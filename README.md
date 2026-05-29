@@ -10,12 +10,12 @@ Bộ kỹ năng hỗ trợ tạo Terminus Regular task từ issue/PR upstream đ
 
 ## Tổng quan
 
-Repo này cung cấp các skill để tạo task end to end:
+Repo này cung cấp các skill để tạo task end to end. Quy tắc mới: tách rõ `mine` và `clone` để giảm quota, tăng tốc sản xuất nhiều task, và tránh Codex đọc lại repo quá nhiều lần.
 
 | # | Tên kỹ năng | Slash command gợi ý | Mô tả |
 |---|---|---|---|
-| 1 | **Task Clone** | `/task-clone` | Clone một closed issue/PR upstream thành Terminus Regular task trong `workspace/tbrain-<problem-slug>` |
-| 2 | **Pytest Closed Issue Task Miner** | `/pytest-closed-issue-task-miner` | Tìm issue/PR tốt từ `pytest-dev/pytest` để làm task Hard |
+| 1 | **Task Miner** | `/task-miner` | Mine metadata/scoring từ closed issue/PR upstream quota thấp-trung bình, không tạo task |
+| 2 | **Task Clone** | `/task-clone` | Transform mined candidate thành Terminus Regular task trong `workspace/tbrain-<problem-slug>` |
 | 3 | **Terminus Regular Task Authoring** | `/terminus-regular-task-authoring` | Tạo/audit cấu trúc Regular task theo Platform Submission Guide |
 | 4 | **Issue To Regression Test** | `/issue-to-regression-test` | Biến issue/PR thành verifier tests hành vi, có regression và anti-shortcut |
 | 5 | **Terminus Hard Python Verifier** | `/terminus-hard-python-verifier` | Viết verifier/oracle cho Python debugging task đủ khó |
@@ -34,7 +34,7 @@ terminus-bench/
 |-- docs/                         # Tài liệu Terminus/Snorkel local
 |-- skills/                       # Skill source chính
 |   |-- task-clone/SKILL.md
-|   |-- pytest-closed-issue-task-miner/SKILL.md
+|   |-- task-miner/SKILL.md
 |   |-- terminus-regular-task-authoring/SKILL.md
 |   |-- issue-to-regression-test/SKILL.md
 |   |-- terminus-hard-python-verifier/SKILL.md
@@ -43,9 +43,12 @@ terminus-bench/
 |   `-- task-zip-submit/SKILL.md
 |-- .codex/skills/                # Bản sync cho Codex trong workspace
 |-- .claude/skills/               # Bản sync cho Claude trong workspace
+|-- mined-candidates/
+    |   |   `-- index.jsonl        # Registry chống trùng issue/PR/candidate
 `-- workspace/                    # Task, reports, ZIP local; bị .gitignore
     |-- tbrain-*/
     |-- reports/
+    |   `-- tbrain-*/
     `-- submissions/
 ```
 
@@ -58,9 +61,11 @@ Task clone, Harbor reports và submission ZIP đều để trong `workspace/`. �
 Các skill được thiết kế để phối hợp theo thứ tự sau:
 
 ```text
-pytest-closed-issue-task-miner     [tùy chọn, nếu cần tìm issue/PR tốt]
+task-miner                         [mine metadata/scoring, không tạo task]
         ↓
-task-clone
+workspace/reports/mined-candidates/<candidate>.json
+        ↓
+task-clone                         [transform candidate thành task]
         ↓
 upstream-repo-sanitizer
         ↓
@@ -75,12 +80,12 @@ task-harbor-runner
 task-zip-submit
 ```
 
-**NOTE**: Nếu đã có issue/PR URL cụ thể, có thể bắt đầu từ `task-clone`. Nếu task không phải từ `pytest-dev/pytest`, bỏ qua `pytest-closed-issue-task-miner`.
+**NOTE**: Nếu đã có issue/PR URL cụ thể, có thể bắt đầu từ `task-clone`. Nếu cần tìm candidate trước, dùng `task-miner`.
 
 ### Thứ tự triển khai
 
-1. **pytest-closed-issue-task-miner** *(tùy chọn)*: Quét closed issue/PR từ `pytest-dev/pytest`, lọc bug đủ khó, tránh docs-only hoặc fix quá dễ.
-2. **task-clone**: Xác định bug, commit trước fix, tên task `workspace/tbrain-<problem-slug>`, và skeleton Regular task.
+1. **task-miner**: Quét closed issue/PR upstream, ưu tiên nguồn quota thấp-trung bình như `pytest-dev/pytest`, `pypa/pip`, `django/django`, và chọn lọc `pandas-dev/pandas`. Skill này chỉ xuất artifact ngắn ở `workspace/reports/mined-candidates/`, không viết Dockerfile, verifier, oracle, hay task folder.
+2. **task-clone**: Đọc mined candidate artifact rồi transform thành task. Nếu artifact đã đủ thông tin, không re-mine GitHub và không quét lại lịch sử repo.
 3. **upstream-repo-sanitizer**: Clone/stage repo vào `environment/repo`, prune file nặng, xóa file giống secret, kiểm tra `environment/ <= 100 MiB`.
 4. **issue-to-regression-test**: Chuyển bug upstream thành verifier tests: direct regression, boundary, normal behavior, anti-shortcut.
 5. **terminus-hard-python-verifier**: Hoàn thiện `tests/test_outputs.py`, `tests/test.sh`, oracle pattern và coverage cho Python Hard task.
@@ -90,7 +95,8 @@ task-zip-submit
 
 ### Phối hợp giữa các kỹ năng
 
-- **task-clone** là skill điều phối chính. Khi người dùng nói "clone task từ issue/PR này", bắt đầu từ đây.
+- **task-miner** là bước lọc nhanh. Dừng khi đã có candidate đủ điểm, tránh over-search.
+- **task-clone** là bước transform chính. Khi người dùng đưa `mined_candidate.json`, bắt đầu từ đây và không mine lại.
 - **upstream-repo-sanitizer** chạy trước khi build Docker để tránh fail vì build context quá lớn hoặc file bị blacklist.
 - **issue-to-regression-test** và **terminus-hard-python-verifier** nên dùng cùng nhau: một skill chuyển issue thành test cases, skill còn lại chuẩn hóa verifier cho Terminus.
 - **task-harbor-runner** phải follow feedback cụ thể từ Docker/Harbor/CI trước khi tự đoán lỗi.
@@ -146,6 +152,14 @@ Tránh:
 - bullet list dài kiểu "must X, must Y"
 - tên task trong prompt
 
+Trước khi lưu, chạy prompt sanitizer:
+
+- bỏ issue URL, PR number, commit hash
+- bỏ tên upstream test hoặc fixture lấy từ PR
+- bỏ internal function/helper name nếu không phải public API
+- bỏ hint triển khai như "sửa hàm X" hoặc "đổi biến Y"
+- bỏ ngôn ngữ benchmark như verifier, oracle, hidden tests, rubric, CI
+
 Ví dụ tốt:
 
 ```md
@@ -182,7 +196,102 @@ Verifier phải:
 - map với requirement trong `instruction.md`
 - luôn ghi `/logs/verifier/reward.txt`
 
-### 5) Quy tắc Harbor feedback
+Verifier matrix nên có:
+
+- direct regression
+- boundary/ordering variant
+- normal behavior preservation
+- anti-shortcut case
+- crash-resistance/no raw traceback
+- output schema/format check nếu task có JSON/XML/CSV/report
+
+Không assert source-code shape, function name nội bộ, hoặc exact implementation.
+
+### 5) Quy tắc tiết kiệm quota
+
+Không dùng một phiên Codex để mine nhiều issue rồi clone full task liên tục. Tách làm hai pha:
+
+```text
+mine  = metadata-only
+clone = transformation-only
+```
+
+Trong mine:
+
+- không đọc quá 10 file nếu chưa cần
+- không đi quá 3 commit quanh fix
+- không chạy full test suite
+- dừng khi có reproducer, touched files, và điểm candidate đủ tốt
+
+Trong clone:
+
+- dùng artifact đã mine
+- chỉ đọc touched files và support files cần thiết
+- ghi notes ngắn vào `workspace/reports/<task-slug>/`
+- không mang raw diff dài trong context nếu không cần
+
+Repo lớn như TypeScript, go-ethereum, PyTorch, NumPy, pandas cần sparse/focused staging trước khi viết verifier.
+
+### 6) Quy tắc chống trùng candidate
+
+Khi nhiều người cùng dùng skill, rất dễ đụng cùng PR/issue tốt. Trước khi mine sâu hoặc clone, check registry:
+
+```text
+mined-candidates/index.jsonl
+```
+
+Mỗi candidate nên có một dòng JSON compact:
+
+```json
+{"repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"mined","rejection_reason":null}
+```
+
+Key chống trùng:
+
+- `repo + issue_or_pr_id`
+- `repo + fixing_commit`
+- `repo + bug_signature`
+
+Nếu team có registry chung qua private repo, Sheet, Notion, hoặc Airtable thì check registry chung trước local. Candidate có status `claimed`, `cloned`, hoặc `submitted` thì bỏ qua, trừ khi người dùng cố ý muốn làm variant khác rõ ràng.
+
+### 7) Nguồn mine ưu tiên
+
+Ưu tiên repo có quota burn thấp tới trung bình:
+
+| Repo | Mức quota | Ghi chú |
+|---|---|---|
+| `pytest-dev/pytest` | thấp | Fixture, collection, reporting, assertion rewriting |
+| `pypa/pip` | thấp-trung bình | Resolver, cache/wheel, requirement parsing, install report offline |
+| `django/django` | trung bình | ORM SQLite, forms, migrations, templates, management commands |
+| `pandas-dev/pandas` | trung bình-cao, chọn lọc | Chỉ lấy bug tiny dataframe, indexing/groupby/merge/datetime/parser, không rebuild extension |
+
+Các repo nặng như TypeScript, go-ethereum, PyTorch, Ray, NumPy vẫn dùng được, nhưng phải bật heavy-repo mode:
+
+- chỉ mine tối đa 1 candidate nặng mỗi phiên
+- đọc tối đa 5 file trước khi quyết định tiếp tục
+- đọc tối đa 2 commit quanh fix
+- không chạy full test/build suite
+- phải có repo slimming plan trước khi clone
+- verifier kỳ vọng dưới 60 giây
+- Docker build context sau slimming phải có khả năng dưới 100 MiB
+
+Reject nếu candidate cần GPU, browser, database, network, cluster, rebuild lớn, hoặc không có reproducer nhỏ offline.
+
+### 8) Quy tắc hardness thực nghiệm
+
+Độ khó của task được chấm bằng pass-rate agent, không chỉ bằng cảm giác codebase phức tạp.
+
+Downgrade hoặc bỏ candidate nếu:
+
+- oracle patch dự kiến chỉ dưới khoảng 10 dòng meaningful trong một file rõ ràng
+- verifier chủ yếu là nhiều biến thể của cùng một nhánh điều kiện
+- prompt cho agent grep ra đúng symbol/hook quá dễ
+- difficulty check cho thấy một frontier agent pass `5/5`
+- aggregate real-agent pass rate `>= 80%`
+
+Timeout không đủ để chứng minh Hard. Task Hard tốt nên làm agent tạo patch sai hoặc thiếu vì interaction logic, không phải chỉ kẹt vì môi trường hay tooling.
+
+### 9) Quy tắc Harbor feedback
 
 Nếu Docker, Harbor hoặc CI đưa ra instruction cụ thể, đọc và follow feedback đó trước khi đoán lỗi.
 
@@ -201,28 +310,31 @@ Ví dụ:
 ### 1) Task Clone
 
 - **Slash command gợi ý**: `/task-clone`
-- **Input**: GitHub issue URL, PR URL, `owner/repo`, hoặc mô tả task muốn clone.
+- **Input**: Ưu tiên `mined_candidate.json`; nếu chưa có thì dùng GitHub issue URL, PR URL, `owner/repo`, hoặc mô tả task muốn clone.
 - **Output**: Folder `workspace/tbrain-<problem-slug>/`.
 - **Mục tiêu**:
-  - Biến một bug upstream thật thành Terminus Regular task.
+  - Transform một bug upstream thật thành Terminus Regular task.
+  - Không re-mine GitHub nếu mined artifact đã đủ thông tin.
   - Chọn commit trước fix để stage vào `environment/repo`.
+  - Sanitize prompt để không leak issue/PR/commit/test name/hint fix.
   - Đặt tên task đúng dạng `tbrain-<problem-slug>`.
-  - Không đưa tên repo/tool vào task name nếu không cần.
-  - Tạo layout chuẩn gồm `instruction.md`, `task.toml`, `environment/`, `solution/`, `tests/`.
-- **Khi nào dùng**: Khi bắt đầu clone một task mới từ issue/PR thật.
+  - Tạo verifier matrix có regression, edge, preservation, anti-shortcut, crash-resistance.
+- **Khi nào dùng**: Khi đã có mined candidate hoặc issue/PR cụ thể đủ tốt để transform thành task.
 
 ---
 
-### 2) Pytest Closed Issue Task Miner
+### 2) Task Miner
 
-- **Slash command gợi ý**: `/pytest-closed-issue-task-miner`
-- **Input**: Repo `pytest-dev/pytest` hoặc issue/PR trong repo này.
-- **Output**: Danh sách candidate issue/PR có thể làm task Hard.
+- **Slash command gợi ý**: `/task-miner`
+- **Input**: Repo upstream, GitHub issue/PR URL, hoặc để trống thì mặc định dùng `pytest-dev/pytest`.
+- **Output**: Compact artifact ở `workspace/reports/mined-candidates/<slug>.json`.
 - **Mục tiêu**:
-  - Tìm bug trong pytest internals đủ khó.
-  - Ưu tiên fixture lifecycle, reporting, collection, assertion rewriting, JUnit XML, plugin hooks.
+  - Tìm và chấm điểm bug upstream đủ khó.
+  - Chỉ mine metadata/scoring, không dựng task, Dockerfile, verifier, oracle.
+  - Ưu tiên `pytest-dev/pytest`, `pypa/pip`, `django/django`, và `pandas-dev/pandas` chọn lọc.
   - Loại docs-only, typo-only, dependency bump, CI-only.
-- **Khi nào dùng**: Khi chưa có issue/PR cụ thể và muốn mine domain pytest.
+  - Dừng sớm khi có reproducer, touched files, parent/fixing commit và score đủ tốt.
+- **Khi nào dùng**: Khi chưa có issue/PR cụ thể và muốn mine candidate với chi phí quota thấp-trung bình.
 
 ---
 

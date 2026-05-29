@@ -1,11 +1,20 @@
 ---
 name: task-clone
-description: Use when creating a Terminus Regular task by cloning a real closed upstream issue or pull request into a tbrain-* task. Combines PR/issue mining, task naming, Regular task scaffolding, hard Python verifier design, oracle patch creation, and pre-submit validation. Task folders must be named tbrain-<problem-slug> without domain/tool filler such as pytest, django, numpy, or repo names unless the problem itself requires it.
+description: Use when transforming a mined closed upstream issue or pull request into a Terminus Regular task under workspace/tbrain-*. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Task folders must be named tbrain-<problem-slug> without domain/tool filler such as pytest, django, numpy, or repo names unless the problem itself requires it.
 ---
 
 # Task Clone
 
 Use this skill when the user wants to turn a real upstream closed issue or PR into a hard Terminus Regular task.
+
+Preferred split:
+
+```text
+mine = candidate discovery + scoring only
+clone = transformation + packaging only
+```
+
+If a mined candidate artifact exists, consume it and do not repeat the mining pass unless required fields are missing.
 
 ## Core Rule
 
@@ -35,12 +44,64 @@ Exception: keep a domain word only when it is part of the actual problem concept
 
 Accept any of:
 
+- a `mined_candidate.json` or equivalent compact artifact
 - a GitHub issue URL
 - a GitHub PR URL
 - `owner/repo` plus a requested domain
 - a rough task idea plus a source repo
 
-If a source URL is given, browse or use `gh` to verify it is closed/merged and to identify the fixing PR/commit. Do not rely on memory for modern GitHub status.
+If a source URL is given without a mined artifact, browse or use `gh` only enough to verify it is closed/merged and identify the fixing PR/commit. Do not perform broad mining inside clone.
+
+## Mined Artifact Contract
+
+When available, clone should start from:
+
+```yaml
+candidate:
+  source_url:
+  issue_or_pr_id:
+  repo:
+  parent_commit:
+  fixing_commit:
+  bug_signature:
+  touched_files:
+  subsystem_tags:
+  runtime_class:
+  external_requirements:
+  repro_summary:
+  bad_behavior:
+  expected_behavior:
+  preserved_behavior:
+  edge_cases:
+  scoring:
+    subsystem_interaction:
+    deterministic_reproducibility:
+    offline_viability:
+    anti_shortcut_hardness:
+    verifier_complexity:
+    runtime_cost:
+    leakage_risk:
+```
+
+If this exists, inspect only touched files, focused upstream tests, and support files needed to stage/build/run the task. Do not rescan large repo history or re-open unrelated issues.
+
+## Dedupe Registry
+
+Before cloning, check:
+
+```text
+mined-candidates/index.jsonl
+```
+
+If a shared team registry exists, check it too. Treat any matching `repo + fixing_commit`, `repo + issue_or_pr_id`, or `repo + bug_signature` with status `claimed`, `cloned`, or `submitted` as already taken unless the user explicitly wants a variant.
+
+During clone, update or append a compact JSON line:
+
+```json
+{"repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"cloned","rejection_reason":null}
+```
+
+Use `bug_signature` for near-duplicate detection when issue and PR URLs differ but the fix is the same behavior.
 
 ## Candidate Selection
 
@@ -65,17 +126,18 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 
 ## Workflow
 
-1. Identify the upstream closed issue/PR and the fixing commit.
-2. Choose a parent commit before the fix for `environment/repo`.
-3. Clone or stage the repo under `environment/repo`, not by runtime network fetch.
-4. Strip unrelated huge files, secrets, and CI clutter while preserving enough files for declared `codebase_size`.
-5. Create a Regular task folder named `workspace/tbrain-<problem-slug>`.
-6. Write concise `instruction.md` describing user-visible behavior only. Do not mention issue URL, PR number, upstream test names, `solution/`, `tests/`, `task.toml`, rubrics, or implementation steps.
+1. Load the mined artifact or verify the source URL with the smallest needed browse/`gh` pass.
+2. Choose the parent commit before the fix for `environment/repo`.
+3. Create `workspace/tbrain-<problem-slug>` using the naming rule.
+4. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
+5. Slim the repo to bug-relevant modules, support utilities, and minimal build config.
+6. Write sanitized `instruction.md` from observable behavior only.
 7. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false`, valid category/subcategories, and realistic resources.
-8. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, and required build/runtime deps.
-9. Write `solution/fix.patch` and `solution/solve.sh` that applies the real generalized fix and rebuilds if needed.
-10. Write `tests/test.sh` and behavioral `tests/test_outputs.py`.
-11. Run structural checks, oracle, nop baseline, CI checks, and optional real-agent trials.
+8. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
+9. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
+10. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
+11. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
+12. Run structural checks, CI checks, and optional real-agent trials.
 
 ## Regular Layout
 
@@ -91,12 +153,16 @@ workspace/tbrain-<problem-slug>/
 ├── solution/
 │   ├── solve.sh
 │   └── fix.patch
-└── tests/
-    ├── test.sh
-    └── test_outputs.py
+├── tests/
+│   ├── test.sh
+│   └── test_outputs.py
+└── reports/                    # optional local notes; exclude from ZIP
+    └── mining_notes.md
 ```
 
 For a small app task, `environment/app/` is acceptable, but cloned upstream bug tasks should normally use `environment/repo/`.
+
+Prefer external notes under `workspace/reports/<task-slug>/` when possible so submission zips do not accidentally include them.
 
 ## Metadata Defaults
 
@@ -170,6 +236,14 @@ Write like a real engineer reporting a bug:
 - No task name in the prompt.
 - No canary strings.
 
+Prompt sanitizer must remove:
+
+- issue URLs, PR numbers, commit hashes
+- upstream test names and fixture names copied from the PR
+- internal helper/function names unless they are public API
+- implementation guidance such as "change `nextitem`" or "edit `runtestprotocol`"
+- benchmark meta language such as verifier, oracle, hidden tests, rubric, or CI
+
 Good shape:
 
 ```md
@@ -184,6 +258,7 @@ Fix it so `<public command or API>` <observable result>. The run should still <p
 
 - use `FROM ...@sha256:<digest>`
 - install `tmux`, `asciinema`, `bash`, and usually `util-linux`
+- include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
 - install build tools only when the agent must rebuild source
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
@@ -226,15 +301,26 @@ If the project requires build artifacts, rebuild them in `solve.sh`. The patch m
 
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
-Coverage should include:
+Verifier matrix must include:
 
 - direct upstream regression
 - boundary or ordering edge case
 - normal behavior preservation
 - anti-shortcut check
 - no internal crash/traceback when the expected behavior is recoverable
+- output format/schema check when relevant
 
 Every test function needs a docstring. Every asserted behavior must be present in `instruction.md`.
+
+Anti-shortcut tactics:
+
+- use temporary directories and generated project names
+- vary filenames, ordering, or input values across tests
+- include one unseen variant not present in the upstream PR
+- avoid exact source-code assertions
+- parse outputs semantically rather than matching full files
+
+The oracle patch must pass the direct regression and at least one variant, proving it is not verifier-targeted hardcoding.
 
 ## tests/test.sh
 
@@ -257,6 +343,19 @@ fi
 ```
 
 Keep the final reward block in this literal `$?` shape for non-milestone tasks.
+
+## Quota Discipline
+
+Avoid monolithic end-to-end exploration. After each phase, compress findings into compact notes and stop carrying raw diffs unless needed.
+
+Exploration limits:
+
+- inspect `<= 10` source/test files unless blocked
+- inspect `<= 3` commits around the fix
+- do not enumerate full repo trees or unrelated test suites
+- reuse upstream regression tests as inspiration, but wrap them in behavioral verifier tests
+
+For large repos such as TypeScript, go-ethereum, PyTorch, pandas, or NumPy, use focused staging/sparse extraction and strict runtime checks before investing in verifier/oracle work.
 
 ## Validation
 
