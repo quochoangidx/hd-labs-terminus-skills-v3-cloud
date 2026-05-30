@@ -15,13 +15,14 @@ Repo này cung cấp các skill để tạo task end to end:
 | # | Tên kỹ năng | Slash command gợi ý | Mô tả |
 |---|---|---|---|
 | 1 | **Task Clone** | `/task-clone` | Clone một closed issue/PR upstream thành Terminus Regular task trong `workspace/tbrain-<problem-slug>` |
-| 2 | **Pytest Closed Issue Task Miner** | `/pytest-closed-issue-task-miner` | Tìm issue/PR tốt từ `pytest-dev/pytest` để làm task Hard |
-| 3 | **Terminus Regular Task Authoring** | `/terminus-regular-task-authoring` | Tạo/audit cấu trúc Regular task theo Platform Submission Guide |
-| 4 | **Issue To Regression Test** | `/issue-to-regression-test` | Biến issue/PR thành verifier tests hành vi, có regression và anti-shortcut |
-| 5 | **Terminus Hard Python Verifier** | `/terminus-hard-python-verifier` | Viết verifier/oracle cho Python debugging task đủ khó |
-| 6 | **Upstream Repo Sanitizer** | `/upstream-repo-sanitizer` | Làm sạch `environment/repo`, giữ build context dưới giới hạn CI |
-| 7 | **Task Harbor Runner** | `/task-harbor-runner` | Chạy và debug Harbor: oracle, nop, CI checks, real agents |
-| 8 | **Task Zip Submit** | `/task-zip-submit` | Đóng gói ZIP sạch, đúng cấu trúc, không dính macOS junk |
+| 2 | **Task Miner** | `/task-miner` | Mine issue/PR tốt từ repo source bất kỳ, ví dụ `dagster-io/dagster`, để làm task Hard |
+| 3 | **Pytest Closed Issue Task Miner** | `/pytest-closed-issue-task-miner` | Tìm issue/PR tốt từ `pytest-dev/pytest` để làm task Hard |
+| 4 | **Terminus Regular Task Authoring** | `/terminus-regular-task-authoring` | Tạo/audit cấu trúc Regular task theo Platform Submission Guide |
+| 5 | **Issue To Regression Test** | `/issue-to-regression-test` | Biến issue/PR thành verifier tests hành vi, có regression và anti-shortcut |
+| 6 | **Terminus Hard Python Verifier** | `/terminus-hard-python-verifier` | Viết verifier/oracle cho Python debugging task đủ khó |
+| 7 | **Upstream Repo Sanitizer** | `/upstream-repo-sanitizer` | Làm sạch `environment/repo`, giữ build context dưới giới hạn CI |
+| 8 | **Task Harbor Runner** | `/task-harbor-runner` | Chạy và debug Harbor: oracle, nop, CI checks, real agents |
+| 9 | **Task Zip Submit** | `/task-zip-submit` | Đóng gói ZIP sạch, đúng cấu trúc, không dính macOS junk |
 
 ---
 
@@ -34,6 +35,7 @@ terminus-bench/
 |-- docs/                         # Tài liệu Terminus/Snorkel local
 |-- skills/                       # Skill source chính
 |   |-- task-clone/SKILL.md
+|   |-- task-miner/SKILL.md
 |   |-- pytest-closed-issue-task-miner/SKILL.md
 |   |-- terminus-regular-task-authoring/SKILL.md
 |   |-- issue-to-regression-test/SKILL.md
@@ -58,7 +60,9 @@ Task clone, Harbor reports và submission ZIP đều để trong `workspace/`. �
 Các skill được thiết kế để phối hợp theo thứ tự sau:
 
 ```text
-pytest-closed-issue-task-miner     [tùy chọn, nếu cần tìm issue/PR tốt]
+task-miner                         [tùy chọn, nếu cần tìm issue/PR từ repo bất kỳ]
+        ↓
+pytest-closed-issue-task-miner     [tùy chọn, nếu repo là pytest-dev/pytest]
         ↓
 task-clone
         ↓
@@ -75,18 +79,19 @@ task-harbor-runner
 task-zip-submit
 ```
 
-**NOTE**: Nếu đã có issue/PR URL cụ thể, có thể bắt đầu từ `task-clone`. Nếu task không phải từ `pytest-dev/pytest`, bỏ qua `pytest-closed-issue-task-miner`.
+**NOTE**: Nếu đã có issue/PR URL cụ thể, có thể bắt đầu từ `task-clone`. Nếu cần mine từ repo bất kỳ, dùng `task-miner`; nếu repo là `pytest-dev/pytest`, có thể dùng thêm `pytest-closed-issue-task-miner` để tận dụng heuristic riêng cho pytest.
 
 ### Thứ tự triển khai
 
-1. **pytest-closed-issue-task-miner** *(tùy chọn)*: Quét closed issue/PR từ `pytest-dev/pytest`, lọc bug đủ khó, tránh docs-only hoặc fix quá dễ.
-2. **task-clone**: Xác định bug, commit trước fix, tên task `workspace/tbrain-<problem-slug>`, và skeleton Regular task.
-3. **upstream-repo-sanitizer**: Clone/stage repo vào `environment/repo`, prune file nặng, xóa file giống secret, kiểm tra `environment/ <= 100 MiB`.
-4. **issue-to-regression-test**: Chuyển bug upstream thành verifier tests: direct regression, boundary, normal behavior, anti-shortcut.
-5. **terminus-hard-python-verifier**: Hoàn thiện `tests/test_outputs.py`, `tests/test.sh`, oracle pattern và coverage cho Python Hard task.
-6. **terminus-regular-task-authoring**: Audit `instruction.md`, `task.toml`, Dockerfile, oracle và verifier theo Platform Submission Guide.
-7. **task-harbor-runner**: Chạy `harbor run -a oracle`, `harbor run -a nop`, `harbor tasks check`, rồi follow feedback nếu fail.
-8. **task-zip-submit**: Dọn cache/macOS junk, zip đúng contents của task folder, verify archive trước khi upload.
+1. **task-miner** *(tùy chọn)*: Quét closed issue/PR từ repo source bất kỳ, lọc bug đủ khó, tránh docs-only hoặc fix quá dễ.
+2. **pytest-closed-issue-task-miner** *(tùy chọn)*: Quét closed issue/PR từ `pytest-dev/pytest`, lọc bug theo heuristic riêng của pytest internals.
+3. **task-clone**: Xác định bug, commit trước fix, tên task `workspace/tbrain-<problem-slug>`, và skeleton Regular task.
+4. **upstream-repo-sanitizer**: Clone/stage repo vào `environment/repo`, prune file nặng, xóa file giống secret, kiểm tra `environment/ <= 100 MiB`.
+5. **issue-to-regression-test**: Chuyển bug upstream thành verifier tests: direct regression, boundary, normal behavior, anti-shortcut.
+6. **terminus-hard-python-verifier**: Hoàn thiện `tests/test_outputs.py`, `tests/test.sh`, oracle pattern và coverage cho Python Hard task.
+7. **terminus-regular-task-authoring**: Audit `instruction.md`, `task.toml`, Dockerfile, oracle và verifier theo Platform Submission Guide.
+8. **task-harbor-runner**: Chạy `harbor run -a oracle`, `harbor run -a nop`, `harbor tasks check`, rồi follow feedback nếu fail.
+9. **task-zip-submit**: Dọn cache/macOS junk, zip đúng contents của task folder, verify archive trước khi upload.
 
 ### Phối hợp giữa các kỹ năng
 
@@ -213,7 +218,21 @@ Ví dụ:
 
 ---
 
-### 2) Pytest Closed Issue Task Miner
+### 2) Task Miner
+
+- **Slash command gợi ý**: `/task-miner`
+- **Input**: Repo source dạng `owner/repo`, GitHub repo URL, `/issues`, `/pulls`, issue URL hoặc PR URL.
+- **Output**: Danh sách candidate issue/PR có thể làm task Hard, kèm commit trước fix và kế hoạch verifier.
+- **Mục tiêu**:
+  - Tìm bug upstream thật từ repo bất kỳ, ví dụ `https://github.com/dagster-io/dagster/pulls`.
+  - Ưu tiên issue/PR đã đóng/merge có test regression và reproduce offline được.
+  - Loại docs-only, typo-only, dependency bump, CI-only, release metadata, typing-only.
+  - Chuẩn bị candidate đủ rõ để chuyển sang `task-clone`.
+- **Khi nào dùng**: Khi chưa có issue/PR cụ thể hoặc muốn mine từ repo không phải `pytest-dev/pytest`.
+
+---
+
+### 3) Pytest Closed Issue Task Miner
 
 - **Slash command gợi ý**: `/pytest-closed-issue-task-miner`
 - **Input**: Repo `pytest-dev/pytest` hoặc issue/PR trong repo này.
@@ -226,7 +245,7 @@ Ví dụ:
 
 ---
 
-### 3) Terminus Regular Task Authoring
+### 4) Terminus Regular Task Authoring
 
 - **Slash command gợi ý**: `/terminus-regular-task-authoring`
 - **Input**: Ý tưởng task hoặc folder task đang dựng.
@@ -239,7 +258,7 @@ Ví dụ:
 
 ---
 
-### 4) Issue To Regression Test
+### 5) Issue To Regression Test
 
 - **Slash command gợi ý**: `/issue-to-regression-test`
 - **Input**: Issue/PR đã chọn và hành vi cần reproduce.
@@ -254,7 +273,7 @@ Ví dụ:
 
 ---
 
-### 5) Terminus Hard Python Verifier
+### 6) Terminus Hard Python Verifier
 
 - **Slash command gợi ý**: `/terminus-hard-python-verifier`
 - **Input**: Task Python debugging và các behavior cần kiểm tra.
@@ -268,7 +287,7 @@ Ví dụ:
 
 ---
 
-### 6) Upstream Repo Sanitizer
+### 7) Upstream Repo Sanitizer
 
 - **Slash command gợi ý**: `/upstream-repo-sanitizer`
 - **Input**: Folder task có `environment/repo`.
@@ -283,7 +302,7 @@ Ví dụ:
 
 ---
 
-### 7) Task Harbor Runner
+### 8) Task Harbor Runner
 
 - **Slash command gợi ý**: `/task-harbor-runner`
 - **Input**: Folder task.
@@ -307,7 +326,7 @@ Nếu lệnh có option output, ghi report vào `workspace/reports/`.
 
 ---
 
-### 8) Task Zip Submit
+### 9) Task Zip Submit
 
 - **Slash command gợi ý**: `/task-zip-submit`
 - **Input**: Folder task đã pass validation.
