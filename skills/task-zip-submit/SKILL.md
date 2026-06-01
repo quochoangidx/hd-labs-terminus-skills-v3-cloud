@@ -13,19 +13,18 @@ Zip the contents of the task folder, not the folder itself.
 
 Task folders usually live under `workspace/`. Zip from inside the task folder, not from the repository root. Put submission ZIPs under `workspace/submissions/` so generated artifacts stay ignored.
 
-The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist. Do not include `reports/`, `submissions/`, local notes, caches, downloaded source archives, or the outer `workspace/` folder.
+The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist. Do not include `reports/`, `submissions/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
 
 For a Regular task, the ZIP root should contain:
 
 ```text
 instruction.md
 task.toml
+pyproject.toml
 environment/
 solution/
 tests/
 ```
-
-Optional root files are allowed only when required by CI or task structure, such as `pyproject.toml` for ruff configuration.
 
 For a milestone task, the ZIP root should contain:
 
@@ -42,14 +41,15 @@ Milestone ZIPs must not include root-level `instruction.md`, `solution/`, or `te
 From the task root:
 
 ```bash
-find . \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycache__' \) -print
+find . \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycache__' -o -name 'target' -o -name '.git' \) -print
 find . -name '*.pyc' -print
+find . \( -name '.ruff_cache' -o -name '.pytest_cache' -o -name '.mypy_cache' \) -print
 ```
 
 Delete junk before packaging:
 
 ```bash
-find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' \) -exec rm -rf {} +
+find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' -o -name 'target' -o -name '.git' -o -name '.ruff_cache' -o -name '.pytest_cache' -o -name '.mypy_cache' \) -exec rm -rf {} +
 ```
 
 Do not use macOS Finder "Compress" when possible; it can add `__MACOSX` and `._*` files that fail CI.
@@ -61,17 +61,8 @@ From inside the task folder:
 ```bash
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*.pyc'
-```
-
-If the task has root `pyproject.toml`, include it:
-
-```bash
-TASK_NAME="$(basename "$PWD")"
-mkdir -p ../submissions
 zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml pyproject.toml environment solution tests \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*.pyc'
+    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc'
 ```
 
 ## Milestone ZIP
@@ -82,7 +73,7 @@ From inside the task folder:
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
 zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*.pyc'
+    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc'
 ```
 
 ## Verify
@@ -90,7 +81,7 @@ zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
 ```bash
 TASK_NAME="$(basename "$PWD")"
 unzip -l "../submissions/${TASK_NAME}.zip" | head -40
-unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|reports/|submissions/|workspace/' || true
+unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|\.ruff_cache|\.pytest_cache|reports/|submissions/|workspace/' || true
 ```
 
 The first listing must not show an extra top-level parent folder.

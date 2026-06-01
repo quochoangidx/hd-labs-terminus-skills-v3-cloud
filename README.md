@@ -181,6 +181,7 @@ Dockerfile cần:
 
 - `FROM ...@sha256:<digest>`
 - cài `tmux` và `asciinema`
+- cài sẵn `pytest`, `pytest-json-ctrf`, và test dependencies cần thiết
 - pin package versions
 - không `COPY tests/`
 - không `COPY solution/`
@@ -195,6 +196,7 @@ Verifier phải:
 - mỗi `def test_*` có docstring
 - map với requirement trong `instruction.md`
 - luôn ghi `/logs/verifier/reward.txt`
+- không chạy `pip install`, `apt-get`, `npm install`, hoặc download network trong `tests/test.sh`
 
 Verifier matrix nên có:
 
@@ -207,7 +209,19 @@ Verifier matrix nên có:
 
 Không assert source-code shape, function name nội bộ, hoặc exact implementation.
 
-### 5) Quy tắc tiết kiệm quota
+### 5) Quality preflight trước khi upload
+
+Trước khi tạo ZIP, tự audit các lỗi quality check hay bắt:
+
+- Mọi exact string, CLI flag, path, XML/JSON field, output key, ordering guarantee trong tests phải xuất hiện công bằng trong `instruction.md`.
+- Preservation tests cũng phải được nhắc trong prompt. Nếu test kiểm tra mode không phải bug chính, alias, fallback, legacy path, hoặc normal case, thêm câu "giữ hành vi X/Y không đổi" vào `instruction.md`.
+- `instruction.md` không chứa issue URL, PR number, commit hash, upstream test name, implementation hint, rubric/hidden-test language.
+- `tests/test.sh` chỉ chạy pytest và ghi reward, không cài package ở verifier runtime.
+- Dockerfile không copy `tests/` hoặc `solution/`, không tạo `/tests`, `/solution`, `/oracle`, `/logs/verifier`.
+- Không đưa `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, submissions vào ZIP.
+- `oracle` pass 1.0, `nop` fail 0.0, và nop fail vì behavior thật chứ không vì thiếu dependency.
+
+### 6) Quy tắc tiết kiệm quota
 
 Không dùng một phiên Codex để mine nhiều issue rồi clone full task liên tục. Tách làm hai pha:
 
@@ -232,7 +246,7 @@ Trong clone:
 
 Repo lớn như TypeScript, go-ethereum, PyTorch, NumPy, pandas cần sparse/focused staging trước khi viết verifier.
 
-### 6) Quy tắc chống trùng candidate
+### 7) Quy tắc chống trùng candidate
 
 Khi nhiều người cùng dùng skill, rất dễ đụng cùng PR/issue tốt. Trước khi mine sâu hoặc clone, check registry:
 
@@ -254,16 +268,23 @@ Key chống trùng:
 
 Nếu team có registry chung qua private repo, Sheet, Notion, hoặc Airtable thì check registry chung trước local. Candidate có status `claimed`, `cloned`, hoặc `submitted` thì bỏ qua, trừ khi người dùng cố ý muốn làm variant khác rõ ràng.
 
-### 7) Nguồn mine ưu tiên
+### 8) Nguồn mine ưu tiên
 
 Ưu tiên repo có quota burn thấp tới trung bình:
 
 | Repo | Mức quota | Ghi chú |
 |---|---|---|
-| `pytest-dev/pytest` | thấp | Fixture, collection, reporting, assertion rewriting |
 | `pypa/pip` | thấp-trung bình | Resolver, cache/wheel, requirement parsing, install report offline |
+| `pypa/setuptools` | thấp-trung bình | Editable install, package discovery, metadata/config parsing |
+| `python/importlib_metadata` | thấp | Entry points, metadata parsing, distribution discovery |
+| `python/importlib_resources` | thấp | Resource lookup, package files, namespace/package edge cases |
 | `django/django` | trung bình | ORM SQLite, forms, migrations, templates, management commands |
+| `urllib3/urllib3` | trung bình | URL parsing, retries, headers, redirects, timeout/proxy với local server/mock |
+| `encode/httpx` | trung bình | Transports, redirects, headers, timeout với mock/local transport |
+| `pytest-dev/pytest` | thấp nhưng đang cooldown | Fixture, collection, reporting, assertion rewriting |
 | `pandas-dev/pandas` | trung bình-cao, chọn lọc | Chỉ lấy bug tiny dataframe, indexing/groupby/merge/datetime/parser, không rebuild extension |
+
+Với `urllib3`/`httpx`, không dùng internet thật. Candidate chỉ hợp lệ nếu verifier chạy bằng local loopback server, fake socket, mock transport, hoặc fixture offline deterministic.
 
 Các repo nặng như TypeScript, go-ethereum, PyTorch, Ray, NumPy vẫn dùng được, nhưng phải bật heavy-repo mode:
 
@@ -277,7 +298,7 @@ Các repo nặng như TypeScript, go-ethereum, PyTorch, Ray, NumPy vẫn dùng �
 
 Reject nếu candidate cần GPU, browser, database, network, cluster, rebuild lớn, hoặc không có reproducer nhỏ offline.
 
-### 8) Quy tắc hardness thực nghiệm
+### 9) Quy tắc hardness thực nghiệm
 
 Độ khó của task được chấm bằng pass-rate agent, không chỉ bằng cảm giác codebase phức tạp.
 
@@ -291,7 +312,7 @@ Downgrade hoặc bỏ candidate nếu:
 
 Timeout không đủ để chứng minh Hard. Task Hard tốt nên làm agent tạo patch sai hoặc thiếu vì interaction logic, không phải chỉ kẹt vì môi trường hay tooling.
 
-### 9) Quy tắc Harbor feedback
+### 10) Quy tắc Harbor feedback
 
 Nếu Docker, Harbor hoặc CI đưa ra instruction cụ thể, đọc và follow feedback đó trước khi đoán lỗi.
 

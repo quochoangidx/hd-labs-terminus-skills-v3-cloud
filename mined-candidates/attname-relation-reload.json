@@ -1,0 +1,69 @@
+{
+  "candidate": {
+    "source_url": "https://github.com/django/django/pull/21156",
+    "issue_or_pr_id": "21156",
+    "repo": "django/django",
+    "parent_commit": "21dcd9a94fb3e9edeec883d12cd1dcac5e773abe",
+    "fixing_commit": "7e9b273dbab0acbc77089d160485b773b51c3ceb",
+    "bug_signature": "sqlite schema editor misses transitive attname to_field relations during unique target alteration",
+    "touched_files": [
+      "django/db/backends/base/schema.py",
+      "django/db/backends/sqlite3/schema.py",
+      "tests/migrations/test_operations.py"
+    ],
+    "subsystem_tags": [
+      "migrations",
+      "schema-editor",
+      "sqlite",
+      "relations"
+    ],
+    "runtime_class": "moderate",
+    "external_requirements": [],
+    "repro_summary": "Use migration operations to create a unique CharField, an intermediate OneToOneField targeting it, and a dependent ForeignKey whose to_field points at the intermediate field's attname. Altering the unique field's max_length on SQLite rebuilds the direct relation but not the transitive dependent table.",
+    "bad_behavior": "The dependent foreign key column keeps the stale SQLite column type after the target field is altered through migrations.",
+    "expected_behavior": "SQLite schema rebuilds must propagate through relations that name either the related field's public name or its attname, preserving foreign key constraints.",
+    "preserved_behavior": "Direct to_field relations and default primary-key foreign keys should still be rebuilt when their target type changes.",
+    "edge_cases": [
+      "The transitive relation uses an intermediate field attname such as owner_id rather than the public field name owner.",
+      "Default primary-key foreign keys continue using the existing primary-key propagation path."
+    ],
+    "upstream_regression_tests": [
+      "tests/migrations/test_operations.py::test_alter_field_reloads_state_on_transitive_attname_to_field_type_change"
+    ],
+    "scoring": {
+      "subsystem_interaction": 5,
+      "deterministic_reproducibility": 5,
+      "offline_viability": 5,
+      "anti_shortcut_hardness": 4,
+      "verifier_complexity": 4,
+      "runtime_cost": 4,
+      "leakage_risk": 4
+    },
+    "hardness_score": 4,
+    "reproducibility_score": 5,
+    "verifier_complexity": 4,
+    "repo_size_risk": 4,
+    "leakage_risk": 4,
+    "heavy_repo_mode": false,
+    "slimming_plan": {
+      "keep": [
+        "django/",
+        "pyproject.toml",
+        "license/readme metadata"
+      ],
+      "remove": [
+        ".git/",
+        "docs/",
+        "tests/",
+        "js_tests/",
+        ".github/"
+      ]
+    },
+    "runtime_budget": {
+      "verifier_sec": 90,
+      "build_sec": 600,
+      "expected_context_files": 2400
+    },
+    "rejection_reason": null
+  }
+}

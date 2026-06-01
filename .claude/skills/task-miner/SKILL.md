@@ -1,11 +1,11 @@
 ---
 name: task-miner
-description: Use when mining closed upstream issues or PRs for hard Terminus Regular task candidates from low-to-medium quota Python repos such as pytest-dev/pytest, pypa/pip, django/django, and selected pandas-dev/pandas issues. This metadata-only skill scores candidates, records fixing/parent commits, reproducer shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. Defaults to pytest-dev/pytest when no repo is specified.
+description: Use when mining closed upstream issues or PRs for hard Terminus Regular task candidates from low-to-medium quota Python repos such as pypa/pip, pypa/setuptools, django/django, python/importlib_metadata, python/importlib_resources, urllib3/urllib3, encode/httpx, pytest-dev/pytest, and selected pandas-dev/pandas issues. This metadata-only skill scores candidates, records fixing/parent commits, reproducer shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. Rotate repos instead of defaulting to pytest unless the user asks for pytest specifically.
 ---
 
 # Task Miner
 
-Use this skill when sourcing task ideas from closed upstream issues or PRs. Default source is `pytest-dev/pytest` when the user does not specify another repo.
+Use this skill when sourcing task ideas from closed upstream issues or PRs. If the user does not specify a repo, rotate through the Source Queue instead of always defaulting to pytest.
 
 This is a lightweight mining pass. Do not create a task folder, Dockerfile, verifier, or oracle here. The output is a compact mined candidate artifact consumed later by `task-clone`.
 
@@ -15,9 +15,14 @@ Prioritize low-to-medium quota sources:
 
 | Repo | Quota burn | Best task domains |
 |---|---:|---|
-| `pytest-dev/pytest` | low | fixture lifecycle, collection, reporting, assertion rewriting |
 | `pypa/pip` | low-medium | resolver behavior, wheel/cache handling, requirement parsing, install/report edge cases |
+| `pypa/setuptools` | low-medium | editable installs, package discovery, metadata/config parsing, build hooks |
+| `python/importlib_metadata` | low | entry points, metadata parsing, distribution discovery |
+| `python/importlib_resources` | low | resource lookup, package files, namespace/package edge cases |
 | `django/django` | medium | ORM/query generation, forms/validation, migrations, template rendering, management commands |
+| `urllib3/urllib3` | medium | URL parsing, connection pools, retries, headers, redirects, timeout/proxy behavior with local servers |
+| `encode/httpx` | medium | request/response behavior, transports, redirects, headers, timeouts with mock/local transports |
+| `pytest-dev/pytest` | low but cooldown after Medium results | fixture lifecycle, collection, reporting, assertion rewriting |
 | `pandas-dev/pandas` | medium-high, selective | indexing/groupby/merge/datetime/parser edge cases with tiny datasets |
 
 Heavy repos are allowed only with explicit opt-in and strict limits:
@@ -91,6 +96,24 @@ For `pypa/pip`, prefer:
 
 Avoid pip candidates that need live package indexes, credentials, platform-specific binary downloads, or network.
 
+For `pypa/setuptools`, prefer:
+
+- editable install and package discovery behavior
+- `pyproject.toml`, `setup.cfg`, and metadata parsing edge cases
+- build hook behavior that can run with local temporary projects
+- namespace package/resource edge cases without network
+
+Avoid setuptools candidates requiring publishing, remote indexes, compiled extensions, or full downstream-package integration.
+
+For `python/importlib_metadata` or `python/importlib_resources`, prefer:
+
+- entry point parsing/selection behavior
+- distribution metadata normalization and discovery
+- resource lookup across packages, namespace packages, zip files, or missing files
+- small public API regressions reproducible with temp packages
+
+Avoid candidates that only update compatibility metadata or depend on a specific installed system package layout.
+
 For `django/django`, prefer:
 
 - ORM SQL/query behavior reproducible with SQLite
@@ -99,6 +122,20 @@ For `django/django`, prefer:
 - template or management-command behavior without external services
 
 Avoid Django candidates needing PostgreSQL/MySQL-specific behavior unless SQLite can faithfully reproduce the bug.
+
+For `urllib3/urllib3` or `encode/httpx`, prefer:
+
+- URL parsing/canonicalization, headers, redirects, retries, pools, proxy configuration, or timeout handling
+- reproductions using local loopback servers, in-memory transports, monkeypatched sockets, or deterministic fake connections
+- public API/CLI behavior that needs no internet
+
+Do not use network-library candidates that call live external URLs, depend on DNS/internet, need real proxies, require TLS cert infrastructure beyond local fixtures, or are flaky timing/concurrency issues.
+
+For network-library candidates with alternate transports or platform-specific
+implementations such as emscripten, the mined artifact must identify the actual
+testable wrapper/API and constructor contract. Do not hand off a candidate that
+only names an internal dataclass or raw container when the behavior lives on a
+wrapper class.
 
 For `pandas-dev/pandas`, prefer:
 
@@ -182,7 +219,8 @@ Reject false-hard candidates:
 - docs-only, typo-only, dependency bump, CI-only, release metadata, or typing-only
 - message-only changes unless the bug is specifically user-facing diagnostic correctness
 - single validation branch fixes
-- `<= 3` meaningful LOC unless the interaction crosses subsystems
+- `<= 10` meaningful LOC in one obvious file unless prior agent trials show low pass rate
+- one-condition fixes such as "if stop flag then do X" when all verifier cases exercise the same branch
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
 ## Candidate Scoring
@@ -232,6 +270,12 @@ candidate:
   expected_behavior:
   preserved_behavior:
   edge_cases:
+  test_surface:
+    primary_api:
+    secondary_apis:
+    constructor_contracts:
+    offline_fixtures:
+    skip_guard_policy:
   upstream_regression_tests:
   scoring:
     subsystem_interaction:
@@ -254,9 +298,33 @@ candidate:
 
 Use `rejection_reason: null` only when the candidate is suitable for cloning.
 
+## Hardness Calibration
+
+Treat platform difficulty as empirical, not just conceptual.
+
+Downgrade or reject candidates when:
+
+- the likely oracle is a tiny one-file patch
+- all tests reduce to variants of the same condition
+- a strong agent can locate the fix by grepping one or two obvious symbols from the prompt
+- a previous difficulty check shows any frontier agent at `5/5` or aggregate pass rate `>= 80%`
+
+For Python tasks, keep only candidates likely to make strong agents fail after understanding the prompt, not merely candidates that look complex by subsystem name.
+
 ## Clone Handoff
 
 Pass only the mined artifact to `task-clone` when possible. The clone phase should not re-mine GitHub, rescan history, or re-read unrelated diffs unless the artifact is missing a required field.
+
+The artifact must include enough verifier-facing API detail for clone to avoid
+guessing. For each tested implementation, include:
+
+- import path
+- class/function that owns the behavior
+- minimal valid constructor call
+- whether the implementation is always present in the pinned repo
+- any raw container or wrapper relationship
+
+If this is unclear, mark the candidate incomplete and do not clone yet.
 
 ## Transformation Hints
 
@@ -300,21 +368,8 @@ Assert externally visible behavior:
 - side-effect files prove skipped or unexecuted tests did not run
 - behavior without the edge case remains unchanged
 
-## Example Hard Candidate
+## Borderline Candidate Warning
 
-Issue domain: fixture teardown under `--maxfail=1` with JUnit XML.
+Fixture teardown under `--maxfail=1` with JUnit XML is now a borderline/retired pattern. It looks hard by subsystem names, but can collapse to a tiny `runtestprotocol` stop-flag patch and may be rated Medium if frontier agents pass reliably.
 
-Why hard:
-
-- requires runner/session stop logic
-- requires fixture teardown reporting
-- requires JUnit XML plugin outcome mapping
-- cannot be fixed by changing one output string
-
-Expected task behavior:
-
-- first failing test is reported
-- already-started fixture teardown error is also reported
-- later tests are not executed because maxfail is honored
-- no internal traceback
-- XML records both failure and error
+Use similar pytest reporting tasks only if the mined artifact shows a deeper architectural change than a one-branch teardown timing fix.

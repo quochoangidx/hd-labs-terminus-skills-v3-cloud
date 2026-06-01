@@ -28,6 +28,8 @@ Turn upstream behavior into verifier tests that are:
 
 Do not paste upstream test names or PR details into `instruction.md`.
 
+Every preservation test must map to a prompt sentence. If a test checks an unaffected mode, alias, fallback path, legacy layout, or normal case, add natural language to `instruction.md` such as "Keep `<mode>` behavior unchanged" or drop the test. Quality checks fail when verifier-only preservation requirements are missing from the prompt.
+
 ## Test Set Shape
 
 For hard tasks, aim for 4-6 tests:
@@ -91,6 +93,8 @@ Before finalizing tests, list every literal or public symbol asserted by tests:
 - boundary values
 
 Ensure each appears in `instruction.md` in natural language. If it is not fair to put it in the prompt, remove or weaken the test.
+
+Pay special attention to preservation cases: flags or modes that are not the main bug trigger still count as asserted behavior.
 
 ## Anti-Shortcut Ideas
 

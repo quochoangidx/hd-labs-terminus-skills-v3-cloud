@@ -73,6 +73,12 @@ candidate:
   expected_behavior:
   preserved_behavior:
   edge_cases:
+  test_surface:
+    primary_api:
+    secondary_apis:
+    constructor_contracts:
+    offline_fixtures:
+    skip_guard_policy:
   scoring:
     subsystem_interaction:
     deterministic_reproducibility:
@@ -84,6 +90,10 @@ candidate:
 ```
 
 If this exists, inspect only touched files, focused upstream tests, and support files needed to stage/build/run the task. Do not rescan large repo history or re-open unrelated issues.
+
+If the artifact is missing `test_surface` details for a secondary implementation
+that tests will cover, fill that gap before writing verifier tests. Do not guess
+constructor signatures from class names.
 
 ## Dedupe Registry
 
@@ -237,6 +247,9 @@ Write like a real engineer reporting a bug:
 - No step-by-step implementation guide.
 - No task name in the prompt.
 - No canary strings.
+- If tests require a secondary implementation that is not obvious from the
+  public behavior, name the relevant module or file path without giving the
+  exact patch. This is allowed instruction sufficiency, not a solution hint.
 
 Prompt sanitizer must remove:
 
@@ -314,6 +327,14 @@ Verifier matrix must include:
 
 Every test function needs a docstring. Every asserted behavior must be present in `instruction.md`.
 
+Preservation tests are not exempt from prompt coverage. If a verifier checks that non-target modes, aliases, fallback paths, legacy layouts, or normal behavior still work, `instruction.md` must say so naturally.
+
+Example:
+
+```md
+Fix the `--import-mode=importlib` collection case. Keep the existing `prepend` and `append` import modes working for the same shadowed-layout projects, and preserve assertion rewriting for nested package tests.
+```
+
 Anti-shortcut tactics:
 
 - use temporary directories and generated project names
@@ -324,6 +345,44 @@ Anti-shortcut tactics:
 
 The oracle patch must pass the direct regression and at least one variant, proving it is not verifier-targeted hardcoding.
 
+## Verifier API Sanity
+
+Before packaging, run a focused smoke check for every import and constructor
+used by `tests/test_outputs.py`.
+
+For each tested API/class, verify:
+
+- the import works in the pinned starting repo
+- the constructor call matches the real signature
+- the object under test actually owns the method/property being asserted
+- skip guards catch only genuine absence, not broken construction or wrong API
+- wrappers and raw containers are not confused
+
+Bad pattern:
+
+```python
+try:
+    from package.platform.response import RawResponse
+except ImportError:
+    pytest.skip("not available")
+
+resp = RawResponse(wrapper_like_arg, request_method="GET")
+```
+
+The `ImportError` guard does not protect against a wrong constructor. If the
+class exists, a `TypeError` is a verifier bug. Use the real wrapper class or
+remove the secondary-implementation test.
+
+Recommended smoke command before Harbor:
+
+```bash
+cd <task-folder>
+python3 -m py_compile tests/test_outputs.py
+```
+
+Then run oracle and nop. A broken verifier must be fixed before any difficulty
+or quality signal is trusted.
+
 ## tests/test.sh
 
 Prefer the docs/current offline pattern with pytest already installed in the image:
@@ -333,10 +392,16 @@ Prefer the docs/current offline pattern with pytest already installed in the ima
 set -uo pipefail
 
 mkdir -p /logs/verifier
+
+if [ "$PWD" = "/" ]; then
+    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
+    echo 0 > /logs/verifier/reward.txt
+    exit 0
+fi
+
 cd /app
 
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-
 if [ $? -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
 else
@@ -344,7 +409,40 @@ else
 fi
 ```
 
-Keep the final reward block in this literal `$?` shape for non-milestone tasks.
+The final reward block must be exactly this shape because the platform static
+checker matches it literally. Do not store `$?` in a variable, wrap the block in
+a helper, add extra commands after it, or rewrite it as `pytest && echo 1`.
+
+Dependency policy is platform-sensitive. Never download from the network in
+`tests/test.sh`.
+
+Use the mode that matches the active platform quality checker:
+
+- If the checker flags `test_deps_in_image`, keep test-only dependencies out of
+  the app image and install them in `tests/test.sh` from bundled local wheels
+  with `--no-index`.
+- If the checker follows the newer docs that require baked verifier deps,
+  install `pytest`, `pytest-json-ctrf`, and verifier deps in the Dockerfile.
+
+In both modes, pin exact versions and keep runtime/project dependencies separate
+from verifier-only dependencies. For editable installs of the target package,
+prefer `pip install --no-deps -e .` after installing pinned deps so project
+metadata cannot fetch or override unpinned packages.
+
+## Quality Preflight
+
+Before packaging or platform upload:
+
+- run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
+- include preservation/non-regression test coverage in the prompt, including modes not directly part of the bug trigger
+- run a verifier API sanity audit for every imported class/function and every
+  constructor used in tests
+- remove implementation hints, issue URLs, PR IDs, commit hashes, upstream test names, and private helper names from `instruction.md`
+- verify `tests/test.sh` does not run `apt-get`, `npm install`, or network downloads; if it runs `pip install`, it must use only bundled local wheels with `--no-index`
+- verify Dockerfile does not `COPY tests/`, `COPY solution/`, or create `/tests`, `/solution`, `/oracle`, `/logs/verifier`
+- verify `environment/ <= 100 MiB` and no file under `environment/` exceeds `50 MiB`
+- remove `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, and local notes from the submission ZIP
+- run oracle and nop; nop must fail for the intended behavior, not missing deps or setup errors
 
 ## Quota Discipline
 
@@ -394,14 +492,14 @@ Zip task contents, not the containing folder:
 
 ```bash
 cd tbrain-<problem-slug>
-find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' \) -print
+find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' -o -name '.ruff_cache' -o -name '.pytest_cache' -o -name '.mypy_cache' \) -print
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests pyproject.toml \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*.pyc'
+zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml pyproject.toml environment solution tests \
+    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc'
 ```
 
-For tasks without `pyproject.toml`, omit it from the zip command. The ZIP must contain only submission-required files/folders, not `reports/`, `submissions/`, `workspace/`, logs, caches, or scratch notes.
+Regular task ZIPs must include task-root `pyproject.toml`. The ZIP must contain only submission-required files/folders, not `reports/`, `submissions/`, `workspace/`, logs, caches, or scratch notes.
 
 ## Hand-Off
 
