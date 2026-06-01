@@ -33,6 +33,17 @@ find environment -type f \( -name '*.key' -o -name '*.pem' -o -name '*.crt' -o -
 find environment \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycache__' \) -print
 ```
 
+Check task-environment hint leakage:
+
+```bash
+find environment -type f \( -iname 'README*' -o -iname 'spec*.md' -o -iname '*architecture*' -o -iname '*.md' -o -iname '*.txt' \) -print
+grep -RInE 'step[- ]by[- ]step|solution|hint|TODO|walkthrough|implement by|fix by|you should|verifier|oracle|hidden tests' environment || true
+```
+
+Environment docs may define realistic API contracts, schemas, protocols, or
+business rules. They must not contain procedural solve guides, commented
+solution plans, or extra task goals that should have been in `instruction.md`.
+
 Check blacklist-prone database substrings only if CI or docs mention them:
 
 ```bash

@@ -30,6 +30,11 @@ Do not paste upstream test names or PR details into `instruction.md`.
 
 Every preservation test must map to a prompt sentence. If a test checks an unaffected mode, alias, fallback path, legacy layout, or normal case, add natural language to `instruction.md` such as "Keep `<mode>` behavior unchanged" or drop the test. Quality checks fail when verifier-only preservation requirements are missing from the prompt.
 
+Do not move prompt requirements into environment README/spec files to satisfy
+length or style limits. Environment docs can define realistic schemas,
+protocols, and business rules, but they must not become hidden solution guides
+or secondary instructions for the agent.
+
 ## Test Set Shape
 
 For hard tasks, aim for 4-6 tests:

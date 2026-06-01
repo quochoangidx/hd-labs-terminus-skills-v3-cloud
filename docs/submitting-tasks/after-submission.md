@@ -8,9 +8,9 @@ What happens after you submit your task, and how to handle feedback.
 |-------|----------|
 | Automated CI checks | Immediate |
 | Peer review assignment | 1 day |
-| Initial review | 1-3 business days |
-| Follow-up reviews | 1-2 business days |
-| **Total** | 3-7 business days |
+| Initial review | 1-7 business days |
+| Follow-up reviews | 1-7 business days |
+| **Total** | 7-14 business days |
 
 ## Review Process
 

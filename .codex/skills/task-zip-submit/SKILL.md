@@ -13,7 +13,7 @@ Zip the contents of the task folder, not the folder itself.
 
 Task folders usually live under `workspace/`. Zip from inside the task folder, not from the repository root. Put submission ZIPs under `workspace/submissions/` so generated artifacts stay ignored.
 
-The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist. Do not include `reports/`, `submissions/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
+The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist. Do not include `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
 
 For a Regular task, the ZIP root should contain:
 
@@ -41,9 +41,10 @@ Milestone ZIPs must not include root-level `instruction.md`, `solution/`, or `te
 From the task root:
 
 ```bash
-find . \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycache__' -o -name 'target' -o -name '.git' \) -print
+find . \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycache__' -o -name 'target' -o -name '.git' -o -name '.env' \) -print
 find . -name '*.pyc' -print
 find . \( -name '.ruff_cache' -o -name '.pytest_cache' -o -name '.mypy_cache' \) -print
+find environment -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -name 'AGENTS.md' \) -print 2>/dev/null || true
 ```
 
 Delete junk before packaging:
@@ -62,7 +63,7 @@ From inside the task folder:
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
 zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml pyproject.toml environment solution tests \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc'
+    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
 ```
 
 ## Milestone ZIP
@@ -73,7 +74,7 @@ From inside the task folder:
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
 zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc'
+    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
 ```
 
 ## Verify
@@ -81,7 +82,7 @@ zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
 ```bash
 TASK_NAME="$(basename "$PWD")"
 unzip -l "../submissions/${TASK_NAME}.zip" | head -40
-unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|\.ruff_cache|\.pytest_cache|reports/|submissions/|workspace/' || true
+unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|/\.env|\.ruff_cache|\.pytest_cache|CLAUDE\.md|skills\.md|AGENTS\.md|reports/|submissions/|jobs/|workspace/' || true
 ```
 
 The first listing must not show an extra top-level parent folder.
@@ -103,11 +104,27 @@ environment/Dockerfile
 
 Also good: every path in the ZIP starts with one of the allowlisted roots (`instruction.md`, `task.toml`, `pyproject.toml`, `environment/`, `solution/`, `tests/`) for Regular tasks.
 
+Before upload, inspect environment README/spec/config/comment-heavy files for
+hidden solution walkthroughs or prompt-bypass instructions. Supporting docs
+must read like realistic engineering artifacts and all task goals must remain
+in `instruction.md`.
+
 ## Submission Reminder
 
 On first upload:
 
 - upload ZIP to Snorkel Expert Platform -> Terminus-2nd-Edition
-- check rubric generation
+- check "Generate Rubric(s)" while "Send to Reviewer" is unchecked
 - keep "Send to Reviewer" unchecked
 - inspect CI and generated rubric before final reviewer submission
+- edit the generated rubric for accuracy and completeness
+- verify rubric lines start with `Agent`, end with `, +/-N`, use only values 1,
+  2, 3, or 5, never use 4, and focus on trace-evidenced behavior rather than
+  final pytest results
+- ensure regular-task rubrics have at least three negative criteria and a 10-40
+  positive-point total; milestone rubrics need at least one negative criterion
+  and 10-40 positive points per milestone
+- before final reviewer submission, uncheck "Generate Rubric(s)" so the edited
+  rubric is not overwritten, then check "Send to Reviewer"
+- after final submission, expect peer review in 1-7 business days; total review
+  cycles can take 7-14 business days

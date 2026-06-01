@@ -13,9 +13,9 @@ Tasking is performed through the **Terminus-2nd-Edition** project on the Snorkel
 5. Create and test your solution
 6. Write and verify tests
 7. Run agents 
-8. Create ZIP file, check rubric generation checkbox, and Submit on platform
-9. Review CI feedback and iterate + review generated rubric and edit for accuracy and completeness
-10. When CI is passing, submit on platform to a reviewer
+8. Create ZIP file, check "Generate Rubric(s)", and submit without sending to reviewer
+9. Review CI feedback, edit the generated rubric for accuracy and completeness, and iterate
+10. When CI is passing, uncheck "Generate Rubric(s)" and submit to a reviewer
 
 ---
 
@@ -73,8 +73,9 @@ category = "software-engineering"
 subcategories = [ ]
 # The number of milestones in the task (can be zero if not a milestone task)
 number_of_milestones = 0
-# Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files. Include all files in the environment when counting.
-codebase_size = "minimal"
+# Size of the codebase for new submissions: small -> 20+ files, large -> 200+ files.
+# "minimal" is blocked for new submissions. Count files in environment/ that the agent works with.
+codebase_size = "small"
 # Coding languages used in the oracle solution or required by the agent
 languages = [ "bash" ]
 # For tool_specific, api_integration, and db_interaction subcategories, please include specific tool, api framework, or database software
@@ -179,9 +180,7 @@ fi
 
 # pytest and pytest-json-ctrf must be pre-installed in the Docker image.
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-rc=$?
-
-if [ "$rc" -eq 0 ]; then
+if [ $? -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt
@@ -316,7 +315,7 @@ harbor tasks check -m openai/@openai/gpt-5.2 harbor_tasks/<task_name>
 3. Click **Start** on the _Submission_ node
 4. Upload your ZIP file
 5. Keep "Send to reviewer" unchecked
-6. Check the rubrics checkbox
+6. Check the "Generate Rubric(s)" checkbox
 7. Submit
 
 ## Step 14: Check CI results and rubric then Iterate until CI looks good  
@@ -325,11 +324,11 @@ harbor tasks check -m openai/@openai/gpt-5.2 harbor_tasks/<task_name>
 3. Click "Revise"
 4. Check CI Results & update task as needed
 5. Check the now generated rubric and edit it within the textbox for accuracy and completeness
-5. Re-upload a new .zip file if necessary
+6. Re-upload a new .zip file if necessary
    - Use the [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) to confirm you have addressed high-severity review criteria before resubmitting.
    - _If you make any significant changes to your task, you must update your rubric accordingly in order to align with the current version of your task._
-6. Keep "Send to Reviewer" Unchecked 
-7. Submit 
+7. Keep "Send to Reviewer" unchecked while iterating. Leave "Generate Rubric(s)" checked only when you need the platform to regenerate the rubric; otherwise uncheck it so your edited rubric is not overwritten.
+8. Submit
 
 ## Step 15: Submit your task to Reviewer
 1. After email notification that your submission is now back in your revision queue, go to [Snorkel Expert Platform](https://experts.snorkel-ai.com/). 
@@ -337,11 +336,11 @@ harbor tasks check -m openai/@openai/gpt-5.2 harbor_tasks/<task_name>
 3. Click "Revise"
 4. Check CI results
 5. Check rubric and edit for accuracy and completeness
-6. If all good, check "Send to Reviewer"
+6. If all good, uncheck "Generate Rubric(s)" and check "Send to Reviewer"
 7. Submit
 
 ## Step 16: Monitor Status
-After submission. wait for peer review (1-3 business days)
+After submission. wait for peer review (1-7 business days)
 
 ---
 
@@ -350,7 +349,7 @@ After submission. wait for peer review (1-3 business days)
 ### Review Process
 
 1. **Automated checks** runs immediately
-2. **Peer review** within 1-3 business days
+2. **Peer review** within 1-7 business days
 3. **Feedback** provided if changes needed
 4. **Acceptance** when all criteria met
 

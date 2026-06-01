@@ -196,10 +196,8 @@ Before accepting the verifier, answer these questions:
 - Would a source-grep patch or prompt-keyword search lead directly to the fix?
 - Are there at least two independent failure modes for incomplete fixes?
 - Are preservation tests explicitly described in `instruction.md`?
-- Are verifier dependencies handled in the mode expected by the active platform
-  checker?
-- Does `tests/test.sh` avoid network access and use only bundled local wheels if
-  it installs test-only packages?
+- Are verifier dependencies available before `tests/test.sh` starts?
+- Does `tests/test.sh` avoid runtime setup and network access?
 
 If any answer is no, repair the task before running real agents.
 
@@ -229,18 +227,19 @@ fi
 The final reward block must be exactly this shape because the platform static
 checker matches it literally. Do not store `$?` in a variable, wrap the block in
 a helper, add extra commands after it, or rewrite it as `pytest && echo 1`.
+Do not add `exit $?` or any other trailing exit after the final `fi`. Harbor
+reads `/logs/verifier/reward.txt` for pass/fail; the script's exit code is not
+the reward signal, and `check_test_sh` rejects the extra exit.
 
-Verifier dependency policy is platform-sensitive. Never download from the
-network in `tests/test.sh`.
+Verifier dependencies must be available before `tests/test.sh` starts. Install
+`pytest`, `pytest-json-ctrf`, and other verifier-only packages during Docker
+build with exact pins.
 
-If the active quality checker flags `test_deps_in_image`, keep test-only
-packages out of the app image and install `pytest`, `pytest-json-ctrf`, and
-other verifier-only packages in `tests/test.sh` from bundled local wheels using
-`--no-index`.
+Narrow exception: local-only installs from preloaded wheels are acceptable when
+needed, but they must use `--no-index`, exact versions, and no network. Do not
+use this exception to hide an incomplete Dockerfile.
 
-If the active platform docs/checker require baked verifier dependencies, install
-them during Docker build instead. In either mode, pin exact versions and keep
-project runtime dependencies separate from verifier-only packages.
+Keep project runtime dependencies separate from verifier-only packages.
 
 ## Oracle Pattern
 

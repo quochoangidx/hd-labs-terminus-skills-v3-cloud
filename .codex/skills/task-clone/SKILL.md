@@ -282,6 +282,17 @@ Prompt sanitizer must remove:
 - implementation guidance such as "change `nextitem`" or "edit `runtestprotocol`"
 - benchmark meta language such as verifier, oracle, hidden tests, rubric, or CI
 
+Environment files must not smuggle the solution:
+
+- README, config, scripts, comments, TODOs, and source files must not contain
+  step-by-step walkthroughs, procedural hints, or commented solution plans.
+- `spec.md`, README, and architecture docs may define schemas, protocols, API
+  contracts, or business rules, but they must describe what is required, not
+  how to implement the fix.
+- Do not split the task's prompt/goals out of `instruction.md` into
+  environment docs to satisfy length limits. Supporting docs should look like
+  realistic engineering artifacts, not LLM-style prompt extensions.
+
 Good bugfix shape:
 
 ```md
@@ -303,6 +314,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 `environment/Dockerfile` must:
 
 - use `FROM ...@sha256:<digest>`
+- use a sanctioned or explicitly exempt final runtime base image, such as
+  `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`,
+  `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`
 - install `tmux`, `asciinema`, `bash`, and usually `util-linux`
 - include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
 - install build tools only when the agent must rebuild source
@@ -310,6 +324,16 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
 - work with `allow_internet = false` at agent/verifier runtime
+- avoid heredocs and opaque generated source in the Dockerfile; store source as
+  files and `COPY` it
+- use one clean apt transaction per stage with `--no-install-recommends` and
+  remove `/var/lib/apt/lists/*`
+- pin downloaded binaries by version and checksum; avoid `curl | sh`
+- order layers from stable manifests/dependencies to volatile task source
+- extract copied archives during build and remove the archive in the same stage
+- avoid broad recursive `chmod -R` or `chown -R`; use targeted `COPY` metadata
+- keep package-manager caches, compiler caches, and unused build outputs out of
+  the final image
 
 Add task-root `pyproject.toml` for upstream repos:
 
@@ -324,7 +348,11 @@ Remove macOS junk and secret-shaped files:
 ```bash
 find <task> \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' \) -print
 find <task>/environment -type f \( -name '*.key' -o -name '*.pem' -o -name '*.crt' -o -name 'id_rsa*' \) -print
+find <task>/environment -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -name 'AGENTS.md' \) -print
 ```
+
+Do not leave AI-framework scaffolding filenames such as `CLAUDE.md`,
+`skills.md`, or similar files in `environment/`.
 
 ## Oracle Pattern
 
@@ -454,22 +482,24 @@ fi
 The final reward block must be exactly this shape because the platform static
 checker matches it literally. Do not store `$?` in a variable, wrap the block in
 a helper, add extra commands after it, or rewrite it as `pytest && echo 1`.
+Do not append `exit $?` or any trailing exit after the final `fi`. Harbor uses
+`/logs/verifier/reward.txt`, not the script exit code, and `check_test_sh`
+expects the reward block to be the script ending.
 
-Dependency policy is platform-sensitive. Never download from the network in
-`tests/test.sh`.
+Verifier dependencies must be available before `tests/test.sh` starts. The
+default docs-compliant path is to install `pytest`, `pytest-json-ctrf`, and any
+verifier-only dependencies in the Dockerfile with exact pins. `tests/test.sh`
+should run pytest and write `/logs/verifier/reward.txt`; it must not perform
+runtime setup or fetch from the network.
 
-Use the mode that matches the active platform quality checker:
+Narrow exception: local-only installs from preloaded wheels are acceptable when
+needed, but they must use `--no-index`, exact versions, and no network. Do not
+use this exception to hide an incomplete Dockerfile.
 
-- If the checker flags `test_deps_in_image`, keep test-only dependencies out of
-  the app image and install them in `tests/test.sh` from bundled local wheels
-  with `--no-index`.
-- If the checker follows the newer docs that require baked verifier deps,
-  install `pytest`, `pytest-json-ctrf`, and verifier deps in the Dockerfile.
-
-In both modes, pin exact versions and keep runtime/project dependencies separate
-from verifier-only dependencies. For editable installs of the target package,
-prefer `pip install --no-deps -e .` after installing pinned deps so project
-metadata cannot fetch or override unpinned packages.
+Keep runtime/project dependencies separate from verifier-only dependencies. For
+editable installs of the target package, prefer `pip install --no-deps -e .`
+after installing pinned deps so project metadata cannot fetch or override
+unpinned packages.
 
 ## Quality Preflight
 
@@ -480,9 +510,18 @@ Before packaging or platform upload:
 - run a verifier API sanity audit for every imported class/function and every
   constructor used in tests
 - remove implementation hints, issue URLs, PR IDs, commit hashes, upstream test names, and private helper names from `instruction.md`
-- verify `tests/test.sh` does not run `apt-get`, `npm install`, or network downloads; if it runs `pip install`, it must use only bundled local wheels with `--no-index`
+- remove hidden walkthroughs, procedural hints, and prompt-bypass instructions
+  from environment files, comments, README, configs, scripts, TODOs, `spec.md`,
+  and architecture docs
+- verify `tests/test.sh` does not run runtime setup, `apt-get`, `npm install`, or network downloads; if it runs `pip install`, it must use only bundled local wheels with `--no-index` and there must be a concrete reason not to bake those verifier deps in the image
 - verify Dockerfile does not `COPY tests/`, `COPY solution/`, or create `/tests`, `/solution`, `/oracle`, `/logs/verifier`
+- verify Dockerfile uses a sanctioned/exempt final runtime base, has no
+  heredoc-generated source files, no tag-only `FROM` image, no unverified
+  downloads, no stale copied archives, and no broad recursive permission rewrites
 - verify `environment/ <= 100 MiB` and no file under `environment/` exceeds `50 MiB`
+- verify `environment/` contains no `.git`, `.env`, credentials, package caches,
+  build outputs, or AI-framework scaffolding files such as `CLAUDE.md` or
+  `skills.md`
 - remove `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, and local notes from the submission ZIP
 - run oracle and nop; nop must fail for the intended behavior, not missing deps or setup errors
 

@@ -194,14 +194,16 @@ exec "$@"
 ```
 
 **Cause 2: `set -euo pipefail` causes early exit.**
-If any command fails before writing `reward.txt`, the script exits. Drop `-e` and capture the exit code. Pytest and any plugins should be pre-installed in the Docker image; `test.sh` should only run the verifier and write the reward file (see [Writing Tests](/portal/docs/creating-tasks/writing-tests)):
+If any command fails before writing `reward.txt`, the script exits. Drop `-e`
+and use the canonical reward block at the end of the script. Pytest and any
+plugins should be pre-installed in the Docker image; `test.sh` should only run
+the verifier and write the reward file (see [Writing Tests](/portal/docs/creating-tasks/writing-tests)):
 ```bash
 set -uo pipefail
 mkdir -p /logs/verifier
 
-python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_m1.py -rA && rc=0 || rc=$?
-
-if [ $rc -eq 0 ]; then
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_m1.py -rA
+if [ $? -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt
@@ -281,7 +283,7 @@ Known intermittent issue. Resubmit. If persistent, post your submission ID and f
 ### Reviews & Disputes
 
 **How long does review take?**
-Assessments: ~24 hours (excluding weekends). Task reviews: 1–3 business days, though backlogs can push this to a week.
+Assessments: ~24 hours (excluding weekends). Task reviews: 1–7 business days.
 
 **My task keeps coming back with blank, incorrect, or mismatched feedback.**
 Known caching issue — reviewers may receive stale or wrong zip files. If the feedback references files, code, or features not in your submission, dispute with screenshots and escalate in #terminus-2nd-edition-submission.

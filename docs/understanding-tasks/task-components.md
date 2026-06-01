@@ -15,7 +15,7 @@ my-task-folder/
 │                           # - task_type
 │                           # - subcategories (if none, leave empty)
 │                           # - difficulty
-│                           # - codebase_size (minimal | small | large)
+│                           # - codebase_size (small | large for new submissions)
 │                           # - number_of_milestones (0 if no milestones)
 │                           # - languages
 │                           # - tags (3-6 keywords)
@@ -60,7 +60,7 @@ This is a file that contains these required metadata:
 * **Task Type**: Each task must have exactly one task type from the list of tasks defined in the Task Type section.
 * **Task Subtype/subcategories**: If your task has any subcategories it aligns with, then you will include each subtype it aligns to here. If no subcategories align with your task, leave this empty. See the Task Subtypes section for more information.
 * **Number of Milestones**: The number of milestones present in the task, if no milestones then use the value of **0**
-* **Codebase Size**: One of `minimal`, `small`, or `large`—a rough scale of how many files in the task environment the agent operates on (not files the agent produces). Bands are minimal ≈ 0–20, small ≈ 20+, large ≈ 200+ files.
+* **Codebase Size**: For new submissions, use `small` or `large`—a rough scale of how many files in the task environment the agent operates on (not files the agent produces). Bands are small ≈ 20+ and large ≈ 200+ files. `minimal` (0–19 files) is blocked for new submissions.
 * **Runtime Limits**: Each task must specify timeouts, including maximum agent runtime (agent_timeout_sec), maximum verifier runtime (verifier_timeout_sec), and maximum environment build runtime (environment_build_timeout_sec), to ensure tasks are bounded and reproducible.
 * **Tags**: Each task must include ~3-6 descriptive tags in the manifest. Tags are free-form keywords that capture important tools, libraries, techniques, or subtopics relevant to the task.
 
@@ -79,8 +79,8 @@ category = "software-engineering"
 subcategories = [ ]
 # The number of milestones in the task (can be zero if not a milestone task)
 number_of_milestones = 0
-# Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files. Count includes all files in the environment (not files the agent produces).
-codebase_size = "minimal"
+# Size of the codebase for new submissions: small -> 20+ files, large -> 200+ files. Count includes files in environment/ that the agent works with.
+codebase_size = "small"
 # Coding languages used in the oracle solution or required by the agent
 languages = [ "bash" ]
 # For tool_specific, api_integration, and db_interaction subcategories, please include specific tool, api framework, or database software
@@ -157,6 +157,8 @@ COPY app/ /app/
 - `/oracle/` - Solution folder copied here at runtime
 - `/tests/` - Tests folder copied here at runtime
 
+**Environment documentation files (spec.md, README.md, architecture docs):** These must read like realistic system specifications (API contracts, DB schemas, RFCs) — **not** step-by-step solution guides — and must not be used to split task instructions out of `instruction.md` to dodge its length limits. See [Spec Files and the Instruction-Length Loophole](/portal/docs/understanding-tasks/prompt-styling) for the full rules.
+
 ### 4. Oracle Solution (solution/solve.sh)
 
 Expert-authored step-by-step solution that reliably completes the task. The solution folder is copied to `/oracle/` at runtime and executed from the working directory.
@@ -201,10 +203,8 @@ The verifier tests themselves must always be Python pytest tests. For non-Python
 
 # Run tests
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-rc=$?
-
 # Produce reward file (REQUIRED)
-if [ "$rc" -eq 0 ]; then
+if [ $? -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt
@@ -216,6 +216,8 @@ fi
 - `/logs/verifier/reward.json` - JSON with multiple metrics: `{ "runtime_sec": 1.23, "accuracy": 0.95 }`
 
 Harbor reads `reward.txt` by default and falls back to `reward.json`.
+
+> **On the reward block and exit codes:** The `if [ $? -eq 0 ] ... fi` reward block is the **canonical end of `test.sh`**. No trailing `exit` statement is required or desired. Harbor reads `/logs/verifier/reward.txt` to determine pass/fail — **not** the script's exit code — so a failing pytest run correctly writes `0` via the `else` branch even though the script itself exits `0`. Reviewers must **not** flag a missing trailing `exit` as a defect, and the `check_test_sh` static gate enforces this exact shape (adding `exit $?` after `fi` will fail CI).
 
 **Key principles:**
 - **Must produce reward file** - This is how Harbor determines success/failure

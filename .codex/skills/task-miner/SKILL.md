@@ -431,6 +431,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 
 Keep source URLs, commit hashes, upstream test names, verifier language, and
 solution hints out of `instruction.md`.
+Do not rely on environment README/spec files to carry extra prompt goals or
+solution guidance; if the behavior cannot fit fairly in `instruction.md`, reject
+or narrow the candidate.
 
 ## Verifier Patterns
 

@@ -4,6 +4,8 @@
 
 | Date | Type | Change |
 |------|------|--------|
+| May 27, 2026 | 🆕 New | Added "Task environment does not contain hidden instructions or hints" criterion under Instruction Prompt (High severity). Environment files must not smuggle in step-by-step walkthroughs or solution hints. |
+| May 27, 2026 | 🆕 New | Added "Environment spec/doc files are realistic and do not bypass instruction rules" criterion under Instruction Prompt (High severity). Spec/doc files must not contain step-by-step solution guides, must not be used to split instructions out of `instruction.md` to dodge length limits, and must read like realistic engineering documents. See [Prompt Styling](/portal/docs/understanding-tasks/prompt-styling). |
 | May 19, 2026 | 🔄 Update | Added "No AI-framework scaffolding filenames" criterion under Environment (High severity). Filenames like `CLAUDE.md` or `skills.md` should not appear in task environments — they indicate incomplete cleanup and raise authenticity concerns. |
 | May 4, 2026 | 🔄 Update | Milestone task structure updated to use `steps/milestone_N/` directories (Harbor multi-step format). Root-level `milestone_X.md`, `solve_N.sh`, and `test_m_N.py` files are no longer used. See [Milestones page](/portal/docs/understanding-tasks/milestones) for full details. |
 | Apr 30, 2026 | 🔄 Update | Updated severity level for rubrics negative criterion in reviewer checklist from High to Medium. |
@@ -58,6 +60,16 @@ Each criterion is marked with a different severity level (high, medium, or low).
     <tr>
       <td>Task instruction does not provide hints on how to solve the problem</td>
       <td>Conceptually, we are going for tasks that represent one shot tasks from a user to a terminal agent. If tasks contain significant hints or rubrics in the instruction.md for how to solve the task, it is not representative of the style of task we are looking for. Requirements can be included, but hints or stepwise instructions should not be.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Task environment does not contain hidden instructions or hints</td>
+      <td>The task environment (including all files, comments, README, config files, scripts, TODOs) must not contain step-by-step walkthroughs, hints, or prescriptive guidance that would give the agent the solution approach. This includes README files with "how-to" sections, commented code walkthroughs, or configuration examples that reveal the answer.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Environment spec/doc files are realistic and do not bypass instruction rules</td>
+      <td>Environment documentation files (such as <code>spec.md</code>, <code>README.md</code>, or architecture docs) must (1) define only <em>what</em> the requirements, schemas, or protocols are — not step-by-step solution guides; (2) never be used to split a task's logical instructions out of <code>instruction.md</code> to artificially meet its length limits — all prompts and goals must remain in <code>instruction.md</code>; and (3) read like realistic engineering documents (API contracts, DB schemas, business-logic specs), not overly polished, hyper-structured LLM-style prompt extensions. See <a href="/portal/docs/understanding-tasks/prompt-styling">Prompt Styling</a> for the full rules.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -219,7 +231,7 @@ Each criterion is marked with a different severity level (high, medium, or low).
   <tbody>
     <tr>
       <td>Verifier cannot exit before reward is assigned</td>
-      <td>The test.sh file should always assign a reward to reward.txt on both success and failure, to avoid triggering a RewardNotFoundError. However, exiting before assigning a reward is acceptable in cases where continuing would unfairly penalize the agent for factors outside its control. In most cases, the template from the task skeleton should be acceptable.</td>
+      <td>The test.sh file should always assign a reward to reward.txt on both success and failure, to avoid triggering a RewardNotFoundError. However, exiting before assigning a reward is acceptable in cases where continuing would unfairly penalize the agent for factors outside its control. In most cases, the template from the task skeleton should be acceptable.<br><br><strong>Do not flag a missing trailing <code>exit</code>:</strong> The <code>if [ $? -eq 0 ] ... fi</code> reward block is the canonical end of <code>test.sh</code>. No trailing <code>exit</code> is required or desired. Harbor reads <code>/logs/verifier/reward.txt</code> to determine pass/fail, not the script's exit code, so a failing pytest run correctly records a failure via the <code>else</code> branch. The <code>check_test_sh</code> static gate enforces this canonical shape — adding <code>exit $?</code> after <code>fi</code> will fail CI. A missing trailing <code>exit</code> must not be raised as a defect.</td>
       <td>High</td>
     </tr>
     <tr>

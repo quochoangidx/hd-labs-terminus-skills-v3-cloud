@@ -41,6 +41,16 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 8. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
 9. Run oracle, CI checks, and real-agent trials before packaging.
 
+## Metadata Rules
+
+For new submissions:
+
+- Set `codebase_size` to `small` or `large`; do not use `minimal`.
+- Use `small` for roughly 20-199 useful files in `environment/`.
+- Use `large` for roughly 200+ useful files in `environment/`.
+- If the staged environment has fewer than 20 useful files, add realistic
+  project context or redesign the task instead of padding with blank filler.
+
 ## Prompt Rules
 
 `instruction.md` should:
@@ -50,6 +60,18 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 - Mention all required paths and output files.
 - Avoid issue URLs, PR numbers, exact test names, canaries, and rubrics.
 - Include enough edge-case requirements that tests are fair.
+
+Environment files must not compensate for a short prompt:
+
+- Do not hide step-by-step walkthroughs, TODO hints, commented solution guides,
+  or prescriptive implementation notes in README, config, scripts, comments, or
+  source files.
+- `spec.md`, README, and architecture docs may define requirements, schemas,
+  protocols, or business rules, but they must state what the system requires,
+  not how to solve the task.
+- Do not split the task's logical prompt or goals out of `instruction.md` into
+  environment docs to dodge length limits. Supporting docs should read like
+  realistic engineering artifacts, not prompt extensions.
 
 Before finalizing, run an instruction/test symmetry audit:
 
@@ -67,21 +89,32 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
 `environment/Dockerfile` must:
 
 - Use `FROM ...@sha256:<digest>`.
+- Use a sanctioned or explicitly exempt final runtime base image, such as
+  `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`,
+  `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`.
 - Install `tmux` and `asciinema`.
 - Pin language dependencies exactly.
-- Keep verifier dependency handling compatible with the active platform quality
-  checker. Never fetch packages from the network at verifier runtime.
+- Install verifier dependencies in the Docker image by default. Never fetch
+  packages from the network at verifier runtime.
 - Keep `environment/` under 100 MiB total and each file under 50 MiB.
 - Include `.dockerignore` for non-trivial environments.
+- Avoid heredocs for source files; store files on disk and `COPY` them.
+- Pin downloaded binaries by version and checksum; avoid `curl | sh`.
+- Order Dockerfile layers from stable dependencies to volatile task source.
+- Extract copied archives during build and remove the archive in the same stage.
+- Avoid broad recursive `chmod -R` or `chown -R`; use `COPY --chmod` or
+  `COPY --chown` for targeted metadata.
+- Keep `.git`, `.env`, credentials, package caches, build outputs, and
+  AI-framework scaffolding filenames such as `CLAUDE.md` or `skills.md` out of
+  `environment/`.
 
 For Python tasks, separate project/runtime dependencies from verifier-only
-dependencies.
+dependencies. Install `pytest`, `pytest-json-ctrf`, and verifier packages in
+the Docker image with exact pins.
 
-If the active quality checker flags `test_deps_in_image`, put verifier-only
-wheels under `tests/files/wheels` and install them in `tests/test.sh` with
-`--no-index`. If the active docs/checker require baked verifier dependencies,
-install `pytest`, `pytest-json-ctrf`, and verifier packages in the Docker image
-instead. Pin exact versions either way.
+Narrow exception: local-only installs from preloaded wheels are acceptable when
+needed, but they must use `--no-index`, exact versions, and no network. Do not
+use this exception to hide an incomplete Dockerfile.
 
 ## Verifier Rules
 
@@ -131,8 +164,13 @@ fi
 The final reward block must be exactly this shape because the platform static
 checker matches it literally. Do not store `$?` in a variable, wrap the block in
 a helper, add extra commands after it, or rewrite it as `pytest && echo 1`.
+Do not add `exit $?` or any trailing exit after the final `fi`: Harbor records
+pass/fail from `/logs/verifier/reward.txt`, and the static gate rejects that
+extra exit even though the script's own exit code is not the reward signal.
 
-Do not run `pip install`, `apt-get`, `npm install`, or network downloads in `tests/test.sh`.
+Do not run runtime setup, `apt-get`, `npm install`, or network downloads in
+`tests/test.sh`. If `pip install` is unavoidable, it must be local-only from
+preloaded wheels with `--no-index` and exact versions.
 
 ## Oracle Rules
 
@@ -155,11 +193,27 @@ harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
 ```
 
 For submission ZIPs, compress the contents of the task folder, not the folder itself.
+Generate rubrics through the platform UI before reviewer submission: check
+"Generate Rubric(s)" while "Send to Reviewer" is unchecked, wait for the
+generated rubric, edit it for accuracy, then uncheck "Generate Rubric(s)" before
+checking "Send to Reviewer" so the edited rubric is not overwritten.
+Rubrics must be trace-focused: non-milestone positive totals should be 10-40
+points; each milestone should account for 10-40 positive points; every line
+starts with `Agent` and ends with `, +/-N`; allowed values are only 1, 2, 3, or
+5; do not use 4; include at least three negative criteria for regular tasks and
+at least one negative criterion per milestone.
 
 Quality preflight:
 
+- `codebase_size` is `small` or `large`, not `minimal`
+- final runtime base image is sanctioned or explicitly exempt
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP
 - no `tests/` or `solution/` copied into the Docker image
-- no network dependency installation at verifier runtime; local wheel installs
-  are allowed only when needed to satisfy the active platform checker
+- no runtime dependency setup in `tests/test.sh` unless using a justified
+  local-only wheel exception with `--no-index`
+- no unverified downloads, `curl | sh`, stale copied archives, broad recursive
+  permission rewrites, or cache-hostile Dockerfile layer ordering
+- no hidden solution walkthroughs, procedural hints, or prompt-bypass
+  instructions in environment files, comments, README, configs, scripts, TODOs,
+  `spec.md`, or architecture docs
 - oracle passes, nop fails, and failures are behavioral rather than infrastructure
