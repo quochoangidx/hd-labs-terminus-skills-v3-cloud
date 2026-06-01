@@ -102,7 +102,8 @@ Hard limits:
 Reject heavy candidates unless all are true:
 
 - reproducer can run offline with small fixtures
-- bug is localized to a small subsystem
+- bug is localizable after slimming but still spans 5-6 meaningful components,
+  behavior surfaces, or project layers
 - verifier can use public CLI/API behavior
 - no GPU, browser, database, network, cluster, or long compile is needed
 - oracle can be a focused patch, not a rebuild of the whole project
@@ -221,7 +222,7 @@ Do not:
 - scaffold `workspace/tbrain-*`
 - write `instruction.md`, Dockerfile, verifier, or oracle patch
 - run large upstream test suites repeatedly
-- inspect more than 10 files unless the candidate is already high value and needs one extra confirmation
+- inspect more than 15 files unless the candidate is already high value and needs one extra confirmation
 - inspect more than 3 commits around the fix
 - enumerate unrelated test suites or full repository trees
 
@@ -258,11 +259,22 @@ Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 ## Hardness Filter
 
 For upstream bugfix mode, apply the repo-specific hard filters below.
-A good Hard candidate should require the agent to understand at least two pytest subsystems. Examples:
+A good Hard candidate should require the agent to understand 5-6 meaningful
+components, behavior surfaces, or project layers. Components can be source
+modules, public APIs, CLI/config parsing, build/dependency metadata, data/schema
+rules, cache/state management, error handling, compatibility paths, or test
+fixtures. Do not count trivial call-stack frames or files that are merely
+adjacent.
+
+Examples of component-rich candidates:
 
 - fixture finalization plus JUnit XML reporting
 - collection tree plus import/path mode
 - assertion rewriting plus traceback formatting
+- package discovery plus editable install metadata plus legacy fallback
+- requirement parsing plus marker evaluation plus wheel/cache selection
+- ORM query compilation plus model validation plus migration state rendering
+- HTTP redirect/retry handling plus header preservation plus transport state
 - warning capture plus terminal reporting
 - hook ordering plus test outcome propagation
 
@@ -275,6 +287,8 @@ Reject false-hard candidates:
 - single validation branch fixes
 - `<= 10` meaningful LOC in one obvious file unless prior agent trials show low pass rate
 - one-condition fixes such as "if stop flag then do X" when all verifier cases exercise the same branch
+- candidates with fewer than 4 meaningful components unless prior frontier-agent
+  trials show repeated failures for semantic reasons
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
 For category-profile mode, reject candidates when:
@@ -284,12 +298,16 @@ For category-profile mode, reject candidates when:
 - the source repo/app is so small that there is no meaningful discovery work
 - the prompt would need to reveal the exact implementation approach
 - the category label is only cosmetic and the real work is debugging
+- the task does not naturally involve at least 4 meaningful components,
+  behavior surfaces, or project layers; prefer 5-6 when available
 
 ## Candidate Scoring
 
 Score each axis from 1 to 5:
 
-- `subsystem_interaction`: needs multiple subsystems, data rules, build layers, or behavior surfaces, not one local branch
+- `subsystem_interaction`: 5 means 5-6 meaningful components/surfaces/layers
+  must be coordinated; 4 means four components and is borderline; 3 or lower is
+  too shallow for new Hard mining unless empirical agent failures justify it
 - `deterministic_reproducibility`: reproduces offline with stable inputs
 - `offline_viability`: no external service or missing plugin dependency
 - `anti_shortcut_hardness`: hard to satisfy with a narrow hardcode
@@ -299,7 +317,8 @@ Score each axis from 1 to 5:
 
 Reject if:
 
-- `subsystem_interaction < 3`
+- `subsystem_interaction < 4` unless prior real-agent evidence shows the task is
+  still hard for semantic reasons
 - `deterministic_reproducibility < 4`
 - `anti_shortcut_hardness < 3`
 - `offline_viability < 4`
@@ -329,6 +348,11 @@ candidate:
   task_slug:
   bug_signature:
   touched_files:
+  component_count:
+  component_map:
+    - name:
+      role:
+      evidence:
   subsystem_tags:
   runtime_class:
   external_requirements:
@@ -383,6 +407,8 @@ Downgrade or reject candidates when:
 - all tests reduce to variants of the same condition
 - a strong agent can locate the fix by grepping one or two obvious symbols from the prompt
 - a previous difficulty check shows any frontier agent at `5/5` or aggregate pass rate `>= 80%`
+- fewer than 4 meaningful components/surfaces/layers are required to understand
+  and solve the task
 
 For Python tasks, keep only candidates likely to make strong agents fail after understanding the prompt, not merely candidates that look complex by subsystem name.
 
