@@ -204,13 +204,20 @@ Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 
 ## Hardness Filter
 
-A good Hard candidate should require the agent to understand at least two pytest subsystems. Examples:
+**Platform diversity rules (enforced at submission):**
+- Only **medium** and **hard** model difficulty accepted — **easy is blocked** for all languages.
+- **Python tasks must be hard** model difficulty (≤20% pass rate) — medium Python tasks are blocked.
+- Final difficulty is determined by empirical pass rates from 5 runs each against GPT-5.2 and Claude Opus 4.6: Hard ≤ 20%, Medium 20–60%, Easy 60–80%.
+
+A good Hard candidate should require the agent to understand at least two interacting subsystems. For pytest, examples include:
 
 - fixture finalization plus JUnit XML reporting
 - collection tree plus import/path mode
 - assertion rewriting plus traceback formatting
 - warning capture plus terminal reporting
 - hook ordering plus test outcome propagation
+
+For non-pytest repos, apply the same principle: the fix must span multiple modules/subsystems or require domain-specific knowledge (RFC specs, protocol semantics, timing attacks, runtime introspection) that agents haven't memorized.
 
 Reject candidates solvable by only matching the issue title or changing one expected string.
 
@@ -248,6 +255,11 @@ Runtime classes:
 - `moderate`: imports a real package subset or writes temporary projects
 - `heavy`: large install/build or broad suite needed
 - `infra-heavy`: database, browser, GPU, network, or OS service; avoid for mass generation
+
+**Scoring → platform difficulty mapping:** These scores predict difficulty but do not replace empirical agent runs. Final difficulty is determined by pass rates from 5 runs per model:
+- Hard: ≤ 20% pass rate on best OR worst model
+- Medium: 20–60% pass rate
+- Easy: 60–80% pass rate (BLOCKED for new submissions; BLOCKED for Python at medium too)
 
 ## Output Artifact
 
@@ -311,6 +323,59 @@ Downgrade or reject candidates when:
 
 For Python tasks, keep only candidates likely to make strong agents fail after understanding the prompt, not merely candidates that look complex by subsystem name.
 
+## Go Source Queue
+
+When mining Go candidates, rotate through these repos:
+
+| Repo | Quota | Best task domains |
+|---|---:|---|
+| `gofiber/fiber` | low-medium | HTTP middleware, cookie/session, security middleware, concurrency |
+| `go-gorm/gorm` | low | ORM query generation, scan behavior, serialization, logger integration |
+| `urfave/cli` | low | flag parsing, command resolution, help generation |
+| `spf13/cobra` | low | completion, argument parsing, command traversal |
+| `go-jose/go-jose` | low | JWS/JWE parsing, header validation, cryptographic operations |
+| `golang/crypto` | medium | SSH protocol, certificate handling, key verification |
+| `golang/net` | medium | HTML parsing, HTTP/2, IDNA |
+| `grpc/grpc-go` | medium-heavy | xDS RBAC, transport, balancer, interceptors |
+| `ethereum/go-ethereum` | heavy | EVM, tracer, txpool, consensus — use Heavy Repo Mode |
+
+## Go Hardness Reality (Empirical)
+
+Lessons learned from actual agent trials on Go tasks. The following patterns consistently collapse to TRIVIAL or EASY despite looking complex conceptually:
+
+**TRIVIAL patterns (auto-reject for HARD):**
+- Single-condition guard fixes: "if flag then do X" → agents grep the error message and add the check (~100% pass rate)
+- Channel/mutex fixes under 30 LOC in one file → atomic.Bool + drain pattern is well-known
+- `app.toString()` → `string()` type fixes → one-line change, trivially greppable
+- Missing nil-check before method call → agents find the panic stack and add `if x != nil`
+- String comparison fixes: `Protocol()` → `Scheme()`, `==` → `!=` → too obvious
+
+**EASY patterns (risky for HARD, may pass at >60%):**
+- Fix in one file ≤30 meaningful LOC even if concept is interesting (e.g., HTML attribute dedup)
+- Fix that only adds a `return false` or `return error` at one obvious location
+- Config validation additions (e.g., "reject negative HSTSMaxAge") — pure input checking
+- Any fix where the instruction names the exact file and the fix is a local branch change
+
+**Reliably HARD patterns (target these):**
+- Multi-file fixes touching ≥2 subsystems where agent must understand the interaction (e.g., keys.go + server.go + certs.go for FIDO UP enforcement)
+- Fixes requiring NEW types/functions/interfaces that didn't exist before (e.g., `buildVerifiers()`, `verifierStrength`, `passwordVerifier` for timing-attack fix)
+- Protocol/spec compliance bugs requiring RFC knowledge agents haven't memorized (e.g., gRFC A41 identity source priority, RFC 7797 critical header integrity)
+- Timing/side-channel fixes where the agent must design the equalization strategy, not just add a check
+- Stack frame / runtime introspection bugs requiring understanding of `runtime.Callers`, `slog.NewRecord`, etc.
+- Server integration tests that exercise full handshake flows (SSH auth, gRPC RBAC policy evaluation)
+
+**Hardness scoring adjustments for Go:**
+- If source fix ≤ 15 LOC in one file → `anti_shortcut_hardness` max 2, likely TRIVIAL
+- If fix only adds a condition check without new types → `subsystem_interaction` max 2
+- If the bug can be found by grepping the error message in the instruction → `anti_shortcut_hardness` max 2
+- If fix requires creating ≥3 new unexported types/functions → `anti_shortcut_hardness` ≥ 4
+- If fix spans ≥3 source files with different roles → `subsystem_interaction` ≥ 4
+
+**Minimum LOC thresholds for Go HARD:**
+- Source-only fix (excluding tests): ≥ 30 meaningful LOC
+- OR fix spans ≥ 3 source files with distinct subsystem roles
+- OR fix requires understanding a specification (RFC, gRFC, WHATWG) that agents haven't seen in training data
+
 ## Clone Handoff
 
 Pass only the mined artifact to `task-clone` when possible. The clone phase should not re-mine GitHub, rescan history, or re-read unrelated diffs unless the artifact is missing a required field.
@@ -336,15 +401,32 @@ If this is unclear, mark the candidate incomplete and do not clone yet.
 6. Write oracle as `solution/fix.patch` plus `solution/solve.sh`.
 7. Test both the regression and normal behavior.
 
-## Prompt Template
+## Prompt Templates
 
+Vary the voice across tasks — do not repeat the same template. These are illustrative, not prescriptive:
+
+**Python test framework (pytest, unittest):**
 ```md
 Pytest in `/app` mishandles <observable scenario>. A user project that <setup> currently <bad behavior>.
 
 Fix pytest so `python -m pytest <command shape>` <required behavior>. The run should <preserve important existing behavior>. Do not change the user project's tests.
 ```
 
-Keep issue URLs and PR IDs out of `instruction.md`.
+**Python library (Django, pip, urllib3, httpx, pandas):**
+```md
+The package at `/app` <fails to / incorrectly handles> <observable scenario>. When <user workflow>, the result is <bad behavior> instead of <expected>.
+
+Fix the <module/subsystem> so that <observable contract>. <Preservation constraints>.
+```
+
+**Go library/framework:**
+```md
+The <library/middleware> at `/app/<path>/` <observable symptom>. <Context about when/how it manifests>.
+
+Fix it so that <behavioral requirement>. <Preservation: what must still work>. <Edge case contract if needed>.
+```
+
+Keep issue URLs, PR IDs, and commit hashes out of `instruction.md`.
 
 ## Verifier Patterns
 
