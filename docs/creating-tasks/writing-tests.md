@@ -156,7 +156,7 @@ def test_special_characters():
 
 ## tests/test.sh
 
-The test runner script sets up the verifier command, runs Python pytest against the test file, and produces a reward file. Do not replace pytest with another test framework such as JUnit, Jest, or `go test`; use Python pytest tests to drive and validate those systems when needed. It must not install packages or fetch anything from the network at runtime. Bake pytest, plugins, browser drivers, wheels, npm packages, and any other verifier dependencies into the Docker image instead.
+The test runner script sets up the verifier command, runs Python pytest against the test file, and produces a reward file. Do not replace pytest with another test framework such as JUnit, Jest, or `go test`; use Python pytest tests to drive and validate those systems when needed. It must not install packages or download from the network at runtime. Bake verifier dependencies into the Docker image, or use local-only installs from preloaded wheels bundled in `tests/wheels/`.
 
 ```bash
 #!/bin/bash

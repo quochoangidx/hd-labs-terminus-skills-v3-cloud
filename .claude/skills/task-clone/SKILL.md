@@ -190,7 +190,7 @@ difficulty = "hard"
 category = "debugging"
 subcategories = ["tool_specific"]
 number_of_milestones = 0
-codebase_size = "small"
+codebase_size = "small"                     # "small" = 20-199 env files, "large" = 200+ env files. "minimal" is BLOCKED.
 languages = ["python"]
 tags = ["<3-6 useful tags>"]
 expert_time_estimate_min = 60
@@ -271,14 +271,15 @@ Fix it so `<public command or API>` <observable result>. The run should still <p
 
 `environment/Dockerfile` must:
 
-- use `FROM ...@sha256:<digest>`
-- install `tmux`, `asciinema`, `bash`, and usually `util-linux`
+- use `FROM ...@sha256:<digest>` — the final-stage base MUST be a **sanctioned image**: `python:*`, `node:*`, `golang:*`, `rust:*`, `ubuntu:*`, `debian:*`, `mcr.microsoft.com/...`, `ghcr.io/snorkel-ai/...`, or `scratch`. Custom bases need exemption before submission. Builder stages may use other images.
+- **REQUIRED: install `tmux` and `asciinema`** — the agent runtime requires both to start a session. Missing either causes ALL agent runs to fail with zero verifier output. Also install `bash` and usually `util-linux`.
 - include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
 - install build tools only when the agent must rebuild source
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
 - work with `allow_internet = false` at agent/verifier runtime
+- if using `docker-compose.yaml`, set `custom_docker_compose = true` in `[metadata]`; if multi-container, also set `is_multi_container = true`
 
 Add task-root `pyproject.toml` for upstream repos:
 
@@ -288,12 +289,15 @@ target-version = "py312"
 extend-exclude = ["environment/repo"]
 ```
 
-Remove macOS junk and secret-shaped files:
+Remove macOS junk, secret-shaped files, and AI scaffolding files:
 
 ```bash
 find <task> \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' \) -print
 find <task>/environment -type f \( -name '*.key' -o -name '*.pem' -o -name '*.crt' -o -name 'id_rsa*' \) -print
+find <task>/environment -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -name '.cursorrules' -o -name '.cursor' \) -print
 ```
+
+Sanitize environment spec files: review README.md, spec files, and docs in `environment/repo/` to remove step-by-step guides, solution hints, or hidden instructions. Environment docs must read like real engineering documents, not solution walkthroughs.
 
 ## Oracle Pattern
 
@@ -385,7 +389,7 @@ or quality signal is trusted.
 
 ## tests/test.sh
 
-Prefer the docs/current offline pattern with pytest already installed in the image:
+Use the canonical test.sh pattern. The `check_test_sh` CI gate enforces this exact shape — do NOT store `$?` in a variable or add `cd /app` (WORKDIR handles that).
 
 ```bash
 #!/bin/bash
@@ -399,28 +403,23 @@ if [ "$PWD" = "/" ]; then
     exit 0
 fi
 
-cd /app
+pip3 install --break-system-packages --no-index --find-links /tests/wheels pytest pytest-json-ctrf 2>/dev/null
 
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-rc=$?
 
-if [ "$rc" -eq 0 ]; then
+if [ $? -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
 else
     echo 0 > /logs/verifier/reward.txt
 fi
 ```
 
-Dependency policy is platform-sensitive. Never download from the network in
-`tests/test.sh`.
+Dependency policy: never download from the network in `tests/test.sh`. Bake verifier dependencies into the Docker image, or use local-only installs from preloaded wheels bundled in `tests/wheels/`. When the CI check `test_deps_in_image` flags pytest in the Dockerfile, bundle wheels instead:
 
-Use the mode that matches the active platform quality checker:
-
-- If the checker flags `test_deps_in_image`, keep test-only dependencies out of
-  the app image and install them in `tests/test.sh` from bundled local wheels
-  with `--no-index`.
-- If the checker follows the newer docs that require baked verifier deps,
-  install `pytest`, `pytest-json-ctrf`, and verifier deps in the Dockerfile.
+```bash
+# Create wheels locally:
+pip3 download --dest tests/wheels/ --only-binary=:all: pytest==8.3.4 pytest-json-ctrf==0.5.0
+```
 
 In both modes, pin exact versions and keep runtime/project dependencies separate
 from verifier-only dependencies. For editable installs of the target package,
@@ -498,6 +497,19 @@ zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml pyproject.tom
 ```
 
 Regular task ZIPs must include task-root `pyproject.toml`. The ZIP must contain only submission-required files/folders, not `reports/`, `submissions/`, `workspace/`, logs, caches, or scratch notes.
+
+## Rubric
+
+After uploading the ZIP to Snorkel, create the rubric in the platform UI before sending to reviewer:
+
+- Minimum **3 negative-reward criteria** (e.g., "Agent hardcoded expected output instead of fixing the bug [-3]")
+- Use format: `"Agent <did/did not> <observable action>, [+/-N]"`
+- Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
+- Total rubric points: 10–40 for non-milestone tasks
+- Do NOT reference test names, metadata fields, or instruction items — rubric criteria must be independently observable
+- Rubric is authored in the Snorkel submission UI, not in the ZIP
+
+Remind the user to create the rubric after upload.
 
 ## Hand-Off
 
