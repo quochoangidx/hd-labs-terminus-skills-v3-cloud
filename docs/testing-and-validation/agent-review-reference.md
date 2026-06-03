@@ -50,7 +50,7 @@ Validates your task metadata:
 | `author_email` | Required. Can be "anonymous". |
 | `difficulty` | Must be: easy, medium, hard, or unknown |
 | `subcategories` | Must be any of _(can be multiple)_: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building". **If no subcategory aligns to your task, leave this BLANK**. |
-| `codebase_size` | New submissions must use `small` or `large`: rough scale of total files in the environment (not outputs the agent produces). Bands ≈ 20+ and ≈ 200+. `minimal` is blocked for new submissions.
+| `codebase_size` | Must be `minimal`, `small`, or `large`: rough scale of total files in the environment (not outputs the agent produces). Bands ≈ 0–20, ≈ 20+, ≈ 200+.
 | `number_of_milestones` | Must be: integer. **Must be 0 if no milestones.** For milestone tasks, must equal the number of `[[steps]]` blocks. |
 | `category` | Must be a valid category |
 | `tags` | Array of relevant tags |
@@ -294,7 +294,9 @@ set -uo pipefail
 mkdir -p /logs/verifier
 
 python -m pytest /tests/test_outputs.py -rA
-if [ $? -eq 0 ]; then
+rc=$?
+
+if [ "$rc" -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt

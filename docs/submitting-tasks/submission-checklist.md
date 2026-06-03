@@ -21,7 +21,6 @@ Use this checklist before every submission to ensure your task is complete and w
 
 **Always required:**
 - [ ] `task.toml` — Complete configuration with all required sections ([requirements](/portal/docs/understanding-tasks/task-requirements#tasktoml-requirements))
-- [ ] `codebase_size` is `small` or `large` for new submissions (`minimal` is blocked)
 - [ ] `environment/Dockerfile` — Builds successfully; language dependencies pinned, every `FROM` image digest-pinned, final runtime base sanctioned or exempt, and `environment/` within size limits ([requirements](/portal/docs/understanding-tasks/task-requirements#dependency-pinning))
 
 **Non-milestone tasks** (`number_of_milestones = 0`):
@@ -43,8 +42,7 @@ Use this checklist before every submission to ensure your task is complete and w
 
 ### Rubric
 - Every submission should include a rubric that is aligned to the task. 
-- Generate a synthetic rubric via the submission UI in the Snorkel Platform by checking "Generate Rubric(s)" and submitting without "Send to Reviewer"; then edit it for accuracy and completeness.
-- Before sending to reviewer, uncheck "Generate Rubric(s)" so the edited rubric is not overwritten.
+- You generate a synthetic rubric via the submission UI in the Snorkel Platform, then edit it for accuracy and completeness.
 - The rubric must include **at least three** criteria that assign **negative** rewards (for example, `-1`).
 - See the  [Rubrics page](/portal/docs/understanding-tasks/rubrics) for workflow details and quality criteria.
 

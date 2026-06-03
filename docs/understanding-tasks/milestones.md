@@ -95,7 +95,7 @@ category = "software-engineering"
 subcategories = []
 # Total milestone count — must match the number of [[steps]] blocks below
 number_of_milestones = 2
-codebase_size = "small"
+codebase_size = "minimal"
 languages = ["python", "bash"]
 tags = ["..."]
 expert_time_estimate_min = 60

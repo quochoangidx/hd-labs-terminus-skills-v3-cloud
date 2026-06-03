@@ -15,7 +15,7 @@ my-task-folder/
 │                           # - task_type
 │                           # - subcategories (if none, leave empty)
 │                           # - difficulty
-│                           # - codebase_size (small | large for new submissions)
+│                           # - codebase_size (minimal | small | large)
 │                           # - number_of_milestones (0 if no milestones)
 │                           # - languages
 │                           # - tags (3-6 keywords)
@@ -60,7 +60,7 @@ This is a file that contains these required metadata:
 * **Task Type**: Each task must have exactly one task type from the list of tasks defined in the Task Type section.
 * **Task Subtype/subcategories**: If your task has any subcategories it aligns with, then you will include each subtype it aligns to here. If no subcategories align with your task, leave this empty. See the Task Subtypes section for more information.
 * **Number of Milestones**: The number of milestones present in the task, if no milestones then use the value of **0**
-* **Codebase Size**: For new submissions, use `small` or `large`—a rough scale of how many files in the task environment the agent operates on (not files the agent produces). Bands are small ≈ 20+ and large ≈ 200+ files. `minimal` (0–19 files) is blocked for new submissions.
+* **Codebase Size**: One of `minimal`, `small`, or `large`—a rough scale of how many files in the task environment the agent operates on (not files the agent produces). Bands are minimal ≈ 0–20, small ≈ 20+, large ≈ 200+ files.
 * **Runtime Limits**: Each task must specify timeouts, including maximum agent runtime (agent_timeout_sec), maximum verifier runtime (verifier_timeout_sec), and maximum environment build runtime (environment_build_timeout_sec), to ensure tasks are bounded and reproducible.
 * **Tags**: Each task must include ~3-6 descriptive tags in the manifest. Tags are free-form keywords that capture important tools, libraries, techniques, or subtopics relevant to the task.
 
@@ -79,8 +79,8 @@ category = "software-engineering"
 subcategories = [ ]
 # The number of milestones in the task (can be zero if not a milestone task)
 number_of_milestones = 0
-# Size of the codebase for new submissions: small -> 20+ files, large -> 200+ files. Count includes files in environment/ that the agent works with.
-codebase_size = "small"
+# Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files. Count includes all files in the environment (not files the agent produces).
+codebase_size = "minimal"
 # Coding languages used in the oracle solution or required by the agent
 languages = [ "bash" ]
 # For tool_specific, api_integration, and db_interaction subcategories, please include specific tool, api framework, or database software
@@ -203,8 +203,10 @@ The verifier tests themselves must always be Python pytest tests. For non-Python
 
 # Run tests
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+
 # Produce reward file (REQUIRED)
-if [ $? -eq 0 ]; then
+if [ "$rc" -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt

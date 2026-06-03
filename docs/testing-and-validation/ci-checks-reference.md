@@ -315,15 +315,14 @@ set -uo pipefail
 mkdir -p /logs/verifier
 
 python -m pytest /tests/test_outputs.py -rA
-if [ $? -eq 0 ]; then
+rc=$?
+
+if [ "$rc" -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt
 fi
 ```
-
-The reward block above is the canonical end of `test.sh`; do not store `$?` in
-a variable or add a trailing `exit` after the final `fi`.
 
 ### check_offline_tests
 

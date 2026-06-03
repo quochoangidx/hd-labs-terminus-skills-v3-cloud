@@ -174,12 +174,13 @@ mkdir -p /logs/verifier
 
 # pytest and pytest-json-ctrf must be pre-installed in the Docker image.
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+
 # Produce reward file (REQUIRED)
 if [ $? -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt
-fi
+fi 
 ```
 
 > **Note:** Test dependencies must be installed in the Dockerfile, NOT in `tests/test.sh`. `tests/test.sh` should not use `uvx`, `pip install`, `npm install`, `curl`, `wget`, `git clone`, or other networked setup commands. Local-only installs from preloaded wheels, such as `pip install --no-index -f /opt/wheels pytest==8.4.1`, are acceptable when needed.

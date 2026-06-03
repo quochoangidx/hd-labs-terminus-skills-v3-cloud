@@ -15,7 +15,7 @@ All task submissions should include and be organized within a single directory c
 | ↳ `subcategories` | ✅ | List of subtypes/subcategories applicable to your task. **If no subtypes align with your task, leave this empty** (e.g., Long Context, DB Interaction). |
 | ↳ `number_of_milestones` | ✅  | Number of milestones in your task. **If no milestones, set this to "0"**. For milestone tasks, this must equal the number of `[[steps]]` blocks in `task.toml`. |
 | ↳ `difficulty` | ✅ | Tier based on frontier model pass rates. |
-| ↳ `codebase_size` | ✅ | Rough scale of files in the task environment the agent operates on. New submissions must use `small` or `large`; `minimal` is blocked. Bands: small ≈ 20+, large ≈ 200+ files. This is a categorical label (not a literal file count); count environment files the agent works with, not outputs the agent produces. |
+| ↳ `codebase_size` | ✅ | Rough scale of files in the task environment the agent operates on (`minimal`, `small`, or `large`). Bands: minimal ≈ 0–20, small ≈ 20+, large ≈ 200+ files. This is a categorical label (not a literal file count); count environment files the agent works with, not outputs the agent produces. |
 | ↳ `languages` | ✅ | List of the main programming language(s) used in the task. _(e.g., If your task is mainly a C# task, but you use a little bit of Python throughout, only list C# not Python.)_ |
 | ↳ `tags` | ✅ | 3-6 free-form keywords for tools/libraries (e.g., FFmpeg, Redis). |
 | ↳ `runtime_limits` | ✅ | Defined timeouts for agent, verifier, and build. For milestone tasks, timeouts are set per-milestone via `[steps.agent]` and `[steps.verifier]` blocks. |
@@ -67,7 +67,7 @@ This is a file that contains this following metadata:
 * **Task Type (_category_)**: Each task must have exactly one task type from the list of tasks defined in the Task Type section.
 * **Task Subtype (_subcategories_)**: If your task has subtypes, then you will include each subtype it aligns to. If no subtypes align to your task, then leave this field blank. _See the Task Subtypes section for more information._
 * **Number of Milestones**: The number of milestones present in the task, if none then set this to **0**
-* **Codebase Size**: For new submissions, use `small` or `large`—a rough scale of how many files in the task environment the agent operates on (not files the agent produces). Bands are small ≈ 20+ and large ≈ 200+ files. `minimal` (0–19 files) is blocked for new submissions.
+* **Codebase Size**: One of `minimal`, `small`, or `large`—a rough scale of how many files in the task environment the agent operates on (not files the agent produces). Bands are minimal ≈ 0–20, small ≈ 20+, large ≈ 200+ files.
 * **Languages**: Coding language(s) used in the oracle solution or required by the agent.
 * **Runtime Limits**: Each task must specify timeouts, including maximum agent runtime (agent_timeout_sec), maximum verifier runtime (verifier_timeout_sec), and maximum environment build runtime (environment_build_timeout_sec), to ensure tasks are bounded and reproducible.
 * **Tags**: Each task must include ~3-6 descriptive tags in the manifest. Tags are free-form keywords that capture important tools, libraries, techniques, or subtopics relevant to the task.
@@ -86,8 +86,8 @@ category = "software-engineering"
 subcategories = [ ]
 # The number of milestones in the task (can be zero if not a milestone task)
 number_of_milestones = 0
-# Size of the codebase for new submissions: small -> 20+ files, large -> 200+ files. Includes files in environment/ that the agent works with.
-codebase_size = "small"
+# Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files. Includes all files in the environment (not files agent produces).
+codebase_size = "minimal"
 # Coding languages used in the oracle solution or required by the agent
 languages = [ "bash" ]
 # For tool_specific, api_integration, and db_interaction subcategories, please include specific tool, api framework, or database software
