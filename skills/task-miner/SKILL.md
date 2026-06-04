@@ -124,7 +124,7 @@ heavy_rejection_reason:
 
 If the slimming plan is unclear, mark `status: rejected` and stop.
 
-## Source Selection
+## Sample Source Selection
 
 For `pytest-dev/pytest`, prefer closed bugs or PRs involving:
 
