@@ -157,6 +157,8 @@ COPY app/ /app/
 - `/oracle/` - Solution folder copied here at runtime
 - `/tests/` - Tests folder copied here at runtime
 
+**Environment documentation files (spec.md, README.md, architecture docs):** These must read like realistic system specifications (API contracts, DB schemas, RFCs) — **not** step-by-step solution guides — and must not be used to split task instructions out of `instruction.md` to dodge its length limits. See [Spec Files and the Instruction-Length Loophole](/portal/docs/understanding-tasks/prompt-styling) for the full rules.
+
 ### 4. Oracle Solution (solution/solve.sh)
 
 Expert-authored step-by-step solution that reliably completes the task. The solution folder is copied to `/oracle/` at runtime and executed from the working directory.
@@ -216,6 +218,8 @@ fi
 - `/logs/verifier/reward.json` - JSON with multiple metrics: `{ "runtime_sec": 1.23, "accuracy": 0.95 }`
 
 Harbor reads `reward.txt` by default and falls back to `reward.json`.
+
+> **On the reward block and exit codes:** The `if [ $? -eq 0 ] ... fi` reward block is the **canonical end of `test.sh`**. No trailing `exit` statement is required or desired. Harbor reads `/logs/verifier/reward.txt` to determine pass/fail — **not** the script's exit code — so a failing pytest run correctly writes `0` via the `else` branch even though the script itself exits `0`. Reviewers must **not** flag a missing trailing `exit` as a defect, and the `check_test_sh` static gate enforces this exact shape (adding `exit $?` after `fi` will fail CI).
 
 **Key principles:**
 - **Must produce reward file** - This is how Harbor determines success/failure

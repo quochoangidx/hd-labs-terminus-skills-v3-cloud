@@ -130,7 +130,7 @@ Based on file count in `environment/` (excluding Dockerfile and docker-compose).
 
 | Value | File count | Notes |
 |---|---|---|
-| `minimal` | 0–19 | **Not accepted** for new submissions |
+| `minimal` | 0–19 | Allowed |
 | `small` | 20+ | |
 | `large` | 200+ | |
 
@@ -281,7 +281,7 @@ Known intermittent issue. Resubmit. If persistent, post your submission ID and f
 ### Reviews & Disputes
 
 **How long does review take?**
-Assessments: ~24 hours (excluding weekends). Task reviews: 1–3 business days, though backlogs can push this to a week.
+Assessments: ~24 hours (excluding weekends). Task reviews: 1–7 business days.
 
 **My task keeps coming back with blank, incorrect, or mismatched feedback.**
 Known caching issue — reviewers may receive stale or wrong zip files. If the feedback references files, code, or features not in your submission, dispute with screenshots and escalate in #terminus-2nd-edition-submission.

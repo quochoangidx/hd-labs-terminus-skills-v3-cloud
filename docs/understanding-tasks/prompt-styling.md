@@ -173,3 +173,13 @@ It tells the agent the exact project structure, exact library to use, exact buil
 #### Why it's bad
 
 Scattered bold markers draw attention to exact solution details. We should not be giving hints.
+
+## Spec Files and the Instruction-Length Loophole
+
+The conciseness requirement for `instruction.md` must not be circumvented by offloading requirements into environment files. The following rules apply:
+
+1. **No step-by-step guides in environment files.** Environment files (such as `spec.md`, `README.md`, or architecture documents) must not contain step-by-step instructions, execution blueprints, or procedural hints telling the agent how to solve the task. They must strictly define *what* the requirements, schemas, or protocols are (i.e., behave as a realistic standard system specification or RFC).
+
+2. **No instruction bypassing via length loophole.** Submitters cannot split the logical instructions of a task across files to artificially meet the character or token limits of `instruction.md`. All prompts and goals must remain in `instruction.md`.
+
+3. **Aesthetic and realism check for environment specs.** Supporting environment specifications must look like documents written by standard engineering teams (e.g., an API contract, a DB schema, or a business logic spec). Overly polished, hyper-structured markdown templates that read like LLM-generated prompt extensions rather than real-world documents are subject to rejection.

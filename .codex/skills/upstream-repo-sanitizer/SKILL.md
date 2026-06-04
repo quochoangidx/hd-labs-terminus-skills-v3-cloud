@@ -33,6 +33,17 @@ find environment -type f \( -name '*.key' -o -name '*.pem' -o -name '*.crt' -o -
 find environment \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycache__' \) -print
 ```
 
+Check task-environment hint leakage:
+
+```bash
+find environment -type f \( -iname 'README*' -o -iname 'spec*.md' -o -iname '*architecture*' -o -iname '*.md' -o -iname '*.txt' \) -print
+grep -RInE 'step[- ]by[- ]step|solution|hint|TODO|walkthrough|implement by|fix by|you should|verifier|oracle|hidden tests' environment || true
+```
+
+Environment docs may define realistic API contracts, schemas, protocols, or
+business rules. They must not contain procedural solve guides, commented
+solution plans, or extra task goals that should have been in `instruction.md`.
+
 Check blacklist-prone database substrings only if CI or docs mention them:
 
 ```bash
@@ -63,14 +74,21 @@ Do not remove files needed to import, build, or run the focused subsystem.
 
 Count files under `environment/`, excluding Dockerfile/compose. Choose:
 
+- `minimal`: roughly 0-19 environment files
 - `small`: roughly 20-199 environment files
 - `large`: 200+ environment files
 
-Avoid `minimal` for new tasks. If the staged repo has fewer than 20 useful files, either stage a realistic package subset or redesign the task.
+All three sizes are accepted. Keep the value honest and vary sizes across the
+task portfolio; do not add filler files or remove useful context solely to move
+between buckets.
 
-## Ruff Exclusion
+## Local Tooling Config
 
-For upstream source trees, add task-root `pyproject.toml`:
+Do not add root-level `pyproject.toml` as a submitted task artifact. If local
+ruff or editor tooling needs to exclude `environment/repo`, keep that
+configuration outside the submitted task or remove it before packaging.
+
+For local-only checks, this is the relevant exclusion shape:
 
 ```toml
 [tool.ruff]

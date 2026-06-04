@@ -186,6 +186,8 @@ fi
 
 > **Note:** Test dependencies must be installed in the Dockerfile, NOT in `tests/test.sh`. `tests/test.sh` should not use `uvx`, `pip install`, `npm install`, `curl`, `wget`, `git clone`, or other networked setup commands. Local-only installs from preloaded wheels, such as `pip install --no-index -f /opt/wheels pytest==8.4.1`, are acceptable when needed.
 
+> **On the reward block and exit codes:** The `if [ ... -eq 0 ] ... fi` reward block is the **canonical end of `test.sh`** (using either `$?` inline or a variable like `rc=$?` captured immediately after pytest — `check_test_sh` accepts both shapes). No trailing `exit` statement is required or desired after it. Harbor determines pass/fail by reading `/logs/verifier/reward.txt`, **not** the script's exit code — when pytest fails, the `else` branch writes `0` and the platform records a failure regardless of the script's own exit status. Reviewers must **not** flag the absence of a trailing `exit` as a defect. The `check_test_sh` static gate enforces this canonical shape, so adding `exit $?` after `fi` will actually fail CI.
+
 ## Common Patterns
 
 ### Testing File Output

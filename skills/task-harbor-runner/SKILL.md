@@ -51,9 +51,18 @@ Examples:
 - If Docker says it cannot connect to the daemon, ask the user to start Docker Desktop or enable the Docker socket.
 - If CI says `environment/` is too large, reduce the build context before changing tests.
 - If CI says `FROM` lacks a digest, pin the base image digest.
-- If `test.sh` reward block is rejected, make the final reward block match the skeleton literally.
-- If build output names a missing package, add it to Dockerfile build-time deps or preloaded wheels, not verifier-time network fetch.
+- If CI says the final runtime base is unsanctioned, move the final stage to an
+  approved base such as `python:*`, `mcr.microsoft.com/...`,
+  `ghcr.io/snorkel-ai/...`, or `scratch`, all digest-pinned, unless the task has
+  an explicit exemption.
+- If `test.sh` reward block is rejected, use the current canonical reward
+  ending: run pytest, immediately capture `rc=$?` or branch on `$?`, write
+  `/logs/verifier/reward.txt`, and do not add a trailing `exit` after the final
+  `fi`. Harbor reads `/logs/verifier/reward.txt`, not the script exit code.
+- If build output names a missing package, add it to Dockerfile build-time or verifier dependency installation. Do not move dependency setup into `tests/test.sh` or bundle dependency wheels under `tests/`.
 - If LLMaJ says tests assert behavior not in instructions, update `instruction.md` or remove the test requirement.
+- If review flags a missing trailing `exit` in `tests/test.sh`, treat that as stale feedback; the current docs say the canonical reward block ends the script.
+- If review flags hidden instructions in environment docs, remove procedural hints from README/spec/config/comments/scripts and keep all task goals in `instruction.md`.
 
 Always quote the shortest useful error excerpt in the handoff.
 

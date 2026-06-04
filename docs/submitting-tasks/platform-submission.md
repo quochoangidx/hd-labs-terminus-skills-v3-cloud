@@ -341,7 +341,7 @@ harbor tasks check -m openai/@openai/gpt-5.2 harbor_tasks/<task_name>
 7. Submit
 
 ## Step 16: Monitor Status
-After submission. wait for peer review (1-3 business days)
+After submission. wait for peer review (1-7 business days)
 
 ---
 
@@ -350,7 +350,7 @@ After submission. wait for peer review (1-3 business days)
 ### Review Process
 
 1. **Automated checks** runs immediately
-2. **Peer review** within 1-3 business days
+2. **Peer review** within 1-7 business days
 3. **Feedback** provided if changes needed
 4. **Acceptance** when all criteria met
 

@@ -63,12 +63,36 @@ Do not convert a severe negative behavior into a minor positive reward.
 
 
 ## 5. Strict Formatting Rules
-Every line in your `rubrics.txt` must follow these syntax rules for CI validation:
+Every criterion line in your rubric must follow these syntax rules for CI validation:
 
-1.  **Start:** Every line must begin with the word **"Agent"**.
-2.  **End:** Every line must end in a comma followed by the score (e.g., `, +3`).
+1.  **Start:** Every criterion line must begin with the word **"Agent"**.
+2.  **End:** Every criterion line must end in a comma followed by the score (e.g., `, +3`).
 3.  **Values:** You must use **+/- 1, 2, 3, or 5**. 
 4.  **Forbidden:** **Do not use the number 4.**
+
+### Milestone Rubric Headers
+
+For **milestone tasks**, split your rubric into one block per milestone using the official `# Rubric N` header convention. Each milestone's block begins with a header line and is followed by that milestone's `Agent …, ±N` criterion lines. The CI parser is aligned to this format.
+
+```text
+# Rubric 1
+Agent compiles the project with no warnings, +2
+Agent runs the build command before testing, +1
+Agent skips compilation and tries to run untested code, -2
+...
+
+# Rubric 2
+Agent validates inputs before processing, +2
+Agent fails to handle the empty-list edge case, -1
+...
+
+# Rubric 3
+Agent emits the required JSON schema, +3
+Agent prints debug output to stdout in production mode, -1
+...
+```
+
+For **non-milestone tasks**, use a flat list of `Agent …, ±N` criterion lines. A single `# Rubric 1` header is tolerated, but not required; do not use `# Rubric 2+` unless the task is milestone-based.
 
 ### Importance Hierarchy
 * **Critical (±5):** Safety (no `rm -rf /`), core correctness, avoids leaking secrets.

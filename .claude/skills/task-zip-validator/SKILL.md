@@ -1,0 +1,467 @@
+---
+name: task-zip-validator
+description: Validate a Terminus task ZIP against Snorkel CI/review rules and auto-fix issues. Input is a ZIP file path. Unzips, audits structure/Dockerfile/instruction/tests against all known CI checks and review criteria, auto-fixes what it can, runs oracle+nop, re-zips if changes were made. Use before uploading to Snorkel platform.
+---
+
+# Task ZIP Validator
+
+Validate and auto-fix a Terminus Edition 2 task ZIP before Snorkel upload. This skill catches the issues that cause CI failures and reviewer rejections, based on empirical patterns from hundreds of submissions.
+
+## Input
+
+A single argument: path to a `.zip` file (absolute or relative).
+
+```
+/task-zip-validator workspace/submissions/tbrain-my-task.zip
+```
+
+## Workflow
+
+1. **Unzip** to a temp directory
+2. **Structural audit** — check every file against rules
+3. **Auto-fix** — apply fixes for known issues
+4. **Oracle + Nop** — run harbor tests if Docker available
+5. **Report** — summarize findings and fixes
+6. **Re-zip** — if fixes applied, create updated ZIP
+
+## Step 1 — Unzip and Identify
+
+```bash
+ZIPFILE="$1"
+TMPDIR=$(mktemp -d)
+unzip -q "$ZIPFILE" -d "$TMPDIR"
+cd "$TMPDIR"
+```
+
+Verify ZIP root structure. Good (files at root):
+```
+instruction.md
+task.toml
+environment/
+solution/
+tests/
+```
+
+Bad (nested folder):
+```
+tbrain-my-task/instruction.md    ← extra parent folder
+```
+
+If nested, note for re-zip fix.
+
+## Step 2 — Structural Checks
+
+### 2a. task.toml (BLOCKING)
+
+Parse with `tomllib`. Required structure:
+
+```toml
+version = "2.0"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "hard"           # or "medium" — NOT "easy" (blocked by diversity gate)
+category = "<one-of-9>"       # see below
+subcategories = [...]
+number_of_milestones = 0
+codebase_size = "minimal"|"small"|"large"  # minimal=0-19, small=20-199, large=200+
+languages = [...]                  # task/oracle implementation languages; exclude verifier-only Python
+tags = [...]
+expert_time_estimate_min = N
+junior_time_estimate_min = N
+
+# If using docker-compose:
+# custom_docker_compose = true
+# is_multi_container = true    # if >1 service
+
+[verifier]
+timeout_sec = N
+
+[agent]
+timeout_sec = N
+
+[environment]
+allow_internet = false         # MUST be false — CI rejects if missing or true
+build_timeout_sec = N
+cpus = N
+memory_mb = N
+storage_mb = N
+```
+
+Valid categories (EXACTLY these 9):
+```
+system-administration
+build-and-dependency-management
+data-processing
+games
+software-engineering
+machine-learning
+debugging
+security
+scientific-computing
+```
+
+Valid subcategories:
+```
+long_context, tool_specific, api_integration, db_interaction, ui_building
+```
+
+**Checks:**
+
+| Check | Rule | Auto-fix |
+|-------|------|----------|
+| `allow_internet` | Must be `false` | ✅ set to false |
+| `difficulty` | Must be `"medium"` or `"hard"`, NOT `"easy"` | ❌ manual |
+| **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
+| `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
+| `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
+| `category` | Must be one of the 9 valid values | ❌ manual |
+| `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
+| `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
+
+### 2b. Dockerfile (BLOCKING)
+
+Check `environment/Dockerfile`:
+
+| Check | Rule | Auto-fix |
+|-------|------|----------|
+| Digest pin | `FROM image@sha256:<64hex>` required, NOT `FROM image:tag` | ❌ manual (need to pull digest) |
+| Sanctioned final-stage base | Final stage must use a sanctioned or explicitly exempt runtime base. Common accepted final bases are `python:*`, `mcr.microsoft.com/...`, `ghcr.io/snorkel-ai/...`, or `scratch`, all digest-pinned. Builder stages may use toolchain images such as `golang`, `rust`, or `node`. | ❌ manual |
+| **tmux + asciinema REQUIRED** | MUST be in apt-get install. Missing either = ALL agent runs fail with zero output. | ✅ add to apt-get |
+| No COPY tests | NO `COPY tests/` or `COPY solution/` | ✅ remove line |
+| No reserved dirs | NO `mkdir /tests`, `/oracle`, `/logs/verifier`, `/solution` | ✅ remove line |
+| apt hygiene | `apt-get update && apt-get install ... && rm -rf /var/lib/apt/lists/*` in one RUN | ❌ manual |
+| `patch` installed | For Go/Rust tasks: `patch` must be in apt-get install list | ✅ add to apt-get |
+| `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
+
+**Verifier deps:** Install `pytest`, `pytest-json-ctrf`, and verifier-only
+packages in the Dockerfile with exact pins. Do not put dependency wheels under
+`tests/`, and do not install packages in `tests/test.sh`.
+
+### 2c. .dockerignore (WARNING → auto-fix)
+
+Must exist at `environment/.dockerignore` with ALL of:
+```
+.git
+.gitignore
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+```
+
+**Auto-fix**: create/overwrite with standard content.
+
+### 2d. test.sh (BLOCKING)
+
+Check `tests/test.sh`:
+
+| Check | Rule | Auto-fix |
+|-------|------|----------|
+| Uses pytest | Contains `pytest` command | ❌ manual |
+| Uses `-rA` | pytest called with `-rA` option | ✅ add flag |
+| `set -uo pipefail` | Must have `set -uo pipefail` (not `-e`) | ✅ fix |
+| Canonical reward block | Must capture pytest status immediately (`rc=$?`) or branch on `$?` immediately; `rc=$?` is preferred | ✅ rewrite |
+| No `cd /app` | WORKDIR handles this — `cd /app` is not in canonical template | ✅ remove |
+| No runtime setup | No `apt-get`, `pip install`, `npm install`, `curl`, or `wget` in test.sh | ✅ remove |
+| CTRF output | Uses `--ctrf /logs/verifier/ctrf.json` | ✅ add flag |
+
+**Canonical test.sh template** (auto-fix target):
+```bash
+#!/bin/bash
+set -uo pipefail
+
+mkdir -p /logs/verifier
+
+if [ "$PWD" = "/" ]; then
+    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
+    echo 0 > /logs/verifier/reward.txt
+    exit 0
+fi
+
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    echo 1 > /logs/verifier/reward.txt
+else
+    echo 0 > /logs/verifier/reward.txt
+fi
+```
+
+### 2e. Dependency wheels and root pyproject
+
+Dependency wheels under `tests/` are blocker-level client feedback issues.
+Root-level `pyproject.toml` is not part of the submission allowlist and should
+not be included in the ZIP.
+
+```bash
+find tests -name '*.whl' -print
+test -f pyproject.toml && echo "FAIL: root pyproject.toml should not be submitted"
+```
+
+**Auto-fix**: remove wheels from `tests/`; remove root `pyproject.toml` from
+the submission package.
+
+### 2g. Secret-shaped files (WARNING)
+
+Scan `environment/` for:
+```bash
+find environment/ -type f \( -name '*.pem' -o -name '*.key' -o -name '*.crt' -o -name 'id_rsa*' \)
+```
+
+**Auto-fix**: delete them (after checking no test depends on them).
+
+### 2h. AI scaffolding files (WARNING — High severity in reviewer checklist)
+
+Scan `environment/` for AI-generated framework files:
+```bash
+find environment/ -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -name '.cursorrules' -o -name '.cursor' -o -name 'AGENTS.md' -o -name 'copilot-instructions.md' \)
+```
+
+**Auto-fix**: delete them.
+
+### 2i. Junk files
+
+Scan for and remove:
+```bash
+find . \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycache__' \
+  -o -name '.ruff_cache' -o -name '.pytest_cache' -o -name '.mypy_cache' -o -name '*.pyc' \)
+```
+
+**Auto-fix**: always delete.
+
+### 2j. Build context size (BLOCKING)
+
+```bash
+# Total environment/ must be <= 100 MiB
+du -sm environment/ | awk '{if ($1 > 100) print "FAIL: environment/ is "$1"MiB (max 100)"}'
+
+# No single file > 50 MiB
+find environment/ -size +50M -exec echo "FAIL: {} exceeds 50MiB" \;
+```
+
+### 2k. Blacklisted databases
+
+Scan for commercial database references:
+```bash
+grep -rl 'sqlserver://\|oracle://\|db2://' environment/ 2>/dev/null
+```
+
+**Auto-fix**: remove offending files if they're CI/workflow configs (e.g., `.github/workflows/`).
+
+## Step 3 — Instruction Audit (per docs/understanding-tasks/prompt-styling.md)
+
+The instruction_check LLMaJ reviewer applies "state the problem, not the solution." Every finding below maps to a real CI/reviewer rejection pattern.
+
+### 3a. Structure and style (BLOCKING — instruction_check)
+
+| Check | Rule | Detect |
+|-------|------|--------|
+| Avoid heavy markdown | Avoid multiple heading levels, excessive bold/bullets. A few headers OK if content is substantive. Flag ≥3 heading lines. | `grep -c "^#"` |
+| No numbered steps | No `### Step 1`, `1.`, `2.` walkthrough | `grep -cE "^[0-9]+\.\s\|^### Step"` |
+| Absolute paths only | All file refs use `/app/...`, never `app/` or `./` | `grep -E "\bapp/" \| grep -v "/app/"` |
+| No task name in text | Task slug doesn't appear in instruction | check slug |
+| No canary strings | No `CANARY_STRING`, UUID-like tokens, or marker strings | grep |
+| No emojis | No emoji characters | regex |
+| Narrative paragraphs | Reads like a bug report, not bullet-list spec | manual |
+| Length | 1-3 paragraphs, < 20 "must"/"should" items | count |
+
+### 3b. No solution leaks (BLOCKING — instruction_check)
+
+| Check | Rule | Detect |
+|-------|------|--------|
+| No issue URLs | No `github.com/...` URLs | grep |
+| No PR numbers | No `#1234`, `PR #`, `pull/` | grep |
+| No commit hashes | No 7+ hex strings that look like SHAs | grep |
+| No function signatures | No `func name(args)`, no `def name(args):` | grep |
+| No code snippets | No triple-backtick code blocks showing fix | grep ``````` |
+| No implementation steps | No "Add X field", "Modify Y function", "Change Z to W" | manual |
+| No internal names | No unexported function/variable names from the fix | compare with fix.patch |
+| No upstream test names | No `TestSomething`, `test_something` from upstream | compare with repo tests |
+
+### 3c. Behavioral completeness (BLOCKING — behavior_in_tests)
+
+Every behavior asserted by `tests/test_outputs.py` MUST be mentioned in `instruction.md`:
+
+1. Read test_outputs.py, list every distinct asserted behavior
+2. For each behavior, verify instruction.md states it (even implicitly)
+3. Flag any test assertion not covered by instruction
+
+Common gaps:
+- Tests assert a specific error message string → instruction must mention it
+- Tests check preservation of behavior X → instruction must say "X should continue to work"
+- Tests check a specific API/method name → instruction must mention it (if it's a public API)
+
+### 3d. No meta-language (WARNING)
+
+| Check | Rule |
+|-------|------|
+| No "solve.sh" | Don't mention oracle/solution files |
+| No "test.sh" | Don't mention test infrastructure |
+| No "task.toml" | Don't mention task metadata |
+| No "verifier" | Don't mention the verification system |
+| No "rubric" | Don't mention scoring |
+| No "milestone" | Don't mention task structure |
+
+### 3e. Content prescriptiveness (WARNING — instruction_check)
+
+The instruction should describe WHAT is broken and WHAT the fix should achieve, NOT HOW to implement it. Flag:
+
+- "Add a `fieldName` field to the struct" → prescribes implementation
+- "Use `atomic.Bool` to track state" → prescribes implementation
+- "The fix should track whether X is expected" → prescribes strategy
+- "Modify `functionName` to check X" → prescribes location + approach
+
+Rewrite recommendations:
+- BEFORE: "The mux should track whether a response is currently expected"
+- AFTER: "Unexpected global responses should be silently discarded"
+- BEFORE: "Add validation during parsing so that if a critical header appears in an unprotected header, parsing is rejected"
+- AFTER: "The library should reject JWS/JWE tokens where critical headers appear in unprotected position"
+
+### 3f. Instruction/test symmetry cross-check
+
+For each Python test function in test_outputs.py:
+1. Read the docstring
+2. Identify the behavior being tested
+3. Verify instruction.md covers that behavior
+
+For each requirement in instruction.md:
+1. Identify the claimed behavior
+2. Verify at least one test covers it
+
+Report:
+- Tests with no instruction coverage → **add to instruction or remove test**
+- Instructions with no test coverage → **add test or remove from instruction**
+
+### 3g. Environment spec files anti-bypass (WARNING — High severity)
+
+Scan `environment/**/*.md` and `environment/**/README*` for:
+- Step-by-step implementation guides
+- "How to fix" sections
+- Solution hints that bypass instruction.md
+- Content that reads as task instructions rather than real engineering docs
+
+Environment docs must read like real engineering documents, not solution walkthroughs. Flag and report for manual review.
+
+**Auto-fix**: Cannot auto-fix — report findings for manual review.
+
+## Step 4 — Code Quality
+
+### 4a. Ruff
+
+```bash
+cd "$TMPDIR" && python3 -m ruff check tests/test_outputs.py
+```
+
+**Auto-fix**: `python3 -m ruff check --fix tests/test_outputs.py`
+
+### 4b. Python syntax
+
+```bash
+python3 -m py_compile tests/test_outputs.py
+```
+
+### 4c. TOML syntax
+
+```python
+import tomllib
+tomllib.load(open("task.toml", "rb"))
+```
+
+## Step 5 — Harbor Tests (if Docker available)
+
+```bash
+harbor run -a oracle -p "$TMPDIR"   # Must return 1.0
+harbor run -a nop -p "$TMPDIR"      # Must return 0.0
+```
+
+## Step 6 — Report and Re-zip
+
+Print summary table:
+
+```
+=== Task ZIP Validation Report ===
+
+| Check                    | Status | Auto-fixed |
+|--------------------------|--------|------------|
+| task.toml structure      | ✅     | -          |
+| allow_internet = false   | ✅     | -          |
+| Python difficulty = hard | ✅     | -          |
+| codebase_size match      | ✅     | YES        |
+| docker-compose flags     | N/A    | -          |
+| Dockerfile digest pin    | ✅     | -          |
+| Sanctioned base image    | ✅     | -          |
+| tmux + asciinema         | ✅     | -          |
+| test.sh canonical form   | ✅     | YES        |
+| .dockerignore            | ✅     | YES        |
+| verifier deps in image   | ✅     | -          |
+| secret files             | ✅     | YES (3)    |
+| AI scaffolding files     | ✅     | YES (1)    |
+| build context size       | ✅     | -          |
+| blacklisted databases    | ✅     | -          |
+| ruff                     | ✅     | YES        |
+| instruction style        | ⚠️     | MANUAL     |
+| instruction/test symmetry| ✅     | -          |
+| env spec anti-bypass     | ✅     | -          |
+| Oracle                   | 1.0    | -          |
+| Nop                      | 0.0    | -          |
+
+Fixes applied: 6
+```
+
+If any fixes were applied, re-zip:
+```bash
+TASK_NAME=$(basename "$ZIPFILE" .zip)
+cd "$TMPDIR"
+zip -rX "${ZIPFILE}" instruction.md task.toml environment solution tests \
+    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/.git/*' -x '*.pyc'
+```
+
+## Rubric Reminder
+
+After upload to Snorkel, remind the user to create a rubric in the platform UI:
+- Non-milestone tasks: flat `Agent ...` criterion list; a single `# Rubric 1`
+  header is tolerated but not required.
+- Milestone tasks: one block per milestone using `# Rubric 1`, `# Rubric 2`,
+  etc.
+- Minimum **3 negative-reward criteria** overall; milestone tasks also need at
+  least one negative criterion per milestone.
+- Format: `"Agent <did/did not> <observable action>, +/-N"`
+- Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
+- Total points: 10–40 for non-milestone tasks
+- Do NOT reference tests, verifier logic, `test.sh`, `test_outputs.py`,
+  `/tests/`, hidden tests, CI, reward files, pytest results, metadata, or
+  instruction items
+
+## Common CI Failures (auto-detect and fix)
+
+Top recurring CI failures from empirical data:
+
+1. **verifier deps** — missing pinned pytest/pytest-json-ctrf in Dockerfile or wheels under tests
+2. **codebase_size mismatch** — file count doesn't match declared size
+3. **FROM not digest-pinned** — missing `@sha256:` suffix
+4. **check_sanctioned_base_images** — final stage uses non-sanctioned base
+5. **ruff errors** — unused imports, ambiguous variable names
+6. **secret files** — .pem/.key/.crt in environment/
+7. **missing .dockerignore** — or incomplete exclusions
+8. **instruction_check** — headers, solution hints, prescriptive language
+9. **reward section** — test.sh doesn't use canonical `$?` pattern
+10. **blacklisted databases** — MSSQL/Oracle/DB2 references in repo files
+11. **AI scaffolding files** — CLAUDE.md, .cursorrules in environment/
+12. **build context size** — environment/ exceeds 100MiB or single file >50MiB
+13. **root pyproject.toml** — remove from submission ZIP
+14. **Python difficulty** — Python task with `difficulty = "medium"` blocked
+
+## Go-specific Checks
+
+For Go tasks (detected by `languages = ["go"]` in task.toml):
+
+- `patch` must be in Dockerfile apt-get install
+- `go.mod` and `go.sum` must exist in `environment/repo/`
+- Dockerfile should have `COPY repo/go.mod repo/go.sum /app/` before `COPY repo/ /app/`
+- `ENV PATH` or symlink for Go binary (see go-task-ci-checklist memory)
+- No `.github/workflows/` directories (may contain blacklisted DB references)
+- For Go tasks, prefer a `golang` builder stage and a sanctioned/exempt final runtime base. A single-stage `golang` final image should be treated as requiring exemption unless current CI/docs explicitly allow it.
