@@ -74,14 +74,21 @@ Do not remove files needed to import, build, or run the focused subsystem.
 
 Count files under `environment/`, excluding Dockerfile/compose. Choose:
 
+- `minimal`: roughly 0-19 environment files
 - `small`: roughly 20-199 environment files
 - `large`: 200+ environment files
 
-Avoid `minimal` for new tasks. If the staged repo has fewer than 20 useful files, either stage a realistic package subset or redesign the task.
+All three sizes are accepted. Keep the value honest and vary sizes across the
+task portfolio; do not add filler files or remove useful context solely to move
+between buckets.
 
-## Ruff Exclusion
+## Local Tooling Config
 
-For upstream source trees, add task-root `pyproject.toml`:
+Do not add root-level `pyproject.toml` as a submitted task artifact. If local
+ruff or editor tooling needs to exclude `environment/repo`, keep that
+configuration outside the submitted task or remove it before packaging.
+
+For local-only checks, this is the relevant exclusion shape:
 
 ```toml
 [tool.ruff]

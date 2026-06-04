@@ -1,17 +1,61 @@
 ---
 name: task-miner
-description: Use when mining closed upstream issues or PRs for hard Terminus Regular task candidates from low-to-medium quota Python repos such as pypa/pip, pypa/setuptools, django/django, python/importlib_metadata, python/importlib_resources, urllib3/urllib3, encode/httpx, pytest-dev/pytest, and selected pandas-dev/pandas issues. This metadata-only skill scores candidates, records fixing/parent commits, reproducer shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. Rotate repos instead of defaulting to pytest unless the user asks for pytest specifically.
+description: Use when mining hard Terminus Regular task candidates, either from closed upstream bugfix issues/PRs or from an explicit category profile such as data-processing, build-and-dependency-management, software-engineering, system-administration, security, scientific-computing, machine-learning, or games. This metadata-only skill scores candidates, records source/base commits, behavior contracts, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. Rotate sources instead of defaulting to pytest unless the user asks for pytest specifically.
 ---
 
 # Task Miner
 
-Use this skill when sourcing task ideas from closed upstream issues or PRs. If the user does not specify a repo, rotate through the Source Queue instead of always defaulting to pytest.
+Use this skill when sourcing task ideas. If the user gives no category, use the default upstream bugfix mode. If the user names a category, use the matching Category Profile and do not force the task into `debugging`.
 
 This is a lightweight mining pass. Do not create a task folder, Dockerfile, verifier, or oracle here. The output is a compact mined candidate artifact consumed later by `task-clone`.
 
+## Operating Modes
+
+### Upstream Bugfix Mode
+
+Use for closed upstream issues/PRs where the task is to diagnose and fix bad behavior. These candidates normally become:
+
+```yaml
+category: debugging
+subcategories: ["tool_specific"]
+```
+
+This mode needs `fixing_commit`, `parent_commit`, `bad_behavior`, `expected_behavior`, and upstream regression-test context.
+
+### Category Profile Mode
+
+Use when the user asks for a non-debugging category or a balanced category batch. Choose the category before mining, then select sources and acceptance criteria that fit that category. Do not accept a candidate whose primary work is bug diagnosis unless the requested category is `debugging`.
+
+Valid categories:
+
+```text
+system-administration
+build-and-dependency-management
+data-processing
+games
+software-engineering
+machine-learning
+debugging
+security
+scientific-computing
+```
+
+For category-profile candidates, `fixing_commit` is optional. The artifact must instead include `base_commit`, `target_behavior`, `required_work`, `input_fixtures`, `output_contract`, and `why_not_debugging` when the category is not `debugging`.
+
+## Category Profiles
+
+- `data-processing`: Mine CLI/scripts/pipelines that transform CSV, JSON, YAML, logs, or directory trees. Accept tasks with joins, filtering, aggregation, schema normalization, deterministic sorting, malformed-input handling, or report generation. Verify by parsing output files/stdout semantically. Reject candidates that are only parser bugfixes, one-expression transforms, or require large/private datasets.
+- `build-and-dependency-management`: Mine build config, packaging, lockfile, Docker, Make/Cargo/npm/pip workflows. Accept reproducible offline build/install/test tasks with inspectable artifacts. Reject version bumps, CI metadata, or live registry requirements.
+- `software-engineering`: Mine feature/enhancement work where the agent implements or extends a public API/CLI behavior. Accept clear behavior contracts with preserved compatibility. Reject pure bugfixes unless the requested category is `debugging`.
+- `system-administration`: Mine local service/config/process/permissions tasks. Accept Docker-contained health checks, config validation, shell automation, users/groups, or process supervision. Reject tasks needing privileged host daemons or external services.
+- `security`: Mine local auth, escaping, sanitization, crypto, permissions, or reverse-engineering style tasks. Accept exploit-prevention plus legitimate-use preservation. Reject vague hardening, live targets, secrets, or network-only validation.
+- `scientific-computing`: Mine numerical, simulation, geospatial, statistics, or domain-code tasks. Accept deterministic small fixtures with tolerances and boundary cases. Reject GPU, huge datasets, or compiled-extension rebuild requirements unless explicitly approved.
+- `machine-learning`: Mine tiny offline data-loader, inference, tokenizer, metric, or evaluation tasks. Accept deterministic seeds and small fixtures. Reject downloads, GPU, model registry, or expensive training.
+- `games`: Mine terminal game/puzzle/simulation rule tasks. Accept deterministic state transitions, move legality, scoring, or solver behavior. Reject visual-only or flaky/random tasks.
+
 ## Source Queue
 
-Prioritize low-to-medium quota sources:
+Prioritize low-to-medium quota sources for upstream bugfix mode:
 
 | Repo | Quota burn | Best task domains |
 |---|---:|---|
@@ -36,6 +80,11 @@ Heavy repos are allowed only with explicit opt-in and strict limits:
 
 For pandas, mine only localized bugs with small dataframes and no compiled-extension rebuild requirement.
 
+For category-profile mode, use sources that naturally match the requested
+category, including small CLI tools, example apps, data pipelines, build scripts,
+admin config repos, numerical utilities, and terminal games. The Source Queue is
+not a category-diversity limit.
+
 ## Heavy Repo Mode
 
 Use this mode for TypeScript, go-ethereum, PyTorch, Ray, NumPy, Tokio, or any repo with large builds/tests.
@@ -53,7 +102,8 @@ Hard limits:
 Reject heavy candidates unless all are true:
 
 - reproducer can run offline with small fixtures
-- bug is localized to a small subsystem
+- bug is localizable after slimming but still spans 5-6 meaningful components,
+  behavior surfaces, or project layers
 - verifier can use public CLI/API behavior
 - no GPU, browser, database, network, cluster, or long compile is needed
 - oracle can be a focused patch, not a rebuild of the whole project
@@ -158,9 +208,11 @@ Avoid as Hard tasks:
 Do:
 
 - check the candidate registry before spending time on a PR/issue
-- verify the issue/PR is closed or merged
-- identify the fixing commit and a parent commit before the fix
-- inspect only the issue/PR text, changed file list, focused diff hunks, and upstream regression tests
+- choose the category first when the user asks for category diversity
+- verify the issue/PR is closed or merged for upstream bugfix mode
+- identify the fixing commit and a parent commit before the fix for upstream bugfix mode
+- identify a stable `base_commit` and observable target behavior for category-profile mode
+- inspect only the source text, changed file list, focused diff hunks, docs/examples, and tests needed to evaluate the candidate
 - score candidate quality and runtime risk
 - write a compact artifact such as `mined-candidates/<slug>.json`
 - append the candidate decision to `mined-candidates/index.jsonl`
@@ -170,7 +222,7 @@ Do not:
 - scaffold `workspace/tbrain-*`
 - write `instruction.md`, Dockerfile, verifier, or oracle patch
 - run large upstream test suites repeatedly
-- inspect more than 10 files unless the candidate is already high value and needs one extra confirmation
+- inspect more than 15 files unless the candidate is already high value and needs one extra confirmation
 - inspect more than 3 commits around the fix
 - enumerate unrelated test suites or full repository trees
 
@@ -188,36 +240,43 @@ If the team has a shared registry path or URL, check that too before claiming a 
 
 Registry identity keys:
 
+- `category + source + task_slug`
 - `repo + issue_or_pr_id`
 - `repo + fixing_commit`
 - `repo + bug_signature`
+- `repo + base_commit + target_behavior`
 
 Reject or skip candidates already marked `cloned`, `submitted`, or `claimed` by another worker. If only the subsystem overlaps but the behavior differs, continue only when `bug_signature` is clearly distinct.
 
 Append one compact JSON line per decision:
 
 ```json
-{"repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"mined","rejection_reason":null}
+{"category":"debugging","repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"mined","rejection_reason":null}
 ```
 
 Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 
 ## Hardness Filter
 
-**Platform diversity rules (enforced at submission):**
-- Only **medium** and **hard** model difficulty accepted — **easy is blocked** for all languages.
-- **Python tasks must be hard** model difficulty (≤20% pass rate) — medium Python tasks are blocked.
-- Final difficulty is determined by empirical pass rates from 5 runs each against GPT-5.2 and Claude Opus 4.6: Hard ≤ 20%, Medium 20–60%, Easy 60–80%.
+For upstream bugfix mode, apply the repo-specific hard filters below.
+A good Hard candidate should require the agent to understand 5-6 meaningful
+components, behavior surfaces, or project layers. Components can be source
+modules, public APIs, CLI/config parsing, build/dependency metadata, data/schema
+rules, cache/state management, error handling, compatibility paths, or test
+fixtures. Do not count trivial call-stack frames or files that are merely
+adjacent.
 
-A good Hard candidate should require the agent to understand at least two interacting subsystems. For pytest, examples include:
+Examples of component-rich candidates:
 
 - fixture finalization plus JUnit XML reporting
 - collection tree plus import/path mode
 - assertion rewriting plus traceback formatting
+- package discovery plus editable install metadata plus legacy fallback
+- requirement parsing plus marker evaluation plus wheel/cache selection
+- ORM query compilation plus model validation plus migration state rendering
+- HTTP redirect/retry handling plus header preservation plus transport state
 - warning capture plus terminal reporting
 - hook ordering plus test outcome propagation
-
-For non-pytest repos, apply the same principle: the fix must span multiple modules/subsystems or require domain-specific knowledge (RFC specs, protocol semantics, timing attacks, runtime introspection) that agents haven't memorized.
 
 Reject candidates solvable by only matching the issue title or changing one expected string.
 
@@ -228,13 +287,27 @@ Reject false-hard candidates:
 - single validation branch fixes
 - `<= 10` meaningful LOC in one obvious file unless prior agent trials show low pass rate
 - one-condition fixes such as "if stop flag then do X" when all verifier cases exercise the same branch
+- candidates with fewer than 4 meaningful components unless prior frontier-agent
+  trials show repeated failures for semantic reasons
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
+
+For category-profile mode, reject candidates when:
+
+- the target behavior can be solved by one obvious expression, option, or config line
+- the verifier would only check one happy-path example
+- the source repo/app is so small that there is no meaningful discovery work
+- the prompt would need to reveal the exact implementation approach
+- the category label is only cosmetic and the real work is debugging
+- the task does not naturally involve at least 4 meaningful components,
+  behavior surfaces, or project layers; prefer 5-6 when available
 
 ## Candidate Scoring
 
 Score each axis from 1 to 5:
 
-- `subsystem_interaction`: needs multiple pytest subsystems, not one local branch
+- `subsystem_interaction`: 5 means 5-6 meaningful components/surfaces/layers
+  must be coordinated; 4 means four components and is borderline; 3 or lower is
+  too shallow for new Hard mining unless empirical agent failures justify it
 - `deterministic_reproducibility`: reproduces offline with stable inputs
 - `offline_viability`: no external service or missing plugin dependency
 - `anti_shortcut_hardness`: hard to satisfy with a narrow hardcode
@@ -244,7 +317,8 @@ Score each axis from 1 to 5:
 
 Reject if:
 
-- `subsystem_interaction < 3`
+- `subsystem_interaction < 4` unless prior real-agent evidence shows the task is
+  still hard for semantic reasons
 - `deterministic_reproducibility < 4`
 - `anti_shortcut_hardness < 3`
 - `offline_viability < 4`
@@ -256,32 +330,43 @@ Runtime classes:
 - `heavy`: large install/build or broad suite needed
 - `infra-heavy`: database, browser, GPU, network, or OS service; avoid for mass generation
 
-**Scoring → platform difficulty mapping:** These scores predict difficulty but do not replace empirical agent runs. Final difficulty is determined by pass rates from 5 runs per model:
-- Hard: ≤ 20% pass rate on best OR worst model
-- Medium: 20–60% pass rate
-- Easy: 60–80% pass rate (BLOCKED for new submissions; BLOCKED for Python at medium too)
-
 ## Output Artifact
 
 Write or return this schema. Keep it compact; raw diffs stay out unless needed.
 
 ```yaml
 candidate:
+  category:
+  subcategories:
+  objective_type: upstream_bugfix | feature | data_pipeline | build | admin_config | security | scientific | ml | game
   source_url:
   issue_or_pr_id:
   repo:
+  base_commit:
   parent_commit:
   fixing_commit:
+  task_slug:
   bug_signature:
   touched_files:
+  component_count:
+  component_map:
+    - name:
+      role:
+      evidence:
   subsystem_tags:
   runtime_class:
   external_requirements:
   repro_summary:
+  current_pipeline_summary:
+  target_behavior:
+  required_work:
+  input_fixtures:
+  output_contract:
   bad_behavior:
   expected_behavior:
   preserved_behavior:
   edge_cases:
+  why_not_debugging:
   test_surface:
     primary_api:
     secondary_apis:
@@ -310,6 +395,8 @@ candidate:
 
 Use `rejection_reason: null` only when the candidate is suitable for cloning.
 
+For non-debugging category profiles, prefer `base_commit`, `target_behavior`, `required_work`, `input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only fields empty instead of inventing a `fixing_commit`.
+
 ## Hardness Calibration
 
 Treat platform difficulty as empirical, not just conceptual.
@@ -320,61 +407,10 @@ Downgrade or reject candidates when:
 - all tests reduce to variants of the same condition
 - a strong agent can locate the fix by grepping one or two obvious symbols from the prompt
 - a previous difficulty check shows any frontier agent at `5/5` or aggregate pass rate `>= 80%`
+- fewer than 4 meaningful components/surfaces/layers are required to understand
+  and solve the task
 
 For Python tasks, keep only candidates likely to make strong agents fail after understanding the prompt, not merely candidates that look complex by subsystem name.
-
-## Go Source Queue
-
-When mining Go candidates, rotate through these repos:
-
-| Repo | Quota | Best task domains |
-|---|---:|---|
-| `gofiber/fiber` | low-medium | HTTP middleware, cookie/session, security middleware, concurrency |
-| `go-gorm/gorm` | low | ORM query generation, scan behavior, serialization, logger integration |
-| `urfave/cli` | low | flag parsing, command resolution, help generation |
-| `spf13/cobra` | low | completion, argument parsing, command traversal |
-| `go-jose/go-jose` | low | JWS/JWE parsing, header validation, cryptographic operations |
-| `golang/crypto` | medium | SSH protocol, certificate handling, key verification |
-| `golang/net` | medium | HTML parsing, HTTP/2, IDNA |
-| `grpc/grpc-go` | medium-heavy | xDS RBAC, transport, balancer, interceptors |
-| `ethereum/go-ethereum` | heavy | EVM, tracer, txpool, consensus — use Heavy Repo Mode |
-
-## Go Hardness Reality (Empirical)
-
-Lessons learned from actual agent trials on Go tasks. The following patterns consistently collapse to TRIVIAL or EASY despite looking complex conceptually:
-
-**TRIVIAL patterns (auto-reject for HARD):**
-- Single-condition guard fixes: "if flag then do X" → agents grep the error message and add the check (~100% pass rate)
-- Channel/mutex fixes under 30 LOC in one file → atomic.Bool + drain pattern is well-known
-- `app.toString()` → `string()` type fixes → one-line change, trivially greppable
-- Missing nil-check before method call → agents find the panic stack and add `if x != nil`
-- String comparison fixes: `Protocol()` → `Scheme()`, `==` → `!=` → too obvious
-
-**EASY patterns (risky for HARD, may pass at >60%):**
-- Fix in one file ≤30 meaningful LOC even if concept is interesting (e.g., HTML attribute dedup)
-- Fix that only adds a `return false` or `return error` at one obvious location
-- Config validation additions (e.g., "reject negative HSTSMaxAge") — pure input checking
-- Any fix where the instruction names the exact file and the fix is a local branch change
-
-**Reliably HARD patterns (target these):**
-- Multi-file fixes touching ≥2 subsystems where agent must understand the interaction (e.g., keys.go + server.go + certs.go for FIDO UP enforcement)
-- Fixes requiring NEW types/functions/interfaces that didn't exist before (e.g., `buildVerifiers()`, `verifierStrength`, `passwordVerifier` for timing-attack fix)
-- Protocol/spec compliance bugs requiring RFC knowledge agents haven't memorized (e.g., gRFC A41 identity source priority, RFC 7797 critical header integrity)
-- Timing/side-channel fixes where the agent must design the equalization strategy, not just add a check
-- Stack frame / runtime introspection bugs requiring understanding of `runtime.Callers`, `slog.NewRecord`, etc.
-- Server integration tests that exercise full handshake flows (SSH auth, gRPC RBAC policy evaluation)
-
-**Hardness scoring adjustments for Go:**
-- If source fix ≤ 15 LOC in one file → `anti_shortcut_hardness` max 2, likely TRIVIAL
-- If fix only adds a condition check without new types → `subsystem_interaction` max 2
-- If the bug can be found by grepping the error message in the instruction → `anti_shortcut_hardness` max 2
-- If fix requires creating ≥3 new unexported types/functions → `anti_shortcut_hardness` ≥ 4
-- If fix spans ≥3 source files with different roles → `subsystem_interaction` ≥ 4
-
-**Minimum LOC thresholds for Go HARD:**
-- Source-only fix (excluding tests): ≥ 30 meaningful LOC
-- OR fix spans ≥ 3 source files with distinct subsystem roles
-- OR fix requires understanding a specification (RFC, gRFC, WHATWG) that agents haven't seen in training data
 
 ## Clone Handoff
 
@@ -393,40 +429,37 @@ If this is unclear, mark the candidate incomplete and do not clone yet.
 
 ## Transformation Hints
 
-1. Pin `environment/repo/` to a parent commit before the fix.
+1. Pin `environment/repo/` to a parent commit before the fix for upstream bugfixes, or to `base_commit` for category-profile tasks.
 2. Remove upstream tests that reveal the exact patch if needed.
 3. Write a prompt describing user-visible behavior only.
 4. Put reproducer projects inside verifier tests, not in the prompt.
-5. Verify the starting state fails by behavior.
+5. Verify the starting state fails the target behavior for the intended reason.
 6. Write oracle as `solution/fix.patch` plus `solution/solve.sh`.
-7. Test both the regression and normal behavior.
+7. Test both the target behavior and normal behavior preservation.
 
-## Prompt Templates
+## Bugfix Prompt Template
 
-Vary the voice across tasks — do not repeat the same template. These are illustrative, not prescriptive:
-
-**Python test framework (pytest, unittest):**
 ```md
 Pytest in `/app` mishandles <observable scenario>. A user project that <setup> currently <bad behavior>.
 
 Fix pytest so `python -m pytest <command shape>` <required behavior>. The run should <preserve important existing behavior>. Do not change the user project's tests.
 ```
 
-**Python library (Django, pip, urllib3, httpx, pandas):**
-```md
-The package at `/app` <fails to / incorrectly handles> <observable scenario>. When <user workflow>, the result is <bad behavior> instead of <expected>.
+Keep issue URLs and PR IDs out of `instruction.md`.
 
-Fix the <module/subsystem> so that <observable contract>. <Preservation constraints>.
+## Category Profile Prompt Template
+
+```md
+The tool in `/app` needs to produce <target artifact or behavior> from <input surface>. Implement support for <public command/API/workflow> so it follows <observable contract>.
+
+The output must <format/schema/order/tolerance requirements>. Preserve <existing mode or compatibility behavior> for <normal workflow>.
 ```
 
-**Go library/framework:**
-```md
-The <library/middleware> at `/app/<path>/` <observable symptom>. <Context about when/how it manifests>.
-
-Fix it so that <behavioral requirement>. <Preservation: what must still work>. <Edge case contract if needed>.
-```
-
-Keep issue URLs, PR IDs, and commit hashes out of `instruction.md`.
+Keep source URLs, commit hashes, upstream test names, verifier language, and
+solution hints out of `instruction.md`.
+Do not rely on environment README/spec files to carry extra prompt goals or
+solution guidance; if the behavior cannot fit fairly in `instruction.md`, reject
+or narrow the candidate.
 
 ## Verifier Patterns
 

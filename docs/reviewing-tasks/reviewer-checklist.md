@@ -4,6 +4,7 @@
 
 | Date | Type | Change |
 |------|------|--------|
+| Jun 3, 2026 | 🔄 Update | Updated the Rubrics formatting criterion: milestone tasks must use `# Rubric 1`, `# Rubric 2`, etc. headers to delineate each milestone's block. Non-milestone tasks use a flat `Agent …` list; a single `# Rubric 1` header is tolerated but not required, and `# Rubric 2+` is reserved for milestone tasks. |
 | May 27, 2026 | 🆕 New | Added "Task environment does not contain hidden instructions or hints" criterion under Instruction Prompt (High severity). Environment files must not smuggle in step-by-step walkthroughs or solution hints. |
 | May 27, 2026 | 🆕 New | Added "Environment spec/doc files are realistic and do not bypass instruction rules" criterion under Instruction Prompt (High severity). Spec/doc files must not contain step-by-step solution guides, must not be used to split instructions out of `instruction.md` to dodge length limits, and must read like realistic engineering documents. See [Prompt Styling](/portal/docs/understanding-tasks/prompt-styling). |
 | May 19, 2026 | 🔄 Update | Added "No AI-framework scaffolding filenames" criterion under Environment (High severity). Filenames like `CLAUDE.md` or `skills.md` should not appear in task environments — they indicate incomplete cleanup and raise authenticity concerns. |
@@ -299,8 +300,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Rubric block must be correctly formatted, with new lines separating each criteria.</td>
-      <td>Each criterion must be a single line. Each line must start with ‘Agent’, contain a ‘,’ at the end of the criterion and then contain a space and the score. An example format is:<br><br>‘Agent must read the script at /app/script.py, 2’</td>
+      <td>Rubric block must be correctly formatted, with new lines separating each criterion.</td>
+      <td>Each criterion must be a single line. Each criterion line must start with 'Agent', contain a ',' at the end of the criterion and then contain a space and the score. An example format is:<br><br>'Agent must read the script at /app/script.py, 2'<br><br><strong>Milestone tasks:</strong> split the rubric into one block per milestone using <code># Rubric 1</code>, <code># Rubric 2</code>, etc. header lines. Each header is followed by that milestone's criterion lines.<br><br><strong>Non-milestone tasks:</strong> use a flat list of <code>Agent …, ±N</code> criterion lines. A single <code># Rubric 1</code> header is tolerated, but not required; do not use <code># Rubric 2+</code> unless the task is milestone-based.<br><br>See <a href="/portal/docs/understanding-tasks/rubrics">Rubrics</a> for examples.</td>
       <td>High</td>
     </tr>
     <tr>

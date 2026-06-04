@@ -1,11 +1,12 @@
 ---
 name: sync-doc-and-skill
-description: Sync Terminus docs from the Snorkel portal and update dependent skills (task-miner, task-clone, task-zip-validator) to match. Run periodically or when you suspect docs have changed. Fetches the live JS bundle from the portal SPA, extracts doc content, diffs against local docs/, patches local files, then audits all 3 skills for discrepancies and auto-fixes them.
+description: Sync Terminus docs from the Snorkel portal and update dependent Terminus skills to match. Run periodically or when you suspect docs have changed. Fetches the live JS bundle from the portal SPA, extracts doc content, diffs against local docs/, patches local files, then audits Terminus skills for discrepancies and auto-fixes them.
 ---
 
 # Sync Docs and Skills
 
-Automatically update local Terminus docs from the Snorkel portal, then cascade changes to the 3 dependent skills that reference those docs.
+Automatically update local Terminus docs from the Snorkel portal, then cascade
+changes to the Terminus skills that reference those docs.
 
 ## When to Use
 
@@ -90,7 +91,7 @@ grep -oE '"checklist-item",children:"[^"]*"' /tmp/terminus_bundle.js
 grep -oE 'children:"[^"]{20,200}"' /tmp/terminus_bundle.js | head -50
 
 # Extract specific doc sections by searching for key terms
-grep -oP '.{0,200}test_deps_in_image.{0,200}' /tmp/terminus_bundle.js
+grep -oP '.{0,200}(test_deps_in_image|verifier depend|tests/wheels).{0,200}' /tmp/terminus_bundle.js
 grep -oP '.{0,200}sanctioned.{0,200}' /tmp/terminus_bundle.js
 grep -oP '.{0,200}allow_internet.{0,200}' /tmp/terminus_bundle.js
 grep -oP '.{0,200}codebase_size.{0,200}' /tmp/terminus_bundle.js
@@ -120,7 +121,7 @@ For each key rule area, compare online content with local docs:
 
 | Rule Area | Local Doc File | Online Search Term |
 |-----------|---------------|-------------------|
-| test_deps_in_image | `creating-tasks/writing-tests.md` | `test_deps_in_image` |
+| Verifier dependency placement | `creating-tasks/writing-tests.md` | `test_deps_in_image`, `verifier dependencies`, `tests/wheels` |
 | Sanctioned bases | `creating-tasks/dockerfile-best-practices.md` | `sanctioned` |
 | test.sh canonical form | `creating-tasks/writing-tests.md` | `reward.txt` |
 | codebase_size bands | `understanding-tasks/task-requirements.md` | `codebase_size` |
@@ -136,10 +137,10 @@ For each key rule area, compare online content with local docs:
 
 For each rule area, report:
 ```
-=== test_deps_in_image ===
-ONLINE: "Test dependencies should be installed in run-tests.sh"
-   ALT: "Bake verifier dependencies into the Docker image, or use local-only installs from preloaded wheels."
-LOCAL:  "Bake verifier dependencies into the Docker image, or use local-only installs from preloaded wheels bundled in tests/wheels/."
+=== verifier dependency placement ===
+ONLINE: "Verifier dependencies should be installed before test.sh runs."
+   ALT: "Dependency wheels under tests/ are not allowed by current client feedback."
+LOCAL:  "Bake verifier dependencies into the Docker image with exact pins; tests/test.sh must not install packages."
 STATUS: ✅ ALIGNED (after last sync)
 ```
 
@@ -162,6 +163,9 @@ After docs are synced, audit these 3 skills:
 .claude/skills/task-miner/SKILL.md
 .claude/skills/task-clone/SKILL.md
 .claude/skills/task-zip-validator/SKILL.md
+.claude/skills/task-client-feedback-review/SKILL.md
+.claude/skills/terminus-create-task/SKILL.md
+.claude/skills/terminus-validate-task/SKILL.md
 ```
 
 ### Audit checklist (check each rule in each skill):
@@ -169,7 +173,7 @@ After docs are synced, audit these 3 skills:
 | Rule | task-miner | task-clone | task-zip-validator |
 |------|-----------|------------|-------------------|
 | test.sh canonical form | — | template | check |
-| test_deps rule | — | guidance | check |
+| verifier dependency placement | — | guidance | check |
 | Sanctioned base images | — | Docker Rules | check |
 | tmux/asciinema required | runtime risk | Docker Rules | check |
 | allow_internet = false | — | metadata defaults | check |

@@ -156,7 +156,7 @@ def test_special_characters():
 
 ## tests/test.sh
 
-The test runner script sets up the verifier command, runs Python pytest against the test file, and produces a reward file. Do not replace pytest with another test framework such as JUnit, Jest, or `go test`; use Python pytest tests to drive and validate those systems when needed. It must not install packages or download from the network at runtime. Bake verifier dependencies into the Docker image, or use local-only installs from preloaded wheels bundled in `tests/wheels/`.
+The test runner script sets up the verifier command, runs Python pytest against the test file, and produces a reward file. Do not replace pytest with another test framework such as JUnit, Jest, or `go test`; use Python pytest tests to drive and validate those systems when needed. It must not install packages or fetch anything from the network at runtime. Bake pytest, plugins, browser drivers, wheels, npm packages, and any other verifier dependencies into the Docker image instead.
 
 ```bash
 #!/bin/bash
@@ -174,9 +174,10 @@ mkdir -p /logs/verifier
 
 # pytest and pytest-json-ctrf must be pre-installed in the Docker image.
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
 
 # Produce reward file (REQUIRED)
-if [ $? -eq 0 ]; then
+if [ "$rc" -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt
@@ -185,7 +186,7 @@ fi
 
 > **Note:** Test dependencies must be installed in the Dockerfile, NOT in `tests/test.sh`. `tests/test.sh` should not use `uvx`, `pip install`, `npm install`, `curl`, `wget`, `git clone`, or other networked setup commands. Local-only installs from preloaded wheels, such as `pip install --no-index -f /opt/wheels pytest==8.4.1`, are acceptable when needed.
 
-> **On the reward block and exit codes:** The `if [ $? -eq 0 ] ... fi` reward block is the **canonical end of `test.sh`**. No trailing `exit` statement is required or desired after it. Harbor determines pass/fail by reading `/logs/verifier/reward.txt`, **not** the script's exit code — when pytest fails, the `else` branch writes `0` and the platform records a failure regardless of the script's own exit status. Reviewers must **not** flag the absence of a trailing `exit` as a defect. The `check_test_sh` static gate enforces this canonical shape, so adding `exit $?` after `fi` will actually fail CI.
+> **On the reward block and exit codes:** The `if [ ... -eq 0 ] ... fi` reward block is the **canonical end of `test.sh`** (using either `$?` inline or a variable like `rc=$?` captured immediately after pytest — `check_test_sh` accepts both shapes). No trailing `exit` statement is required or desired after it. Harbor determines pass/fail by reading `/logs/verifier/reward.txt`, **not** the script's exit code — when pytest fails, the `else` branch writes `0` and the platform records a failure regardless of the script's own exit status. Reviewers must **not** flag the absence of a trailing `exit` as a defect. The `check_test_sh` static gate enforces this canonical shape, so adding `exit $?` after `fi` will actually fail CI.
 
 ## Common Patterns
 

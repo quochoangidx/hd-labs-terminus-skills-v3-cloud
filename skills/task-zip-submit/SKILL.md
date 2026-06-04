@@ -20,7 +20,6 @@ For a Regular task, the ZIP root should contain:
 ```text
 instruction.md
 task.toml
-pyproject.toml
 environment/
 solution/
 tests/
@@ -35,6 +34,18 @@ steps/
 ```
 
 Milestone ZIPs must not include root-level `instruction.md`, `solution/`, or `tests/`.
+
+## Metadata Update
+
+Before packaging, update the task's `task.toml` `[metadata]` author fields to:
+
+```toml
+author_name = "Trung"
+author_email = "trung.phan@tbrain.ai"
+```
+
+Replace existing `author_name` and `author_email` values instead of adding
+duplicate keys.
 
 ## Clean First
 
@@ -62,7 +73,7 @@ From inside the task folder:
 ```bash
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml pyproject.toml environment solution tests \
+zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
 ```
 
@@ -102,7 +113,25 @@ task.toml
 environment/Dockerfile
 ```
 
-Also good: every path in the ZIP starts with one of the allowlisted roots (`instruction.md`, `task.toml`, `pyproject.toml`, `environment/`, `solution/`, `tests/`) for Regular tasks.
+Also good: every path in the ZIP starts with one of the allowlisted roots (`instruction.md`, `task.toml`, `environment/`, `solution/`, `tests/`) for Regular tasks.
+
+## Client Feedback Blockers
+
+Before upload, fail the package if any of these are present:
+
+- root-level `pyproject.toml`
+- any string beginning with `CANARY-`
+- `.whl` files under `tests/`
+- license files in small or minimal codebases
+- `environment/data` used as an oversized prompt/spec extension
+- `instruction.md` references `tests/`, `verifier`, `test.sh`,
+  `test_outputs.py`, hidden tests, rubrics, CI, or reward files
+- rubrics reference tests, verifier logic, `test.sh`, `test_outputs.py`,
+  `/tests/`, hidden tests, CI, reward files, or pytest results
+- `tests/test.sh` writes `/logs/verifier` only after an early exit guard
+
+Verifier dependencies must be installed by `environment/Dockerfile`; `tests/`
+should contain verifier scripts and fixtures, not dependency wheels.
 
 Before upload, inspect environment README/spec/config/comment-heavy files for
 hidden solution walkthroughs or prompt-bypass instructions. Supporting docs
@@ -121,9 +150,14 @@ On first upload:
 - verify rubric lines start with `Agent`, end with `, +/-N`, use only values 1,
   2, 3, or 5, never use 4, and focus on trace-evidenced behavior rather than
   final pytest results
-- ensure regular-task rubrics have at least three negative criteria and a 10-40
-  positive-point total; milestone rubrics need at least one negative criterion
-  and 10-40 positive points per milestone
+- for non-milestone tasks, use a flat `Agent ...` list; a single `# Rubric 1`
+  header is tolerated but not required, and `# Rubric 2+` is reserved for
+  milestone tasks
+- for milestone tasks, use `# Rubric 1`, `# Rubric 2`, etc. blocks matching the
+  milestones
+- ensure rubrics have at least three negative criteria overall; milestone
+  rubrics also need at least one negative criterion and 10-40 positive points
+  per milestone
 - before final reviewer submission, uncheck "Generate Rubric(s)" so the edited
   rubric is not overwritten, then check "Send to Reviewer"
 - after final submission, expect peer review in 1-7 business days; total review

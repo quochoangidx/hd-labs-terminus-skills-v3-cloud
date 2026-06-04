@@ -217,27 +217,28 @@ if [ "$PWD" = "/" ]; then
 fi
 
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-if [ $? -eq 0 ]; then
+rc=$?
+if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
 else
     echo 0 > /logs/verifier/reward.txt
 fi
 ```
 
-The final reward block must be exactly this shape because the platform static
-checker matches it literally. Do not store `$?` in a variable, wrap the block in
-a helper, add extra commands after it, or rewrite it as `pytest && echo 1`.
+The final reward block must end the script. The current `check_test_sh` gate
+accepts either `if [ $? -eq 0 ]` immediately after pytest or the preferred
+defensive form above, where `rc=$?` is captured immediately after pytest and
+used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
+commands between pytest and the capture/conditional, or rewrite it as
+`pytest && echo 1`.
 Do not add `exit $?` or any other trailing exit after the final `fi`. Harbor
 reads `/logs/verifier/reward.txt` for pass/fail; the script's exit code is not
-the reward signal, and `check_test_sh` rejects the extra exit.
+the reward signal.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
-`pytest`, `pytest-json-ctrf`, and other verifier-only packages during Docker
-build with exact pins.
-
-Narrow exception: local-only installs from preloaded wheels are acceptable when
-needed, but they must use `--no-index`, exact versions, and no network. Do not
-use this exception to hide an incomplete Dockerfile.
+`pytest`, `pytest-json-ctrf`, and other verifier-only packages in the Docker
+image with exact pins. Do not put dependency wheels in `tests/`, and do not run
+`pip install` from `tests/test.sh`.
 
 Keep project runtime dependencies separate from verifier-only packages.
 

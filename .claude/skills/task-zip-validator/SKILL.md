@@ -37,7 +37,6 @@ Verify ZIP root structure. Good (files at root):
 ```
 instruction.md
 task.toml
-pyproject.toml
 environment/
 solution/
 tests/
@@ -66,8 +65,8 @@ difficulty = "hard"           # or "medium" — NOT "easy" (blocked by diversity
 category = "<one-of-9>"       # see below
 subcategories = [...]
 number_of_milestones = 0
-codebase_size = "small"|"large"  # NOT "minimal" (blocked). small=20-199 files, large=200+
-languages = [...]
+codebase_size = "minimal"|"small"|"large"  # minimal=0-19, small=20-199, large=200+
+languages = [...]                  # task/oracle implementation languages; exclude verifier-only Python
 tags = [...]
 expert_time_estimate_min = N
 junior_time_estimate_min = N
@@ -114,8 +113,9 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 |-------|------|----------|
 | `allow_internet` | Must be `false` | ✅ set to false |
 | `difficulty` | Must be `"medium"` or `"hard"`, NOT `"easy"` | ❌ manual |
-| **Python must be hard** | If `"python"` in `languages` → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
-| `codebase_size` | Must match file count: ≤200 → `"small"`, >200 → `"large"`. NOT `"minimal"` | ✅ adjust |
+| **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
+| `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
+| `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
 | `category` | Must be one of the 9 valid values | ❌ manual |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
 | `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
@@ -127,7 +127,7 @@ Check `environment/Dockerfile`:
 | Check | Rule | Auto-fix |
 |-------|------|----------|
 | Digest pin | `FROM image@sha256:<64hex>` required, NOT `FROM image:tag` | ❌ manual (need to pull digest) |
-| Sanctioned final-stage base | Final stage must use: `python:*`, `mcr.microsoft.com/...`, `ghcr.io/snorkel-ai/...`, or `scratch`. Builder stages may use other images (e.g., `golang`, `rust`). | ❌ manual |
+| Sanctioned final-stage base | Final stage must use a sanctioned or explicitly exempt runtime base. Common accepted final bases are `python:*`, `mcr.microsoft.com/...`, `ghcr.io/snorkel-ai/...`, or `scratch`, all digest-pinned. Builder stages may use toolchain images such as `golang`, `rust`, or `node`. | ❌ manual |
 | **tmux + asciinema REQUIRED** | MUST be in apt-get install. Missing either = ALL agent runs fail with zero output. | ✅ add to apt-get |
 | No COPY tests | NO `COPY tests/` or `COPY solution/` | ✅ remove line |
 | No reserved dirs | NO `mkdir /tests`, `/oracle`, `/logs/verifier`, `/solution` | ✅ remove line |
@@ -135,7 +135,9 @@ Check `environment/Dockerfile`:
 | `patch` installed | For Go/Rust tasks: `patch` must be in apt-get install list | ✅ add to apt-get |
 | `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
 
-**Test deps in Dockerfile:** The docs allow baking verifier deps into the Docker image OR using local-only wheel installs. When CI check `test_deps_in_image` flags pytest in the Dockerfile, use bundled wheels instead. Do NOT auto-remove pytest from Dockerfile — only flag for manual decision.
+**Verifier deps:** Install `pytest`, `pytest-json-ctrf`, and verifier-only
+packages in the Dockerfile with exact pins. Do not put dependency wheels under
+`tests/`, and do not install packages in `tests/test.sh`.
 
 ### 2c. .dockerignore (WARNING → auto-fix)
 
@@ -162,9 +164,9 @@ Check `tests/test.sh`:
 | Uses pytest | Contains `pytest` command | ❌ manual |
 | Uses `-rA` | pytest called with `-rA` option | ✅ add flag |
 | `set -uo pipefail` | Must have `set -uo pipefail` (not `-e`) | ✅ fix |
-| Canonical reward block | Must use `if [ $? -eq 0 ]; then` directly after pytest — do NOT store `$?` in a variable (`rc=$?`) | ✅ rewrite |
+| Canonical reward block | Must capture pytest status immediately (`rc=$?`) or branch on `$?` immediately; `rc=$?` is preferred | ✅ rewrite |
 | No `cd /app` | WORKDIR handles this — `cd /app` is not in canonical template | ✅ remove |
-| No network downloads | No `apt-get`, no `pip install` without `--no-index` | ✅ convert to wheel install |
+| No runtime setup | No `apt-get`, `pip install`, `npm install`, `curl`, or `wget` in test.sh | ✅ remove |
 | CTRF output | Uses `--ctrf /logs/verifier/ctrf.json` | ✅ add flag |
 
 **Canonical test.sh template** (auto-fix target):
@@ -175,41 +177,33 @@ set -uo pipefail
 mkdir -p /logs/verifier
 
 if [ "$PWD" = "/" ]; then
-    echo "Error: No working directory set."
+    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
     echo 0 > /logs/verifier/reward.txt
     exit 0
 fi
 
-pip3 install --break-system-packages --no-index --find-links /tests/wheels pytest pytest-json-ctrf 2>/dev/null
-
-python3 -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-
-if [ $? -eq 0 ]; then
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
 else
     echo 0 > /logs/verifier/reward.txt
 fi
 ```
 
-### 2e. Bundled wheels
+### 2e. Dependency wheels and root pyproject
 
-If `tests/wheels/` doesn't exist or is empty AND Dockerfile doesn't bake pytest:
+Dependency wheels under `tests/` are blocker-level client feedback issues.
+Root-level `pyproject.toml` is not part of the submission allowlist and should
+not be included in the ZIP.
+
 ```bash
-pip3 download --dest tests/wheels/ --only-binary=:all: pytest==8.3.4 pytest-json-ctrf==0.5.0
+find tests -name '*.whl' -print
+test -f pyproject.toml && echo "FAIL: root pyproject.toml should not be submitted"
 ```
 
-**Auto-fix**: create `tests/wheels/` and download if missing.
-
-### 2f. pyproject.toml
-
-Must exist with ruff exclude for environment/repo:
-```toml
-[tool.ruff]
-target-version = "py312"
-extend-exclude = ["environment/repo"]
-```
-
-**Auto-fix**: create if missing.
+**Auto-fix**: remove wheels from `tests/`; remove root `pyproject.toml` from
+the submission package.
 
 ### 2g. Secret-shaped files (WARNING)
 
@@ -403,7 +397,7 @@ Print summary table:
 | tmux + asciinema         | ✅     | -          |
 | test.sh canonical form   | ✅     | YES        |
 | .dockerignore            | ✅     | YES        |
-| bundled wheels           | ✅     | YES        |
+| verifier deps in image   | ✅     | -          |
 | secret files             | ✅     | YES (3)    |
 | AI scaffolding files     | ✅     | YES (1)    |
 | build context size       | ✅     | -          |
@@ -422,24 +416,31 @@ If any fixes were applied, re-zip:
 ```bash
 TASK_NAME=$(basename "$ZIPFILE" .zip)
 cd "$TMPDIR"
-zip -rX "${ZIPFILE}" instruction.md task.toml pyproject.toml environment solution tests \
+zip -rX "${ZIPFILE}" instruction.md task.toml environment solution tests \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/.git/*' -x '*.pyc'
 ```
 
 ## Rubric Reminder
 
 After upload to Snorkel, remind the user to create a rubric in the platform UI:
-- Minimum **3 negative-reward criteria**
-- Format: `"Agent <did/did not> <observable action>, [+/-N]"`
+- Non-milestone tasks: flat `Agent ...` criterion list; a single `# Rubric 1`
+  header is tolerated but not required.
+- Milestone tasks: one block per milestone using `# Rubric 1`, `# Rubric 2`,
+  etc.
+- Minimum **3 negative-reward criteria** overall; milestone tasks also need at
+  least one negative criterion per milestone.
+- Format: `"Agent <did/did not> <observable action>, +/-N"`
 - Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
 - Total points: 10–40 for non-milestone tasks
-- Do NOT reference test names, metadata, or instruction items
+- Do NOT reference tests, verifier logic, `test.sh`, `test_outputs.py`,
+  `/tests/`, hidden tests, CI, reward files, pytest results, metadata, or
+  instruction items
 
 ## Common CI Failures (auto-detect and fix)
 
 Top recurring CI failures from empirical data:
 
-1. **test_deps_in_image** — pytest in Dockerfile → use bundled wheels in test.sh
+1. **verifier deps** — missing pinned pytest/pytest-json-ctrf in Dockerfile or wheels under tests
 2. **codebase_size mismatch** — file count doesn't match declared size
 3. **FROM not digest-pinned** — missing `@sha256:` suffix
 4. **check_sanctioned_base_images** — final stage uses non-sanctioned base
@@ -451,7 +452,7 @@ Top recurring CI failures from empirical data:
 10. **blacklisted databases** — MSSQL/Oracle/DB2 references in repo files
 11. **AI scaffolding files** — CLAUDE.md, .cursorrules in environment/
 12. **build context size** — environment/ exceeds 100MiB or single file >50MiB
-13. **missing pyproject.toml** — ruff can't find config
+13. **root pyproject.toml** — remove from submission ZIP
 14. **Python difficulty** — Python task with `difficulty = "medium"` blocked
 
 ## Go-specific Checks
@@ -463,4 +464,4 @@ For Go tasks (detected by `languages = ["go"]` in task.toml):
 - Dockerfile should have `COPY repo/go.mod repo/go.sum /app/` before `COPY repo/ /app/`
 - `ENV PATH` or symlink for Go binary (see go-task-ci-checklist memory)
 - No `.github/workflows/` directories (may contain blacklisted DB references)
-- For Go tasks, `golang` base image is OK as single-stage (agent needs `go build`); sanctioned-base rule applies only to multi-stage final image
+- For Go tasks, prefer a `golang` builder stage and a sanctioned/exempt final runtime base. A single-stage `golang` final image should be treated as requiring exemption unless current CI/docs explicitly allow it.

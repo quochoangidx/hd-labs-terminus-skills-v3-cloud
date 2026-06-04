@@ -15,7 +15,7 @@ The official Snorkel-portal task skeletons live at `/Users/trung/develop/terminu
 - [task_skeleton/milestone/milestone_template/](../../../task_skeleton/milestone/milestone_template/) — 2-milestone
 - [task_skeleton/ui/](../../../task_skeleton/ui/) — UI-building (Vitest + Playwright)
 
-The structural checks below are the **shape contract these skeletons define**. When a check ambiguously flags or accepts something, **read the matching skeleton file** to decide. Patterns that appear verbatim in a skeleton are by definition acceptable (e.g. the `set +e` / `RC=$?` / `set -e` block in the milestone `test.sh` — that is the canonical reward-gate pattern, do NOT flag it as suspicious).
+The structural checks below are the **shape contract these skeletons define**. When a check ambiguously flags or accepts something, **read the matching skeleton file** to decide. The current `check_test_sh` gate accepts both `if [ $? -eq 0 ]` immediately after pytest and the preferred defensive `rc=$?` variable captured immediately after pytest.
 
 ## API keys / `.env`
 
@@ -157,24 +157,20 @@ number_of_milestones, languages, tags, expert_time_estimate_min, junior_time_est
 - Each `subcategories` entry ∈ {long_context, tool_specific, api_integration, db_interaction, ui_building} → MED. (No platform restriction on which.)
 - `difficulty` ∈ {easy, medium, hard} → HIGH if not in set.
 - **Diversity gate — `difficulty = "easy"` → HIGH.** Auto-blocked by Snorkel's pre-submit diversity eval (`diversity-requirements.md`). Only `medium` / `hard` accepted for brand-new submissions.
-- **Diversity gate — `codebase_size = "minimal"` → HIGH.** Auto-blocked. Only `small` / `large` accepted.
 - `codebase_size` ∈ {minimal, small, large} → MED if literal value is something else entirely.
 - **Empirical codebase_size mismatch → HIGH.** Snorkel CI counts files under `environment/` (excluding `Dockerfile`, `docker-compose.yaml`, and `docker-compose.yml`) and compares to the declared `codebase_size`:
-  - 0–19 files → expected `minimal` (which is itself blocked — caller must pre-stage files);
+  - 0–19 files → expected `minimal`;
   - 20–199 files → expected `small`;
   - ≥ 200 files → expected `large`.
-  If the declared value disagrees with the empirical count, CI emits: `codebase_size is '<declared>' but environment/ has N files`, which is HIGH. Implementation: `find environment -type f | grep -vE '^environment/(Dockerfile|docker-compose\.ya?ml)$' | wc -l`. Tasks that `git clone` at build time (instead of `COPY repo/`) almost always trip this — they must pre-stage a representative subset of the upstream repo into `environment/repo/` per `docs/reference/faq.md` "How do I get to 20+ files for a small codebase?".
-- **Diversity gate — Python primary + `difficulty != "hard"` → HIGH.** If `"python"` is in `languages[0]` (or any entry of `languages`) and `difficulty` is not `"hard"`, auto-blocked. Note: this checks the metadata field; the *real* gate is empirical worst-model pass-rate, but mismatched metadata still fails the pre-submit eval.
+  If the declared value disagrees with the empirical count, CI emits: `codebase_size is '<declared>' but environment/ has N files`, which is HIGH. Implementation: `find environment -type f | grep -vE '^environment/(Dockerfile|docker-compose\.ya?ml)$' | wc -l`. `minimal`, `small`, and `large` are all accepted; keep the value honest and vary size across the portfolio.
+- **Diversity gate — Python primary + `difficulty != "hard"` → HIGH.** If `"python"` is a task/oracle implementation language and `difficulty` is not `"hard"`, auto-blocked. Do not include Python in `languages` solely because verifier tests are written in pytest.
 - `len(tags)` between 3 and 6 → LOW outside that range.
 - `number_of_milestones`: 0 for non-ms, ≥ 2 for ms (1 milestone is invalid). HIGH if violated. Note: non-ms is allowed but ms is *preferred* (higher pay) per `diversity-requirements.md` — LOW info if `number_of_milestones == 0`.
 
 Required blocks:
 - Non-ms: `[verifier].timeout_sec`, `[agent].timeout_sec`, `[environment].{build_timeout_sec, cpus, memory_mb, storage_mb}`. HIGH if missing.
 - **HIGH — REQUIRED FIELD (added by Snorkel CI ~2026-05-20)**: `[environment].allow_internet` must be present. Value must be `false` for almost all tasks (the platform's quality-guidelines forbid network access; only specific approved cases allow `true`). Missing the field → CI fails with `Missing required field: environment.allow_internet (must be false)`. Detect via tomllib: `t["environment"].get("allow_internet")` must exist and be `false`.
-- **HIGH — `allow_internet = false` ↔ test.sh / Dockerfile must work OFFLINE**: when `allow_internet = false`, the verifier container has NO outbound network. This breaks any `curl|wget` to `astral.sh/uv`, any `apt-get update`, any `pip install <pkg>` from pypi, any `uvx --with-editable /app` that triggers a rebuild needing setuptools. Mitigations:
-  - **Pre-install `curl` + any other apt deps in the Dockerfile** (build time has network; verify time doesn't).
-  - **Bundle pip wheels under `tests/files/wheels/`** so test.sh can `python3 -m pip install --no-index --find-links /tests/files/wheels pytest==X.Y.Z pytest-json-ctrf==Z.W.V` offline. Generate via: `python3 -m pip download --no-cache-dir -d /tmp/wheels pytest==X.Y.Z pytest-json-ctrf==Z.W.V` (transitive deps included). Bundle ALL transitive wheels — not just `pytest` and `pytest-json-ctrf`, but also `iniconfig`, `packaging`, `pluggy`, `pygments`. The `--no-index` flag forces pip to use only the local wheelhouse, which catches a missing transitive dep immediately. This still satisfies CI `test_deps_in_image` because pytest is NOT in the image — it is installed from the wheelhouse at verify time.
-  - **AVOID `uvx --with-editable /app`** when the app is already pip-installed editable in the Dockerfile — uvx will try to re-resolve build deps (e.g. `setuptools>=77`) over the network and fail. Use system python (`python3 -m pytest ...`) instead.
+- **HIGH — `allow_internet = false` ↔ test.sh / Dockerfile must work OFFLINE**: when `allow_internet = false`, the verifier container has NO outbound network. `tests/test.sh` must not run `curl|wget`, `apt-get`, `pip install`, `npm install`, or `uvx` that fetches dependencies. Install `pytest`, `pytest-json-ctrf`, and verifier-only dependencies in the Dockerfile with exact pins, then use system Python in `tests/test.sh`.
 
 - **HIGH — Dockerfile MUST pre-install `tmux` + `bash` + `util-linux` for the agent harness**: Snorkel's `terminus-2` (and other interactive) agents bootstrap by attaching a tmux session inside the container. With `allow_internet = false` the bootstrap cannot `apt-get install tmux` at runtime, so the agent fails before ever generating code with the cryptic error:
 
@@ -251,7 +247,7 @@ If `environment/docker-compose.yaml` exists:
 - **HIGH (CI `build_context_pollution` — secret-shaped files)**: any `*.key`, `*.pem`, `*.crt`, `id_rsa*`, or other credential-shaped filename anywhere under `environment/` (CI scans `environment/repo/**/*.key` too). Even GPG release-signing public keys (e.g. `jq-release-new.key`) trip this — delete them from the build context. Detect with `find environment -type f \( -name '*.key' -o -name '*.pem' -o -name '*.crt' -o -name 'id_rsa*' \)`.
 - **LOW (CI false-positive — `runtime_build_tool_package` warning)**: a single-stage Dockerfile that installs build tooling (`build-essential`, `make`, `gcc`, `autoconf`, `cmake`, etc.) at the runtime layer triggers a "should be multi-stage" warning. For **debugging tasks** where the agent edits source and the verifier re-runs the build (e.g. all jq / scipy debugging tasks where `solve.sh` does `make -j"$(nproc)"`), this is a **known false positive** per the CI carve-out — keep the single-stage Dockerfile. CI documents a future `task.toml` metadata flag to auto-suppress this. Action: ignore for debugging tasks; for everything else, split into `<lang>:… AS builder` + `COPY --from=builder` runtime.
 - **HIGH (CI `tests_or_solution_in_image`)**: `COPY tests/`, `COPY ./tests/`, `COPY solution/`, `COPY ./solution/`, or any `ADD` of those paths.
-- **HIGH (CI `test_deps_in_image`)**: `RUN pip install` (any form) that includes `pytest`, `pytest-`, `coverage`, `pytest-cov`, or `pytest-json-ctrf`. Test deps belong in `tests/test.sh`, not the image.
+- **HIGH (verifier dependency placement)**: dependency wheels under `tests/`, or package installation/downloads in `tests/test.sh`, are client-feedback blockers. Bake verifier deps into the Dockerfile with exact pins.
 - HIGH: `RUN mkdir` (or `mkdir -p`) of `/tests`, `/oracle`, `/solution`, `/logs/verifier`, `/logs/artifacts`.
 - HIGH: `RUN chown ... /tests`, `... /oracle`, `... /solution`.
 - **HIGH (CI `check_dockerfile_references`)**: Dockerfile references `solution/solve.sh`, `tests/test.sh`, `tests/test_outputs.py`, or any file under `solution/` or `tests/`. Detect with: `grep -E 'solution/(solve\.sh|init_state\.patch)|tests/(test\.sh|test_outputs\.py|test_m[0-9]+\.py)' environment/Dockerfile`.
@@ -286,7 +282,9 @@ For each file:
 
 ### 1f. `tests/test.sh` (non-ms) and `steps/milestone_N/tests/test.sh` (ms)
 
-**⚠️ Snorkel CI checks the literal end of test.sh.** Per a real CI failure observed on a submitted task, the run_static_checks validator REQUIRES this exact tail:
+`tests/test.sh` must end with a reward block. The current `check_test_sh` gate
+accepts either the inline `$?` form or a variable captured immediately after
+pytest; the variable form is preferred because `$?` is easy to clobber.
 
 ```bash
 if [ $? -eq 0 ]; then
@@ -296,22 +294,38 @@ else
 fi
 ```
 
-This is the skeleton-regular pattern ([task_skeleton/regular/tests/test.sh](../../../task_skeleton/regular/tests/test.sh)). The milestone skeleton pattern (`set -euo pipefail` + `set +e/-e` wrapping pytest + `if [ "$RC" -eq 0 ]`) is documented as locally valid but the Snorkel platform CI does NOT accept it for non-milestone tasks — it expects the literal `[ $? -eq 0 ]` form. **For non-milestone tasks, always use the skeleton-regular tail verbatim.** For milestone tasks, the per-milestone CI may accept either; default to skeleton-regular for safety.
+Preferred form:
+
+```bash
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    echo 1 > /logs/verifier/reward.txt
+else
+    echo 0 > /logs/verifier/reward.txt
+fi
+```
 
 Findings:
-- **HIGH (CI literal-pattern)**: non-milestone `tests/test.sh` does not END with the exact skeleton-regular block (`if [ $? -eq 0 ]; then\n    echo 1 > /logs/verifier/reward.txt\nelse\n    echo 0 > /logs/verifier/reward.txt\nfi`). Snorkel `run_static_checks.py` rejects anything else with: `Must end with the reward section: ...`.
+- **HIGH (CI reward-pattern)**: `tests/test.sh` does not end with an accepted
+  reward block: pytest, then either immediate `rc=$?` plus `if [ "$rc" -eq 0 ]`
+  or immediate `if [ $? -eq 0 ]`, then reward writes.
 - HIGH: does not write `/logs/verifier/reward.txt` (or `reward.json`) on **both** the success and failure path.
-- HIGH: any pytest / pytest-plugin install in this file lacks `==` pin (e.g. `uvx -w pytest -w pytest-json-ctrf`). Both `-w pkg==ver` (skeleton-regular) and `--with pkg==ver` (skeleton-milestone) forms are acceptable.
+- HIGH: any runtime setup in this file: `apt-get`, `pip install`, `npm install`, `curl`, `wget`, `playwright install`, or dependency-resolving `uvx`.
 - HIGH: contains conditional logic that branches on whether `/oracle` exists, or sets `EVAL_IS_ORACLE`, or chmods test files only when oracle absent (quality-guidelines §2 — same logic for oracle and agent).
 - HIGH: bare reference to an env var with no default (`"$TEST_DIR"` without `${TEST_DIR:-/tests}` somewhere earlier; allow `$HOME`, `$PWD`, `$PATH`).
 - MED: latency / timing assertions inside the script (search for `p50|p95|p99|latency_ms|elapsed_ms` patterns).
-- MED: uses `set -e` / `set -euo pipefail` without `set +e` around pytest AND does not match the literal skeleton-regular tail above — even if the trap-style reward write would work locally, the CI literal-pattern check will fail.
+- MED: uses `set -e` / `set -euo pipefail` without `set +e` around pytest and
+  does not match either accepted reward form.
 
-**UI task variant** (`tests/test.sh` for `ui_building` subcategory — mirrors [task_skeleton/ui/tests/test.sh](../../../task_skeleton/ui/tests/test.sh)):
-- HIGH: missing `npm install` / `npm ci` before the test commands.
-- HIGH: missing `npx playwright install chromium` (or equivalent browser install) — Playwright tests will fail without a browser.
+**UI task variant** (`tests/test.sh` for `ui_building` subcategory):
+- HIGH: `npm install`, `npm ci`, `playwright install`, or browser downloads in
+  `tests/test.sh`. Install Node verifier deps and browsers during Docker build.
+- HIGH: missing `npm run test` and `npm run test:e2e` reward gating when the UI
+  task expects both unit and E2E coverage.
 - HIGH: reward gate not based on BOTH unit AND E2E exit codes (skeleton uses `UNIT_EXIT=$?` + `E2E_EXIT=$?`, then `[ "$UNIT_EXIT" -eq 0 ] && [ "$E2E_EXIT" -eq 0 ]`). Single-suite reward gating is incorrect.
-- LOW: missing `export DEBIAN_FRONTEND=noninteractive` before `playwright install-deps` (apt may hang on prompts).
+- MED: Dockerfile does not install required Node verifier dependencies or browser
+  binaries needed by the UI tests.
 
 ### 1g. `tests/test_outputs.py` (non-ms) and `steps/milestone_N/tests/test_mN.py` (ms)
 
@@ -370,17 +384,11 @@ Only run if `ui_building` is in `subcategories`. Skeleton: [task_skeleton/ui/tes
 
 ### 1j. `environment/repo/` upstream-source hygiene (pre-staged repos)
 
-When a task pre-stages an upstream repo into `environment/repo/` (the recommended way to hit `codebase_size = "small"`/`large"` per `docs/reference/faq.md`), Snorkel's `ruff` and "blacklisted databases" checks run against THAT subtree too. The upstream code is rarely ruff-clean and may contain false-positive blacklist hits.
+When a task pre-stages an upstream repo into `environment/repo/`, Snorkel's `ruff` and "blacklisted databases" checks run against THAT subtree too. The upstream code is rarely ruff-clean and may contain false-positive blacklist hits.
 
-- **HIGH (CI ruff-fail on env/repo)**: `ruff check <task>` runs over the entire task tree including `environment/repo/`. Upstream codebases (Ansible, scipy, sklearn, CPython, Django) routinely have hundreds of `F401`/`F821`/`E902` warnings under modern ruff (e.g. `BaseExceptionGroup` requires `target-version = "py311"`, lazy imports flag `F401`). To unblock CI without rewriting upstream source, add a task-root `pyproject.toml`:
+- **HIGH (root packaging hygiene)**: do not include task-root `pyproject.toml` in submitted tasks. If local tooling needs a ruff exclude for `environment/repo`, keep that config outside the ZIP or remove it before packaging.
 
-  ```toml
-  [tool.ruff]
-  target-version = "py312"   # or whatever matches the Dockerfile's python version
-  extend-exclude = ["environment/repo"]
-  ```
-
-  Detect: count `ruff check .` errors at task root; if any are inside `environment/repo/`, the task is missing this exclude.
+- **HIGH (CI ruff-fail on env/repo)**: `ruff check <task>` runs over the entire task tree including `environment/repo/`. Upstream codebases may have many warnings. Prefer pruning irrelevant files or using CI-supported exclusions that do not require submitting a root `pyproject.toml`; never rewrite upstream source behavior just to silence ruff.
 
 - **HIGH (CI blacklisted-database)**: Snorkel scans for commercial DB strings via **case-insensitive substring matching**, not word-boundary regex. Known triggers observed: `oci_` → "Oracle (OCI)", `maxscale` → "MariaDB_MaxScale". The blacklist is dumb-substring and produces false positives in sklearn (`MinMaxScaler`, `MaxAbsScaler` contain the substring `maxscale`), Ansible (`oci_vcn` legacy module redirects). Verify with: `grep -rilE 'maxscale|oci_|oracle|mysql|sqlserver|mariadb|snowflake|redshift|bigquery|postgres' environment/repo/`.
   Mitigation strategies (in order of preference):
@@ -555,7 +563,7 @@ Category: <category>   Subcategories: [<...>]   Difficulty: <difficulty>
 Codebase size: <minimal|small|large>   Languages: [<...>]   Tags: [<...>]
 
 Diversity gate: <PASS | BLOCKED — reason>
-  (easy / minimal / Python+non-hard auto-block per diversity-requirements.md)
+  (easy / Python+non-hard auto-block per diversity-requirements.md; codebase_size minimal/small/large all accepted when honest)
 
 ## HIGH (must fix before submit) — <count>
 - [<area>] <path>: <message>
@@ -604,7 +612,9 @@ Next:
         unzip -l <TASK_SLUG>.zip | grep -cE '__MACOSX/|\.DS_Store'   # must print 0
 
   3. Upload to experts.snorkel-ai.com → Terminus-2nd-Edition. Check the rubrics
-     checkbox; leave Send-to-Reviewer UNticked the first time.
+     checkbox; leave Send-to-Reviewer UNticked the first time. Edit the generated
+     rubric before reviewer submission: non-milestone uses a flat `Agent ...`
+     list; milestone uses `# Rubric 1`, `# Rubric 2`, etc. blocks.
 
 See docs/submitting-tasks/platform-submission.md.
 ```
@@ -619,13 +629,13 @@ The structural rules above are calibrated to catch every check Snorkel's `run_st
 | `pinned_dependencies` (base image) | `FROM ... :latest` or no tag | 1d | HIGH |
 | `typos` | spell-check across task tree | 1i.1 | MED |
 | `tests_or_solution_in_image` | `COPY tests/` or `COPY solution/` | 1d | HIGH |
-| `test_deps_in_image` | `RUN pip install pytest...` in Dockerfile | 1d | HIGH |
+| verifier dependency placement | wheels under `tests/` or runtime installs in `tests/test.sh` | 1d/1f | HIGH |
 | `check_dockerfile_references` | Dockerfile references `solution/solve.sh` / `tests/test.sh` / `test_outputs.py` | 1d | HIGH |
 | `check_test_sh` | test.sh missing reward write OR end pattern wrong | 1f | HIGH |
 | `check_task_absolute_path` | instruction has relative path to a task file | 1c | HIGH |
 | `check_privileged_containers` | compose `privileged: true` or dangerous caps | 1d | HIGH |
 | `ruff` (task code) | macOS junk `__MACOSX/`/`.DS_Store`/`._*` triggers E902 | 1i | HIGH |
-| `ruff` (env/repo upstream) | missing `pyproject.toml` with `extend-exclude = ["environment/repo"]` | 1j | HIGH |
+| root `pyproject.toml` | remove from submitted task ZIP | 1j | HIGH |
 | `check_task_sizes` | any file > 1 MB | 1i | LOW |
 | `validate_task_fields` | missing required `[metadata]` key | 1b | HIGH |
 | `validate_task_fields` (category) | `category` not in 9 taxonomy values (lowercase kebab-case) | 1b | HIGH |
@@ -637,7 +647,6 @@ Plus three diversity-gate checks (per `docs/understanding-tasks/diversity-requir
 | Diversity / blacklist | SKILL rule | Section | Sev |
 |---|---|---|---|
 | `difficulty = "easy"` blocked | rule 1b diversity gate | 1b | HIGH |
-| `codebase_size = "minimal"` blocked | rule 1b diversity gate | 1b | HIGH |
 | Python + difficulty ≠ "hard" blocked | rule 1b diversity gate | 1b | HIGH |
 | Empirical `codebase_size` mismatch (file count) | rule 1b empirical check | 1b | HIGH |
 | Commercial-database blacklist (`oracle`, `oci_`, `mysql`, `sqlserver`, …) | rule 1j substring scan | 1j | HIGH |
@@ -669,15 +678,15 @@ The rules above reflect real Snorkel CI failures observed during dogfooding 2026
 | CI message (verbatim) | SKILL rule that now catches it |
 |---|---|
 | `codebase_size is 'large' but environment/ has 0 files (expected 'minimal')` | Empirical codebase_size mismatch (1b) |
-| `test.sh: Must end with the reward section: if [ $? -eq 0 ]; then ...` | test.sh literal end pattern (1f) |
+| `test.sh: Must end with the reward section` | use an accepted reward block: immediate `rc=$?` or immediate `$?` conditional (1f) |
 | `ruff E902: stream did not contain valid UTF-8` on `__MACOSX/.../._*.py` | macOS junk in tree (1i) |
-| `ruff F401/F821 ...` over 1000+ errors inside `environment/repo/lib/ansible/` | `environment/repo/` needs `pyproject.toml` exclude (1j) |
+| `ruff F401/F821 ...` over 1000+ errors inside `environment/repo/lib/ansible/` | prune/scope upstream files or use an allowed non-submitted local config; root `pyproject.toml` should not be in the ZIP (1j) |
 | `Found 1 blacklisted database(s) in 1 file(s): Oracle` (substring match `oci_`) | Commercial-DB blacklist (1j) |
 | `[instruction_check] reads as a detailed implementation guide` | LLMaJ over-prescription (1c) |
 | `[instruction_check] reads like an implementation guide with prescribed refactoring steps` (2nd iteration) | Same rule (1c) — tighten further: prefer "outcome + constraint" wording, push naming details into a small "Naming hint" section at the end |
 | `Missing required field: environment.allow_internet (must be false)` (added by Snorkel ~2026-05-20) | `[environment].allow_internet` required field (1b) |
 | `typos: ini key 'interpreter_python' collides with INTERPRETER_PYTHON` | ini key collision when reusing upstream key for a new config (1b empirical) — pick a unique key (e.g. `inject_invocation`, not `interpreter_python`) |
-| `setuptools>=77.0.3 ... Temporary failure in name resolution` when `uvx --with-editable` rebuilds | `allow_internet=false` offline rule (1b) — bundle wheels under `tests/files/wheels/` + `pip install --no-index --find-links` |
+| `setuptools>=77.0.3 ... Temporary failure in name resolution` when `uvx --with-editable` rebuilds | `allow_internet=false` offline rule (1b) — bake verifier deps into Dockerfile and remove runtime installs |
 | Test Quality Review: "Copy action plugin toggle behavior has no correctness test" (LLMaJ recommendation: STRENGTHEN) | weak-assertion pattern (1g) — `hasattr` shape-check + no behavior assertion |
 | Test Quality Review: "templar tested only with None — actual templating unverified" | "kwarg accepted but not used" pattern (1g) — use a recording stub |
 | Test Quality Review: "`_ensure_invocation` result mutation not asserted" | weak-assertion pattern (1g) — must `assert "invocation" not in returned` |

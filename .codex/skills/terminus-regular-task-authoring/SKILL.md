@@ -45,11 +45,13 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 
 For new submissions:
 
-- Set `codebase_size` to `small` or `large`; do not use `minimal`.
-- Use `small` for roughly 20-199 useful files in `environment/`.
-- Use `large` for roughly 200+ useful files in `environment/`.
-- If the staged environment has fewer than 20 useful files, add realistic
-  project context or redesign the task instead of padding with blank filler.
+- Set `codebase_size` honestly from useful files in `environment/`.
+- Use `minimal` for roughly 0-19 useful files, `small` for roughly 20-199
+  useful files, and `large` for roughly 200+ useful files.
+- `minimal`, `small`, and `large` are all accepted; aim for a portfolio mix
+  instead of padding or pruning solely to hit one size.
+- `languages` lists the main language(s) used by the task/oracle changes. Do
+  not include Python solely because verifier tests are written in pytest.
 
 ## Prompt Rules
 
@@ -60,6 +62,9 @@ For new submissions:
 - Mention all required paths and output files.
 - Avoid issue URLs, PR numbers, exact test names, canaries, and rubrics.
 - Include enough edge-case requirements that tests are fair.
+- Apply the real-user prompt test to every sentence: would a developer who did
+  not already know the solution naturally include this detail? If not, it is
+  probably a hint rather than a requirement.
 
 Environment files must not compensate for a short prompt:
 
@@ -112,9 +117,9 @@ For Python tasks, separate project/runtime dependencies from verifier-only
 dependencies. Install `pytest`, `pytest-json-ctrf`, and verifier packages in
 the Docker image with exact pins.
 
-Narrow exception: local-only installs from preloaded wheels are acceptable when
-needed, but they must use `--no-index`, exact versions, and no network. Do not
-use this exception to hide an incomplete Dockerfile.
+Do not put verifier dependency wheels in `tests/`. The `tests/` directory should
+contain verifier scripts and fixtures only; install verifier dependencies during
+Docker build.
 
 ## Verifier Rules
 
@@ -151,26 +156,29 @@ if [ "$PWD" = "/" ]; then
     exit 0
 fi
 
-cd /app
-
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-if [ $? -eq 0 ]; then
+rc=$?
+if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
 else
     echo 0 > /logs/verifier/reward.txt
 fi
 ```
 
-The final reward block must be exactly this shape because the platform static
-checker matches it literally. Do not store `$?` in a variable, wrap the block in
-a helper, add extra commands after it, or rewrite it as `pytest && echo 1`.
+The final reward block must end the script. The current `check_test_sh` gate
+accepts either `if [ $? -eq 0 ]` immediately after pytest or the preferred
+defensive form above, where `rc=$?` is captured immediately after pytest and
+used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
+commands between pytest and the capture/conditional, or rewrite it as
+`pytest && echo 1`.
 Do not add `exit $?` or any trailing exit after the final `fi`: Harbor records
-pass/fail from `/logs/verifier/reward.txt`, and the static gate rejects that
-extra exit even though the script's own exit code is not the reward signal.
+pass/fail from `/logs/verifier/reward.txt`; the script's own exit code is not
+the reward signal.
 
 Do not run runtime setup, `apt-get`, `npm install`, or network downloads in
-`tests/test.sh`. If `pip install` is unavoidable, it must be local-only from
-preloaded wheels with `--no-index` and exact versions.
+`tests/test.sh`. Bake verifier dependencies into the Docker image; `test.sh`
+should run the verifier and write `/logs/verifier/reward.txt`, not install
+packages.
 
 ## Oracle Rules
 
@@ -197,20 +205,32 @@ Generate rubrics through the platform UI before reviewer submission: check
 "Generate Rubric(s)" while "Send to Reviewer" is unchecked, wait for the
 generated rubric, edit it for accuracy, then uncheck "Generate Rubric(s)" before
 checking "Send to Reviewer" so the edited rubric is not overwritten.
-Rubrics must be trace-focused: non-milestone positive totals should be 10-40
-points; each milestone should account for 10-40 positive points; every line
-starts with `Agent` and ends with `, +/-N`; allowed values are only 1, 2, 3, or
-5; do not use 4; include at least three negative criteria for regular tasks and
-at least one negative criterion per milestone.
+Rubrics must be trace-focused. Every criterion line starts with `Agent` and
+ends with `, +/-N`; allowed values are only 1, 2, 3, or 5; do not use 4.
+Non-milestone rubrics should be a flat list of `Agent ...` criteria; a single
+`# Rubric 1` header is tolerated but not required, and `# Rubric 2+` is reserved
+for milestone tasks. Milestone rubrics must use one block per milestone:
+`# Rubric 1`, `# Rubric 2`, etc. Non-milestone positive totals should be 10-40
+points, and each milestone should account for 10-40 positive points. Include at
+least three negative criteria overall; for milestone tasks, also include at
+least one negative criterion per milestone.
+Rubrics must describe observable agent behavior during the solve. Do not
+reference tests, verifier logic, `test.sh`, `test_outputs.py`, `/tests/`,
+hidden tests, CI, reward files, pytest, or final test results.
 
 Quality preflight:
 
-- `codebase_size` is `small` or `large`, not `minimal`
+- `codebase_size` matches the useful environment file count and portfolio mix
+- `languages` excludes verifier-only Python
+- no root-level `pyproject.toml`
 - final runtime base image is sanctioned or explicitly exempt
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP
+- no dependency wheels in `tests/`
 - no `tests/` or `solution/` copied into the Docker image
-- no runtime dependency setup in `tests/test.sh` unless using a justified
-  local-only wheel exception with `--no-index`
+- no runtime dependency setup in `tests/test.sh`
+- no rubric or instruction references to tests, verifier logic, `test.sh`,
+  `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, pytest, or final
+  test results
 - no unverified downloads, `curl | sh`, stale copied archives, broad recursive
   permission rewrites, or cache-hostile Dockerfile layer ordering
 - no hidden solution walkthroughs, procedural hints, or prompt-bypass

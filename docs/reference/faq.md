@@ -130,7 +130,7 @@ Based on file count in `environment/` (excluding Dockerfile and docker-compose).
 
 | Value | File count | Notes |
 |---|---|---|
-| `minimal` | 0–19 | **Not accepted** for new submissions |
+| `minimal` | 0–19 | Allowed |
 | `small` | 20+ | |
 | `large` | 200+ | |
 

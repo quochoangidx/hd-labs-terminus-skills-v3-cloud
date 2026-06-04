@@ -166,7 +166,7 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 3. Create `workspace/tbrain-<problem-slug>` using the naming rule.
 4. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 5. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
-6. Write sanitized `instruction.md` from observable behavior only.
+6. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
 7. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false`, the artifact's valid category/subcategories, and realistic resources.
 8. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
 9. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
@@ -180,7 +180,6 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 workspace/tbrain-<problem-slug>/
 ├── instruction.md
 ├── task.toml
-├── pyproject.toml              # add when excluding environment/repo from ruff
 ├── environment/
 │   ├── .dockerignore
 │   ├── Dockerfile
@@ -214,7 +213,7 @@ category = "<artifact.category or debugging for upstream bugfix>"
 subcategories = ["<artifact subcategories, or tool_specific for upstream bugfix>"]
 number_of_milestones = 0
 codebase_size = "small"
-languages = ["python"]
+languages = ["<main implementation language>"]
 tags = ["<3-6 useful tags>"]
 expert_time_estimate_min = 60
 junior_time_estimate_min = 180
@@ -257,7 +256,13 @@ db_interaction
 ui_building
 ```
 
-Python tasks must be hard. Avoid `codebase_size = "minimal"` for new tasks; stage enough files to justify `small` or use a real large repo.
+Python tasks must be hard. `codebase_size` may be `minimal`, `small`, or
+`large`; choose the honest size from useful files under `environment/` and aim
+for a portfolio mix instead of forcing every task to one size.
+
+`languages` should list the main language(s) the agent works in or the oracle
+solution changes. Do not include Python solely because the verifier is written
+in pytest.
 
 ## Instruction Style
 
@@ -270,6 +275,10 @@ Write like a real engineer describing the requested observable work:
 - No step-by-step implementation guide.
 - No task name in the prompt.
 - No canary strings.
+- Apply the real-user prompt test to every sentence: would a developer who did
+  not already know the solution naturally include this detail? If the detail is
+  useful mainly because it points to the fix path, remove it or restate it as an
+  observable requirement.
 - If tests require a secondary implementation that is not obvious from the
   public behavior, name the relevant module or file path without giving the
   exact patch. This is allowed instruction sufficiency, not a solution hint.
@@ -335,13 +344,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - keep package-manager caches, compiler caches, and unused build outputs out of
   the final image
 
-Add task-root `pyproject.toml` for upstream repos:
-
-```toml
-[tool.ruff]
-target-version = "py312"
-extend-exclude = ["environment/repo"]
-```
+Do not add root-level `pyproject.toml` as a submission artifact. If local ruff
+or editor tooling needs to exclude `environment/repo`, keep that configuration
+outside the submitted task or remove it before packaging.
 
 Remove macOS junk and secret-shaped files:
 
@@ -455,7 +460,9 @@ or quality signal is trusted.
 
 ## tests/test.sh
 
-Prefer the docs/current offline pattern with pytest already installed in the image:
+Use the canonical test.sh pattern. The `check_test_sh` CI gate accepts the
+current reward block shapes documented below, and `WORKDIR` in the Dockerfile
+handles the `/app` working directory.
 
 ```bash
 #!/bin/bash
@@ -469,32 +476,29 @@ if [ "$PWD" = "/" ]; then
     exit 0
 fi
 
-cd /app
-
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-if [ $? -eq 0 ]; then
+rc=$?
+if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
 else
     echo 0 > /logs/verifier/reward.txt
 fi
 ```
 
-The final reward block must be exactly this shape because the platform static
-checker matches it literally. Do not store `$?` in a variable, wrap the block in
-a helper, add extra commands after it, or rewrite it as `pytest && echo 1`.
+The final reward block must end the script. The current `check_test_sh` gate
+accepts either `if [ $? -eq 0 ]` immediately after pytest or the preferred
+defensive form above, where `rc=$?` is captured immediately after pytest and
+used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
+commands between pytest and the capture/conditional, or rewrite it as
+`pytest && echo 1`.
 Do not append `exit $?` or any trailing exit after the final `fi`. Harbor uses
-`/logs/verifier/reward.txt`, not the script exit code, and `check_test_sh`
-expects the reward block to be the script ending.
+`/logs/verifier/reward.txt`, not the script exit code.
 
-Verifier dependencies must be available before `tests/test.sh` starts. The
-default docs-compliant path is to install `pytest`, `pytest-json-ctrf`, and any
-verifier-only dependencies in the Dockerfile with exact pins. `tests/test.sh`
-should run pytest and write `/logs/verifier/reward.txt`; it must not perform
-runtime setup or fetch from the network.
-
-Narrow exception: local-only installs from preloaded wheels are acceptable when
-needed, but they must use `--no-index`, exact versions, and no network. Do not
-use this exception to hide an incomplete Dockerfile.
+Verifier dependencies must be available before `tests/test.sh` starts. Install
+`pytest`, `pytest-json-ctrf`, and verifier-only dependencies in the Dockerfile
+with exact pins. `tests/test.sh` should run pytest and write
+`/logs/verifier/reward.txt`; it must not install packages or fetch from the
+network.
 
 Keep runtime/project dependencies separate from verifier-only dependencies. For
 editable installs of the target package, prefer `pip install --no-deps -e .`
@@ -513,7 +517,14 @@ Before packaging or platform upload:
 - remove hidden walkthroughs, procedural hints, and prompt-bypass instructions
   from environment files, comments, README, configs, scripts, TODOs, `spec.md`,
   and architecture docs
-- verify `tests/test.sh` does not run runtime setup, `apt-get`, `npm install`, or network downloads; if it runs `pip install`, it must use only bundled local wheels with `--no-index` and there must be a concrete reason not to bake those verifier deps in the image
+- verify the task root has no `pyproject.toml`
+- verify rubrics do not reference tests, verifier logic, `test.sh`,
+  `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, or pytest
+  results
+- verify `tests/` contains verifier scripts/fixtures only, not dependency
+  wheels
+- verify `tests/test.sh` does not run runtime setup, `apt-get`, `pip install`,
+  `npm install`, or network downloads
 - verify Dockerfile does not `COPY tests/`, `COPY solution/`, or create `/tests`, `/solution`, `/oracle`, `/logs/verifier`
 - verify Dockerfile uses a sanctioned/exempt final runtime base, has no
   heredoc-generated source files, no tag-only `FROM` image, no unverified
@@ -576,11 +587,13 @@ cd tbrain-<problem-slug>
 find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' -o -name '.ruff_cache' -o -name '.pytest_cache' -o -name '.mypy_cache' \) -print
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml pyproject.toml environment solution tests \
+zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc'
 ```
 
-Regular task ZIPs must include task-root `pyproject.toml`. The ZIP must contain only submission-required files/folders, not `reports/`, `submissions/`, `workspace/`, logs, caches, or scratch notes.
+Regular task ZIPs must contain only submission-required files/folders, not root
+`pyproject.toml`, `reports/`, `submissions/`, `workspace/`, logs, caches, or
+scratch notes.
 
 ## Hand-Off
 
