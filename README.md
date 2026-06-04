@@ -10,7 +10,9 @@ Bộ kỹ năng hỗ trợ tạo Terminus Regular task từ issue/PR upstream đ
 
 ## Tổng quan
 
-Repo này cung cấp các skill để tạo task end to end. Quy tắc mới: tách rõ `mine` và `clone` để giảm quota, tăng tốc sản xuất nhiều task, và tránh Codex đọc lại repo quá nhiều lần.
+Repo này cung cấp các skill để tạo task end to end. Quy tắc mới: tách rõ `mine`,
+`clone`, `review client feedback`, `validate`, và `zip` để giảm quota, tăng tốc
+sản xuất nhiều task, và tránh Codex đọc lại repo quá nhiều lần.
 
 | # | Tên kỹ năng | Slash command gợi ý | Mô tả |
 |---|---|---|---|
@@ -22,6 +24,7 @@ Repo này cung cấp các skill để tạo task end to end. Quy tắc mới: t�
 | 6 | **Upstream Repo Sanitizer** | `/upstream-repo-sanitizer` | Làm sạch `environment/repo`, giữ build context dưới giới hạn CI |
 | 7 | **Task Harbor Runner** | `/task-harbor-runner` | Chạy và debug Harbor: oracle, nop, CI checks, real agents |
 | 8 | **Task Zip Submit** | `/task-zip-submit` | Đóng gói ZIP sạch, đúng cấu trúc, không dính macOS junk |
+| 9 | **Task Client Feedback Review** | `/task-client-feedback-review` | Review task/ZIP theo feedback client mới nhất trước upload/resubmission |
 
 ---
 
@@ -40,7 +43,10 @@ terminus-bench/
 |   |-- terminus-hard-python-verifier/SKILL.md
 |   |-- upstream-repo-sanitizer/SKILL.md
 |   |-- task-harbor-runner/SKILL.md
-|   `-- task-zip-submit/SKILL.md
+|   |-- task-zip-submit/SKILL.md
+|   `-- task-client-feedback-review/
+|       |-- SKILL.md
+|       `-- scripts/review_task.py
 |-- .codex/skills/                # Bản sync cho Codex trong workspace
 |-- .claude/skills/               # Bản sync cho Claude trong workspace
 |-- mined-candidates/
@@ -53,6 +59,15 @@ terminus-bench/
 ```
 
 Task clone, Harbor reports và submission ZIP đều để trong `workspace/`. Đây là khu vực local, không đẩy lên git. `.gitignore` đã ignore nguyên thư mục `/workspace/`.
+
+`skills/` là source chính của bộ skill trong repo. `.codex/skills/` và
+`.claude/skills/` là bản sync cho từng runtime; khi cập nhật skill, giữ các bản
+này khớp nhau nếu skill tồn tại ở nhiều nơi.
+
+`.claude/skills/` có thêm một vài helper legacy/Claude-only như
+`terminus-create-task`, `terminus-validate-task`, `task-zip-validator`,
+`sync-doc-and-skill`, và `find-task-prs`. Các helper này cũng đã được align với
+docs/client feedback mới, nhưng source chính cho workflow Codex là `skills/`.
 
 ---
 
@@ -75,6 +90,8 @@ terminus-hard-python-verifier
         ↓
 terminus-regular-task-authoring    [audit/sửa cấu trúc task]
         ↓
+task-client-feedback-review        [quét feedback client: prompt/rubric/package]
+        ↓
 task-harbor-runner
         ↓
 task-zip-submit
@@ -90,8 +107,9 @@ task-zip-submit
 4. **issue-to-regression-test**: Chuyển bug upstream thành verifier tests: direct regression, boundary, normal behavior, anti-shortcut.
 5. **terminus-hard-python-verifier**: Hoàn thiện `tests/test_outputs.py`, `tests/test.sh`, oracle pattern và coverage cho Python Hard task.
 6. **terminus-regular-task-authoring**: Audit `instruction.md`, `task.toml`, Dockerfile, oracle và verifier theo Platform Submission Guide.
-7. **task-harbor-runner**: Chạy `harbor run -a oracle`, `harbor run -a nop`, `harbor tasks check`, rồi follow feedback nếu fail.
-8. **task-zip-submit**: Dọn cache/macOS junk, zip đúng contents của task folder, verify archive trước khi upload.
+7. **task-client-feedback-review**: Review prompt/rubric/package theo feedback client hiện tại. Mặc định review-only; chỉ sửa khi user yêu cầu.
+8. **task-harbor-runner**: Chạy `harbor run -a oracle`, `harbor run -a nop`, `harbor tasks check`, rồi follow feedback nếu fail.
+9. **task-zip-submit**: Dọn cache/macOS junk, zip đúng contents của task folder, verify archive trước khi upload.
 
 ### Phối hợp giữa các kỹ năng
 
@@ -99,6 +117,9 @@ task-zip-submit
 - **task-clone** là bước transform chính. Khi người dùng đưa `mined_candidate.json`, bắt đầu từ đây và không mine lại.
 - **upstream-repo-sanitizer** chạy trước khi build Docker để tránh fail vì build context quá lớn hoặc file bị blacklist.
 - **issue-to-regression-test** và **terminus-hard-python-verifier** nên dùng cùng nhau: một skill chuyển issue thành test cases, skill còn lại chuẩn hóa verifier cho Terminus.
+- **task-client-feedback-review** chạy trước upload hoặc resubmission để bắt
+  prompt leakage, rubric leakage, metadata sai, `tests/` chứa wheels, root
+  `pyproject.toml`, canary, hidden hints trong environment, và ZIP sai layout.
 - **task-harbor-runner** phải follow feedback cụ thể từ Docker/Harbor/CI trước khi tự đoán lỗi.
 - **task-zip-submit** chỉ chạy sau khi oracle pass, nop fail, và CI/LLMaJ không còn blocker. ZIP chỉ được chứa các file/folder mà Platform Submission Guide yêu cầu.
 
@@ -151,6 +172,7 @@ Tránh:
 - hướng dẫn sửa file nào, function nào, helper nào
 - bullet list dài kiểu "must X, must Y"
 - tên task trong prompt
+- canary strings
 
 Trước khi lưu, chạy prompt sanitizer:
 
@@ -159,6 +181,8 @@ Trước khi lưu, chạy prompt sanitizer:
 - bỏ internal function/helper name nếu không phải public API
 - bỏ hint triển khai như "sửa hàm X" hoặc "đổi biến Y"
 - bỏ ngôn ngữ benchmark như verifier, oracle, hidden tests, rubric, CI
+- áp dụng real-user prompt test cho từng câu: một developer không biết sẵn
+  solution có tự nhiên nói chi tiết này không?
 
 Ví dụ tốt:
 
@@ -187,6 +211,15 @@ Dockerfile cần:
 - không `COPY solution/`
 - không tạo `/tests`, `/oracle`, `/solution`, `/logs/verifier`
 
+`codebase_size` phải khai thật theo số file hữu ích trong `environment/`:
+
+- `minimal`: 0-19 files
+- `small`: 20-199 files
+- `large`: 200+ files
+
+Hiện `minimal`, `small`, và `large` đều được accept; không thêm filler hoặc prune
+context chỉ để đổi bucket.
+
 ### 4) Quy tắc verifier
 
 Verifier phải:
@@ -197,6 +230,22 @@ Verifier phải:
 - map với requirement trong `instruction.md`
 - luôn ghi `/logs/verifier/reward.txt`
 - không chạy `pip install`, `apt-get`, `npm install`, hoặc download network trong `tests/test.sh`
+- dependencies của verifier phải được bake vào Dockerfile với version pin
+
+`tests/test.sh` nên capture pytest status ngay sau pytest:
+
+```bash
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    echo 1 > /logs/verifier/reward.txt
+else
+    echo 0 > /logs/verifier/reward.txt
+fi
+```
+
+Inline `if [ $? -eq 0 ]` ngay sau pytest cũng được docs chấp nhận, nhưng `rc=$?`
+ít lỗi hơn. Không thêm trailing `exit` sau reward block.
 
 Verifier matrix nên có:
 
@@ -218,10 +267,53 @@ Trước khi tạo ZIP, tự audit các lỗi quality check hay bắt:
 - `instruction.md` không chứa issue URL, PR number, commit hash, upstream test name, implementation hint, rubric/hidden-test language.
 - `tests/test.sh` chỉ chạy pytest và ghi reward, không cài package ở verifier runtime.
 - Dockerfile không copy `tests/` hoặc `solution/`, không tạo `/tests`, `/solution`, `/oracle`, `/logs/verifier`.
+- Không có root `pyproject.toml` trong ZIP.
+- Không có dependency wheels trong `tests/`.
+- `languages` chỉ liệt kê ngôn ngữ task/oracle implementation, không include
+  Python chỉ vì verifier dùng pytest.
+- Rubric không nhắc tests/verifier/`test.sh`/`test_outputs.py`/`/tests/`/hidden
+  tests/CI/reward/pytest results.
 - Không đưa `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, submissions vào ZIP.
 - `oracle` pass 1.0, `nop` fail 0.0, và nop fail vì behavior thật chứ không vì thiếu dependency.
 
-### 6) Quy tắc tiết kiệm quota
+### 6) Rubric theo docs mới
+
+Rubric được tạo/sửa trên Snorkel UI, không nằm trong ZIP.
+
+Rule chính:
+
+- Mỗi criterion là một dòng, bắt đầu bằng `Agent`, kết thúc bằng `, +/-N`.
+- Score chỉ dùng `1`, `2`, `3`, `5`; không dùng `4`.
+- Non-milestone: dùng flat list `Agent ...`; `# Rubric 1` được tolerated nhưng
+  không bắt buộc.
+- Milestone: dùng block `# Rubric 1`, `# Rubric 2`, ... tương ứng milestone.
+- Cần ít nhất 3 negative criteria overall.
+- Milestone rubrics còn cần ít nhất 1 negative criterion mỗi milestone.
+- Positive total: non-milestone target 10-40; milestone target 10-40 mỗi
+  milestone.
+
+### 7) Client feedback overlay
+
+Feedback client 04/06 nhấn mạnh các lỗi hay reject:
+
+| Mức độ | Lỗi | Tần suất trong report |
+|---|---|---:|
+| Critical | Prompt give away solution / reverse-engineered prompt | >=4/17 |
+| High | Rubric reference tests/verifier/test logic | 9/17 |
+| High | Instruction reference tests/verifier | 8/17 |
+| High | Wheels/dependency artifacts trong `tests/` | 6/17 |
+| High | Root `pyproject.toml` trong task ZIP | 5/17 |
+| High | Hidden hints trong environment comments/docs/source | 5/17 |
+| High | Canary strings còn sót | 4/17 |
+| High | `/logs/verifier` chuẩn bị sau PWD guard/early exit | 4/17 |
+| Medium | License files trong small/minimal codebases | 3/17 |
+| High | `environment/data` dùng để inflate prompt/spec | 2/17 |
+
+Nếu task đã client-passed, preserve task đó. Không rewrite prompt/verifier/oracle
+trừ khi client explicitly yêu cầu; chỉ áp explicit nits như metadata cleanup,
+rubric cleanup, hoặc packaging cleanup.
+
+### 8) Quy tắc tiết kiệm quota
 
 Không dùng một phiên Codex để mine nhiều issue rồi clone full task liên tục. Tách làm hai pha:
 
@@ -246,7 +338,7 @@ Trong clone:
 
 Repo lớn như TypeScript, go-ethereum, PyTorch, NumPy, pandas cần sparse/focused staging trước khi viết verifier.
 
-### 7) Quy tắc chống trùng candidate
+### 9) Quy tắc chống trùng candidate
 
 Khi nhiều người cùng dùng skill, rất dễ đụng cùng PR/issue tốt. Trước khi mine sâu hoặc clone, check registry:
 
@@ -268,7 +360,7 @@ Key chống trùng:
 
 Nếu team có registry chung qua private repo, Sheet, Notion, hoặc Airtable thì check registry chung trước local. Candidate có status `claimed`, `cloned`, hoặc `submitted` thì bỏ qua, trừ khi người dùng cố ý muốn làm variant khác rõ ràng.
 
-### 8) Nguồn mine ưu tiên
+### 10) Nguồn mine ưu tiên
 
 Ưu tiên repo có quota burn thấp tới trung bình:
 
@@ -298,7 +390,7 @@ Các repo nặng như TypeScript, go-ethereum, PyTorch, Ray, NumPy vẫn dùng �
 
 Reject nếu candidate cần GPU, browser, database, network, cluster, rebuild lớn, hoặc không có reproducer nhỏ offline.
 
-### 9) Quy tắc hardness thực nghiệm
+### 11) Quy tắc hardness thực nghiệm
 
 Độ khó của task được chấm bằng pass-rate agent, không chỉ bằng cảm giác codebase phức tạp.
 
@@ -312,7 +404,7 @@ Downgrade hoặc bỏ candidate nếu:
 
 Timeout không đủ để chứng minh Hard. Task Hard tốt nên làm agent tạo patch sai hoặc thiếu vì interaction logic, không phải chỉ kẹt vì môi trường hay tooling.
 
-### 10) Quy tắc Harbor feedback
+### 12) Quy tắc Harbor feedback
 
 Nếu Docker, Harbor hoặc CI đưa ra instruction cụ thể, đọc và follow feedback đó trước khi đoán lỗi.
 
@@ -411,7 +503,8 @@ Ví dụ:
   - Không có file đơn lẻ quá `50 MiB`.
   - Xóa `.git/`, cache, macOS junk, secret-shaped files.
   - Thêm `.dockerignore`.
-  - Thêm `pyproject.toml` ruff exclude nếu cần.
+  - Giữ `codebase_size` đúng file count.
+  - Không đưa root `pyproject.toml` vào submitted task.
 - **Khi nào dùng**: Trước khi build Docker hoặc chạy Harbor.
 
 ---
@@ -447,7 +540,8 @@ Nếu lệnh có option output, ghi report vào `workspace/reports/`.
 - **Output**: ZIP sạch để upload lên Snorkel Platform.
 - **Mục tiêu**:
   - Zip contents của task folder, không zip folder cha.
-  - Chỉ include allowlist submission: `instruction.md`, `task.toml`, `pyproject.toml` nếu cần, `environment/`, `solution/`, `tests/`.
+  - Chỉ include allowlist submission: `instruction.md`, `task.toml`,
+    `environment/`, `solution/`, `tests/`.
   - Loại `.DS_Store`, `._*`, `__MACOSX`, `__pycache__`, `*.pyc`.
   - Verify archive không bị lồng folder.
 
@@ -458,13 +552,12 @@ find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' \) -exec rm -r
 
 TASK_NAME="$(basename "$PWD")"
 mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml pyproject.toml environment solution tests \
+zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*.pyc'
 ```
 
-Nếu không có `pyproject.toml`, bỏ nó khỏi command.
-
-Không include `workspace/`, `reports/`, `submissions/`, logs, cache, scratch notes, hoặc folder cha của task.
+Không include root `pyproject.toml`, `workspace/`, `reports/`, `submissions/`,
+logs, cache, scratch notes, hoặc folder cha của task.
 
 Verify:
 
@@ -476,15 +569,42 @@ unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|_
 
 ---
 
+### 9) Task Client Feedback Review
+
+- **Slash command gợi ý**: `/task-client-feedback-review`
+- **Input**: Folder task hoặc submission ZIP.
+- **Output**: Report `blocker` / `should_fix` / `polish` và skill nên dùng để sửa.
+- **Mục tiêu**:
+  - Bắt prompt/rubric leakage trước reviewer.
+  - Bắt packaging issues theo client feedback: root `pyproject.toml`, wheels
+    trong `tests/`, canary, ZIP lồng folder, cache/macOS junk.
+  - Bắt metadata issue như verifier-only Python trong `languages`.
+  - Bắt environment hidden hints hoặc `environment/data` prompt inflation.
+  - Bắt `tests/test.sh` runtime setup và `/logs/verifier` sai vị trí.
+- **Khi nào dùng**: Trước upload/resubmission hoặc khi nhận client feedback mới.
+
+Chạy scanner:
+
+```bash
+python skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
+```
+
+Scanner là review gate, không thay thế manual prompt/rubric review.
+
+---
+
 ## Lưu ý chung
 
 - Task clone, report và ZIP sinh ra nằm trong `workspace/` và bị `.gitignore`, không đẩy lên git.
 - Mỗi skill có file mô tả chi tiết trong `skills/{tên-kỹ-năng}/SKILL.md`.
+- Khi sửa skill, sync lại `.codex/skills/` và `.claude/skills/` nếu skill đó
+  có bản runtime tương ứng.
 - `instruction.md` phải là human language, không phải LLM checklist.
 - Với Docker/Harbor/CI, luôn đọc feedback cụ thể trước khi đoán lỗi.
 - Oracle pass chưa đủ; nop phải fail.
 - Python task nên target `hard`. Nếu real agents pass quá dễ, task có khả năng bị reject.
 - ZIP phải chứa files trực tiếp ở root, không lồng thêm folder task.
+- ZIP không được chứa root `pyproject.toml`.
 
 ---
 
@@ -493,6 +613,8 @@ unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|_
 - [ ] Folder name đúng dạng `tbrain-<problem-slug>`, không có domain filler.
 - [ ] `instruction.md` nghe như human bug report, không như LLM checklist.
 - [ ] `task.toml` parse được, có `allow_internet = false`.
+- [ ] `codebase_size` khai đúng: `minimal`/`small`/`large` đều allowed nếu thật.
+- [ ] `languages` không include verifier-only Python.
 - [ ] Dockerfile digest-pinned, có `tmux` và `asciinema`.
 - [ ] `environment/` <= 100 MiB, mỗi file <= 50 MiB.
 - [ ] Không copy `tests/` hoặc `solution/` vào image.
@@ -500,4 +622,8 @@ unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|_
 - [ ] Nop fail.
 - [ ] Tests có docstring và test behavior.
 - [ ] Tests map với instruction.
+- [ ] Rubric đúng format, không mention tests/verifier, có đủ negative criteria.
+- [ ] `task-client-feedback-review` không còn blocker.
 - [ ] ZIP không lồng folder, không có macOS junk.
+- [ ] ZIP không có root `pyproject.toml`, wheels trong `tests/`, canary strings,
+      hoặc hidden environment hints.
