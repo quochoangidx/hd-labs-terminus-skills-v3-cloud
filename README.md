@@ -451,7 +451,7 @@ Ví dụ:
 
 ---
 
-### 3) Terminus Regular Task Authoring
+### 4) Terminus Regular Task Authoring
 
 - **Slash command gợi ý**: `/terminus-regular-task-authoring`
 - **Input**: Ý tưởng task hoặc folder task đang dựng.
@@ -464,7 +464,7 @@ Ví dụ:
 
 ---
 
-### 4) Issue To Regression Test
+### 5) Issue To Regression Test
 
 - **Slash command gợi ý**: `/issue-to-regression-test`
 - **Input**: Issue/PR đã chọn và hành vi cần reproduce.
@@ -479,7 +479,7 @@ Ví dụ:
 
 ---
 
-### 5) Terminus Hard Python Verifier
+### 6) Terminus Hard Python Verifier
 
 - **Slash command gợi ý**: `/terminus-hard-python-verifier`
 - **Input**: Task Python debugging và các behavior cần kiểm tra.
@@ -493,7 +493,7 @@ Ví dụ:
 
 ---
 
-### 6) Upstream Repo Sanitizer
+### 7) Upstream Repo Sanitizer
 
 - **Slash command gợi ý**: `/upstream-repo-sanitizer`
 - **Input**: Folder task có `environment/repo`.
@@ -509,7 +509,7 @@ Ví dụ:
 
 ---
 
-### 7) Task Harbor Runner
+### 8) Task Harbor Runner
 
 - **Slash command gợi ý**: `/task-harbor-runner`
 - **Input**: Folder task.
@@ -533,7 +533,7 @@ Nếu lệnh có option output, ghi report vào `workspace/reports/`.
 
 ---
 
-### 8) Task Zip Submit
+### 9) Task Zip Submit
 
 - **Slash command gợi ý**: `/task-zip-submit`
 - **Input**: Folder task đã pass validation.
