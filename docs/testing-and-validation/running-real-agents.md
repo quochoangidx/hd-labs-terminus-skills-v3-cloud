@@ -23,23 +23,23 @@ export OPENAI_BASE_URL=https://api.portkey.ai/v1
 
 | Model | Command Flag |
 |-------|--------------|
-| GPT-5.2 | `gpt-5.2` |
-| Claude Opus 4.6 | `claude-opus-4-6` |
+| GPT-5.5 | `gpt-5.5` |
+| Claude Opus 4.8 | `claude-opus-4-8` |
 
 ## Running Agents
 
 Run these via the Snorkel CLI (`stb`). Replace `<path-to-task>` with your task directory.
 
-### GPT-5.2
+### GPT-5.5
 
 ```bash
-stb harbor run -m @openai/gpt-5.2 -p <path-to-task>
+stb harbor run -m @openai/gpt-5.5 -p <path-to-task>
 ```
 
-### Claude Opus 4.6
+### Claude Opus 4.8
 
 ```bash
-stb harbor run -m @anthropic/claude-opus-4-6 -p <path-to-task>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <path-to-task>
 ```
 
 ---
@@ -83,18 +83,18 @@ Run each agent **5 times** to get a reliable pass rate:
 ### Example Testing
 
 ```
-Run 1 (GPT-5): FAIL
-Run 2 (GPT-5): PASS
-Run 3 (GPT-5): FAIL
-Run 4 (GPT-5): FAIL
-Run 5 (GPT-5): PASS
+Run 1 (GPT-5.5): FAIL
+Run 2 (GPT-5.5): PASS
+Run 3 (GPT-5.5): FAIL
+Run 4 (GPT-5.5): FAIL
+Run 5 (GPT-5.5): PASS
 Run 1 (Claude): FAIL
 Run 2 (Claude): FAIL
 Run 3 (Claude): FAIL
 Run 4 (Claude): FAIL
 Run 5 (Claude): FAIL
 
-GPT-5: 2/5 = 40%   ← best model
+GPT-5.5: 2/5 = 40%   ← best model
 Claude: 0/5 = 0%   ← worst model
 
 Worst-model accuracy is 0% (≤ 20%) → Hard difficulty ✓

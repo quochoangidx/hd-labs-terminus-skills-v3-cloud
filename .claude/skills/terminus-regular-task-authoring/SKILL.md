@@ -264,7 +264,7 @@ Run, when available:
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
+harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
 ```
 
 For submission ZIPs, compress the contents of the task folder, not the folder itself.

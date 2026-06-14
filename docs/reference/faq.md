@@ -115,7 +115,7 @@ No — new guidelines apply to new submissions only. If automated checks block a
 - **TRIVIAL** means the agent pass rate is too high — make the task harder.
 
 **What qualifies as HARD?**
-A task is HARD when accuracy is **≤ 20%** on either the **best** model OR the **worst** model (across GPT-5.2 and Claude Opus 4.6). See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for the full breakdown of Easy / Medium / Hard thresholds.
+A task is HARD when accuracy is **≤ 20%** on either the **best** model OR the **worst** model (across GPT-5.5 and Claude Opus 4.8). See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for the full breakdown of Easy / Medium / Hard thresholds.
 
 **My task keeps coming back as TRIVIAL. What types of tasks pass as HARD?**
 Complex multi-step debugging, nuanced edge cases, larger codebases, and workflows requiring discovery across multiple files. Single-bug or template-based tasks tend to be flagged as too easy.
@@ -144,7 +144,7 @@ Use files from public open-source repos to build a realistic project environment
 **What is the agent timeout limit?**
 **1800 seconds** (30 minutes). Agents failing due to timeout contribute to difficulty.
 
-**Can I run concurrent agent tests (GPT-5.2 and Opus at the same time)?**
+**Can I run concurrent agent tests (GPT-5.5 and Opus at the same time)?**
 Yes, but expect API errors and faster key exhaustion. Refresh keys more frequently if you do.
 
 ---
@@ -163,19 +163,19 @@ Yes, but expect API errors and faster key exhaustion. Refresh keys more frequent
 To replicate this locally with `-k 10`:
 
 ```bash
-stb harbor run -m @openai/gpt-5.2 -p ./task -k 10
-stb harbor run -m @anthropic/claude-opus-4-6 -p ./task -k 10
+stb harbor run -m @openai/gpt-5.5 -p ./task -k 10
+stb harbor run -m @anthropic/claude-opus-4-8 -p ./task -k 10
 ```
 
 **What are the correct model strings?**
 | Model | String | Common mistakes |
 |---|---|---|
-| GPT | `@openai/gpt-5.2` | `gpt-5-2`, `@openai-tbench/gpt-5-2` |
-| Claude Opus | `@anthropic/claude-opus-4-6` | `claude-opus-4.6` (dot instead of hyphen) |
+| GPT | `@openai/gpt-5.5` | `gpt-5-5`, `@openai-tbench/gpt-5-5` |
+| Claude Opus | `@anthropic/claude-opus-4-8` | `claude-opus-4.8` (dot instead of hyphen) |
 
 If you see `INVALID_MODEL_NOT_ALLOWED`, double-check your model string.
 
-**502 Bad Gateway or RateLimitError with Opus 4.6, but GPT-5.2 works fine.**
+**502 Bad Gateway or RateLimitError with Opus 4.8, but GPT-5.5 works fine.**
 Regenerate a fresh API key. If it persists, run with `--debug` and share the output in Slack.
 
 ### Common Build & Test Failures

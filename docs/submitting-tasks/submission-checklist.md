@@ -70,7 +70,7 @@ harbor run -a oracle -p <task-folder>
 ### CI Checks
 
 ```bash
-harbor tasks check <task-folder> -m openai/@openai/gpt-5.2
+harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
 ```
 
 - [ ] pinned_dependencies ✓
@@ -114,20 +114,20 @@ Warnings should also be fixed unless an explicit reviewer-approved exception app
 
 ## Real Agent Testing
 
-### Run Against GPT-5.2
+### Run Against GPT-5.5
 
 ```bash
-stb harbor run -m @openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 ```
 
 - [ ] Run 1: PASS / FAIL
 - [ ] Run 2: PASS / FAIL
 - [ ] Run 3: PASS / FAIL
 
-### Run Against Claude Opus 4.6
+### Run Against Claude Opus 4.8
 
 ```bash
-stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 - [ ] Run 1: PASS / FAIL

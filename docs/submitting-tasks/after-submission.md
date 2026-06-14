@@ -33,8 +33,8 @@ A qualified coding expert reviews:
 ### 3. Agent Evaluation
 
 Your task is run against:
-- GPT-5.2 with Codex agent (5 runs)
-- Claude Opus 4.6 with Claude Code (5 runs)
+- GPT-5.5 with Codex agent (5 runs)
+- Claude Opus 4.8 with Claude Code (5 runs)
 
 Pass rate determines final difficulty classification.
 

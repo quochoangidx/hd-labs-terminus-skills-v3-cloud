@@ -243,11 +243,11 @@ Tasks where the worst model scores **above 80%** will not be accepted. See the [
 Run your task against real agents (minimum 2-3 times each):
 
 ```bash
-# GPT-5.2
-stb harbor run -m @openai/gpt-5.2 -p <task-folder>
+# GPT-5.5
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 
-# Claude Opus 4.6
-stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
+# Claude Opus 4.8
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 ---

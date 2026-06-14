@@ -16,7 +16,7 @@ We're not looking for trivia or trick questions. We want genuine engineering cha
 
 ### 1. Difficulty Target
 
-**The worst-performing model's accuracy must be ≤ 80%** across GPT-5.2 and Claude Opus 4.6.
+**The worst-performing model's accuracy must be ≤ 80%** across GPT-5.5 and Claude Opus 4.8.
 
 | Difficulty | Threshold | Description |
 |------------|-----------|-------------|

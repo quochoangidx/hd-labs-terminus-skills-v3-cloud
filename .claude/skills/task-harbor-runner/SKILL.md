@@ -14,14 +14,14 @@ Prefer this sequence:
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
+harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
 ```
 
 Run real agents only when the user approves API usage:
 
 ```bash
-stb harbor run -m @openai/gpt-5.2 -p <task-folder>
-stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 Use the absolute binary path if PATH is stale:

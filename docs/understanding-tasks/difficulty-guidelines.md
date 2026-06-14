@@ -21,8 +21,8 @@ Both models are run against every task. The **worst model** sets the difficulty 
 ## Evaluation Process
 
 Each task is evaluated against:
-- **GPT-5.2** with Codex agent
-- **Claude Opus 4.6** with Claude Code agent
+- **GPT-5.5** with Codex agent
+- **Claude Opus 4.8** with Claude Code agent
 - **5 runs each** to determine average accuracy
 
 ## Designing for Difficulty
@@ -103,11 +103,11 @@ This should PASS. If it doesn't, your task may have issues.
 ### 2. Run Against Real Agents
 
 ```bash
-# GPT-5.2
-stb harbor run -m @openai/gpt-5.2 -p <task-folder>
+# GPT-5.5
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 
-# Claude Opus 4.6
-stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
+# Claude Opus 4.8
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 Run at least 2-3 times against each model to gauge pass rate, and remember that the **worst** model's pass rate is what determines Easy/Medium for most tasks.

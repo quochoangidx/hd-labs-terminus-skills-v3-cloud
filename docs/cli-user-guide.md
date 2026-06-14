@@ -123,11 +123,11 @@ stb harbor run -a oracle -p ./my-task-name
 
 **Test with real agents:**
 ```bash
-# GPT-5.2
-stb harbor run -m @openai/gpt-5.2 -p ./my-task-name
+# GPT-5.5
+stb harbor run -m @openai/gpt-5.5 -p ./my-task-name
 
-# Claude Opus 4.6
-stb harbor run -m @anthropic/claude-opus-4-6 -p ./my-task-name
+# Claude Opus 4.8
+stb harbor run -m @anthropic/claude-opus-4-8 -p ./my-task-name
 ```
 
 Run each agent 2-3 times to gauge difficulty. See [Testing Agent Performance](/portal/docs/testing-and-validation/running-real-agents) for guidance.
@@ -404,7 +404,7 @@ If you see `Bad Request: Maximum refresh limit (3)` when running `stb keys refre
 ### Model Warnings (Safe to Ignore)
 
 ```
-Failed to retrieve model info for '@anthropic/claude-opus-4-6'...
+Failed to retrieve model info for '@anthropic/claude-opus-4-8'...
 ```
 
 This is a known harmless warning that can be safely ignored. Your testing will work fine.
