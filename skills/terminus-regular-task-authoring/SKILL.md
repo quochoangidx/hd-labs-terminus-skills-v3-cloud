@@ -65,6 +65,15 @@ For new submissions:
 - Apply the real-user prompt test to every sentence: would a developer who did
   not already know the solution naturally include this detail? If not, it is
   probably a hint rather than a requirement.
+- Do not narrate the internal mechanism or root cause (the #1 client reject,
+  June 2026 trial feedback). Describe the observable symptom and the desired
+  outcome, not how the code is wrong inside. Cut "Right now the parser does X
+  internally" sentences (state what is observed instead), "the other path
+  already handles it" tells (they point at where to copy the fix), and
+  fix-shaped requirements that restate the implementation (state them
+  behaviorally). KEEP test-asserted spec contracts even when specific
+  (thresholds, public API the tests drive, preservation/edge cases) so
+  instruction/test symmetry still holds.
 
 Environment files must not compensate for a short prompt:
 
@@ -86,6 +95,28 @@ Before finalizing, run an instruction/test symmetry audit:
 - if tests cover non-target modes, aliases, legacy modes, fallback paths, or normal layouts, state that those modes must continue working
 - remove tests for behavior that would be unfair to state in the prompt
 - keep implementation symbols out of the prompt unless they are public API
+- distinguish two kinds of things a test can pin (docs: prompt-styling.md gives
+  the what not the how; `behavior_in_task_description` + `structured_data_schema`
+  want asserted behavior and output schemas explicit; prompt-styling section 4
+  "Overly Prescriptive Guidelines" calls listing exact function signatures /
+  struct layouts BAD):
+  - VALUES the test asserts (numeric thresholds, output keys, JSON/CSV/data
+    schema the agent produces, exact-match constants) MUST be explicit. Omitting
+    a tested cutoff makes agents guess and fail unfairly; this is required
+    sufficiency, not over-spec.
+  - CODE IDENTIFIERS the test pins (function signatures, struct field
+    names/types, project layout the agent must produce) are exactly what
+    prompt-styling section 4 forbids prescribing. Do NOT resolve a compile-time
+    name mismatch by pasting a struct schema or signature list into the prompt
+    (that is the "reads like a design document" failure). Resolve it by making
+    the verifier BEHAVIORAL/OPAQUE: drive observable output and pass any new
+    value straight back into the API as a black box, so the test never reads
+    its fields and the instruction can say "you choose its fields." That often
+    means the API owns more of the protocol (e.g. a resume option takes the
+    full input and seeks internally rather than the caller slicing by a field).
+    Only when a brand-new exported symbol genuinely cannot be made behavioral,
+    name that single symbol minimally (a new type/function the test must call by
+    that exact name) and nothing more; never its field schema.
 
 Common quality-check failure: a test asserts that unaffected modes such as `prepend`/`append`, non-editable installs, normal parsers, or legacy fallbacks still work, but `instruction.md` only describes the target mode. Fix by adding one natural sentence like "Keep `<mode A>` and `<mode B>` behavior unchanged for the same layout" or remove that preservation test.
 
@@ -98,6 +129,14 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`,
   `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`.
 - Install `tmux` and `asciinema`.
+- For cloned-repo tasks, `git init` the task workdir after the final source
+  `COPY` (`RUN git init -q && git config user.email task@example.com && git
+  config user.name task && git add -A && git commit -q -m "initial task
+  state"`). Agents often apply edits via `git apply` and self-check with `git
+  diff`; if `/app` is not a git repo (cloned `.git` stripped, and excluded from
+  the build context), patches silently fail to land and otherwise-correct agents
+  score 0 ("Some tests not passed by any agent run"). Runs in the image, so it
+  does not trip the `.git`-in-context hygiene warning; oracle/nop unaffected.
 - Pin language dependencies exactly.
 - Install verifier dependencies in the Docker image by default. Never fetch
   packages from the network at verifier runtime.
@@ -136,6 +175,25 @@ Avoid quality-check failures:
 
 - do not assert source-code shape, private helper names, or exact implementation
 - parse structured outputs semantically
+- for floating-point or irrational NUMERIC results, assert an accuracy
+  tolerance (`|got - trueRef| <= tol`) instead of exact string equality. Exact
+  matching forces agents to reproduce one implementation's undocumented
+  rounding (often a float64 artifact that is LESS correct than the true value),
+  so a more-accurate agent fails unfairly. Pick `tol` so the oracle's own output
+  clears it and a naive/buggy impl misses by orders of magnitude; for a
+  `precision`-parameterised API set `tol` to that floor (precision=10 -> 1e-10).
+  Keep exact string match only for genuinely exact results (integer powers,
+  defined truncations, edge-case zero/error)
+- when the instruction mandates a REFACTOR of an EXISTING interface/signature
+  (not just new behavior), behavioral tests alone let an agent add a parallel
+  interface and skip the refactor. Add two guards: (a) a compile-time
+  interface-satisfaction assertion (`var _ pkg.Interface = (*Probe)(nil)` where
+  `Probe` has the new method signature) so the verifier only compiles if the
+  EXISTING interface was actually changed; this checks a public type-system
+  contract the instruction requires, not private implementation; and (b) a
+  separate `go build ./...` test, since `go test ./_verifier_test/` compiles
+  only transitively-imported packages, not sibling subpackages with their own
+  call sites of the changed interface
 - include docstrings explaining the user behavior being tested
 - keep randomization deterministic
 - ensure `nop` fails for the intended behavior, not setup/tooling
@@ -188,6 +246,15 @@ packages.
 - Be deterministic and self-contained.
 - Avoid network access.
 - Apply a real fix, not write hardcoded expected outputs.
+- Contain ONLY the hunks relevant to the task. When the patch is generated from
+  an upstream PR or a multi-concern diff, strip every file/hunk unrelated to the
+  stated instruction (a separator fix should not also bundle a regexp/string
+  refactor). Bundled changes create a hidden requirement that widens the agent's
+  scope beyond instruction.md and misaligns the oracle with the goal (review
+  flags "Solution Patch Contains Unrelated Changes"). After stripping, confirm
+  the build step in `solve.sh` still passes; if an unrelated hunk turns out to
+  be load-bearing for the build, that is a signal the snapshot is inconsistent,
+  not a reason to keep the refactor.
 - Rebuild or regenerate artifacts when the verifier invokes a built binary.
 
 ## Final Checks
@@ -227,6 +294,9 @@ Quality preflight:
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP
 - no dependency wheels in `tests/`
 - no `tests/` or `solution/` copied into the Docker image
+- no `privileged: true`, no `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities,
+  no `/var/run/docker.sock` mounts; compose volume mounts must not shadow the
+  reserved paths `/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`
 - no runtime dependency setup in `tests/test.sh`
 - no rubric or instruction references to tests, verifier logic, `test.sh`,
   `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, pytest, or final

@@ -6,7 +6,7 @@ All submissions must pass the automated Agent checks. This reference explains wh
 
 ```bash
 # Using GPT-5.2 (recommended - matches CI)
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.2 -p <task-folder>
 ```
 
 For a pre-submission static pass, run:

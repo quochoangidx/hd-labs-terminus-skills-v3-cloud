@@ -22,7 +22,7 @@ python .codex/skills/task-client-feedback-review/scripts/review_task.py <task-or
 For global skill use:
 
 ```bash
-python /Users/thuongthai/.codex/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
+python "$HOME"/.codex/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
 ```
 
 Use `--json` when another script will consume the result.
@@ -35,6 +35,68 @@ Use `--json` when another script will consume the result.
      implementation path, or exact patch shape?
    - Niche behavioral detail is acceptable when it makes tests fair.
      Implementation/root-cause detail is not.
+   - Flag these solution-giving anti-patterns (the #1 client reject, June 2026
+     trial feedback) as `should_fix` (or `blocker` if blatant): "Right now the
+     <component> does X internally" sentences that narrate the mechanism instead
+     of the observable symptom; "the other path already enforces/handles it"
+     tells that point at where to copy the fix; and fix-shaped requirements that
+     restate the implementation (e.g. "reject a line whose host field begins
+     with `@`" instead of "reject a line with more than one marker"). The scanner
+     does not catch these; read for them. Specific thresholds/API/preservation
+     cases the tests assert are NOT this problem (keep them for symmetry).
+   - Two-way instruction/test symmetry (scanner does not catch; read for both
+     directions; confirmed 2026-06 ssh-rsa-privatekey-dos hit BOTH at once):
+     - **Not vaguer than the tests (else Task Instruction Sufficiency FAIL).**
+       If a test asserts a specific numeric threshold or exact value, the
+       instruction MUST state that number. "reject a too-large exponent" while
+       the test requires `> 24 bits` made 8/9 agents guess 31/33/64 and fail.
+       Flag any tested cutoff/value that the instruction leaves implicit
+       (`should_fix`). Naming the spec value the test checks is required
+       sufficiency, not over-spec; optionally cite an in-repo precedent.
+       The "spec value" here means VALUES (numbers, output keys, data schema,
+       exact-match constants) — docs want these explicit
+       (`structured_data_schema`, `behavior_in_task_description`). Distinguish
+       these from CODE IDENTIFIERS the test pins (function signatures, struct
+       field names/types, project layout). A test that reads `cp.CompressedOffset
+       int64` / `cp.BitOffset uint8` does force the agent to produce those exact
+       names, and omitting them makes agents compile-fail (confirmed 2026-06
+       flate-inflate-checkpoint: 5/6 guessed `window` vs `Window`,
+       `CompressedByteOffset` vs `CompressedOffset`). BUT do NOT flag this by
+       telling the author to paste the struct schema/signature into the prompt —
+       prompt-styling.md section 4 ("Overly Prescriptive Guidelines") calls
+       listing exact signatures/struct layouts BAD, and that is exactly what the
+       `instruction_check`/design-document reviewer rejects (flate hit
+       Sufficiency-FAIL when names were omitted, then the design-doc WARN when
+       the full schema was pasted in — the schema route cannot win). The
+       docs-aligned fix is to make the verifier BEHAVIORAL/OPAQUE: pass the new
+       value straight back into the consuming API as a black box and assert
+       OBSERVABLE output, never reading its fields, so the instruction can say
+       "you choose its fields" and fold per-field semantics into one coherence
+       sentence. Only when a brand-new exported symbol genuinely cannot be made
+       behavioral, name that single symbol minimally (the type/function the test
+       must call) and nothing more. Recommend the redesign via `task-clone`.
+     - **Not broader than the tests (else Test Quality VULNERABLE).** Every
+       condition the instruction promises must have a DISCRIMINATING test (one
+       that fails on a partial fix omitting it). If the instruction lists a
+       condition no test covers, flag it. Resolve by adding a discriminating
+       test, or by removing the condition from the instruction when it cannot be
+       made discriminating (e.g. an even/`<3` RSA exponent that the buggy
+       build's own `Validate` already rejects, so a test passes on both nop and
+       oracle = a dud). The oracle may legitimately do more than the instruction
+       promises; the instruction must not promise more than the tests verify.
+   - Numeric exact-string match on floating/irrational results (scanner does not
+     catch; read the verifier; confirmed 2026-06 decimal-pow-precision FAILED +
+     0/10 same two tests). If a test asserts `someFloatResult.String() ==
+     "<literal>"` for an irrational/fractional value (a power, root, log, trig,
+     division to many places), flag it `should_fix`: the literal is usually one
+     implementation's undocumented rounding (often a float64 artifact LESS
+     correct than the true value), so a more-accurate agent fails unfairly, and
+     `precision`-style params get read as a rounding ceiling when the reference
+     treats them as a minimum floor. Fix = assert accuracy tolerance against a
+     high-precision TRUE reference (tol the oracle clears, naive misses by
+     orders of magnitude; precision=N -> tol 1e-N), and state the precision
+     contract in the instruction. Exact match is fine for genuinely exact values
+     (integer results, defined truncations, edge-case zero/error).
    - Non-milestone rubrics should be flat `Agent ...` criteria; a single
      `# Rubric 1` header is tolerated but not required. `# Rubric 2+` is only
      for milestone tasks.
@@ -61,6 +123,30 @@ Use `--json` when another script will consume the result.
 - license files in small or minimal codebases
 - `environment/data` used as an oversized prompt/spec extension
 - hidden solution walkthroughs or bug hints in environment docs/comments
+- missing `tmux`/`asciinema` in the task image (agent runs fail with
+  `Failed to start tmux session` / `verifier_did_not_run`)
+- `tests/` or `solution/` copied into the Docker image
+- `privileged: true`, `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities, or
+  `/var/run/docker.sock` mounts in docker-compose
+- AI-scaffolding filenames in the environment (`CLAUDE.md`, `AGENTS.md`,
+  `skills.md`, `.cursor/`)
+- `codebase_size` not matching the `environment/` file count (excluding
+  `Dockerfile`/`docker-compose*`): 0-19 `minimal`, 20-199 `small`, 200+ `large`.
+  CI (`run_static_checks.py`) enforces this mechanically and rejects a mismatch.
+- `ruff` errors anywhere ruff scans the task dir — INCLUDING upstream `.py`
+  under `environment/repo` (CI lints the whole tree, default E4/E7/E9/F). Common
+  hits: `F401`/`E741` in `tests/test_outputs.py`, `E402`/`E701`/`E731` in
+  upstream dev/codegen scripts. Fix per `upstream-repo-sanitizer`.
+- `agent.timeout_sec` outside `[1, 1800]` — CI hard-caps it at 1800 (a heavy
+  build does not justify raising it; the build runs under `build_timeout_sec`
+  and the verifier under `verifier.timeout_sec`, both separate from the agent
+  budget).
+- commercial-DB blacklist (CI `check_blacklisted_databases`, SUBSTRING match):
+  the confirmed blocking token is `maxscale` (MariaDB MaxScale), which commonly
+  false-matches a decimal `MaxScale` identifier in SQL-engine repos and still
+  fails. Bare oracle/mysql/postgres/mariadb/mssql/snowflake were observed NOT
+  flagged. Fix by renaming the identifier or removing a non-build-required file
+  (see `upstream-repo-sanitizer`).
 
 ## Existing Skills To Use For Fixes
 

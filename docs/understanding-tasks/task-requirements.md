@@ -244,10 +244,10 @@ Run your task against real agents (minimum 2-3 times each):
 
 ```bash
 # GPT-5.2
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.2 -p <task-folder>
 
 # Claude Opus 4.6
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
 ```
 
 ---

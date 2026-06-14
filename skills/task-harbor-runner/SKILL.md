@@ -20,14 +20,14 @@ harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
 Run real agents only when the user approves API usage:
 
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
 ```
 
 Use the absolute binary path if PATH is stale:
 
 ```bash
-/Users/thuongthai/.local/bin/harbor --version
+"$HOME/.local/bin/harbor" --version
 ```
 
 Keep Harbor/agent outputs under the ignored workspace:
@@ -54,7 +54,20 @@ Examples:
 - If CI says the final runtime base is unsanctioned, move the final stage to an
   approved base such as `python:*`, `mcr.microsoft.com/...`,
   `ghcr.io/snorkel-ai/...`, or `scratch`, all digest-pinned, unless the task has
-  an explicit exemption.
+  an explicit exemption. NOTE: official Docker library toolchain images are
+  also sanctioned as the final base (CI-confirmed: `node`, `gcc`; precedent:
+  `golang`, `rust`) — keep them digest-pinned. Only COMMUNITY images are
+  rejected (e.g. `hexpm/elixir`; use official `erlang:<v>` instead).
+- The `build toolchain in runtime image` (`make_build`/compile in a single
+  stage) finding is a NON-BLOCKING warning with an explicit carve-out for
+  debugging/rebuild tasks whose verifier re-runs the build. Keep the
+  single-stage Dockerfile; do NOT split to multi-stage (the agent needs the
+  toolchain at runtime to rebuild after editing).
+- A `pip install`/`npm install` without a lockfile next to it is a NON-BLOCKING
+  warning; inline `==` pins are accepted. Add a lockfile only to silence it.
+- If CI `ruff` fails on an upstream `.py` under `environment/repo`, the platform
+  lints the whole task dir; delete non-build-required dev scripts or fix
+  build-required ones in place (see `upstream-repo-sanitizer`).
 - If `test.sh` reward block is rejected, use the current canonical reward
   ending: run pytest, immediately capture `rc=$?` or branch on `$?`, write
   `/logs/verifier/reward.txt`, and do not add a trailing `exit` after the final
@@ -63,6 +76,17 @@ Examples:
 - If LLMaJ says tests assert behavior not in instructions, update `instruction.md` or remove the test requirement.
 - If review flags a missing trailing `exit` in `tests/test.sh`, treat that as stale feedback; the current docs say the canonical reward block ends the script.
 - If review flags hidden instructions in environment docs, remove procedural hints from README/spec/config/comments/scripts and keep all task goals in `instruction.md`.
+
+- If oracle suddenly fails with a `[build failed] undefined: <symbol>` from the
+  verifier AND `agent/oracle.txt` is empty, suspect a STALE cached Docker image:
+  Harbor does not reliably rebuild when `environment/repo` or `solution/fix.patch`
+  change on disk. Re-run with `harbor run --force-build -a oracle -p <task>` (and
+  for nop). Do not chase the "undefined symbol" as a patch/code bug until you
+  have force-built. To get ground truth without Harbor, build the image and run
+  the real flow in one container: `docker build -t dbg environment/ && docker run
+  --rm -v "$PWD/<task>/solution:/solution:ro" -v "$PWD/<task>/tests:/tests:ro"
+  dbg bash -c 'set -e; bash /solution/solve.sh; bash /tests/test.sh; cat
+  /logs/verifier/reward.txt'`.
 
 Always quote the shortest useful error excerpt in the handoff.
 

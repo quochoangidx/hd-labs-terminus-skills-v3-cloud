@@ -157,15 +157,13 @@ For each discrepancy found:
 
 ## Step 4 — Audit Skills Against Updated Docs
 
-After docs are synced, audit these 3 skills:
+After docs are synced, audit these skills:
 
 ```
 .claude/skills/task-miner/SKILL.md
 .claude/skills/task-clone/SKILL.md
 .claude/skills/task-zip-validator/SKILL.md
 .claude/skills/task-client-feedback-review/SKILL.md
-.claude/skills/terminus-create-task/SKILL.md
-.claude/skills/terminus-validate-task/SKILL.md
 ```
 
 ### Audit checklist (check each rule in each skill):

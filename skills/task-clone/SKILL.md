@@ -212,7 +212,7 @@ difficulty = "hard"
 category = "<artifact.category or debugging for upstream bugfix>"
 subcategories = ["<artifact subcategories, or tool_specific for upstream bugfix>"]
 number_of_milestones = 0
-codebase_size = "small"
+codebase_size = "<minimal|small|large>"   # compute from env file count; CI enforces this, do NOT default to small
 languages = ["<main implementation language>"]
 tags = ["<3-6 useful tags>"]
 expert_time_estimate_min = 60
@@ -222,7 +222,7 @@ junior_time_estimate_min = 180
 timeout_sec = 600.0
 
 [agent]
-timeout_sec = 1800.0
+timeout_sec = 1800.0   # CI hard cap: agent.timeout_sec must be 1-1800 (do not raise above 1800 for heavy builds)
 
 [environment]
 allow_internet = false
@@ -260,6 +260,14 @@ Python tasks must be hard. `codebase_size` may be `minimal`, `small`, or
 `large`; choose the honest size from useful files under `environment/` and aim
 for a portfolio mix instead of forcing every task to one size.
 
+**CI enforces `codebase_size` mechanically** from the file count under
+`environment/` EXCLUDING `Dockerfile`/`docker-compose*`: `minimal` = 0-19,
+`small` = 20-199, `large` = 200+. A mismatch is a blocking error
+(`run_static_checks.py`). Compute it, never default:
+```bash
+find <task>/environment -type f ! -name Dockerfile ! -name "docker-compose*" | wc -l
+```
+
 `languages` should list the main language(s) the agent works in or the oracle
 solution changes. Do not include Python solely because the verifier is written
 in pytest.
@@ -282,6 +290,33 @@ Write like a real engineer describing the requested observable work:
 - If tests require a secondary implementation that is not obvious from the
   public behavior, name the relevant module or file path without giving the
   exact patch. This is allowed instruction sufficiency, not a solution hint.
+
+**Do not narrate the internal mechanism or root cause (the #1 client reject,
+June 2026 trial feedback).** The most common rejection is a prompt that "gives
+away the solution": it explains how the code is wrong internally, or which code
+path is already correct, so the agent only has to read the prompt rather than
+reason about the code. Describe the OBSERVABLE symptom a real user would hit and
+the DESIRED outcome; let the agent find the cause and the fix.
+
+- Cut "Right now the parser does X internally" sentences. State the observable
+  instead: not "the parser ignores the algorithm name and trusts the embedded
+  curve" but "a key labeled `nistp384` that actually carries a `nistp256` curve
+  is accepted."
+- Cut "the other path already handles it" tells (e.g. "the ordinary callback
+  enforces this but the new one does not"). They point the agent at where to
+  copy the fix from. State only that the behavior is missing where the user
+  observes it.
+- Cut fix-shaped requirements that restate the implementation (e.g. "reject a
+  line whose host field begins with `@`"). State the requirement behaviorally
+  ("reject a line with more than one marker or an unknown marker").
+- Litmus test: if a sentence would be strange for a user who did NOT know the
+  fix to write, it is a hint. If removing a sentence makes the task unsolvable,
+  it was probably a hint, not a requirement.
+- KEEP test-asserted contracts that are genuine spec, even when specific:
+  thresholds (`> 8192 bits`, `2048` rounds, `160`-bit), the public API the tests
+  drive, named exempt contexts, and every preservation/edge case a test checks.
+  These satisfy instruction/test symmetry. The goal is to remove root-cause and
+  implementation narration, not the behavioral contract.
 
 Prompt sanitizer must remove:
 
@@ -328,7 +363,36 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`
 - install `tmux`, `asciinema`, `bash`, and usually `util-linux`
 - include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
+- **initialize a git repo in the task workdir** (after the final source `COPY`)
+  so the agent's edit tooling works. Many agents apply edits via `git apply` and
+  self-check with `git diff`; if the cloned repo's `.git` was stripped (and
+  `.dockerignore` excludes `.git` from the build context anyway), `/app` is NOT
+  a git repo at runtime, `git apply` silently fails, `git diff` shows nothing,
+  and agents that understood the fix perfectly still score 0 (confirmed June
+  2026: a grpc-go task got 0/3 agent trials purely because patches never landed,
+  flagged "Some tests not passed by any agent run"). Add after the source COPY
+  and build:
+  ```dockerfile
+  RUN git init -q \
+      && git config user.email task@example.com \
+      && git config user.name task \
+      && git add -A \
+      && git commit -q -m "initial task state"
+  ```
+  This runs inside the image (not the build context), so it does not trip the
+  `check_dockerfile_hygiene` `.git`-in-context warning. Oracle/nop are unaffected
+  (oracle applies `fix.patch` with `patch -p1`, not git).
 - install build tools only when the agent must rebuild source
+- **put the language toolchain on the agent's LOGIN-shell PATH by symlinking it
+  into `/usr/local/bin`** — the agent runs in a login shell that resets PATH to
+  the default and DROPS Docker `ENV PATH=...` additions, so a toolchain under
+  `/usr/local/cargo/bin` (Rust), `/usr/local/go/bin` (Go), or `${JAVA_HOME}/bin`
+  (Java) is invisible to the agent and causes wasted steps / timeouts even
+  though oracle/nop pass (they run as non-login subprocesses inheriting the
+  image ENV). e.g. `RUN ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo`
+  (+ `rustc`); `ln -sf /usr/local/go/bin/go /usr/local/bin/go`;
+  `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac`. `node`/`gcc` images
+  already place tools in `/usr/local/bin`. Sanity: `bash -lc 'which <tool>'`.
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
@@ -380,6 +444,21 @@ target behavior, not only the concrete verifier fixtures.
 
 `tests/test_outputs.py` should create temporary reproducer projects or inputs and run the target externally.
 
+**Verifier tests MUST be supplied by the verifier at verify time, NEVER staged
+inside `environment/repo`.** A compiled-language reproducer (a `*_test.go`,
+`.rs`, `.exs`, `.java`, etc.) must either be embedded as a string in
+`test_outputs.py` and written into `/app` at verify, or shipped under `tests/`
+and copied into `/app` at verify (overwriting whatever is there). If the test
+file lives in `environment/repo`, the agent can edit or delete it and the
+`/app` working tree the agent gets is non-deterministic across trial instances
+-- confirmed 2026-06-14: an h2 task staged its `concurrency.rs` in
+`environment/repo` and ran it directly; some agents altered it, so the
+verifier found the tests present in some instances and absent in others, which
+the reviewer flagged as **Task Instruction Sufficiency: FAIL** (1/9 trials
+passed). The agent fixes only the source; the verifier brings its own tests, so
+the prompt need not name any test file or function -- name only a new public
+API symbol the test must call (see Instruction Style).
+
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
 Verifier matrix for upstream bugfixes must include:
@@ -388,6 +467,18 @@ Verifier matrix for upstream bugfixes must include:
 - boundary or ordering edge case
 - normal behavior preservation
 - anti-shortcut check
+- **one discriminating test per independent criterion the instruction lists.**
+  If the prompt names N separate reject/accept conditions (e.g. reject modulus
+  >8192 AND prime >4096 AND exponent malformed), a verifier covering only one
+  lets an agent add a single check and pass — reviewers flag this Critical. Each
+  test must DISCRIMINATE: the input must be ACCEPTED by the buggy code and
+  REJECTED only by the fix. Watch for a downstream validator (e.g. `rsa.Validate`
+  / `pk.Validate()`) that already rejects malformed inputs on the buggy build —
+  that makes the test pass on both nop and oracle (a dud). Isolate each criterion
+  with an OTHERWISE-VALID input that violates only the target bound (e.g. a real
+  RSA key with one prime >4096 but modulus ≤8192; a valid key with a large odd
+  exponent). Some criteria a validator already enforces (even exponent, e<3)
+  cannot be made discriminating — do not add them as duds.
 - no internal crash/traceback when the expected behavior is recoverable
 - output format/schema check when relevant
 
@@ -417,6 +508,17 @@ Anti-shortcut tactics:
 - include one unseen variant not present in the upstream PR
 - avoid exact source-code assertions
 - parse outputs semantically rather than matching full files
+- never require an EXACT error-message string the instruction does not disclose.
+  If discrimination needs distinguishing the fix's rejection from the buggy
+  build's rejection (both error), prefer a pass/fail behavioral test (an input
+  the buggy build accepts and the fix rejects); else match a loose token from
+  the instruction's own vocabulary (e.g. instruction says "round count" → match
+  case-insensitive `round`), which accepts any reasonable agent phrasing yet
+  still differs from the buggy build's unrelated error. Matching the reference
+  solution's exact wording fails functionally-correct agents who phrase the
+  message differently (Task Instruction Sufficiency FAIL). Probe the buggy
+  error first to confirm the loose token is absent there, and verify a variant
+  wording still passes.
 
 The oracle patch must pass the direct regression and at least one variant, proving it is not verifier-targeted hardcoding.
 
@@ -518,6 +620,15 @@ Before packaging or platform upload:
   from environment files, comments, README, configs, scripts, TODOs, `spec.md`,
   and architecture docs
 - verify the task root has no `pyproject.toml`
+- set `codebase_size` to match the actual `environment/` file count (excluding
+  `Dockerfile`/`docker-compose*`): 0-19 `minimal`, 20-199 `small`, 200+ `large`.
+  CI rejects a mismatch.
+- run `ruff check <task-folder>` over the WHOLE task dir. Platform CI lints
+  `environment/repo` too (default E4/E7/E9/F rules), so a non-`ruff`-clean
+  upstream dev/codegen `.py` fails the build. Remove non-build-required upstream
+  `.py` that has lint errors; fix build-required generators in place
+  (output-preserving, e.g. move an `E402` import to the top) and re-run oracle.
+  Also clear `F401`/`E741` in `tests/test_outputs.py`.
 - verify rubrics do not reference tests, verifier logic, `test.sh`,
   `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, or pytest
   results

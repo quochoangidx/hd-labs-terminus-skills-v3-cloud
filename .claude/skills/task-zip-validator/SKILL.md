@@ -134,6 +134,7 @@ Check `environment/Dockerfile`:
 | apt hygiene | `apt-get update && apt-get install ... && rm -rf /var/lib/apt/lists/*` in one RUN | ❌ manual |
 | `patch` installed | For Go/Rust tasks: `patch` must be in apt-get install list | ✅ add to apt-get |
 | `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
+| No privileged/dangerous caps | docker-compose must NOT use `privileged: true`, `cap_add` of `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE`, or mount `/var/run/docker.sock`; volume mounts must not shadow reserved paths (`/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`) | ❌ manual |
 
 **Verifier deps:** Install `pytest`, `pytest-json-ctrf`, and verifier-only
 packages in the Dockerfile with exact pins. Do not put dependency wheels under

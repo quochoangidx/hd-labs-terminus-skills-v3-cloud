@@ -104,10 +104,10 @@ This should PASS. If it doesn't, your task may have issues.
 
 ```bash
 # GPT-5.2
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.2 -p <task-folder>
 
 # Claude Opus 4.6
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
 ```
 
 Run at least 2-3 times against each model to gauge pass rate, and remember that the **worst** model's pass rate is what determines Easy/Medium for most tasks.

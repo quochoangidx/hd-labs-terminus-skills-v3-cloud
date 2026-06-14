@@ -212,13 +212,13 @@ export OPENAI_BASE_URL=https://api.portkey.ai/v1
 2. Run with GPT-5:
 
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.2 -p <task-folder>
 ```
 
 3. Run with Claude Opus 4.6:
 
 ```bash
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
 ```
 
 Run each agent 2-3 times to gauge pass rate. Your task should have < 80% pass rate to be accepted.
@@ -229,12 +229,12 @@ Run LLMaJ checks before submitting:
 
 **GPT-5:**
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.2 -p <task-folder>
 ```
 
 **Claude Opus 4.6:**
 ```bash
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
 ```
 
 All checks should pass before submission.

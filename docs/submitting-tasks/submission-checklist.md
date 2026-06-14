@@ -117,7 +117,7 @@ Warnings should also be fixed unless an explicit reviewer-approved exception app
 ### Run Against GPT-5.2
 
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.2 -p <task-folder>
 ```
 
 - [ ] Run 1: PASS / FAIL
@@ -127,7 +127,7 @@ harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
 ### Run Against Claude Opus 4.6
 
 ```bash
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
 ```
 
 - [ ] Run 1: PASS / FAIL
