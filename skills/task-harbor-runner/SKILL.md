@@ -14,14 +14,14 @@ Prefer this sequence:
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
+harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
 ```
 
 Run real agents only when the user approves API usage:
 
 ```bash
-stb harbor run -m @openai/gpt-5.2 -p <task-folder>
-stb harbor run -m @anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 Use the absolute binary path if PATH is stale:
@@ -141,6 +141,21 @@ LLMaJ:
 - make prompt/tests symmetric.
 - remove implementation hints from prompt.
 - add docstrings and behavioral assertions.
+
+Real agents / Agent Timeout Gate:
+
+- `Agent Timeout Gate: ❌ N/10 real-agent runs timed out (threshold: 5)` is a
+  hard blocker, not a difficulty signal. It means the environment is too heavy:
+  agents spend the 1800s budget on cold rebuilds, navigating an un-slimmed repo,
+  or a slow test suite, and never converge.
+- Pre-check WITHOUT spending agent budget: build once, then `time harbor run -a
+  oracle -p <task-folder>` against the cached image. The cached-image oracle run
+  approximates one agent edit→build→test cycle; if it is a large fraction of
+  1800s, agents will time out.
+- Fix the environment, do not just raise the timeout (capped at 1800): warm the
+  build in the Dockerfile so rebuilds are incremental, keep the build/dependency
+  cache in the final image, slim the repo, and shrink the verifier. See the
+  `task-clone` "Agent Timeout Gate" section.
 
 ## Reporting
 

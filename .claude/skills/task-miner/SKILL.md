@@ -554,6 +554,12 @@ Reject if:
 - `deterministic_reproducibility < 4`
 - `anti_shortcut_hardness < 3`
 - `offline_viability < 4`
+- the agent's edit→build→test cycle cannot be made fast. If testing a change
+  requires a long cold rebuild that cannot be warmed to an incremental per-edit
+  rebuild (Dockerfile pre-build + retained cache), the task trips the **Agent
+  Timeout Gate** (`> ~5/10` agents time out) no matter how interesting the bug
+  is. Prefer bugs in repos with incremental builds and small focused tests; a
+  slow cold build is not difficulty, it is a blocker.
 
 Runtime classes:
 

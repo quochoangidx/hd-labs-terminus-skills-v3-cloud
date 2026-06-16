@@ -142,6 +142,21 @@ LLMaJ:
 - remove implementation hints from prompt.
 - add docstrings and behavioral assertions.
 
+Real agents / Agent Timeout Gate:
+
+- `Agent Timeout Gate: ❌ N/10 real-agent runs timed out (threshold: 5)` is a
+  hard blocker, not a difficulty signal. It means the environment is too heavy:
+  agents spend the 1800s budget on cold rebuilds, navigating an un-slimmed repo,
+  or a slow test suite, and never converge.
+- Pre-check WITHOUT spending agent budget: build once, then `time harbor run -a
+  oracle -p <task-folder>` against the cached image. The cached-image oracle run
+  approximates one agent edit→build→test cycle; if it is a large fraction of
+  1800s, agents will time out.
+- Fix the environment, do not just raise the timeout (capped at 1800): warm the
+  build in the Dockerfile so rebuilds are incremental, keep the build/dependency
+  cache in the final image, slim the repo, and shrink the verifier. See the
+  `task-clone` "Agent Timeout Gate" section.
+
 ## Reporting
 
 Report:

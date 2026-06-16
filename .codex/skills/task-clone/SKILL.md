@@ -383,6 +383,14 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   `check_dockerfile_hygiene` `.git`-in-context warning. Oracle/nop are unaffected
   (oracle applies `fix.patch` with `patch -p1`, not git).
 - install build tools only when the agent must rebuild source
+- **warm the build during image build whenever the agent must rebuild** (any
+  compiled or heavy-build language — Rust, Go, C/C++, TypeScript, Java, Scala).
+  Run one full build of the *unmodified* repo in the Dockerfile so every
+  dependency is fetched and compiled and the build cache is populated; the
+  agent's post-edit rebuild is then incremental (seconds), not cold (minutes).
+  e.g. `RUN cargo build --tests`; `RUN go build ./... && go vet ./...`;
+  `RUN npm ci && npm run build`; configure + `make` for autotools/CMake. A cold
+  per-edit rebuild is the #1 cause of the Agent Timeout Gate (see that section).
 - **put the language toolchain on the agent's LOGIN-shell PATH by symlinking it
   into `/usr/local/bin`** — the agent runs in a login shell that resets PATH to
   the default and DROPS Docker `ENV PATH=...` additions, so a toolchain under
@@ -406,7 +414,12 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - extract copied archives during build and remove the archive in the same stage
 - avoid broad recursive `chmod -R` or `chown -R`; use targeted `COPY` metadata
 - keep package-manager caches, compiler caches, and unused build outputs out of
-  the final image
+  the final image — **exception:** when the agent must rebuild, KEEP the
+  warmed build/dependency cache (`target/`, `GOCACHE`, `node_modules`,
+  `~/.cargo/registry`, `~/.cache`, etc.) so the agent's rebuild stays
+  incremental. Solvability under the timeout gate beats image slimness here, and
+  `check_no_build_tools_in_final_image` already permits the toolchain for
+  rebuild-required tasks. Strip only caches the agent will never reuse.
 
 Do not add root-level `pyproject.toml` as a submission artifact. If local ruff
 or editor tooling needs to exclude `environment/repo`, keep that configuration
@@ -422,6 +435,55 @@ find <task>/environment -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -na
 
 Do not leave AI-framework scaffolding filenames such as `CLAUDE.md`,
 `skills.md`, or similar files in `environment/`.
+
+## Agent Timeout Gate
+
+The platform runs ~10 real-agent trials and **blocks the task (`❌`) when more
+than the threshold (~5) of them hit `agent.timeout_sec` without finishing** —
+e.g. `Agent Timeout Gate: ❌ 10/10 real-agent runs timed out (threshold: 5)`.
+This is a hard blocker, **not** a difficulty signal: a task where most agents
+never even produce a fix is treated as a broken/too-heavy environment, not as
+legitimately Hard. Hard must come from wrong or partial fixes, not from agents
+starving on tooling.
+
+Root cause is almost always that the agent burns its 30-minute budget on **cold
+tooling** instead of reasoning: rebuilding a large project from scratch on every
+edit, navigating an un-slimmed tree, or waiting on a slow test suite. It then
+gets only one or two edit→build→test cycles and never converges. Prevent it
+at build time:
+
+- **Warm the build in the Dockerfile** so the agent's post-edit rebuild is
+  incremental, not cold (see the Docker Rules bullet above). This is the single
+  biggest lever.
+- **Keep the warmed build/dependency cache in the final image** (the explicit
+  exception in Docker Rules). A warm Dockerfile build is wasted if the cache is
+  stripped before runtime.
+- **Budget the edit→build→test cycle.** A solving agent needs ~8–12 iterations
+  inside 1800s. Time one *warm* cycle locally (edit one source file, rebuild,
+  run the focused test). If a single warm cycle still exceeds ~2–3 min, the task
+  will trip the gate — slim further, shrink the test, or reject the candidate.
+- **Slim the repo** so navigation and `grep`/`rg` are cheap (see
+  `upstream-repo-sanitizer`); a multi-thousand-file tree wastes agent steps
+  before any reasoning starts. Keep `codebase_size` honest.
+- **Keep the verifier fast** — focused reproducer tests with short
+  per-subprocess timeouts, never a full upstream suite
+  (`terminus-hard-python-verifier`).
+- Set `agent.timeout_sec = 1800` (the cap) for any build-involving task; the
+  default already is. You cannot buy more than 30 min, so the fix is a faster
+  cycle, not a bigger timeout.
+
+Pre-check before spending real-agent budget — time the warm oracle cycle:
+
+```bash
+harbor run --force-build -a oracle -p <task-folder>   # build the image once
+time harbor run -a oracle -p <task-folder>            # reuse cached image: this ~= the agent's per-cycle cost
+```
+
+The oracle does *less* than a solving agent (it applies a known patch and runs
+the focused test — no exploration). If the cached-image oracle run is already a
+large fraction of 1800s, real agents will certainly time out. Treat a slow
+oracle as an early timeout-gate warning and warm/slim the build before running
+agents.
 
 ## Oracle Pattern
 
@@ -667,7 +729,7 @@ Run what is available:
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
+harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
 ```
 
 If Docker is not running, still run static checks:
@@ -688,6 +750,7 @@ Difficulty gate:
 - If aggregate real-agent pass rate is `>= 80%`, do not submit as Hard; re-mine or redesign.
 - If the oracle patch is `<= 10` meaningful LOC in one obvious file, require empirical agent failures before keeping it.
 - Timeouts count as weak evidence only; a good Hard task should produce wrong/partial fixes, not mostly environment/tooling timeouts.
+- A high timeout rate is not Hard — it is a blocker. If `> ~5/10` real-agent runs time out, the platform fails the **Agent Timeout Gate** (`❌`); fix the environment per the Agent Timeout Gate section (warm build, keep the cache, slim, fast verifier), do not submit hoping the timeouts read as difficulty.
 
 ## Final Packaging
 
