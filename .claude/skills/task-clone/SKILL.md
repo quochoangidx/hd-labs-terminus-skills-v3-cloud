@@ -357,10 +357,24 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 
 `environment/Dockerfile` must:
 
-- use `FROM ...@sha256:<digest>`
-- use a sanctioned or explicitly exempt final runtime base image, such as
-  `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`,
-  `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`
+- use `FROM ...@sha256:<digest>` on every stage
+- use a **canonical Terminal-Bench base image** for the final runtime stage when
+  one matches the task's language (exact digest-pinned refs):
+  - Python: `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`
+  - Node: `public.ecr.aws/docker/library/node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383`
+  - Go: `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac`
+  - Rust: `public.ecr.aws/docker/library/rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36`
+  - Java (JDK): `public.ecr.aws/docker/library/eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14`
+  - C/C++ (GCC): `public.ecr.aws/docker/library/gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c`
+  - Ruby: `public.ecr.aws/docker/library/ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df`
+  - Maven: `public.ecr.aws/docker/library/maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e`
+  - Debian: `public.ecr.aws/docker/library/debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d`
+  - Ubuntu: `public.ecr.aws/docker/library/ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932`
+
+  A non-canonical base is allowed ONLY with a brief, credible justification (as a
+  `Dockerfile` comment or in the task `README.md`) — e.g. a runtime the list
+  doesn't cover. Missing/vague/boilerplate justification, or one that matches an
+  existing canonical entry, is **blocked** by `check_sanctioned_base_images`.
 - install `tmux`, `asciinema`, `bash`, and usually `util-linux`
 - include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
 - **initialize a git repo in the task workdir** (after the final source `COPY`)
@@ -699,7 +713,8 @@ Before packaging or platform upload:
 - verify `tests/test.sh` does not run runtime setup, `apt-get`, `pip install`,
   `npm install`, or network downloads
 - verify Dockerfile does not `COPY tests/`, `COPY solution/`, or create `/tests`, `/solution`, `/oracle`, `/logs/verifier`
-- verify Dockerfile uses a sanctioned/exempt final runtime base, has no
+- verify Dockerfile uses a canonical final runtime base (or non-canonical with a
+  credible justification), has no
   heredoc-generated source files, no tag-only `FROM` image, no unverified
   downloads, no stale copied archives, and no broad recursive permission rewrites
 - verify `environment/ <= 100 MiB` and no file under `environment/` exceeds `50 MiB`

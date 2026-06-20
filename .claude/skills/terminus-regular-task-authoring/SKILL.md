@@ -124,10 +124,17 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
 
 `environment/Dockerfile` must:
 
-- Use `FROM ...@sha256:<digest>`.
-- Use a sanctioned or explicitly exempt final runtime base image, such as
-  `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`,
-  `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`.
+- Use `FROM ...@sha256:<digest>` on every stage.
+- Use a **canonical Terminal-Bench base image** for the final runtime stage when
+  one matches the task's language (all under `public.ecr.aws/docker/library/`,
+  exact digest required): `python:3.13-slim-bookworm@sha256:01f4…24fb`,
+  `node:22-bookworm-slim@sha256:f3a6…2383`, `golang:1.24-bookworm@sha256:1a6d…77ac`,
+  `rust:1.85-slim@sha256:9f84…cb36`, `eclipse-temurin:21-jdk-jammy@sha256:25d1…4b14`,
+  `gcc:13-bookworm@sha256:930f…ac5c`, `ruby:3.3-slim-bookworm@sha256:e767…e3df`,
+  `maven:3.9.9-eclipse-temurin-21@sha256:3a4a…211e`, `debian:bookworm-slim@sha256:4724…655d`,
+  `ubuntu:24.04@sha256:0d39…e932`. (Full digests live in `docs/creating-tasks/dockerfile-best-practices.md`.)
+  A non-canonical base is allowed only with a brief, credible justification in the
+  `Dockerfile` or task `README.md`; missing/vague justification is blocked.
 - Install `tmux` and `asciinema`.
 - For cloned-repo tasks, `git init` the task workdir after the final source
   `COPY` (`RUN git init -q && git config user.email task@example.com && git
@@ -290,7 +297,7 @@ Quality preflight:
 - `codebase_size` matches the useful environment file count and portfolio mix
 - `languages` excludes verifier-only Python
 - no root-level `pyproject.toml`
-- final runtime base image is sanctioned or explicitly exempt
+- final runtime base image is canonical for the task's language (or non-canonical with a credible justification)
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP
 - no dependency wheels in `tests/`
 - no `tests/` or `solution/` copied into the Docker image

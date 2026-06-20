@@ -183,12 +183,12 @@ The agent runtime requires `tmux` and `asciinema` in every task image. Missing t
 
 ```dockerfile
 # Bad - Missing tmux and asciinema
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm
 WORKDIR /app
 RUN pip install pandas==2.0.0
 
 # Good - Pre-installs the required agent runtime deps
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -257,13 +257,13 @@ The `solution/` and `tests/` directories are copied into the container by Harbor
 
 ```dockerfile
 # Bad - Bakes the solution and tests into the image
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm
 WORKDIR /app
 COPY . /app/                  # Copies solution/ and tests/
 RUN pip install pandas==2.0.0
 
 # Good - Only copy the agent-facing files
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm
 WORKDIR /app
 COPY app/ /app/               # Only the project under test
 RUN pip install pandas==2.0.0
@@ -341,14 +341,14 @@ environment/
 
 ### Unsanctioned or Floating Base Images
 
-The final runtime base image must be sanctioned (or explicitly exempt) and use a specific version tag — never `latest` or another floating tag. Builder stages may use task-appropriate toolchain images, but the final stage is what agents and verifiers run in and is checked by CI.
+The final runtime base image must be [canonical](/portal/docs/creating-tasks/dockerfile-best-practices) (or non-canonical with a brief justification) and use a specific version tag with a digest — never `latest` or another floating tag. Builder stages may use task-appropriate toolchain images, but the final stage is what agents and verifiers run in and is checked by CI.
 
 ```dockerfile
 # Bad - Floating tag, unknown provenance
-FROM python:latest
+FROM public.ecr.aws/docker/library/python:latest
 
-# Good - Specific version tag with digest pin
-FROM python:3.11-slim@sha256:<digest>
+# Good - Canonical base, specific version tag with digest pin
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 ```
 
 > **Note:** For version-pinning issues specifically (pip/npm packages unpinned, apt versions floating, base image tag missing the digest), the feedback category is `pinning`, not `environment`. The two are related but distinct.

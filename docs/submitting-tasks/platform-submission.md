@@ -108,7 +108,7 @@ Edit the `environment/Dockerfile` to set up your task environment:
 - Add any dependencies required by your task
 - Pin all package versions for reproducibility
 - Digest-pin every `FROM` image with `@sha256:<digest>`
-- Use a sanctioned or exempt final runtime base image
+- For the final runtime stage, use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices) when one matches your task's language. Non-canonical images are allowed with a brief written justification in the Dockerfile or task `README.md`; missing justifications are blocked.
 - Keep `environment/` at or below 100 MiB total and no file over 50 MiB
 - Add `.dockerignore` for non-trivial environments
 - Never copy `solution/` or `tests/` folders in the Dockerfile

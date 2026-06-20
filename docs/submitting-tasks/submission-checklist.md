@@ -21,7 +21,7 @@ Use this checklist before every submission to ensure your task is complete and w
 
 **Always required:**
 - [ ] `task.toml` — Complete configuration with all required sections ([requirements](/portal/docs/understanding-tasks/task-requirements#tasktoml-requirements))
-- [ ] `environment/Dockerfile` — Builds successfully; language dependencies pinned, every `FROM` image digest-pinned, final runtime base sanctioned or exempt, and `environment/` within size limits ([requirements](/portal/docs/understanding-tasks/task-requirements#dependency-pinning))
+- [ ] `environment/Dockerfile` — Builds successfully; language dependencies pinned, every `FROM` image digest-pinned, final runtime base canonical (or non-canonical with a justification), and `environment/` within size limits ([requirements](/portal/docs/understanding-tasks/task-requirements#dependency-pinning))
 
 **Non-milestone tasks** (`number_of_milestones = 0`):
 - [ ] `instruction.md` — Clear, human-written instructions ([requirements](/portal/docs/understanding-tasks/task-requirements#instructionmd-requirements))
