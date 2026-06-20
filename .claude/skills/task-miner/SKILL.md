@@ -53,7 +53,50 @@ For category-profile candidates, `fixing_commit` is optional. The artifact must 
 - `machine-learning`: Mine tiny offline data-loader, inference, tokenizer, metric, or evaluation tasks. Accept deterministic seeds and small fixtures. Reject downloads, GPU, model registry, or expensive training.
 - `games`: Mine terminal game/puzzle/simulation rule tasks. Accept deterministic state transitions, move legality, scoring, or solver behavior. Reject visual-only or flaky/random tasks.
 
+## Selection axis — archetype × build-viability, NOT language
+
+Pick by ARCHETYPE first; language is free. Only the verifier must be Python
+pytest, and it merely shells out to the task's executable / API / file outputs —
+so the codebase the agent works in (`languages` in task.toml) can be ANY
+language. Docs treat "niche tools/languages" as a Hard lever (less training data
+→ frontier agents fail more), so a non-Python codebase often HELPS difficulty.
+
+The real gate is operational viability, not language: build <=600s after
+slimming, verifier <=450s, offline (`allow_internet=false`), deterministic,
+2 CPU / 4 GB, `environment/` <=100 MiB. Language matters only INDIRECTLY through
+build cost.
+
+Hard-dense archetypes (language-agnostic) — mine TOWARD these:
+
+| Language | Hard archetypes | Build/viability |
+|---|---|---|
+| Go | scheduler/reconciler, SQL planner, protocol state machine, EVM/consensus (scoped) | fast static build ✅ — AVOID one-guard parser/crypto libs |
+| Rust | async cancellation, trait resolution, borrow/lifetime, codegen | slow but cacheable; pick small crates |
+| TypeScript/JS | TS compiler inference/narrowing, type-level libs | TS compiler heavy but offline |
+| C/C++ | optimizer pass, UB/codegen, numerical algorithm | small make/cmake builds fast; watch toolchain |
+| Java/Kotlin/C# | Roslyn/javac analyzer, query engine, bytecode | JVM/.NET build heavier (use offline mode) |
+| Haskell/OCaml/Scala | type inference, parser-combinator engine, evaluator | NICHE BONUS for Hard; build can be heavy |
+| Python | mypy, Django ORM compile, scientific, multi-layer interpreter | fastest build — convenient, NOT mandatory |
+
+3-step selection rule (replaces "prefer Python"):
+
+1. Choose a hard archetype (compiler / planner / state-machine / numerical /
+   multi-layer interpreter), regardless of language.
+2. Confirm that scope builds offline within 600s after slimming. If yes, accept
+   — any language.
+3. Tie-break between equally-hard candidates by preferring the NICHE language
+   (Haskell/OCaml/Rust earn the Hard bonus) and the lighter build.
+
+Deliberately MIX languages across a batch to avoid the "17 tasks all Go libs"
+failure (June 2026 batch B). A healthy batch spans e.g. Rust + Go + TS + C/C++ +
+a niche language, not one library family.
+
 ## Source Queue
+
+The repos below are the OPERATIONALLY-EASY Python lane (fast offline builds) —
+convenient, but NOT the default or the only lane. Do not let this list pull
+every batch back to Python parser/validator libs. Apply the archetype-first
+selection rule above and the patch-shape gate before using any of them.
 
 Prioritize low-to-medium quota sources for upstream bugfix mode:
 
@@ -124,7 +167,7 @@ heavy_rejection_reason:
 
 If the slimming plan is unclear, mark `status: rejected` and stop.
 
-## Source Selection
+## Sample Source Selection
 
 For `pytest-dev/pytest`, prefer closed bugs or PRs involving:
 
@@ -256,6 +299,16 @@ Append one compact JSON line per decision:
 
 Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 
+**Family ledger (difficulty memory at the family level, not just exact dedupe).**
+Exact-candidate dedupe does not stop the team from re-mining the same SHAPE of
+bug in a different function. Maintain a `family_difficulty` ledger keyed by
+`library + bug_family` (e.g. `golang-crypto-ssh + validation-bound-check`,
+`go-yaml + parser-edge-condition`). Record the max platform rating observed for
+that family. If a family's ceiling is `<=EASY` (or `<=MEDIUM` after >=2 samples),
+skip new candidates in it unless a frontier-agent probe failed semantically.
+Append difficulty outcomes back into this ledger after platform rating so the
+miner stops feeding known-collapsed families.
+
 ## Hardness Filter
 
 For upstream bugfix mode, apply the repo-specific hard filters below.
@@ -291,6 +344,185 @@ Reject false-hard candidates:
   trials show repeated failures for semantic reasons
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
+### Mechanical patch-shape gate — RUN FIRST, pass/fail, before any scoring
+
+The fix-shape filter below is correct but kept getting ignored: 17 candidates
+shipped and 14 rated <=EASY (June 2026 batch B). So gate it MECHANICALLY. Open
+the fixing diff and answer these. A candidate is Hard-eligible ONLY if at least
+ONE is true:
+
+- the diff ADDS >=1 new exported symbol (type, interface, func, method, or
+  struct field) that call sites must be rewired to use;
+- the diff changes >=2 NON-TEST source files whose logic INTERACTS (not the same
+  guard copied to a second path — that is the mirror anti-pattern, still fails);
+- the upstream fix landed as >=2 iterated commits where maintainers reworked the
+  design (link them);
+- a frontier-agent probe has already FAILED this candidate for a semantic reason
+  (record it).
+
+If NONE hold — i.e. the entire fix is "+1..~20 lines inside ONE existing
+function / one obvious spot" — REJECT for Hard with no exception for CVE status,
+security/crypto domain, severity, or impressive component names. Record
+`patch_shape_gate: fail`. This is the single most important gate in this skill.
+
+### Empirical override (2026-06 non-Python batch, 9 agent-RATED tasks): the count-based gate above is NECESSARY, NOT SUFFICIENT
+
+Platform agent-trial ratings refuted file-count / LOC / "adds a new exported
+symbol" as Hard predictors:
+
+| Rated | task | files | LOC | decisive factor |
+|---|---|---:|---:|---|
+| HARD | caffeine cache-eviction scan | 1 | 38 | design a non-obvious traverse-and-requeue invariant |
+| HARD | elixir set-theoretic types | 1 | 155 | design static/dynamic projection invariant |
+| HARD | valkey hashtable resize-policy | 5 | 67 | re-derive ALLOW/AVOID/FORBID policy state machine |
+| HARD | go-mysql-server optimizer FDS | 2 | 132 | invent a conditional-equivalence concept |
+| MEDIUM | hashicorp/raft commit-index | 5 | 200 | new interface+flag BUT the prompt must NAME the API |
+| MEDIUM | h2 push-promise waker | 5 | 40 | mechanical-once-diagnosed (add a waker + notify) |
+| EASY | vue reactivity flag-dedup | 1 | 26 | known idiom; the "5 functions" are all in one file |
+| EASY | nats scale-down unify | 1 | 75 | spec'd-signature transcription |
+| TRIVIAL | jq codec rewrite | 1 | 118 | accumulate-then-validate, mechanical |
+
+raft hit EVERY mechanical condition (new interface, 6 files, 38 commits) yet
+rated MEDIUM; caffeine hit NONE (1 file, 38 LOC) yet rated HARD. So once the
+mechanical gate passes, apply the TWO REAL predictors — BOTH must hold for Hard:
+
+1. **DESIGN-not-transcribe.** The fix must require reasoning out a NON-OBVIOUS
+   invariant / algorithm / policy. REJECT to MEDIUM/EASY if, once the symptom is
+   diagnosed, the fix is MECHANICAL: add a waker/field/guard at known points
+   (h2 push-promise → MEDIUM), a known idiom (flag-dedup = vue → EASY;
+   accumulate-then-validate codec = jq → TRIVIAL), or mirror an existing path.
+   "Adds a new exported symbol" does NOT save it — raft added a whole interface
+   and still rated MEDIUM.
+2. **BEHAVIORAL-verifiability (the cap that bit raft + nats).** The fix must be
+   verifiable through OBSERVABLE PUBLIC behavior (CLI/API output, a metric, an
+   `EXPLAIN` plan, rendered state) so `instruction.md` can describe ONLY the
+   symptom and the agent must DISCOVER + DESIGN the fix. If the fix logic is
+   UNEXPORTED and the only fair verifier is a white-box test that must CALL a
+   named new symbol, the prompt is forced to NAME it → the agent transcribes the
+   spec → MEDIUM ceiling. Pre-mine question: "can a verifier prove this fix purely
+   through public/observable behavior, WITHOUT the prompt naming any new symbol?"
+   If no → MEDIUM at best; re-mine.
+
+**Bonus HARD signal — secondary-observable bug:** prefer bugs that surface in a
+SECONDARY observable (cost / plan / cardinality / metric / memory / eviction
+timing / internal state), NOT a wrong primary output — the agent then cannot
+pattern-match a wrong result and must reason about the engine (go-mysql-server:
+query RESULTS stay correct, only the plan/row-estimate is wrong → HARD).
+
+**Archetype weighting from this batch:** ENGINES with algorithm/policy/invariant
+state — query optimizers, type systems, cache eviction, data-structure
+resize/rebalance, numerical kernels — rated HARD. Codec / parser / scheduler-flag
+/ protocol-waker / membership-unify rated TRIVIAL→MEDIUM. Weight engine
+archetypes UP; treat the latter as MEDIUM-at-best absent an agent-probe failure.
+
+**Operational-ease inversion (why the other scores mislead):** high
+`offline_viability` / `deterministic_reproducibility` / low `runtime_cost`
+correlate NEGATIVELY with difficulty here. Parser, validator, crypto-blob, and
+numeric-precision bugs score perfectly on those axes PRECISELY because they are
+localized one-spot fixes. A candidate that is "clean and easy to test" is a
+yellow flag for Hard, not a green one. Never let operational tidiness raise the
+hardness score.
+
+### Collapsed families — do NOT re-mine (each empirically rated <=EASY/MEDIUM)
+
+These bug families have a fixed low ceiling regardless of library. Skip new
+candidates in them unless a recorded frontier-agent probe failed semantically:
+
+- input validation / bound / range / size / FIPS checks (ssh RSA-modulus,
+  bcrypt-rounds, RSA-privatekey, DSA-param)
+- malformed-blob / type-mismatch / marker / revoked rejection in key parsing
+  (knownhosts-*, ssh key parse, ecdsa curve confusion)
+- single-condition parser edge-cases in compose/parse (go-yaml sibling-anchor
+  scope, tag-node container, empty-seq sibling; JSON/struct decode edges)
+- cycle / nil / recursion guards (goja circular ToPrimitive)
+- precision / rounding / scale tweaks in one numeric routine (decimal Pow)
+- regex anchoring / partial-match fixes (grpc RBAC regex-partial — still only MEDIUM)
+- single-table / histogram construction in one func (huff0 ctable)
+- reflection field-access traversal (expr interface field — only MEDIUM)
+
+Low-yield-for-Hard SOURCES (treat single-bugfix PRs here as default-reject for
+Hard): golang/crypto ssh + knownhosts, go-yaml/yaml, dop251/goja,
+shopspring/decimal, klauspost/compress (huff0/zstd), expr-lang/expr, and similar
+parser/validator/crypto/numeric libraries. Their bugfix PRs are almost always
+one-spot patches. The earlier note calling golang/crypto ssh "a rich, fast-
+building source" is RETRACTED for Hard mining — it is rich in TRIVIAL.
+
+### Fix-shape filter — the #1 cause of EASY/TRIVIAL ratings (empirical, June 2026)
+
+Difficulty is set by the reasoning needed to PRODUCE THE FIX, NOT by the bug's
+severity, CVE status, security domain, file count, or impressive subsystem
+names. A security-critical, CVE-grade, multi-file bug still rates TRIVIAL/EASY
+if the fix is a small obvious guard. The "5-6 components" heuristic does NOT
+save such candidates — they look component-rich but the patch lives in one
+obvious spot.
+
+REJECT a candidate (for Hard) when the likely fix is any of:
+
+- a single bound / size / range check (`if N.BitLen() > 8192 { reject }`,
+  `if rounds > 2048 { reject }`, `Q must be 160 bits`)
+- a missing validation that is an obvious idiom (compare a declared type vs the
+  actual decoded type and reject mismatch; reject a malformed/duplicate marker;
+  anchor a regex)
+- MIRRORING an existing check onto another code path (the bug is "path B lacks
+  the guard that path A already has"; the agent copies A's logic to B)
+- adding a nil-guard, an early return, or a missing error return
+- anything a strong agent produces just by reading the observable symptom and
+  adding ~1-15 lines in the one function the symptom points to
+
+This holds even if the candidate is a published CVE, touches auth/crypto, or
+spans several files. Empirical confirmations (all rated TRIVIAL on platform
+despite "hard" metadata): ssh RSA-modulus DoS (one `BitLen()>8192` check), ssh
+knownhosts key-type mismatch (compare declared vs actual type), knownhosts
+multiple-marker rejection (reject host starting with `@`), DSA param validation
+(three FIPS bound checks in one func), and even ssh source-address bypass
+(CVE-2026-46595 — fix just mirrors the existing source-address check onto the
+VerifiedPublicKeyCallback path). knownhosts revoked-CA (also check the signing
+CA key against the revoked set) rated EASY.
+
+KEEP for Hard only when the fix requires at least one of: designing a new
+abstraction (new type/interface/struct field, multi-method refactor with new
+signatures); a non-obvious algorithm or state-machine change; reconciling a
+genuine cross-component contradiction the agent must reason through and CANNOT
+copy from an existing site; or prior frontier-agent trials that fail for
+semantic (not tooling) reasons. Prefer bugs where naming the observable symptom
+does NOT hand the agent the patch location and shape.
+
+### Mine TOWARD these Hard fix-signatures (positive selection)
+
+Don't just filter out easy bugs — actively seek bugs whose fix has one of these
+shapes. Empirically-confirmed HARD (June 2026 batches):
+
+- **New abstraction / type-design fix:** the fix adds a new type, interface,
+  struct field, or method signature and rewires call sites. E.g. go-ethereum
+  mux-tracer "V2 hooks" (expose `OnNonceChangeV2`/`OnCodeChangeV2` on the Hooks
+  struct + propagate). The agent must design the surface, not add a guard.
+- **New-architecture fix:** the bug is fixed by restructuring control flow, not
+  inserting a check. E.g. basicauth timing-leak (introduce verifier ranking +
+  a dummy-verify path + constant-time comparison). No single "add if" works.
+- **Spec-correctness across multiple contexts:** the fix must satisfy an RFC /
+  protocol in several places with different encodings, where a naive single fix
+  breaks another context. E.g. JOSE `b64` critical header across JWS + JWE;
+  RFC 6265 cookie domain/host-only semantics.
+- **Branch-heavy logic with preservation constraints:** the fix changes
+  behavior across many interacting branches and must NOT regress neighbours
+  (path-traversal confinement across middleware + io/fs + path rewrite).
+- **Algorithm / numerical / state-machine change:** log-sum-exp rewrite,
+  deflation trigger, SIMD pivot ordering, CRT/precompute logic, parser
+  state-machine reshaping.
+
+Source patterns that tend to yield these: large feature/refactor PRs (not
+one-line bugfixes); PRs that ALSO change several non-test files and add new
+exported symbols; bugs whose upstream fix touches a core algorithm or a
+protocol state machine; issues where maintainers debated the design. AVOID PRs
+whose diff is a few added `if` lines in one function, however serious the bug.
+When mining a security CVE, check the fix-shape FIRST: many CVEs are one-guard
+fixes (TRIVIAL) — only keep the ones whose patch redesigns logic.
+
+NOTE on the "5-6 components" heuristic used elsewhere in this skill: component
+count is NECESSARY-NOT-SUFFICIENT. A bug can touch many components yet have a
+one-spot fix (rates TRIVIAL). Always apply the fix-shape probe on top of the
+component count; the fix-shape is the real difficulty test.
+
 For category-profile mode, reject candidates when:
 
 - the target behavior can be solved by one obvious expression, option, or config line
@@ -322,6 +554,12 @@ Reject if:
 - `deterministic_reproducibility < 4`
 - `anti_shortcut_hardness < 3`
 - `offline_viability < 4`
+- the agent's edit→build→test cycle cannot be made fast. If testing a change
+  requires a long cold rebuild that cannot be warmed to an incremental per-edit
+  rebuild (Dockerfile pre-build + retained cache), the task trips the **Agent
+  Timeout Gate** (`> ~5/10` agents time out) no matter how interesting the bug
+  is. Prefer bugs in repos with incremental builds and small focused tests; a
+  slow cold build is not difficulty, it is a blocker.
 
 Runtime classes:
 
@@ -382,6 +620,10 @@ candidate:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
+  patch_shape_gate:        # pass | fail — from the mechanical gate; fail => not Hard-eligible
+  patch_shape_evidence:    # which gate condition passed (new symbol / >=2 interacting files / multi-commit / probe-fail)
+  family_key:              # library + bug_family, checked against the family ledger
+  agent_probe:             # {ran: bool, passed_oneshot: bool} — required if claiming Hard
   hardness_score:
   reproducibility_score:
   verifier_complexity:
@@ -409,6 +651,16 @@ Downgrade or reject candidates when:
 - a previous difficulty check shows any frontier agent at `5/5` or aggregate pass rate `>= 80%`
 - fewer than 4 meaningful components/surfaces/layers are required to understand
   and solve the task
+
+**Pre-mine fix-shape probe (apply to EVERY candidate before scoring it Hard):**
+read the actual fixing diff and ask, "if I describe only the observable symptom
+to a strong agent, does it produce this patch by adding an obvious guard /
+validation / bound check / nil-check, or by copying a check that already exists
+on another path?" If yes → EASY/TRIVIAL, reject for Hard regardless of CVE
+status, security domain, or component count (see the Fix-shape filter above).
+The patch's REASONING content, not its severity or LOC spread, sets difficulty.
+A 7-line CVE fix that mirrors an existing guard onto a second path is TRIVIAL;
+a 7-line fix that requires inventing a new invariant is not.
 
 For Python tasks, keep only candidates likely to make strong agents fail after understanding the prompt, not merely candidates that look complex by subsystem name.
 

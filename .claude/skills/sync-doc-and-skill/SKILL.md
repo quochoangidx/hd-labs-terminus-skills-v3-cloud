@@ -1,6 +1,6 @@
 ---
 name: sync-doc-and-skill
-description: Sync Terminus docs from the Snorkel portal and update dependent Terminus skills to match. Run periodically or when you suspect docs have changed. Fetches the live JS bundle from the portal SPA, extracts doc content, diffs against local docs/, patches local files, then audits Terminus skills for discrepancies and auto-fixes them.
+description: Sync Terminus docs from the Snorkel portal and update dependent Terminus skills to match. Run periodically or when you suspect docs have changed. Fetches each doc's markdown file DIRECTLY from the portal (…/docs/<slug>.md), diffs against local docs/, patches local files, then audits Terminus skills for discrepancies and auto-fixes them. Do NOT scrape the JS bundle for content — it is only the SPA shell and can carry stale hardcoded strings.
 ---
 
 # Sync Docs and Skills
@@ -27,10 +27,10 @@ No arguments required. Optionally:
 ```
 Snorkel Portal (SPA)
     │
-    ├── JS bundle contains all doc content as embedded strings
+    ├── doc content served as plain markdown at /docs/<slug>.md (SPA fetches at runtime)
     │
     ▼
-Step 1: Fetch & Extract docs from JS bundle
+Step 1: Fetch each doc's .md file DIRECTLY (NOT from the JS bundle)
     │
     ▼
 Step 2: Diff against local docs/
@@ -48,70 +48,47 @@ Step 5: Auto-fix skills
 Step 6: Report changes
 ```
 
-## Step 1 — Fetch Docs from Portal
+## Step 1 — Fetch Docs from Portal (direct `.md`, NOT the bundle)
 
-The Snorkel portal at `https://snorkel-ai.github.io/Terminus-EC-Training-stateful/` is a single-page app (SPA). All doc content is embedded in the JS bundle. WebFetch/curl only gets the HTML shell — content must be extracted from the JS.
+The portal at `https://snorkel-ai.github.io/Terminus-EC-Training-stateful/` is an
+SPA, but **doc content is served as plain markdown** that the app fetches at
+runtime from `…/docs/<slug>.md` (content-type `text/markdown`). Fetch those
+`.md` files DIRECTLY.
 
-### 1a. Download the JS bundle
+> ⚠️ Do NOT grep the JS bundle for doc content. The bundle is only the React
+> shell; it carries stale hardcoded strings (confirmed 2026-06-14: the bundle
+> still showed eval models `GPT-5.2`/`Opus 4.6` while the live `.md` already had
+> `GPT-5.5`/`Opus 4.8`). Also, the bundle has a content-hashed filename, so an
+> UNCHANGED bundle name does NOT mean docs are unchanged — doc `.md` files change
+> independently. The only reliable change-detector is diffing the fetched `.md`.
 
-```bash
-# Get the main page to find the bundle filename (it has a hash)
-PORTAL_URL="https://snorkel-ai.github.io/Terminus-EC-Training-stateful/"
-BUNDLE_PATH=$(curl -sL "$PORTAL_URL" | grep -oE 'src="/Terminus-EC-Training-stateful/assets/index-[^"]+\.js"' | sed 's/src="//;s/"//')
-BUNDLE_URL="https://snorkel-ai.github.io${BUNDLE_PATH}"
+### 1a. Build the slug list (and detect new/removed pages)
 
-curl -sL "$BUNDLE_URL" > /tmp/terminus_bundle.js
-echo "Bundle size: $(wc -c < /tmp/terminus_bundle.js) bytes"
-```
-
-### 1b. Extract navigation structure
-
-```bash
-# Extract all doc page slugs and titles
-grep -oE 'slug:"[^"]+",title:"[^"]+"' /tmp/terminus_bundle.js | \
-  sed 's/slug:"//;s/",title:"/ → /;s/"//' | sort
-```
-
-Compare with existing local docs:
-```bash
-find docs/ -name "*.md" | sed 's|docs/||; s|\.md$||' | sort
-```
-
-Flag any pages in online that are missing locally, or local pages not in online.
-
-### 1c. Extract doc content
-
-The bundle contains doc content as JSX strings. Extract key sections:
+The slug set normally matches local `docs/`. To catch newly-added pages, also
+read the nav from the bundle (the bundle is still fine for the slug list):
 
 ```bash
-# Extract checklist items
-grep -oE '"checklist-item",children:"[^"]*"' /tmp/terminus_bundle.js
-
-# Extract table cell content
-grep -oE 'children:"[^"]{20,200}"' /tmp/terminus_bundle.js | head -50
-
-# Extract specific doc sections by searching for key terms
-grep -oP '.{0,200}(test_deps_in_image|verifier depend|tests/wheels).{0,200}' /tmp/terminus_bundle.js
-grep -oP '.{0,200}sanctioned.{0,200}' /tmp/terminus_bundle.js
-grep -oP '.{0,200}allow_internet.{0,200}' /tmp/terminus_bundle.js
-grep -oP '.{0,200}codebase_size.{0,200}' /tmp/terminus_bundle.js
-grep -oP '.{0,200}tmux.{0,200}' /tmp/terminus_bundle.js
-grep -oP '.{0,200}rubric.{0,200}' /tmp/terminus_bundle.js
-grep -oP '.{0,200}canary.{0,200}' /tmp/terminus_bundle.js
+PORTAL="https://snorkel-ai.github.io/Terminus-EC-Training-stateful"
+BUNDLE=$(curl -sL "$PORTAL/" | grep -oE '/Terminus-EC-Training-stateful/assets/index-[^"]+\.js' | head -1)
+curl -sL "https://snorkel-ai.github.io$BUNDLE" | grep -oE 'slug:"[^"]+"' | sed 's/slug:"//;s/"//' | sort -u > /tmp/portal_slugs.txt
+find docs -name '*.md' | sed 's|docs/||;s|\.md$||' | sort > /tmp/local_slugs.txt
+echo "== new pages in portal (create locally) =="; comm -23 /tmp/portal_slugs.txt /tmp/local_slugs.txt
+echo "== local pages not in portal (flag) =="; comm -13 /tmp/portal_slugs.txt /tmp/local_slugs.txt
 ```
 
-### 1d. Known extraction patterns
+### 1b. Fetch each doc's markdown DIRECTLY (authoritative)
 
-Since the SPA embeds content as JSX, use these patterns to extract structured data:
+```bash
+mkdir -p /tmp/livemd
+cat /tmp/local_slugs.txt /tmp/portal_slugs.txt | sort -u | while IFS= read -r slug; do
+  out="/tmp/livemd/$(echo "$slug" | tr '/' '_').md"
+  code=$(curl -sL -H 'Cache-Control: no-store' -o "$out" -w '%{http_code}' "$PORTAL/docs/$slug.md?z=$RANDOM")
+  [ "$code" = 200 ] && [ -s "$out" ] || echo "  [HTTP $code] fetch failed: $slug"
+done
+```
 
-| What | Pattern |
-|------|---------|
-| Navigation | `slug:"...",title:"..."` |
-| Checklist items | `"checklist-item",children:"..."` |
-| Table cells | `l.jsx("td",{children:"..."})` |
-| CI check names | `l.jsx("code",{children:"..."})` |
-| Info boxes | `"info-box",children:[...]` |
-| Section headers | `l.jsx("h2",{children:"..."})` |
+The directly-fetched `.md` is the source of truth even when curl gets a stale
+cached bundle from the GitHub Pages CDN.
 
 ## Step 2 — Diff Against Local Docs
 
@@ -157,15 +134,13 @@ For each discrepancy found:
 
 ## Step 4 — Audit Skills Against Updated Docs
 
-After docs are synced, audit these 3 skills:
+After docs are synced, audit these skills:
 
 ```
 .claude/skills/task-miner/SKILL.md
 .claude/skills/task-clone/SKILL.md
 .claude/skills/task-zip-validator/SKILL.md
 .claude/skills/task-client-feedback-review/SKILL.md
-.claude/skills/terminus-create-task/SKILL.md
-.claude/skills/terminus-validate-task/SKILL.md
 ```
 
 ### Audit checklist (check each rule in each skill):
@@ -237,23 +212,18 @@ Skill fixes applied: 3
 Manual review needed: 0
 ```
 
-## Appendix: Bundle Hash Tracking
+## Appendix: Change Detection (do NOT rely on bundle hash)
 
-Store the last-synced bundle filename to detect changes:
+⚠️ The bundle filename hash is NOT a reliable change-detector. Doc `.md` files are
+served and updated independently of the SPA shell bundle, so docs can change while
+the bundle name stays the same (confirmed 2026-06-14: bundle `index-Bbhn77A_.js`
+unchanged for days while `difficulty-guidelines.md` flipped eval models to
+GPT-5.5/Opus 4.8). The GitHub Pages CDN can also serve curl a stale bundle while
+serving fresh `.md`.
 
-```bash
-# Save current bundle hash
-echo "index-C9l2BqvB.js" > docs/.last-sync-bundle
-```
-
-On next run, compare:
-```bash
-LAST=$(cat docs/.last-sync-bundle 2>/dev/null)
-CURRENT=$(curl -sL "$PORTAL_URL" | grep -oE 'index-[^"]+\.js')
-if [ "$LAST" = "$CURRENT" ]; then
-    echo "No bundle change — docs likely unchanged. Use --force to sync anyway."
-fi
-```
+**Reliable detection = diff the directly-fetched `.md` files** (Step 1b + Step 2).
+The `docs/.last-sync-bundle` marker is kept only as a coarse hint; never conclude
+"docs unchanged" from an unchanged bundle name — always fetch and diff the `.md`.
 
 ## Appendix: Key Terms to Monitor
 

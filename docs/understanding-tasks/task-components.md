@@ -120,7 +120,7 @@ The environment definition must be placed in an `environment/` folder. This prev
 **Example Dockerfile:**
 
 ```dockerfile
-FROM python:3.13-slim@sha256:<digest>
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 
 WORKDIR /app
 
@@ -144,7 +144,7 @@ COPY app/ /app/
 - Install `tmux` and `asciinema` — **required by the agent runtime**. Missing these will cause all agent runs to fail with no verifier output.
 - Pin all application dependency versions (pip, npm, etc.)
 - Digest-pin every `FROM` image and any compose `image:` lines with `@sha256:<digest>`.
-- Use a sanctioned or exempt final runtime base image, such as `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`, `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`.
+- For the final runtime stage, prefer a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices). Non-canonical images are allowed only with a brief written justification (in the `Dockerfile` or task `README.md`); missing justifications are blocked.
 - Keep `environment/` at or below 100 MiB total and no more than 50 MiB per file.
 - Include a `.dockerignore` for non-trivial environments.
 - Never copy `solution/` or `tests/` in Dockerfile

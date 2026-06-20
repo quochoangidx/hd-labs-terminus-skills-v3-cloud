@@ -5,6 +5,9 @@
 
 | Date         | Type      | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Jun 12, 2026 | 🆕 New    | Added the **canonical Terminal-Bench base image list** to the Dockerfile Best Practices guide — a curated set of 10 digest-pinned images covering Python, Node, Go, Rust, Java, Ruby, C/C++ (GCC), Maven, Debian, and Ubuntu. Prefer these for the final runtime stage to maximize reusability and cache hits. Non-canonical images are still allowed with a brief, credible justification in the Dockerfile or task `README.md`; missing or vague justifications are now blocked. ***[See Dockerfile Best Practices §2](/portal/docs/creating-tasks/dockerfile-best-practices)*** |
+| Jun 12, 2026 | 🔄 Update | **Difficulty-check models upgraded.** Tasks are now benchmarked against **Claude Opus 4.8** and **GPT-5.5** (previously Claude Opus 4.6 and GPT-5.2). Difficulty thresholds and EASY/MEDIUM/HARD ratings are unchanged — only the benchmark models changed. Since the new models are stronger, tasks that previously rated MEDIUM or HARD may land differently; calibrate accordingly. GPT-5.5 is also now available in the EC CLI. ***[See Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines)*** |
+| Jun 3, 2026  | 🆕 New    | Added an **Environment Problems** section to the Common Errors reviewer reference covering Dockerfile/container defect patterns: missing `tmux`/`asciinema`, runtime network installs in `test.sh`, AI-scaffolding filenames, solution/tests baked into the image, privileged mode, reserved-directory conflicts, oversized build context, and unsanctioned base images. Each section of Common Errors now also names its corresponding reviewer feedback category. ***[See Common Errors](/portal/docs/reviewing-tasks/common-errors)*** |
 | Jun 3, 2026  | 🔄 Update | Restored the defensive `rc=$?` variable form in the `tests/test.sh` canonical example. The `check_test_sh` CI gate now accepts **both** the literal `$?` inline form and a variable captured from `$?` immediately after pytest. The variable form is preferred because `$?` only holds the last command's exit status, so any line between pytest and the conditional silently clobbers it. ***[See Writing Tests](/portal/docs/creating-tasks/writing-tests)*** |
 | Jun 3, 2026  | 🔄 Update | Clarified rubric formatting: **milestone tasks** must split the rubric into one block per milestone using `# Rubric 1`, `# Rubric 2`, etc. header lines (the CI parser is aligned to this format). **Non-milestone tasks** use a flat list of `Agent …, ±N` lines; a single `# Rubric 1` header is tolerated but not required. ***[See Rubrics](/portal/docs/understanding-tasks/rubrics)*** |
 | Jun 3, 2026  | 🔄 Update | **`codebase_size = "minimal"` tasks are accepted again** (re-allowed as of May 11, 2026). CI checks no longer block them. Updated the FAQ codebase-size table and Diversity Requirements page to reflect this. ***[See FAQ](/portal/docs/reference/faq)*** |
@@ -63,7 +66,7 @@ As a Coding Expert, you will:
 
 Task Difficulty Targets
 
-Testing your task on AI agents on ChatGPT-5.2 and Claud Opus 4.6 yields pass rates for the task you create. According to how many times it fails or succeeds, your task falls into the following difficulty tiers:
+Testing your task on AI agents on GPT-5.5 and Claude Opus 4.8 yields pass rates for the task you create. According to how many times it fails or succeeds, your task falls into the following difficulty tiers:
 
 
 | Difficulty | Threshold                                                             | Description                                   |
@@ -82,9 +85,9 @@ Evaluation Process
 Each task undergoes a rigorous 4-step review:
 
 1. **Automated CI checks** — Technical requirements (syntax, structure, etc.)
-2. **LLM-as-Judge (LLMaJ)** — Quality evaluation using GPT-5.2
+2. **LLM-as-Judge (LLMaJ)** — Quality evaluation using GPT-5.5
 3. **Peer review** — Human expert verification
-4. **Agent evaluation** — Run against GPT-5.2 and Claude Opus 4.6 (5 times each)
+4. **Agent evaluation** — Run against GPT-5.5 and Claude Opus 4.8 (5 times each)
 
 
 

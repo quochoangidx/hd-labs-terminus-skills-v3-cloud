@@ -127,13 +127,14 @@ Check `environment/Dockerfile`:
 | Check | Rule | Auto-fix |
 |-------|------|----------|
 | Digest pin | `FROM image@sha256:<64hex>` required, NOT `FROM image:tag` | ❌ manual (need to pull digest) |
-| Sanctioned final-stage base | Final stage must use a sanctioned or explicitly exempt runtime base. Common accepted final bases are `python:*`, `mcr.microsoft.com/...`, `ghcr.io/snorkel-ai/...`, or `scratch`, all digest-pinned. Builder stages may use toolchain images such as `golang`, `rust`, or `node`. | ❌ manual |
+| Canonical final-stage base | Final stage must use a **canonical Terminal-Bench base image** (digest-pinned) when one matches the task's language, OR a non-canonical base with a brief credible justification in the `Dockerfile`/`README.md`. Canonical refs: Python `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`, Node `…/node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383`, Go `…/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac`, Rust `…/rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36`, Java `…/eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14`, GCC `…/gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c`, Ruby `…/ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df`, Maven `…/maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e`, Debian `…/debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d`, Ubuntu `…/ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932`. Builder stages may use any task-appropriate toolchain image. | ❌ manual |
 | **tmux + asciinema REQUIRED** | MUST be in apt-get install. Missing either = ALL agent runs fail with zero output. | ✅ add to apt-get |
 | No COPY tests | NO `COPY tests/` or `COPY solution/` | ✅ remove line |
 | No reserved dirs | NO `mkdir /tests`, `/oracle`, `/logs/verifier`, `/solution` | ✅ remove line |
 | apt hygiene | `apt-get update && apt-get install ... && rm -rf /var/lib/apt/lists/*` in one RUN | ❌ manual |
 | `patch` installed | For Go/Rust tasks: `patch` must be in apt-get install list | ✅ add to apt-get |
 | `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
+| No privileged/dangerous caps | docker-compose must NOT use `privileged: true`, `cap_add` of `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE`, or mount `/var/run/docker.sock`; volume mounts must not shadow reserved paths (`/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`) | ❌ manual |
 
 **Verifier deps:** Install `pytest`, `pytest-json-ctrf`, and verifier-only
 packages in the Dockerfile with exact pins. Do not put dependency wheels under
@@ -393,7 +394,7 @@ Print summary table:
 | codebase_size match      | ✅     | YES        |
 | docker-compose flags     | N/A    | -          |
 | Dockerfile digest pin    | ✅     | -          |
-| Sanctioned base image    | ✅     | -          |
+| Canonical base image     | ✅     | -          |
 | tmux + asciinema         | ✅     | -          |
 | test.sh canonical form   | ✅     | YES        |
 | .dockerignore            | ✅     | YES        |
@@ -443,7 +444,7 @@ Top recurring CI failures from empirical data:
 1. **verifier deps** — missing pinned pytest/pytest-json-ctrf in Dockerfile or wheels under tests
 2. **codebase_size mismatch** — file count doesn't match declared size
 3. **FROM not digest-pinned** — missing `@sha256:` suffix
-4. **check_sanctioned_base_images** — final stage uses non-sanctioned base
+4. **check_sanctioned_base_images** — final stage uses a non-canonical base with no (or vague) justification; or uses a different digest/registry than the canonical entry for that language (e.g. bare `golang@sha256:…` instead of the canonical `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d…`)
 5. **ruff errors** — unused imports, ambiguous variable names
 6. **secret files** — .pem/.key/.crt in environment/
 7. **missing .dockerignore** — or incomplete exclusions
@@ -464,4 +465,4 @@ For Go tasks (detected by `languages = ["go"]` in task.toml):
 - Dockerfile should have `COPY repo/go.mod repo/go.sum /app/` before `COPY repo/ /app/`
 - `ENV PATH` or symlink for Go binary (see go-task-ci-checklist memory)
 - No `.github/workflows/` directories (may contain blacklisted DB references)
-- For Go tasks, prefer a `golang` builder stage and a sanctioned/exempt final runtime base. A single-stage `golang` final image should be treated as requiring exemption unless current CI/docs explicitly allow it.
+- For Go tasks, the canonical base IS the full `golang` image: `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac` (covers all Go 1.21–1.26 + alpine/bullseye/bookworm). A single-stage final image using THIS exact ref passes `check_sanctioned_base_images` — no exemption needed. A bare `golang@sha256:<other digest>` or a different registry/tag is **blocked**; replace the digest with the canonical one.

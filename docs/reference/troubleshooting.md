@@ -81,11 +81,11 @@ Then run commands manually to find the issue.
 
 ```dockerfile
 # Before
-FROM python:3.13-slim
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm
 RUN pip install numpy pandas
 
 # After
-FROM python:3.13-slim@sha256:<digest>
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 RUN pip install numpy==1.26.4 pandas==2.1.0
 ```
 

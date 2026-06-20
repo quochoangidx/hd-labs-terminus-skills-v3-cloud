@@ -65,8 +65,7 @@ Task clone, Harbor reports và submission ZIP đều để trong `workspace/`. �
 này khớp nhau nếu skill tồn tại ở nhiều nơi.
 
 `.claude/skills/` có thêm một vài helper legacy/Claude-only như
-`terminus-create-task`, `terminus-validate-task`, `task-zip-validator`,
-`sync-doc-and-skill`, và `find-task-prs`. Các helper này cũng đã được align với
+`task-zip-validator`, `sync-doc-and-skill`, và `find-task-prs`. Các helper này cũng đã được align với
 docs/client feedback mới, nhưng source chính cho workflow Codex là `skills/`.
 
 ---

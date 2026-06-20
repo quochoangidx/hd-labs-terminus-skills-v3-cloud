@@ -58,6 +58,15 @@ DOC_HINT_RE = re.compile(
 )
 LICENSE_RE = re.compile(r"(?i)(^|/)(LICENSE|COPYING|NOTICE)(\..*)?$")
 CANARY_RE = re.compile(r"CANARY-")
+# CI's commercial-DB blacklist; 'maxscale' (MariaDB MaxScale) is the
+# empirically-confirmed token (it substring-matches a decimal `MaxScale`
+# identifier and still blocks). The full CI term list is unknown — bare
+# oracle/mysql/postgres/mariadb/mssql/snowflake were observed NOT flagged.
+COMMERCIAL_DB_RE = re.compile(r"(?i)maxscale")
+BLACKLIST_SCAN_SUFFIXES = TEXT_SUFFIXES | {
+    ".go", ".c", ".cc", ".cpp", ".cxx", ".hpp", ".java", ".ex", ".exs",
+    ".sql", ".kt", ".scala", ".rb", ".pl",
+}
 RUBRIC_HEADER_RE = re.compile(r"^#\s*Rubric\s+(\d+)\s*$", re.IGNORECASE)
 RUBRIC_CRITERION_RE = re.compile(r"^Agent\b.*,\s*([+-])([1235])\s*$")
 RUBRIC_BAD_SCORE_RE = re.compile(r",\s*[+-]?4\s*$")
@@ -171,6 +180,11 @@ def parse_task_toml(view: TaskView, findings: list[Finding]) -> dict:
     if not view.exists("task.toml"):
         add(findings, "blocker", "layout", "Missing task.toml.", "task.toml", "terminus-regular-task-authoring")
         return {}
+    try:
+        return tomllib.loads(view.read_text("task.toml"))
+    except Exception as exc:
+        add(findings, "blocker", "metadata", f"task.toml does not parse: {exc}", "task.toml", "terminus-regular-task-authoring")
+        return {}
 
 
 def review_rubric_format(
@@ -234,11 +248,6 @@ def review_rubric_format(
             add(findings, "should_fix", "rubric-points", f"Non-milestone positive rubric total is {positive_total}; target range is 10-40.", path, "terminus-regular-task-authoring")
     if not is_milestone and len(negatives) < 3:
         add(findings, "should_fix", "rubric-negatives", "Non-milestone rubric should include at least three negative criteria.", path, "terminus-regular-task-authoring")
-    try:
-        return tomllib.loads(view.read_text("task.toml"))
-    except Exception as exc:
-        add(findings, "blocker", "metadata", f"task.toml does not parse: {exc}", "task.toml", "terminus-regular-task-authoring")
-        return {}
 
 
 def root_entries(files: Iterable[str]) -> set[str]:
@@ -247,6 +256,60 @@ def root_entries(files: Iterable[str]) -> set[str]:
         first = name.split("/", 1)[0]
         out.add(first if "/" not in name else first + "/")
     return out
+
+
+def run_ruff(view: TaskView, findings: list[Finding]) -> None:
+    """Mirror the platform CI ruff gate, which lints the WHOLE task tree
+    (default E4/E7/E9/F rules) INCLUDING upstream .py under environment/repo."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    py_files = [n for n in view.files() if n.endswith((".py", ".pyi"))]
+    if not py_files:
+        return
+    ruff = shutil.which("ruff")
+    if not ruff:
+        cand = os.path.expanduser("~/.local/share/uv/tools/harbor/bin/ruff")
+        ruff = cand if os.path.exists(cand) else None
+    if not ruff:
+        add(findings, "should_fix", "ruff-unavailable", f"Could not run ruff locally; {len(py_files)} .py file(s) (incl. environment/repo) are unverified. CI lints the whole task tree (default E4/E7/E9/F); ensure all .py are clean.", None, "upstream-repo-sanitizer")
+        return
+    if view.is_zip:
+        target = tempfile.mkdtemp(prefix="ruff_review_")
+        for rel in py_files:
+            dest = os.path.join(target, rel)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, "wb") as fh:
+                fh.write(view.read_bytes(rel))
+    else:
+        target = str(view.path)
+    try:
+        proc = subprocess.run([ruff, "check", "--output-format", "concise", target], capture_output=True, text=True, timeout=120)
+    except Exception as exc:
+        add(findings, "should_fix", "ruff-error", f"ruff could not run: {exc}", None, "upstream-repo-sanitizer")
+        return
+    out = proc.stdout + "\n" + proc.stderr
+    err_lines = [ln.strip() for ln in out.splitlines() if re.search(r":\d+:\d+:", ln)]
+    for ln in err_lines[:10]:
+        msg = ln.replace(target.rstrip("/") + "/", "")
+        add(findings, "blocker", "ruff", f"ruff: {msg}", None, "upstream-repo-sanitizer")
+    if len(err_lines) > 10:
+        add(findings, "blocker", "ruff", f"... and {len(err_lines) - 10} more ruff error(s).", None, "upstream-repo-sanitizer")
+
+
+def check_blacklisted_db(view: TaskView, findings: list[Finding]) -> None:
+    """CI blocks commercial-DB references; the confirmed token is 'maxscale'."""
+    hits = []
+    for name in view.files():
+        if Path(name).suffix.lower() not in BLACKLIST_SCAN_SUFFIXES:
+            continue
+        if COMMERCIAL_DB_RE.search(view.read_text(name, limit=200_000)):
+            hits.append(name)
+    for name in hits[:8]:
+        add(findings, "blocker", "blacklisted-db", "Contains 'maxscale' — CI blocks this as MariaDB MaxScale (often a false match on a decimal `MaxScale` identifier; rename to break the substring or remove the file if it is not build-required).", name, "upstream-repo-sanitizer")
+    if len(hits) > 8:
+        add(findings, "blocker", "blacklisted-db", f"... and {len(hits) - 8} more file(s) containing 'maxscale'.", None, "upstream-repo-sanitizer")
 
 
 def review(path: Path) -> dict:
@@ -287,6 +350,24 @@ def review(path: Path) -> dict:
 
         if any(n.startswith("environment/data/") for n in files):
             add(findings, "blocker", "environment-data", "environment/data is present; verify it is not an oversized prompt/spec extension.", "environment/data", "upstream-repo-sanitizer")
+
+        # codebase_size must match the environment/ file count; CI enforces this
+        # mechanically (excludes Dockerfile/docker-compose): 0-19 minimal,
+        # 20-199 small, 200+ large.
+        env_count = sum(
+            1 for n in files
+            if n.startswith("environment/")
+            and os.path.basename(n) != "Dockerfile"
+            and not os.path.basename(n).startswith("docker-compose")
+        )
+        expected_size = "minimal" if env_count <= 19 else "small" if env_count <= 199 else "large"
+        if codebase_size and codebase_size != expected_size:
+            add(findings, "blocker", "codebase-size", f"codebase_size is '{codebase_size}' but environment/ has {env_count} files (excluding Dockerfile/docker-compose), expected '{expected_size}'.", "task.toml", "task-clone")
+
+        # agent.timeout_sec must be in [1, 1800] (CI hard cap).
+        agent_timeout = (task.get("agent") or {}).get("timeout_sec") if isinstance(task, dict) else None
+        if isinstance(agent_timeout, (int, float)) and not (1 <= agent_timeout <= 1800):
+            add(findings, "blocker", "agent-timeout", f"agent.timeout_sec is {agent_timeout}; CI requires 1-1800 seconds.", "task.toml", "terminus-regular-task-authoring")
 
         if codebase_size in {"minimal", "small"}:
             for name in files:
@@ -337,6 +418,9 @@ def review(path: Path) -> dict:
         for name in files:
             if name.startswith("environment/") and view.file_size(name) > 50 * 1024 * 1024:
                 add(findings, "blocker", "large-file", "File under environment/ exceeds 50 MiB.", name, "upstream-repo-sanitizer")
+
+        run_ruff(view, findings)
+        check_blacklisted_db(view, findings)
 
         for name in files:
             if re.search(r"(^|/)(\.DS_Store|__MACOSX|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache)(/|$)", name) or name.endswith(".pyc") or "/._" in name or name.startswith("._"):

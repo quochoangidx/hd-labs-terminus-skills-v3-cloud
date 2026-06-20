@@ -12,7 +12,7 @@ Given a GitHub repo, surface ~10 merged PRs that would make good tb-quality task
 - **Repo**: `owner/repo` or full GitHub URL (required)
 - Optional: `--limit N` (how many merged PRs to fetch; default 50)
 - Optional: `--pick K` (how many to return; default 10)
-- Reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env` (default model: `gpt-5.2-codex`)
+- Reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env` (default model: `gpt-5.5-codex`)
 
 ## Steps
 

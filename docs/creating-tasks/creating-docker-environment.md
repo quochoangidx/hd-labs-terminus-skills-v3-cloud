@@ -9,7 +9,7 @@ For the canonical Dockerfile policy and detailed examples for each image check, 
 Your Dockerfile should be located at `environment/Dockerfile`:
 
 ```dockerfile
-FROM python:3.13-slim@sha256:<digest>
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 
 WORKDIR /app
 
@@ -97,7 +97,7 @@ Use digest-pinned base images in each pattern, same as in the [basic Dockerfile]
 ### Python Project
 
 ```dockerfile
-FROM python:3.13-slim@sha256:<digest>
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 WORKDIR /app
 
 COPY requirements.txt .
@@ -110,7 +110,7 @@ ENV PYTHONPATH=/app
 ### Node.js Project
 
 ```dockerfile
-FROM mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm@sha256:<digest>
+FROM public.ecr.aws/docker/library/node:22-bookworm-slim@sha256:<digest>
 WORKDIR /app
 
 COPY package*.json ./
@@ -122,7 +122,7 @@ COPY src/ /app/src/
 ### System Administration Task
 
 ```dockerfile
-FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04@sha256:<digest>
+FROM public.ecr.aws/docker/library/ubuntu:24.04@sha256:<digest>
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
@@ -134,7 +134,7 @@ RUN apt-get update \
 ### Git Repository Task
 
 ```dockerfile
-FROM python:3.13-slim@sha256:<digest>
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*

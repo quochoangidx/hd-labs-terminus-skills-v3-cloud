@@ -4,6 +4,7 @@
 
 | Date | Type | Change |
 |------|------|--------|
+| Jun 12, 2026 | 🔄 Update | Replaced the "Final runtime base image is sanctioned or exempt" criterion with the new canonical-list criterion: *"Base image(s) are canonical for the task's language, or the non-canonical justification is present and credible."* Canonical image → passes; non-canonical with a credible justification → passes (surfaced to reviewer); non-canonical with missing or vague justification → blocked. (High severity) |
 | Jun 3, 2026 | 🔄 Update | Updated the Rubrics formatting criterion: milestone tasks must use `# Rubric 1`, `# Rubric 2`, etc. headers to delineate each milestone's block. Non-milestone tasks use a flat `Agent …` list; a single `# Rubric 1` header is tolerated but not required, and `# Rubric 2+` is reserved for milestone tasks. |
 | May 27, 2026 | 🆕 New | Added "Task environment does not contain hidden instructions or hints" criterion under Instruction Prompt (High severity). Environment files must not smuggle in step-by-step walkthroughs or solution hints. |
 | May 27, 2026 | 🆕 New | Added "Environment spec/doc files are realistic and do not bypass instruction rules" criterion under Instruction Prompt (High severity). Spec/doc files must not contain step-by-step solution guides, must not be used to split instructions out of `instruction.md` to dodge length limits, and must read like realistic engineering documents. See [Prompt Styling](/portal/docs/understanding-tasks/prompt-styling). |
@@ -13,7 +14,7 @@
 | Apr 22, 2026 | 🔄 Update | Updated milestone files guidelines (must include milestone_X.md files if a milestone task. |
 | Apr 15, 2026 | 🆕 New | Added mandatory negative criteria requirement and standardized milestone point values for rubrics. |
 
-> Prefer the Google Docs format? View the checklist [here](https://docs.google.com/document/d/1cFfpOxuciUGSH8ApNVeOtf5B2Cdopi5s6QL30tDg8AE/edit?tab=t.0).
+> Prefer the Google Docs format? View the checklist [here](https://docs.google.com/document/d/1cFfpOxuciUGSH8ApNVeOtf5B2Cdopi5s6QL30tDg8AE/edit?tab=t.0)
 
 This doc outlines the critical criteria required for evaluating the quality of a Terminus Edition 2 task. This will highlight key areas that require human review and/or must pass for a task to be acceptable. This list is subject to change and should be updated as new criteria are discovered.
 
@@ -153,8 +154,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Final runtime base image is sanctioned or exempt</td>
-      <td>The final runtime stage should use a sanctioned or explicitly exempt base such as <code>python:*@sha256:&lt;digest&gt;</code>, <code>mcr.microsoft.com/...</code>, <code>ghcr.io/snorkel-ai/...</code>, or <code>scratch</code>. Custom final bases should be flagged for review.</td>
+      <td>Base image(s) are canonical for the task's language, or the non-canonical justification is present and credible</td>
+      <td>The final runtime stage should use a <a href="/portal/docs/creating-tasks/dockerfile-best-practices">canonical Terminal-Bench base image</a> from the published list when one matches the task's language. Non-canonical images are allowed only when a brief, credible justification is present (in the <code>Dockerfile</code> as a comment or in the task <code>README.md</code>) — for example, "the canonical Java image is JDK-only; this task needs full JRE + system libraries," or "targeting a runtime not yet in the canonical list."<br><br><strong>Outcome matrix:</strong><br>• Canonical image → ✅ passes<br>• Non-canonical + present, credible justification → ✅ passes; surface to reviewer for judgment<br>• Non-canonical + missing, vague, or boilerplate justification → ❌ blocked<br><br>Reject if the stated justification matches an existing canonical entry (i.e., a canonical image would have worked fine).</td>
       <td>High</td>
     </tr>
     <tr>

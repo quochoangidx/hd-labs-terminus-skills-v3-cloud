@@ -14,20 +14,20 @@ Prefer this sequence:
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
+harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
 ```
 
 Run real agents only when the user approves API usage:
 
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 Use the absolute binary path if PATH is stale:
 
 ```bash
-/Users/thuongthai/.local/bin/harbor --version
+"$HOME/.local/bin/harbor" --version
 ```
 
 Keep Harbor/agent outputs under the ignored workspace:
@@ -51,10 +51,36 @@ Examples:
 - If Docker says it cannot connect to the daemon, ask the user to start Docker Desktop or enable the Docker socket.
 - If CI says `environment/` is too large, reduce the build context before changing tests.
 - If CI says `FROM` lacks a digest, pin the base image digest.
-- If CI says the final runtime base is unsanctioned, move the final stage to an
-  approved base such as `python:*`, `mcr.microsoft.com/...`,
-  `ghcr.io/snorkel-ai/...`, or `scratch`, all digest-pinned, unless the task has
-  an explicit exemption.
+- If CI says the final runtime base is non-canonical (`check_sanctioned_base_images`),
+  switch the final stage to the **canonical Terminal-Bench base image** for the
+  task's language, using the EXACT digest-pinned ref (registry + tag + digest all
+  matter — a bare `golang@sha256:<other>` or a different registry is blocked even
+  though it's "official"). Canonical refs (all under `public.ecr.aws/docker/library/`):
+  - Python `python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`
+  - Node `node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383`
+  - Go `golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac`
+  - Rust `rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36`
+  - Java `eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14`
+  - GCC `gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c`
+  - Ruby `ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df`
+  - Maven `maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e`
+  - Debian `debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d`
+  - Ubuntu `ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932`
+
+  If the task genuinely needs a base off this list, keep it but add a brief,
+  credible justification (Dockerfile comment or task `README.md`); missing/vague
+  justification — or one that matches a canonical entry — is blocked. Builder
+  stages are unrestricted.
+- The `build toolchain in runtime image` (`make_build`/compile in a single
+  stage) finding is a NON-BLOCKING warning with an explicit carve-out for
+  debugging/rebuild tasks whose verifier re-runs the build. Keep the
+  single-stage Dockerfile; do NOT split to multi-stage (the agent needs the
+  toolchain at runtime to rebuild after editing).
+- A `pip install`/`npm install` without a lockfile next to it is a NON-BLOCKING
+  warning; inline `==` pins are accepted. Add a lockfile only to silence it.
+- If CI `ruff` fails on an upstream `.py` under `environment/repo`, the platform
+  lints the whole task dir; delete non-build-required dev scripts or fix
+  build-required ones in place (see `upstream-repo-sanitizer`).
 - If `test.sh` reward block is rejected, use the current canonical reward
   ending: run pytest, immediately capture `rc=$?` or branch on `$?`, write
   `/logs/verifier/reward.txt`, and do not add a trailing `exit` after the final
@@ -63,6 +89,17 @@ Examples:
 - If LLMaJ says tests assert behavior not in instructions, update `instruction.md` or remove the test requirement.
 - If review flags a missing trailing `exit` in `tests/test.sh`, treat that as stale feedback; the current docs say the canonical reward block ends the script.
 - If review flags hidden instructions in environment docs, remove procedural hints from README/spec/config/comments/scripts and keep all task goals in `instruction.md`.
+
+- If oracle suddenly fails with a `[build failed] undefined: <symbol>` from the
+  verifier AND `agent/oracle.txt` is empty, suspect a STALE cached Docker image:
+  Harbor does not reliably rebuild when `environment/repo` or `solution/fix.patch`
+  change on disk. Re-run with `harbor run --force-build -a oracle -p <task>` (and
+  for nop). Do not chase the "undefined symbol" as a patch/code bug until you
+  have force-built. To get ground truth without Harbor, build the image and run
+  the real flow in one container: `docker build -t dbg environment/ && docker run
+  --rm -v "$PWD/<task>/solution:/solution:ro" -v "$PWD/<task>/tests:/tests:ro"
+  dbg bash -c 'set -e; bash /solution/solve.sh; bash /tests/test.sh; cat
+  /logs/verifier/reward.txt'`.
 
 Always quote the shortest useful error excerpt in the handoff.
 
@@ -117,6 +154,21 @@ LLMaJ:
 - make prompt/tests symmetric.
 - remove implementation hints from prompt.
 - add docstrings and behavioral assertions.
+
+Real agents / Agent Timeout Gate:
+
+- `Agent Timeout Gate: ❌ N/10 real-agent runs timed out (threshold: 5)` is a
+  hard blocker, not a difficulty signal. It means the environment is too heavy:
+  agents spend the 1800s budget on cold rebuilds, navigating an un-slimmed repo,
+  or a slow test suite, and never converge.
+- Pre-check WITHOUT spending agent budget: build once, then `time harbor run -a
+  oracle -p <task-folder>` against the cached image. The cached-image oracle run
+  approximates one agent edit→build→test cycle; if it is a large fraction of
+  1800s, agents will time out.
+- Fix the environment, do not just raise the timeout (capped at 1800): warm the
+  build in the Dockerfile so rebuilds are incremental, keep the build/dependency
+  cache in the final image, slim the repo, and shrink the verifier. See the
+  `task-clone` "Agent Timeout Gate" section.
 
 ## Reporting
 

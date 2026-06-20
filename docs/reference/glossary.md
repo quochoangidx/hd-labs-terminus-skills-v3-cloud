@@ -34,7 +34,7 @@ Automated systems that run tests and checks when code is submitted. In TerminalB
 Anthropic's agentic coding system that uses Claude Sonnet 4.5. One of the models used to evaluate task difficulty.
 
 ### Codex
-OpenAI's code-focused agent. Used with GPT-5 to evaluate task difficulty.
+OpenAI's code-focused agent. Used with GPT-5.5 to evaluate task difficulty.
 
 ---
 
@@ -57,7 +57,7 @@ Configuration file that defines how containers, volumes, and networks are orches
 ## F
 
 ### Frontier Model
-The most capable AI models available at any given time. Currently includes GPT-5.2 and Claude Opus 4.6.
+The most capable AI models available at any given time. Currently includes GPT-5.5 and Claude Opus 4.8.
 
 ---
 
@@ -73,7 +73,7 @@ The verified correct solution for a task. In TerminalBench, this is the oracle s
 ## L
 
 ### LLMaJ (LLM-as-Judge)
-Using a language model (GPT-5) to evaluate task quality. LLMaJ checks assess things like test coverage, clarity, and anti-cheating measures.
+Using a language model (GPT-5.5) to evaluate task quality. LLMaJ checks assess things like test coverage, clarity, and anti-cheating measures.
 
 ---
 

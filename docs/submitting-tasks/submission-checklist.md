@@ -21,7 +21,7 @@ Use this checklist before every submission to ensure your task is complete and w
 
 **Always required:**
 - [ ] `task.toml` — Complete configuration with all required sections ([requirements](/portal/docs/understanding-tasks/task-requirements#tasktoml-requirements))
-- [ ] `environment/Dockerfile` — Builds successfully; language dependencies pinned, every `FROM` image digest-pinned, final runtime base sanctioned or exempt, and `environment/` within size limits ([requirements](/portal/docs/understanding-tasks/task-requirements#dependency-pinning))
+- [ ] `environment/Dockerfile` — Builds successfully; language dependencies pinned, every `FROM` image digest-pinned, final runtime base canonical (or non-canonical with a justification), and `environment/` within size limits ([requirements](/portal/docs/understanding-tasks/task-requirements#dependency-pinning))
 
 **Non-milestone tasks** (`number_of_milestones = 0`):
 - [ ] `instruction.md` — Clear, human-written instructions ([requirements](/portal/docs/understanding-tasks/task-requirements#instructionmd-requirements))
@@ -70,7 +70,7 @@ harbor run -a oracle -p <task-folder>
 ### CI Checks
 
 ```bash
-harbor tasks check <task-folder> -m openai/@openai/gpt-5.2
+harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
 ```
 
 - [ ] pinned_dependencies ✓
@@ -114,20 +114,20 @@ Warnings should also be fixed unless an explicit reviewer-approved exception app
 
 ## Real Agent Testing
 
-### Run Against GPT-5.2
+### Run Against GPT-5.5
 
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 ```
 
 - [ ] Run 1: PASS / FAIL
 - [ ] Run 2: PASS / FAIL
 - [ ] Run 3: PASS / FAIL
 
-### Run Against Claude Opus 4.6
+### Run Against Claude Opus 4.8
 
 ```bash
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 - [ ] Run 1: PASS / FAIL

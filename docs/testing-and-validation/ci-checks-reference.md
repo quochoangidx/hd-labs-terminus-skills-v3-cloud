@@ -5,14 +5,14 @@ All submissions must pass the automated Agent checks. This reference explains wh
 ## Running Agents Locally
 
 ```bash
-# Using GPT-5.2 (recommended - matches CI)
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+# Using GPT-5.5 (recommended - matches CI)
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 ```
 
 For a pre-submission static pass, run:
 
 ```bash
-harbor tasks check <task-folder> -m openai/@openai/gpt-5.2
+harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
 ```
 
 ## Structural Checks
@@ -78,10 +78,10 @@ Package-manager lockfiles are also acceptable where appropriate, such as `packag
 
 ```dockerfile
 # Bad
-FROM python:3.13-slim
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm
 
 # Good
-FROM python:3.13-slim@sha256:<digest>
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 ```
 
 Apply the same discipline to service images in `docker-compose.yaml` when a service uses `image:` instead of `build:`.
@@ -90,23 +90,19 @@ Apply the same discipline to service images in `docker-compose.yaml` when a serv
 
 **Severity:** Blocking by default.
 
-**What it checks:** The final runtime stage uses a sanctioned or exempt base image. Builder stages may use task-appropriate toolchain images, but the final stage should land on an approved runtime base unless the task has an explicit exemption.
+**What it checks:** The final runtime stage uses a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices). Builder stages may use task-appropriate toolchain images, but the final stage must land on a canonical base — or a non-canonical base accompanied by a brief, credible justification in the Dockerfile or task `README.md`.
 
-**Common sanctioned or exempt final bases include:**
-- `python:*@sha256:<digest>`
-- `mcr.microsoft.com/...@sha256:<digest>`
-- `ghcr.io/snorkel-ai/...@sha256:<digest>`
-- `scratch`
+See the [canonical base image list](/portal/docs/creating-tasks/dockerfile-best-practices) for the full set (Python, Node, Go, Rust, Java, Ruby, GCC, Maven, Debian, Ubuntu).
 
 ```dockerfile
-# Bad: final runtime stage is not sanctioned
+# Bad: final runtime stage is not canonical (and no justification provided)
 FROM hexpm/elixir:1.16@sha256:<digest>
 
-# Good: final runtime stage is sanctioned
-FROM python:3.13-slim@sha256:<digest>
+# Good: final runtime stage is a canonical base
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 ```
 
-If you need a custom final runtime base, flag it for review before submission.
+If you need a non-canonical final runtime base, include a brief justification and flag it for review before submission.
 
 ### check_reproducible_builds
 
@@ -225,10 +221,10 @@ RUN apt-get update && apt-get install -y build-essential
 RUN make
 
 # Good: compile in a builder, copy artifact into slim runtime
-FROM rust:1.86-bookworm@sha256:<digest> AS builder
+FROM public.ecr.aws/docker/library/rust:1.85-slim@sha256:<digest> AS builder
 RUN cargo build --release --locked
 
-FROM mcr.microsoft.com/devcontainers/base:bookworm@sha256:<digest>
+FROM public.ecr.aws/docker/library/debian:bookworm-slim@sha256:<digest>
 COPY --from=builder /build/target/release/tool /usr/local/bin/tool
 ```
 
@@ -368,7 +364,7 @@ ruff check --fix <task-folder>
 | Check | Default Result | What It Validates | Common Fix |
 |-------|----------------|-------------------|------------|
 | `check_pinned_images` | Blocks | Every `FROM` image has `@sha256` | Add digest pins |
-| `check_sanctioned_base_images` | Blocks | Final runtime base is sanctioned or exempt | Use an approved final base or request exemption |
+| `check_sanctioned_base_images` | Blocks | Final runtime base is canonical (or non-canonical with a justification) | Use a [canonical base](/portal/docs/creating-tasks/dockerfile-best-practices), or add a brief justification |
 | `check_build_context_size` | Blocks | `environment/` <= 100 MiB total and <= 50 MiB per file | Remove large files or mount/fetch optional data |
 | `pinned_dependencies` | Blocks | Language deps have exact versions | Add exact pins or lockfiles |
 | `tests_or_solution_in_image` | Blocks | No tests/solution in Docker image | Remove forbidden `COPY` lines |

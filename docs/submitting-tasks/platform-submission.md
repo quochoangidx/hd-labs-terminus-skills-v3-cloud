@@ -108,7 +108,7 @@ Edit the `environment/Dockerfile` to set up your task environment:
 - Add any dependencies required by your task
 - Pin all package versions for reproducibility
 - Digest-pin every `FROM` image with `@sha256:<digest>`
-- Use a sanctioned or exempt final runtime base image
+- For the final runtime stage, use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices) when one matches your task's language. Non-canonical images are allowed with a brief written justification in the Dockerfile or task `README.md`; missing justifications are blocked.
 - Keep `environment/` at or below 100 MiB total and no file over 50 MiB
 - Add `.dockerignore` for non-trivial environments
 - Never copy `solution/` or `tests/` folders in the Dockerfile
@@ -209,16 +209,16 @@ export OPENAI_API_KEY=<your-portkey-api-key>
 export OPENAI_BASE_URL=https://api.portkey.ai/v1
 ```
 
-2. Run with GPT-5:
+2. Run with GPT-5.5:
 
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 ```
 
-3. Run with Claude Opus 4.6:
+3. Run with Claude Opus 4.8:
 
 ```bash
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 Run each agent 2-3 times to gauge pass rate. Your task should have < 80% pass rate to be accepted.
@@ -227,14 +227,14 @@ Run each agent 2-3 times to gauge pass rate. Your task should have < 80% pass ra
 
 Run LLMaJ checks before submitting:
 
-**GPT-5:**
+**GPT-5.5:**
 ```bash
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 ```
 
-**Claude Opus 4.6:**
+**Claude Opus 4.8:**
 ```bash
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 All checks should pass before submission.
@@ -255,7 +255,7 @@ Run final checks:
 harbor run -a oracle -p <task-folder>
 
 # LLMaJ checks
-harbor tasks check -m openai/@openai/gpt-5.2 harbor_tasks/<task_name>
+harbor tasks check -m openai/@openai/gpt-5.5 harbor_tasks/<task_name>
 ```
 
 ## Step 12: Create ZIP File

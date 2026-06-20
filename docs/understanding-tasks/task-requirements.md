@@ -200,17 +200,17 @@ Canary strings are no longer required in Terminus Edition 2.
 
 **Application packages** (`pip`, `npm`, etc.) **must** have exact version pins. This is enforced by CI.
 
-**Base image:** Use an immutable digest on every `FROM` line (and any `image:` lines in `docker-compose.yaml`). Tags are useful for readability, but the digest is the source of truth. The final runtime stage must use a sanctioned or exempt base image, such as `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`, `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`.
+**Base image:** Use an immutable digest on every `FROM` line (and any `image:` lines in `docker-compose.yaml`). Tags are useful for readability, but the digest is the source of truth. The final runtime stage must use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices), or a non-canonical image with a brief written justification.
 
 ```dockerfile
-# Good - base image digest and pip packages pinned
-FROM python:3.13-slim@sha256:<digest>
+# Good - canonical base image, digest-pinned, pip packages pinned
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:<digest>
 RUN pip install pandas==2.0.0 numpy==1.24.0
 ```
 
 ```dockerfile
 # Bad - tag-only base image and unpinned pip
-FROM python:3.13-slim
+FROM public.ecr.aws/docker/library/python:3.13-slim-bookworm
 RUN pip install pandas numpy
 ```
 
@@ -243,11 +243,11 @@ Tasks where the worst model scores **above 80%** will not be accepted. See the [
 Run your task against real agents (minimum 2-3 times each):
 
 ```bash
-# GPT-5.2
-harbor run -a terminus-2 -m openai/@openai/gpt-5.2 -p <task-folder>
+# GPT-5.5
+stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 
-# Claude Opus 4.6
-harbor run -a terminus-2 -m anthropic/@anthropic/claude-opus-4-6 -p <task-folder>
+# Claude Opus 4.8
+stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
 ```
 
 ---
@@ -290,7 +290,7 @@ Your task must pass all CI and LLMaJ checks:
 | Check | What It Validates |
 |-------|-------------------|
 | `check_pinned_images` | Every `FROM` image is digest-pinned |
-| `check_sanctioned_base_images` | Final runtime base image is sanctioned or exempt |
+| `check_sanctioned_base_images` | Final runtime base is canonical (or non-canonical with a justification) |
 | `check_build_context_size` | `environment/` stays within context-size limits |
 | `pinned_dependencies` | All packages have version pins |
 | `typos` | No spelling errors in code |

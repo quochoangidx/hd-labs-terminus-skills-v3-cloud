@@ -212,7 +212,7 @@ difficulty = "hard"
 category = "<artifact.category or debugging for upstream bugfix>"
 subcategories = ["<artifact subcategories, or tool_specific for upstream bugfix>"]
 number_of_milestones = 0
-codebase_size = "small"
+codebase_size = "<minimal|small|large>"   # compute from env file count; CI enforces this, do NOT default to small
 languages = ["<main implementation language>"]
 tags = ["<3-6 useful tags>"]
 expert_time_estimate_min = 60
@@ -222,7 +222,7 @@ junior_time_estimate_min = 180
 timeout_sec = 600.0
 
 [agent]
-timeout_sec = 1800.0
+timeout_sec = 1800.0   # CI hard cap: agent.timeout_sec must be 1-1800 (do not raise above 1800 for heavy builds)
 
 [environment]
 allow_internet = false
@@ -260,6 +260,14 @@ Python tasks must be hard. `codebase_size` may be `minimal`, `small`, or
 `large`; choose the honest size from useful files under `environment/` and aim
 for a portfolio mix instead of forcing every task to one size.
 
+**CI enforces `codebase_size` mechanically** from the file count under
+`environment/` EXCLUDING `Dockerfile`/`docker-compose*`: `minimal` = 0-19,
+`small` = 20-199, `large` = 200+. A mismatch is a blocking error
+(`run_static_checks.py`). Compute it, never default:
+```bash
+find <task>/environment -type f ! -name Dockerfile ! -name "docker-compose*" | wc -l
+```
+
 `languages` should list the main language(s) the agent works in or the oracle
 solution changes. Do not include Python solely because the verifier is written
 in pytest.
@@ -282,6 +290,33 @@ Write like a real engineer describing the requested observable work:
 - If tests require a secondary implementation that is not obvious from the
   public behavior, name the relevant module or file path without giving the
   exact patch. This is allowed instruction sufficiency, not a solution hint.
+
+**Do not narrate the internal mechanism or root cause (the #1 client reject,
+June 2026 trial feedback).** The most common rejection is a prompt that "gives
+away the solution": it explains how the code is wrong internally, or which code
+path is already correct, so the agent only has to read the prompt rather than
+reason about the code. Describe the OBSERVABLE symptom a real user would hit and
+the DESIRED outcome; let the agent find the cause and the fix.
+
+- Cut "Right now the parser does X internally" sentences. State the observable
+  instead: not "the parser ignores the algorithm name and trusts the embedded
+  curve" but "a key labeled `nistp384` that actually carries a `nistp256` curve
+  is accepted."
+- Cut "the other path already handles it" tells (e.g. "the ordinary callback
+  enforces this but the new one does not"). They point the agent at where to
+  copy the fix from. State only that the behavior is missing where the user
+  observes it.
+- Cut fix-shaped requirements that restate the implementation (e.g. "reject a
+  line whose host field begins with `@`"). State the requirement behaviorally
+  ("reject a line with more than one marker or an unknown marker").
+- Litmus test: if a sentence would be strange for a user who did NOT know the
+  fix to write, it is a hint. If removing a sentence makes the task unsolvable,
+  it was probably a hint, not a requirement.
+- KEEP test-asserted contracts that are genuine spec, even when specific:
+  thresholds (`> 8192 bits`, `2048` rounds, `160`-bit), the public API the tests
+  drive, named exempt contexts, and every preservation/edge case a test checks.
+  These satisfy instruction/test symmetry. The goal is to remove root-cause and
+  implementation narration, not the behavioral contract.
 
 Prompt sanitizer must remove:
 
@@ -322,13 +357,64 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 
 `environment/Dockerfile` must:
 
-- use `FROM ...@sha256:<digest>`
-- use a sanctioned or explicitly exempt final runtime base image, such as
-  `python:*@sha256:<digest>`, `mcr.microsoft.com/...@sha256:<digest>`,
-  `ghcr.io/snorkel-ai/...@sha256:<digest>`, or `scratch`
+- use `FROM ...@sha256:<digest>` on every stage
+- use a **canonical Terminal-Bench base image** for the final runtime stage when
+  one matches the task's language (exact digest-pinned refs):
+  - Python: `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`
+  - Node: `public.ecr.aws/docker/library/node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383`
+  - Go: `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac`
+  - Rust: `public.ecr.aws/docker/library/rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36`
+  - Java (JDK): `public.ecr.aws/docker/library/eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14`
+  - C/C++ (GCC): `public.ecr.aws/docker/library/gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c`
+  - Ruby: `public.ecr.aws/docker/library/ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df`
+  - Maven: `public.ecr.aws/docker/library/maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e`
+  - Debian: `public.ecr.aws/docker/library/debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d`
+  - Ubuntu: `public.ecr.aws/docker/library/ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932`
+
+  A non-canonical base is allowed ONLY with a brief, credible justification (as a
+  `Dockerfile` comment or in the task `README.md`) — e.g. a runtime the list
+  doesn't cover. Missing/vague/boilerplate justification, or one that matches an
+  existing canonical entry, is **blocked** by `check_sanctioned_base_images`.
 - install `tmux`, `asciinema`, `bash`, and usually `util-linux`
 - include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
+- **initialize a git repo in the task workdir** (after the final source `COPY`)
+  so the agent's edit tooling works. Many agents apply edits via `git apply` and
+  self-check with `git diff`; if the cloned repo's `.git` was stripped (and
+  `.dockerignore` excludes `.git` from the build context anyway), `/app` is NOT
+  a git repo at runtime, `git apply` silently fails, `git diff` shows nothing,
+  and agents that understood the fix perfectly still score 0 (confirmed June
+  2026: a grpc-go task got 0/3 agent trials purely because patches never landed,
+  flagged "Some tests not passed by any agent run"). Add after the source COPY
+  and build:
+  ```dockerfile
+  RUN git init -q \
+      && git config user.email task@example.com \
+      && git config user.name task \
+      && git add -A \
+      && git commit -q -m "initial task state"
+  ```
+  This runs inside the image (not the build context), so it does not trip the
+  `check_dockerfile_hygiene` `.git`-in-context warning. Oracle/nop are unaffected
+  (oracle applies `fix.patch` with `patch -p1`, not git).
 - install build tools only when the agent must rebuild source
+- **warm the build during image build whenever the agent must rebuild** (any
+  compiled or heavy-build language — Rust, Go, C/C++, TypeScript, Java, Scala).
+  Run one full build of the *unmodified* repo in the Dockerfile so every
+  dependency is fetched and compiled and the build cache is populated; the
+  agent's post-edit rebuild is then incremental (seconds), not cold (minutes).
+  e.g. `RUN cargo build --tests`; `RUN go build ./... && go vet ./...`;
+  `RUN npm ci && npm run build`; configure + `make` for autotools/CMake. A cold
+  per-edit rebuild is the #1 cause of the Agent Timeout Gate (see that section).
+- **put the language toolchain on the agent's LOGIN-shell PATH by symlinking it
+  into `/usr/local/bin`** — the agent runs in a login shell that resets PATH to
+  the default and DROPS Docker `ENV PATH=...` additions, so a toolchain under
+  `/usr/local/cargo/bin` (Rust), `/usr/local/go/bin` (Go), or `${JAVA_HOME}/bin`
+  (Java) is invisible to the agent and causes wasted steps / timeouts even
+  though oracle/nop pass (they run as non-login subprocesses inheriting the
+  image ENV). e.g. `RUN ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo`
+  (+ `rustc`); `ln -sf /usr/local/go/bin/go /usr/local/bin/go`;
+  `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac`. `node`/`gcc` images
+  already place tools in `/usr/local/bin`. Sanity: `bash -lc 'which <tool>'`.
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
@@ -342,7 +428,12 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - extract copied archives during build and remove the archive in the same stage
 - avoid broad recursive `chmod -R` or `chown -R`; use targeted `COPY` metadata
 - keep package-manager caches, compiler caches, and unused build outputs out of
-  the final image
+  the final image — **exception:** when the agent must rebuild, KEEP the
+  warmed build/dependency cache (`target/`, `GOCACHE`, `node_modules`,
+  `~/.cargo/registry`, `~/.cache`, etc.) so the agent's rebuild stays
+  incremental. Solvability under the timeout gate beats image slimness here, and
+  `check_no_build_tools_in_final_image` already permits the toolchain for
+  rebuild-required tasks. Strip only caches the agent will never reuse.
 
 Do not add root-level `pyproject.toml` as a submission artifact. If local ruff
 or editor tooling needs to exclude `environment/repo`, keep that configuration
@@ -358,6 +449,55 @@ find <task>/environment -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -na
 
 Do not leave AI-framework scaffolding filenames such as `CLAUDE.md`,
 `skills.md`, or similar files in `environment/`.
+
+## Agent Timeout Gate
+
+The platform runs ~10 real-agent trials and **blocks the task (`❌`) when more
+than the threshold (~5) of them hit `agent.timeout_sec` without finishing** —
+e.g. `Agent Timeout Gate: ❌ 10/10 real-agent runs timed out (threshold: 5)`.
+This is a hard blocker, **not** a difficulty signal: a task where most agents
+never even produce a fix is treated as a broken/too-heavy environment, not as
+legitimately Hard. Hard must come from wrong or partial fixes, not from agents
+starving on tooling.
+
+Root cause is almost always that the agent burns its 30-minute budget on **cold
+tooling** instead of reasoning: rebuilding a large project from scratch on every
+edit, navigating an un-slimmed tree, or waiting on a slow test suite. It then
+gets only one or two edit→build→test cycles and never converges. Prevent it
+at build time:
+
+- **Warm the build in the Dockerfile** so the agent's post-edit rebuild is
+  incremental, not cold (see the Docker Rules bullet above). This is the single
+  biggest lever.
+- **Keep the warmed build/dependency cache in the final image** (the explicit
+  exception in Docker Rules). A warm Dockerfile build is wasted if the cache is
+  stripped before runtime.
+- **Budget the edit→build→test cycle.** A solving agent needs ~8–12 iterations
+  inside 1800s. Time one *warm* cycle locally (edit one source file, rebuild,
+  run the focused test). If a single warm cycle still exceeds ~2–3 min, the task
+  will trip the gate — slim further, shrink the test, or reject the candidate.
+- **Slim the repo** so navigation and `grep`/`rg` are cheap (see
+  `upstream-repo-sanitizer`); a multi-thousand-file tree wastes agent steps
+  before any reasoning starts. Keep `codebase_size` honest.
+- **Keep the verifier fast** — focused reproducer tests with short
+  per-subprocess timeouts, never a full upstream suite
+  (`terminus-hard-python-verifier`).
+- Set `agent.timeout_sec = 1800` (the cap) for any build-involving task; the
+  default already is. You cannot buy more than 30 min, so the fix is a faster
+  cycle, not a bigger timeout.
+
+Pre-check before spending real-agent budget — time the warm oracle cycle:
+
+```bash
+harbor run --force-build -a oracle -p <task-folder>   # build the image once
+time harbor run -a oracle -p <task-folder>            # reuse cached image: this ~= the agent's per-cycle cost
+```
+
+The oracle does *less* than a solving agent (it applies a known patch and runs
+the focused test — no exploration). If the cached-image oracle run is already a
+large fraction of 1800s, real agents will certainly time out. Treat a slow
+oracle as an early timeout-gate warning and warm/slim the build before running
+agents.
 
 ## Oracle Pattern
 
@@ -380,6 +520,21 @@ target behavior, not only the concrete verifier fixtures.
 
 `tests/test_outputs.py` should create temporary reproducer projects or inputs and run the target externally.
 
+**Verifier tests MUST be supplied by the verifier at verify time, NEVER staged
+inside `environment/repo`.** A compiled-language reproducer (a `*_test.go`,
+`.rs`, `.exs`, `.java`, etc.) must either be embedded as a string in
+`test_outputs.py` and written into `/app` at verify, or shipped under `tests/`
+and copied into `/app` at verify (overwriting whatever is there). If the test
+file lives in `environment/repo`, the agent can edit or delete it and the
+`/app` working tree the agent gets is non-deterministic across trial instances
+-- confirmed 2026-06-14: an h2 task staged its `concurrency.rs` in
+`environment/repo` and ran it directly; some agents altered it, so the
+verifier found the tests present in some instances and absent in others, which
+the reviewer flagged as **Task Instruction Sufficiency: FAIL** (1/9 trials
+passed). The agent fixes only the source; the verifier brings its own tests, so
+the prompt need not name any test file or function -- name only a new public
+API symbol the test must call (see Instruction Style).
+
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
 Verifier matrix for upstream bugfixes must include:
@@ -388,6 +543,18 @@ Verifier matrix for upstream bugfixes must include:
 - boundary or ordering edge case
 - normal behavior preservation
 - anti-shortcut check
+- **one discriminating test per independent criterion the instruction lists.**
+  If the prompt names N separate reject/accept conditions (e.g. reject modulus
+  >8192 AND prime >4096 AND exponent malformed), a verifier covering only one
+  lets an agent add a single check and pass — reviewers flag this Critical. Each
+  test must DISCRIMINATE: the input must be ACCEPTED by the buggy code and
+  REJECTED only by the fix. Watch for a downstream validator (e.g. `rsa.Validate`
+  / `pk.Validate()`) that already rejects malformed inputs on the buggy build —
+  that makes the test pass on both nop and oracle (a dud). Isolate each criterion
+  with an OTHERWISE-VALID input that violates only the target bound (e.g. a real
+  RSA key with one prime >4096 but modulus ≤8192; a valid key with a large odd
+  exponent). Some criteria a validator already enforces (even exponent, e<3)
+  cannot be made discriminating — do not add them as duds.
 - no internal crash/traceback when the expected behavior is recoverable
 - output format/schema check when relevant
 
@@ -417,6 +584,17 @@ Anti-shortcut tactics:
 - include one unseen variant not present in the upstream PR
 - avoid exact source-code assertions
 - parse outputs semantically rather than matching full files
+- never require an EXACT error-message string the instruction does not disclose.
+  If discrimination needs distinguishing the fix's rejection from the buggy
+  build's rejection (both error), prefer a pass/fail behavioral test (an input
+  the buggy build accepts and the fix rejects); else match a loose token from
+  the instruction's own vocabulary (e.g. instruction says "round count" → match
+  case-insensitive `round`), which accepts any reasonable agent phrasing yet
+  still differs from the buggy build's unrelated error. Matching the reference
+  solution's exact wording fails functionally-correct agents who phrase the
+  message differently (Task Instruction Sufficiency FAIL). Probe the buggy
+  error first to confirm the loose token is absent there, and verify a variant
+  wording still passes.
 
 The oracle patch must pass the direct regression and at least one variant, proving it is not verifier-targeted hardcoding.
 
@@ -518,6 +696,15 @@ Before packaging or platform upload:
   from environment files, comments, README, configs, scripts, TODOs, `spec.md`,
   and architecture docs
 - verify the task root has no `pyproject.toml`
+- set `codebase_size` to match the actual `environment/` file count (excluding
+  `Dockerfile`/`docker-compose*`): 0-19 `minimal`, 20-199 `small`, 200+ `large`.
+  CI rejects a mismatch.
+- run `ruff check <task-folder>` over the WHOLE task dir. Platform CI lints
+  `environment/repo` too (default E4/E7/E9/F rules), so a non-`ruff`-clean
+  upstream dev/codegen `.py` fails the build. Remove non-build-required upstream
+  `.py` that has lint errors; fix build-required generators in place
+  (output-preserving, e.g. move an `E402` import to the top) and re-run oracle.
+  Also clear `F401`/`E741` in `tests/test_outputs.py`.
 - verify rubrics do not reference tests, verifier logic, `test.sh`,
   `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, or pytest
   results
@@ -526,7 +713,8 @@ Before packaging or platform upload:
 - verify `tests/test.sh` does not run runtime setup, `apt-get`, `pip install`,
   `npm install`, or network downloads
 - verify Dockerfile does not `COPY tests/`, `COPY solution/`, or create `/tests`, `/solution`, `/oracle`, `/logs/verifier`
-- verify Dockerfile uses a sanctioned/exempt final runtime base, has no
+- verify Dockerfile uses a canonical final runtime base (or non-canonical with a
+  credible justification), has no
   heredoc-generated source files, no tag-only `FROM` image, no unverified
   downloads, no stale copied archives, and no broad recursive permission rewrites
 - verify `environment/ <= 100 MiB` and no file under `environment/` exceeds `50 MiB`
@@ -556,7 +744,7 @@ Run what is available:
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.2 <task-folder>
+harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
 ```
 
 If Docker is not running, still run static checks:
@@ -577,6 +765,7 @@ Difficulty gate:
 - If aggregate real-agent pass rate is `>= 80%`, do not submit as Hard; re-mine or redesign.
 - If the oracle patch is `<= 10` meaningful LOC in one obvious file, require empirical agent failures before keeping it.
 - Timeouts count as weak evidence only; a good Hard task should produce wrong/partial fixes, not mostly environment/tooling timeouts.
+- A high timeout rate is not Hard — it is a blocker. If `> ~5/10` real-agent runs time out, the platform fails the **Agent Timeout Gate** (`❌`); fix the environment per the Agent Timeout Gate section (warm build, keep the cache, slim, fast verifier), do not submit hoping the timeouts read as difficulty.
 
 ## Final Packaging
 
