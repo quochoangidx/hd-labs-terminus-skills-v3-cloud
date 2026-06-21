@@ -96,6 +96,53 @@ Early-stop rules:
 - If the first 2 runs fail semantically in different fair ways, the task is
   already promising; a third run is optional when budget matters.
 
+## Beating Opus 4.8 is a ~1/5 lottery — calibrate expectations (2026-06-21)
+
+Hard empirical finding (7 from-scratch spec tasks built in one session, only 2
+reached MEDIUM): **Opus 4.8 solves almost any well-specified spec task 3/3.** It
+knows standard algorithms/specs cold AND it differential-tests its output against
+any reachable reference. Do NOT promise a pipeline of MEDIUM+ tasks; treat each
+as a gamble and tell the user so up front.
+
+What does NOT make Opus fail (all came back 3/3): a clean "implement standard X"
+task, even with the formula withheld, the reference library absent from the image,
+a niche language, or a genuinely tricky CENTRAL behavior (push-then-move-optimal
+Sokoban, GNU `chmod` symbolic modes, NumPy quantile methods, RFC 5952 IPv6, DST
+gap/fold). Making the hard thing the HEADLINE backfires: the solver focuses on it,
+fuzzes it, and nails it.
+
+What DID work (the only 2 wins, both the same lever): a **secondary sub-rule blind
+spot inside a LARGE multi-rule spec**, in an input category the solver under-fuzzes
+even with the reference in hand. Both wins were gitignore-family path matching
+where the discriminating fixture was `<dir>/**` + a query of the directory itself
+(trailing-slash / `type=dir`) — random fuzzers under-generate directory-typed
+queries at a `/**` parent, so ~1/3 of solvers miss it. Recipe: large spec, bury
+the discriminator in a non-headline rule, do NOT spell out its subtle implication,
+and put fixtures in the under-fuzzed shape.
+
+## This probe is OVER-GENEROUS — make it fair, and know its limit
+
+The blind solver runs on the host with full Docker + network, so it can
+differential-test against ANY reference the platform agent could NOT: tools baked
+in the task image (`git`, `chmod`, `openssl`) and — crucially — host-stdlib
+references (`python3 -c "import ipaddress/csv/datetime/...; ..."`). The platform
+agent is sandboxed (no internet, task-image only). So a 3/3 here is a decisive
+"too easy", but a probe pass can be falsely easy for tasks whose reference is
+reachable.
+
+- Prefer a **fair probe** for compiled/non-Python tasks: give the solver a build
+  command that runs INSIDE the task's own image with `--network none`
+  (`docker run --rm -i --network none -v <repo>:/w:ro -w /w <task base image> bash -lc '<build && run>'`)
+  and state "the environment is fully offline; this command is the only way to
+  build/run; do not install or fetch anything." This denies references not in the
+  image — but it does NOT stop a determined solver from running host `python3`
+  against a stdlib reference, so **design reference-reachability away at mining
+  time** (don't pick a behavior whose ground truth is a host stdlib).
+- Apply the solver's diff by **copying the changed source file(s)** into the
+  `verify/` copy and running `harbor --force-build -a nop -p run_N/verify`
+  (reward 1.0 = solved). Do NOT use `probe.py apply` — its `diff -ruN` treats the
+  sanitized-away `solution/`,`tests/` as deletions and corrupts `verify/`.
+
 ## Solver Prompt Shape
 
 Use a short prompt for each fresh solver:

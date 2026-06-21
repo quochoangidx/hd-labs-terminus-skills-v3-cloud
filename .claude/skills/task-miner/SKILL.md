@@ -843,6 +843,38 @@ Use `rejection_reason: null` only when the candidate is suitable for cloning.
 
 For non-debugging category profiles, prefer `base_commit`, `target_behavior`, `required_work`, `input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only fields empty instead of inventing a `fixing_commit`.
 
+## Opus-4.8 resistance — what actually makes a from-scratch SPEC task hard (2026-06-21, hard-won)
+
+When the local probe model is Opus 4.8, mining clean "implement standard X" spec
+tasks is a **~1/5 lottery** (one session: 7 built, 2 MEDIUM, 5×3/3). Internalize
+this before mining a batch of spec-implementation tasks and DO NOT promise the
+user N hard tasks from a pipeline:
+
+- **A well-specified standard is NOT hard.** Opus knows standard algorithms/specs
+  cold and differential-tests its output against any reachable reference, so
+  withholding the formula, using a niche language, or omitting the reference
+  library from the image does NOT help. Confirmed 3/3: push/move-optimal Sokoban,
+  GNU `chmod` symbolic modes, NumPy quantile methods, RFC 5952 IPv6, DST gap/fold.
+- **Reference-reachability kills it.** If the ground truth is a tool baked in
+  every image (`chmod`, `git`) or a host stdlib (`ipaddress`, `csv`, `datetime`,
+  `numpy`), the solver differential-tests exhaustively → 3/3. Pick behaviors whose
+  reference is not trivially reachable, OR rely on a blind spot (below).
+- **Do NOT headline the trap.** If the subtle behavior is the task's CENTRAL,
+  explicitly-stated requirement, the solver attends to it, fuzzes it, and passes.
+  The trap must be a SECONDARY sub-rule inside a LARGER multi-rule spec.
+- **The one lever that worked (twice):** a discriminating fixture in an input
+  category the solver under-fuzzes even with the reference in hand. Both MEDIUM
+  wins were gitignore-family path matching where the fixture was `<dir>/**` + a
+  query of the directory ITSELF (`type=dir` / trailing slash) — random fuzzers
+  under-generate directory-typed queries at a `/**` parent, so ~1/3 of solvers
+  get it wrong. Recipe: large gitignore/glob-style spec, reference an authoritative
+  external tool ("match `git check-ignore`") rather than enumerating rules, and
+  bury the `/**`-vs-its-own-directory + parent-exclusion-blocks-reinclude cases in
+  the hidden fixtures.
+- **Empirically-hard non-spec lever stays the subtle-invariant BUGFIX** (caffeine
+  cache-eviction, valkey resize policy, go-mysql FDS) — but those are `debugging`,
+  currently ON HOLD.
+
 ## Hardness Calibration
 
 Treat platform difficulty as empirical, not just conceptual.
