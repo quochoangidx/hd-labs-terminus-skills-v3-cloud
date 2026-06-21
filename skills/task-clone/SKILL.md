@@ -202,6 +202,8 @@ Prefer external notes under `workspace/reports/<task-slug>/` when possible so su
 
 Use artifact category/subcategories first. For upstream bugfix artifacts with no category, default to `debugging` and `["tool_specific"]`. For non-debugging category-profile artifacts, do not use the bugfix default.
 
+`category` MUST be one of the 9 kebab values below — NOT the gallery's Title Case name. The platform `task.toml` schema has only `category` (9), `subcategories` (the 5 subtypes) and `difficulty`; it has NO subcategory/subsubcategory field. If the artifact records the gallery's 3-level placement (`gallery_category`/`subcategory`/`subsubcategory`, see `mined-candidates/gallery_taxonomy.md`), carry that placement into `tags` (a slug of the chosen subsubcategory) so the task still lands under the right gallery leaf — do not put it in `category`.
+
 ```toml
 version = "2.0"
 
@@ -209,12 +211,12 @@ version = "2.0"
 author_name = "anonymous"
 author_email = "anonymous"
 difficulty = "hard"
-category = "<artifact.category or debugging for upstream bugfix>"
+category = "<artifact.category (one of the 9 kebab values below) or debugging for upstream bugfix; NOT the gallery Title Case name>"
 subcategories = ["<artifact subcategories, or tool_specific for upstream bugfix>"]
 number_of_milestones = 0
 codebase_size = "<minimal|small|large>"   # compute from env file count; CI enforces this, do NOT default to small
 languages = ["<main implementation language>"]
-tags = ["<3-6 useful tags>"]
+tags = ["<3-6 useful tags; include a slug of the gallery subcategory/subsubcategory when the artifact records one>"]
 expert_time_estimate_min = 60
 junior_time_estimate_min = 180
 
@@ -231,6 +233,14 @@ cpus = 2
 memory_mb = 4096
 storage_mb = 10240
 ```
+
+> **⛔ CATEGORY HOLD (2026-06-21):** `debugging` and `software-engineering` are PENDING
+> on the platform — do NOT clone tasks in these categories. If the mined artifact's
+> `category` is one of them, STOP and ask the user (or reframe into an allowed category
+> only if the primary work genuinely fits). The bugfix default below (`debugging`) is
+> therefore also paused. Allowed: system-administration, build-and-dependency-management,
+> data-processing, games, machine-learning, security, scientific-computing. Mirror of the
+> task-miner hold — lift both together when the platform reopens.
 
 Valid categories are only:
 
