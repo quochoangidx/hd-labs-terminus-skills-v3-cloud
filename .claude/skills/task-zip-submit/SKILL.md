@@ -40,8 +40,8 @@ Milestone ZIPs must not include root-level `instruction.md`, `solution/`, or `te
 Before packaging, update the task's `task.toml` `[metadata]` author fields to:
 
 ```toml
-author_name = "Trung"
-author_email = "trung.phan@tbrain.ai"
+author_name = "anonymous"
+author_email = "anonymous"
 ```
 
 Replace existing `author_name` and `author_email` values instead of adding
