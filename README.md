@@ -49,6 +49,7 @@ terminus-bench/
 |       `-- scripts/review_task.py
 |-- .codex/skills/                # Bản sync cho Codex trong workspace
 |-- .claude/skills/               # Bản sync cho Claude trong workspace
+|-- .gemini/skills/               # Bản sync dạng Markdown phẳng cho Gemini
 |-- mined-candidates/
     |   |   `-- index.jsonl        # Registry chống trùng issue/PR/candidate
 `-- workspace/                    # Task, reports, ZIP local; bị .gitignore
@@ -60,9 +61,10 @@ terminus-bench/
 
 Task clone, Harbor reports và submission ZIP đều để trong `workspace/`. Đây là khu vực local, không đẩy lên git. `.gitignore` đã ignore nguyên thư mục `/workspace/`.
 
-`skills/` là source chính của bộ skill trong repo. `.codex/skills/` và
-`.claude/skills/` là bản sync cho từng runtime; khi cập nhật skill, giữ các bản
-này khớp nhau nếu skill tồn tại ở nhiều nơi.
+`skills/` là source chính của bộ skill trong repo. `.codex/skills/`,
+`.claude/skills/`, và `.gemini/skills/` là bản sync cho từng runtime; khi cập
+nhật skill, giữ các bản này khớp nhau nếu skill tồn tại ở nhiều nơi. Gemini dùng
+file phẳng `<skill-name>.md`, còn Codex/Claude dùng `<skill-name>/SKILL.md`.
 
 `.claude/skills/` có thêm một vài helper legacy/Claude-only như
 `task-zip-validator`, `sync-doc-and-skill`, và `find-task-prs`. Các helper này cũng đã được align với
@@ -596,8 +598,8 @@ Scanner là review gate, không thay thế manual prompt/rubric review.
 
 - Task clone, report và ZIP sinh ra nằm trong `workspace/` và bị `.gitignore`, không đẩy lên git.
 - Mỗi skill có file mô tả chi tiết trong `skills/{tên-kỹ-năng}/SKILL.md`.
-- Khi sửa skill, sync lại `.codex/skills/` và `.claude/skills/` nếu skill đó
-  có bản runtime tương ứng.
+- Khi sửa skill, sync lại `.codex/skills/`, `.claude/skills/`, và
+  `.gemini/skills/` nếu skill đó có bản runtime tương ứng.
 - `instruction.md` phải là human language, không phải LLM checklist.
 - Với Docker/Harbor/CI, luôn đọc feedback cụ thể trước khi đoán lỗi.
 - Oracle pass chưa đủ; nop phải fail.

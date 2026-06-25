@@ -5,54 +5,47 @@ description: Guidelines and strict checklist for authoring Terminus Regular task
 
 # Terminus Rust Task Authoring Guidelines
 
-When transforming a Rust bug into a Terminus task, strictly follow these standards to ensure quality, reproducibility, and proper evaluation on the platform. These rules address critical pitfalls discovered in previous authoring attempts.
+This is a Rust-specific supplement. Follow
+`.gemini/skills/terminus-regular-task-authoring.md`,
+`.gemini/skills/task-clone.md`, and `.gemini/skills/task-zip-submit.md` as the
+source of truth for layout, verifier dependencies, submission explanations,
+review, and packaging. If this file conflicts with those skills, the canonical
+skills win.
 
-## 1. Initial State & Cleanliness
-- **Strictly Buggy Baseline**: `environment/repo` MUST be on the exact parent commit (the buggy state). It cannot have the patch already applied.
-- **No Dirty Files**: The repository must be completely clean. No `.rej`, `.orig`, or untracked patch files left behind. Run `git clean -fdx` and `git reset --hard HEAD` before packaging.
-- **Solution Isolation**: The patch should exist only in `solution/fix.patch`. Do not leave traces of the fix in the environment repo.
+## Rust-Specific Rules
 
-## 2. Strict Task Layout & Sizing
-A valid task folder must only contain:
+- Stage the exact buggy source under `environment/repo`; keep the oracle patch
+  only under `solution/`.
+- Use a digest-pinned Rust runtime image and install `tmux`, `asciinema`, Git,
+  patching/search tools, Python, and the Rust toolchain needed by the task.
+- Put Cargo on the login-shell `PATH`, including symlinks for `cargo` and
+  `rustc` under `/usr/local/bin` when necessary.
+- Warm the unmodified build during Docker image construction, for example with
+  `cargo build --tests --locked`, and preserve the dependency/build cache needed
+  for fast incremental agent rebuilds.
+- Keep verifier dependencies in the Docker image. Never store wheels under
+  `tests/` and never install packages from `tests/test.sh`.
+- Supply Rust verifier programs at verification time from
+  `tests/test_outputs.py` or verifier fixtures. Do not stage hidden
+  `*_test.rs` or reproducer programs inside `environment/repo`.
+- Drive public behavior through temporary Cargo projects, binaries, or public
+  APIs. Avoid source-string checks and private implementation assertions.
+- Run deterministic focused commands rather than the entire upstream suite.
+  Every subprocess should have a practical timeout and useful captured output.
+- Preserve instruction/test symmetry for feature flags, workspace layouts,
+  target-specific behavior, generated artifacts, and compatibility paths.
+
+## Submission Explanations
+
+Create the reviewer-facing Difficulty, Solution, and Verification explanations
+outside the task folder under:
+
+```text
+workspace/reports/<task-slug>/
 ```
-instruction.md
-task.toml
-environment/
-  Dockerfile
-  .dockerignore
-  repo/
-solution/
-  fix.patch
-  solve.sh
-tests/
-  test.sh
-  test_outputs.py
-  files/wheels/ (if local pip installs are needed)
-```
-- **Remove Caches and Git**: Before zipping, remove `.git/`, `target/`, `__pycache__/`, `.pytest_cache`, `.DS_Store`. The final submission size should be as small as possible (ideally under 15-20MB, strictly < 100MB).
-- **.dockerignore**: Always include `environment/.dockerignore` blocking `.git`, `target`, `__pycache__`, `*.rej`, etc., so the image build is clean and fast.
 
-## 3. Dockerfile Environment
-- **Digest-Pinned Base**: Use a specific, pinned digest for the base image (e.g., `FROM rust:1.85.0-slim-bookworm@sha256:...`).
-- **Required Tools**: Install essential tools the agent will need: `asciinema`, `bash`, `ca-certificates`, `coreutils`, `git`, `patch`, `python3`, `python3-pip`, `ripgrep`, `sed`, `tmux`, `util-linux`.
-- **Working Directory & Mount**: 
-  - Explicitly set `WORKDIR /app`.
-  - Copy the repo properly: `COPY repo/ /app/`.
-- **Preloading Dependencies**: Run `cargo fetch --locked` (and optionally pre-build sub-crates if applicable) in the Dockerfile so that agents do not encounter network dependency fetches during their run.
-
-## 4. Verifier Standards (Pytest is King)
-Even for Rust tasks, the standard Terminus test harness relies on Python `pytest` and `pytest-json-ctrf`.
-- **`tests/test_outputs.py`**: Write a robust Python test script that:
-  - Generates a temporary Rust project using `tmp_path_factory.mktemp()`.
-  - Sets up path dependencies pointing to the local `/app` repository.
-  - Compiles the temporary project via `subprocess.run(['cargo', 'run', ...])`.
-  - **Asserts Real Behavior**: Don't just assert string matching on generated outputs. For example, if testing bash completion, actually source the script in `bash` and assert the `COMPREPLY` array contains the expected tokens.
-  - **Docstrings**: EVERY test function MUST have a clear docstring explaining what behavior is being tested.
-- **`tests/test.sh`**: Must run pytest, output CTRF to `/logs/verifier/ctrf.json`, and set `/logs/verifier/reward.txt` to `1` or `0`.
-- **Offline Wheels**: Do not hit the network in `test.sh`. Install `pytest` and `pytest-json-ctrf` from local `.whl` files stored in `tests/files/wheels/` using `--no-index --find-links`.
-
-## 5. Instruction & Test Symmetry
-- `instruction.md` must describe the bug **purely from an observable behavior standpoint**.
-- Do not expose GitHub PR IDs, Issue numbers, or exact implementation hints.
-- Every edge case, "normal behavior preservation", or anti-shortcut condition asserted in the pytest verifier **must** be explicitly mandated in the `instruction.md`.
-- Ensure difficulty metadata in `task.toml` honestly reflects the complexity. If the fix is a localized one-line change, it is likely `difficulty = "medium"`, not `"hard"`.
+Describe intrinsic Rust reasoning such as trait/API interactions, feature
+resolution, workspace inheritance, ownership/lifetime constraints, generated
+code, or state-machine invariants. Do not use compile time, repository size, or
+timeouts as evidence of difficulty, and do not place the explanations in the
+submission ZIP.

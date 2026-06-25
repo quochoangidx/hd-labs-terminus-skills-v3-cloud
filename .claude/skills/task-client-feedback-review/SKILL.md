@@ -105,7 +105,48 @@ Use `--json` when another script will consume the result.
    - Rubrics need at least three negative criteria overall; milestone rubrics
      also need at least one negative criterion per milestone.
 
-3. Classify findings:
+3. Review reviewer-facing submission explanations when available. Look first
+   for these external files:
+
+```text
+workspace/reports/<task-slug>/submission-explanations-source.md
+workspace/reports/<task-slug>/submission-explanations.md
+```
+
+   These files must remain outside the submitted task and ZIP.
+
+   Review each field separately:
+
+   - **Difficulty Explanation:** names intrinsic technical interactions and a
+     plausible partial-fix trap; does not use repository size, test count,
+     timeout rate, cold builds, instruction ambiguity, or verifier defects as
+     evidence of difficulty.
+   - **Solution Explanation:** matches the oracle and root cause at a high
+     level; does not paste the patch, invent extra work, or leak back into
+     `instruction.md`, environment docs, or rubrics.
+   - **Verification Explanation:** maps behavioral cases to requirements,
+     explains what catches partial fixes, and reports oracle/nop outcomes only
+     when validation logs support them.
+
+   Compare the UI-ready file against the factual source draft. Flag removed
+   thresholds, changed API names, altered paths, unsupported validation claims,
+   or softened preservation requirements.
+
+   Apply a final prose check:
+
+   - no references to LLMs, AI, models, agents, anti-LLM mechanisms, detection
+     avoidance, guidelines, reviewer criteria, or policy dates
+   - no generic claims such as "comprehensive", "robust", or "high confidence"
+     without concrete support
+   - the three fields do not repeat one identical template
+   - the prose starts with task-specific facts and remains copy-paste ready
+
+   Missing explanations are `should_fix` before reviewer submission, not a ZIP
+   structure blocker. Unsupported facts, leaked solution material in
+   agent-visible files, or claims contradicted by the oracle/verifier are
+   `blocker`.
+
+4. Classify findings:
    - `blocker`: likely reject or high-severity client feedback issue.
    - `should_fix`: not always fatal, but fix before a new submission.
    - `polish`: useful prompt/rubric quality improvement.
@@ -147,6 +188,11 @@ Use `--json` when another script will consume the result.
   fails. Bare oracle/mysql/postgres/mariadb/mssql/snowflake were observed NOT
   flagged. Fix by renaming the identifier or removing a non-build-required file
   (see `upstream-repo-sanitizer`).
+- reviewer-facing explanation text copied into `instruction.md`,
+  `environment/`, or a rubric when it reveals root cause, oracle strategy, or
+  verifier behavior
+- submission explanations that materially contradict the task, oracle, or
+  verifier, including unrun oracle/nop claims
 
 ## Existing Skills To Use For Fixes
 
@@ -177,6 +223,11 @@ Should fix:
 
 Polish:
 - <finding> — why it matters — skill to use
+
+Submission narratives:
+- Difficulty Explanation: ready | weak | missing
+- Solution Explanation: ready | too detailed | missing
+- Verification Explanation: ready | incomplete | missing
 ```
 
 If no blockers are found, still mention any residual risk such as skipped

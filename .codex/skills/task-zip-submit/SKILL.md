@@ -15,6 +15,10 @@ Task folders usually live under `workspace/`. Zip from inside the task folder, n
 
 The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist. Do not include `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
 
+The platform's `Difficulty Explanation`, `Solution Explanation`, and
+`Verification Explanation` fields are entered separately in the UI. They are
+not ZIP contents.
+
 For a Regular task, the ZIP root should contain:
 
 ```text
@@ -138,11 +142,47 @@ hidden solution walkthroughs or prompt-bypass instructions. Supporting docs
 must read like realistic engineering artifacts and all task goals must remain
 in `instruction.md`.
 
+## Submission Explanation Preflight
+
+Before sending the task to a reviewer, locate:
+
+```text
+workspace/reports/<task-slug>/submission-explanations-source.md
+workspace/reports/<task-slug>/submission-explanations.md
+```
+
+The UI-ready file must contain exactly these three sections:
+
+```text
+Difficulty Explanation
+Solution Explanation
+Verification Explanation
+```
+
+Check that:
+
+- the final text preserves the facts, thresholds, paths, APIs, and validation
+  results from the source draft
+- Difficulty describes intrinsic engineering difficulty, not slow builds,
+  repository size, test count, or timeout behavior
+- Solution matches the oracle at a high level without pasting code or a patch
+- Verification explains behavioral discrimination and does not merely say that
+  tests pass
+- no field mentions LLMs, AI, models, agents, anti-LLM mechanisms, detection
+  avoidance, guidelines, reviewer criteria, or policy dates
+- neither explanation file is present in the task root or generated ZIP
+
+Missing explanations should stop reviewer submission until they are written,
+but they do not change the ZIP allowlist.
+
 ## Submission Reminder
 
 On first upload:
 
 - upload ZIP to Snorkel Expert Platform -> Terminus-2nd-Edition
+- copy the three sections from the UI-ready `submission-explanations.md` into
+  their matching platform fields; do not copy headings, rewrite diagnostics, or
+  the factual source draft
 - check "Generate Rubric(s)" while "Send to Reviewer" is unchecked
 - keep "Send to Reviewer" unchecked
 - inspect CI and generated rubric before final reviewer submission
