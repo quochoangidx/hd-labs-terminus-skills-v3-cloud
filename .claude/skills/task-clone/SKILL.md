@@ -83,6 +83,9 @@ candidate:
   expected_behavior:
   preserved_behavior:
   edge_cases:
+  difficulty_rationale:
+  reasoning_bottlenecks:
+  tempting_partial_fixes:
   why_not_debugging:
   test_surface:
     primary_api:
@@ -173,6 +176,8 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 10. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
 11. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
 12. Run structural checks, CI checks, and optional real-agent trials.
+13. After behavior and validation are stable, write reviewer-facing Difficulty,
+    Solution, and Verification explanations outside the task folder.
 
 ## Regular Layout
 
@@ -197,6 +202,15 @@ workspace/tbrain-<problem-slug>/
 For a small app task, `environment/app/` is acceptable, but cloned upstream bug tasks should normally use `environment/repo/`.
 
 Prefer external notes under `workspace/reports/<task-slug>/` when possible so submission zips do not accidentally include them.
+
+For the current platform submission form, create:
+
+```text
+workspace/reports/<task-slug>/submission-explanations-source.md
+workspace/reports/<task-slug>/submission-explanations.md
+```
+
+Never place these files under the submitted task root.
 
 ## Metadata Defaults
 
@@ -724,6 +738,48 @@ Before packaging or platform upload:
 - remove `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, and local notes from the submission ZIP
 - run oracle and nop; nop must fail for the intended behavior, not missing deps or setup errors
 
+## Submission Explanation Workflow
+
+Generate submission explanations only after the prompt, oracle, verifier, and
+available solve probes are stable.
+
+1. Write `submission-explanations-source.md` from task evidence:
+   - Difficulty: interacting concepts, the tempting partial fix, fair semantic
+     failure patterns from solve probes, and why the issue requires reasoning
+     across more than one local symptom.
+   - Solution: root cause, high-level oracle strategy, and preserved behavior.
+   - Verification: requirement-to-test mapping, why cases discriminate, and
+     actual oracle/nop results.
+2. Produce `submission-explanations.md` as the concise UI-ready version.
+3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
+   an editorial pass. Do not add claims, remove thresholds, or change technical
+   meaning.
+4. Compare the final version with `instruction.md`, `solution/fix.patch`,
+   `tests/test_outputs.py`, and validation reports.
+5. Keep both files outside the task ZIP.
+
+Use this structure in both files:
+
+```md
+# Difficulty Explanation
+
+...
+
+# Solution Explanation
+
+...
+
+# Verification Explanation
+
+...
+```
+
+The final text must not mention LLMs, AI, models, agents, anti-LLM techniques,
+detection avoidance, submission guidelines, or reviewer criteria. Although the
+form asks why the task is challenging for humans and agents, answer by
+describing the intrinsic technical difficulty rather than speculating about a
+solver type.
+
 ## Quota Discipline
 
 Avoid monolithic end-to-end exploration. After each phase, compress findings into compact notes and stop carrying raw diffs unless needed.
@@ -793,4 +849,5 @@ When done, report:
 - task slug under `workspace/` and why the name omits repo/domain filler
 - tests included and which prompt requirement each covers
 - validation commands run and results
+- paths to the factual and UI-ready submission explanation files
 - any blocked step, especially Docker/Harbor/API key availability

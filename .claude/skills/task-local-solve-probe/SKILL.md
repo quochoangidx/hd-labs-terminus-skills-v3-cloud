@@ -62,7 +62,9 @@ confidence.
 6. Run the same local verifier command you would normally trust for the task.
 7. Record pass/fail plus failure type: `semantic`, `compile`, `setup`,
    `timeout`, or `unknown`.
-8. Summarize the observed pass rate and whether Harbor LLM spend is justified.
+8. For fair semantic failures, record the missed invariant, compatibility path,
+   state transition, or project layer without exposing verifier fixture names.
+9. Summarize the observed pass rate and whether Harbor LLM spend is justified.
 
 Use the helper script when possible:
 
@@ -87,6 +89,11 @@ python3 skills/task-local-solve-probe/scripts/probe.py summarize workspace/local
 Compile-only failures are weak difficulty evidence. Strong signals are partial
 fixes that compile but miss legitimate contexts, preservation behavior, edge
 invariants, or the correct project layer.
+
+These semantic failure patterns may support the later Difficulty Explanation.
+Setup failures, instruction ambiguity, verifier defects, dependency failures,
+compile-only mistakes, and timeouts must not be presented as intrinsic task
+difficulty.
 
 Early-stop rules:
 
@@ -121,5 +128,7 @@ Return:
 - pass count
 - failure type distribution
 - whether failures are semantic/fair or setup/instruction noise
+- compact semantic failure patterns suitable as factual input to the Difficulty
+  Explanation, with no solver/model names and no hidden fixture details
 - recommendation: `rework`, `run_harbor_llm_with_approval`, `replace`, or
   `keep_without_llm_if_budget_limited`

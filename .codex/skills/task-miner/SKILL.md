@@ -604,6 +604,9 @@ candidate:
   expected_behavior:
   preserved_behavior:
   edge_cases:
+  difficulty_rationale:
+  reasoning_bottlenecks:
+  tempting_partial_fixes:
   why_not_debugging:
   test_surface:
     primary_api:
@@ -678,6 +681,17 @@ guessing. For each tested implementation, include:
 - any raw container or wrapper relationship
 
 If this is unclear, mark the candidate incomplete and do not clone yet.
+
+Also provide factual input for the later reviewer-facing Difficulty
+Explanation:
+
+- `difficulty_rationale`: intrinsic technical reason the task is hard
+- `reasoning_bottlenecks`: interacting invariants, layers, or state transitions
+- `tempting_partial_fixes`: plausible local repairs that miss required behavior
+
+Do not describe these in terms of LLM/model/agent tendencies. Do not use build
+time, repository size, test count, or expected timeouts as hardness evidence.
+These fields are mining evidence, not final submission prose.
 
 ## Transformation Hints
 

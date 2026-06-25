@@ -70,6 +70,10 @@ BLACKLIST_SCAN_SUFFIXES = TEXT_SUFFIXES | {
 RUBRIC_HEADER_RE = re.compile(r"^#\s*Rubric\s+(\d+)\s*$", re.IGNORECASE)
 RUBRIC_CRITERION_RE = re.compile(r"^Agent\b.*,\s*([+-])([1235])\s*$")
 RUBRIC_BAD_SCORE_RE = re.compile(r",\s*[+-]?4\s*$")
+SUBMISSION_EXPLANATION_NAMES = {
+    "submission-explanations.md",
+    "submission-explanations-source.md",
+}
 
 
 @dataclass
@@ -333,6 +337,20 @@ def review(path: Path) -> dict:
         for item in sorted(roots):
             if item not in allowed_roots:
                 add(findings, "should_fix", "zip-allowlist", f"Unexpected root entry: {item}", item, "task-zip-submit")
+
+        explanation_files = [
+            name for name in files
+            if Path(name).name.lower() in SUBMISSION_EXPLANATION_NAMES
+        ]
+        for name in explanation_files:
+            add(
+                findings,
+                "blocker",
+                "submission-explanations-in-task",
+                "Reviewer-facing submission explanations must stay outside the task folder and ZIP.",
+                name,
+                "task-zip-submit",
+            )
 
         task = parse_task_toml(view, findings)
         metadata = task.get("metadata", {}) if isinstance(task, dict) else {}

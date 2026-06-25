@@ -201,6 +201,18 @@ Before accepting the verifier, answer these questions:
 
 If any answer is no, repair the task before running real agents.
 
+Before handoff, write a compact requirement-to-test map for the reviewer-facing
+Verification Explanation. For each behavioral group, record:
+
+- the observable requirement
+- the direct, boundary, preservation, anti-shortcut, or recoverability role
+- why the case fails on the buggy state or a plausible partial fix
+- whether oracle/nop validation actually ran
+
+Keep this map in external reports, not in `instruction.md`, `environment/`, or
+the submission ZIP. The final explanation should describe behavioral coverage,
+not test function names, hidden fixture details, or source-code shape.
+
 ## tests/test.sh
 
 Use this pattern:

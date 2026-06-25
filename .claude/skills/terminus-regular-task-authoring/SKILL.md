@@ -53,6 +53,95 @@ For new submissions:
 - `languages` lists the main language(s) used by the task/oracle changes. Do
   not include Python solely because verifier tests are written in pytest.
 
+## Reviewer-Facing Submission Explanations
+
+The current submission form requires three reviewer-facing text fields:
+
+- `Difficulty Explanation`
+- `Solution Explanation`
+- `Verification Explanation`
+
+These are submission metadata, not agent-visible task requirements. Do not put
+them in `instruction.md`, `task.toml`, `environment/`, a rubric, or the
+submission ZIP. Keep local drafts outside the task folder, preferably:
+
+```text
+workspace/reports/<task-slug>/submission-explanations-source.md
+workspace/reports/<task-slug>/submission-explanations.md
+```
+
+Write the source draft only after the task behavior, oracle, verifier, and
+available difficulty probes are stable. The source draft is the factual record;
+the second file is the concise copy-paste version for the platform UI.
+
+### Difficulty Explanation
+
+Explain why the engineering problem itself is difficult:
+
+- identify the interacting subsystems, invariants, state transitions, numerical
+  constraints, compatibility paths, or project layers involved
+- describe the natural partial fix and the legitimate behavior it misses
+- use semantic local/Harbor solve failures as evidence when available
+- distinguish genuine reasoning difficulty from instruction ambiguity,
+  verifier defects, dependency failures, cold builds, or timeouts
+
+Do not claim that a task is hard merely because the repository is large, the
+build is slow, the verifier has many tests, or runs time out. Do not describe
+what an LLM, AI system, model, or agent tends to do. State the technical trap
+directly.
+
+### Solution Explanation
+
+Describe the high-level root cause, repair strategy, and key insight behind the
+oracle:
+
+- name relevant files, public APIs, state transitions, or algorithms when that
+  makes the explanation concrete
+- explain how the fix addresses the general behavior and preserves unaffected
+  paths
+- mention rebuild/regeneration work only when it is part of correctness
+
+Do not paste the patch, reproduce long code blocks, narrate every edited line,
+or turn the explanation into instructions for the solving agent. This field is
+reviewer-only and must never be copied into `instruction.md` or environment
+documentation.
+
+### Verification Explanation
+
+Explain how the verifier distinguishes correct, partial, and broken solutions:
+
+- map the direct regression, boundary case, preservation check, anti-shortcut
+  variation, and recoverability/stateful checks to observable requirements
+- state why important cases discriminate against the buggy starting state or
+  an incomplete fix
+- include oracle-pass and nop-fail results only when they were actually run
+- mention deterministic semantic parsing, tolerances, or generated fixtures
+  when relevant
+
+Do not settle for "all tests pass", list only test function names, expose hidden
+fixture contents unnecessarily, or describe source-code-shape assertions.
+
+### Human-Writing Pass
+
+Apply the human-writing pass only after factual review:
+
+- start with the task-specific point; remove template openings and conclusions
+- prefer concrete behavior, numbers, paths, and API names over unsupported
+  abstractions such as "robustness", "comprehensive coverage", or "confidence"
+- vary sentence and paragraph shape instead of giving all three fields the same
+  problem/fix/test skeleton
+- remove hedging when the evidence is conclusive
+- do not cite submission guidelines, reviewer criteria, policy dates, or call
+  the prose "LLM-like"
+- do not mention LLMs, AI, models, agents, anti-LLM mechanisms, or detection
+  avoidance in the three explanations
+- preserve every technical fact, threshold, API name, path, and validation
+  result from the source draft
+
+Natural prose is an editorial goal, never permission to weaken or embellish the
+technical record. After rewriting, compare the final version against the source
+draft and the task artifacts once more.
+
 ## Prompt Rules
 
 `instruction.md` should:
@@ -296,6 +385,9 @@ Quality preflight:
 
 - `codebase_size` matches the useful environment file count and portfolio mix
 - `languages` excludes verifier-only Python
+- reviewer-facing submission explanations exist outside the task/ZIP, preserve
+  the factual source draft, and contain no unsupported claims or agent/AI meta
+  language
 - no root-level `pyproject.toml`
 - final runtime base image is canonical for the task's language (or non-canonical with a credible justification)
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP
