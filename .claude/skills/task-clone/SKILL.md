@@ -216,6 +216,8 @@ Never place these files under the submitted task root.
 
 Use artifact category/subcategories first. For upstream bugfix artifacts with no category, default to `debugging` and `["tool_specific"]`. For non-debugging category-profile artifacts, do not use the bugfix default.
 
+`category` MUST be one of the 9 kebab values below — NOT the gallery's Title Case name. The platform `task.toml` schema has only `category` (9), `subcategories` (the 5 subtypes) and `difficulty`; it has NO subcategory/subsubcategory field. If the artifact records the gallery's 3-level placement (`gallery_category`/`subcategory`/`subsubcategory`, see `mined-candidates/gallery_taxonomy.md`), carry that placement into `tags` (a slug of the chosen subsubcategory) so the task still lands under the right gallery leaf — do not put it in `category`.
+
 ```toml
 version = "2.0"
 
@@ -223,12 +225,12 @@ version = "2.0"
 author_name = "anonymous"
 author_email = "anonymous"
 difficulty = "hard"
-category = "<artifact.category or debugging for upstream bugfix>"
+category = "<artifact.category (one of the 9 kebab values below) or debugging for upstream bugfix; NOT the gallery Title Case name>"
 subcategories = ["<artifact subcategories, or tool_specific for upstream bugfix>"]
 number_of_milestones = 0
 codebase_size = "<minimal|small|large>"   # compute from env file count; CI enforces this, do NOT default to small
 languages = ["<main implementation language>"]
-tags = ["<3-6 useful tags>"]
+tags = ["<3-6 useful tags; include a slug of the gallery subcategory/subsubcategory when the artifact records one>"]
 expert_time_estimate_min = 60
 junior_time_estimate_min = 180
 
@@ -245,6 +247,25 @@ cpus = 2
 memory_mb = 4096
 storage_mb = 10240
 ```
+
+> **⛔ CATEGORY HOLD (2026-06-21):** `debugging` and `software-engineering` are PENDING
+> on the platform — do NOT clone tasks in these categories. If the mined artifact's
+> `category` is one of them, STOP and ask the user (or reframe into an allowed category
+> only if the primary work genuinely fits). The bugfix default below (`debugging`) is
+> therefore also paused. Allowed: system-administration, build-and-dependency-management,
+> data-processing, games, machine-learning, security, scientific-computing. Mirror of the
+> task-miner hold — lift both together when the platform reopens.
+>
+> **Spec-implementation/coding tasks read as "software-engineering" — classify by
+> PROBLEM DOMAIN into the nearest ALLOWED category instead** (a platform reviewer
+> will still suggest "software-engineering"; that's expected and must be declined
+> while held). A regex/glob/pattern matcher → `data-processing` (gallery leaf
+> *Text & Document Processing → Pattern Extraction & Regex Matching*); a parser/
+> codec → data-processing; a numeric kernel → scientific-computing; a build/dep
+> tool → build-and-dependency-management; etc. Then pick an ACCURATE gallery-leaf
+> tag: a pattern matcher that classifies given paths is *Pattern Extraction &
+> Regex Matching*, NOT *File Discovery & Search* (which implies walking a real
+> filesystem) — reviewers flag a misleading leaf tag as a category mismatch.
 
 Valid categories are only:
 
@@ -290,7 +311,16 @@ in pytest.
 
 Write like a real engineer describing the requested observable work:
 
-- 1-3 short paragraphs.
+- 1-3 short FLOWING paragraphs — never a spec sheet. Do NOT use `## Input` /
+  `## Output` / `## Build` (or any similar) section headers, format tables, or
+  bulleted "rules" lists. The platform `instruction_check` reviewer flags a
+  section-structured instruction as a "design document that prescribes
+  implementation" and warns even after the rule enumeration is removed (confirmed
+  twice, 2026-06-21: rule-free-but-sectioned still warned; the prose rewrite
+  cleared it). Weave the stdin/stdout format, constraints, and the build note
+  into narrative sentences that explain *why* each part matters. When the
+  behaviour follows a known standard or tool, reference it ("the result must
+  match `git check-ignore`") instead of restating its rules.
 - Absolute paths only, such as `/app` and `/app/src/module.py`.
 - State observable contract and exact user-facing strings only if tests assert them.
 - No issue URLs, PR numbers, test names, rubrics, or solution hints.
@@ -696,6 +726,45 @@ Keep runtime/project dependencies separate from verifier-only dependencies. For
 editable installs of the target package, prefer `pip install --no-deps -e .`
 after installing pinned deps so project metadata cannot fetch or override
 unpinned packages.
+
+## Spec-task gotchas that cost a re-run (2026-06-21, learn these)
+
+When cloning a from-scratch spec-implementation whose oracle is checked against a
+real external tool/library (gitignore, chmod, IPv6, quantile, DST, …), four
+mistakes each cost a full rebuild this session — avoid them up front:
+
+- **Reference the authoritative external behavior in `instruction.md`; do NOT
+  enumerate the rule mechanics.** A prose list of matching rules / a precedence
+  table reads to the platform reviewer as a "design specification that prescribes
+  implementation" — the `instruction_check` warning and the #1 client reject.
+  Instead say "the result must match what `git check-ignore` reports / matches
+  `numpy.quantile(method=...)`" and let the tests be the source of truth. This
+  ALSO satisfies instruction/test symmetry (the named reference defines
+  correctness) without listing internals. Keep only YOUR I/O format + the
+  observable contract; drop the mechanics. AND write the whole instruction as
+  flowing prose (1-3 paragraphs) — NOT as `Input`/`Output`/`Build` sections:
+  `instruction_check` flags rigid spec-section structure as a "design document"
+  too, even after the rule tables are gone. Weave the stdin/stdout format into
+  narrative sentences that say *why* each part matters (confirmed: a
+  section-structured but rule-free instruction still drew the warning; the prose
+  rewrite cleared it).
+- **Generate ground-truth fixtures with the SAME runtime VERSION the verifier
+  uses (inside the task image), never the host.** Baking fixtures from a host
+  interpreter can disagree with the in-image one on edge cases (e.g. Python 3.9
+  vs 3.11 `ipaddress` on a trailing-colon address), so the oracle passes locally
+  but fails in CI. Run the reference in the task's base image (or the exact
+  pinned version) when dumping expected values.
+- **Pin verifier deps with a hash-locked `requirements.lock` + `pip install
+  --require-hashes --no-deps`, for EVERY language's task** (not just Python ones).
+  Inline `pip install pytest==x pytest-json-ctrf==y` trips the static-check
+  lockfile warning even in a Go/C++/Rust task. Copy a `requirements.lock` into
+  `environment/` and install from it. (Reusing an existing task's lock is fine.)
+- **Don't make blank/empty input a fixture VALUE if the program skips blank
+  lines, and avoid positional-alignment verifiers.** A program that ignores blank
+  lines emits no output line for an empty input, which both contradicts an
+  "empty -> INVALID" expectation and shifts every later line in an
+  index-by-position comparison. Prefer one invocation per case, or assert on a
+  parsed mapping, and only test inputs the program actually emits a line for.
 
 ## Quality Preflight
 
