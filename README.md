@@ -35,21 +35,26 @@ terminus-bench/
 |-- README.md
 |-- .gitignore
 |-- docs/                         # Tài liệu Terminus/Snorkel local
-|-- skills/                       # Skill source chính
+|-- .agent/skills/                # SOURCE CHÍNH (single source of truth) cho mọi skill
 |   |-- task-clone/SKILL.md
 |   |-- task-miner/SKILL.md
 |   |-- terminus-regular-task-authoring/SKILL.md
+|   |-- terminus-rust-task-authoring/SKILL.md
 |   |-- issue-to-regression-test/SKILL.md
 |   |-- terminus-hard-python-verifier/SKILL.md
 |   |-- upstream-repo-sanitizer/SKILL.md
 |   |-- task-harbor-runner/SKILL.md
 |   |-- task-zip-submit/SKILL.md
+|   |-- task-zip-validator/SKILL.md
+|   |-- sync-doc-and-skill/SKILL.md
+|   |-- find-task-prs/SKILL.md
+|   |-- task-local-solve-probe/SKILL.md
 |   `-- task-client-feedback-review/
 |       |-- SKILL.md
 |       `-- scripts/review_task.py
-|-- .codex/skills/                # Bản sync cho Codex trong workspace
-|-- .claude/skills/               # Bản sync cho Claude trong workspace
-|-- .gemini/skills/               # Bản sync dạng Markdown phẳng cho Gemini
+|-- .claude/skills -> ../.agent/skills   # symlink (Claude Code)
+|-- .codex/skills  -> ../.agent/skills   # symlink (Codex)
+|-- .gemini/skills -> ../.agent/skills   # symlink (Gemini)
 |-- mined-candidates/
     |   |   `-- index.jsonl        # Registry chống trùng issue/PR/candidate
 `-- workspace/                    # Task, reports, ZIP local; bị .gitignore
@@ -61,14 +66,15 @@ terminus-bench/
 
 Task clone, Harbor reports và submission ZIP đều để trong `workspace/`. Đây là khu vực local, không đẩy lên git. `.gitignore` đã ignore nguyên thư mục `/workspace/`.
 
-`skills/` là source chính của bộ skill trong repo. `.codex/skills/`,
-`.claude/skills/`, và `.gemini/skills/` là bản sync cho từng runtime; khi cập
-nhật skill, giữ các bản này khớp nhau nếu skill tồn tại ở nhiều nơi. Gemini dùng
-file phẳng `<skill-name>.md`, còn Codex/Claude dùng `<skill-name>/SKILL.md`.
+`.agent/skills/` là **single source of truth** duy nhất cho toàn bộ skill trong
+repo (mỗi skill là `<skill-name>/SKILL.md`). `.claude/skills`, `.codex/skills`,
+và `.gemini/skills` chỉ là **symlink** trỏ về `../.agent/skills`, nên mọi CLI
+(Claude Code, Codex, Gemini) đọc đúng một bản; chỉnh sửa skill chỉ cần sửa trong
+`.agent/skills/` là tất cả runtime tự cập nhật theo. Không còn bản copy/sync thủ
+công và không còn bản Markdown phẳng riêng cho Gemini.
 
-`.claude/skills/` có thêm một vài helper legacy/Claude-only như
-`task-zip-validator`, `sync-doc-and-skill`, và `find-task-prs`. Các helper này cũng đã được align với
-docs/client feedback mới, nhưng source chính cho workflow Codex là `skills/`.
+Khi thêm hỗ trợ cho một CLI/tool mới, chỉ cần tạo thêm một symlink tương tự, ví
+dụ `ln -s ../.agent/skills .cursor/skills`.
 
 ---
 
@@ -587,7 +593,7 @@ unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|_
 Chạy scanner:
 
 ```bash
-python skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
+python .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
 ```
 
 Scanner là review gate, không thay thế manual prompt/rubric review.
@@ -597,9 +603,9 @@ Scanner là review gate, không thay thế manual prompt/rubric review.
 ## Lưu ý chung
 
 - Task clone, report và ZIP sinh ra nằm trong `workspace/` và bị `.gitignore`, không đẩy lên git.
-- Mỗi skill có file mô tả chi tiết trong `skills/{tên-kỹ-năng}/SKILL.md`.
-- Khi sửa skill, sync lại `.codex/skills/`, `.claude/skills/`, và
-  `.gemini/skills/` nếu skill đó có bản runtime tương ứng.
+- Mỗi skill có file mô tả chi tiết trong `.agent/skills/{tên-kỹ-năng}/SKILL.md`.
+- Chỉ sửa skill trong `.agent/skills/`. `.claude/skills`, `.codex/skills`, và
+  `.gemini/skills` là symlink trỏ về đó nên tự cập nhật — không cần sync tay.
 - `instruction.md` phải là human language, không phải LLM checklist.
 - Với Docker/Harbor/CI, luôn đọc feedback cụ thể trước khi đoán lỗi.
 - Oracle pass chưa đủ; nop phải fail.
