@@ -166,6 +166,19 @@ draft and the task artifacts once more.
   the verifier checks must be derivable either from the named standard or from the
   kept task-specific contract. Stay narrative prose; do NOT convert to bullet
   lists or `## Input`/`## Rules` headings (the same check penalizes that shape).
+  CAUTION when delegating: the named standard must AGREE with the test ground
+  truth. If the standard has advisory / "should" language that a real runtime
+  implements differently, delegating creates a spec ambiguity, agents follow the
+  standard's strict reading and fail while the tests use the runtime's permissive
+  behavior (`task_specification: FAIL`, an unfair 0/N). Confirmed 2026-07-01: a
+  dpkg task delegated validity to "the Debian Policy Manual" (upstream *should*
+  start with a digit) but tested against real `dpkg --compare-versions` (which
+  accepts `a`/`abc`/`1..0`); 8/10 trials flagged the spec, and every agent failed
+  the same ~5 validity cases. Fix: pin the exact runtime behavior the tests use
+  ("validity matches `dpkg --compare-versions` at runtime; upstream MAY begin with
+  a non-digit"), or restore an explicit unambiguous rule. NOTE this also revealed
+  the task was never genuinely hard, its whole 0/N came from that one ambiguity;
+  see [[platform-hard-can-be-unfair-ambiguity-artifact]].
   NEVER add a "here is where a naive implementation goes wrong / the tricky parts
   are X, Y, Z / a few points bear emphasis" paragraph, and NEVER mention the
   verifier or the tests ("the verifier leans on this", "getting it wrong is
@@ -244,6 +257,14 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   `ubuntu:24.04@sha256:0d39…e932`. (Full digests live in `docs/creating-tasks/dockerfile-best-practices.md`.)
   A non-canonical base is allowed only with a brief, credible justification in the
   `Dockerfile` or task `README.md`; missing/vague justification is blocked.
+  - **Reviewer reality (Terminal-Bench 2.0):** reviewers treat `ghcr.io/laude-institute/t-bench/*`
+    as the canonical registry and will flag `public.ecr.aws/docker/library/*` images —
+    especially `golang`/`rust`, which have no t-bench-family equivalent — as *non-canonical*,
+    returning the task for revision even when the image is digest-pinned. When you must use the
+    ECR mirror (the common case for Go/Rust), pre-empt the revision by putting the justified-exception
+    comment **directly above the `FROM` line in the Dockerfile** (canonical registry has no image for
+    this language; digest-pinned for reproducibility; consistent with the rest of the suite). A
+    justification the reviewer can see in-file resolves the warning; one buried elsewhere does not.
 - Install `tmux` and `asciinema`.
 - For cloned-repo tasks, `git init` the task workdir after the final source
   `COPY` (`RUN git init -q && git config user.email task@example.com && git

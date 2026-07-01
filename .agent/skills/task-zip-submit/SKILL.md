@@ -13,7 +13,7 @@ Zip the contents of the task folder, not the folder itself.
 
 Task folders usually live under `workspace/`. Zip from inside the task folder, not from the repository root. Put submission ZIPs under `workspace/submissions/` so generated artifacts stay ignored.
 
-The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist. Do not include `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
+The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist (`instruction.md task.toml environment solution tests`) rather than zipping `.` — a `.` glob silently pulls in files reviewers reject. Do not include `rubric.md` or `SUBMISSION.md` (rubrics are entered in the platform UI only; `SUBMISSION.md` is a local meta-doc — reviewers return the task if either ships in the ZIP), nor `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
 
 The platform's `Difficulty Explanation`, `Solution Explanation`, and
 `Verification Explanation` fields are entered separately in the UI. They are
@@ -97,8 +97,17 @@ zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
 ```bash
 TASK_NAME="$(basename "$PWD")"
 unzip -l "../submissions/${TASK_NAME}.zip" | head -40
-unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|/\.env|\.ruff_cache|\.pytest_cache|CLAUDE\.md|skills\.md|AGENTS\.md|reports/|submissions/|jobs/|workspace/' || true
+unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|/\.env|\.ruff_cache|\.pytest_cache|CLAUDE\.md|skills\.md|AGENTS\.md|rubric\.md|SUBMISSION\.md|reports/|submissions/|jobs/|workspace/' || true
 ```
+
+Any hit from that grep is a blocker — re-zip with the allowlist. In particular `rubric.md` and `SUBMISSION.md` must not appear.
+
+**Verifier self-containment:** files that ship in `tests/` must not reference paths that are absent at verify time. The verifier container mounts only `/app` and `tests/`; `reports/`, `solution/`, and root docs are NOT present. Grep the verifier for stray references before zipping — a docstring or comment pointing at `reports/...` (or `solution/...`) is a review blocker even though it is "just a comment":
+
+```bash
+grep -nE 'reports/|solution/|\.\./' tests/*.py || true   # expect no matches
+```
+Fix by removing the reference (make the docstring self-contained) rather than shipping the extra file.
 
 The first listing must not show an extra top-level parent folder.
 
