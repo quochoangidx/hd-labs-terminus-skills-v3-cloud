@@ -460,9 +460,10 @@ Stop mining when a deterministic reproducer, localized touched files, and suffic
 Before mining deeply, check these:
 
 ```text
-mined-candidates/index.jsonl               # candidates already mined/claimed/cloned by the team
+mined-candidates/index.jsonl               # candidates already mined/claimed/cloned by the team (incl. the spec-conformance resource-claim lane)
 mined-candidates/gallery_tasks_snapshot.md # task NAMES already IN the live gallery — do not duplicate
 mined-candidates/gallery_taxonomy.md       # the category/subcategory/subsubcategory + subtype menu to align to
+.agent/skills/task-miner/lever_patterns.md # SHARED, resource-agnostic pattern specs + claimed-resource ledger — the in-repo home of "learn the pattern, not the resource" (replaces relying on any personal memory)
 ```
 
 The gallery snapshot is the **novelty gate**: if the gallery already contains the
@@ -479,6 +480,14 @@ Registry identity keys:
 - `repo + fixing_commit`
 - `repo + bug_signature`
 - `repo + base_commit + target_behavior`
+- `conformance_suite + spec + language` **(spec-conformance lane — MANDATORY).
+  The keys above do NOT catch conformance-suite collisions: the task slugs
+  differ and there is no repo/issue, so two teammates independently pick the
+  same official suite and only discover the clash after both are built. Claim
+  the suite+spec HERE before building. Cell-dedup on
+  `gallery_category × language × lever` requires a NOVEL resource within the
+  cell — a different suite than the ones the lever catalog names, not just a
+  different slug.**
 
 Reject or skip candidates already marked `cloned`, `submitted`, or `claimed` by another worker. If only the subsystem overlaps but the behavior differs, continue only when `bug_signature` is clearly distinct.
 
@@ -884,7 +893,26 @@ user N hard tasks from a pipeline:
   `environment/repo` makes it trivial — see task-clone), oracle passes 100%. Wins:
   WHATWG-URL (urltestdata.json), UTS-46 IDNA (IdnaTestV2), RFC 9535 JSONPath (CTS),
   UAX-14 line-break (LineBreakTest), UAX-29 SENTENCE-break, JSON-Schema-2020-12
-  (unevaluated*+$dynamicRef), HTML5 tokenizer (html5lib). Independent full
+  (unevaluated*+$dynamicRef), HTML5 tokenizer (html5lib). **LEARN THE PATTERN, NOT THE RESOURCE: those
+  named suites are ILLUSTRATIVE and by now mostly CLAIMED/BUILT by the team
+  (including sibling memories) — the LEVER is the reusable asset; a specific
+  suite is a shared, FINITE commodity. Do NOT default to a named suite. The
+  resource universe (WHATWG / Unicode UTS-UAX / RFC CTS / JSON-Schema / TOML
+  toml-test …) is small, so two miners who both "learned the resource"
+  independently reach for it and ship duplicates — confirmed: our TOML
+  (Go/toml-test) task collided outright with a teammate's, and our
+  html5-tree-construction collided with their whatwg-url-parse on the same
+  Rust × Data-Processing × WHATWG-conformance cell. Apply the pattern to a
+  FRESH spec+suite that is NOT already in the registry, and claim its
+  `conformance_suite`+`spec` in `index.jsonl` BEFORE building (see the
+  spec-conformance dedupe key below). The resource-agnostic spec for this
+  lever, the claimed-resource ledger, AND a complete step-by-step **L1 build
+  procedure** live in `.agent/skills/task-miner/lever_patterns.md` — follow that
+  runbook top-to-bottom (pivot-check for in-env reference impls, messy-spec check,
+  blind probe, fairness audit, disclose-vs-collapse, instruction_check). It is a
+  memory-free source of truth: anyone can build a fair-HARD task from it with NO
+  personal memory. Read it instead of relying on memory; it is shared, memory is
+  per-person.** Independent full
   implementations each miss DIFFERENT tail cases → 0-1/3 solve. NON-winners with a
   suite: clean CLEAN-RULE-SET segmenters (UAX-29 WORD-break was 3/3 EASY — a finite
   rule set + a provided property table is learnable) and well-known algos (byte-BPE,
