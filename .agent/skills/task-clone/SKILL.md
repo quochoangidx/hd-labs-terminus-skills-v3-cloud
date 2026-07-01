@@ -305,7 +305,28 @@ find <task>/environment -type f ! -name Dockerfile ! -name "docker-compose*" | w
 
 `languages` should list the main language(s) the agent works in or the oracle
 solution changes. Do not include Python solely because the verifier is written
-in pytest.
+in pytest. Use LOWERCASE slugs: `["rust"]`, `["go"]`, `["c"]`, `["typescript"]`
+— NOT `["Rust"]`/`["Go"]` (reviewers return capitalized values; the docs examples
+are all lowercase).
+
+**`[environment].workdir` is MILESTONE-ONLY.** Do NOT set `workdir` in a
+non-milestone (`number_of_milestones = 0`) `task.toml` — the container working
+directory comes from the Dockerfile `WORKDIR /app`; a stray `workdir` line gets
+flagged. (Docs `task-components.md`: `workdir = "/app"  # Milestone tasks only`.)
+
+⚠️ The der-canonical-codec reference `task.toml` predates these two rules — it
+ships `languages = ["Rust"]` AND `[environment] workdir = "/app"` in a
+non-milestone task. Both are WRONG; do not copy them. Confirmed 2026-07-01 by a
+platform reviewer on a Rust task.
+
+## Rubric quality (rubric is entered in the UI, NOT in the ZIP — see task-zip-submit)
+Reward the END STATE, not the process. Do NOT add criteria for "reads/studies the
+stub before starting", "compiles successfully with `cargo build`/`go build`"
+(compilation is a prerequisite implied by any output), or "verifies by running the
+binary on samples" — a reviewer strips these as process-not-state. Keep only
+behavioral end-state positives plus the required >=3 negative criteria, and make
+the max-score comment match the real positive sum. Confirmed 2026-07-01: a task
+shipped 3 such process lines (34 positives) and the reviewer cut them to 27.
 
 ## Instruction Style
 

@@ -115,6 +115,8 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 | `difficulty` | Must be `"medium"` or `"hard"`, NOT `"easy"` | ❌ manual |
 | **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
+| `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` | ✅ lowercase them |
+| `workdir` (milestone-only) | `[environment].workdir` must NOT appear when `number_of_milestones = 0`; it is milestone-only (container cwd comes from Dockerfile `WORKDIR`) | ✅ remove line |
 | `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
 | `category` | Must be one of the 9 valid values | ❌ manual |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
@@ -435,6 +437,11 @@ After upload to Snorkel, remind the user to create a rubric in the platform UI:
 - Format: `"Agent <did/did not> <observable action>, +/-N"`
 - Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
 - Total points: 10–40 for non-milestone tasks
+- Reward the END STATE, not the process: no "reads/studies the stub", no
+  "compiles successfully with `cargo build`/`go build`" (compilation is implied by
+  any output), no "verifies by running the binary on samples". Reviewers strip
+  these; keep behavioral end-state criteria only, and make any max-score comment
+  match the real positive sum.
 - Do NOT reference tests, verifier logic, `test.sh`, `test_outputs.py`,
   `/tests/`, hidden tests, CI, reward files, pytest results, metadata, or
   instruction items
