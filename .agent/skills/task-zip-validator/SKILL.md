@@ -282,6 +282,8 @@ The instruction_check LLMaJ reviewer applies "state the problem, not the solutio
 | No implementation steps | No "Add X field", "Modify Y function", "Change Z to W" | manual |
 | No internal names | No unexported function/variable names from the fix | compare with fix.patch |
 | No upstream test names | No `TestSomething`, `test_something` from upstream | compare with repo tests |
+| No pitfall/trap emphasis | No "where a naive X goes wrong", "the tricky/subtle parts are", "a few points bear emphasis", "getting it wrong is easy", "worth calling out". Points the solver at the traps (no-hints violation) and makes it easier. For spec/conformance tasks, delegate rule detail to the named standard ("per RFC 9535 / UAX-14, treat it as authoritative") and let the solver find the hard parts. | `grep -inE 'naive\|goes wrong\|bear emphasis\|tricky\|worth calling out\|getting (it\|them) wrong'` |
+| No verifier/test mention | Instruction never references the grader: no "the verifier", "the tests check/lean on", "the verifier expects" | `grep -inE '\bverifier\b\|the tests\b'` |
 
 ### 3c. Behavioral completeness (BLOCKING — behavior_in_tests)
 

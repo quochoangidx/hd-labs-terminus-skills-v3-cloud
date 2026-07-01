@@ -421,6 +421,18 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   existing canonical entry, is **blocked** by `check_sanctioned_base_images`.
 - install `tmux`, `asciinema`, `bash`, and usually `util-linux`
 - include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
+- **expose the language toolchain on `/usr/local/bin`.** The agent runs in a LOGIN
+  shell that resets PATH to `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`
+  and drops any Docker `ENV PATH` additions. The Go image keeps `go`/`gofmt` in
+  `/usr/local/go/bin` and the Rust image keeps `cargo`/`rustc` in `/usr/local/cargo/bin`,
+  neither of which is on that login PATH, so the agent cannot invoke the compiler
+  even though oracle/nop can (they run in a non-login shell with PATH intact).
+  Symlink them: Go `RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`;
+  Rust `ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`.
+  Confirmed 2026-07-01: a Go task omitted this and ~3/10 agent trials failed with
+  "no Go toolchain, unable to compile", scoring 0 for a pure environment reason
+  while oracle stayed green. Verify with
+  `docker run --rm --entrypoint bash <img> -lc 'command -v go'`.
 - **initialize a git repo in the task workdir** (after the final source `COPY`)
   so the agent's edit tooling works. Many agents apply edits via `git apply` and
   self-check with `git diff`; if the cloned repo's `.git` was stripped (and

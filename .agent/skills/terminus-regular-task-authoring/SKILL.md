@@ -166,6 +166,14 @@ draft and the task artifacts once more.
   the verifier checks must be derivable either from the named standard or from the
   kept task-specific contract. Stay narrative prose; do NOT convert to bullet
   lists or `## Input`/`## Rules` headings (the same check penalizes that shape).
+  NEVER add a "here is where a naive implementation goes wrong / the tricky parts
+  are X, Y, Z / a few points bear emphasis" paragraph, and NEVER mention the
+  verifier or the tests ("the verifier leans on this", "getting it wrong is
+  easy"). Those are no-hints violations (CI `instruction_check` flags them) AND
+  they make the task easier by pointing at the traps. State the observable
+  contract and the governing standard; let the solver discover the hard parts.
+  Confirmed 2026-07-01: four conformance tasks (UAX-14/29, RFC 9535, Selectors L4)
+  shipped exactly such pitfall paragraphs and got flagged.
 - Do not narrate the internal mechanism or root cause (the #1 client reject,
   June 2026 trial feedback). Describe the observable symptom and the desired
   outcome, not how the code is wrong inside. Cut "Right now the parser does X
