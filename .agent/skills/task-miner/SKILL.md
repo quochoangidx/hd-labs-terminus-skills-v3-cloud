@@ -877,6 +877,24 @@ user N hard tasks from a pipeline:
 - **Empirically-hard non-spec lever stays the subtle-invariant BUGFIX** (caffeine
   cache-eviction, valkey resize policy, go-mysql FDS) — but those are `debugging`,
   currently ON HOLD.
+- **The strongest ALLOWED-category lever (2026-07-01, netted 10 HARD / 17 built):
+  an OFFICIAL machine-checkable conformance suite over a spec with a genuinely
+  DIVERGENT / irregular long tail, where NO host-stdlib matches.** Ship the stub,
+  bake the official suite HIDDEN under `tests/` (a leaked answer table in
+  `environment/repo` makes it trivial — see task-clone), oracle passes 100%. Wins:
+  WHATWG-URL (urltestdata.json), UTS-46 IDNA (IdnaTestV2), RFC 9535 JSONPath (CTS),
+  UAX-14 line-break (LineBreakTest), UAX-29 SENTENCE-break, JSON-Schema-2020-12
+  (unevaluated*+$dynamicRef), HTML5 tokenizer (html5lib). Independent full
+  implementations each miss DIFFERENT tail cases → 0-1/3 solve. NON-winners with a
+  suite: clean CLEAN-RULE-SET segmenters (UAX-29 WORD-break was 3/3 EASY — a finite
+  rule set + a provided property table is learnable) and well-known algos (byte-BPE,
+  3/3). Clean bidirectional CODECS (bech32/punycode/structured-fields) and matching
+  engines (git-pathspec) also 3/3 EASY. So the suite is necessary-not-sufficient:
+  it must cover a spec people actually implement INCONSISTENTLY. Probe CENTRALLY
+  from the manager (this harness spawns subagents async-only); blind solvers must
+  NOT paste source (dumps blow up context). Audit any 0/3 for the unfair artifact:
+  if all runs fail the SAME single narrow test it is a spec-ambiguity, not hardness
+  (a MIME encoded-word task's encode-structure test had legit fold/B-vs-Q freedom).
 
 ## Hardness Calibration
 

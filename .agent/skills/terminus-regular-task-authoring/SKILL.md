@@ -154,6 +154,18 @@ draft and the task artifacts once more.
 - Apply the real-user prompt test to every sentence: would a developer who did
   not already know the solution naturally include this detail? If not, it is
   probably a hint rather than a requirement.
+- For spec / conformance tasks, DELEGATE the rule enumeration to the named
+  authoritative standard instead of transcribing it. Say "expansion follows RFC
+  6570 Level 4 exactly, treat it as governing" rather than walking through every
+  operator, encoding set, and edge case. The CI `instruction_check` rejects
+  instructions that "read like a reference manual"; a long enumeration also hints
+  at the traps and makes the task easier. KEEP explicit only what the standard
+  does NOT define: the CLI, the exact input/output format, the `ERROR: <code>`
+  strings and exit codes, and any task-specific decisions (which malformed inputs
+  map to which error). Verify instruction/test symmetry still holds: everything
+  the verifier checks must be derivable either from the named standard or from the
+  kept task-specific contract. Stay narrative prose; do NOT convert to bullet
+  lists or `## Input`/`## Rules` headings (the same check penalizes that shape).
 - Do not narrate the internal mechanism or root cause (the #1 client reject,
   June 2026 trial feedback). Describe the observable symptom and the desired
   outcome, not how the code is wrong inside. Cut "Right now the parser does X

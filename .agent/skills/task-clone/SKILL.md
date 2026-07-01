@@ -579,6 +579,23 @@ passed). The agent fixes only the source; the verifier brings its own tests, so
 the prompt need not name any test file or function -- name only a new public
 API symbol the test must call (see Instruction Style).
 
+**Expected-output DATA is a test vector too -- keep the answer key out of
+`environment/repo`.** For conformance-style tasks graded against an official
+suite, the `(input, expected-output)` vector table lives ONLY under `tests/`
+(embedded in `test_outputs.py` or a `tests/*.json` data file the verifier reads).
+NEVER commit the answer table into `environment/repo` -- e.g. a `cases.rs` /
+`vectors.json` plus a repo `selftest` subcommand that a verifier test invokes.
+The agent reads the shipped repo, so a repo-embedded answer table hands over the
+expected outputs and the task collapses to trivial. If you want a fast in-process
+full-suite check, feed the vectors from a `tests/` file into the binary at verify
+time (or have the binary read a path under `tests/`); do not compile them into the
+shipped crate. Before shipping, grep the repo for answer-shaped data:
+`grep -rlE 'expected|TEST_CASES|÷|<the exact output token>' <task>/environment/repo`.
+Confirmed 2026-07-01: a UAX-14 line-break task shipped `src/cases.rs` with all
+19338 `(input, expected ÷/× marker)` vectors so a repo `selftest` could check them
+-- that leaked the entire answer key; the fix was to move the check to the hidden
+`tests/` vectors and delete the repo table.
+
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
 Verifier matrix for upstream bugfixes must include:
