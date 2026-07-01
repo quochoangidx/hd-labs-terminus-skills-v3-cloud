@@ -15,6 +15,8 @@ Task folders usually live under `workspace/`. Zip from inside the task folder, n
 
 The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist (`instruction.md task.toml environment solution tests`) rather than zipping `.` — a `.` glob silently pulls in files reviewers reject. Do not include `rubric.md` or `SUBMISSION.md` (rubrics are entered in the platform UI only; `SUBMISSION.md` is a local meta-doc — reviewers return the task if either ships in the ZIP), nor `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
 
+**Make shell scripts executable before zipping.** Reviewers reject a ZIP whose `tests/test.sh` or `solution/solve.sh` is non-executable. Run `chmod +x tests/test.sh solution/solve.sh` first, then verify the stored Unix mode with `unzip -Z <zip> tests/test.sh solution/solve.sh` (expect `-rwxr-xr-x`). `zip -X` preserves the Unix permission mode — it only strips uid/gid and timestamps — so the allowlist command below keeps the exec bit intact.
+
 The platform's `Difficulty Explanation`, `Solution Explanation`, and
 `Verification Explanation` fields are entered separately in the UI. They are
 not ZIP contents.
