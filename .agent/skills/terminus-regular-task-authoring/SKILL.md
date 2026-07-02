@@ -144,6 +144,50 @@ draft and the task artifacts once more.
 
 ## Prompt Rules
 
+**`instruction_check` — pass on the FIRST try. Two DIFFERENT checks share the word
+"instruction" and pull in OPPOSITE directions, so blindly adding or cutting detail
+ping-pongs between them. Identify which one failed, then pull the matching lever:**
+
+| Failure | It complains that… | Usual cause | Lever |
+|---|---|---|---|
+| *"reads like a reference manual / design document"* (structural) | too much structure / enumeration | `##`/`###` headers, bullet or numbered rule lists, tables, step-by-step algorithm narration, function-signature / struct-field dumps, "pay attention to…", >~300 words | REMOVE structure → flowing prose; delegate the rule-set to the named standard |
+| *Task Instruction Sufficiency* / `task_specification` (completeness) | a behavior/value the hidden tests assert is not stated | prompt defers everything to a spec URL but a test pins an edge/constant an agent won't infer (e.g. TOML's UTF-8 BOM) | ADD that edge/value in a SENTENCE (never a table); or make the verifier behavioral so it isn't pinned |
+
+**#1 recurring cause of the structural FAIL:** writing `instruction.md` with `## Input` /
+`## Output` / `## Rules` headings and bullet lists — that shape alone trips it every time.
+Use flowing prose: no headers, no bullets, no tables.
+
+**Sweet spot that passes BOTH** = prose containing only the one-sentence objective + the
+exact I/O contract + "treat <NAMED STANDARD> as the definition of correct behavior" + one
+or two sentences naming any tested edge the standard leaves implicit. Delegate general
+rules to the standard; state only what it does NOT define plus tested constants; keep code
+identifiers out (make the verifier opaque instead).
+
+Copyable skeleton (no headers/bullets/tables, ≤300 words):
+
+> The program at `<path>` should `<objective, one sentence>`. It reads `<input>` from
+> `<source>` and writes `<output>` to `<destination>`. Its behavior follows
+> `<NAMED STANDARD>` exactly; treat that standard as the definition of correct behavior.
+> `<One or two sentences for any tested edge an agent would miss, e.g. "a leading UTF-8
+> BOM must be accepted and silently ignored">`. Build it with `<cmd>`; the output must be
+> exactly `<format>` and nothing else.
+
+Binary preflight (every box YES before running the check):
+
+- no `##`/`###` headers, no bullet/numbered lists, no tables;
+- no step-by-step algorithm, no function signatures / struct-field dumps;
+- no "pay attention" / "note that" / "make sure" hint phrases; no PR/issue/test-name/rubric leakage;
+- ≤ ~300 words of flowing prose;
+- every VALUE/constant/edge the hidden tests assert appears in a sentence (sufficiency);
+- general rule-sets delegated to the named standard, not transcribed;
+- code identifiers the tests pin are NOT in the prompt (verifier is behavioral instead).
+
+For **L1 conformance tasks**, "implement <spec>; treat <spec> + its official suite as the
+definition" normally satisfies BOTH. But if a SINGLE tested edge is both undisclosed AND
+trivially pivotable via an in-env reference (TOML + BOM + `tomllib`), you are in the
+disclose-vs-collapse trap — fix the RESOURCE, not the prose (see
+`.agent/skills/task-miner/lever_patterns.md`, L1 step 7).
+
 `instruction.md` should:
 
 - Be short and human-styled.

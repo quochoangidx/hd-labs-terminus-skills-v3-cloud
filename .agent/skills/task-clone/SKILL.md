@@ -612,6 +612,16 @@ passed). The agent fixes only the source; the verifier brings its own tests, so
 the prompt need not name any test file or function -- name only a new public
 API symbol the test must call (see Instruction Style).
 
+**Re-check the RESOURCE is novel before scaffolding a conformance-style task.**
+The named-suite universe (WHATWG / Unicode UTS-UAX / RFC CTS / JSON-Schema /
+TOML toml-test …) is small and SHARED across teammates, so a slug-distinct task
+built over the SAME official suite is still a duplicate. Before cloning, confirm
+the artifact's `conformance_suite`+`spec` is not already `claimed`/`submitted`
+in `mined-candidates/index.jsonl` (human mirror: the L1 claimed-resource ledger
+in `.agent/skills/task-miner/lever_patterns.md`). If it is taken, STOP and
+re-target the same lever onto a fresh spec+suite rather than cloning — learn the
+pattern, not the resource.
+
 **Expected-output DATA is a test vector too -- keep the answer key out of
 `environment/repo`.** For conformance-style tasks graded against an official
 suite, the `(input, expected-output)` vector table lives ONLY under `tests/`
