@@ -157,27 +157,33 @@ reachable.
   contract/oracle. Sanity-gate before trusting any score: the SOURCE oracle must
   PASS and the stock/starting state must FAIL under the same command.
 
-## Coverage pre-audit for conformance corpora (pre-empt the 0/N flag)
+## Submit-readiness verdict (no extra runs — re-score the diffs you already have)
 
-For tasks graded per-case over a big corpus, the probe's solver diffs double as
-a FREE correlated-blind-spot detector. The platform's blocking flag "Some tests
-not passed by any agent run" fires exactly on cases ALL agents miss, and the
-probe solvers predict those. After the runs:
+The probe must end with a SUBMIT verdict, not just a pass rate. It combines the
+difficulty band with union coverage (the platform's blocking flag "Some tests
+not passed by any agent run" fires on any case ALL agents miss), using only the
+diffs already produced — never spend additional solver runs on this:
 
-- Score EACH solver's build per-case against the SOURCE corpus (not just the
-  overall pass/fail) and compute the union: which cases did NO probe run pass?
-- A case at 0/probes is a correlated-blind-spot candidate. Before submitting,
-  disclose it (one instruction sentence or an in-env examples file), ship the
-  missing non-derivable reference data in-env, or prune it — decision tree in
-  `.agent/skills/task-revise-flag-remediation/SKILL.md`.
-- Cases passed by only ~1 of 3 probes are fine (de-correlated hardness); the
-  target shape is many independent quirk families each solver misses a
-  DIFFERENT slice of.
-- Solver diffs/binaries are reusable: after strengthening or pruning the
-  corpus, RE-SCORE the stored diffs instead of re-running solvers.
+- **1/3 pass** → union coverage is AUTOMATICALLY satisfied (the passing run
+  covers every case). Verdict: **submit-ready** — the sweet spot (hard + every
+  test reachable).
+- **0/3 pass** → score each stored solver diff PER-CASE against the SOURCE
+  corpus and compute the union:
+  - union covers ALL cases → **submit-ready** (each run failed a different
+    slice = de-correlated hardness, exactly the target shape);
+  - any case passed by NO run → **fix first**: correlated blind spot — disclose
+    it (one sentence or an in-env examples file), ship the missing reference
+    data in-env, or prune it per
+    `.agent/skills/task-revise-flag-remediation/SKILL.md`, then RE-SCORE the
+    same stored diffs (free) to confirm the union now covers everything.
+- **2-3/3 pass** → too easy; coverage is irrelevant, rework or replace.
 
-This costs no extra solver budget and catches most coverage-flag returns one
-platform cycle early.
+Caveats: a 3-run local union is a noisier sample than the platform's ~10 runs
+(a case at exactly 1/3 here can still land 0/N there), and this probe is
+over-generous (see below) — a solver that pivoted to a host reference passes
+cases a sandboxed platform agent cannot, hiding blind spots. Score diffs built
+inside the task image with `--network none` when the verdict matters. The
+platform run remains the source of truth.
 
 ## Solver Prompt Shape
 
@@ -206,5 +212,9 @@ Return:
 - whether failures are semantic/fair or setup/instruction noise
 - compact semantic failure patterns suitable as factual input to the Difficulty
   Explanation, with no solver/model names and no hidden fixture details
-- recommendation: `rework`, `run_harbor_llm_with_approval`, `replace`, or
+- for 0/3 conformance-corpus tasks: the per-case union verdict (all cases
+  covered by ≥1 run, or the list of 0-probe correlated-blind-spot cases)
+- recommendation: `submit_ready` (0-1/3 pass AND union covers every case),
+  `fix_coverage_then_rescore` (0/3 with 0-probe cases), `rework`,
+  `run_harbor_llm_with_approval`, `replace`, or
   `keep_without_llm_if_budget_limited`
