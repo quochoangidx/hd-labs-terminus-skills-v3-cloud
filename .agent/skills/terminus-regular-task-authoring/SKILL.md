@@ -347,7 +347,24 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
 - Install verifier dependencies in the Docker image by default. Never fetch
   packages from the network at verifier runtime.
 - Keep `environment/` under 100 MiB total and each file under 50 MiB.
-- Include `.dockerignore` for non-trivial environments.
+- Include `.dockerignore` for non-trivial environments, and always start from
+  the standard clutter/secrets exclusion set (reviewers flag a thin `.dockerignore`
+  that omits these) — then add any task-specific build outputs (e.g. `numfmt`,
+  `*.o`, a Rust `target/`):
+
+  ```gitignore
+  .git
+  .gitignore
+  **/.git
+  **/.DS_Store
+  **/._*
+  **/__pycache__/
+  **/*.pyc
+  **/.pytest_cache/
+  **/.mypy_cache/
+  **/.ruff_cache/
+  **/node_modules/
+  ```
 - Avoid heredocs for source files; store files on disk and `COPY` them.
 - Pin downloaded binaries by version and checksum; avoid `curl | sh`.
 - Order Dockerfile layers from stable dependencies to volatile task source.
@@ -376,6 +393,11 @@ Tests must:
 - Cover every explicit and important implicit prompt requirement.
 - Include boundary cases and at least one regression guard.
 - Assert no internal crash/traceback when the task is about recoverable behavior.
+- Pin the OUTPUT SHAPE, not just the values at expected positions. For a
+  line/record-oriented CLI, assert the exact count of output lines equals the
+  number of requests (and stdout ends cleanly) so a program that prints a banner,
+  a debug line, or an extra/missing trailing line fails — indexing only the
+  positions you expect silently lets stray output through.
 
 Avoid quality-check failures:
 
