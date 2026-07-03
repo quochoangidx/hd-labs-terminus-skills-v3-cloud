@@ -97,7 +97,9 @@ difficulty.
 
 Early-stop rules:
 
-- If the first 2 runs pass quickly, stop and treat the task as likely too easy.
+- If the first 2 runs pass quickly: for Python tasks (must be Hard), stop and
+  treat as too easy; for non-Python tasks, run the third — 2/3 is still
+  submit-viable, only 3/3 defaults to rework.
 - If the first 2 runs fail for setup, unclear instruction, or verifier
   construction reasons, stop and fix the task before probing again.
 - If the first 2 runs fail semantically in different fair ways, the task is
@@ -167,16 +169,31 @@ diffs already produced — never spend additional solver runs on this:
 - **1/3 pass** → union coverage is AUTOMATICALLY satisfied (the passing run
   covers every case). Verdict: **submit-ready** — the sweet spot (hard + every
   test reachable).
+- **2/3 pass** → coverage also auto-satisfied; lands around Medium. **Submit-viable
+  for non-Python tasks** (only Easy is blocked); NOT enough for Python tasks
+  (which must be Hard) → rework those.
+- **3/3 pass** → **review**: default too easy, rework or replace — a 3/3 on this
+  over-generous probe rarely survives even as Medium on the platform. Keep only
+  with a concrete reason (e.g. all three passes leaned on a host reference the
+  fair in-image probe denies — then re-probe fairly).
 - **0/3 pass** → score each stored solver diff PER-CASE against the SOURCE
-  corpus and compute the union:
-  - union covers ALL cases → **submit-ready** (each run failed a different
-    slice = de-correlated hardness, exactly the target shape);
-  - any case passed by NO run → **fix first**: correlated blind spot — disclose
-    it (one sentence or an in-env examples file), ship the missing reference
-    data in-env, or prune it per
-    `.agent/skills/task-revise-flag-remediation/SKILL.md`, then RE-SCORE the
-    same stored diffs (free) to confirm the union now covers everything.
-- **2-3/3 pass** → too easy; coverage is irrelevant, rework or replace.
+  corpus, combine the results, and pick the action by the failure GEOMETRY:
+  1. **Union covers ALL cases** → **submit-ready** (each run failed a different
+     slice = de-correlated hardness, exactly the target shape).
+  2. **Killer cases sit inside group/aggregate tests but ≥1 run passed them
+     individually** → **SPLIT**: parametrize the corpus per-case (changes the
+     unit of coverage, not the win condition).
+  3. **A few 0-probe cases on an irreducible obscure feature or undisclosed
+     convention** → **PRUNE** them, or disclose / ship the non-derivable
+     reference data in-env, per
+     `.agent/skills/task-revise-flag-remediation/SKILL.md` — then RE-SCORE the
+     same stored diffs (free) to confirm the union now covers everything.
+  4. **Runs are NEAR-PERFECT, failing only one (or a couple of) case(s)** — the
+     single-blind-spot fingerprint: the entire difficulty is one insight or
+     ambiguity, with no fair middle (kept hidden = unfair 0/N; disclosed = the
+     task collapses to EASY). → **REDESIGN around an independent lever, or DROP
+     the task.** Do NOT prune your way out here — removing that case flips the
+     near-perfect runs to 100% and leaves an EASY task.
 
 Caveats: a 3-run local union is a noisier sample than the platform's ~10 runs
 (a case at exactly 1/3 here can still land 0/N there), and this probe is
@@ -214,7 +231,9 @@ Return:
   Explanation, with no solver/model names and no hidden fixture details
 - for 0/3 conformance-corpus tasks: the per-case union verdict (all cases
   covered by ≥1 run, or the list of 0-probe correlated-blind-spot cases)
-- recommendation: `submit_ready` (0-1/3 pass AND union covers every case),
-  `fix_coverage_then_rescore` (0/3 with 0-probe cases), `rework`,
+- recommendation: `submit_ready` (0-2/3 pass AND union covers every case; 2/3
+  only for non-Python tasks), `fix_coverage_then_rescore` (0/3 with fixable
+  0-probe cases: split / prune / disclose), `redesign_or_drop` (0/3 with the
+  near-perfect single-blind-spot fingerprint), `rework`,
   `run_harbor_llm_with_approval`, `replace`, or
   `keep_without_llm_if_budget_limited`
