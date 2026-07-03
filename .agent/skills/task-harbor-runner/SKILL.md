@@ -9,20 +9,35 @@ Use this skill after a task folder exists and the user wants to run or debug it.
 
 ## Command Order
 
-Prefer this sequence:
+Prefer this sequence (CLI surface verified 2026-06-24; mind the version skew —
+bare `harbor` is 0.5.0 while the stb-bundled one is 0.7.0, and `harbor tasks
+check` was REMOVED in 0.7.0):
 
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
+stb harbor check <task-folder>          # replaces the removed `harbor tasks check`
 ```
 
-Run real agents only when the user approves API usage:
+Run real agents only when the user approves API usage. `-a` DEFAULTS TO ORACLE —
+always pass the agent explicitly, and the agent name is `terminus-2` (not
+`terminus`); models are Portkey `@provider/model` slugs:
 
 ```bash
-stb harbor run -m @openai/gpt-5.5 -p <task-folder>
-stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
+stb harbor run -a terminus-2 -m @openai/gpt-5.5 -k 3 -p <task-folder>
+stb harbor run -a terminus-2 -m @anthropic/claude-opus-4-8 -k 3 -p <task-folder>
 ```
+
+Known INFRA failures — do not treat these as task defects:
+
+- `stb harbor check` dying with an `openrouter` API-key error is the check
+  harness, not the task. Fall back to Docker oracle/nop plus a blind solve
+  probe (`task-local-solve-probe`); the platform check at submit stays the
+  source of truth.
+- From VN both providers geo-block direct API calls (OpenAI 403 country /
+  Anthropic not-allowed) — run via the platform or a VPN; never rewrite the
+  task in response.
+- Creds are budget-capped (~$10/30d) but rotatable via `stb keys refresh`.
 
 Use the absolute binary path if PATH is stale:
 
@@ -128,7 +143,14 @@ Docker daemon:
 
 Dockerfile:
 
-- missing `tmux` causes interactive agent bootstrap failure.
+- missing `tmux` causes interactive agent bootstrap failure. On a raw non-tb
+  base image (e.g. `rust:1.85-slim`) EVERY agent run dies at setup — the
+  harness builds tmux from source and hits the 360s `AgentSetupTimeoutError` —
+  and the platform report disguises it as external "tmux-build-timeout" infra
+  plus a spurious HARD verdict. Fingerprint: `verifier_did_not_run: N/N` +
+  oracle passes + nop fails = contaminated signal, NOT difficulty. Fix:
+  apt-install `tmux` + `asciinema` in the Dockerfile, re-verify oracle=1/nop=0,
+  re-zip. Mandatory check whenever the base image is not a tb-canonical one.
 - missing `asciinema` can fail agent runtime.
 - `apt-get` in verifier fails when `allow_internet = false`; install deps at image build time.
 - `COPY tests/` or `COPY solution/` is a hard failure.

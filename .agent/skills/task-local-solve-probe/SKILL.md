@@ -149,6 +149,35 @@ reachable.
   `verify/` copy and running `harbor --force-build -a nop -p run_N/verify`
   (reward 1.0 = solved). Do NOT use `probe.py apply` — its `diff -ruN` treats the
   sanitized-away `solution/`,`tests/` as deletions and corrupts `verify/`.
+- **Probe copies go STALE the moment the source task is edited** (spec fix,
+  corpus prune, test change after probe prep). Score solver diffs against the
+  SOURCE task's `tests/` + oracle, never against a `run_N/verify` copy prepared
+  earlier — a stale copy can flip the whole verdict. Tells: a "MISSING TEST FN"
+  pytest error, or the copy's expected outputs disagreeing with the current
+  contract/oracle. Sanity-gate before trusting any score: the SOURCE oracle must
+  PASS and the stock/starting state must FAIL under the same command.
+
+## Coverage pre-audit for conformance corpora (pre-empt the 0/N flag)
+
+For tasks graded per-case over a big corpus, the probe's solver diffs double as
+a FREE correlated-blind-spot detector. The platform's blocking flag "Some tests
+not passed by any agent run" fires exactly on cases ALL agents miss, and the
+probe solvers predict those. After the runs:
+
+- Score EACH solver's build per-case against the SOURCE corpus (not just the
+  overall pass/fail) and compute the union: which cases did NO probe run pass?
+- A case at 0/probes is a correlated-blind-spot candidate. Before submitting,
+  disclose it (one instruction sentence or an in-env examples file), ship the
+  missing non-derivable reference data in-env, or prune it — decision tree in
+  `.agent/skills/task-revise-flag-remediation/SKILL.md`.
+- Cases passed by only ~1 of 3 probes are fine (de-correlated hardness); the
+  target shape is many independent quirk families each solver misses a
+  DIFFERENT slice of.
+- Solver diffs/binaries are reusable: after strengthening or pruning the
+  corpus, RE-SCORE the stored diffs instead of re-running solvers.
+
+This costs no extra solver budget and catches most coverage-flag returns one
+platform cycle early.
 
 ## Solver Prompt Shape
 

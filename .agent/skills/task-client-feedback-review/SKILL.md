@@ -158,7 +158,10 @@ workspace/reports/<task-slug>/submission-explanations.md
 - dependency installation or downloads in `tests/test.sh`
 - instructions or rubrics referencing tests, verifier logic, `test.sh`,
   `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, pytest, or final
-  test results
+  test results. NOTE: the feedback scanner also matches the BARE WORD
+  (`\bverifier\b`) in `instruction.md` and environment comments, so an innocent
+  sentence like "the verifier binary reads stdin" trips it as a false positive —
+  rename to "binary"/"program"/"the checks" to dodge it
 - canary strings (`CANARY-*`)
 - `/logs/verifier` not prepared before early exits in `tests/test.sh`
 - license files in small or minimal codebases
