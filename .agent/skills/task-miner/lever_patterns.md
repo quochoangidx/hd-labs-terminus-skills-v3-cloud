@@ -54,7 +54,12 @@ dedupe_key:         conformance_suite + spec + language  (mirror into index.json
   divergent tail. (Answer table in `environment/repo` makes it trivial — see task-clone.)
 - **necessary (ALL must hold):**
   - an official, machine-checkable suite exists over the spec;
-  - the spec has a genuinely divergent / irregular long tail;
+  - the spec has a genuinely divergent / irregular long tail. The strongest positive
+    signal is **REAL-IMPL-AS-SPEC**: ground truth is the accreted quirks of a real
+    implementation that nobody DESIGNED (Maven/semver/conda/croniter ordering rules,
+    browser-compat WHATWG behavior) — a frontier model cannot re-derive from principles
+    what was never principled. A deliberately-designed, precisely-written standard fails
+    this even when intricate (see the disqualifiers);
   - NO reference implementation is reachable IN THE ENVIRONMENT — vet EVERY language
     and tool on PATH in the task image, not just the task language's stdlib. Agents
     pivot across languages: if the image ships `python3` (needed by the pytest
@@ -67,7 +72,17 @@ dedupe_key:         conformance_suite + spec + language  (mirror into index.json
   - clean finite rule-set + a provided property table (e.g. a WORD-break-style segmenter);
   - a well-known named algorithm (e.g. byte-BPE);
   - a clean bidirectional codec (bech32 / punycode / structured-fields shape);
-  - a clean matching engine (git-pathspec shape).
+  - a clean matching engine (git-pathspec shape);
+  - a PRECISELY-SPECIFIED standard, however intricate — including crypto with public
+    KATs (rpmvercmp, CLDR plurals with the rules shipped as data, Argon2/RFC 9106 — each
+    3/3 EASY, 2026-07-02). Intricacy ≠ difficulty: the tail must be one a frontier model
+    implementing FRESH gets wrong, not merely one a popular library flubs (RFC 6570
+    falsified this — the `uritemplate` lib is wrong on 6 cases, yet Opus 4.8 and GPT-5.5
+    both scored 10/10);
+  - FAMOUS/memorizable reference vectors (chess perft node counts — blind 3/3): the
+    solver self-verifies against memorized constants. Pick specs whose (input→output)
+    vectors are obscure lookup-table data (Unicode sort keys, URL parses), never famous
+    numbers.
   - **TOML 1.0.0 — DISQUALIFIED (in-env reference impl).** Task language Go has no TOML
     in std, BUT the image installs `python3` and Python's stdlib `tomllib` is a
     ~99.7%-compliant decoder. Agents pivot to it: in the `tbrain-toml-document-decoder`
@@ -103,15 +118,81 @@ Authoritative machine copy = the `lever:"conformance-suite-divergent-tail"` line
 | Unicode CollationTest (UCA)      | UTS-10 + DUCET    | C++        | this-workspace | claimed | replaces chess; variable-weighting SHIFTED/NON_IGNORABLE + contractions + implicit weights tail; sort keys are NOT memorizable → solver cannot self-verify |
 | css-tokenizer-tests (romainmenke)| CSS Syntax L3     | Go         | this-workspace | claimed | escapes/number/url-token/bad-string recovery tail; no stdlib CSS tokenizer in Python |
 | RFC 5545 RRULE vectors           | RFC 5545 RRULE    | Rust       | this-workspace | claimed | BYSETPOS/BYDAY-in-monthly/negative BYMONTHDAY/WKST tail; dateutil not in stdlib |
+| Maven ComparableVersion + ComparableVersionTest | Maven ComparableVersion (maven-artifact 3.9.9) | Go | this-workspace | built | **HARD (blind Opus 0/3, ~890/8015 miss)** qualifier-precedence (alpha/beta/milestone/rc/cr/snapshot/sp + unknown-lexical), digit↔char transition, `.X` vs `-X` sub-list, aliases, trailing-null normalization tail; ground truth from real Maven; Python `packaging` is PEP440 not Maven → no pivot. tbrain-maven-version-order |
+| node-semver test fixtures        | npm semver ranges | Rust       | this-workspace | built   | **HARD (blind Opus 0/3, 28–133/3131 miss)** prerelease-inclusion + caret/tilde-on-0.x + `-0` valid_range canonicalization tail; no npm-semver in Python (PEP440 differs). tbrain-semver-range-satisfies |
+| json5/json5-tests (relabelled)   | JSON5 v1.0.0      | C          | this-workspace | built   | qualifies but BORDERLINE (blind Opus 1/3 fail, U+2028/2029 string line-continuation); ECMAScript IdentifierName keys + number-grammar tail; Python `json` is strict JSON. tbrain-json5-parse |
+| rpm tests/rpmvercmp.at + pairwise | RPM version cmp (rpmvercmp) | Rust | this-workspace | REJECTED | **too easy — blind Opus 3/3 (2599/2599).** rpmvercmp is a SMALL clean well-known algorithm; version-ordering is NOT uniformly hard (rpm≠maven/semver, which are hard for their LARGE irregular tails). |
+| CLDR plurals.xml + @integer/@decimal samples | UTS-35 Pt5 plural rules | Go | this-workspace | REJECTED | **too easy — blind Opus 3/3 (3170/3170).** Shipping the rules-as-data + spelling out operands (needed for sufficiency) leaves nothing divergent → over-specified standard collapses. |
+| RFC 9106 KAT + argon2-cffi corpus | Argon2 v1.3 (i/d/id) | C | this-workspace | REJECTED | **too easy — blind Opus 3/3 (1804/1804).** Precisely-specified crypto standard w/ public KATs; Opus reproduces exactly. Intricacy ≠ difficulty. |
+| croniter reference (generated) | cron next-fire-time (croniter dialect) | Go | this-workspace | **built HARD** | **blind Opus 0/3 (broad 6/7-group fail).** Large quirky real-impl surface: DOM/DOW OR-rule, L, d#n, 3 step forms, name-range endpoints, X-X→full-range croniter quirk, year rollover. tbrain-cron-next-fire |
+| Ruby Gem::Version/Requirement (host ref) | RubyGems requirement satisfaction | Go | this-workspace | REJECTED | **too easy — blind Opus 2/3.** Gem::Version well-known; RubyGems has NO prerelease-exclusion quirk → surface too small. (RANGE-satisfaction generally hard — see semver — but needs a big quirk set.) |
+| portage.versions.vercmp + tests | Gentoo/PMS ebuild vercmp | Go | this-workspace | REJECTED | **too easy — blind Opus 3/3.** leading-zero-fraction rule has an equivalent simple formulation; suffix precedence documented. |
+| cyberphone testdata + node/V8 (ES6) | RFC 8785 JSON Canonicalization | Go | this-workspace | REJECTED | **too easy — blind Opus 3/3.** ES6 Number::toString + UTF-16 key sort + minimal escaping all documented; Opus reproduces. |
+| RFC 3986 sec 5.4 + port | RFC 3986 URI reference resolution | C | this-workspace | REJECTED | **too easy — blind Opus 2/2.** sec 5.3 is well-documented pseudocode; structural urljoin-divergence doesn't help (solvers implement from knowledge). |
+| conda VersionOrder (host ref) + test_version | Conda version ordering | C | this-workspace | **built HARD** | **blind Opus 1/3** (2/3 fail on `_`-separator ambiguity, dev/post sentinels, string<int, fill-0 phase). Weirder than rpm/gentoo. tbrain-conda-version-order |
+| uritemplate-test suite + uritemplate lib | RFC 6570 URI Template L1-4 | Rust | this-workspace | built — difficulty FALSIFIED | Original blind Opus 0/3, but a 2026-07-02 re-probe of the same spec scored Opus 4.8 AND GPT-5.5 both 100% (10/10) = TRIVIAL — a clean, memorized templating spec. LESSON: "a popular lib fails N cases" is NOT evidence a frontier model fails; the model implements FRESH from the spec, it does not inherit the lib's bugs. Never re-pick RFC 6570 (any new task would also duplicate this one). tbrain-uri-template-expand |
+| mustache/spec (non-lambda)       | Mustache manual   | Go         | this-workspace | REJECTED | **too easy — blind Opus 3/3 (136/136).** Core mustache (standalone-whitespace + partial re-indentation) is a clean spec Opus reproduces; verifiable-divergent modules (lambdas) aren't data-checkable. LESSON: templating / clean-rule specs collapse like segmenters — prefer IRREGULAR version-ordering / canonicalization tails. Replaced by maven-version-order. |
+| editorconfig-core-test + editorconfig-core-py 0.17.1 | EditorConfig format | Go | this-workspace | claimed | glob (brace/numeric-range/**/[]-classes/escapes) + multi-file cascade (root, last-match-wins, section merge) + key-lowercase/unset tail; core-test suite exists BECAUSE cores diverge; no editorconfig in any stdlib. tbrain-editorconfig-resolve |
+| soupsieve 2.x (CSS Selectors L4) | W3C Selectors L4 matching+specificity | Rust | this-workspace | claimed | pre-parsed DOM input (not html parsing); nth-child(An+B of S)/:not/:is/:where/:has/attr-ops+case-flags/combinators/specificity tail; no selector engine in Rust/C/py stdlib. tbrain-css-selector-match |
+| publicsuffix.org tests.txt + publicsuffixlist | PSL algorithm (eTLD+1, ICANN/PRIVATE) | C | this-workspace | claimed | wildcard `*.`/exception `!`/default-`*`/domain==suffix-null/IDN-punycode/ICANN-vs-PRIVATE tail; .dat provided as input; no PSL in any stdlib. tbrain-public-suffix-domain |
 
 ### Fresh-resource ideas for L1 (unclaimed — verify `necessary`/`disqualifiers` first)
 
-These are pointers, not endorsements — probe each ≥3× blind before trusting the difficulty:
-UAX-31 identifier syntax, UTS-51 emoji ZWJ sequences, RFC 3986 URI reference resolution
-(distinct from WHATWG-URL), RFC 5322 address parsing, RFC 8259 vs JSON5, ICU/CLDR plural
-rules, WHATWG Encoding (single-byte + multibyte index tables), CSS Syntax Level 3
-tokenizer (csswg test suite), IRI/IDNA round-trips. Pick one NOT in the ledger, in a
-language NOT already paired with it, and confirm independent impls diverge on the tail.
+These are pointers, not endorsements — probe each ≥3× blind before trusting the
+difficulty. (Former entries RFC 3986 resolution, ICU/CLDR plural rules, JSON5, and CSS
+Syntax L3 have moved into the ledger above with verdicts — check the ledger FIRST;
+several "obvious" ideas probed EASY.)
+
+| family | official suite / ground truth | pivot-check verdict (verify FIRST) |
+|---|---|---|
+| YAML 1.2 | yaml-test-suite | STRONG — the suite exists BECAUSE parsers diverge (anchors, merge keys, block scalars, the Norway problem); PyYAML is not stdlib |
+| CommonMark | spec.txt (~650 examples) | STRONG but probe-first — babelmark proves impls diverge (emphasis delimiter runs, HTML blocks, loose lists); no stdlib markdown anywhere; risk: famous reference impls may be memorized |
+| PCRE2 dialect subset | pcre2 testdata | STRONG — Python `re` ≠ PCRE2 exactly on the tail (possessive quantifiers, atomic groups, `\K`); MUST scope-cap the subset or the verifier hangs |
+| robots.txt REP | google/robotstxt suite | CAUTION — stdlib `urllib.robotparser` exists; measure how much of Google's suite it passes before claiming |
+| CLDR date/number skeletons | CLDR test data | GOOD — ground truth is ICU, unreachable in-env; data-driven, not memorizable |
+| RFC 5322 address parsing | — | CAUTION, likely DISQUALIFIED — Python stdlib `email` parses addresses fairly completely; measure the pivot before claiming |
+| UAX-31 identifiers · UTS-51 emoji ZWJ · WHATWG Encoding index tables · IRI/IDNA round-trips | Unicode / WHATWG | unvetted pointers |
+
+Auto-disqualified by ALWAYS-ON-PATH references — do not bother probing: anything
+defined by `dpkg --compare-versions` (dpkg ships in every Debian-family image), `git`
+behavior (wildmatch / gitignore / gitattributes — git is a required agent tool), shell
+globbing / word-splitting (`bash` is required), POSIX TZ strings (Python `time.tzset`
+is a near-complete reference).
+
+Pick one NOT in the ledger, in a language NOT already paired with it, confirm
+independent impls diverge on the tail, and claim before building.
+
+### Widen the language axis (dedupe-cell relief)
+
+The dedupe cell is `gallery_category × language × lever`. With only Rust/Go/C/C++/TS in
+play the cells exhaust fast and teammates collide on the same pairings — the language
+axis is the cheapest place to create novelty. Beyond the canonical-base languages, any
+apt-installable toolchain on the canonical Debian/Ubuntu base runs offline: Lua, PHP,
+Perl, OCaml, Haskell (ghc), Erlang/Elixir, Common Lisp (sbcl), SWI-Prolog, R; Fortran
+rides the canonical gcc image (gfortran included). See the language-widening bullet in
+task-clone's Docker Rules for the sanctioned-base mechanics. Two caveats:
+
+- **The pivot-check (step 2) applies to the TASK language too.** Choosing a language
+  ships its stdlib into the image, and batteries-included stdlibs carry reference
+  implementations: Ruby `URI`, PHP `parse_url`/intl-IDN, Perl core modules count exactly
+  like `tomllib`. Vet the pairing's stdlib before claiming.
+- **Niche earns the Hard bonus only while frontier agents still WRITE the language
+  competently.** A language the agent cannot produce at all yields Agent-Timeout-Gate
+  blockers and 0/N flags, not difficulty — the hardness must stay in the spec tail, the
+  language just removes memorized-library crutches.
+
+**Expansion policy (2026-07-02): the palette above is ENOUGH — usage, not breadth, is
+the bottleneck.** Every task built so far pairs only Rust/Go/C/C++/TS; force new
+batches to draw from the UNUSED apt-lane languages (OCaml, Haskell, Lua, R,
+Erlang/Elixir, …) before anyone proposes a new toolchain. Add new languages LAZILY —
+only when a concrete candidate demands one, and only from these pre-vetted three:
+**C#/.NET** (pinned dotnet on the Debian base, with the non-canonical justification),
+**Kotlin/Scala** (ride the canonical temurin base + a pinned compiler zip), and **SQL
+via a real DB engine** (the gallery's #2 language and the under-served
+`db_interaction` subtype — one such task opens new cells on BOTH axes at once).
+BANNED: pre-1.0 / fast-churn languages (Zig, Nim, Crystal, V) — frontier models emit
+version-skewed code there, which produces Agent-Timeout-Gate and 0/N tooling failures:
+unfair-hard, never real difficulty.
 
 ## L1 — build procedure (follow top-to-bottom; a newcomer with ZERO team memory can ship a fair-HARD task from this alone)
 
@@ -133,6 +214,22 @@ language NOT already paired with it, and confirm independent impls diverge on th
    NEVER commit the answer table (input→expected) into `environment/repo` — grep for it
    before shipping (see task-clone). Read binary suite files (`.dat`, `LineBreakTest`) in
    BINARY mode; a stray `\r` silently corrupts cases.
+   **Design the corpus so difficulty is the UNION of distributed misses, never the
+   INTERSECTION.** Valid hardness = many INDEPENDENT quirk families where each solver
+   misses a DIFFERENT slice; full-pass probability ≈ the product of per-family pass
+   rates (10 families × ~70% each ≈ 3% ⇒ HARD, with a fair-MEDIUM floor since partial
+   solutions still score). Target each family at ~40–80% expected per-run pass rate; a
+   case you predict fewer than ~35% of runs will pass is a statistical 0/N candidate
+   at N=10. A case EVERY fresh implementation will miss (insider quirk,
+   undisclosed convention, data-table-only knowledge) is intersection-of-misses = a
+   guaranteed 0/N flag — disclose it in one prose sentence or drop it BEFORE shipping.
+   Structure the verifier per-case (parametrized) or as graded bands whose top band the
+   best realistic run can actually reach; never ONE monolithic all-N-cases-must-pass
+   function, where a single universal blind spot turns the whole test 0/N, and never a
+   group-aggregate test sitting on top of per-case tests (structurally 0/N forever).
+   Cheap pre-audit: after the blind probe (step 6), score the probe solvers' diffs
+   per-case against the corpus — any case NO probe run passes is a correlated blind
+   spot to disclose/prune now (see task-local-solve-probe, Coverage pre-audit).
 6. **Probe difficulty AND fairness — do BOTH before trusting the task:**
    - Run ≥3 BLIND solvers (fresh agent, no `solution/`, no `tests/`). HARD ≈ 0–1/3 solve.
    - Do NOT let a solver paste the spec source (blows up context, distorts the probe).
@@ -156,10 +253,123 @@ language NOT already paired with it, and confirm independent impls diverge on th
    - Binary all-or-nothing scoring is legitimate here (each impl misses a DIFFERENT tail
      slice) but means one universal blind spot dominates the score — which is exactly why
      this audit is mandatory.
-8. **instruction_check pre-flight.** Write the instruction as PROSE: objective + I/O
-   protocol + the authoritative spec/suite reference. No `##` headers, no lookup tables,
-   no algorithm narration, no "pay attention" hints — those trip the checker.
+   - **The platform submit-time flag `❌ Some tests not passed by any agent run` is
+     BLOCKING, not advisory — the task gets RETURNED (user-confirmed 2026-07-02); every
+     verifier test must be passed by ≥1 of the ~10 agent runs.** Full remediation
+     decision tree (infra look-alikes → classify each 0/N test → delete redundant group
+     test / parametrize per-case / prune / disclose / ship reference data → margin-prune
+     the ≤2/N tail → difficulty-retention guards → offline validation) lives in
+     `.agent/skills/task-revise-flag-remediation/SKILL.md` — follow it, don't
+     improvise. The two hard NEVERs: never delete the per-case parametrized suite or
+     collapse the corpus to clear the flag (flips the task EASY), and never prune when
+     the 0/N cases ARE the lever (undisclosed reference-class divergence → disclose
+     instead). The flag is stochastic across re-runs — re-run to confirm both the
+     failure and the fix.
+8. **instruction_check pre-flight — run the binary preflight in
+   `terminus-regular-task-authoring` (Prompt Rules) BEFORE the first platform check.**
+   Prose only: objective + I/O protocol + the authoritative spec/suite reference; no
+   `##` headers, no lookup tables, no bullet rule-lists, no algorithm narration, no
+   "pay attention" hints, ≤ ~300 words. Traps beyond the basics, each burned once:
+   - NEVER invent a custom byte-exact output serialization — a self-invented format
+     ALWAYS trips the checker and makes its verdict oscillate table↔prose across
+     re-runs (there is no wording that describes a bespoke byte format and still reads
+     as prose). Emit natural JSON and make the VERIFIER semantic instead: compare
+     ordered pairs, IEEE-754 bit-compare for floats. If dropping the format drops the
+     difficulty, re-add hardness in the INPUT DOMAIN (a harder tail), never in the
+     output encoding.
+   - Naming a standard ALGORITHM (PAVA, Dijkstra, …) and narrating its steps reads as a
+     "design document" even in section-free prose. Frame objective-only: goal + output
+     property + I/O. Referencing an external tool/standard as ground truth ("must match
+     `git check-ignore`") is fine and encouraged.
+   - The check FLIP-FLOPS across re-runs. If the items it flags are test-pinned
+     literals/values, removing them breaks `behavior_in_tests` (which IS blocking) —
+     keep them and SHIP the non-blocking ⚠️; do not iterate wording. If green is
+     required anyway: move the disclosure into an in-env reference file
+     (`/app/examples.json` — oracle-verified pairs DISJOINT from the hidden corpus,
+     COPY'd into the image before `git add -A`) plus a one-line declarative pointer in
+     the instruction — clears instruction_check while keeping sufficiency/symmetry
+     (semver, 2026-07-02).
 9. Ship.
+
+---
+
+## L2 — `synthetic-interval-invariant-ledger`
+
+- **intent:** a Lane-A MEDIUM+ task with an **INFINITE resource pool** — no shared
+  suite/spec to collide on, so no claim contention. Hardness comes from designing a
+  non-obvious invariant over interval/continuous-time state, not from knowing a spec.
+- **mechanism:** invent a small business domain whose state is a set of time- or
+  interval-scoped facts (leases, duty cycles, settlements, alert windows, allocations);
+  require a query/aggregation whose correct answer hinges on interval-arithmetic
+  invariants — overlap resolution, half-open boundaries, retroactive
+  amendments/reversals, tie-breaking, zero-length intervals. Verifier =
+  **boundary-biased differential** against an oracle port over generated scenarios
+  (adjacent endpoints, touching intervals, reversal-of-reversal), never a small curated
+  test list. **Domain-port lane:** once an invariant probes MEDIUM+, re-skin the SAME
+  logic into a fresh domain per task (logic-preserving port) — each port is a new task
+  at near-zero mining cost. Built instances: leader-lease-ledger, duty-cycle-ledger,
+  interval-arith-evaluator.
+- **necessary:** the invariant is non-obvious once the symptom is named (probe it);
+  the instruction states ONLY the business contract, never the algorithm; the
+  differential generator is boundary-biased.
+- **disqualifiers (each observed TRIVIAL/EASY):** the instruction narrates the
+  algorithm or a placeholder comment lists the todo (over-specified batches 2026-06-30
+  / 07-01); a tiny curated verifier with no differential; an invariant that collapses
+  to a textbook sort+sweep; **ambiguity-only difficulty** — if disclosing every
+  contract ambiguity fully-fairs the task to 3/3 (settlement-ledger), there was no
+  independent trap; require ≥1 discriminating boundary family that survives full
+  disclosure.
+- **fairness_gate:** after all ambiguities are disclosed, at least one boundary family
+  still fails ~half of blind runs.
+- **resource_slot:** `<domain skin × invariant family>` — synthetic, generate fresh.
+- **dedupe_cell / dedupe_key:** `invariant_family × gallery_category` (ports of the
+  same invariant into different domains are fine across categories, not within one).
+
+## L3 — `differential-vs-in-env-authority`
+
+- **intent:** fair-by-construction HARD where the reference is reachable **on
+  purpose** — hardness is an engineering constraint, not hidden knowledge, so there is
+  no disclose-vs-collapse trap at all.
+- **mechanism:** require an implementation under a structural/algorithmic constraint
+  (e.g. a Brzozowski-derivative regex engine) in a task language that LACKS the
+  authority; ground truth = an authority the pytest VERIFIER calls directly
+  (`re.fullmatch` itself) over a large differential corpus. The lever is an algorithmic
+  trap inside the constraint — e.g. nullable-loop termination for `(a*)*`-shaped
+  patterns. Built instance: tbrain-regex-derivative-matcher (oracle 1.0 / nop 0.0,
+  7500 differential pairs).
+- **necessary:** the task language must not ship the authority (implement in Rust/Go/C,
+  authority lives verifier-side in Python); the constraint must be behaviorally
+  enforced (its violation shows up as wrong output/hang, not as a white-box source
+  check); the generator MUST cap inputs (nesting depth, bounded-only atoms, short
+  texts) — otherwise the authority itself backtracks catastrophically and hangs the
+  verifier.
+- **disqualifiers:** a constraint agents can ignore while still matching the authority;
+  an authority whose behavior the model has memorized end-to-end on the capped domain.
+- **fairness_gate:** blind runs must fail on the algorithmic trap (wrong/hang on the
+  trap family), not on corpus breadth.
+- **dedupe_key:** `authority + constraint`.
+
+## L4 — `multi-vector-security-hardening`
+
+- **intent:** confirmed-HARD security task (0/3 blind Opus — mathjs #3656): agents
+  close the OBVIOUS attack vectors and miss a subtle one. Category `security` (allowed
+  under the hold).
+- **mechanism:** take a sandbox/escaping/auth surface with N exploit vectors of graded
+  subtlety; the instruction states the security objective + every legitimate behavior
+  to preserve (this satisfies behavior_in_task_description symmetry and is
+  difficulty-safe — hardness lives in the implementation, not the prompt); verifier =
+  public behavioral tests: each exploit input must fail, each legit use must keep
+  working.
+- **necessary:** EVERY vector test must DISCRIMINATE — stock code fails it, patched
+  passes. Docker-probe stock-vs-patched before adopting any reviewer-suggested vector:
+  many are pre-blocked (= security theater duds that pass on both). Safe generic wins:
+  `assert threw` and a broadened leak signal.
+- **disqualifiers:** single-vector or vague "harden this" tasks; vectors needing
+  network/live targets; a fix that is one obvious guard (fix-shape filter still
+  applies).
+- **fairness_gate:** blind failures must be MISSED-VECTOR failures, not
+  cannot-reproduce/tooling failures.
+- **dedupe_key:** `surface + vector_set`.
 
 ---
 

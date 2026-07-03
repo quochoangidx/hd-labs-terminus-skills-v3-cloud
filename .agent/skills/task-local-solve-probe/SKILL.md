@@ -97,7 +97,9 @@ difficulty.
 
 Early-stop rules:
 
-- If the first 2 runs pass quickly, stop and treat the task as likely too easy.
+- If the first 2 runs pass quickly: for Python tasks (must be Hard), stop and
+  treat as too easy; for non-Python tasks, run the third — 2/3 is still
+  submit-viable, only 3/3 defaults to rework.
 - If the first 2 runs fail for setup, unclear instruction, or verifier
   construction reasons, stop and fix the task before probing again.
 - If the first 2 runs fail semantically in different fair ways, the task is
@@ -149,6 +151,56 @@ reachable.
   `verify/` copy and running `harbor --force-build -a nop -p run_N/verify`
   (reward 1.0 = solved). Do NOT use `probe.py apply` — its `diff -ruN` treats the
   sanitized-away `solution/`,`tests/` as deletions and corrupts `verify/`.
+- **Probe copies go STALE the moment the source task is edited** (spec fix,
+  corpus prune, test change after probe prep). Score solver diffs against the
+  SOURCE task's `tests/` + oracle, never against a `run_N/verify` copy prepared
+  earlier — a stale copy can flip the whole verdict. Tells: a "MISSING TEST FN"
+  pytest error, or the copy's expected outputs disagreeing with the current
+  contract/oracle. Sanity-gate before trusting any score: the SOURCE oracle must
+  PASS and the stock/starting state must FAIL under the same command.
+
+## Submit-readiness verdict (no extra runs — re-score the diffs you already have)
+
+The probe must end with a SUBMIT verdict, not just a pass rate. It combines the
+difficulty band with union coverage (the platform's blocking flag "Some tests
+not passed by any agent run" fires on any case ALL agents miss), using only the
+diffs already produced — never spend additional solver runs on this:
+
+- **1/3 pass** → union coverage is AUTOMATICALLY satisfied (the passing run
+  covers every case). Verdict: **submit-ready** — the sweet spot (hard + every
+  test reachable).
+- **2/3 pass** → coverage also auto-satisfied; lands around Medium. **Submit-viable
+  for non-Python tasks** (only Easy is blocked); NOT enough for Python tasks
+  (which must be Hard) → rework those.
+- **3/3 pass** → **review**: default too easy, rework or replace — a 3/3 on this
+  over-generous probe rarely survives even as Medium on the platform. Keep only
+  with a concrete reason (e.g. all three passes leaned on a host reference the
+  fair in-image probe denies — then re-probe fairly).
+- **0/3 pass** → score each stored solver diff PER-CASE against the SOURCE
+  corpus, combine the results, and pick the action by the failure GEOMETRY:
+  1. **Union covers ALL cases** → **submit-ready** (each run failed a different
+     slice = de-correlated hardness, exactly the target shape).
+  2. **Killer cases sit inside group/aggregate tests but ≥1 run passed them
+     individually** → **SPLIT**: parametrize the corpus per-case (changes the
+     unit of coverage, not the win condition).
+  3. **A few 0-probe cases on an irreducible obscure feature or undisclosed
+     convention** → **PRUNE** them, or disclose / ship the non-derivable
+     reference data in-env, per
+     `.agent/skills/task-revise-flag-remediation/SKILL.md` — then RE-SCORE the
+     same stored diffs (free) to confirm the union now covers everything.
+  4. **Runs are NEAR-PERFECT, failing only one (or a couple of) case(s)** — the
+     single-blind-spot fingerprint: the entire difficulty is one insight or
+     ambiguity, with no fair middle (kept hidden = unfair 0/N; disclosed = the
+     task collapses to EASY). → **REDESIGN around an independent lever, or DROP
+     the task.** Do NOT prune your way out here — removing that case flips the
+     near-perfect runs to 100% and leaves an EASY task.
+
+Caveats: a 3-run local union is a noisier sample than the platform's ~10 runs
+(a case at exactly 1/3 here can still land 0/N there), and this probe is
+over-generous (see below) — a solver that pivoted to a host reference passes
+cases a sandboxed platform agent cannot, hiding blind spots. Score diffs built
+inside the task image with `--network none` when the verdict matters. The
+platform run remains the source of truth.
 
 ## Solver Prompt Shape
 
@@ -177,5 +229,11 @@ Return:
 - whether failures are semantic/fair or setup/instruction noise
 - compact semantic failure patterns suitable as factual input to the Difficulty
   Explanation, with no solver/model names and no hidden fixture details
-- recommendation: `rework`, `run_harbor_llm_with_approval`, `replace`, or
+- for 0/3 conformance-corpus tasks: the per-case union verdict (all cases
+  covered by ≥1 run, or the list of 0-probe correlated-blind-spot cases)
+- recommendation: `submit_ready` (0-2/3 pass AND union covers every case; 2/3
+  only for non-Python tasks), `fix_coverage_then_rescore` (0/3 with fixable
+  0-probe cases: split / prune / disclose), `redesign_or_drop` (0/3 with the
+  near-perfect single-blind-spot fingerprint), `rework`,
+  `run_harbor_llm_with_approval`, `replace`, or
   `keep_without_llm_if_budget_limited`

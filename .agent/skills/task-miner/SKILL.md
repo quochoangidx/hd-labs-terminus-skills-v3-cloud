@@ -260,6 +260,7 @@ Hard-dense archetypes (language-agnostic) — mine TOWARD these:
 | C/C++ | optimizer pass, UB/codegen, numerical algorithm | small make/cmake builds fast; watch toolchain |
 | Java/Kotlin/C# | Roslyn/javac analyzer, query engine, bytecode | JVM/.NET build heavier (use offline mode) |
 | Haskell/OCaml/Scala | type inference, parser-combinator engine, evaluator | NICHE BONUS for Hard; build can be heavy |
+| Lua/PHP/Perl/Elixir/Erlang/R/Fortran/Lisp/Prolog | interpreter/engine quirks, version-ordering & canonicalization tails, numeric kernels | apt-installable on the canonical Debian/Ubuntu base (Fortran: gcc image) — fast offline install, NICHE BONUS, widens the dedupe cell; vet the language's OWN stdlib for in-env reference impls (Ruby `URI`, PHP `parse_url` count like `tomllib`) and confirm agents still write it competently |
 | Python | mypy, Django ORM compile, scientific, multi-layer interpreter | fastest build — convenient, NOT mandatory |
 
 3-step selection rule (replaces "prefer Python"):
@@ -923,6 +924,17 @@ user N hard tasks from a pipeline:
   NOT paste source (dumps blow up context). Audit any 0/3 for the unfair artifact:
   if all runs fail the SAME single narrow test it is a spec-ambiguity, not hardness
   (a MIME encoded-word task's encode-structure test had legit fold/B-vs-Q freedom).
+- **The full lever menu is codified as L1–L4 in
+  `.agent/skills/task-miner/lever_patterns.md` — spread batches across levers, not just
+  L1.** L1 conformance-suite resources are a SHARED FINITE commodity (claim first); L2
+  synthetic interval/continuous-time invariant ledgers have an INFINITE pool (no
+  resource collisions — domain-port a proven invariant into a fresh skin); L3
+  differential-vs-in-env-authority is fair-by-construction (no disclose-vs-collapse
+  trap); L4 multi-vector security hardening is confirmed-HARD in an allowed category.
+  Plan every batch as a PORTFOLIO: beating the best model is a ~1/5 lottery per task,
+  so design each task for a fair-MEDIUM floor (union-of-misses corpus, per-case or
+  banded scoring — see L1 step 5) with HARD upside, and SUBMIT non-Python Medium
+  results (`target_difficulty: medium`) instead of discarding them.
 
 ## Hardness Calibration
 

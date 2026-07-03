@@ -59,7 +59,15 @@ When available, clone should start from:
 ```yaml
 candidate:
   category:
-  subcategories:
+  gallery_category:        # canonical gallery name (Title Case) — goes into tags, NOT task.toml category
+  subcategory:             # gallery leaf — slugged into tags
+  subsubcategory:          # gallery leaf — slugged into tags
+  subcategories:           # the 5 cross-cutting subtypes
+  target_difficulty:       # hard | medium (never easy; Python => hard)
+  expected_codebase_size:  # minimal | small | large — recompute from environment/ before shipping
+  closest_gallery_task:
+  gallery_novelty:         # novel | twist-on-existing | duplicate (duplicate => do not clone)
+  subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
   objective_type:
   source_url:
   issue_or_pr_id:
@@ -101,6 +109,10 @@ candidate:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
+  patch_shape_gate:        # pass | fail — fail means not Hard-eligible, do not clone as Hard
+  patch_shape_evidence:
+  family_key:              # library + bug_family, for the family ledger
+  agent_probe:             # {ran, passed_oneshot} — blind-probe evidence backing the difficulty claim
 ```
 
 If this exists, inspect only touched files, focused upstream tests, and support files needed to stage/build/run the task. Do not rescan large repo history or re-open unrelated issues.
@@ -342,6 +354,13 @@ Write like a real engineer describing the requested observable work:
   into narrative sentences that explain *why* each part matters. When the
   behaviour follows a known standard or tool, reference it ("the result must
   match `git check-ignore`") instead of restating its rules.
+- Before the first platform check, run the `instruction_check` binary preflight
+  in `terminus-regular-task-authoring` (Prompt Rules). The escape hatches for a
+  flip-flopping verdict, test-pinned literals, and custom output formats live in
+  `.agent/skills/task-miner/lever_patterns.md` (L1 step 8): ship the non-blocking
+  ⚠️ when the flagged items are test-pinned, use natural JSON + a semantic
+  verifier instead of a bespoke byte format, and move unavoidable disclosures
+  into an in-env reference file with a one-line pointer.
 - Absolute paths only, such as `/app` and `/app/src/module.py`.
 - State observable contract and exact user-facing strings only if tests assert them.
 - No issue URLs, PR numbers, test names, rubrics, or solution hints.
@@ -440,6 +459,18 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   `Dockerfile` comment or in the task `README.md`) — e.g. a runtime the list
   doesn't cover. Missing/vague/boilerplate justification, or one that matches an
   existing canonical entry, is **blocked** by `check_sanctioned_base_images`.
+- **languages without a canonical base = canonical Debian/Ubuntu base + a pinned
+  apt toolchain, NOT a third-party language image.** Lua, PHP, Perl, OCaml,
+  Haskell (ghc), Erlang/Elixir, Common Lisp (sbcl), SWI-Prolog, R and similar all
+  install offline from apt in the same clean transaction as `tmux`/`asciinema`,
+  which keeps `check_sanctioned_base_images` green with no justification needed;
+  Fortran rides the canonical gcc image (gfortran included). The login-shell
+  PATH, warm-build, and cache-retention rules below still apply — sanity-check
+  with `bash -lc 'which <tool>'`. Do NOT introduce pre-1.0 / fast-churn
+  toolchains (Zig, Nim, Crystal, V): frontier agents emit version-skewed code
+  there, yielding timeout/0/N tooling failures instead of difficulty. New
+  languages beyond the apt lane are added lazily per the expansion policy in
+  `lever_patterns.md` ("Widen the language axis").
 - install `tmux`, `asciinema`, `bash`, and usually `util-linux`
 - include practical agent tools such as `git`, `ripgrep`, and `sed`/`coreutils` when the base image lacks them
 - **expose the language toolchain on `/usr/local/bin`.** The agent runs in a LOGIN
@@ -639,6 +670,17 @@ Confirmed 2026-07-01: a UAX-14 line-break task shipped `src/cases.rs` with all
 -- that leaked the entire answer key; the fix was to move the check to the hidden
 `tests/` vectors and delete the repo table.
 
+**Structure conformance corpora for union-not-intersection difficulty (the
+"Some tests not passed by any agent run" gate is BLOCKING).** Score per-case
+(parametrized tests) or in graded bands whose top band a best realistic run can
+actually reach; never ONE monolithic all-N-cases-must-pass function — a single
+universal blind spot then turns that whole test 0/N and the task gets returned.
+Before shipping, drop or disclose (one prose sentence) any case EVERY fresh
+implementation would miss; keep hardness as many independent quirk families
+each solver misses a different slice of. Full remediation decision tree when
+the flag fires anyway: `.agent/skills/task-revise-flag-remediation/SKILL.md`
+(design-time rules: `lever_patterns.md` L1 step 5).
+
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
 Verifier matrix for upstream bugfixes must include:
@@ -758,7 +800,7 @@ if [ "$PWD" = "/" ]; then
     exit 0
 fi
 
-python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+python3 -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
 rc=$?
 if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
@@ -766,6 +808,12 @@ else
     echo 0 > /logs/verifier/reward.txt
 fi
 ```
+
+Always invoke `python3`, never bare `python`: non-Python base images (node, gcc,
+rust, go, debian) ship no `python` alias, so `python -m pytest` dies with
+`python: command not found` and the oracle silently scores 0 — read
+test-stdout first when a working patch scores 0 (confirmed on a node base,
+June 2026).
 
 The final reward block must end the script. The current `check_test_sh` gate
 accepts either `if [ $? -eq 0 ]` immediately after pytest or the preferred
@@ -924,12 +972,15 @@ For large repos such as TypeScript, go-ethereum, PyTorch, pandas, or NumPy, use 
 
 ## Validation
 
-Run what is available:
+Run what is available (full verified CLI surface + infra-failure triage live in
+`task-harbor-runner` — notably `harbor tasks check` was removed in 0.7.0, and
+agent runs need an explicit `-a terminus-2` because `-a` defaults to oracle):
 
 ```bash
 harbor run -a oracle -p <task-folder>
 harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
+stb harbor check <task-folder>
+stb harbor run -a terminus-2 -m @openai/gpt-5.5 -k 3 -p <task-folder>   # difficulty, needs approval
 ```
 
 If Docker is not running, still run static checks:
