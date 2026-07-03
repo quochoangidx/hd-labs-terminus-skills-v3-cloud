@@ -462,7 +462,16 @@ for milestone tasks. Milestone rubrics must use one block per milestone:
 points, and each milestone should account for 10-40 positive points. Include at
 least three negative criteria overall; for milestone tasks, also include at
 least one negative criterion per milestone.
-Rubrics must describe observable agent behavior during the solve. Do not
+Rubrics must reward the observable behavior of the SOLUTION — what the
+implemented code does, judged from the artifact and its outputs (correct results
+on specific input classes, edge cases, boundary handling, and error contracts) —
+NOT the agent's PROCESS during the solve. Do not reward process steps that do not
+affect the result: "reads the stub / surrounding files to understand the
+signature", "successfully compiles with `cargo build --release` / `go build`
+without errors", or "verifies behavior by running the built binary on sample
+inputs" are all non-discriminating (the behavior criteria already pin the result,
+and a wrong-but-compiling solution earns them). Rephrase any such positive into an
+observable behavior of the implementation and keep the score. Do not
 reference tests, verifier logic, `test.sh`, `test_outputs.py`, `/tests/`,
 hidden tests, CI, reward files, pytest, or final test results.
 

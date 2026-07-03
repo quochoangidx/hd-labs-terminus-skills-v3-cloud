@@ -16,8 +16,16 @@ file conflicts with those skills, the canonical skills win.
   only under `solution/`.
 - Use a digest-pinned Rust runtime image and install `tmux`, `asciinema`, Git,
   patching/search tools, Python, and the Rust toolchain needed by the task.
-- Put Cargo on the login-shell `PATH`, including symlinks for `cargo` and
-  `rustc` under `/usr/local/bin` when necessary.
+- Put Cargo on the AGENT login-shell `PATH`. The `rust:*-slim` images expose
+  cargo only via a Docker `ENV PATH=/usr/local/cargo/bin:$PATH` addition, which
+  the verifier keeps through `docker exec` but the agent's tmux login shell drops
+  because `/etc/profile` resets `PATH` — so `cargo`/`rustc` become "command not
+  found" in the agent shell (and any rubric that rewards `cargo build` then
+  punishes the agent unfairly). Fix in the Dockerfile:
+  `RUN ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`
+  (`/usr/local/bin` is on the reset login `PATH`), or wire `/usr/local/cargo/bin`
+  into `/etc/bash.bashrc`. `RUSTUP_HOME`/`CARGO_HOME` survive the reset — only
+  `PATH` needs restoring.
 - Warm the unmodified build during Docker image construction, for example with
   `cargo build --tests --locked`, and preserve the dependency/build cache needed
   for fast incremental agent rebuilds.
