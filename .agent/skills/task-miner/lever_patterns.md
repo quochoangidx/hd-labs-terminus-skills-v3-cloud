@@ -309,12 +309,17 @@ unfair-hard, never real difficulty.
   into an 11th skin adds a near-duplicate, not a task.
 - **Anti-anchoring naming rule (mandatory, applies to EVERY lever):** name the task
   after the DOMAIN PROBLEM (what a real team's ticket would say), never after the
-  lever mechanism. Slugs must not use lever vocabulary — no `-ledger`, `-cycle`,
-  `-interval`, `-window`, `-ledger`-like suffixes — and must not reuse a prior
-  instance's skin (leases, duty cycles, settlements, dosing, metering, airtime…).
-  Before claiming, grep `mined-candidates/index.jsonl` + the gallery snapshot for
-  your slug's final noun: if ≥2 tasks already end in it, rename AND re-skin. The
-  built-instance names in this file are a DO-NOT-REUSE ledger, not templates.
+  lever mechanism. There is NO fixed banned-word list — the test is RELATIVE to the
+  current portfolio: before claiming, grep `mined-candidates/index.jsonl` + the
+  gallery snapshot for the slug's final noun and its overall shape; if a similar
+  name already appears ≥2 times, pick a different name AND a different domain skin.
+  Two questions catch most collisions: (a) does the slug describe the
+  pattern/mechanism rather than the domain (whatever the currently over-used word
+  is — at the time of writing it happened to be `-ledger`)? (b) would a reviewer
+  scanning the task list see a family resemblance with existing names? Vary the
+  name grammar across a batch too (not every slug needs the same noun-noun-noun
+  shape). The built-instance names in this file are a DO-NOT-REUSE list, not
+  templates.
 - **intent:** a Lane-A MEDIUM task with an **INFINITE resource pool** — no shared
   suite/spec to collide on, so no claim contention. Hardness comes from designing a
   non-obvious invariant over interval/continuous-time state, not from knowing a spec.

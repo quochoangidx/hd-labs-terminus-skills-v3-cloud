@@ -40,15 +40,17 @@ Do not include repo/tool/domain filler in the slug. Prefer the behavior or bug:
 
 Exception: keep a domain word only when it is part of the actual problem concept, not just the source repo name.
 
-Name-shape dedupe (mandatory): never name a task after the LEVER/mechanism it
-was built from — `-ledger`, `-cycle`, `-interval`, `-window` and similar
-pattern-vocabulary suffixes are banned (the 2026-07 portfolio accumulated EIGHT
-`tbrain-*-ledger` tasks because fresh sessions copied the lever's example
-names). Name it after the domain problem a real team's ticket would describe.
-Before creating the folder, grep `mined-candidates/index.jsonl` and the gallery
-snapshot for the slug's final noun; if ≥2 existing tasks already end in it,
-pick a different name — identical suffixes signal near-duplicate tasks to
-reviewers even when the logic differs.
+Name-shape dedupe (mandatory, RELATIVE — no fixed banned-word list): name the
+task after the domain problem a real team's ticket would describe, never after
+the lever/mechanism it was built from. The check is against the CURRENT
+portfolio, not a word list: before creating the folder, grep
+`mined-candidates/index.jsonl` and the gallery snapshot for the slug's final
+noun and overall shape; if a similar name already appears ≥2 times, pick a
+different name (and, for synthetic tasks, a different domain skin). Identical
+suffixes signal near-duplicate tasks to reviewers even when the logic differs —
+the 2026-07 portfolio accumulated eight `tbrain-*-ledger` tasks this way, but
+the over-used word will drift over time; trust the grep, not any remembered
+list. Varying the name grammar across a batch helps too.
 
 ## Inputs
 
