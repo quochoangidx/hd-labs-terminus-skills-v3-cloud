@@ -200,6 +200,30 @@ tripping the structural check, escalate in this order; never iterate wording sid
    token is the irritant, consider relaxing the verifier to observable accept/reject
    with single-rule-isolating cases instead (then the token can leave both places).
 
+**Writing the in-env reference file itself (ladder tier 2 — `FORMAT.md`, `SPEC.md`,
+`examples.json`):**
+
+- Two proven shapes: an **examples file** (oracle-verified input→output pairs, JSON
+  with a short `note` per entry) and a **format/contract doc** (output schema and
+  conventions). Pick by what the blind runs actually missed.
+- Formatting is FREE here — headers, bullets, and tables are fine in environment
+  files; instruction_check judges only `instruction.md`. But keep the words
+  "verifier"/"test"/"pytest" out (the feedback scanner greps environment files too).
+- **Completeness is the whole point:** document EVERY convention the expected output
+  depends on — the sort order of each emitted array, merge/coalesce rules for
+  adjacent or overlapping spans, half-open vs closed boundary semantics, tie-breaks,
+  zero-length handling, null/absent-field shape. An undocumented convention that
+  every solver must guess is a guaranteed universal blind spot (a coldchain-style
+  task went 0/N on exactly this: unmerged overlaps + unspecified array order).
+- Verify every stated fact and example **against the oracle binary before writing
+  it down** — never from memory; one confidently-wrong example poisons the task.
+- Style: a realistic engineering artifact a team would keep in the repo — states
+  what the system requires, never how to implement it, no trap-pointing ("note the
+  tricky…"), no algorithm walkthrough (the env-docs rules below apply in full).
+- Disclosure budget: teach only already-disclosable conventions and the families
+  blind runs universally missed; keep surviving difficulty levers OUT of the file,
+  or the task collapses to EASY.
+
 Copyable skeleton (no headers/bullets/tables, ≤300 words):
 
 > The program at `<path>` should `<objective, one sentence>`. It reads `<input>` from
