@@ -927,8 +927,10 @@ user N hard tasks from a pipeline:
 - **The full lever menu is codified as L1–L4 in
   `.agent/skills/task-miner/lever_patterns.md` — spread batches across levers, not just
   L1.** L1 conformance-suite resources are a SHARED FINITE commodity (claim first); L2
-  synthetic interval/continuous-time invariant ledgers have an INFINITE pool (no
-  resource collisions — domain-port a proven invariant into a fresh skin); L3
+  synthetic interval/continuous-time invariant ledgers are **SATURATED / on cooldown**
+  (10+ near-identical `-ledger` instances shipped; empirical ceiling MEDIUM; the
+  domain-port re-skin lane is CLOSED — see the L2 STATUS callout + anti-anchoring
+  naming rule in `lever_patterns.md` before proposing one); L3
   differential-vs-in-env-authority is fair-by-construction (no disclose-vs-collapse
   trap); L4 multi-vector security hardening is confirmed-HARD in an allowed category.
   Plan every batch as a PORTFOLIO: beating the best model is a ~1/5 lottery per task,
