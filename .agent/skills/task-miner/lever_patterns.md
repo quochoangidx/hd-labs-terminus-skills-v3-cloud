@@ -295,20 +295,44 @@ unfair-hard, never real difficulty.
 
 ## L2 — `synthetic-interval-invariant-ledger`
 
-- **intent:** a Lane-A MEDIUM+ task with an **INFINITE resource pool** — no shared
+- **⚠️ STATUS (2026-07-04): SATURATED — cooldown. Do NOT default to this lever.** The
+  portfolio already holds 10+ instances that converge in shape AND name
+  (`index.jsonl`: broadcast-airtime-, coldchain-excursion-, energy-reservoir-,
+  infusion-dose-, metered-billing-, oxygen-deficit-, service-supervision-,
+  thermal-duty-`ledger`, plus leader-lease / duty-cycle / settlement /
+  interval-arith). Empirical ceiling = **MEDIUM**: pure interval/gap/overlap logic
+  probed 3/3 EASY; even a fully-disclosed clamp+carry+reset work-budget variant
+  stayed 3/3 blind EASY; iterative frontier agents solve ledger-family tasks
+  reliably. Use L2 only as an occasional MEDIUM filler (non-Python) when the batch
+  portfolio needs one AND the invariant family is genuinely new; for HARD go
+  L1/L3/L4. The domain-port lane below is **CLOSED** — porting a proven invariant
+  into an 11th skin adds a near-duplicate, not a task.
+- **Anti-anchoring naming rule (mandatory, applies to EVERY lever):** name the task
+  after the DOMAIN PROBLEM (what a real team's ticket would say), never after the
+  lever mechanism. There is NO fixed banned-word list — the test is RELATIVE to the
+  current portfolio: before claiming, grep `mined-candidates/index.jsonl` + the
+  gallery snapshot for the slug's final noun and its overall shape; if a similar
+  name already appears ≥2 times, pick a different name AND a different domain skin.
+  Two questions catch most collisions: (a) does the slug describe the
+  pattern/mechanism rather than the domain (whatever the currently over-used word
+  is — at the time of writing it happened to be `-ledger`)? (b) would a reviewer
+  scanning the task list see a family resemblance with existing names? Vary the
+  name grammar across a batch too (not every slug needs the same noun-noun-noun
+  shape). The built-instance names in this file are a DO-NOT-REUSE list, not
+  templates.
+- **intent:** a Lane-A MEDIUM task with an **INFINITE resource pool** — no shared
   suite/spec to collide on, so no claim contention. Hardness comes from designing a
   non-obvious invariant over interval/continuous-time state, not from knowing a spec.
 - **mechanism:** invent a small business domain whose state is a set of time- or
-  interval-scoped facts (leases, duty cycles, settlements, alert windows, allocations);
-  require a query/aggregation whose correct answer hinges on interval-arithmetic
-  invariants — overlap resolution, half-open boundaries, retroactive
-  amendments/reversals, tie-breaking, zero-length intervals. Verifier =
+  interval-scoped facts; require a query/aggregation whose correct answer hinges on
+  interval-arithmetic invariants — overlap resolution, half-open boundaries,
+  retroactive amendments/reversals, tie-breaking, zero-length intervals. Verifier =
   **boundary-biased differential** against an oracle port over generated scenarios
   (adjacent endpoints, touching intervals, reversal-of-reversal), never a small curated
-  test list. **Domain-port lane:** once an invariant probes MEDIUM+, re-skin the SAME
-  logic into a fresh domain per task (logic-preserving port) — each port is a new task
-  at near-zero mining cost. Built instances: leader-lease-ledger, duty-cycle-ledger,
-  interval-arith-evaluator.
+  test list. ~~Domain-port lane~~ (CLOSED — see STATUS: re-skinning the same logic
+  now produces near-duplicates; every new L2 must bring a NEW invariant family).
+  Built instances (DO-NOT-REUSE skins): leader-lease-ledger, duty-cycle-ledger,
+  interval-arith-evaluator, plus the 8 `-ledger` tasks listed in STATUS.
 - **necessary:** the invariant is non-obvious once the symptom is named (probe it);
   the instruction states ONLY the business contract, never the algorithm; the
   differential generator is boundary-biased.

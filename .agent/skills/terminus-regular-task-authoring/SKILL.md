@@ -144,6 +144,18 @@ draft and the task artifacts once more.
 
 ## Prompt Rules
 
+**Step 0 — after writing (or editing) `instruction.md`, ALWAYS run the mechanical
+pre-flight and fix every finding before anything else:**
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+```
+
+It catches the structural triggers (headers, bullets, tables, over-length, hint
+phrases, verifier/test leakage, mapping-chain density) mechanically. A clean run
+is necessary, not sufficient — the content rules below (algorithm narration,
+mechanism leaks, sufficiency of tested values) still need a read.
+
 **`instruction_check` — pass on the FIRST try. Two DIFFERENT checks share the word
 "instruction" and pull in OPPOSITE directions, so blindly adding or cutting detail
 ping-pongs between them. Identify which one failed, then pull the matching lever:**
@@ -187,6 +199,30 @@ tripping the structural check, escalate in this order; never iterate wording sid
    for a blocking `behavior_in_tests`/sufficiency failure. If a pinned exact-output
    token is the irritant, consider relaxing the verifier to observable accept/reject
    with single-rule-isolating cases instead (then the token can leave both places).
+
+**Writing the in-env reference file itself (ladder tier 2 — `FORMAT.md`, `SPEC.md`,
+`examples.json`):**
+
+- Two proven shapes: an **examples file** (oracle-verified input→output pairs, JSON
+  with a short `note` per entry) and a **format/contract doc** (output schema and
+  conventions). Pick by what the blind runs actually missed.
+- Formatting is FREE here — headers, bullets, and tables are fine in environment
+  files; instruction_check judges only `instruction.md`. But keep the words
+  "verifier"/"test"/"pytest" out (the feedback scanner greps environment files too).
+- **Completeness is the whole point:** document EVERY convention the expected output
+  depends on — the sort order of each emitted array, merge/coalesce rules for
+  adjacent or overlapping spans, half-open vs closed boundary semantics, tie-breaks,
+  zero-length handling, null/absent-field shape. An undocumented convention that
+  every solver must guess is a guaranteed universal blind spot (a coldchain-style
+  task went 0/N on exactly this: unmerged overlaps + unspecified array order).
+- Verify every stated fact and example **against the oracle binary before writing
+  it down** — never from memory; one confidently-wrong example poisons the task.
+- Style: a realistic engineering artifact a team would keep in the repo — states
+  what the system requires, never how to implement it, no trap-pointing ("note the
+  tricky…"), no algorithm walkthrough (the env-docs rules below apply in full).
+- Disclosure budget: teach only already-disclosable conventions and the families
+  blind runs universally missed; keep surviving difficulty levers OUT of the file,
+  or the task collapses to EASY.
 
 Copyable skeleton (no headers/bullets/tables, ≤300 words):
 

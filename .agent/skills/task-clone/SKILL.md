@@ -40,6 +40,18 @@ Do not include repo/tool/domain filler in the slug. Prefer the behavior or bug:
 
 Exception: keep a domain word only when it is part of the actual problem concept, not just the source repo name.
 
+Name-shape dedupe (mandatory, RELATIVE — no fixed banned-word list): name the
+task after the domain problem a real team's ticket would describe, never after
+the lever/mechanism it was built from. The check is against the CURRENT
+portfolio, not a word list: before creating the folder, grep
+`mined-candidates/index.jsonl` and the gallery snapshot for the slug's final
+noun and overall shape; if a similar name already appears ≥2 times, pick a
+different name (and, for synthetic tasks, a different domain skin). Identical
+suffixes signal near-duplicate tasks to reviewers even when the logic differs —
+the 2026-07 portfolio accumulated eight `tbrain-*-ledger` tasks this way, but
+the over-used word will drift over time; trust the grep, not any remembered
+list. Varying the name grammar across a batch helps too.
+
 ## Inputs
 
 Accept any of:
@@ -341,6 +353,14 @@ the max-score comment match the real positive sum. Confirmed 2026-07-01: a task
 shipped 3 such process lines (34 positives) and the reviewer cut them to 27.
 
 ## Instruction Style
+
+After writing or editing `instruction.md`, run the mechanical pre-flight and
+fix every finding (structure, length, hint phrases, leakage) before the first
+platform check:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+```
 
 Write like a real engineer describing the requested observable work:
 
