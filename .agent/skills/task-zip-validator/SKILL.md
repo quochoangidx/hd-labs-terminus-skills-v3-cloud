@@ -259,6 +259,12 @@ grep -rl 'sqlserver://\|oracle://\|db2://' environment/ 2>/dev/null
 
 The instruction_check LLMaJ reviewer applies "state the problem, not the solution." Every finding below maps to a real CI/reviewer rejection pattern.
 
+Fast first pass — run the shared mechanical scanner, then audit the content rules manually:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <unzipped-task-dir>
+```
+
 ### 3a. Structure and style (BLOCKING — instruction_check)
 
 | Check | Rule | Detect |

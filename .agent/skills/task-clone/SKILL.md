@@ -354,6 +354,14 @@ shipped 3 such process lines (34 positives) and the reviewer cut them to 27.
 
 ## Instruction Style
 
+After writing or editing `instruction.md`, run the mechanical pre-flight and
+fix every finding (structure, length, hint phrases, leakage) before the first
+platform check:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+```
+
 Write like a real engineer describing the requested observable work:
 
 - 1-3 short FLOWING paragraphs — never a spec sheet. Do NOT use `## Input` /

@@ -144,6 +144,18 @@ draft and the task artifacts once more.
 
 ## Prompt Rules
 
+**Step 0 — after writing (or editing) `instruction.md`, ALWAYS run the mechanical
+pre-flight and fix every finding before anything else:**
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+```
+
+It catches the structural triggers (headers, bullets, tables, over-length, hint
+phrases, verifier/test leakage, mapping-chain density) mechanically. A clean run
+is necessary, not sufficient — the content rules below (algorithm narration,
+mechanism leaks, sufficiency of tested values) still need a read.
+
 **`instruction_check` — pass on the FIRST try. Two DIFFERENT checks share the word
 "instruction" and pull in OPPOSITE directions, so blindly adding or cutting detail
 ping-pongs between them. Identify which one failed, then pull the matching lever:**
