@@ -223,6 +223,18 @@ workspace/reports/<task-slug>/submission-explanations.md
 - `difficulty` in `task.toml` not matching the platform's difficulty artifact
   (e.g. artifact reports `medium`, toml says `hard`) — align the metadata (a
   non-blocking cleanup reviewers still call out).
+- a config/format PARSER task (HCL2, Dockerfile, HOCON, nginx, …) whose deliverable
+  is "parse document → canonical JSON" but `category = "build-and-dependency-management"`
+  — reviewers reject it as software-engineering (BLOCKED): "the actual work is
+  implementing a full X parser from a stub." Retarget `category = "data-processing"`
+  (the graded artifact is the transformed OUTPUT DATA vs an oracle) AND reframe the
+  instruction transformation-first: lead "This task converts <FORMAT> documents into
+  their canonical JSON form" (NOT "turn the stub into a real parser"), frame the
+  program as the conversion tool, "Implement the conversion" not "Implement the
+  parser". KEEP genuine dependency tasks (depsolve, maven mediation, semver, rpm
+  version) as build-and-dependency-management. When one parser is flagged, AUDIT the
+  whole batch and fix same-profile parsers proactively. See memory
+  `config-parser-mislabeled-swe-retarget-dataprocessing`.
 
 ## Existing Skills To Use For Fixes
 
