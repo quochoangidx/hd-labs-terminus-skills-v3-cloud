@@ -196,6 +196,33 @@ workspace/reports/<task-slug>/submission-explanations.md
   verifier behavior
 - submission explanations that materially contradict the task, oracle, or
   verifier, including unrun oracle/nop claims
+- `tests/test.sh` that does NOT write a default `echo 0 > /logs/verifier/reward.txt`
+  immediately after `mkdir -p /logs/verifier` (before pytest / any risky work).
+  Reviewers require reward to default to 0 so a crash/timeout before the final
+  block leaves 0, not an absent reward (KDL + HOCON 2026-07). Fix per
+  `terminus-regular-task-authoring` (test.sh shape).
+- verifier that runs a compiled binary but never REBUILDS it from the agent's
+  source (only asserts the prebuilt binary exists) — the tests then don't enforce
+  the "implement it in the source" contract (a stale image-built binary passes).
+  Fix: session-fixture `rm` + `go/cargo build` from `/app` before cases (see
+  `terminus-regular-task-authoring`, Verifier Rules).
+- environment reference docs (`CANONICAL_FORM.md`, `FORMAT.md`, `SPEC.md`) that
+  use GRADER vocabulary ("grading", "grader", "compares", "checks", "verifier",
+  "test", "reward") OR contradict the instruction/rubric (e.g. doc says "key
+  order is ignored" while the prompt requires sorted keys). Rewrite as a neutral
+  product/format contract and reconcile doc↔instruction↔rubric to one story.
+- reject/invalid-case asymmetry: `instruction.md` says an invalid input "writes
+  nothing useful to stdout" but the verifier's invalid branch only asserts
+  `returncode != 0`. Either assert `proc.stdout == b""` (if the oracle emits
+  empty stdout on reject) or drop the stdout clause from the prompt.
+- an output property the value-based verifier can't enforce still stated as a
+  requirement: prompt/rubric demand lexicographically SORTED keys (or any
+  ordering) while `test_outputs.py` compares PARSED values (order-independent,
+  often to tolerate a float-repr gap). Drop the ungraded requirement from
+  prompt/rubric/format-doc, or switch to a canonical-byte assertion.
+- `difficulty` in `task.toml` not matching the platform's difficulty artifact
+  (e.g. artifact reports `medium`, toml says `hard`) — align the metadata (a
+  non-blocking cleanup reviewers still call out).
 
 ## Existing Skills To Use For Fixes
 

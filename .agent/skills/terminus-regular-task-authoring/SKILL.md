@@ -207,8 +207,19 @@ tripping the structural check, escalate in this order; never iterate wording sid
   with a short `note` per entry) and a **format/contract doc** (output schema and
   conventions). Pick by what the blind runs actually missed.
 - Formatting is FREE here — headers, bullets, and tables are fine in environment
-  files; instruction_check judges only `instruction.md`. But keep the words
-  "verifier"/"test"/"pytest" out (the feedback scanner greps environment files too).
+  files; instruction_check judges only `instruction.md`. But keep GRADER-FACING
+  vocabulary out (the feedback scanner greps environment files and reviewers read
+  them): none of "verifier", "test", "pytest", "grading", "grader", "compares",
+  "checks", "reward". Write it as a product/format contract ("the output is…",
+  "a value is emitted as…"), never "grading compares…" / "the check asserts…"
+  (HOCON 2026-07 was flagged for exactly this).
+- **The reference doc MUST AGREE with the instruction and rubric — no
+  contradictions.** A format doc that says "key order is ignored" while the
+  prompt/rubric require sorted keys (or vice-versa) is a review reject: it both
+  leaks grader mechanics and contradicts the visible contract. Before shipping,
+  reconcile the doc, the instruction, and the rubric to one story; if the
+  verifier can't enforce a property (see the ordering/value-compare rule under
+  Verifier Rules), state it in NONE of the three.
 - **Completeness is the whole point:** document EVERY convention the expected output
   depends on — the sort order of each emitted array, merge/coalesce rules for
   adjacent or overlapping spans, half-open vs closed boundary semantics, tie-breaks,
@@ -434,6 +445,27 @@ Tests must:
   number of requests (and stdout ends cleanly) so a program that prints a banner,
   a debug line, or an extra/missing trailing line fails — indexing only the
   positions you expect silently lets stray output through.
+- **REBUILD the graded binary from the agent's SOURCE before running cases**
+  when the task ships a compiled artifact (Go/Rust/C). A verifier that only
+  checks the prebuilt binary exists does NOT enforce the "implement it in the
+  source" contract — an agent can edit non-compiling source and the stale
+  image-built binary still passes (reviewer-flagged, HOCON 2026-07). In a
+  session-scoped autouse fixture: `rm -f <binary>`, then
+  `subprocess.run([...,"build","-o",<binary>,<pkg>], cwd="/app", capture_output=True)`,
+  assert returncode 0 (surface build stderr on failure), then assert the binary
+  exists. Non-compiling source then fails the fixture and errors every case →
+  reward 0; the toolchain is present (canonical `golang`/`rust` base) so the
+  build runs at verify time. Confirm oracle still passes and nop still fails on
+  BEHAVIOR (its stub source compiles) — not on the build.
+- Keep the verifier and the prompt SYMMETRIC on reject cases and on ordering.
+  If `instruction.md` says an invalid input "writes nothing useful to stdout,"
+  assert `proc.stdout == b""` for reject cases, not only `returncode != 0`
+  (else a "print garbage then exit 1" shortcut passes; KDL 2026-07). Conversely,
+  do NOT require an output property the verifier cannot enforce: if you compare
+  parsed VALUES (order-independent, e.g. to tolerate a `1000.0` vs `1000`
+  float-repr gap), then sorted-key / key-ordering is ungraded — drop that
+  requirement from the prompt/rubric/format-doc rather than leaving a
+  never-checked clause (HOCON 2026-07).
 
 Avoid quality-check failures:
 
@@ -471,6 +503,7 @@ Use this shape:
 set -uo pipefail
 
 mkdir -p /logs/verifier
+echo 0 > /logs/verifier/reward.txt
 
 if [ "$PWD" = "/" ]; then
     echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
@@ -487,7 +520,12 @@ else
 fi
 ```
 
-The final reward block must end the script. The current `check_test_sh` gate
+Write the default `echo 0 > /logs/verifier/reward.txt` **immediately after
+`mkdir -p /logs/verifier`, before any risky verifier work** (the rebuild
+fixture, pytest, anything that could crash/timeout). Reviewers explicitly ask
+for this (KDL + HOCON, 2026-07): if the verifier dies before the final block
+runs, the reward must already be 0, not absent. The final reward block still
+overwrites it to 1 only on a clean pytest pass and must end the script. The current `check_test_sh` gate
 accepts either `if [ $? -eq 0 ]` immediately after pytest or the preferred
 defensive form above, where `rc=$?` is captured immediately after pytest and
 used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
