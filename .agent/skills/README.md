@@ -18,7 +18,8 @@ callouts in task-miner + task-clone — lift both together).
 | 4. Validate | `task-harbor-runner` (oracle / nop / `stb harbor check` / real-agent runs) |
 | 5. Review & package | `task-client-feedback-review`, `task-zip-validator`, `task-zip-submit` |
 | 6. Remediate a platform return | `task-revise-flag-remediation` ("Some tests not passed by any agent run" / 0/N coverage flag), `terminus-regular-task-authoring` Prompt Rules (instruction_check + disclosure ladder) |
-| 7. Maintenance | `sync-doc-and-skill` (portal-doc drift), `task-miner/refresh_gallery_taxonomy.py` (taxonomy, ~weekly), `anti-llm` (editorial pass) |
+| 7. Port an existing task to new languages | `task-language-port` (feasibility screen, mandatory narrative reskin, faithful placeholder+solution translation, re-validation) |
+| 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `task-miner/refresh_gallery_taxonomy.py` (taxonomy, ~weekly), `anti-llm` (editorial pass) |
 
 Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<slug>.json`
 + a claim line in `index.jsonl`) — clone consumes it and must not re-mine.
