@@ -1,7 +1,8 @@
 # AGENTS.md — Terminus Regular Task Building (single-file memory)
 
 > **The single source of truth for every coding agent in this repo** (Claude, Codex, Gemini, Cline, Qwen). `CLAUDE.md` is a symlink to this file.
-> Fully self-contained: all knowledge from the 259 detail files (repo `memory/` + Claude auto-memory) was consolidated INTO this file on 2026-07-07. `memory/` is now a frozen archive — nothing in it overrides this file. Record new findings by editing this file directly.
+> Fully self-contained: all prior knowledge (259 detail notes across earlier stores) was consolidated INTO this file on 2026-07-07; nothing outside it overrides it.
+> **Self-update rule:** whenever a new durable finding lands (probe verdict, client feedback, platform/infra fix, corrected label), immediately update and improve this file — fold it into the matching section, keep the whole file consistent and conflict-free (the newest verdict replaces the old claim in place, stated once), and mirror the same finding into Claude auto-memory.
 
 ---
 
@@ -187,4 +188,4 @@ Everything else — rule complexity, counter-intuitive *stated* rules, named alg
 
 ---
 
-*Consolidated 2026-07-07 from 259 detail files (repo `memory/` + `~/.claude/projects/…/memory/` auto-memory; both kept as frozen backups — this file supersedes them). To update: edit this file directly; do not re-create per-topic detail files.*
+*Consolidated 2026-07-07 from all prior memory stores; this file supersedes them. Keep it alive: fold every new memory or corrected verdict into the matching section immediately — consistent and conflict-free (newest verdict wins, stated once) — and mirror the same update into Claude auto-memory. Do not re-create per-topic detail files.*

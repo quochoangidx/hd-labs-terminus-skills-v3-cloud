@@ -149,7 +149,7 @@ mirror the same `<source-task-slug>/tbrain-<new-slug>-<language>.zip` layout the
 ## Example prompts
 
 - **Bulk, pilot-first**: "Using `/task-language-port`, convert every task in
-  `/home/minhvnq/Downloads/passed` to whatever languages are feasible. Start with a 3-task
+  `~/Downloads/passed` to whatever languages are feasible. Start with a 3-task
   pilot — confirm the language list/count before spawning agents — then continue to the rest
   once it passes oracle/nop."
 - **Single task, explicit targets**: "Using `/task-language-port`, port
