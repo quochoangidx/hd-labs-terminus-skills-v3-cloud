@@ -16,7 +16,7 @@ callouts in task-miner + task-clone — lift both together).
 | 2. Build the task | `task-clone` (+ `upstream-repo-sanitizer` for repo staging; `issue-to-regression-test`, `terminus-hard-python-verifier` for verifiers; `terminus-regular-task-authoring`, `terminus-rust-task-authoring` for layout/prompt rules) |
 | 3. Probe difficulty cheaply | `task-local-solve-probe` (before any Harbor LLM spend) |
 | 4. Validate | `task-harbor-runner` (oracle / nop / `stb harbor check` / real-agent runs) |
-| 5. Review & package | `task-client-feedback-review`, `task-zip-validator`, `task-zip-submit` |
+| 5. Review & package | `task-client-feedback-review`, `task-llm-style-audit` (LLM-tell audit + re-author of all prose surfaces, last step before zip), `task-zip-validator`, `task-zip-submit` |
 | 6. Remediate a platform return | `task-revise-flag-remediation` ("Some tests not passed by any agent run" / 0/N coverage flag), `terminus-regular-task-authoring` Prompt Rules (instruction_check + disclosure ladder) |
 | 7. Port an existing task to new languages | `task-language-port` (feasibility screen, mandatory narrative reskin, faithful placeholder+solution translation, re-validation) |
 | 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `task-miner/refresh_gallery_taxonomy.py` (taxonomy, ~weekly), `anti-llm` (editorial pass) |
