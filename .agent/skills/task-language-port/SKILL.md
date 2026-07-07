@@ -145,24 +145,3 @@ an idle ping alone.
 `workspace/<source-task-slug>/` — gitignored, never committed. Confirm this before the first
 write of a session; if the user wants the result somewhere else (e.g. a Downloads folder),
 mirror the same `<source-task-slug>/tbrain-<new-slug>-<language>.zip` layout there instead.
-
-## Example prompts
-
-- **Bulk, pilot-first**: "Using `/task-language-port`, convert every task in
-  `/home/minhvnq/Downloads/passed` to whatever languages are feasible. Start with a 3-task
-  pilot — confirm the language list/count before spawning agents — then continue to the rest
-  once it passes oracle/nop."
-- **Single task, explicit targets**: "Using `/task-language-port`, port
-  `tbrain-tvd-advection-solver.zip` (C) to C++, Rust, and Go. Full Harbor oracle/nop validation
-  on each."
-- **Single task, open-ended coverage**: "Using `/task-language-port`, port
-  `tbrain-sort-key-fields.zip` to as many feasible languages as you can justify from the live
-  gallery data. Tell me the list before spawning anything."
-- **Forcing a feasibility call-out**: "Using `/task-language-port`, try porting
-  `tbrain-c-custody-chain-auditor.zip` to Rust, C++, Go, and PHP. If any don't actually fit,
-  tell me which and why instead of forcing it."
-- **Continue-the-rest follow-up**: "The pilot passed — using `/task-language-port`, continue
-  with the remaining tasks in the passed folder the same way."
-
-By default the destination is `workspace/<task-name>/` in this repo; if a prompt wants
-Downloads (or elsewhere) instead, it needs to say so explicitly.

@@ -233,8 +233,7 @@ workspace/reports/<task-slug>/submission-explanations.md
   program as the conversion tool, "Implement the conversion" not "Implement the
   parser". KEEP genuine dependency tasks (depsolve, maven mediation, semver, rpm
   version) as build-and-dependency-management. When one parser is flagged, AUDIT the
-  whole batch and fix same-profile parsers proactively. See memory
-  `config-parser-mislabeled-swe-retarget-dataprocessing`.
+  whole batch and fix same-profile parsers proactively.
 
 ## Existing Skills To Use For Fixes
 
