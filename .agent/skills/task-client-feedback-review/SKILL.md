@@ -226,14 +226,17 @@ workspace/reports/<task-slug>/submission-explanations.md
 - a config/format PARSER task (HCL2, Dockerfile, HOCON, nginx, …) whose deliverable
   is "parse document → canonical JSON" but `category = "build-and-dependency-management"`
   — reviewers reject it as software-engineering (BLOCKED): "the actual work is
-  implementing a full X parser from a stub." Retarget `category = "data-processing"`
-  (the graded artifact is the transformed OUTPUT DATA vs an oracle) AND reframe the
-  instruction transformation-first: lead "This task converts <FORMAT> documents into
-  their canonical JSON form" (NOT "turn the stub into a real parser"), frame the
-  program as the conversion tool, "Implement the conversion" not "Implement the
-  parser". KEEP genuine dependency tasks (depsolve, maven mediation, semver, rpm
-  version) as build-and-dependency-management. When one parser is flagged, AUDIT the
-  whole batch and fix same-profile parsers proactively.
+  implementing a full X parser from a stub." ⛔ The old fix — retarget
+  `category = "data-processing"` with a transformation-first reframe — is DEAD:
+  since 2026-07-11 `data-processing` is itself a blocked predicted category
+  (`Predicted category 'data-processing' (confidence 0.9) is blocked`), so that
+  retarget just swaps one blocked slug for another. A flagged parser task must
+  either honestly become one of the 6 allowed categories
+  (`system-administration`, `build-and-dependency-management`, `games`,
+  `machine-learning`, `security`, `scientific-computing`) or be shelved/dropped.
+  KEEP genuine dependency tasks (depsolve, maven mediation, semver, rpm version)
+  as build-and-dependency-management. When one parser is flagged, AUDIT the whole
+  batch and shelve same-profile parsers proactively.
 
 ## Existing Skills To Use For Fixes
 

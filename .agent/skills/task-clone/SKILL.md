@@ -1,11 +1,11 @@
 ---
 name: task-clone
-description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders, including closed upstream bugfix candidates and explicit category-profile candidates such as data-processing, build-and-dependency-management, system-administration, security, scientific-computing, machine-learning, or games. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Do not clone tasks whose classifier-visible shape still predicts software-engineering; reshape honestly into an allowed non-SWE category or stop."
+description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders, including closed upstream bugfix candidates and explicit category-profile candidates such as build-and-dependency-management, system-administration, security, scientific-computing, machine-learning, or games. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Do not clone tasks whose classifier-visible shape still predicts a blocked category (software-engineering, debugging, or data-processing); reshape honestly into one of the 6 allowed categories or stop."
 ---
 
 # Task Clone
 
-Use this skill when the user wants to turn a mined candidate into a hard Terminus Regular task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category unless it is invalid or the task's visible shape still predicts as the blocked `software-engineering` category.
+Use this skill when the user wants to turn a mined candidate into a hard Terminus Regular task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category unless it is invalid or the task's visible shape still predicts as a blocked category (`software-engineering`, `debugging`, or `data-processing`).
 
 Preferred split:
 
@@ -191,9 +191,13 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 1. Load the mined artifact or verify the source URL with the smallest needed browse/`gh` pass.
 2. Gate the category shape before scaffolding: if the work is still `implement`
    / `parse` / `render` / `cmp` / public API or stub completion / exact reference
-   conformance, it will likely predict `software-engineering`. Reshape the I/O
-   into a genuine allowed category only if the primary activity truly changes;
-   otherwise stop and mark `category_classifier_software_engineering`.
+   conformance, it will likely predict `software-engineering`; ETL/dataset→report
+   pipelines predict `data-processing` — BOTH are blocked (data-processing since
+   2026-07-11, so the dataset→report reshape is no longer an escape route).
+   Reshape the I/O into one of the 6 allowed categories only if the primary
+   activity truly changes; otherwise stop and mark
+   `category_classifier_<predicted_slug>` (e.g.
+   `category_classifier_software_engineering`, `category_classifier_data_processing`).
 3. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
 4. Create `workspace/tbrain-<problem-slug>` using the naming rule.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
@@ -277,22 +281,28 @@ memory_mb = 4096
 storage_mb = 10240
 ```
 
-> **⛔ BLOCKED CATEGORY CLASSIFIER (active — 2026-07-10).** A task can fail CI with
-> `Predicted category 'software-engineering' ... is blocked` even when `task.toml`
-> declares `data-processing` or another allowed category. The in-progress exemption
-> list is frozen and only shrinks; do NOT add submission IDs or treat this as a
-> reviewer override. `debugging` is also blocked for net-new submissions, so do not
-> re-label bugfix work as another category unless the primary activity truly changes.
+> **⛔ BLOCKED CATEGORY CLASSIFIER (active — 2026-07-10; `data-processing` added
+> 2026-07-11).** A task can fail CI with
+> `Predicted category '<slug>' ... is blocked` even when `task.toml` declares an
+> allowed category — blocked predicted slugs are `software-engineering`,
+> `debugging`, AND `data-processing` (observed live:
+> `Predicted category 'data-processing' (confidence 0.9) is blocked`). The
+> in-progress exemption list is frozen and only shrinks; do NOT add submission IDs
+> or treat this as a reviewer override. Do not re-label bugfix work as another
+> category unless the primary activity truly changes.
 >
 > Before cloning, check whether the actual deliverable still looks like
-> `implement parse/render/cmp`, public API or stub completion, or exact reference
-> conformance. If yes, reshape the I/O into a genuine allowed category only when
-> the primary activity truly changes. A real dataset→report export, build/dependency
-> artifact, admin config, security outcome, scientific result, ML evaluation, or
-> game-state workflow can pass; a vocabulary sweep cannot. Treat split preflight
-> predictions as failure because any blocked prediction fails CI. If the shape
-> cannot be reshaped honestly, STOP and record
-> `category_classifier_software_engineering`.
+> `implement parse/render/cmp`, public API or stub completion, exact reference
+> conformance, OR a dataset→report / ETL pipeline (now equally blocked as
+> data-processing). If yes, reshape the I/O into one of the 6 allowed categories
+> (`system-administration`, `build-and-dependency-management`, `games`,
+> `machine-learning`, `security`, `scientific-computing`) only when the primary
+> activity truly changes. A build/dependency artifact, admin config, security
+> outcome, scientific result, ML evaluation, or game-state workflow can pass; a
+> vocabulary sweep cannot, and the former dataset→report escape hatch cannot
+> either. Treat split preflight predictions as failure because any blocked
+> prediction fails CI. If the shape cannot be reshaped honestly, STOP and record
+> `category_classifier_<predicted_slug>`.
 >
 > Pick an accurate gallery-leaf tag after any reshape: a pattern matcher that
 > classifies given paths is *Pattern Extraction & Regex Matching*, NOT *File
