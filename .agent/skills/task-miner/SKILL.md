@@ -1,6 +1,6 @@
 ---
 name: task-miner
-description: Use when mining Terminus Regular task candidates that fit the live task gallery (/portal/tasks) — self-contained, spec-driven problems aligned to the gallery's canonical 3-level taxonomy (10 categories: Software Engineering & Development, Data Processing & Scripting, Machine Learning & AI, Security & Cryptography, System Setup & Configuration, Build & Dependency Management, Debugging & Troubleshooting, Scientific Computing & Analysis, Interactive Challenges & Games, Large Codebase Tasks; each with subcategory → subsubcategory) plus the 5 cross-cutting subtypes (long_context, tool_specific, api_integration, db_interaction, ui_building). Targets the gallery's difficulty mix: Hard or Medium model pass rate (Easy is blocked; Python tasks must be Hard). This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category/subcategory/subsubcategory + subtype fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The full taxonomy menu lives in mined-candidates/gallery_taxonomy.md. The debugging and software-engineering categories are currently BLOCKED (net-new submissions are rejected by an automated eval check) — skip them and mine the other 7. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks.
+description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The debugging category and software-engineering classifier label are currently BLOCKED by automated eval/CI checks; mine tasks whose primary activity and I/O shape genuinely land in an allowed non-SWE category. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks."
 ---
 
 # Task Miner
@@ -12,34 +12,45 @@ look like they belong in it and that do NOT already exist there.
 - **No direction given → default to Gallery-style mining** (Category Profile Mode
   below): self-contained, spec-driven "implement a tool/engine/pipeline/algorithm
   end-to-end" tasks (Lane A), spread across UNDER-represented ALLOWED categories
-  (see the Category Hold callout below). Do NOT default to upstream bugfix PRs —
+  (see the Submission Blocks callout below). Do NOT default to upstream bugfix PRs —
   those are a minority of the gallery.
-- **User names a category** → use the matching Category Profile (reject if it is on hold).
+- **User names a category** → use the matching Category Profile (reject if it is
+  blocked or still predicts as `software-engineering` after shaping).
 - **User names a subtype** → use the matching Subtype Profile.
-- **User asks for a bugfix / closed PR** → use Upstream Bugfix Mode (minority lane) —
-  but it produces the `debugging` category, which is currently BLOCKED by an eval
-  check (see callout below); only proceed if the user explicitly overrides the block.
+- **User asks for a bugfix / closed PR** → use Upstream Bugfix Mode (minority lane)
+  only for explicit debugging/revision work; do not relabel a bugfix as another
+  category just to dodge a blocked classifier.
 
 This is a lightweight mining pass. Do not create a task folder, Dockerfile,
 verifier, or oracle here. The output is a compact mined candidate artifact consumed
 later by `task-clone`.
 
-> **⛔ SUBMISSION BLOCKS (active — escalated 2026-06-29).** Two platform blocks are live and
+> **⛔ SUBMISSION BLOCKS (active — escalated 2026-07-10).** Two platform blocks are live and
 > enforced by an automated eval check:
-> 1. **`debugging` and `software-engineering` are BLOCKED** — net-new submissions in either
->    category are rejected by an eval check. Do NOT mine or propose candidates in these two
->    categories, and do NOT default to Upstream Bugfix Mode (it produces `debugging`).
->    **Allowed categories (7):** `system-administration`, `build-and-dependency-management`,
->    `data-processing`, `games`, `machine-learning`, `security`, `scientific-computing`. If a
->    candidate naturally lands in a blocked category, either reframe it into an allowed
->    category ONLY when the primary work genuinely fits there, or reject with
->    `rejection_reason: category_on_hold`.
+> 1. **`debugging` and the `software-engineering` classifier label are BLOCKED** —
+>    net-new debugging submissions are rejected, and CI can fail with
+>    `Predicted category 'software-engineering' ... is blocked` even when
+>    `task.toml` declares another category. The in-progress exemption list is
+>    frozen and only shrinks; do NOT add submission IDs or treat this as an
+>    override problem. **Allowed categories (7):** `system-administration`,
+>    `build-and-dependency-management`, `data-processing`, `games`,
+>    `machine-learning`, `security`, `scientific-computing`.
+>
+>    Design the task so its PRIMARY ACTIVITY and I/O shape genuinely predict as
+>    an allowed non-SWE category. A prose/vocabulary sweep is not enough:
+>    `implement parse/render/cmp to match a reference`, stub completion, public
+>    API extension, and exact-conformance component work still read as
+>    software-engineering. Prefer real dataset→report, build artifact, admin
+>    config, security outcome, scientific computation, ML evaluation, or
+>    game-state work. If the shape cannot be honestly reshaped, reject/shelve
+>    with `rejection_reason: category_classifier_software_engineering`; do not
+>    gamble on a split preflight prediction because any blocked prediction fails CI.
 > 2. **New milestone tasks are BLOCKED** — net-new milestone submissions are rejected by an
 >    eval check (milestone tasks already in your revision queue or awaiting review are exempt
 >    and continue through to Accepted). Mine non-milestone tasks only.
 >
-> Re-enable either by editing this one callout (and the mirrored note in `task-clone`) when
-> the platform reopens.
+> Re-enable by editing this one callout (and the mirrored note in `task-clone`) only when
+> the platform reopens the block; do not use the frozen in-progress exemption list.
 
 ## Task Gallery Alignment (mine toward the live benchmark)
 
@@ -106,7 +117,8 @@ artifact. Bugfix-PR clones are the MINORITY — prefer Lane A unless the user as
   BALANCED — every category sits ~390–600 curated rows (Security 600, Debugging 592,
   Scientific 589, Games 520, ML 516, Software-Eng 499, Data-Processing 417, System
   Setup 396, Build 392). So treat all 9 as first-class; the diversity rule (no single
-  category >~30%, ≥4 categories ≥10%) still holds — don't pile onto software-engineering.
+  category >~30%, ≥4 categories ≥10%) still holds. Do not mine toward
+  software-engineering while the classifier label is blocked.
 - Difficulty: hard ~53%, medium ~38%, easy ~4%. Mine Hard-or-Medium ONLY.
 
 **Archetype catalog (mine toward these; counts = gallery prevalence across 543):**
@@ -143,10 +155,6 @@ MiB. Codebase size minimal/small/large all accepted — aim for a mix.
 
 ### Upstream Bugfix Mode (minority lane)
 
-> **ON HOLD (2026-06-21):** this mode produces the `debugging` category, which is
-> currently pending — do NOT run it by default. Only use it when the user explicitly
-> overrides the Category Hold, and even then prefer reframing into an allowed category.
-
 Use ONLY when the user asks for a bugfix, or for the small bugfix/debug slice of the
 gallery (`debugging` is ~5% of the corpus). For closed upstream issues/PRs where the
 task is to diagnose and fix bad behavior. These candidates normally become:
@@ -160,7 +168,9 @@ subcategories: []   # add a subtype ONLY if one genuinely applies (see Subtype P
 subtype truly fits; do not auto-stamp `tool_specific`. This mode needs
 `fixing_commit`, `parent_commit`, `bad_behavior`, `expected_behavior`, and upstream
 regression-test context. Prefer Gallery-style Lane A (Category Profile Mode) by
-default.
+default. Never reframe a bugfix as `data-processing`,
+`build-and-dependency-management`, or another category unless the primary work
+genuinely is that category's activity.
 
 ### Category Profile Mode
 
@@ -180,8 +190,9 @@ security
 scientific-computing
 ```
 
-**`debugging` and `software-engineering` are currently ON HOLD — do not choose them**
-(see the Category Hold callout above); mine the other 7. These kebab labels map 1:1 to
+**Do not choose `debugging` or `software-engineering` for net-new submissions, and
+do not accept tasks that still predict as `software-engineering` after shaping**
+(see the Submission Blocks callout above). These kebab labels map 1:1 to
 the gallery's canonical category names (see the table in
 `mined-candidates/gallery_taxonomy.md`). The gallery also has a 10th category, **Large
 Codebase Tasks** (milestone-heavy multi-layer repos) — mine it only when the user asks
@@ -195,7 +206,7 @@ For category-profile candidates, `fixing_commit` is optional. The artifact must 
 
 - `data-processing`: Mine CLI/scripts/pipelines that transform CSV, JSON, YAML, logs, or directory trees. Accept tasks with joins, filtering, aggregation, schema normalization, deterministic sorting, malformed-input handling, or report generation. Verify by parsing output files/stdout semantically. Reject candidates that are only parser bugfixes, one-expression transforms, or require large/private datasets.
 - `build-and-dependency-management`: Mine build config, packaging, lockfile, Docker, Make/Cargo/npm/pip workflows. Accept reproducible offline build/install/test tasks with inspectable artifacts. Reject version bumps, CI metadata, or live registry requirements.
-- `software-engineering`: Mine feature/enhancement work where the agent implements or extends a public API/CLI behavior. Accept clear behavior contracts with preserved compatibility. Reject pure bugfixes unless the requested category is `debugging`.
+- `software-engineering`: BLOCKED by the category classifier for current submissions. Do not mine new tasks here; reshape only when the primary activity truly becomes an allowed category, otherwise reject/shelve with `category_classifier_software_engineering`.
 - `system-administration`: Mine local service/config/process/permissions tasks. Accept Docker-contained health checks, config validation, shell automation, users/groups, or process supervision. Reject tasks needing privileged host daemons or external services.
 - `security`: Mine local auth, escaping, sanitization, crypto, permissions, or reverse-engineering style tasks. Accept exploit-prevention plus legitimate-use preservation. Reject vague hardening, live targets, secrets, or network-only validation.
 - `scientific-computing`: Mine numerical, simulation, geospatial, statistics, or domain-code tasks. Accept deterministic small fixtures with tolerances and boundary cases. Reject GPU, huge datasets, or compiled-extension rebuild requirements unless explicitly approved.
@@ -737,6 +748,9 @@ For category-profile mode, reject candidates when:
 - the source repo/app is so small that there is no meaningful discovery work
 - the prompt would need to reveal the exact implementation approach
 - the category label is only cosmetic and the real work is debugging
+- the declared category is cosmetic and the classifier-visible shape is still
+  software-engineering (`implement`, `parse`, `render`, `cmp`, exact reference
+  matching, API/stub completion)
 - the task does not naturally involve at least 4 meaningful components,
   behavior surfaces, or project layers; prefer 5-6 when available
 
@@ -855,7 +869,7 @@ candidate:
   heavy_repo_mode:
   slimming_plan:
   runtime_budget:
-  rejection_reason:
+  rejection_reason:        # use category_classifier_software_engineering when the task shape still predicts SWE
 ```
 
 Use `rejection_reason: null` only when the candidate is suitable for cloning.
@@ -891,8 +905,9 @@ user N hard tasks from a pipeline:
   bury the `/**`-vs-its-own-directory + parent-exclusion-blocks-reinclude cases in
   the hidden fixtures.
 - **Empirically-hard non-spec lever stays the subtle-invariant BUGFIX** (caffeine
-  cache-eviction, valkey resize policy, go-mysql FDS) — but those are `debugging`,
-  currently ON HOLD.
+  cache-eviction, valkey resize policy, go-mysql FDS), but do not re-label these
+  as another category unless the primary activity truly changes; cosmetic labels
+  are caught by reviewers/classifiers.
 - **The strongest ALLOWED-category lever (2026-07-01, netted 10 HARD / 17 built):
   an OFFICIAL machine-checkable conformance suite over a spec with a genuinely
   DIVERGENT / irregular long tail, where NO host-stdlib matches.** Ship the stub,
