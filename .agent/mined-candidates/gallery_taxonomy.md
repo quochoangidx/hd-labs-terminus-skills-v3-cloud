@@ -12,10 +12,10 @@ is the **authoritative taxonomy menu** the miner aligns candidates to. Pair it w
 - Source: the portal's own Supabase backend, read with the public anon key the
   portal JS bundle ships (the exact data the gallery renders). Pages repo and
   `snorkel-tb-tasks` are private (not readable via the user's GitHub).
-- Snapshot date: 2026-07-07 (auto-refresh).
+- Snapshot date: 2026-07-10 (auto-refresh).
 - Rows read: `v_tasks_with_priorities` = 4521 (curated/priority tasks, 3-level
-  taxonomy); `task_inspiration_v2` = 5946 (inspiration pool; is_milestone
-  true=0 / false=5946).
+  taxonomy); `task_inspiration_v2` = 6285 (inspiration pool; is_milestone
+  true=0 / false=6285).
 - The difficulty column on `v_tasks_with_priorities` may be all-null; if so,
   difficulty is NOT a usable gallery field — gate hardness by model pass-rate.
 
@@ -38,29 +38,29 @@ may add **Large Codebase Tasks** (milestone-heavy large multi-layer repos).
 
 | Canonical gallery category | skill kebab alias | curated rows | inspiration rows |
 |---|---|---:|---:|
-| Security & Cryptography | `security` | 600 | 1145 |
-| Machine Learning & AI | `machine-learning` | 516 | 1119 |
-| Scientific Computing & Analysis | `scientific-computing` | 589 | 851 |
-| Interactive Challenges & Games | `games` | 520 | 822 |
-| Build & Dependency Management | `build-and-dependency-management` | 392 | 549 |
-| System Setup & Configuration | `system-administration` | 396 | 540 |
-| Debugging & Troubleshooting | `debugging` | 592 | 224 |
-| Software Engineering & Development | `software-engineering` | 499 | 257 |
-| Data Processing & Scripting | `data-processing` | 417 | 254 |
+| Security & Cryptography | `security` | 600 | 1249 |
+| Machine Learning & AI | `machine-learning` | 516 | 1137 |
+| Scientific Computing & Analysis | `scientific-computing` | 589 | 868 |
+| Interactive Challenges & Games | `games` | 520 | 838 |
+| Build & Dependency Management | `build-and-dependency-management` | 392 | 582 |
+| System Setup & Configuration | `system-administration` | 396 | 544 |
+| Debugging & Troubleshooting | `debugging` | 592 | 298 |
+| Software Engineering & Development | `software-engineering` | 499 | 284 |
+| Data Processing & Scripting | `data-processing` | 417 | 300 |
 | Large Codebase Tasks | `(milestone / large-codebase lane — no kebab in current skill)` | 0 | 185 |
 
 ## 5 cross-cutting subtypes (`task_inspiration_v2.subtypes`)
 
 Orthogonal to category; a task has 0+ of these. (Counts across the inspiration pool.)
 
-- **Long Context** — 2038
-- **Tool Specific** — 2050
+- **Long Context** — 2156
+- **Tool Specific** — 2123
 - **API Integration** — 2082
 - **DB Interaction** — 2024
 - **UI Building** — 398
 
 The **Large Codebase Tasks** type instead uses milestone subtypes:
-  observability (179), testing (179), concurrency (164), devops/CI (145), security (113), migration (72), feature (30), debugging (3), correctness (2), refactor (2), Text processing (1), Log parsing and aggregation (1), performance (1), error-handling (1).
+  observability (179), testing (179), Db Interaction (176), concurrency (164), Api Integration (155), devops/CI (145), security (113), migration (72), feature (30), debugging (3), correctness (2), refactor (2), Text processing (1), Log parsing and aggregation (1), performance (1), error-handling (1).
 
 ## Language distribution (`task_inspiration_v2.languages`, top 30)
 
@@ -68,14 +68,14 @@ Evidence for the "mix languages, archetype-first" rule.
 
 | lang | n | | lang | n | | lang | n |
 |---|---:|---|---|---:|---|---|---:|
-| SQL | 2256 | | Python | 2031 | | Bash | 1497 |
-| JavaScript | 1119 | | Go | 656 | | C | 609 |
-| TypeScript | 569 | | Java | 479 | | C++ | 464 |
-| Kotlin | 267 | | PHP | 262 | | Ruby | 221 |
-| YAML | 206 | | AWK | 191 | | Perl | 182 |
-| Lua | 179 | | TOML | 159 | | Terraform | 153 |
-| Rego | 149 | | HCL | 108 | | Rust | 107 |
-| Make | 100 | | Makefile | 96 | | HTML | 94 |
+| SQL | 2393 | | Python | 2173 | | Bash | 1625 |
+| JavaScript | 1187 | | Go | 684 | | C | 654 |
+| TypeScript | 609 | | Java | 514 | | C++ | 487 |
+| Kotlin | 273 | | PHP | 268 | | Ruby | 223 |
+| YAML | 215 | | AWK | 199 | | Perl | 186 |
+| Lua | 181 | | Terraform | 171 | | TOML | 168 |
+| Rego | 153 | | Rust | 118 | | Make | 109 |
+| HCL | 108 | | Makefile | 100 | | HTML | 94 |
 | CSS | 83 | | CMake | 71 | | Shell | 66 |
 | POSIX shell | 60 | | Node.js | 49 | | JSON | 46 |
 
