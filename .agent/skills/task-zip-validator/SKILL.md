@@ -102,6 +102,16 @@ security
 scientific-computing
 ```
 
+> ⛔ The toml enum above is only syntax validity. The CI `category_classifier`
+> BLOCKS submissions whose PREDICTED category is `software-engineering`,
+> `debugging`, or `data-processing` (the last added 2026-07-11:
+> `Predicted category 'data-processing' (confidence 0.9) is blocked`) — the
+> prediction is independent of the declared `category`, and the exemption list is
+> frozen. If the task's shape (spec-conformance component, stub completion, or
+> dataset→report/ETL pipeline) predicts a blocked slug, flag it as a manual
+> BLOCKER: the task needs an honest reshape into one of the 6 allowed categories
+> or a shelve — never a category re-label.
+
 Valid subcategories:
 ```
 long_context, tool_specific, api_integration, db_interaction, ui_building
@@ -118,7 +128,7 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 | `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` | ✅ lowercase them |
 | `workdir` (milestone-only) | `[environment].workdir` must NOT appear when `number_of_milestones = 0`; it is milestone-only (container cwd comes from Dockerfile `WORKDIR`) | ✅ remove line |
 | `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
-| `category` | Must be one of the 9 valid values | ❌ manual |
+| `category` | Must be one of the 9 valid values; ALSO flag `software-engineering`/`debugging`/`data-processing` (declared or shape-predicted) as blocked by `category_classifier` | ❌ manual |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
 | `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
 
