@@ -385,8 +385,8 @@ tomllib.load(open("task.toml", "rb"))
 ## Step 5 — Harbor Tests (if Docker available)
 
 ```bash
-harbor run -a oracle -p "$TMPDIR"   # Must return 1.0
-harbor run -a nop -p "$TMPDIR"      # Must return 0.0
+stb harbor run -a oracle -p "$TMPDIR"   # Must return 1.0
+stb harbor run -a nop -p "$TMPDIR"      # Must return 0.0
 ```
 
 ## Step 6 — Report and Re-zip
@@ -442,6 +442,7 @@ After upload to Snorkel, remind the user to create a rubric in the platform UI:
   least one negative criterion per milestone.
 - Format: `"Agent <did/did not> <observable action>, +/-N"`
 - Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
+- **Positive scores need an explicit leading `+`** (write `+3`, not `3`); unsigned positives are sent back for revision
 - Total points: 10–40 for non-milestone tasks
 - Reward the END STATE, not the process: no "reads/studies the stub", no
   "compiles successfully with `cargo build`/`go build`" (compilation is implied by

@@ -564,9 +564,9 @@ packages.
 Run, when available:
 
 ```bash
-harbor run -a oracle -p <task-folder>
-harbor run -a nop -p <task-folder>
-harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
+stb harbor run -a oracle -p <task-folder>
+stb harbor run -a nop -p <task-folder>
+stb harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
 ```
 
 For submission ZIPs, compress the contents of the task folder, not the folder itself.
@@ -575,7 +575,9 @@ Generate rubrics through the platform UI before reviewer submission: check
 generated rubric, edit it for accuracy, then uncheck "Generate Rubric(s)" before
 checking "Send to Reviewer" so the edited rubric is not overwritten.
 Rubrics must be trace-focused. Every criterion line starts with `Agent` and
-ends with `, +/-N`; allowed values are only 1, 2, 3, or 5; do not use 4.
+ends with `, +/-N`; allowed values are only 1, 2, 3, or 5; do not use 4; and
+positive scores must carry an explicit leading `+` (write `+3`, not `3`) —
+unsigned positives are sent back for revision.
 Non-milestone rubrics should be a flat list of `Agent ...` criteria; a single
 `# Rubric 1` header is tolerated but not required, and `# Rubric 2+` is reserved
 for milestone tasks. Milestone rubrics must use one block per milestone:

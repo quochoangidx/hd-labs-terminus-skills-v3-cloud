@@ -42,10 +42,10 @@ If the Oracle Agent can't complete your task, neither can AI agents.
 
 ```bash
 # Basic run
-harbor run -a oracle -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
 
 # With verbose output
-harbor run -a oracle -p <task-folder> -v
+stb harbor run -a oracle -p <task-folder> -v
 ```
 
 ## Expected Output
@@ -94,7 +94,7 @@ When the Oracle Agent fails, follow this workflow:
 
 **Step 2: Reproduce Interactively**
 ```bash
-harbor tasks start-env -p <task-folder> -i
+stb harbor tasks start-env -p <task-folder> -i
 ```
 Inside the container, run commands one by one to find the issue.
 
@@ -109,7 +109,7 @@ If your solution doesn't run:
 
 1. **Enter interactive mode:**
    ```bash
-   harbor tasks start-env -p <task-folder> -i
+   stb harbor tasks start-env -p <task-folder> -i
    ```
 
 2. **Run commands manually** to find the failing step

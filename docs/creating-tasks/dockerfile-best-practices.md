@@ -421,6 +421,17 @@ gpu_types = []
 allow_internet = false
 ```
 
+**Note — `gpus`, `gpu_types`, and `docker_flags` are optional.** These are valid Harbor resource fields, not requirements. TB2 tasks should not require GPU, so `gpus` and `gpu_types` may be omitted or left blank — a task is equally valid with or without them. `gpu_types` only matters when a task actually requests GPUs (`gpus > 0`); for a typical non-GPU task, `gpu_types = []` adds nothing. The minimal form below is just as acceptable as the full block above:
+
+```toml
+[environment]
+build_timeout_sec = 600.0
+cpus = 1
+memory_mb = 2048
+storage_mb = 10240
+allow_internet = false
+```
+
 ---
 
 ## 15. Publish Images with Audit Metadata

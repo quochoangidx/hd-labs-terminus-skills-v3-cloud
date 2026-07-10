@@ -10,14 +10,14 @@ Snorkel staff goes through everything you need to know about Project Terminus an
 
 [Watch New Expert Onboarding Video](https://www.loom.com/share/1e7db8d29c224413951256d90478719a)
 
->[_Download the slides from this video_](https://snorkelai.box.com/s/ye3lyflhgarcqzo4zj6ojw855o42ydr0)
+>[_Download the slides from this video_](https://snorkelai.box.com/s/5vifce6oenvkegxqs83xk2fatddb8pvo)
 
 #### For Returning Experts:
 Snorkel staff covers the changes from Terminus Edition 1 to Edition 2. Intended for Experts alreadt familiar with Project Terminus from Edition 1. 
 
 [Watch Returning Expert Onboarding Video](https://www.loom.com/share/c705f782b01d40b4ab14e23930af65bd)
 
->[_Download the slides from this video_](https://snorkelai.box.com/s/sf4ugtyhy3b6vkbroumo5crb1bvhx7on)
+>[_Download the slides from this video_](https://snorkelai.box.com/s/8izz2l3r9dvy5ogcmjzr9zorcdq1pbwm)
 
 
 ## Expert Training Videos

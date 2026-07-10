@@ -1,6 +1,6 @@
 # Terminus 2nd Edition — Frequently Asked Questions
 
-*Last updated: April 27, 2026*
+*Last updated: June 29, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
@@ -42,7 +42,7 @@ The **task gallery** and the **submission portal** are separate sites. The galle
 No — work on and submit multiple tasks in parallel.
 
 **How do I initialize a new task with the CLI?**
-`stb init my-task-name -p "terminus-2nd-edition" -t base`
+`stb init my-task-name -p "terminus-2nd-edition" -t default`
 
 ---
 
@@ -61,7 +61,7 @@ Known intermittent issue. Try: (1) regenerate a new API key in the browser using
 You don't need your own. The project provides AI credentials through the CLI — follow the [CLI User Guide](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/cli-user-guide) and run `stb keys refresh`.
 
 **My API key is exhausted or giving errors mid-work.**
-Keys have a usage budget. Run `stb keys refresh` for a new one. At the 10-refresh limit, ask an admin. Keys can also become temporarily rate-limited — wait a few minutes and retry. Running concurrent agent tests exhausts keys faster.
+Keys have a usage budget. Run `stb keys refresh` for a new one. There's a cap on how many times you can refresh; once you hit it, ask an admin to reset or raise it. Keys can also become temporarily rate-limited — wait a few minutes and retry. Running concurrent agent tests exhausts keys faster.
 
 **I'm having trouble upgrading `stb`.**
 Follow the upgrade command in the [CLI User Guide](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/cli-user-guide). A 403 Forbidden error usually means the download link was temporarily rotated — try again later. Always verify your version with `stb --version` before troubleshooting other issues.
@@ -225,6 +225,13 @@ RUN apt-get update \
 **The LLMaJ review says "NOT_APPLICABLE" with an empty summary.**
 Agents couldn't start (often a tmux session failure — see above). Report the task UUID in Slack.
 
+**`stb harbor check` fails with "Claude Code returned an unexpected response" or a Usage Policy error.**
+This is a **provider content refusal**, not a CLI bug and not a verdict on your task's correctness. The model running the quality check (e.g., Claude Code / GPT-5.5) flagged something in your task content as potentially violating the [Usage Policy](https://www.anthropic.com/legal/aup). The surface error is misleading — you may see `Received result: "success", but the operation was treated as a failure`, while the underlying cause is `API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy. Try rephrasing the request in a new session or change your model.` Work through these in order:
+1. **Re-run the check** — refusals can be intermittent; a fresh session sometimes passes.
+2. **Switch the judge model** — re-run with the other model (swap `@openai/gpt-5.5` ↔ `@anthropic/claude-opus-4-8`). A refusal on one model frequently clears on the other.
+3. **Review your task content** — security/exploit/malware-adjacent framing, harmful instructions, or sensitive-looking data can trip the flag even for legitimate tasks. Where possible, frame the task in clearly legitimate, defensive/educational terms.
+4. **Escalate** — if the task is legitimately security-related (e.g., a CTF or defensive-security task) and keeps refusing on every model, post the task UUID in #terminus-2nd-edition-submission so the team can review.
+
 ### Docker Issues
 
 **My `environment/app` folder isn't being mounted in Harbor.**
@@ -265,12 +272,19 @@ You can also drill into a specific submission:
 See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#check-submission-status) for the full set of submission commands.
 
 **What is the daily submission limit?**
-| Expert level | Limit |
-|---|---|
-| New (before 2 accepted tasks) | 2 new per day |
-| Established (2+ accepted tasks) | 5 new per day |
+Net-new tasks are capped per day by Expert level:
 
-Revisions **do not count** toward this limit. Resets at **midnight UTC** (~7–8 PM EST). If you're being blocked despite not hitting your limit, report it — this is a known bug.
+| Expert level | Net-new tasks per day |
+|---|---|
+| New (before 2 accepted tasks) | 2 per day |
+| Veteran (2+ accepted tasks) | 3 per day |
+
+Only **net-new** submissions count toward this cap — **revisions do not**. Resets at **midnight UTC** (~7–8 PM EST).
+
+**What is the revision-queue limit?**
+You can have at most **10 submissions in your revision queue at once**. Once you reach 10, you're blocked from submitting any net-new tasks until you make room. To clear a task you don't intend to revise, hit **"Discard"** on it — that rejects the task and removes it from your revision queue.
+
+If you're blocked from a net-new submission while under your daily limit, check whether your revision queue is full (10) before reporting a bug.
 
 **My submission is auto-rejected by AutoEval even though it passes manual checks.**
 Known intermittent issue. Resubmit. If persistent, post your submission ID and failing build ID in Slack.
@@ -374,8 +388,9 @@ Yes. The current schedule is **pinned at the top of the `#terminus-2nd-edition-a
 
 | Issue | Workaround |
 |---|---|
-| `stb keys refresh` limit (10) reached | Ask admin in Slack to reset |
+| `stb keys refresh` limit reached | Ask admin in Slack to reset or raise it |
 | Non-Python tasks flagged as Python | Remove Python from `languages` in `task.toml` |
 | Quality check false-flags `source "$HOME/.local/bin/env"` | Ignore this specific flag |
 | Agent logs unavailable for some reviews | Report with task UUID |
 | Docker network limit from repeated harbor runs | Run `docker network prune` |
+| `stb harbor check` fails: "unexpected response" / Usage Policy refusal | Provider content refusal — re-run, switch judge model (`gpt-5.5` ↔ `claude-opus-4-8`), review content; escalate with UUID if a legitimate task keeps failing |

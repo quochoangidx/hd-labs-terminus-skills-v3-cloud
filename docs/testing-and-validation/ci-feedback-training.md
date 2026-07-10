@@ -28,7 +28,7 @@ Run checks → Identify failures → Fix issues → Re-run → Repeat
 ### Step 1: Run All Checks
 
 ```bash
-harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
+stb harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
 ```
 
 ### Step 2: Review Output
@@ -62,7 +62,7 @@ Focus on one failure at a time. The error message will tell you exactly what's w
 ### Step 4: Re-run and Verify
 
 ```bash
-harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
+stb harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
 ```
 
 ### Step 5: Repeat

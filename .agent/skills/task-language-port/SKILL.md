@@ -125,7 +125,7 @@ Each agent independently: rewrites `instruction.md` + spec/README in the new voi
 `git init` after the build); ports the placeholder and the solution with identical behavior;
 renames the CLI binary everywhere, including the one resolution line in the test file; updates
 `task.toml`; recomputes `codebase_size` honestly from the real file count. Then validates for
-real — `harbor run -a oracle -p .` must be `1.000` and `harbor run -a nop -p .` must be
+real — `stb harbor run -a oracle -p .` must be `1.000` and `stb harbor run -a nop -p .` must be
 `0.000`, re-exercising the *entire* differential/verifier suite, not a spot check. Finally
 packages per this project's ZIP-submission rules (allowlist zip, executable bits on
 `solve.sh`/`test.sh`, no junk) and writes the result to

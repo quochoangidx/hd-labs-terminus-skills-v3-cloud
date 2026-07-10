@@ -1,6 +1,6 @@
 ---
 name: task-miner
-description: Use when mining Terminus Regular task candidates that fit the live task gallery (/portal/tasks) — self-contained, spec-driven problems aligned to the gallery's canonical 3-level taxonomy (10 categories: Software Engineering & Development, Data Processing & Scripting, Machine Learning & AI, Security & Cryptography, System Setup & Configuration, Build & Dependency Management, Debugging & Troubleshooting, Scientific Computing & Analysis, Interactive Challenges & Games, Large Codebase Tasks; each with subcategory → subsubcategory) plus the 5 cross-cutting subtypes (long_context, tool_specific, api_integration, db_interaction, ui_building). Targets the gallery's difficulty mix: Hard or Medium model pass rate (Easy is blocked; Python tasks must be Hard). This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category/subcategory/subsubcategory + subtype fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The full taxonomy menu lives in mined-candidates/gallery_taxonomy.md. The debugging and software-engineering categories are currently ON HOLD (pending on the platform) — skip them and mine the other 7. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks.
+description: Use when mining Terminus Regular task candidates that fit the live task gallery (/portal/tasks) — self-contained, spec-driven problems aligned to the gallery's canonical 3-level taxonomy (10 categories: Software Engineering & Development, Data Processing & Scripting, Machine Learning & AI, Security & Cryptography, System Setup & Configuration, Build & Dependency Management, Debugging & Troubleshooting, Scientific Computing & Analysis, Interactive Challenges & Games, Large Codebase Tasks; each with subcategory → subsubcategory) plus the 5 cross-cutting subtypes (long_context, tool_specific, api_integration, db_interaction, ui_building). Targets the gallery's difficulty mix: Hard or Medium model pass rate (Easy is blocked; Python tasks must be Hard). This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category/subcategory/subsubcategory + subtype fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The full taxonomy menu lives in mined-candidates/gallery_taxonomy.md. The debugging and software-engineering categories are currently BLOCKED (net-new submissions are rejected by an automated eval check) — skip them and mine the other 7. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks.
 ---
 
 # Task Miner
@@ -17,23 +17,29 @@ look like they belong in it and that do NOT already exist there.
 - **User names a category** → use the matching Category Profile (reject if it is on hold).
 - **User names a subtype** → use the matching Subtype Profile.
 - **User asks for a bugfix / closed PR** → use Upstream Bugfix Mode (minority lane) —
-  but it produces the `debugging` category, which is currently ON HOLD (see callout
-  below); only proceed if the user explicitly overrides the hold.
+  but it produces the `debugging` category, which is currently BLOCKED by an eval
+  check (see callout below); only proceed if the user explicitly overrides the block.
 
 This is a lightweight mining pass. Do not create a task folder, Dockerfile,
 verifier, or oracle here. The output is a compact mined candidate artifact consumed
 later by `task-clone`.
 
-> **⛔ CATEGORY HOLD (active — set 2026-06-21).** `debugging` and `software-engineering`
-> are PENDING on the platform and are NOT being accepted right now. Do NOT mine or
-> propose candidates in these two categories, and do NOT default to Upstream Bugfix Mode
-> (it produces `debugging`). **Allowed categories (7):** `system-administration`,
-> `build-and-dependency-management`, `data-processing`, `games`, `machine-learning`,
-> `security`, `scientific-computing`. If a candidate naturally lands in a held category,
-> either reframe it into an allowed category ONLY when the primary work genuinely fits
-> there, or reject with `rejection_reason: category_on_hold`. This is a TEMPORARY hold —
-> re-enable by editing this one callout (and the mirrored note in `task-clone`) when the
-> platform reopens these categories.
+> **⛔ SUBMISSION BLOCKS (active — escalated 2026-06-29).** Two platform blocks are live and
+> enforced by an automated eval check:
+> 1. **`debugging` and `software-engineering` are BLOCKED** — net-new submissions in either
+>    category are rejected by an eval check. Do NOT mine or propose candidates in these two
+>    categories, and do NOT default to Upstream Bugfix Mode (it produces `debugging`).
+>    **Allowed categories (7):** `system-administration`, `build-and-dependency-management`,
+>    `data-processing`, `games`, `machine-learning`, `security`, `scientific-computing`. If a
+>    candidate naturally lands in a blocked category, either reframe it into an allowed
+>    category ONLY when the primary work genuinely fits there, or reject with
+>    `rejection_reason: category_on_hold`.
+> 2. **New milestone tasks are BLOCKED** — net-new milestone submissions are rejected by an
+>    eval check (milestone tasks already in your revision queue or awaiting review are exempt
+>    and continue through to Accepted). Mine non-milestone tasks only.
+>
+> Re-enable either by editing this one callout (and the mirrored note in `task-clone`) when
+> the platform reopens.
 
 ## Task Gallery Alignment (mine toward the live benchmark)
 

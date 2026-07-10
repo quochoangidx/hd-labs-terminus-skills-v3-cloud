@@ -68,7 +68,8 @@ Every criterion line in your rubric must follow these syntax rules for CI valida
 1.  **Start:** Every criterion line must begin with the word **"Agent"**.
 2.  **End:** Every criterion line must end in a comma followed by the score (e.g., `, +3`).
 3.  **Values:** You must use **+/- 1, 2, 3, or 5**. 
-4.  **Forbidden:** **Do not use the number 4.**
+4.  **Signed positives:** Positive scores **must include an explicit leading `+`** (e.g., `+3`, not `3`). Unsigned positive scores will be sent back for revision.
+5.  **Forbidden:** **Do not use the number 4.**
 
 ### Milestone Rubric Headers
 

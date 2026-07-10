@@ -9,7 +9,7 @@ To support this, we are introducing new automated evaluations. These checks are 
 ### Restrictions and preferences
 
 - **Codebase size:** `minimal`, `small`, and `large` are all accepted. Aim for a mix across your portfolio rather than every task at one size — variety improves dataset coverage.
-- **Milestones:** Non-milestone tasks won't be blocked, but milestone tasks are preferred (and pay more! 🎉).
+- **Milestones:** New milestone tasks are **currently blocked** and can no longer be submitted (milestone tasks already in progress are exempt — see the [Milestones page](/portal/docs/understanding-tasks/milestones)). Submit non-milestone tasks.
 - **Model difficulty:** Only **medium** and **hard** will be accepted — **easy** will be blocked.
 
 > **Note:** “Easy,” “medium,” and “hard” here refer to **model performance** (pass rates on frontier agents), not the difficulty field you set in `task.toml`.

@@ -62,7 +62,7 @@ Use this checklist before every submission to ensure your task is complete and w
 ### Oracle Agent
 
 ```bash
-harbor run -a oracle -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
 ```
 
 - [ ] Oracle agent PASSES
@@ -70,7 +70,7 @@ harbor run -a oracle -p <task-folder>
 ### CI Checks
 
 ```bash
-harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
+stb harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
 ```
 
 - [ ] pinned_dependencies ✓

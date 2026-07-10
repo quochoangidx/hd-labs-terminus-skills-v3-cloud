@@ -49,7 +49,7 @@ docker build -t test . 2>&1 | tail -50
 
 **Enter interactive mode to debug:**
 ```bash
-harbor tasks start-env -p <task-folder> -i
+stb harbor tasks start-env -p <task-folder> -i
 ```
 
 Then run commands manually to find the issue.
@@ -203,7 +203,7 @@ Include:
 > "It's not working"
 
 **Good:**
-> "When I run `harbor run -a oracle`, I get `FileNotFoundError: /app/data/input.csv`. The file exists in my task folder and is included in the Dockerfile COPY command. Full error: [paste]"
+> "When I run `stb harbor run -a oracle`, I get `FileNotFoundError: /app/data/input.csv`. The file exists in my task folder and is included in the Dockerfile COPY command. Full error: [paste]"
 
 ### Where to ask:
 

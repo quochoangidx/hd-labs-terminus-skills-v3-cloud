@@ -617,8 +617,8 @@ at build time:
 Pre-check before spending real-agent budget — time the warm oracle cycle:
 
 ```bash
-harbor run --force-build -a oracle -p <task-folder>   # build the image once
-time harbor run -a oracle -p <task-folder>            # reuse cached image: this ~= the agent's per-cycle cost
+stb harbor run --force-build -a oracle -p <task-folder>   # build the image once
+time stb harbor run -a oracle -p <task-folder>            # reuse cached image: this ~= the agent's per-cycle cost
 ```
 
 The oracle does *less* than a solving agent (it applies a known patch and runs
@@ -997,8 +997,8 @@ Run what is available (full verified CLI surface + infra-failure triage live in
 agent runs need an explicit `-a terminus-2` because `-a` defaults to oracle):
 
 ```bash
-harbor run -a oracle -p <task-folder>
-harbor run -a nop -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
+stb harbor run -a nop -p <task-folder>
 stb harbor check <task-folder>
 stb harbor run -a terminus-2 -m @openai/gpt-5.5 -k 3 -p <task-folder>   # difficulty, needs approval
 ```

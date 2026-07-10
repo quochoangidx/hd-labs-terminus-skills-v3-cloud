@@ -199,8 +199,9 @@ On first upload:
 - inspect CI and generated rubric before final reviewer submission
 - edit the generated rubric for accuracy and completeness
 - verify rubric lines start with `Agent`, end with `, +/-N`, use only values 1,
-  2, 3, or 5, never use 4, and focus on trace-evidenced behavior rather than
-  final pytest results
+  2, 3, or 5, never use 4, carry an explicit leading `+` on every positive
+  score (write `+3`, not `3` — unsigned positives are sent back for revision),
+  and focus on trace-evidenced behavior rather than final pytest results
 - for non-milestone tasks, use a flat `Agent ...` list; a single `# Rubric 1`
   header is tolerated but not required, and `# Rubric 2+` is reserved for
   milestone tasks

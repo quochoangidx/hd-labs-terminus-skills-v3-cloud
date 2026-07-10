@@ -60,7 +60,7 @@ empirically-confirmed token. When CI flags a commercial DB on an upstream
 identifier, do NOT remove core source — rename the identifier to break the
 substring (`DecimalTypeMaxScale` -> `DecimalTypeMaximumScale`, applied
 consistently across every `.go`), or delete the file if it is not build-
-required, then re-run `harbor run --force-build -a oracle`.
+required, then re-run `stb harbor run --force-build -a oracle`.
 
 Follow any explicit CI feedback before applying broad pruning.
 
@@ -112,7 +112,7 @@ shipped, so it does not help on the platform. Every `.py` left under
 - For a `.py` the build genuinely invokes (e.g. a code generator referenced in a
   Makefile rule), FIX the lint in place with an output-preserving change
   (`E402` import move, `E731`/`E701` reformat, `F841` unused var) and re-run
-  `harbor run --force-build -a oracle`.
+  `stb harbor run --force-build -a oracle`.
 - Run `ruff check workspace/tbrain-<slug>` over the whole task dir before zipping.
 
 For local-only checks, this is the relevant exclusion shape (do NOT ship it):
