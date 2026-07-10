@@ -12,7 +12,7 @@ stb harbor run -m @openai/gpt-5.5 -p <task-folder>
 For a pre-submission static pass, run:
 
 ```bash
-harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
+stb harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
 ```
 
 ## Structural Checks

@@ -42,7 +42,7 @@ stb --help
 stb login
 ```
 
-This opens the Experts platform and displays the API key generation dialog. Click "Generate Key", copy the key, and paste it into your terminal.
+This opens the API key page directly on the Experts platform. Click "Generate Key", copy the key, and paste it into your terminal.
 
 ### AI Credentials
 
@@ -90,13 +90,13 @@ You can use either the project name or UUID. If a project has only one template,
 
 ```bash
 # Using project name
-stb init my-task-name -p "Terminus-2nd-Edition" -t base
+stb init my-task-name -p "Terminus-2nd-Edition" -t default
 
 # Using project UUID
 stb init my-task-name -p bfe79c33-8ab0-4061-9849-08d3207c9927 -t milestone
 ```
 
-For non-milestone templates (e.g. `-t base`), this creates a folder with `instruction.md`, `task.toml`, `environment/Dockerfile`, `solution/solve.sh`, and `tests/test.sh`. See [Task Components](/portal/docs/understanding-tasks/task-components) for details.
+For non-milestone templates (e.g. `-t default`), this creates a folder with `instruction.md`, `task.toml`, `environment/Dockerfile`, `solution/solve.sh`, and `tests/test.sh`. See [Task Components](/portal/docs/understanding-tasks/task-components) for details.
 
 > **Note:** The `-t milestone` template uses the multi-step format described in the [Milestones page](/portal/docs/understanding-tasks/milestones) — each milestone is a self-contained subdirectory under `steps/`. If you generate a milestone scaffold and it produces the older root-level `solveN.sh` / `test_mN.py` / `milestone_x.md` layout instead, your `stb` CLI is out of date — upgrade it before proceeding.
 
@@ -397,9 +397,9 @@ See [Troubleshooting Guide](/portal/docs/reference/troubleshooting) for more iss
 
 Run `stb login` to re-authenticate.
 
-### "Maximum refresh limit (3)" Error
+### "Maximum refresh limit" Error
 
-If you see `Bad Request: Maximum refresh limit (3)` when running `stb keys refresh`, you've exceeded the retry limit for AI credential requests. Contact an admin to reset your key refresh limit, then run `stb keys refresh` again.
+If you see `Bad Request: Maximum refresh limit reached` when running `stb keys refresh`, you've exceeded the current cap on AI credential requests. Contact an admin to reset or raise it, then run `stb keys refresh` again.
 
 ### Model Warnings (Safe to Ignore)
 
@@ -420,7 +420,7 @@ The CLI checks for updates hourly. When available, you'll see:
 Run the following command to upgrade:
 
 ```bash
-uv tool upgrade snorkelai-stb --find-links https://snorkel-python-wheels.s3.us-west-2.amazonaws.com/stb/index.html --python ">=3.12" --refresh
+uv tool install snorkelai-stb --find-links https://snorkel-python-wheels.s3.us-west-2.amazonaws.com/stb/index.html --python ">=3.12" --reinstall --no-cache
 ```
 
 Your config and credentials are preserved.

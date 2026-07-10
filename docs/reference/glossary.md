@@ -121,7 +121,7 @@ A task is **solvable** when, **across all 10 agent runs**, each individual unit 
 The oracle solution script that demonstrates how to complete the task. Located in `solution/solve.sh`.
 
 ### Harbor
-The CLI tool (`harbor`) used for running agents and validating tasks. Run `harbor run -a oracle -p <task-folder>` to test your task.
+The task validation and testing framework used for running agents and validating tasks. Contributors invoke it through the Snorkel CLI as `stb harbor …` — e.g., run `stb harbor run -a oracle -p <task-folder>` to test your task.
 
 ---
 

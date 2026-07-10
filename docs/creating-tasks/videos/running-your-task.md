@@ -18,7 +18,7 @@ Learn how to interact with your task environment and test your solution locally.
 ### Start Interactive Mode
 
 ```bash
-harbor tasks start-env -p <task-folder> -i
+stb harbor tasks start-env -p <task-folder> -i
 ```
 
 ### Inside the Container

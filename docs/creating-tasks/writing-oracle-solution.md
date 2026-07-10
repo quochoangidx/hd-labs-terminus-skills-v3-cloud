@@ -182,7 +182,7 @@ do_something
 
 ```bash
 # Enter the container
-harbor tasks start-env -p <task-folder> -i
+stb harbor tasks start-env -p <task-folder> -i
 
 # Inside container, run your solution steps manually
 # Verify each step works as expected
@@ -191,7 +191,7 @@ harbor tasks start-env -p <task-folder> -i
 ### Run Oracle Agent
 
 ```bash
-harbor run -a oracle -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
 ```
 
 The oracle agent should PASS. If it fails, either:

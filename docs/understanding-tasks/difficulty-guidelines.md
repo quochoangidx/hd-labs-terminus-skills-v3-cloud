@@ -95,7 +95,7 @@ Before submitting, verify difficulty by:
 ### 1. Run Against Oracle Agent
 
 ```bash
-harbor run -a oracle -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
 ```
 
 This should PASS. If it doesn't, your task may have issues.

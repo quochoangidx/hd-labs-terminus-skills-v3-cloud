@@ -1,5 +1,7 @@
 # Understanding Milestones
 
+> 🚫 **New milestone tasks are currently blocked (effective immediately).** Net-new milestone task submissions are no longer accepted and will be rejected by an automated eval check. **Milestone tasks already in the pipeline are exempt** — anything currently in your revision queue or waiting for review can continue through to Accepted as normal. This block applies only to net-new milestone submissions.
+
 In Terminal Bench Edition 2, we are moving beyond "all-or-nothing" task completion. To better evaluate the reasoning traces of frontier agents, a subset of tasks now incorporates **Milestones**.
 
 > **Terminology note:** The Harbor framework refers to these as **multi-step tasks** ([Harbor docs](https://www.harborframework.com/docs/tasks/multi-step)). We use the term **Milestones** throughout our documentation for consistency, but the two are interchangeable — a "milestone" is the same thing as a "step."

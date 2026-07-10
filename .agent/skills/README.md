@@ -5,8 +5,9 @@ platform, aligned to the live task gallery (`/portal/tasks`): self-contained, of
 deterministic problems with a Python-pytest verifier, targeting **Hard or Medium by
 MODEL PASS RATE** (Easy is blocked; Python tasks must be Hard). The default lane is
 gallery-style spec-driven work (Lane A); upstream bugfix PRs are a minority lane.
-`debugging` and `software-engineering` categories are ON HOLD (see the mirrored
-callouts in task-miner + task-clone — lift both together).
+`debugging` and `software-engineering` categories are BLOCKED (rejected by an
+automated eval check as of 2026-06-29), and new milestone tasks are also blocked
+— see the mirrored callouts in task-miner + task-clone (lift both together).
 
 ## Pipeline → skill map
 

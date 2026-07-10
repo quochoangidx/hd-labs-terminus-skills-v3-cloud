@@ -133,7 +133,7 @@ sudo dseditgroup -o edit -a $USER -t user docker
 Enter your task container interactively to test your solution:
 
 ```bash
-harbor tasks start-env -p <task-folder> -i
+stb harbor tasks start-env -p <task-folder> -i
 ```
 
 While in the container, test your solution approach to ensure it works as expected.
@@ -195,7 +195,7 @@ See [Writing Tests](/portal/docs/creating-tasks/writing-tests) for detailed guid
 Verify your solution passes all tests:
 
 ```bash
-harbor run -a oracle -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
 ```
 
 This should **PASS**. If it doesn't, fix issues before proceeding.
@@ -252,10 +252,10 @@ Run final checks:
 
 ```bash
 # Oracle agent
-harbor run -a oracle -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
 
 # LLMaJ checks
-harbor tasks check -m openai/@openai/gpt-5.5 harbor_tasks/<task_name>
+stb harbor tasks check -m openai/@openai/gpt-5.5 harbor_tasks/<task_name>
 ```
 
 ## Step 12: Create ZIP File

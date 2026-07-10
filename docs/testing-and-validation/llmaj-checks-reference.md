@@ -6,7 +6,7 @@ LLM-as-Judge (LLMaJ) checks use GPT-5.5 to evaluate task quality and correctness
 
 ```bash
 # GPT-5.5 (matches CI)
-harbor tasks check -m openai/@openai/gpt-5.5 -o output.json harbor_tasks/<task_name>
+stb harbor tasks check -m openai/@openai/gpt-5.5 -o output.json harbor_tasks/<task_name>
 ```
 
 ## LLMaJ Checks
