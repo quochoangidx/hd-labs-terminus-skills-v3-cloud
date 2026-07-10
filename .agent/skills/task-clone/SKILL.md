@@ -1,11 +1,11 @@
 ---
 name: task-clone
-description: Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-*, including closed upstream bugfix candidates and explicit category-profile candidates such as data-processing, build-and-dependency-management, software-engineering, system-administration, security, scientific-computing, machine-learning, or games. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Task folders must be named tbrain-<problem-slug> without domain/tool filler such as pytest, django, numpy, or repo names unless the problem itself requires it.
+description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders, including closed upstream bugfix candidates and explicit category-profile candidates such as data-processing, build-and-dependency-management, system-administration, security, scientific-computing, machine-learning, or games. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Do not clone tasks whose classifier-visible shape still predicts software-engineering; reshape honestly into an allowed non-SWE category or stop."
 ---
 
 # Task Clone
 
-Use this skill when the user wants to turn a mined candidate into a hard Terminus Regular task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category unless it is invalid.
+Use this skill when the user wants to turn a mined candidate into a hard Terminus Regular task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category unless it is invalid or the task's visible shape still predicts as the blocked `software-engineering` category.
 
 Preferred split:
 
@@ -189,18 +189,23 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 ## Workflow
 
 1. Load the mined artifact or verify the source URL with the smallest needed browse/`gh` pass.
-2. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
-3. Create `workspace/tbrain-<problem-slug>` using the naming rule.
-4. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
-5. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
-6. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
-7. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false`, the artifact's valid category/subcategories, and realistic resources.
-8. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
-9. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
-10. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
-11. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
-12. Run structural checks, CI checks, and optional real-agent trials.
-13. After behavior and validation are stable, write reviewer-facing Difficulty,
+2. Gate the category shape before scaffolding: if the work is still `implement`
+   / `parse` / `render` / `cmp` / public API or stub completion / exact reference
+   conformance, it will likely predict `software-engineering`. Reshape the I/O
+   into a genuine allowed category only if the primary activity truly changes;
+   otherwise stop and mark `category_classifier_software_engineering`.
+3. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
+4. Create `workspace/tbrain-<problem-slug>` using the naming rule.
+5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
+6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
+7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
+8. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false`, the artifact's valid category/subcategories, and realistic resources.
+9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
+10. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
+11. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
+12. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
+13. Run structural checks, CI checks, and optional real-agent trials.
+14. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
 
 ## Regular Layout
@@ -272,24 +277,26 @@ memory_mb = 4096
 storage_mb = 10240
 ```
 
-> **⛔ CATEGORY HOLD (2026-06-21):** `debugging` and `software-engineering` are PENDING
-> on the platform — do NOT clone tasks in these categories. If the mined artifact's
-> `category` is one of them, STOP and ask the user (or reframe into an allowed category
-> only if the primary work genuinely fits). The bugfix default below (`debugging`) is
-> therefore also paused. Allowed: system-administration, build-and-dependency-management,
-> data-processing, games, machine-learning, security, scientific-computing. Mirror of the
-> task-miner hold — lift both together when the platform reopens.
+> **⛔ BLOCKED CATEGORY CLASSIFIER (active — 2026-07-10).** A task can fail CI with
+> `Predicted category 'software-engineering' ... is blocked` even when `task.toml`
+> declares `data-processing` or another allowed category. The in-progress exemption
+> list is frozen and only shrinks; do NOT add submission IDs or treat this as a
+> reviewer override. `debugging` is also blocked for net-new submissions, so do not
+> re-label bugfix work as another category unless the primary activity truly changes.
 >
-> **Spec-implementation/coding tasks read as "software-engineering" — classify by
-> PROBLEM DOMAIN into the nearest ALLOWED category instead** (a platform reviewer
-> will still suggest "software-engineering"; that's expected and must be declined
-> while held). A regex/glob/pattern matcher → `data-processing` (gallery leaf
-> *Text & Document Processing → Pattern Extraction & Regex Matching*); a parser/
-> codec → data-processing; a numeric kernel → scientific-computing; a build/dep
-> tool → build-and-dependency-management; etc. Then pick an ACCURATE gallery-leaf
-> tag: a pattern matcher that classifies given paths is *Pattern Extraction &
-> Regex Matching*, NOT *File Discovery & Search* (which implies walking a real
-> filesystem) — reviewers flag a misleading leaf tag as a category mismatch.
+> Before cloning, check whether the actual deliverable still looks like
+> `implement parse/render/cmp`, public API or stub completion, or exact reference
+> conformance. If yes, reshape the I/O into a genuine allowed category only when
+> the primary activity truly changes. A real dataset→report export, build/dependency
+> artifact, admin config, security outcome, scientific result, ML evaluation, or
+> game-state workflow can pass; a vocabulary sweep cannot. Treat split preflight
+> predictions as failure because any blocked prediction fails CI. If the shape
+> cannot be reshaped honestly, STOP and record
+> `category_classifier_software_engineering`.
+>
+> Pick an accurate gallery-leaf tag after any reshape: a pattern matcher that
+> classifies given paths is *Pattern Extraction & Regex Matching*, NOT *File
+> Discovery & Search* (which implies walking a real filesystem).
 
 Valid categories are only:
 
