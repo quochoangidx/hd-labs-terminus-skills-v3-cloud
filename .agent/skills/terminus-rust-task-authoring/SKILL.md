@@ -40,6 +40,20 @@ file conflicts with those skills, the canonical skills win.
   Every subprocess should have a practical timeout and useful captured output.
 - Preserve instruction/test symmetry for feature flags, workspace layouts,
   target-specific behavior, generated artifacts, and compatibility paths.
+- **Do NOT ship the bare `cargo new` stub-CLI skeleton.** The CI
+  `template_detection` static check (first observed 2026-07-13 on
+  tbrain-bundler-resolve) BLOCKS submissions matching the named template
+  `rust_cli`: a minimal single-crate repo (`Cargo.toml` + one `src/main.rs`
+  stub + README), a stdin-JSON→stdout-JSON batch binary, an "extend the
+  starter" instruction, a hidden vector-corpus verifier, and
+  `codebase_size = "minimal"`. It judges structural SHAPE (an LLM fallback
+  scores the match), so a wording sweep will not clear it. Minimum
+  de-templating for a new Rust task: a realistic multi-module crate
+  (`lib.rs` + several `src/*.rs` modules), in-repo unit tests and repo
+  furniture, and — where the domain allows — a file-based I/O surface
+  instead of a stdin→stdout batch pipe. Remediation levers are still
+  UNVERIFIED (single data point); see AGENTS.md §9 for the current verdict
+  before relying on any one lever.
 
 ## Submission Explanations
 

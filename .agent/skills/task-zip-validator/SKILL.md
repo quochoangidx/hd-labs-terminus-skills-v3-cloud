@@ -112,6 +112,17 @@ scientific-computing
 > BLOCKER: the task needs an honest reshape into one of the 6 allowed categories
 > or a shelve — never a category re-label.
 
+> ⛔ The CI `template_detection` static check (first observed 2026-07-13) BLOCKS
+> submissions whose structural shape matches a named template library entry —
+> confirmed: `rust_cli` (`Matches known template 'rust_cli' (llm_fallback,
+> confidence 0.85). Rework the task so it is not templated.`). Heuristic to flag
+> as a manual BLOCKER-risk: `environment/repo` is a minimal single-source-file
+> project (one `main.rs`/`main.go`/etc. + manifest + README), the graded binary
+> is a stdin→stdout batch pipe, the instruction says to extend a starter/stub,
+> and the verifier compares against a hidden vector corpus. Judges SHAPE, not
+> prose; assume per-language sibling templates. Remediation levers UNVERIFIED —
+> see AGENTS.md §9.
+
 Valid subcategories:
 ```
 long_context, tool_specific, api_integration, db_interaction, ui_building

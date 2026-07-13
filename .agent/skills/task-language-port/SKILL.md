@@ -35,6 +35,16 @@ is the task's difficulty. Do not simplify the placeholder's bug or improve the a
    on the platform (see `task-miner`/`task-clone`); a port would sit un-submittable regardless
    of language. Confirm they still want it (e.g. for later, once the hold lifts) before
    spending build effort.
+
+   **Template-shape check, same gate.** The CI `template_detection` static check (first
+   observed 2026-07-13) BLOCKS submissions whose structural shape matches a named template —
+   `rust_cli` is confirmed (minimal single-file stub crate, stdin-JSON→stdout-JSON batch
+   binary, "extend the starter" instruction, hidden vector corpus, `codebase_size = minimal`);
+   assume sibling templates exist for other languages. A port series multiplies exposure:
+   every sibling shares the core's shape, so if one flags, all will. If the SOURCE task has
+   this stub-CLI shape, de-template the CORE first (realistic multi-module layout, in-repo
+   tests, domain-authentic file I/O where possible — levers UNVERIFIED, see AGENTS.md §9) and
+   only then port; never try to clear the flag per-port.
 2. Identify the source language and what the program is actually coupled to: pure JSON/stdin
    logic ports to nearly anything; a task tightly bound to a source-ecosystem library (e.g. a
    C program driving `sqlite3` directly, a Node program parsing npm lockfile conventions, tar
