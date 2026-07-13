@@ -41,6 +41,17 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 8. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
 9. Run oracle, CI checks, and real-agent trials before packaging.
 
+> ⛔ Blocking CI shape gates (both judge the task's structural SHAPE, not its
+> prose, so wording sweeps don't clear them): `category_classifier` blocks tasks
+> predicting `software-engineering`/`debugging`/`data-processing`, and
+> `template_detection` (first observed 2026-07-13) blocks tasks matching a named
+> template library entry — confirmed `rust_cli` = minimal single-source-file
+> stub project + stdin→stdout batch binary + "extend the starter" instruction +
+> hidden vector-corpus verifier; assume per-language siblings. Design away from
+> both shapes up front (realistic multi-module repo, in-repo tests,
+> domain-authentic file I/O). Details and current remediation verdicts live in
+> AGENTS.md §9.
+
 ## Metadata Rules
 
 For new submissions:

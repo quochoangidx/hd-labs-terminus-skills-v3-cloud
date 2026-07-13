@@ -198,6 +198,15 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
    activity truly changes; otherwise stop and mark
    `category_classifier_<predicted_slug>` (e.g.
    `category_classifier_software_engineering`, `category_classifier_data_processing`).
+   In the same gate, check the TEMPLATE shape: the CI `template_detection` check
+   (first observed 2026-07-13) blocks submissions matching a named template —
+   confirmed `rust_cli` = minimal single-source-file stub project, stdin→stdout
+   batch binary, "extend the starter" instruction, hidden vector-corpus verifier,
+   `codebase_size = minimal`; assume per-language siblings. Scaffold away from
+   that shape from the start (realistic multi-module repo, in-repo tests,
+   domain-authentic file I/O); if flagged anyway, mark
+   `template_detection_<template_name>` and see AGENTS.md §9 for current
+   (UNVERIFIED) remediation levers.
 3. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
 4. Create `workspace/tbrain-<problem-slug>` using the naming rule.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
