@@ -57,6 +57,42 @@ misses were compound canonicalization conventions). Before writing any fix:
   while failing the enclosing group test? (This decides parametrize vs prune
   below.)
 
+## Step 1.5 — ⭐ suspect the ORACLE before you prune
+
+N independent strong agents each reconstruct the authority; when they ALL
+disagree with the oracle on the same cluster, the base rate says the oracle is
+wrong, not the agents. Before any prune/disclose:
+
+- Re-derive every expectation in the cluster by running the REAL authority (a
+  live `node_modules/semver`, the actual jar, the upstream binary) — not the
+  oracle, not the corpus.
+- Differential-fuzz the oracle against that authority over tens of thousands of
+  generated inputs. The corpus is self-consistent with the oracle's bugs *by
+  construction*, so `oracle == corpus` proves nothing; the gate is
+  `oracle == authority`.
+- Pruning first deletes the evidence: the semver-range family's two 0/N
+  clusters (numeric-after-wildcard, build-metadata-on-partial) were BOTH oracle
+  bugs; the prune cleared the flag and a client reviewer returned the sibling
+  task months later.
+
+Only once the oracle is proven conformant is a 0/N cluster evidence of a real
+agent blind spot — then, and only then, proceed to Step 2.
+
+## Step 1.75 — single-lever early exit (DROP, don't remediate)
+
+Before walking the decision tree, check the fair⊥hard fingerprint: agent runs
+are NEAR-PERFECT and miss only the 0/N cluster — i.e. the task's ENTIRE
+difficulty is that one boundary / convention / precedence / output-contract
+fact. Then no remediation path exists: hiding it stays unfair 0/N, disclosing
+or pruning it flips the near-perfect runs to 100% and the task grades EASY.
+**DROP or redesign around an orthogonal undisclosed second lever immediately**
+(arrhenius-clip-fit, calibration-threshold-select, hanabi, provenance-release-
+gate were all late-drop lessons). This mirrors verdict case 4 in
+`task-local-solve-probe` (Submit-readiness); the same fingerprint should
+already have been screened at mining time (`task-miner`, Master collapse law
+screen). Only tasks with a BROAD residual wall beyond the 0/N cluster continue
+to Step 2.
+
 ## Step 2 — classify each 0/N test and apply the matching fix
 
 | 0/N shape | Fix | Why / proven on |
@@ -81,6 +117,12 @@ Cross-cutting rules:
 - Pre-audit any NEWLY added vector family for likely-universal-miss shapes
   before shipping (semver pre-emptively dropped vectors even the oracle
   originally got wrong).
+- **Soft-representative rule:** after any prune, every feature cluster must
+  still keep ≥1 "soft" case that a majority of runs pass. A hard-cases-only
+  corpus is forbidden — it maximizes 0/N exposure on the next re-run and trips
+  anti-hardcoding minimum-coverage guards. The trimming direction is always
+  pass-table-driven; never "drop the easy cases to keep the hard ones" (easy
+  cases ARE the coverage that keeps the flag from firing).
 
 ## Step 3 — margin-prune the ≤2/N tail
 
@@ -127,7 +169,7 @@ reach full-pass.
 
 - Structure verifiers **per-case parametrized or graded bands** from day one;
   no monolithic all-N-cases functions, no group-aggregate tests on top of
-  per-case ones (`lever_patterns.md` L1 step 5).
+  per-case ones (`lever_patterns.md` L1 step 6).
 - Target each quirk family at ~40–80% expected per-run pass rate; a case you
   predict <~35% of runs will pass is a 0/N candidate — disclose or drop it at
   design time.

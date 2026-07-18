@@ -220,7 +220,17 @@ unfair-hard, never real difficulty.
    that real implementers get INCONSISTENTLY wrong. Reject clean finite rule-sets, named
    algorithms, and clean bidirectional codecs — those probe EASY even *with* an official suite.
 4. **Claim it** in `mined-candidates/index.jsonl` (dedupe_key = `conformance_suite + spec + language`).
-5. **Build.** Ship a stub (reads input, emits nothing/minimal). Put the official suite
+5. **Skeleton probe gate — probe BEFORE building the full oracle/verifier.** As soon as
+   you have `instruction.md` + a buildable `environment/` + the stub + a ROUGH check
+   command (a thrown-together differential or a handful of hand-checked cases — the
+   real oracle and hidden suite do not exist yet), run the skeleton probe
+   (`task-local-solve-probe`, Skeleton mode), N≥3. 3/3 pass → DROP or redesign the
+   lever now; do NOT spend the oracle/verifier/Docker build on a candidate the
+   collapse law already killed. 0–2/3 with semantic failures → proceed to step 6.
+   Setup/instruction failures → fix the skeleton and re-probe. This gate exists
+   because the old ordering (full build first, probe last) burned the entire build
+   cost on candidates that then probed 3/3 EASY.
+6. **Build.** Ship a stub (reads input, emits nothing/minimal). Put the official suite
    HIDDEN under `tests/`; oracle = a full correct impl that passes 100%; nop/stub fails.
    NEVER commit the answer table (input→expected) into `environment/repo` — grep for it
    before shipping (see task-clone). Read binary suite files (`.dat`, `LineBreakTest`) in
@@ -231,22 +241,27 @@ unfair-hard, never real difficulty.
    rates (10 families × ~70% each ≈ 3% ⇒ HARD, with a fair-MEDIUM floor since partial
    solutions still score). Target each family at ~40–80% expected per-run pass rate; a
    case you predict fewer than ~35% of runs will pass is a statistical 0/N candidate
-   at N=10. A case EVERY fresh implementation will miss (insider quirk,
+   at N=10. **Soft-representative rule:** every feature cluster keeps ≥1 "soft" case
+   that a majority of runs pass — never a hard-cases-only corpus (soft cases are the
+   coverage that keeps the 0/N flag from firing, and they satisfy anti-hardcoding
+   minimum-coverage guards). **Soft size cap:** a curated corpus of ~≤100 cases is
+   the right default for a normal task; a large corpus (300+) is justified only when
+   the wall is genuinely broad AND the per-case pass-table pre-audit below has run. A case EVERY fresh implementation will miss (insider quirk,
    undisclosed convention, data-table-only knowledge) is intersection-of-misses = a
    guaranteed 0/N flag — disclose it in one prose sentence or drop it BEFORE shipping.
    Structure the verifier per-case (parametrized) or as graded bands whose top band the
    best realistic run can actually reach; never ONE monolithic all-N-cases-must-pass
    function, where a single universal blind spot turns the whole test 0/N, and never a
    group-aggregate test sitting on top of per-case tests (structurally 0/N forever).
-   Cheap pre-audit: after the blind probe (step 6), score the probe solvers' diffs
+   Cheap pre-audit: after the blind probe (step 7), score the probe solvers' diffs
    per-case against the corpus — any case NO probe run passes is a correlated blind
    spot to disclose/prune now (see task-local-solve-probe, Coverage pre-audit).
-6. **Probe difficulty AND fairness — do BOTH before trusting the task:**
+7. **Probe difficulty AND fairness — do BOTH before trusting the task:**
    - Run ≥3 BLIND solvers (fresh agent, no `solution/`, no `tests/`). HARD ≈ 0–1/3 solve.
    - Do NOT let a solver paste the spec source (blows up context, distorts the probe).
    - Sanity gate: oracle must PASS and nop/stub must FAIL, or the harness is broken —
      that is not a difficulty signal (see the missing-tmux / verifier-did-not-run traps).
-7. **Fairness audit — a green `✅ HARD` verdict is NECESSARY-NOT-SUFFICIENT; read the
+8. **Fairness audit — a green `✅ HARD` verdict is NECESSARY-NOT-SUFFICIENT; read the
    per-test failure distribution, not just the pass rate.** A task can report
    `✅ HARD / ✅ Solvable / oracle 100% / agents 0/5` and STILL be an invalid, fake-hard
    task — the disqualified TOML decoder did exactly that: its "hardness" was pure artifact
@@ -276,7 +291,7 @@ unfair-hard, never real difficulty.
      the 0/N cases ARE the lever (undisclosed reference-class divergence → disclose
      instead). The flag is stochastic across re-runs — re-run to confirm both the
      failure and the fix.
-8. **instruction_check pre-flight — run the binary preflight in
+9. **instruction_check pre-flight — run the binary preflight in
    `terminus-regular-task-authoring` (Prompt Rules) BEFORE the first platform check.**
    Prose only: objective + I/O protocol + the authoritative spec/suite reference; no
    `##` headers, no lookup tables, no bullet rule-lists, no algorithm narration, no
@@ -300,7 +315,7 @@ unfair-hard, never real difficulty.
      COPY'd into the image before `git add -A`) plus a one-line declarative pointer in
      the instruction — clears instruction_check while keeping sufficiency/symmetry
      (semver, 2026-07-02).
-9. Ship.
+10. Ship.
 
 ---
 

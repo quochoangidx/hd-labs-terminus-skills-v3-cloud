@@ -111,6 +111,19 @@ scientific-computing
 > dataset→report/ETL pipeline) predicts a blocked slug, flag it as a manual
 > BLOCKER: the task needs an honest reshape into one of the 6 allowed categories
 > or a shelve — never a category re-label.
+>
+> **Run the blind category probe to make this check operational** (the real
+> classifier is geoblocked from VN and cannot be preflighted). Give a FRESH
+> subagent only the classifier-visible surfaces — `instruction.md`, the
+> `environment/` file-tree listing, README, rubric text — WITHOUT the declared
+> category, and ask it to pick the primary-activity category from the 9 slugs
+> with a confidence and a one-line reason; repeat 2–3 times (the platform's
+> `llm_fallback` is noisy). Any run predicting a blocked slug, or a majority
+> disagreeing with the declared category, is the BLOCKER above; the probe's
+> reasons name the leaking surface. Fix by reshaping the SHAPE (instruction
+> verbs, I/O surface, rubric lines, repo furniture — see `task-miner`,
+> "Classifier-visible surface artifacts"), then re-probe; never by re-wording
+> prose or editing `task.toml` alone.
 
 > ⛔ The CI `template_detection` static check (first observed 2026-07-13) BLOCKS
 > submissions whose structural shape matches a named template library entry —
@@ -139,7 +152,7 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 | `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` | ✅ lowercase them |
 | `workdir` (milestone-only) | `[environment].workdir` must NOT appear when `number_of_milestones = 0`; it is milestone-only (container cwd comes from Dockerfile `WORKDIR`) | ✅ remove line |
 | `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
-| `category` | Must be one of the 9 valid values; ALSO flag `software-engineering`/`debugging`/`data-processing` (declared or shape-predicted) as blocked by `category_classifier` | ❌ manual |
+| `category` | Must be one of the 9 valid values; ALSO flag `software-engineering`/`debugging`/`data-processing` (declared or shape-predicted) as blocked by `category_classifier` — shape-predicted is checked via the blind category probe (see the callout below the toml block) | ❌ manual + probe |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
 | `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
 

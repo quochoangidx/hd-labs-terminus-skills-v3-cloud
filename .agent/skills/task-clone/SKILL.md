@@ -214,11 +214,25 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
 8. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false`, the artifact's valid category/subcategories, and realistic resources.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
-10. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
-11. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
-12. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
-13. Run structural checks, CI checks, and optional real-agent trials.
-14. After behavior and validation are stable, write reviewer-facing Difficulty,
+10. **SKELETON PROBE GATE (mandatory — before any oracle/verifier investment).**
+    At this point you have `instruction.md` + a buildable `environment/` + the
+    stub, and that is ALL a difficulty probe needs. Assemble a ROUGH check
+    command (a thrown-together differential, or a dozen hand-verified
+    input→output cases — the real oracle and hidden corpus do not exist yet) and
+    run `task-local-solve-probe` in Skeleton mode, N≥3 fresh blind solvers.
+    - 3/3 pass → DROP the candidate or redesign its lever NOW; do not write the
+      oracle, the verifier corpus, or the packaging for a task the master
+      collapse law already killed (AGENTS.md §1).
+    - 0–2/3 with semantic failures → continue to step 11.
+    - Failures from setup / unclear instruction / broken skeleton → fix the
+      skeleton and re-probe; those runs measure nothing about difficulty.
+    The post-build full probe (step 14) remains the source of truth for the
+    submit verdict; this gate only exists to stop full builds of 3/3-EASY tasks.
+11. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
+12. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
+13. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
+14. Run structural checks, CI checks, and optional real-agent trials.
+15. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
 
 ## Regular Layout
@@ -403,7 +417,7 @@ Write like a real engineer describing the requested observable work:
 - Before the first platform check, run the `instruction_check` binary preflight
   in `terminus-regular-task-authoring` (Prompt Rules). The escape hatches for a
   flip-flopping verdict, test-pinned literals, and custom output formats live in
-  `.agent/skills/task-miner/lever_patterns.md` (L1 step 8): ship the non-blocking
+  `.agent/skills/task-miner/lever_patterns.md` (L1 step 9): ship the non-blocking
   ⚠️ when the flagged items are test-pinned, use natural JSON + a semantic
   verifier instead of a bespoke byte format, and move unavoidable disclosures
   into an in-env reference file with a one-line pointer.
@@ -723,9 +737,16 @@ actually reach; never ONE monolithic all-N-cases-must-pass function — a single
 universal blind spot then turns that whole test 0/N and the task gets returned.
 Before shipping, drop or disclose (one prose sentence) any case EVERY fresh
 implementation would miss; keep hardness as many independent quirk families
-each solver misses a different slice of. Full remediation decision tree when
-the flag fires anyway: `.agent/skills/task-revise-flag-remediation/SKILL.md`
-(design-time rules: `lever_patterns.md` L1 step 5).
+each solver misses a different slice of. Corpus-curation rules: soft size cap
+~≤100 curated cases for a normal task (300+ only for a genuinely broad wall
+that has passed the pass-table pre-audit); every feature cluster keeps ≥1
+"soft" case a majority of runs pass; and the trimming direction is always
+data-driven from the per-case pass table — NEVER "drop the easy cases, keep
+the hard ones" (easy cases are the coverage that keeps the 0/N flag from
+firing; a hard-only corpus maximizes 0/N exposure). Full remediation decision
+tree when the flag fires anyway:
+`.agent/skills/task-revise-flag-remediation/SKILL.md`
+(design-time rules: `lever_patterns.md` L1 step 6).
 
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
@@ -924,6 +945,30 @@ mistakes each cost a full rebuild this session — avoid them up front:
 
 Before packaging or platform upload:
 
+- **run the per-case pass-table pre-audit (mandatory for any corpus-graded
+  verifier).** Re-score the stored blind-probe solver diffs per-case against the
+  FULL corpus (free — no new solver runs) and build the pass table. Then check
+  three conditions before zipping: (1) every case has ≥1 probe passer — any
+  0-probe-pass case is a correlated-blind-spot candidate, handle it via
+  `task-revise-flag-remediation` NOW (and suspect the ORACLE first: authority-
+  check before pruning); (2) the best union still fails >0 cases (no run can
+  flip to 100% after any prune); (3) every feature cluster still has a soft
+  representative a majority of runs pass
+- **run the blind category probe (mandatory — the real `category_classifier`
+  is geoblocked from VN and cannot be preflighted).** Give a FRESH subagent
+  (zero task context) only the classifier-visible surfaces — `instruction.md`,
+  the `environment/` file tree listing, README, and the rubric text — WITHOUT
+  the declared category, and ask it to pick the task's primary-activity
+  category from the 9 slugs (software-engineering, debugging,
+  data-processing, build-and-dependency-management, system-administration,
+  security, scientific-computing, machine-learning, games) with a confidence
+  and a one-line reason. Run it 2–3 times (the platform's `llm_fallback` is
+  noisy). Any run predicting a BLOCKED slug, or a majority predicting ≠ the
+  declared category → reshape the SHAPE (instruction verbs, I/O surface,
+  rubric lines, repo furniture — see `task-miner`, Classifier-visible surface
+  artifacts) and re-probe; do not just re-word prose or change `task.toml`.
+  The probe's one-line reasons tell you exactly which surface is leaking the
+  wrong shape
 - run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
 - include preservation/non-regression test coverage in the prompt, including modes not directly part of the bug trigger
 - run a verifier API sanity audit for every imported class/function and every

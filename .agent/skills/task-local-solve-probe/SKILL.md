@@ -76,6 +76,34 @@ python3 .agent/skills/task-local-solve-probe/scripts/probe.py record workspace/l
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
 ```
 
+## Skeleton mode — probe BEFORE the full build (mandatory gate in task-clone)
+
+Run a difficulty probe as soon as a candidate has the minimum probeable
+surface, BEFORE any oracle/verifier/packaging investment. This is the
+mandatory gate in `task-clone` Workflow step 10 and `lever_patterns.md` L1
+step 5; it exists because the old ordering (full build first, probe last)
+burned the whole build cost on candidates that then probed 3/3 EASY.
+
+- **Minimum input:** a buildable `environment/` + `instruction.md` + the stub.
+  No polished oracle, no hidden suite, no Dockerfile hardening, no packaging.
+- **Scoring:** use a ROUGH check — a thrown-together differential against the
+  intended authority, or a dozen hand-verified input→output cases. Accept
+  noise; the goal is to kill 3/3-EASY candidates early, not to measure the
+  exact difficulty band.
+- **Verdict mapping:**
+  - 3/3 pass → DROP or redesign the lever before building anything more. Apply
+    the master collapse law (AGENTS.md §1): if no undisclosed in-image
+    library-quirk differential and no undisclosed counter-intuitive rule
+    survives, there is nothing to redesign around — drop.
+  - 0–2/3 with semantic failures → proceed to the full build, then run the
+    normal post-build probe.
+  - Setup/instruction/skeleton failures → fix the skeleton and re-probe; these
+    runs measure nothing about difficulty.
+- **Limits:** skeleton mode never replaces the post-build probe or the
+  submit-readiness verdict below — the rough check command is too noisy to
+  ground a submit decision, and the pass-table pre-audit needs the real
+  corpus. A skeleton 0/3 is a "worth building" signal, not a HARD label.
+
 ## Interpretation
 
 - `0-2/5 pass` with semantic/fair failures: promising task; run Harbor GPT/Claude

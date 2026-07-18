@@ -269,7 +269,7 @@ For **L1 conformance tasks**, "implement <spec>; treat <spec> + its official sui
 definition" normally satisfies BOTH. But if a SINGLE tested edge is both undisclosed AND
 trivially pivotable via an in-env reference (TOML + BOM + `tomllib`), you are in the
 disclose-vs-collapse trap — fix the RESOURCE, not the prose (see
-`.agent/skills/task-miner/lever_patterns.md`, L1 step 7).
+`.agent/skills/task-miner/lever_patterns.md`, L1 step 8).
 
 `instruction.md` should:
 
@@ -634,7 +634,13 @@ Quality preflight:
   instructions in environment files, comments, README, configs, scripts, TODOs,
   `spec.md`, or architecture docs
 - oracle passes, nop fails, and failures are behavioral rather than infrastructure
+- for any corpus-graded verifier, the per-case pass-table pre-audit has run
+  before zipping (see `task-clone` Quality Preflight / `task-local-solve-probe`):
+  re-score the stored blind-probe diffs per-case and confirm (1) every case has
+  ≥1 probe passer, (2) the best union still fails >0 cases, (3) every feature
+  cluster keeps a soft representative a majority of runs pass
 
 If the platform returns the task with `❌ Some tests not passed by any agent
 run` (blocking 0/N coverage flag), do not improvise — follow the decision tree
-in `.agent/skills/task-revise-flag-remediation/SKILL.md`.
+in `.agent/skills/task-revise-flag-remediation/SKILL.md` (Step 1.5 first:
+suspect the oracle before pruning; Step 1.75: single-lever fingerprint → DROP).

@@ -45,6 +45,29 @@ is the task's difficulty. Do not simplify the placeholder's bug or improve the a
    this stub-CLI shape, de-template the CORE first (realistic multi-module layout, in-repo
    tests, domain-authentic file I/O where possible — levers UNVERIFIED, see AGENTS.md §9) and
    only then port; never try to clear the flag per-port.
+
+   **Sweep the CORE before porting — defects multiply by series size.** A port series
+   inherits every core defect ×N siblings, and platform returns then hit the whole series
+   (the purl 6-language series needed the same fix in 5 of 6 zips, twice). Run this
+   checklist on the SOURCE task and fix the core FIRST, then port:
+   - **noexec `/tmp` verifier audit.** If the verifier stages AND execs anything under a
+     default `tempfile.mkdtemp()` — a compiled binary, an instrumented build, or a
+     `#!/bin/sh` wrapper script (`exec node …` / `exec java …`) — it dies on the
+     platform's noexec `/tmp` while passing locally. Fix in the core: yield an argv
+     prefix (`["node", main_js]`) instead of a staged wrapper, or use a
+     `_find_exec_base()` probe (`/app`, `/var/tmp`, `/dev/shm`); repro with
+     `docker run --tmpfs /tmp:noexec,nosuid …` (oracle 1, nop 0) before porting.
+   - **Corpus 0/N + rule-level coverage sweep.** Run the per-case pass-table pre-audit
+     (`task-local-solve-probe`) on the core, and audit that every SPEC rule has a
+     discriminating corpus input (input ≠ output on exactly that rule) — a shared-corpus
+     series inherits every gap, and added rows must be authority-generated and synced to
+     EVERY sibling.
+   - **Anti-cheat sweep.** If the verifier keeps an expected-value corpus readable under
+     `/tests` and execs the candidate as root, a corpus-reading candidate passes with
+     zero implementation. Fix in the core (hide-corpus unlink + chmod 700, run the
+     candidate as `nobody`, world-read the build artifacts; prove with a
+     cheat-emulation), then sweep every language sibling — pre-hardened siblings can
+     coexist with exposed ones in the same series.
 2. Identify the source language and what the program is actually coupled to: pure JSON/stdin
    logic ports to nearly anything; a task tightly bound to a source-ecosystem library (e.g. a
    C program driving `sqlite3` directly, a Node program parsing npm lockfile conventions, tar

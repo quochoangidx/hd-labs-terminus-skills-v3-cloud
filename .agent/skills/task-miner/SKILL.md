@@ -223,6 +223,35 @@ For category-profile candidates, `fixing_commit` is optional. The artifact must 
 - `machine-learning`: Mine tiny offline data-loader, inference, tokenizer, metric, or evaluation tasks. Accept deterministic seeds and small fixtures. Reject downloads, GPU, model registry, or expensive training.
 - `games`: Mine terminal game/puzzle/simulation rule tasks. Accept deterministic state transitions, move legality, scoring, or solver behavior. Reject visual-only or flaky/random tasks.
 
+### Classifier-visible surface artifacts — pick the category BEFORE building, then build the SHAPE to match
+
+The platform `category_classifier` predicts from the task's SHAPE — instruction
+verbs, I/O surface, repo furniture, rubric wording — and ignores the declared
+`task.toml` category entirely. A category mismatch is therefore a SHAPE bug,
+fixed at design time, not a labeling bug fixed at submit time. Choose the
+category first, then make sure the dominant surfaces below actually appear;
+a prose/vocabulary sweep alone does NOT flip a wrong prediction.
+
+| Category | Surfaces that pull the prediction toward it |
+|---|---|
+| build-and-dependency-management | manifests/lockfiles/build graphs are the OBJECT of the work; instruction verbs = resolve/install/build/package; verifier inspects build outputs or installed artifacts |
+| system-administration | services, config files, permissions, users, processes, logs; the agent OPERATES a system rather than authoring an algorithm |
+| security | threat/abuse framing; memory-safety verifier (ASan/UBSan); sanitization/authz/crypto; exploit-prevention PLUS legitimate-use preservation tests |
+| scientific-computing | continuous/numerical model with physical units; precision/tolerance output requirements; NO prescribed method steps — one method-shaped sentence ("solve the quadratic rather than stepping") flipped a task to software-engineering |
+| machine-learning | dataset/loader/metric/eval-loop artifacts with fixed seeds; conversely, ML SUBJECT ≠ ML category — scrub ML framing/tags when the activity is not ML |
+| games | game rules, state transitions, move legality, scoring; verbs = simulate/play/adjudicate |
+
+**Anti-tells that predict a BLOCKED slug** (any of these dominating the shape ⇒
+reshape honestly or reject): `implement`/`parse`/`render`/`cmp`/"extend the
+starter"/fill-the-stub and exact-reference-conformance framing →
+software-engineering; dataset→report / ETL pipelines → data-processing;
+"find the bug" / make-the-failing-test-pass → debugging. Rubric lines carry the
+same signal as instruction prose — de-shape both. If the honest reshape guts
+the difficulty (quartz-cron: reshaped clean, probed 3/3 EASY), drop instead of
+gambling. The real classifier is geoblocked from VN and cannot be preflighted
+directly — emulate it with the blind category probe in `task-clone`
+(Quality Preflight) / `task-zip-validator` before every submission.
+
 ## Subtype Profiles
 
 The 5 subtypes are the gallery's **cross-cutting axis** (`task_inspiration_v2.subtypes`)
@@ -572,6 +601,44 @@ Reject false-hard candidates:
   trials show repeated failures for semantic reasons
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
+### Master collapse law screen — RUN ON EVERY CANDIDATE, any lane, before scoring
+
+⭐ Confirmed over a 15-task blind-probe batch (2026-07-12), lane-agnostic: a task
+holds under a fair blind probe **if and only if** it hides one of exactly two
+things:
+
+- **(a) an undisclosed in-image library-quirk differential** — behaviour the
+  solver can only match by differential-testing a real implementation present in
+  the image (and NOT re-derivable from a memorized spec or a reachable
+  stdlib/host reference);
+- **(b) an undisclosed counter-intuitive rule** — a rule a naive-but-careful
+  implementation gets wrong, with a broad enough footprint to survive fair
+  disclosure of the surrounding contract.
+
+Everything disclosed-and-derivable is EASY 3/3, regardless of rule count,
+cascade depth, stated counter-intuitiveness, or optimization shape. A
+**DISCLOSED** counter-intuitive rule is not hard either — Opus reads it straight
+from the spec (hanabi downward-rotation and maven memorized-reference both
+collapsed 820/820 once stated). Screen every candidate by naming which of the
+two levers it hides, in one sentence, in the artifact. Cannot name one → reject
+at mining time, cost zero. This subsumes the spec-task advice in "Opus-4.8
+resistance" and the bugfix-side "Fix-shape filter": both are projections of this
+law onto their lane.
+
+**fair⊥hard single-lever early-DROP (apply here, not after the platform flag):**
+if the candidate's ENTIRE difficulty is one boundary / convention / precedence /
+output-contract fact, there is no fair-and-hard path — hiding it produces an
+unfair 0/N coverage flag, disclosing it collapses the task to EASY. Reject at
+mining; do not wait to learn this from a platform return (arrhenius-clip-fit,
+calibration-threshold-select, hanabi, provenance-release-gate were all
+late-drop lessons). Fingerprints: a self-contained game-replay or
+single-invariant adjudicator; difficulty that lives in an uninferable OUTPUT
+contract rather than semantics; a "wall" that is one code path. The only
+escape: the candidate admits a SECOND lever that is orthogonal, undisclosed,
+and broad-footprint (dkim `b=`-not-last, hex-requirement intersection=0) —
+record it explicitly or reject. Record `collapse_law_screen: pass|fail` with
+the named lever in the candidate artifact.
+
 ### Mechanical patch-shape gate — RUN FIRST, pass/fail, before any scoring
 
 The fix-shape filter below is correct but kept getting ignored: 17 candidates
@@ -780,6 +847,8 @@ Score each axis from 1 to 5:
 
 Reject if:
 
+- the Master collapse law screen fails (no nameable lever, or single-lever
+  fair⊥hard fingerprint with no orthogonal second lever) — see Hardness Filter
 - `subsystem_interaction < 4` unless prior real-agent evidence shows the task is
   still hard for semantic reasons
 - `deterministic_reproducibility < 4`
@@ -867,6 +936,7 @@ candidate:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
+  collapse_law_screen:     # pass | fail — name the hidden lever in one sentence: in-image library-quirk differential | undisclosed counter-intuitive rule; fail (or single-lever fair⊥hard fingerprint) => reject
   patch_shape_gate:        # pass | fail — from the mechanical gate; fail => not Hard-eligible
   patch_shape_evidence:    # which gate condition passed (new symbol / >=2 interacting files / multi-commit / probe-fail)
   family_key:              # library + bug_family, checked against the family ledger
@@ -966,7 +1036,7 @@ user N hard tasks from a pipeline:
   trap); L4 multi-vector security hardening is confirmed-HARD in an allowed category.
   Plan every batch as a PORTFOLIO: beating the best model is a ~1/5 lottery per task,
   so design each task for a fair-MEDIUM floor (union-of-misses corpus, per-case or
-  banded scoring — see L1 step 5) with HARD upside, and SUBMIT non-Python Medium
+  banded scoring — see L1 step 6) with HARD upside, and SUBMIT non-Python Medium
   results (`target_difficulty: medium`) instead of discarding them.
 
 ## Hardness Calibration
