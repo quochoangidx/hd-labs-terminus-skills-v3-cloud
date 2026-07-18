@@ -12,10 +12,10 @@ is the **authoritative taxonomy menu** the miner aligns candidates to. Pair it w
 - Source: the portal's own Supabase backend, read with the public anon key the
   portal JS bundle ships (the exact data the gallery renders). Pages repo and
   `snorkel-tb-tasks` are private (not readable via the user's GitHub).
-- Snapshot date: 2026-07-10 (auto-refresh).
+- Snapshot date: 2026-07-15 (auto-refresh).
 - Rows read: `v_tasks_with_priorities` = 4521 (curated/priority tasks, 3-level
-  taxonomy); `task_inspiration_v2` = 6285 (inspiration pool; is_milestone
-  true=0 / false=6285).
+  taxonomy); `task_inspiration_v2` = 6789 (inspiration pool; is_milestone
+  true=0 / false=6789).
 - The difficulty column on `v_tasks_with_priorities` may be all-null; if so,
   difficulty is NOT a usable gallery field — gate hardness by model pass-rate.
 
@@ -38,12 +38,12 @@ may add **Large Codebase Tasks** (milestone-heavy large multi-layer repos).
 
 | Canonical gallery category | skill kebab alias | curated rows | inspiration rows |
 |---|---|---:|---:|
-| Security & Cryptography | `security` | 600 | 1249 |
-| Machine Learning & AI | `machine-learning` | 516 | 1137 |
-| Scientific Computing & Analysis | `scientific-computing` | 589 | 868 |
-| Interactive Challenges & Games | `games` | 520 | 838 |
-| Build & Dependency Management | `build-and-dependency-management` | 392 | 582 |
-| System Setup & Configuration | `system-administration` | 396 | 544 |
+| Security & Cryptography | `security` | 600 | 1375 |
+| Machine Learning & AI | `machine-learning` | 516 | 1263 |
+| Scientific Computing & Analysis | `scientific-computing` | 589 | 952 |
+| Interactive Challenges & Games | `games` | 520 | 922 |
+| Build & Dependency Management | `build-and-dependency-management` | 392 | 624 |
+| System Setup & Configuration | `system-administration` | 396 | 586 |
 | Debugging & Troubleshooting | `debugging` | 592 | 298 |
 | Software Engineering & Development | `software-engineering` | 499 | 284 |
 | Data Processing & Scripting | `data-processing` | 417 | 300 |
@@ -53,10 +53,10 @@ may add **Large Codebase Tasks** (milestone-heavy large multi-layer repos).
 
 Orthogonal to category; a task has 0+ of these. (Counts across the inspiration pool.)
 
-- **Long Context** — 2156
-- **Tool Specific** — 2123
-- **API Integration** — 2082
-- **DB Interaction** — 2024
+- **Long Context** — 2350
+- **Tool Specific** — 2307
+- **API Integration** — 2270
+- **DB Interaction** — 2220
 - **UI Building** — 398
 
 The **Large Codebase Tasks** type instead uses milestone subtypes:
@@ -68,16 +68,16 @@ Evidence for the "mix languages, archetype-first" rule.
 
 | lang | n | | lang | n | | lang | n |
 |---|---:|---|---|---:|---|---|---:|
-| SQL | 2393 | | Python | 2173 | | Bash | 1625 |
-| JavaScript | 1187 | | Go | 684 | | C | 654 |
-| TypeScript | 609 | | Java | 514 | | C++ | 487 |
-| Kotlin | 273 | | PHP | 268 | | Ruby | 223 |
-| YAML | 215 | | AWK | 199 | | Perl | 186 |
-| Lua | 181 | | Terraform | 171 | | TOML | 168 |
-| Rego | 153 | | Rust | 118 | | Make | 109 |
-| HCL | 108 | | Makefile | 100 | | HTML | 94 |
-| CSS | 83 | | CMake | 71 | | Shell | 66 |
-| POSIX shell | 60 | | Node.js | 49 | | JSON | 46 |
+| SQL | 2672 | | Python | 2274 | | Bash | 1868 |
+| JavaScript | 1249 | | Go | 741 | | C | 703 |
+| TypeScript | 649 | | Java | 570 | | C++ | 519 |
+| Kotlin | 303 | | PHP | 303 | | Ruby | 255 |
+| YAML | 239 | | AWK | 233 | | Perl | 222 |
+| Lua | 220 | | Terraform | 195 | | TOML | 188 |
+| Rego | 173 | | Rust | 135 | | HCL | 128 |
+| Make | 126 | | Makefile | 110 | | HTML | 94 |
+| CSS | 83 | | CMake | 79 | | Shell | 71 |
+| POSIX shell | 70 | | JSON | 50 | | Node.js | 49 |
 
 ## Full 3-level taxonomy tree (`v_tasks_with_priorities`)
 
