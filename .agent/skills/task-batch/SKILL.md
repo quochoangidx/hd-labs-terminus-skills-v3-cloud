@@ -51,7 +51,11 @@ Shortlist the 8–12 most diverse survivors (never two from one family).
 
 ## Loop (repeat until quota or a stop condition)
 
-1. **MINE** fresh per the doctrine; claim slugs (`tbrain-<problem-slug>`).
+1. **MINE** fresh per the doctrine, starting with **Repo Prospecting**
+   (`task-miner`, Repo Prospecting): discover mature-but-obscure repos via
+   `gh search` by lever/archetype signal — never rely on the static Source
+   Queue (famous repos are memorization-poison) or on repos the model happens
+   to remember. Claim slugs (`tbrain-<problem-slug>`).
 2. **SKELETON PROBE GATE** (mandatory): env + instruction.md + stub + rough
    grader, N≥3 fresh blind solvers in isolated dirs outside the repo
    (`/var/tmp/probe-*`), net forbidden, every known reference lib NAMED as

@@ -197,6 +197,9 @@ Per mining round:
      subcategories thin in the gallery AND absent from the portfolio.
   6. Free-form ideas — any shape that names a hidden lever; no precedent
      needed.
+  Concrete repos/tools for classes 1–3 come from **Repo Prospecting** (section
+  below) — actively discovered mature-but-obscure repos, never just the static
+  Source Queue or whatever the model happens to remember.
 - Screen ALL of them with the Master collapse law; record every verdict in
   `index.jsonl` INCLUDING rejects (a reject is map data — the batch deliverable
   includes this exploration map, and durable verdicts get folded into
@@ -376,10 +379,52 @@ Deliberately MIX languages across a batch to avoid the "17 tasks all Go libs"
 failure (June 2026 batch B). A healthy batch spans e.g. Rust + Go + TS + C/C++ +
 a niche language, not one library family.
 
-## Source Queue
+## Repo Prospecting — actively discover NEW repos (default; run BEFORE touching the Source Queue)
+
+The skill must PROSPECT for repos, not consume a fixed list. Two principles:
+
+- **Fame is memorization-poison.** Frontier solvers know famous repos
+  (pip/django/pandas/urllib3…) cold — behavior, quirks, and bug history — so
+  levers mined there collapse first. The sweet spot is **mature-but-obscure**:
+  real users, ≥2 years of history, roughly 100–5,000 stars; reject
+  "everyone-knows-it" repos (rule of thumb >20k stars) as difficulty sources.
+- **Prospect by archetype/lever signal, not by name.** Decide the target lever
+  and category first (surface-artifacts table), then search for repos matching
+  that signal. `gh` is not geoblocked from VN.
+
+Procedure per prospecting round:
+
+1. Pick target lever (a: in-image real-tool quirk / b: under-documented
+   divergence / stateful-counter-intuitive) + target category.
+2. Run discovery queries — examples to adapt, not an exhaustive list:
+   - `gh search repos --topic=<format-or-domain> --language=<lang> --stars=100..5000 --sort=updated`
+   - `gh search repos "<standard/RFC name> implementation" --stars=100..5000`
+   - `gh search repos "drop-in replacement" / "compatible with <tool>" / "port of <lib>"`
+     — reimplementations PROMISE divergence tails vs the original (lever b)
+   - `gh search repos "bug-compatible" / "quirks"` — self-declared divergence
+   - registry category browses (crates.io / npm / PyPI classifiers) for niche
+     parsers, engines, schedulers, numeric kernels
+   - category-shaped hunts: config validators / service supervisors
+     (system-administration), alternative package managers / lockfile tools
+     (build-and-dependency-management), simulation/roguelike engines (games),
+     numeric kernels (scientific-computing)
+3. Feasibility filter before claiming: permissive license; slims to <100 MiB
+   context; offline build <600s on a canonical base image; no runtime
+   network/GPU/hosted service.
+4. Anti-memorization + novelty: fame check above; dedupe vs `index.jsonl` and
+   the gallery snapshot (`gallery_novelty` must be `novel`).
+5. Output per prospect: repo | archetype | ONE-SENTENCE lever hypothesis |
+   category fit — feed straight into the Master collapse law screen, and log
+   every prospect (rejects included) into `index.jsonl` as exploration-map
+   data.
+
+## Source Queue (static FALLBACK — memorization-risk; prospect first)
 
 The repos below are the OPERATIONALLY-EASY Python lane (fast offline builds) —
-convenient, but NOT the default or the only lane. Do not let this list pull
+convenient, but NOT the default or the only lane, and every one of them is
+famous enough that frontier solvers have them memorized (weak difficulty
+sources — see Repo Prospecting above). Use them mainly for the bugfix minority
+lane or when prospecting is impossible. Do not let this list pull
 every batch back to Python parser/validator libs. Apply the archetype-first
 selection rule above and the patch-shape gate before using any of them.
 
