@@ -1,11 +1,11 @@
 ---
 name: task-local-solve-probe
-description: Use when cheaply probing whether a Terminus Regular task is too easy before spending Harbor LLM budget. Prepares isolated solve copies that exclude solution, tests, rubrics, and reports; records fresh-agent solve attempts, defaulting to 3 runs; applies diffs into verifier copies; and summarizes pass-rate risk without modifying the source task.
+description: Use when cheaply probing whether a Terminus Regular task is too easy before submission. Prepares isolated solve copies that exclude solution, tests, rubrics, and reports; records fresh-agent solve attempts, defaulting to 2 runs (a 3rd only on a 1-1 split); scores diffs against verifier copies; and summarizes pass-rate risk without modifying the source task.
 ---
 
 # Task Local Solve Probe
 
-Use this skill after a task folder exists and before expensive Harbor LLM runs,
+Use this skill after a task folder exists and before platform submission,
 especially when deciding whether a task is likely Medium/Hard for GPT-5.5 or
 Claude Opus 4.8.
 
@@ -22,9 +22,10 @@ confidence.
   `*_rubric*`, prior run logs, and generated submission zips.
 - Verification copies may include the full task; apply only the solve diff into
   them before running verifier commands.
-- Default to 3 sequential fresh-context runs. Use 1 run for a quick smoke probe
-  and 5 runs only for shortlist candidates where the extra signal is worth the
-  model budget.
+- Default to 2 sequential fresh-context runs, adding a 3rd ONLY on a 1–1 split
+  (user probe default, 2026-07-19). Use 1 run for a quick smoke probe. Pooling
+  to N≥5 is an escalation option for same-engine families where per-engine
+  numbers would otherwise be variance (AGENTS.md §7), never the default.
 - Use parallel agents only when the user explicitly wants that and the
   orchestration is stable.
 - Select the default blind solver from the active runtime:
@@ -44,14 +45,16 @@ confidence.
   only for shortlist candidates or when the user explicitly asks for a
   Harbor-like long solve budget. The manager may wait in shorter chunks, but
   should not let a local solve probe run indefinitely.
-- If a Harbor GPT/Claude run is suggested after the probe, require both an AI
-  API key and explicit user approval before running it.
+- Harbor LLM calls and stb agent runs are PERMANENTLY geoblocked from this
+  environment (AGENTS.md §7) — never plan a Harbor GPT/Claude follow-up run.
+  Local fresh-subagent probes plus platform submission results are the only
+  difficulty signals.
 
 ## Workflow
 
-1. Prepare 3 run folders by default under
-   `workspace/local-solve-probes/<task-slug>/`; override with `--runs 1..5`
-   when needed.
+1. Prepare 2 run folders by default under
+   `workspace/local-solve-probes/<task-slug>/`; add a `run_3` only on a 1–1
+   split. Override with `--runs 1..5` when needed (N≥5 = same-engine pooling).
 2. For each run, give the solver only `solve/`, which contains the sanitized
    task environment and `instruction.md`.
 3. The solver edits only that run's `solve/` copy and returns one final
@@ -64,17 +67,23 @@ confidence.
    `timeout`, or `unknown`.
 8. For fair semantic failures, record the missed invariant, compatibility path,
    state transition, or project layer without exposing verifier fixture names.
-9. Summarize the observed pass rate and whether Harbor LLM spend is justified.
+9. Summarize the observed pass rate and whether the task is worth submitting
+   (Harbor LLM runs are geoblocked — the platform's own agent runs after
+   submission are the only downstream difficulty check).
 
 Use the helper script when possible:
 
 ```bash
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare workspace/tbrain-example
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py apply workspace/local-solve-probes/tbrain-example/run_1
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py record workspace/local-solve-probes/tbrain-example/run_1 --result fail --type semantic --notes "missed target-specific manifest section"
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
 ```
+
+Do NOT use `probe.py apply` on sanitized solve copies — its `diff -ruN` records
+the sanitized-away `solution/`/`tests/` as deletions and corrupts `verify/`.
+Instead, copy the solver's changed source file(s) into the `verify/` copy by
+hand (see the fair-probe section below).
 
 ## Skeleton mode — probe BEFORE the full build (mandatory gate in task-clone)
 
@@ -82,37 +91,45 @@ Run a difficulty probe as soon as a candidate has the minimum probeable
 surface, BEFORE any oracle/verifier/packaging investment. This is the
 mandatory gate in `task-clone` Workflow step 10 and `lever_patterns.md` L1
 step 5; it exists because the old ordering (full build first, probe last)
-burned the whole build cost on candidates that then probed 3/3 EASY.
+burned the whole build cost on candidates that then probed all-pass EASY.
 
 - **Minimum input:** a buildable `environment/` + `instruction.md` + the stub.
   No polished oracle, no hidden suite, no Dockerfile hardening, no packaging.
 - **Scoring:** use a ROUGH check — a thrown-together differential against the
   intended authority, or a dozen hand-verified input→output cases. Accept
-  noise; the goal is to kill 3/3-EASY candidates early, not to measure the
-  exact difficulty band.
-- **Verdict mapping:**
-  - 3/3 pass → DROP or redesign the lever before building anything more. Apply
-    the master collapse law (AGENTS.md §1): if no undisclosed in-image
-    library-quirk differential and no undisclosed counter-intuitive rule
-    survives, there is nothing to redesign around — drop.
-  - 0–2/3 with semantic failures → proceed to the full build, then run the
-    normal post-build probe.
+  noise; the goal is to kill all-pass-EASY candidates early, not to measure
+  the exact difficulty band.
+- **Verdict mapping (2 runs, 3rd only on a 1–1 split):**
+  - 2/2 pass (or 2/3 after the tie-break run) → DROP or redesign the lever
+    before building anything more. Apply the master collapse law (AGENTS.md
+    §1): if no undisclosed in-image library-quirk differential and no
+    undisclosed counter-intuitive rule survives, there is nothing to redesign
+    around — drop.
+  - 0/2, or 0–1/3 after a tie-break, with semantic failures → proceed to the
+    full build, then run the normal post-build probe.
   - Setup/instruction/skeleton failures → fix the skeleton and re-probe; these
     runs measure nothing about difficulty.
 - **Limits:** skeleton mode never replaces the post-build probe or the
   submit-readiness verdict below — the rough check command is too noisy to
   ground a submit decision, and the pass-table pre-audit needs the real
-  corpus. A skeleton 0/3 is a "worth building" signal, not a HARD label.
+  corpus. A skeleton 0/2 is a "worth building" signal, not a HARD label.
 
 ## Interpretation
 
-- `0-2/5 pass` with semantic/fair failures: promising task; run Harbor GPT/Claude
-  only if the user approves API usage.
-- `0-2/5 pass` with setup, missing dependency, unclear instruction, or verifier
-  construction failures: fix the task, not the difficulty label.
-- `3/5 pass`: gray zone. Likely Medium unless failures show robust semantic
-  blind spots across contexts.
-- `4-5/5 pass`: likely too easy for a top batch; rework or replace.
+Default probe (2 runs, 3rd only on a 1–1 split):
+
+- `0/2 pass` with semantic/fair failures: strongest hold signal; promising
+  task.
+- `1/1 split`: run the 3rd. `1/3` with semantic failures still holds (gray
+  zone — likely Medium unless failures show robust semantic blind spots);
+  `2/3` = collapse, rework or replace.
+- `2/2 pass`: too easy for a top batch; rework or replace.
+- Any band where failures are setup, missing dependency, unclear instruction,
+  or verifier construction: fix the task, not the difficulty label.
+
+Escalated pooling (N≥5 across same-engine variants): grade the pooled rate —
+~0–25% pass with semantic failures is a HARD-signal, ~40–67% pools to Medium,
+≥80% is easy (AGENTS.md §7).
 
 Compile-only failures are weak difficulty evidence. Strong signals are partial
 fixes that compile but miss legitimate contexts, preservation behavior, edge
@@ -123,15 +140,16 @@ Setup failures, instruction ambiguity, verifier defects, dependency failures,
 compile-only mistakes, and timeouts must not be presented as intrinsic task
 difficulty.
 
-Early-stop rules:
+Early-stop rules (k=2 default):
 
-- If the first 2 runs pass quickly: for Python tasks (must be Hard), stop and
-  treat as too easy; for non-Python tasks, run the third — 2/3 is still
-  submit-viable, only 3/3 defaults to rework.
-- If the first 2 runs fail for setup, unclear instruction, or verifier
-  construction reasons, stop and fix the task before probing again.
-- If the first 2 runs fail semantically in different fair ways, the task is
-  already promising; a third run is optional when budget matters.
+- If both runs pass: stop — `2/2` is EASY, drop or rework. Do not run a 3rd
+  hoping for a different answer.
+- If the runs split 1–1: run the 3rd (the only case that earns one). `2/3` =
+  collapse; `1/3` with semantic failures = hold.
+- If both runs fail for setup, unclear instruction, or verifier construction
+  reasons, stop and fix the task before probing again.
+- If both runs fail semantically in fair ways, stop — `0/2` is the strongest
+  hold signal; no tie-break run is needed.
 
 ## Beating Opus 4.8 is a ~1/5 lottery — calibrate expectations (2026-06-21)
 
@@ -163,9 +181,9 @@ The blind solver runs on the host with full Docker + network, so it can
 differential-test against ANY reference the platform agent could NOT: tools baked
 in the task image (`git`, `chmod`, `openssl`) and — crucially — host-stdlib
 references (`python3 -c "import ipaddress/csv/datetime/...; ..."`). The platform
-agent is sandboxed (no internet, task-image only). So a 3/3 here is a decisive
-"too easy", but a probe pass can be falsely easy for tasks whose reference is
-reachable.
+agent is sandboxed (no internet, task-image only). So an all-pass (2/2) here is
+a decisive "too easy", but a probe pass can be falsely easy for tasks whose
+reference is reachable.
 
 - Prefer a **fair probe** for compiled/non-Python tasks: give the solver a build
   command that runs INSIDE the task's own image with `--network none`
@@ -194,18 +212,17 @@ difficulty band with union coverage (the platform's blocking flag "Some tests
 not passed by any agent run" fires on any case ALL agents miss), using only the
 diffs already produced — never spend additional solver runs on this:
 
-- **1/3 pass** → union coverage is AUTOMATICALLY satisfied (the passing run
-  covers every case). Verdict: **submit-ready** — the sweet spot (hard + every
-  test reachable).
-- **2/3 pass** → coverage also auto-satisfied; lands around Medium. **Submit-viable
-  for non-Python tasks** (only Easy is blocked); NOT enough for Python tasks
-  (which must be Hard) → rework those.
-- **3/3 pass** → **review**: default too easy, rework or replace — a 3/3 on this
-  over-generous probe rarely survives even as Medium on the platform. Keep only
-  with a concrete reason (e.g. all three passes leaned on a host reference the
-  fair in-image probe denies — then re-probe fairly).
-- **0/3 pass** → score each stored solver diff PER-CASE against the SOURCE
-  corpus, combine the results, and pick the action by the failure GEOMETRY:
+- **1/3 pass (after the tie-break run)** → union coverage is AUTOMATICALLY
+  satisfied (the passing run covers every case). Verdict: **submit-ready** —
+  the sweet spot (hard + every test reachable).
+- **2/2 pass, or 2/3 after the tie-break** → **collapse**: default too easy,
+  rework or replace — an all-but-one pass on this over-generous probe rarely
+  survives even as Medium on the platform. Keep only with a concrete reason
+  (e.g. the passes leaned on a host reference the fair in-image probe denies —
+  then re-probe fairly).
+- **0/2 pass** (strongest hold signal; same handling for a 0/3) → score each
+  stored solver diff PER-CASE against the SOURCE corpus, combine the results,
+  and pick the action by the failure GEOMETRY:
   1. **Union covers ALL cases** → **submit-ready** (each run failed a different
      slice = de-correlated hardness, exactly the target shape).
   2. **Killer cases sit inside group/aggregate tests but ≥1 run passed them
@@ -223,8 +240,8 @@ diffs already produced — never spend additional solver runs on this:
      the task.** Do NOT prune your way out here — removing that case flips the
      near-perfect runs to 100% and leaves an EASY task.
 
-Caveats: a 3-run local union is a noisier sample than the platform's ~10 runs
-(a case at exactly 1/3 here can still land 0/N there), and this probe is
+Caveats: a 2–3-run local union is a noisier sample than the platform's ~10 runs
+(a case at exactly 1/2 here can still land 0/N there), and this probe is
 over-generous (see below) — a solver that pivoted to a host reference passes
 cases a sandboxed platform agent cannot, hiding blind spots. Score diffs built
 inside the task image with `--network none` when the verdict matters. The
@@ -257,11 +274,18 @@ Return:
 - whether failures are semantic/fair or setup/instruction noise
 - compact semantic failure patterns suitable as factual input to the Difficulty
   Explanation, with no solver/model names and no hidden fixture details
-- for 0/3 conformance-corpus tasks: the per-case union verdict (all cases
-  covered by ≥1 run, or the list of 0-probe correlated-blind-spot cases)
-- recommendation: `submit_ready` (0-2/3 pass AND union covers every case; 2/3
-  only for non-Python tasks), `fix_coverage_then_rescore` (0/3 with fixable
-  0-probe cases: split / prune / disclose), `redesign_or_drop` (0/3 with the
-  near-perfect single-blind-spot fingerprint), `rework`,
-  `run_harbor_llm_with_approval`, `replace`, or
-  `keep_without_llm_if_budget_limited`
+- for 0/2 (or 0/3) conformance-corpus tasks: the per-case union verdict (all
+  cases covered by ≥1 run, or the list of 0-probe correlated-blind-spot cases)
+- recommendation, from this shared vocabulary (`probe.py summarize` emits the
+  first four automatically; the last two require the manual per-case scoring
+  above):
+  - `submit_ready` — 0/2, or 0–1/3 after a tie-break, with fair semantic
+    failures AND union covers every case
+  - `gray_zone_review` — a 1–1 split awaiting its tie-break run, or a
+    borderline pooled rate
+  - `rework_or_replace` — 2/2 pass, or 2/3+ after the tie-break (collapse)
+  - `fix_task_first` — failures dominated by setup/instruction/verifier noise
+  - `fix_coverage_then_rescore` — 0/N with fixable 0-probe cases: split /
+    prune / disclose
+  - `redesign_or_drop` — 0/N with the near-perfect single-blind-spot
+    fingerprint

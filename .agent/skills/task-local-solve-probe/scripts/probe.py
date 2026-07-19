@@ -73,7 +73,9 @@ def prepare(args: argparse.Namespace) -> None:
             "this copied task folder. Do not search for solution, tests, rubrics, "
             "reports, or platform feedback. Read instruction.md and the codebase, "
             "make the fix, and run whatever local checks are available inside the "
-            "copied environment. Stop when you have a candidate patch.\n",
+            "copied environment. Stop when you have a candidate patch. This is a "
+            "one-shot attempt: after your final answer, you will not receive "
+            "verifier feedback for another try.\n",
             encoding="utf-8",
         )
         (run_dir / "result.json").write_text(
@@ -106,6 +108,17 @@ def diff_run(args: argparse.Namespace) -> None:
 
 
 def apply_run(args: argparse.Namespace) -> None:
+    # WARNING: do NOT use `apply` when the solve copy was sanitized (the
+    # default from `prepare`): the `diff -ruN` in `diff` records the
+    # sanitized-away solution/ and tests/ as deletions, so applying it
+    # corrupts verify/. Copy the solver's changed source file(s) into
+    # verify/ manually instead (see SKILL.md, fair-probe section).
+    print(
+        "WARNING: `apply` corrupts verify/ when the solve copy was sanitized "
+        "(diff records solution/ and tests/ as deletions). Prefer manually "
+        "copying the changed source files into verify/ (see SKILL.md).",
+        file=sys.stderr,
+    )
     run_dir = Path(args.run_dir).resolve()
     patch = run_dir / "solve.diff"
     verify = run_dir / "verify"
@@ -148,14 +161,32 @@ def summarize(args: argparse.Namespace) -> None:
     for item in records:
         if item.get("result") != "pass":
             failures[item.get("failure_type") or "unknown"] = failures.get(item.get("failure_type") or "unknown", 0) + 1
-    if passed <= 2 and failures and set(failures) <= {"semantic", "compile", "unknown"}:
-        recommendation = "run_harbor_llm_with_approval"
-    elif passed == 3:
-        recommendation = "gray_zone_review"
-    elif passed >= 4:
-        recommendation = "rework_or_replace"
+    # Thresholds are proportional to the actual run count; labels match the
+    # SKILL.md Reporting vocabulary (submit_ready / gray_zone_review /
+    # rework_or_replace / fix_task_first).
+    semantic_like = set(failures) & {"semantic", "compile", "unknown"}
+    if passed == 0:
+        if failures and not semantic_like:
+            recommendation = "fix_task_first"
+        else:
+            recommendation = "submit_ready"
+    elif total <= 3:
+        # Default regime: 2 runs, 3rd only on a 1-1 split.
+        if total == 2 and passed == 1:
+            recommendation = "gray_zone_review"  # 1-1 split: run the tie-break 3rd
+        elif passed == 1:
+            recommendation = "submit_ready"  # 1/3 after tie-break = hold
+        else:
+            recommendation = "rework_or_replace"  # 2/2 or 2/3+ = collapse
     else:
-        recommendation = "fix_task_before_harbor"
+        # Escalated same-engine pooling (N>=4).
+        rate = passed / total
+        if rate >= 0.8:
+            recommendation = "rework_or_replace"
+        elif rate >= 0.4:
+            recommendation = "gray_zone_review"
+        else:
+            recommendation = "submit_ready"
     summary = {
         "probe_dir": os.path.relpath(probe_dir),
         "runs": total,
@@ -183,7 +214,7 @@ def main() -> int:
 
     p = sub.add_parser("prepare")
     p.add_argument("task")
-    p.add_argument("--runs", type=int, default=3)
+    p.add_argument("--runs", type=int, default=2)
     p.add_argument("--output")
     p.set_defaults(func=prepare)
 

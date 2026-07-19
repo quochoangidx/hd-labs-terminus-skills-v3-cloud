@@ -19,13 +19,15 @@ the user explicitly asks for fixes.
 python .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
 ```
 
-For global skill use:
-
-```bash
-python "$HOME"/.codex/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
-```
+(The script lives in-repo at
+`.agent/skills/task-client-feedback-review/scripts/review_task.py` — run it
+from the repo root.)
 
 Use `--json` when another script will consume the result.
+
+Also run `scripts/preflight.sh <task-dir>` (repo root) for the mechanical
+subset review_task.py doesn't itself check (.dockerignore contents,
+`# syntax=` line, CRLF/arcnames, rubric closed-set).
 
 2. Read `instruction.md` and any provided/generated rubric manually for prompt
    realism:

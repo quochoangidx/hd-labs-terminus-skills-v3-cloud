@@ -1,5 +1,22 @@
 # Interaction/Scale Shape Recipe — building tasks OUTSIDE the spec-engine mold
 
+> ⚠️ **EMPIRICAL VERDICT (2026-07-19, batch-3-round2): Archetypes 1 & 2 probed EASY.**
+> The coupling doctrine below (≥3 causally-coupled causes ⇒ HARD) did NOT hold
+> against fresh blind frontier solvers. **Archetype 1 (multi-service ops
+> restoration)** — a stack with 3 GENUINELY causal-unmasking misconfigs
+> (all partial-fix subsets verified failing) — was fully restored by **3/3**
+> solvers in ~130s via routine `supervisorctl status`→logs→perms→socket→schema
+> iteration. **Archetype 2 (order-dependent live DB migration)** — with a real
+> silent double-count/ordering trap — was full-solved by **3/3** solvers who all
+> applied the canonical SQLite table-rebuild recipe, which defuses the trap by
+> construction. Sysadmin restoration is discoverable-by-iteration; DB migration
+> has a canonical recipe. **Do NOT build these expecting HARD.** Treat this whole
+> recipe as MEDIUM-at-best and unproven; the ops/DB archetypes are effectively
+> dead for HARD. Archetype 3 (long-context cross-referencing) is the only
+> untested one and is suspect. Skeleton-probe ANY interaction shape extra
+> strictly and expect EASY. See AGENTS.md §6 interaction-shape verdict.
+
+
 The master collapse law was validated on minimal spec-engine tasks: anything
 disclosed-and-derivable is EASY, and the fresh hidden-lever space there is
 near-exhausted. This recipe covers the one seam that escapes the law's reach:

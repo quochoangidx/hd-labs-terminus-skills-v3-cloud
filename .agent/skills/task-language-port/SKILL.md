@@ -19,7 +19,7 @@ language it's built in and (per the reskin rule below) its surface narrative.
 > are what reviewers flag as "not sufficiently original"; the byte-identical
 > corpus IS the signal they match on). DKIM is at 8 variants = permanently
 > closed. Count variants against the quantified ledger in
-> `mined-candidates/platform-passed-portfolio.md` before accepting any
+> `.agent/mined-candidates/platform-passed-portfolio.md` before accepting any
 > request: UAX-14 wrap (10), UAX-29 sentence (8), WHATWG URL canonicalize
 > (8), version-constraint (8), viterbi decode (7), URI template (6), LOWESS
 > (5) are ALL closed; sub-threshold headroom exists only for CSS engines
@@ -60,7 +60,8 @@ is the task's difficulty. Do not simplify the placeholder's bug or improve the a
    assume sibling templates exist for other languages. A port series multiplies exposure:
    every sibling shares the core's shape, so if one flags, all will. If the SOURCE task has
    this stub-CLI shape, de-template the CORE first (realistic multi-module layout, in-repo
-   tests, domain-authentic file I/O where possible — levers UNVERIFIED, see AGENTS.md §9) and
+   tests, domain-authentic file I/O where possible — a multi-module restructure ALONE is
+   insufficient, stack all levers; see AGENTS.md §9) and
    only then port; never try to clear the flag per-port.
 
    **Sweep the CORE before porting — defects multiply by series size.** A port series
@@ -162,19 +163,21 @@ abstract low/high/dwell schema fits almost any duty-cycle equipment; a schema wi
 software-flavored fields like `client`/`rate`/`banned_at` fits another software domain more
 naturally than a physical-process one).
 
-Update the task slug/folder/ZIP name and `task.toml` tags to match the new story. Check this
-portfolio's own sibling `task.toml` files for the actual `languages =` casing convention
-before trusting generic advice — this project's real accepted tasks use Title Case
-(`"Rust"`, `"Go"`, `"C"`, `"TypeScript"`) with `"C++"` as a fixed idiomatic exception, not the
-lowercase slugs some skill docs describe.
+Update the task slug/folder/ZIP name and `task.toml` tags to match the new story. `languages =`
+values are lowercase slugs (`"rust"`, `"go"`, `"c"`, `"typescript"`) — the single exception is
+`"C++"`, which stays capitalized (AGENTS.md §9; task-clone and task-zip-validator enforce the
+same convention). Do not use Title Case.
 
 ## Step 3 — Build, one parallel agent per confirmed language
 
 Each agent independently: rewrites `instruction.md` + spec/README in the new voice (run the
 `anti-llm` skill pass on the prose afterward, preserving every fact/number/path); adapts
 `environment/Dockerfile` to the target's base image plus this project's standing Docker rules
-(toolchain symlinked onto the login-shell PATH, warm build of the *unmodified* shipped source,
-`git init` after the build); ports the placeholder and the solution with identical behavior;
+(toolchain symlinked onto the login-shell PATH, `git init` after the build — a warm build of the
+*unmodified* shipped source is acceptable ONLY when the verifier's build helper clean-rebuilds:
+`make clean` → assert the artifact is gone → build → assert `returncode == 0`; otherwise drop
+the warm build step, since a stale warm binary can grade a non-compiling submission green,
+AGENTS.md §8); ports the placeholder and the solution with identical behavior;
 renames the CLI binary everywhere, including the one resolution line in the test file; updates
 `task.toml`; recomputes `codebase_size` honestly from the real file count. Then validates for
 real — `stb harbor run -a oracle -p .` must be `1.000` and `stb harbor run -a nop -p .` must be

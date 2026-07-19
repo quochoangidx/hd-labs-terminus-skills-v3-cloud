@@ -128,7 +128,11 @@ Cross-cutting rules:
 
 The flag is stochastic across re-runs: a case at 1/N has ~35% chance of
 flipping to 0/N on the next sampled run, 2/N ~11%, 3/N ~2.8%. After fixing the
-clusters, prune the observed ≤2/N cases from the last report for margin.
+clusters, prune observed ≤2/N cases from the last report for margin — but do
+NOT prune the whole ≤2/N tail on the FIRST fix (pkgconf 2026-07-19, AGENTS.md
+§3): that tail can nearly equal the best agent's residual failure budget, and
+sweeping it risks flipping HARD to EASY. Prune conservatively, keep softer
+representatives of each cluster, and lean on disclosure first.
 Don't chase ≤3/N unless forced — over-pruning the hardest cases raises the
 best-run ceiling toward 100% and risks the difficulty gate. Per-case counts in
 one report are a noisy sample; this is probabilistic de-risking, not a

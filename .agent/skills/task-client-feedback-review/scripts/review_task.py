@@ -421,8 +421,17 @@ def review(path: Path) -> dict:
 
         dockerfile = view.read_text("environment/Dockerfile")
         if dockerfile:
-            if re.search(r"(?im)^\s*FROM\s+[^@\n]+$", dockerfile):
-                add(findings, "blocker", "dockerfile-digest", "Dockerfile FROM line appears to lack a sha256 digest.", "environment/Dockerfile", "terminus-regular-task-authoring")
+            stage_aliases = {
+                m.group(1).lower()
+                for m in re.finditer(r"(?im)^\s*FROM\s+\S+\s+AS\s+(\S+)", dockerfile)
+            }
+            for m in re.finditer(r"(?im)^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)", dockerfile):
+                image = m.group(1)
+                if image.lower() in stage_aliases:
+                    continue  # multi-stage FROM <earlier-alias> needs no digest
+                if "@" not in image:
+                    add(findings, "blocker", "dockerfile-digest", "Dockerfile FROM line appears to lack a sha256 digest.", "environment/Dockerfile", "terminus-regular-task-authoring")
+                    break
             if "tmux" not in dockerfile or "asciinema" not in dockerfile:
                 add(findings, "blocker", "dockerfile-agent-deps", "Dockerfile should install tmux and asciinema.", "environment/Dockerfile", "terminus-regular-task-authoring")
             if re.search(r"(?im)^\s*COPY\s+.*\b(tests|solution)\b", dockerfile):

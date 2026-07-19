@@ -219,19 +219,25 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
     stub, and that is ALL a difficulty probe needs. Assemble a ROUGH check
     command (a thrown-together differential, or a dozen hand-verified
     input→output cases — the real oracle and hidden corpus do not exist yet) and
-    run `task-local-solve-probe` in Skeleton mode, N≥3 fresh blind solvers.
-    - 3/3 pass → DROP the candidate or redesign its lever NOW; do not write the
-      oracle, the verifier corpus, or the packaging for a task the master
-      collapse law already killed (AGENTS.md §1).
-    - 0–2/3 with semantic failures → continue to step 11.
+    run `task-local-solve-probe` in Skeleton mode, 2 fresh blind solvers by
+    default, adding a 3rd only on a 1–1 split (user probe default).
+    - 2/2 pass (or 2/3 after the tie-break run) → DROP the candidate or
+      redesign its lever NOW; do not write the oracle, the verifier corpus, or
+      the packaging for a task the master collapse law already killed
+      (AGENTS.md §1).
+    - 0/2, or 0–1/3 after a tie-break, with semantic failures → continue to
+      step 11.
     - Failures from setup / unclear instruction / broken skeleton → fix the
       skeleton and re-probe; those runs measure nothing about difficulty.
     The post-build full probe (step 14) remains the source of truth for the
-    submit verdict; this gate only exists to stop full builds of 3/3-EASY tasks.
+    submit verdict; this gate only exists to stop full builds of all-pass-EASY
+    tasks.
 11. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
 12. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
 13. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
-14. Run structural checks, CI checks, and optional real-agent trials.
+14. Run structural checks, CI checks, and local fresh-subagent blind probes
+    (`task-local-solve-probe`) — stb real-agent trials are permanently
+    geoblocked from this environment (AGENTS.md §7).
 15. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
 
@@ -383,15 +389,21 @@ in pytest. Use LOWERCASE slugs: `["rust"]`, `["go"]`, `["c"]`, `["typescript"]`
 — NOT `["Rust"]`/`["Go"]` (reviewers return capitalized values; the docs examples
 are all lowercase).
 
-**`[environment].workdir` is MILESTONE-ONLY.** Do NOT set `workdir` in a
-non-milestone (`number_of_milestones = 0`) `task.toml` — the container working
-directory comes from the Dockerfile `WORKDIR /app`; a stray `workdir` line gets
-flagged. (Docs `task-components.md`: `workdir = "/app"  # Milestone tasks only`.)
+**`[environment].workdir` — default to Dockerfile-`WORKDIR`-only on
+non-milestone tasks.** With `number_of_milestones = 0`, let the container
+working directory come from the Dockerfile `WORKDIR /app` and omit `workdir`
+from `task.toml` (docs `task-components.md`: `workdir = "/app"  # Milestone
+tasks only`). BUT when a human reviewer explicitly requests `workdir = "/app"`
+on a non-milestone task, honor it — set it to the same dir as the Dockerfile
+`WORKDIR` and rebuild (reviewer-overridden 2026-07-16, card-stack-replay;
+the human reviewer sits above the static scanner). Both blocks are apparently
+accepted; the "a stray workdir line fails the check" claim is not reliable.
 
-⚠️ The der-canonical-codec reference `task.toml` predates these two rules — it
+⚠️ The der-canonical-codec reference `task.toml` predates these rules — it
 ships `languages = ["Rust"]` AND `[environment] workdir = "/app"` in a
-non-milestone task. Both are WRONG; do not copy them. Confirmed 2026-07-01 by a
-platform reviewer on a Rust task.
+non-milestone task. The capitalized language is WRONG (confirmed 2026-07-01 by
+a platform reviewer on a Rust task); the `workdir` line follows the
+default-omit-unless-reviewer-requested rule above — do not copy it by default.
 
 ## Rubric quality (rubric is entered in the UI, NOT in the ZIP — see task-zip-submit)
 Reward the END STATE, not the process. Do NOT add criteria for "reads/studies the
@@ -550,7 +562,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   neither of which is on that login PATH, so the agent cannot invoke the compiler
   even though oracle/nop can (they run in a non-login shell with PATH intact).
   Symlink them: Go `RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`;
-  Rust `ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`.
+  Rust `ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`;
+  Java `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac` (+ `java`).
+  `node`/`gcc` images already place tools in `/usr/local/bin`.
   Confirmed 2026-07-01: a Go task omitted this and ~3/10 agent trials failed with
   "no Go toolchain, unable to compile", scoring 0 for a pure environment reason
   while oracle stayed green. Verify with
@@ -583,16 +597,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   e.g. `RUN cargo build --tests`; `RUN go build ./... && go vet ./...`;
   `RUN npm ci && npm run build`; configure + `make` for autotools/CMake. A cold
   per-edit rebuild is the #1 cause of the Agent Timeout Gate (see that section).
-- **put the language toolchain on the agent's LOGIN-shell PATH by symlinking it
-  into `/usr/local/bin`** — the agent runs in a login shell that resets PATH to
-  the default and DROPS Docker `ENV PATH=...` additions, so a toolchain under
-  `/usr/local/cargo/bin` (Rust), `/usr/local/go/bin` (Go), or `${JAVA_HOME}/bin`
-  (Java) is invisible to the agent and causes wasted steps / timeouts even
-  though oracle/nop pass (they run as non-login subprocesses inheriting the
-  image ENV). e.g. `RUN ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo`
-  (+ `rustc`); `ln -sf /usr/local/go/bin/go /usr/local/bin/go`;
-  `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac`. `node`/`gcc` images
-  already place tools in `/usr/local/bin`. Sanity: `bash -lc 'which <tool>'`.
+- login-shell PATH: covered by the "expose the language toolchain on
+  `/usr/local/bin`" bullet above — the same symlink rule applies whenever the
+  agent must rebuild. Sanity: `bash -lc 'which <tool>'`.
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
@@ -739,6 +746,37 @@ Confirmed 2026-07-01: a UAX-14 line-break task shipped `src/cases.rs` with all
 19338 `(input, expected ÷/× marker)` vectors so a repo `selftest` could check them
 -- that leaked the entire answer key; the fix was to move the check to the hidden
 `tests/` vectors and delete the repo table.
+
+**Anti-cheat: a `/tests`-readable expected-output corpus + candidate-run-as-root
+is a reviewer-blocking cheat surface (2026-07-18, sbom-purl-key + lowess —
+AGENTS.md §3).** A candidate that just reads the `/tests` corpus and echoes each
+row's `expected` passes every case with zero logic. For any conformance-style
+clone, stack ALL of these (difficulty-neutral):
+1. `_hide_corpus()` — load the corpus into memory, then (only when
+   `dirname(CORPUS) == "/tests"`) `os.unlink` the corpus file AND
+   `os.chmod("/tests", 0o700)` BEFORE compiling or running any candidate code.
+2. Run the candidate as an unprivileged user — `subprocess.run(...,
+   user="nobody", group="nogroup")` iff `os.geteuid() == 0` (else no kwargs, so
+   local non-root runs keep working) — and `chmod -R a+rX` the temp build dir
+   (plus `0644` file-argument inputs / `0755` their dirs) so `nobody` can read
+   root-owned artifacts.
+3. Checker-owned compile: never run a submitted Makefile/executable while the
+   corpus is readable; compile the submitted source with the verifier's own
+   command. Remove `/solution` in the build fixture (the oracle's solve.sh has
+   already copied its source into `/app` by verify time) and reject a
+   translation unit that is a symlink, resolves outside `/app`, or `#include`s
+   an absolute, `..`-containing, or `solution`-named path.
+4. Run pytest as `python3 -I -m pytest` from a fresh verifier-owned dir — this
+   blocks an agent-planted `/app/sitecustomize.py` that `os._exit(0)`s the
+   interpreter into a free reward.
+5. Prove it with a cheat-emulation: a corpus-reading candidate must pass the
+   OLD verifier (reward 1) and fail the NEW one (reward 0), while oracle stays
+   1 and nop 0. Sweep every language sibling of a shared-corpus port series —
+   they share the hole.
+6. Stage anything the verifier execs on an exec-capable base (`/app`,
+   `/var/tmp`, `/dev/shm`), never bare `/tmp` — the platform mounts `/tmp`
+   noexec; the `scripts/preflight.sh` `--tmpfs /tmp:noexec` repro in Quality
+   Preflight catches this.
 
 **Structure conformance corpora for union-not-intersection difficulty (the
 "Some tests not passed by any agent run" gate is BLOCKING).** Score per-case
@@ -1110,8 +1148,12 @@ agent runs need an explicit `-a terminus-2` because `-a` defaults to oracle):
 stb harbor run -a oracle -p <task-folder>
 stb harbor run -a nop -p <task-folder>
 stb harbor check <task-folder>
-stb harbor run -a terminus-2 -m @openai/gpt-5.5 -k 3 -p <task-folder>   # difficulty, needs approval
 ```
+
+stb agent runs (`-a terminus-2 -m ...`) and Harbor LLM calls are PERMANENTLY
+geoblocked from this environment (AGENTS.md §7) — do not plan around them. The
+only local difficulty signal is fresh-subagent blind probes via
+`task-local-solve-probe`.
 
 If Docker is not running, still run static checks:
 
@@ -1125,7 +1167,9 @@ PY
 
 Before submission, real-agent pass rate must be below 80%; Python tasks should target hard.
 
-Difficulty gate:
+Difficulty gate (PLATFORM-result interpretation only — these numbers come from
+the platform's own agent runs after submission, not from anything runnable
+locally):
 
 - If any frontier reference agent passes `5/5`, treat the task as Medium unless another agent family consistently fails for implementation reasons.
 - If aggregate real-agent pass rate is `>= 80%`, do not submit as Hard; re-mine or redesign.

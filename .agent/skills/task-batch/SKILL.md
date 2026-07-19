@@ -151,9 +151,16 @@ Escalate the exploration, in order:
    long-context cross-referencing; ≥3-coupled-causes doctrine, determinism
    rules, category framing). These are more expensive to build, so
    skeleton-probe them extra strictly before investing.
-3. **Revisit held §5/§4 archetype RECIPES with a genuinely new engine** (a
-   recipe is not a task — a fresh engine in a held archetype still satisfies
-   `gallery_novelty: novel`; a reskin of an existing engine does not).
+3. **Last resort — held §5/§4 archetype RECIPES, heavily constrained** (prefer
+   staying in the bd-mgmt / interaction-scale lanes and genuinely novel shapes
+   from rungs 1–2 first). §5 sim-in-verifier is allowed ONLY in the
+   sim-stays-hidden-in-verifier form: the solver emits an estimate/plan and the
+   simulation lives solely inside the verifier — a fresh stub-fill where the
+   solver reimplements disclosed dynamics is the disclosure trap and collapses
+   EASY (AGENTS.md §6). §4's terse-spec ledger recipe is closed by the
+   fresh-only doctrine and pools MEDIUM at best — never promise HARD from it.
+   A fresh engine in a held archetype can still satisfy
+   `gallery_novelty: novel`; a reskin of an existing engine does not.
 
 Log each pivot in the round report. Never lower the handover bar; never
 backfill with ports. Only after ALL THREE pivots have been attempted in this

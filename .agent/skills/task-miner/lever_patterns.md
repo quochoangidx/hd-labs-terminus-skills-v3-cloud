@@ -1,5 +1,15 @@
 # Lever Pattern Catalog — shared, in-repo, read before mining a HARD task
 
+> **⛔ STATUS (2026-07-19) — this catalog predates the category classifier.** The
+> L1 conformance-parser stub-fill shape is CATEGORY-DEAD: it predicts
+> `software-engineering` = BLOCKED (rule R4 in `category_rules.md`), and the
+> classic engines (WHATWG-URL, IDNA, UAX-14/29, HTML5, version-constraint, URI
+> template, LOWESS…) are saturation-CLOSED in the ledger
+> (`.agent/mined-candidates/platform-passed-portfolio.md`). The L1 runbook below
+> remains valid ONLY for remediating already-returned legacy tasks, or for a
+> shape that FIRST passes the rules-first category gate. **Every build must run
+> the category gate (`category_rules.md`) BEFORE building — never after.**
+
 **Why this file exists.** A *lever* (the technique that makes a task HARD *and* fair)
 is the reusable asset. The *resource* a lever is applied to — a conformance suite, a
 spec, a repo, a dataset — is a small, SHARED, finite commodity. This catalog lives in
@@ -45,6 +55,13 @@ dedupe_key:         conformance_suite + spec + language  (mirror into index.json
 ---
 
 ## L1 — `conformance-suite-divergent-tail`
+
+> **⛔ CATEGORY-DEAD for fresh builds (2026-07-19):** this stub-fill
+> parse/normalize-to-spec shape predicts `software-engineering` = blocked
+> (`category_rules.md` R4), and the classic engines are saturation-CLOSED
+> (`.agent/mined-candidates/platform-passed-portfolio.md`). Use this runbook
+> only to remediate already-returned legacy L1 tasks, or after the shape
+> passes the rules-first category gate.
 
 - **intent:** a from-scratch implementation task that a strong agent solves only 0–1/3,
   because independent *full* implementations each miss a DIFFERENT slice of the spec's
@@ -110,7 +127,7 @@ Authoritative machine copy = the `lever:"conformance-suite-divergent-tail"` line
 | Unicode LineBreakTest            | UAX-14            | C          | nhonho-batch | built  | |
 | jsonpath CTS                     | RFC 9535          | TypeScript | nhonho-batch | built  | |
 | toml-lang/toml-test              | TOML 1.0.0        | Go         | nhonho-batch | built  | **DISQUALIFIED + COLLISION** — in-env `tomllib` reference (see disqualifiers) makes both this and our tbrain-toml-document-decoder unfair-hard; RETIRE both, do not rebuild TOML under L1 in a Python image |
-| html5lib tree-construction       | WHATWG HTML §13   | Rust       | this-workspace | built | near-neighbor of the URL task (same Rust × Data-Processing × WHATWG cell) |
+| html5lib tree-construction       | WHATWG HTML §13   | Rust       | this-workspace | built | near-neighbor of the URL task (same Rust × WHATWG-conformance cell; historically filed under Data-Processing — that classifier label is BLOCKED since 2026-07-11, grandfathered only) |
 | html5lib tokenizer               | WHATWG HTML §13   | (team)     | team         | built  | |
 | Unicode SENTENCE-break (UAX-29)  | UAX-29 sentence   | (team)     | team         | built  | |
 | JSON-Schema-2020-12 suite        | draft 2020-12     | (team)     | team         | built  | unevaluated* + $dynamicRef tail |
@@ -147,10 +164,17 @@ Authoritative machine copy = the `lever:"conformance-suite-divergent-tail"` line
 | PostgreSQL 16 array_in (differential) | PG array text repr | Go | this-workspace | **built HARD** 2026-07-06 | blind Opus 0/2 offline (miss PG16 hex/octal/binary int literals + empty/adjacent-quote rejection). Ground truth = real postgres:16 `array_to_json(...::text[])`. tbrain-postgres-array-parse |
 | GNU cpp / gcc -E -P (differential) | C preprocessor §6.10.3 | Go | this-workspace | **built HARD** 2026-07-06 | blind Opus 0/2 offline (miss func-spanning-lines + `#`-stringize-vaargs). Blue-paint/hide-set + prescan is the tail. No cpp in Go image. tbrain-cpp-macro-expand |
 
-### Fresh-resource ideas for L1 (unclaimed — verify `necessary`/`disqualifiers` first)
+### Fresh-resource ideas for L1 — ⛔ HISTORICAL / DEAD (kept as a forbidden-zone map)
 
-These are pointers, not endorsements — probe each ≥3× blind before trusting the
-difficulty. (Former entries RFC 3986 resolution, ICU/CLDR plural rules, JSON5, and CSS
+**Do NOT mine from this table (2026-07-19).** Every entry is an L1
+parse/normalize stub-fill shape — category-dead per the banner above — and
+robots.txt is an AGENTS.md §6 dead-end outright ("hardening a memorized public
+library is futile"). The table survives only as a forbidden-zone map for
+dedupe; fresh mining follows the fresh-only doctrine (task-miner SKILL.md) and
+the saturation ledger (`.agent/mined-candidates/platform-passed-portfolio.md`).
+Original guidance, for legacy-remediation context only: probe each ≥3× blind
+before trusting difficulty. (Former entries RFC 3986 resolution, ICU/CLDR
+plural rules, JSON5, and CSS
 Syntax L3 have moved into the ledger above with verdicts — check the ledger FIRST;
 several "obvious" ideas probed EASY.)
 
@@ -170,7 +194,8 @@ behavior (wildmatch / gitignore / gitattributes — git is a required agent tool
 globbing / word-splitting (`bash` is required), POSIX TZ strings (Python `time.tzset`
 is a near-complete reference).
 
-Pick one NOT in the ledger, in a language NOT already paired with it, confirm
+(Legacy context only — superseded by the fresh-only doctrine:) pick one NOT in
+the ledger, in a language NOT already paired with it, confirm
 independent impls diverge on the tail, and claim before building.
 
 ### Widen the language axis (dedupe-cell relief)

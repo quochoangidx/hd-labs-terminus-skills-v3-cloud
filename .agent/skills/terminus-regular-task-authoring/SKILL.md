@@ -42,11 +42,16 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 > oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
 > zipping, every time.
 
-1. Pick a real engineering bug with multi-step reasoning.
+1. Pick the task shape: fresh default is an allowed-category shape (bd-mgmt /
+   interaction lanes etc. — see the rules-first category gate below). Pick a
+   real engineering bug with multi-step reasoning ONLY when the resulting
+   repair shape still passes that gate — the repair shape fires the
+   `debugging` BLOCK rule by default.
 2. Write concise `instruction.md` using absolute paths only.
 3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false`.
 4. Build `environment/Dockerfile` with `tmux`, `asciinema`, pinned package versions, and digest-pinned `FROM`.
-5. Put a deliberately buggy starting state under `environment/`.
+5. Put the starting state under `environment/` (a deliberately buggy state
+   only for the bug-repair variant that cleared the category gate).
 6. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
 7. Write Python `pytest` verifier tests in `tests/test_outputs.py`.
 8. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
@@ -402,14 +407,20 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   `ubuntu:24.04@sha256:0d39…e932`. (Full digests live in `docs/creating-tasks/dockerfile-best-practices.md`.)
   A non-canonical base is allowed only with a brief, credible justification in the
   `Dockerfile` or task `README.md`; missing/vague justification is blocked.
-  - **Reviewer reality (Terminal-Bench 2.0):** reviewers treat `ghcr.io/laude-institute/t-bench/*`
-    as the canonical registry and will flag `public.ecr.aws/docker/library/*` images —
-    especially `golang`/`rust`, which have no t-bench-family equivalent — as *non-canonical*,
-    returning the task for revision even when the image is digest-pinned. When you must use the
-    ECR mirror (the common case for Go/Rust), pre-empt the revision by putting the justified-exception
-    comment **directly above the `FROM` line in the Dockerfile** (canonical registry has no image for
-    this language; digest-pinned for reproducibility; consistent with the rest of the suite). A
-    justification the reviewer can see in-file resolves the warning; one buried elsewhere does not.
+  - **Reviewer reality (Terminal-Bench 2.0):** a review demanding
+    `ghcr.io/laude-institute/t-bench/*` over the digest-pinned
+    `public.ecr.aws/docker/library/*` images is a known **FALSE POSITIVE** —
+    push back with citations rather than switch registries (AGENTS.md §9;
+    inventory-purl 2026-07-18: the public.ecr.aws digest-pinned image IS the
+    sanctioned one). To pre-empt the flag, put a brief justified comment
+    **directly above the `FROM` line in the Dockerfile** (canonical
+    digest-pinned base per the sanctioned list; pinned for reproducibility;
+    consistent with the rest of the suite). A justification the reviewer can
+    see in-file resolves the warning; one buried elsewhere does not.
+- Never include a `# syntax=docker/dockerfile:1` line — platform build nodes
+  cannot pull the BuildKit frontend, so it fails as "Oracle failed". Likewise
+  no `RUN --mount=type=bind`; convert mounts to a plain `COPY` plus `rm -rf`
+  in the same layer.
 - Install `tmux` and `asciinema`.
 - For cloned-repo tasks, `git init` the task workdir after the final source
   `COPY` (`RUN git init -q && git config user.email task@example.com && git
@@ -432,6 +443,9 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   .git
   .gitignore
   **/.git
+  .env
+  solution/
+  tests/
   **/.DS_Store
   **/._*
   **/__pycache__/
@@ -441,6 +455,10 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   **/.ruff_cache/
   **/node_modules/
   ```
+
+  `solution/`, `tests/`, and `.env` are mandatory: omitting them passes local
+  harbor (NOP=0, Oracle=1) but gets reviewer-returned — grep-verify all three
+  before zipping (`scripts/preflight.sh` FAILs on each).
 - Avoid heredocs for source files; store files on disk and `COPY` them.
 - Pin downloaded binaries by version and checksum; avoid `curl | sh`.
 - Order Dockerfile layers from stable dependencies to volatile task source.
@@ -595,7 +613,7 @@ Run, when available:
 ```bash
 stb harbor run -a oracle -p <task-folder>
 stb harbor run -a nop -p <task-folder>
-stb harbor tasks check -m openai/@openai/gpt-5.5 <task-folder>
+stb harbor check -m @openai/gpt-5.5 <task-folder>
 ```
 
 For submission ZIPs, compress the contents of the task folder, not the folder itself.

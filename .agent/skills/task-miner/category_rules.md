@@ -68,7 +68,7 @@ against it **in both directions** (see the labeled dataset below). Therefore:
 
 Enforcement is date-gated (data-processing block 2026-07-10+,
 `template_detection` 2026-07-13+, originality flags 2026-07-19). The 91-task
-platform-passed portfolio (`mined-candidates/platform-passed-portfolio.md`)
+platform-passed portfolio (`.agent/mined-candidates/platform-passed-portfolio.md`)
 contains many parse/normalize shapes (whatwg-url, html5-tokenizer,
 css-syntax-tokenize, 8 URL-canonicalize reskins) that passed BEFORE
 enforcement — they are grandfathered, NOT counter-evidence to R1/R4. Never

@@ -134,13 +134,20 @@ For each discrepancy found:
 
 ## Step 4 — Audit Skills Against Updated Docs
 
-After docs are synced, audit these skills:
+After docs are synced, audit the doctrine-coupled set:
 
 ```
-.agent/skills/task-miner/SKILL.md
+.agent/skills/task-miner/SKILL.md (+ category_rules.md)
 .agent/skills/task-clone/SKILL.md
+.agent/skills/task-batch/SKILL.md
 .agent/skills/task-zip-validator/SKILL.md
+.agent/skills/task-zip-submit/SKILL.md
 .agent/skills/task-client-feedback-review/SKILL.md
+.agent/skills/task-language-port/SKILL.md
+.agent/skills/terminus-regular-task-authoring/SKILL.md
+.agent/skills/task-harbor-runner/SKILL.md
+.agent/skills/task-llm-style-audit/SKILL.md
+.agent/skills/task-revise-flag-remediation/SKILL.md
 ```
 
 ### Audit checklist (check each rule in each skill):

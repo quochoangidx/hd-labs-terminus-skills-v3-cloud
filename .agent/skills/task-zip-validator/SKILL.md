@@ -165,7 +165,7 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 | **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
 | `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` — EXCEPT `"C++"` stays capitalized | ✅ lowercase them (preserve `"C++"`) |
-| `workdir` (milestone-only) | `[environment].workdir` must NOT appear when `number_of_milestones = 0`; it is milestone-only (container cwd comes from Dockerfile `WORKDIR`) | ✅ remove line |
+| `workdir` (informational) | For `number_of_milestones = 0`, default is Dockerfile-`WORKDIR`-only (no `[environment].workdir`), but BOTH forms are accepted — a reviewer may explicitly request `workdir = "/app"` (reviewer-overridden 2026-07-16); honor that. Do NOT auto-remove | ℹ️ flag only |
 | `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
 | `category` | Must be one of the 9 valid values; ALSO flag `software-engineering`/`debugging`/`data-processing` (declared or shape-predicted) as blocked by `category_classifier` — shape-predicted is checked rules-first via `category_rules.md`, probe only as fallback (see the callout below the toml block) | ❌ manual + rules/probe |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
@@ -184,6 +184,8 @@ Check `environment/Dockerfile`:
 | No reserved dirs | NO `mkdir /tests`, `/oracle`, `/logs/verifier`, `/solution` | ✅ remove line |
 | apt hygiene | `apt-get update && apt-get install ... && rm -rf /var/lib/apt/lists/*` in one RUN | ❌ manual |
 | `patch` installed | For Go/Rust tasks: `patch` must be in apt-get install list | ✅ add to apt-get |
+| No `# syntax=` line | NO `# syntax=docker/dockerfile:1` line — platform build nodes can't pull the frontend → "Oracle failed" (preflight.sh checks this) | ✅ delete line |
+| No `--mount=type=bind` | NO BuildKit `RUN --mount=type=bind` — convert to plain `COPY` + `rm -rf` in the same layer | ❌ manual (convert to COPY + rm) |
 | `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
 | No privileged/dangerous caps | docker-compose must NOT use `privileged: true`, `cap_add` of `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE`, or mount `/var/run/docker.sock`; volume mounts must not shadow reserved paths (`/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`) | ❌ manual |
 
@@ -196,7 +198,11 @@ packages in the Dockerfile with exact pins. Do not put dependency wheels under
 Must exist at `environment/.dockerignore` with ALL of:
 ```
 .git
+**/.git
 .gitignore
+.env
+solution/
+tests/
 **/__pycache__/
 **/*.pyc
 **/.pytest_cache/
@@ -205,7 +211,12 @@ Must exist at `environment/.dockerignore` with ALL of:
 **/node_modules/
 ```
 
-**Auto-fix**: create/overwrite with standard content.
+`solution/`, `tests/`, and `.env` are mandatory (AGENTS.md §10): missing them
+passes local harbor (NOP=0, Oracle=1) but gets reviewer-returned;
+`scripts/preflight.sh` FAILs on each.
+
+**Auto-fix**: create/overwrite with standard content (including `solution/`,
+`tests/`, `.env`, `**/.git`).
 
 ### 2d. test.sh (BLOCKING)
 
@@ -257,7 +268,7 @@ test -f pyproject.toml && echo "FAIL: root pyproject.toml should not be submitte
 **Auto-fix**: remove wheels from `tests/`; remove root `pyproject.toml` from
 the submission package.
 
-### 2g. Secret-shaped files (WARNING)
+### 2f. Secret-shaped files (WARNING)
 
 Scan `environment/` for:
 ```bash
@@ -266,7 +277,7 @@ find environment/ -type f \( -name '*.pem' -o -name '*.key' -o -name '*.crt' -o 
 
 **Auto-fix**: delete them (after checking no test depends on them).
 
-### 2h. AI scaffolding files (WARNING — High severity in reviewer checklist)
+### 2g. AI scaffolding files (WARNING — High severity in reviewer checklist)
 
 Scan `environment/` for AI-generated framework files:
 ```bash
@@ -275,7 +286,7 @@ find environment/ -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -name '.c
 
 **Auto-fix**: delete them.
 
-### 2i. Junk files
+### 2h. Junk files
 
 Scan for and remove:
 ```bash
@@ -285,7 +296,7 @@ find . \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycac
 
 **Auto-fix**: always delete.
 
-### 2j. Build context size (BLOCKING)
+### 2i. Build context size (BLOCKING)
 
 ```bash
 # Total environment/ must be <= 100 MiB
@@ -295,7 +306,7 @@ du -sm environment/ | awk '{if ($1 > 100) print "FAIL: environment/ is "$1"MiB (
 find environment/ -size +50M -exec echo "FAIL: {} exceeds 50MiB" \;
 ```
 
-### 2k. Blacklisted databases
+### 2j. Blacklisted databases
 
 Scan for commercial database references:
 ```bash
@@ -434,9 +445,12 @@ tomllib.load(open("task.toml", "rb"))
 ## Step 5 — Harbor Tests (if Docker available)
 
 ```bash
-stb harbor run -a oracle -p "$TMPDIR"   # Must return 1.0
-stb harbor run -a nop -p "$TMPDIR"      # Must return 0.0
+harbor run -a oracle -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-oracle -q   # Must return 1.0
+harbor run -a nop -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-nop -q         # Must return 0.0
 ```
+
+(Plain `harbor run` — the `stb` prefix is only for real-agent runs; see
+task-harbor-runner.)
 
 ## Step 6 — Report and Re-zip
 
@@ -492,6 +506,13 @@ After upload to Snorkel, remind the user to create a rubric in the platform UI:
 - Format: `"Agent <did/did not> <observable action>, +/-N"`
 - Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
 - **Positive scores need an explicit leading `+`** (write `+3`, not `3`); unsigned positives are sent back for revision
+- **Every criterion is exactly ONE physical line** — no mid-criterion wrapping;
+  a wrapped line is unparseable by the CI rubric parser = High reject
+  (2026-07-15)
+- **The whole rubric block appears exactly ONCE** — a duplicated/concatenated
+  paste (e.g. "…-2.Verdicts match…") is unparseable = High reject; the block
+  lives in the platform rubric FIELD, so a malformed paste is invisible in
+  local files — verify programmatically
 - Total points: 10–40 for non-milestone tasks
 - Reward the END STATE, not the process: no "reads/studies the stub", no
   "compiles successfully with `cargo build`/`go build`" (compilation is implied by
@@ -528,6 +549,6 @@ For Go tasks (detected by `languages = ["go"]` in task.toml):
 - `patch` must be in Dockerfile apt-get install
 - `go.mod` and `go.sum` must exist in `environment/repo/`
 - Dockerfile should have `COPY repo/go.mod repo/go.sum /app/` before `COPY repo/ /app/`
-- `ENV PATH` or symlink for Go binary (see go-task-ci-checklist memory)
+- `ENV PATH` or symlink for the Go binary (`ln -sf /usr/local/go/bin/go /usr/local/bin/go` — platform login shells reset PATH)
 - No `.github/workflows/` directories (may contain blacklisted DB references)
 - For Go tasks, the canonical base IS the full `golang` image: `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac` (covers all Go 1.21–1.26 + alpine/bullseye/bookworm). A single-stage final image using THIS exact ref passes `check_sanctioned_base_images` — no exemption needed. A bare `golang@sha256:<other digest>` or a different registry/tag is **blocked**; replace the digest with the canonical one.
