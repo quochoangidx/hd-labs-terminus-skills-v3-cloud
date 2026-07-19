@@ -1,15 +1,26 @@
 ---
 name: task-batch
-description: Use when the user wants an autonomous end-to-end batch of brand-new Terminus Regular tasks delivered to submissions/ — e.g. "/task-batch", "/task-batch 3", "tạo batch task", "chạy batch". Runs the full gate pipeline (fresh-only mining → collapse-law screen → skeleton probe → build → validate → package → SUBMISSION.md) without further prompting. Args: optional delivery quota (default 4). Do not use for single-task work, ports (needs an explicit port request via task-language-port), or remediation of returned tasks.
+description: Use when the user wants an autonomous end-to-end batch of brand-new Terminus Regular tasks delivered to submissions/ — e.g. "/task-batch", "/task-batch 3", "/task-batch 10", "tạo batch task", "chạy batch". Runs the full gate pipeline (fresh-only mining with repo prospecting → collapse-law screen → skeleton probe → build → validate → package → SUBMISSION.md) without further prompting. Args: optional delivery quota (default 4); a quota >6 is treated as a cumulative target run in sequential rounds of 3-4. Do not use for single-task work, ports (needs an explicit port request via task-language-port), or remediation of returned tasks.
 ---
 
 # Task Batch — autonomous end-to-end delivery
 
-Mission: deliver `<quota>` (default 4, hard range 2–6) brand-new Terminus
-Regular tasks at ≥ MEDIUM, fully autonomously. Do not ask the user questions
-mid-run; every drop/redesign/lane decision is yours, governed by AGENTS.md and
-the skills below. The quota is the commitment; every candidate is raw material
-— drop without regret, and NEVER lower the handover bar to hit the number.
+Mission: deliver `<quota>` (default 4) brand-new Terminus Regular tasks at
+≥ MEDIUM, fully autonomously. Do not ask the user questions mid-run; every
+drop/redesign/lane decision is yours, governed by AGENTS.md and the skills
+below. The quota is the commitment; every candidate is raw material — drop
+without regret, and NEVER lower the handover bar to hit the number.
+
+**Quota semantics — per-round cap 6, larger quotas are CUMULATIVE:** a single
+round realistically yields 2–4 fresh tasks, so a quota >6 (e.g.
+`/task-batch 10`) means a cumulative target: run sequential internal rounds of
+3–4, and BETWEEN rounds fold the exploration map + durable verdicts into
+AGENTS.md/memory/index.jsonl so the next round mines with an expanded
+forbidden-zone map (this is what makes later rounds cheaper and more
+accurate). Report progress after each round (delivered so far / quota, plus
+that round's exploration map). Stop before the cumulative quota ONLY when two
+consecutive rounds deliver 0 tasks or a round hits the budget stop conditions
+below — then hand over everything delivered with the infeasibility analysis.
 
 Environment notes: harbor + Docker work locally (~3 min/oracle run) and need
 no LLM; harbor LLM / stb are geoblocked from VN — run every difficulty and
