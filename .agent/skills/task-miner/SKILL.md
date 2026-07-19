@@ -162,6 +162,50 @@ MiB. Codebase size minimal/small/large all accepted — aim for a mix.
 
 ## Operating Modes
 
+### Fresh-only exploration doctrine — DEFAULT for every mining run (user-set 2026-07-19)
+
+Default mining is **100% new tasks**. Do NOT recreate what already exists: no
+ports/reskins of shipped or held engines, no same-corpus variants, no twists on
+existing gallery/portfolio tasks — a candidate must reach
+`gallery_novelty: novel` (`twist-on-existing` is a reject under this doctrine,
+not just `duplicate`). Ports/reskins run ONLY on an explicit user request, via
+`task-language-port`, and an engine with ≥5 shipped variants is
+originality-saturated regardless (DKIM at 8 = closed).
+
+History (AGENTS.md, memory, `index.jsonl`, gallery snapshot) has exactly three
+roles — never "source of ideas":
+1. **Forbidden-zone map**: every §6 dead-end archetype and every family with a
+   collapse verdict is off-limits; do not re-explore it.
+2. **Design laws**: every fresh idea must still name its hidden lever in one
+   sentence (Master collapse law screen).
+3. **Dedupe + novelty check + Task Inspiration ID lookup.**
+
+Per mining round:
+- Generate **20–30 fresh ideas** spread over ≥4 of the 6 allowed categories and
+  ≥4 of these source classes (each class ≤40% of the pool):
+  1. A REAL tool/library in the image whose observable behavior diverges from
+     its public spec — lever (a): run the real tool, find quirks the public
+     docs under-describe.
+  2. A REAL implementation diverging from an UNDER-documented standard — lever
+     (b); before accepting, answer "does the public spec fully describe the
+     authority's behavior?" Yes → reject (the SigV4 lesson).
+  3. Stateful systems/simulators with unstated counter-intuitive rules — games
+     with recursive/typed corners; true hidden-sim (solver submits an
+     estimate, the simulation stays INSIDE the verifier, dynamics undisclosed).
+  4. Upstream closed bugfix PRs (minority lane, patch-shape gate).
+  5. Taxonomy coverage gaps: run `refresh_gallery_taxonomy.py`, prefer
+     subcategories thin in the gallery AND absent from the portfolio.
+  6. Free-form ideas — any shape that names a hidden lever; no precedent
+     needed.
+- Screen ALL of them with the Master collapse law; record every verdict in
+  `index.jsonl` INCLUDING rejects (a reject is map data — the batch deliverable
+  includes this exploration map, and durable verdicts get folded into
+  AGENTS.md §6/§3 + memory per the self-update rule).
+- Shortlist the 8–12 most DIVERSE survivors (never two from the same family)
+  for skeleton probing; expect ~2/3 of ideas to die at the screen and a 2–4
+  tasks/batch delivery rate — a high kill rate is the design working, never
+  backfill quota with ports.
+
 ### Upstream Bugfix Mode (minority lane)
 
 Use ONLY when the user asks for a bugfix, or for the small bugfix/debug slice of the
@@ -882,7 +926,7 @@ candidate:
   target_difficulty:       # hard | medium  (never easy; Python => must be hard)
   expected_codebase_size:  # minimal (~0-20 files) | small (~20+) | large (~200+)
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
-  gallery_novelty:         # novel | twist-on-existing | duplicate  (duplicate => reject)
+  gallery_novelty:         # novel | twist-on-existing | duplicate — fresh-only doctrine (default): anything below novel => reject; twist-on-existing acceptable ONLY when the user explicitly asked for a variant/port
   objective_type: spec_implementation | data_pipeline | tool_workflow | api_service | db_interaction | ui_build | upstream_bugfix | feature | build | admin_config | security | scientific | ml | game
   subtype_profile:         # fill ONLY the block(s) matching subcategories above
     long_context: { document_source:, approx_tokens:, format:, why_not_greppable: }

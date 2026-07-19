@@ -10,6 +10,16 @@ identical behavior in a different language. The source task's `instruction.md`, 
 test judge define ground truth; nothing about *what* the task requires may change, only the
 language it's built in and (per the reskin rule below) its surface narrative.
 
+> ⛔ **Explicit-request gate + engine saturation cap (user-set 2026-07-19).** The
+> default mining doctrine is fresh-only (see `task-miner`, Fresh-only exploration
+> doctrine): ports/reskins run ONLY when the user explicitly asks for them —
+> never as autonomous quota backfill or a "cheap lane" in a batch prompt. Even
+> on explicit request, an engine with **≥5 shipped variants is
+> originality-saturated**: refuse further ports and say why (same-corpus series
+> are what reviewers flag as "not sufficiently original"; the byte-identical
+> corpus IS the signal they match on). DKIM is at 8 variants = permanently
+> closed.
+
 ## Why this is usually safe
 
 Most Regular tasks verify a compiled/interpreted program as a **black box**: the verifier

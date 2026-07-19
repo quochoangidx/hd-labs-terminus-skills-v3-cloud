@@ -78,7 +78,7 @@ candidate:
   target_difficulty:       # hard | medium (never easy; Python => hard)
   expected_codebase_size:  # minimal | small | large — recompute from environment/ before shipping
   closest_gallery_task:
-  gallery_novelty:         # novel | twist-on-existing | duplicate (duplicate => do not clone)
+  gallery_novelty:         # novel | twist-on-existing | duplicate — fresh-only doctrine (default): clone only novel; twist-on-existing needs an explicit user request for a variant/port
   subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
   objective_type:
   source_url:
