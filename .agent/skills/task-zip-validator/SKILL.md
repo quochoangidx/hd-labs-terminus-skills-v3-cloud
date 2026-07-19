@@ -17,6 +17,13 @@ A single argument: path to a `.zip` file (absolute or relative).
 
 ## Workflow
 
+> ⚙️ For an UNZIPPED task folder, run `scripts/preflight.sh <task-dir>`
+> (repo root) first — it covers the mechanical subset below (layout,
+> .dockerignore entries, Dockerfile hygiene, task.toml fields, leak sweep,
+> zip arcnames, rubric format, docker oracle/nop, noexec-/tmp repro) in one
+> command; this skill then focuses on the judgment checks (category shape,
+> instruction/test symmetry, template shape).
+
 1. **Unzip** to a temp directory
 2. **Structural audit** — check every file against rules
 3. **Auto-fix** — apply fixes for known issues
@@ -112,18 +119,26 @@ scientific-computing
 > BLOCKER: the task needs an honest reshape into one of the 6 allowed categories
 > or a shelve — never a category re-label.
 >
-> **Run the blind category probe to make this check operational** (the real
-> classifier is geoblocked from VN and cannot be preflighted). Give a FRESH
-> subagent only the classifier-visible surfaces — `instruction.md`, the
-> `environment/` file-tree listing, README, rubric text — WITHOUT the declared
-> category, and ask it to pick the primary-activity category from the 9 slugs
-> with a confidence and a one-line reason; repeat 2–3 times (the platform's
-> `llm_fallback` is noisy). Any run predicting a blocked slug, or a majority
-> disagreeing with the declared category, is the BLOCKER above; the probe's
-> reasons name the leaking surface. Fix by reshaping the SHAPE (instruction
-> verbs, I/O surface, rubric lines, repo furniture — see `task-miner`,
-> "Classifier-visible surface artifacts"), then re-probe; never by re-wording
-> prose or editing `task.toml` alone.
+> **Make this check operational rules-first** (the real classifier is
+> geoblocked from VN and cannot be preflighted): apply the real-CI-calibrated
+> rules in `.agent/skills/task-miner/category_rules.md` to the task shape
+> BEFORE any probe. A fired BLOCK rule (exact-reference-conformance → SWE;
+> dataset→report → DP; repair shape → debugging; stub-fill compute-to-spec →
+> SWE) IS the BLOCKER above and no probe run overrides it; a fired ALLOW rule
+> matching the declared category clears the check with at most one
+> confirmatory probe run. Only when no rule fires, fall back to the blind
+> category probe: give a FRESH subagent only the classifier-visible surfaces —
+> `instruction.md`, the `environment/` file-tree listing, README, rubric
+> text — WITHOUT the declared category, and ask it to pick the
+> primary-activity category from the 9 slugs with a confidence and a one-line
+> reason; run twice, a 3rd only on a 1–1 split (the platform's
+> `llm_fallback` is noisy). Any run
+> predicting a blocked slug, or a majority disagreeing with the declared
+> category, is the BLOCKER above; the probe's reasons name the leaking
+> surface. Fix by reshaping the SHAPE (instruction verbs, I/O surface, rubric
+> lines, repo furniture — see `task-miner`, "Classifier-visible surface
+> artifacts"), then re-check; never by re-wording prose or editing `task.toml`
+> alone.
 
 > ⛔ The CI `template_detection` static check (first observed 2026-07-13) BLOCKS
 > submissions whose structural shape matches a named template library entry —
@@ -149,10 +164,10 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 | `difficulty` | Must be `"medium"` or `"hard"`, NOT `"easy"` | ❌ manual |
 | **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
-| `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` | ✅ lowercase them |
+| `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` — EXCEPT `"C++"` stays capitalized | ✅ lowercase them (preserve `"C++"`) |
 | `workdir` (milestone-only) | `[environment].workdir` must NOT appear when `number_of_milestones = 0`; it is milestone-only (container cwd comes from Dockerfile `WORKDIR`) | ✅ remove line |
 | `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
-| `category` | Must be one of the 9 valid values; ALSO flag `software-engineering`/`debugging`/`data-processing` (declared or shape-predicted) as blocked by `category_classifier` — shape-predicted is checked via the blind category probe (see the callout below the toml block) | ❌ manual + probe |
+| `category` | Must be one of the 9 valid values; ALSO flag `software-engineering`/`debugging`/`data-processing` (declared or shape-predicted) as blocked by `category_classifier` — shape-predicted is checked rules-first via `category_rules.md`, probe only as fallback (see the callout below the toml block) | ❌ manual + rules/probe |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
 | `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
 

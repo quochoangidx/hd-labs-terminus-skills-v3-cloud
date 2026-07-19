@@ -31,6 +31,17 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 
 ## Authoring Workflow
 
+> ⚙️ Tooling shortcuts (repo root): `scripts/new-task.sh <slug> <lang>
+> <category>` stamps steps 2–4 and 7–8 as a skeleton with the packaging +
+> verifier hygiene (canonical digest-pinned base, full .dockerignore,
+> `_hide_corpus`/`nobody`-candidate/`_find_exec_base`/build-exit-check
+> helpers, per-case parametrize) pre-wired — fill its TODOs instead of
+> re-deriving the boilerplate. `scripts/preflight.sh <task-dir>` then runs
+> every mechanical gate (layout, .dockerignore, Dockerfile, task.toml, leak
+> sweep, zip arcnames, rubric format, docker oracle=1/nop=0, and the
+> oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
+> zipping, every time.
+
 1. Pick a real engineering bug with multi-step reasoning.
 2. Write concise `instruction.md` using absolute paths only.
 3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false`.

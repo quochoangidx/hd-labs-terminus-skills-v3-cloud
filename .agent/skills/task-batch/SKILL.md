@@ -11,19 +11,27 @@ drop/redesign/lane decision is yours, governed by AGENTS.md and the skills
 below. The quota is the commitment; every candidate is raw material — drop
 without regret, and NEVER lower the handover bar to hit the number.
 
-**Quota semantics — the quota is a HARD delivery contract.** The run ends in
-exactly one way: `<quota>` tasks in `submissions/`, each passing all six
-handover conditions. Never hand over fewer, never ask the user anything
-mid-run, and never lower the bar to get there. A single round realistically
-yields 2–4 fresh tasks, so a quota >6 (e.g. `/task-batch 10`) runs sequential
-internal rounds of 3–4; BETWEEN rounds fold the exploration map + durable
-verdicts into AGENTS.md/memory/index.jsonl so the next round mines with an
-expanded forbidden-zone map (this is what makes later rounds cheaper and more
-accurate). Report progress after each round (delivered so far / quota, plus
-that round's exploration map) — a status report, not a question. If the
-session is interrupted, re-invoking `/task-batch <quota>` resumes: count
-already-delivered zips in `submissions/`, reload state from `index.jsonl`,
-and continue toward the same cumulative quota.
+**Quota semantics — the quota is the target, honesty is the contract.** The
+run ends in one of exactly two ways: (a) `<quota>` tasks in `submissions/`,
+each passing all six handover conditions; or (b) the **honest-exhaustion
+exit** — the full pivot ladder (Dry-round handling below) has been walked AND
+two consecutive fully-pivoted rounds delivered nothing new, in which case the
+run ends below quota with the complete exploration map and a per-seam verdict
+report. Measured fresh HARD+category-safe yield is ~1–4 per batch (AGENTS.md
+§6: "treat 10-fresh as infeasible and report honestly rather than pad") — an
+under-quota exit backed by a full exploration map is a CORRECT outcome, not a
+failure; padding with lowered-bar tasks or ports is the failure. Never ask the
+user anything mid-run, and never lower the handover bar to hit the number. A
+single round realistically yields 2–4 fresh tasks, so a quota >6 (e.g.
+`/task-batch 10`) runs sequential internal rounds of 3–4; BETWEEN rounds fold
+the exploration map + durable verdicts into AGENTS.md/memory/index.jsonl so
+the next round mines with an expanded forbidden-zone map (this is what makes
+later rounds cheaper and more accurate). Report progress after each round
+(delivered so far / quota, plus that round's exploration map) — a status
+report, not a question. If the session is interrupted, re-invoking
+`/task-batch <quota>` resumes: count already-delivered zips in
+`submissions/`, reload state from `index.jsonl`, and continue toward the same
+cumulative quota.
 
 Environment notes: harbor + Docker work locally (~3 min/oracle run) and need
 no LLM; harbor LLM / stb are geoblocked from VN — run every difficulty and
@@ -44,10 +52,16 @@ category probe yourself with fresh subagents (Agent tool), never harbor LLM.
    every case ≥1 probe passer; best union <100%; every feature cluster keeps a
    soft representative; any 0-probe cluster was oracle-authority-checked
    BEFORE any prune/disclose (`task-revise-flag-remediation` Step 1.5).
-4. **Blind category probe** 2–3 runs (fresh subagent; de-contaminated packet —
-   only instruction.md + environment file tree + README + rubric, copied
-   outside the repo; the subagent must NOT read AGENTS.md/CLAUDE.md/memory):
-   no run predicts a blocked slug; majority matches the declared category.
+4. **Category check — rules first** (`task-miner/category_rules.md`): run the
+   real-CI-calibrated rules against the task shape. A fired BLOCK rule ⇒
+   reshape or drop, no probe run can override it; a fired ALLOW rule matching
+   the declared category ⇒ at most one confirmatory probe run. Only when NO
+   rule fires, fall back to the blind category probe — 2 runs, a 3rd only on
+   a 1–1 split (fresh subagent;
+   de-contaminated packet — only instruction.md + environment file tree +
+   README + rubric, copied outside the repo; the subagent must NOT read
+   AGENTS.md/CLAUDE.md/memory): no run predicts a blocked slug; majority
+   matches the declared category.
 5. No rust_cli/sibling template shape; passes `task-zip-validator` +
    `task-llm-style-audit`; zip lands in `submissions/`.
 6. `submissions/SUBMISSION-<slug>.md` complete (section below).
@@ -75,13 +89,16 @@ Shortlist the 8–12 most diverse survivors (never two from one family).
    (`/var/tmp/probe-*`), net forbidden, every known reference lib NAMED as
    forbidden. Running harbor oracle on a candidate with no skeleton-probe log
    is a violation — log it as a wasted build. 3/3 pass → drop, next candidate.
-3. **BUILD** (`task-clone`): corpus soft cap ~100 curated cases, independent
-   quirk families at ~40–80% per-run pass, per-case parametrized, binary 0/1
-   reward, soft representative per cluster, any case predicted <35% pass →
-   disclose in one sentence or drop. Verifier hygiene: build from /app +
-   check build exit status, hide expected-value corpora before running the
-   candidate, run the candidate unprivileged, no exec from bare /tmp,
-   instruction/test symmetry both directions.
+3. **BUILD** (`task-clone`): start from `scripts/new-task.sh <slug> <lang>
+   <category>` (skeleton with the verifier/packaging hygiene pre-wired).
+   Corpus soft cap ~100 curated cases, independent quirk families at ~40–80%
+   per-run pass, per-case parametrized, binary 0/1 reward, soft
+   representative per cluster, any case predicted <35% pass → disclose in
+   one sentence or drop. Verifier hygiene: build from /app + check build
+   exit status, hide expected-value corpora before running the candidate,
+   run the candidate unprivileged, no exec from bare /tmp, instruction/test
+   symmetry both directions. Before condition-5 validation, run
+   `scripts/preflight.sh <task-dir>` — zero FAIL rows required.
 4. **VALIDATE** against all six conditions. On a miss, fix per playbook (0/N →
    `task-revise-flag-remediation`, suspect the ORACLE first; single-lever
    fingerprint → DROP, never rescue; category drift → reshape the SHAPE and
@@ -116,32 +133,37 @@ Shortlist the 8–12 most diverse survivors (never two from one family).
 - **File zip name** — the matching zip in `submissions/`.
 - Run `task-llm-style-audit` over all three explanations (human-writing pass).
 
-## Dry-round handling — PIVOT, never stop short
+## Dry-round handling — PIVOT before stopping, honest exit after the ladder
 
-There are no early-stop conditions: the quota is a hard contract. What were
-stop triggers are now PIVOT triggers — when ≥15 screened candidates are
-exhausted without a delivery, or 2 consecutive rounds put nothing through the
-skeleton gate, do not keep drilling the same seam. Escalate the exploration,
-in order:
+Dry rounds trigger PIVOTS, not an immediate stop — when ≥15 screened
+candidates are exhausted without a delivery, or 2 consecutive rounds put
+nothing through the skeleton gate, do not keep drilling the same seam.
+Escalate the exploration, in order:
 
 1. **Rotate source classes and categories** you haven't used yet this run
    (the ≤40%-per-class rule exists for this); switch prospecting queries to
    new archetype signals and new registries.
 2. **Change task SHAPE, not just domain**: the collapse law was validated on
    minimal spec-engine tasks — move to interaction/scale-based shapes where
-   difficulty comes from multi-step environment work and discovery
-   (tool_specific, db_interaction, api_integration, long_context, multi-step
-   system-administration workflows per the Subtype Profiles in `task-miner`).
-   These are more expensive to build, so skeleton-probe them extra strictly
-   before investing.
+   difficulty comes from multi-step environment work and discovery. The
+   build recipe is `task-miner/interaction_shape_recipe.md` (3 archetypes:
+   multi-service ops restoration, stateful data-store operations,
+   long-context cross-referencing; ≥3-coupled-causes doctrine, determinism
+   rules, category framing). These are more expensive to build, so
+   skeleton-probe them extra strictly before investing.
 3. **Revisit held §5/§4 archetype RECIPES with a genuinely new engine** (a
    recipe is not a task — a fresh engine in a held archetype still satisfies
    `gallery_novelty: novel`; a reskin of an existing engine does not).
 
 Log each pivot in the round report. Never lower the handover bar; never
-backfill with ports; never end the run below quota.
+backfill with ports. Only after ALL THREE pivots have been attempted in this
+run AND two consecutive fully-pivoted rounds delivered nothing new does the
+honest-exhaustion exit apply (Quota semantics above): end below quota with the
+full exploration map, per-seam verdicts folded into AGENTS.md §6/memory, and
+an explicit "delivered X of <quota>; remaining yield requires either the port
+lane (user request) or a new build recipe for interaction/scale shapes" line.
 
-## Final handover (only when the full quota is in submissions/)
+## Final handover (full quota reached, or honest-exhaustion exit)
 
 Report in the user's language. Table: slug | category | hidden lever (one
 sentence) | skeleton probe | fair probe (where each run failed) | pass-table |

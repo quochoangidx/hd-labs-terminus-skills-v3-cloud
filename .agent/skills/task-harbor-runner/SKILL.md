@@ -35,8 +35,10 @@ Known INFRA failures — do not treat these as task defects:
   probe (`task-local-solve-probe`); the platform check at submit stays the
   source of truth.
 - From VN both providers geo-block direct API calls (OpenAI 403 country /
-  Anthropic not-allowed) — run via the platform or a VPN; never rewrite the
-  task in response.
+  Anthropic not-allowed) — no VPN/remote access is available; these calls
+  only ever run at platform submission time. Locally, substitute
+  fresh-subagent probes (`task-local-solve-probe`) and never rewrite the
+  task in response to the geoblock.
 - Creds are budget-capped (~$10/30d) but rotatable via `stb keys refresh`.
 
 Use the absolute binary path if PATH is stale:

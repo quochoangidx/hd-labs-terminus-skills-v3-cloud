@@ -158,11 +158,13 @@ in `instruction.md`.
 Before sending the task to a reviewer, locate:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
 ```
 
-The UI-ready file must contain exactly these three sections:
+The UI-ready packet must contain (alongside Metadata and Rubrics — see
+`task-clone`/`task-batch` for the full packet format) exactly these three
+explanation sections:
 
 ```text
 Difficulty Explanation
@@ -191,9 +193,10 @@ but they do not change the ZIP allowlist.
 On first upload:
 
 - upload ZIP to Snorkel Expert Platform -> Terminus-2nd-Edition
-- copy the three sections from the UI-ready `submission-explanations.md` into
-  their matching platform fields; do not copy headings, rewrite diagnostics, or
-  the factual source draft
+- copy the three explanation sections (plus rubric and metadata answers)
+  from the UI-ready `submissions/SUBMISSION-<slug>.md` packet into their
+  matching platform fields; do not copy headings, rewrite diagnostics, or the
+  factual source draft
 - check "Generate Rubric(s)" while "Send to Reviewer" is unchecked
 - keep "Send to Reviewer" unchecked
 - inspect CI and generated rubric before final reviewer submission

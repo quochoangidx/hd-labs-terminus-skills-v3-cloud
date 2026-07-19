@@ -235,6 +235,15 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 15. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
 
+> ⚙️ For interaction/scale-shaped candidates (multi-service ops restoration,
+> stateful data-store operations, long-context cross-referencing), the build
+> doctrine — ≥3 coupled causes, symptom≠site, end-to-end-behavior verifiers,
+> determinism rules, category framing — is in
+> `.agent/skills/task-miner/interaction_shape_recipe.md`; it overrides the
+> spec-engine corpus guidance below where they conflict (these tasks grade
+> final environment state, not a hidden case corpus). Scaffold with
+> `scripts/new-task.sh` all the same.
+
 ## Regular Layout
 
 ```text
@@ -262,11 +271,12 @@ Prefer external notes under `workspace/reports/<task-slug>/` when possible so su
 For the current platform submission form, create:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (the UI-ready platform packet — single canonical name)
 ```
 
-Never place these files under the submitted task root.
+Packet contents and format: the "platform packet" section near the end of
+this skill. Never place either file under the submitted task root or ZIP.
 
 ## Metadata Defaults
 
@@ -945,6 +955,13 @@ mistakes each cost a full rebuild this session — avoid them up front:
 
 Before packaging or platform upload:
 
+- **run `scripts/preflight.sh <task-dir>` (repo root) — zero FAIL rows
+  required.** It machine-checks layout, .dockerignore entries, Dockerfile
+  hygiene (syntax line, canonical digest-pinned base, bind-mounts),
+  task.toml fields, leak sweep, zip arcnames/CRLF, rubric format, docker
+  oracle=1.0/nop=0.0, and the oracle-under-`--tmpfs /tmp:noexec` repro.
+  (New tasks should have been stamped by `scripts/new-task.sh`, which
+  pre-wires the hygiene this checks.)
 - **run the per-case pass-table pre-audit (mandatory for any corpus-graded
   verifier).** Re-score the stored blind-probe solver diffs per-case against the
   FULL corpus (free — no new solver runs) and build the pass table. Then check
@@ -954,16 +971,25 @@ Before packaging or platform upload:
   check before pruning); (2) the best union still fails >0 cases (no run can
   flip to 100% after any prune); (3) every feature cluster still has a soft
   representative a majority of runs pass
-- **run the blind category probe (mandatory — the real `category_classifier`
-  is geoblocked from VN and cannot be preflighted).** Give a FRESH subagent
+- **run the category check, rules first (mandatory — the real
+  `category_classifier` is geoblocked from VN and cannot be preflighted).**
+  FIRST apply the real-CI-calibrated rules in
+  `.agent/skills/task-miner/category_rules.md` to the task shape: a fired
+  BLOCK rule (exact-reference-conformance → SWE; dataset→report → DP; repair
+  shape → debugging; stub-fill compute-to-spec → SWE) is authoritative —
+  reshape or drop, and do NOT run the probe hoping it disagrees; a fired
+  ALLOW rule matching the declared category needs at most one confirmatory
+  probe run, and a probe run disagreeing with it is noise (purl: probe SWE
+  0.9, real CI bd-mgmt 1.0). Only when no rule fires, fall back to the blind
+  category probe. For the probe: give a FRESH subagent
   (zero task context) only the classifier-visible surfaces — `instruction.md`,
   the `environment/` file tree listing, README, and the rubric text — WITHOUT
   the declared category, and ask it to pick the task's primary-activity
   category from the 9 slugs (software-engineering, debugging,
   data-processing, build-and-dependency-management, system-administration,
   security, scientific-computing, machine-learning, games) with a confidence
-  and a one-line reason. Run it 2–3 times (the platform's `llm_fallback` is
-  noisy). Any run predicting a BLOCKED slug, or a majority predicting ≠ the
+  and a one-line reason. Run it twice, adding a 3rd run only on a 1–1 split
+  (user-set probe default; the platform's `llm_fallback` is noisy). Any run predicting a BLOCKED slug, or a majority predicting ≠ the
   declared category → reshape the SHAPE (instruction verbs, I/O surface,
   rubric lines, repo furniture — see `task-miner`, Classifier-visible surface
   artifacts) and re-probe; do not just re-word prose or change `task.toml`.

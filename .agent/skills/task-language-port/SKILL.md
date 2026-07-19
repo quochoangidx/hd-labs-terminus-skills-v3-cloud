@@ -18,7 +18,14 @@ language it's built in and (per the reskin rule below) its surface narrative.
 > originality-saturated**: refuse further ports and say why (same-corpus series
 > are what reviewers flag as "not sufficiently original"; the byte-identical
 > corpus IS the signal they match on). DKIM is at 8 variants = permanently
-> closed.
+> closed. Count variants against the quantified ledger in
+> `mined-candidates/platform-passed-portfolio.md` before accepting any
+> request: UAX-14 wrap (10), UAX-29 sentence (8), WHATWG URL canonicalize
+> (8), version-constraint (8), viterbi decode (7), URI template (6), LOWESS
+> (5) are ALL closed; sub-threshold headroom exists only for CSS engines
+> (4/5), Postgres value parsers (3/5), grapheme-width (2/5) — and each new
+> variant must still clear today's CI gates (category rules, template shape),
+> which postdate the family's historical passes.
 
 ## Why this is usually safe
 

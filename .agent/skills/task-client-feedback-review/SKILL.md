@@ -109,11 +109,12 @@ Use `--json` when another script will consume the result.
    for these external files:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
 ```
 
-   These files must remain outside the submitted task and ZIP.
+   These files must remain outside the submitted task and ZIP (the review
+   script also flags any `submission-*.md` found inside the ZIP).
 
    Review each field separately:
 

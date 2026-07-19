@@ -171,6 +171,14 @@ existing gallery/portfolio tasks — a candidate must reach
 not just `duplicate`). Ports/reskins run ONLY on an explicit user request, via
 `task-language-port`, and an engine with ≥5 shipped variants is
 originality-saturated regardless (DKIM at 8 = closed).
+`mined-candidates/platform-passed-portfolio.md` is the quantified saturation
+ledger over the 91 platform-passed tasks: UAX-14 wrap (10), UAX-29 sentence
+(8), WHATWG URL canonicalize (8), version-constraint (8), viterbi decode (7),
+RFC 6570 URI template (6), LOWESS (5) are ALL closed — reject any new variant
+of these engines at dedupe, and count the sub-threshold families listed there
+before honoring even a user-requested port. That file's passes are largely
+grandfathered (pre-date category/template/originality enforcement): use it for
+dedupe/saturation only, never as evidence a shape clears today's CI.
 
 History (AGENTS.md, memory, `index.jsonl`, gallery snapshot) has exactly three
 roles — never "source of ideas":
@@ -208,6 +216,34 @@ Per mining round:
   for skeleton probing; expect ~2/3 of ideas to die at the screen and a 2–4
   tasks/batch delivery rate — a high kill rate is the design working, never
   backfill quota with ports.
+
+### bd-mgmt seam — the highest-probability category-safe lane (prioritize per round)
+
+The strongest real-CI category signal on record: purl canon predicted
+**build-and-dependency-management at 1.0** even though the blind probe
+insisted SWE 0.9 (`category_rules.md` R5). The classifier reads
+manifests/lockfiles/dependency-graphs-as-the-OBJECT as bd-mgmt even when the
+work is compute-heavy — so this seam clears the category gate that kills most
+fresh candidates. Target shapes (all fresh, none in the saturated ledger):
+
+- offline lockfile reconstruction: manifest + a vendored registry snapshot
+  in-image → regenerate the exact lockfile a real tool would produce;
+- dependency-graph conflict resolution with backtracking (real resolver
+  in-image as the authority);
+- toolchain/build migration: make a project build correctly against a second
+  pinned toolchain under stated constraints;
+- vendoring/patch resolution: apply override/patch precedence rules the way
+  the real tool does.
+
+The DIFFICULTY bar is unchanged — master collapse law still applies: the
+candidate needs a real in-image tool whose resolution rules INTERACT
+(conan/conda-style operator × bound × prerelease × endpoint coupling), not a
+table of standalone quirks (§6: portage/rubygems collapsed). Version
+COMPARISON alone is dead; resolution/backtracking/lockfile-shape carries the
+residual wall. Prospecting queries: `gh search repos` for alternative package
+managers, lockfile tools, registry-snapshot/vendoring tools, monorepo build
+resolvers — 100–5k stars, ≥2y history, never pip/cargo/npm themselves
+(memorization-poison).
 
 ### Upstream Bugfix Mode (minority lane)
 
@@ -296,8 +332,14 @@ software-engineering; dataset→report / ETL pipelines → data-processing;
 same signal as instruction prose — de-shape both. If the honest reshape guts
 the difficulty (quartz-cron: reshaped clean, probed 3/3 EASY), drop instead of
 gambling. The real classifier is geoblocked from VN and cannot be preflighted
-directly — emulate it with the blind category probe in `task-clone`
-(Quality Preflight) / `task-zip-validator` before every submission.
+directly — emulate it RULES-FIRST with `category_rules.md` (this directory):
+deterministic rules calibrated on real-CI verdicts, authoritative when they
+fire (the blind fresh-subagent probe has been wrong in BOTH directions —
+libinjection probe=security/real=SWE 0.92; purl probe=SWE/real=bd-mgmt 1.0).
+The blind category probe in `task-clone` (Quality Preflight) /
+`task-zip-validator` is the fallback for shapes no rule covers. At MINING
+time, run the rules against the candidate's intended shape: a BLOCK-rule hit
+with no honest reshape is a reject before any build cost.
 
 ## Subtype Profiles
 

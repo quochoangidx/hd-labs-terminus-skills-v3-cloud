@@ -74,6 +74,7 @@ SUBMISSION_EXPLANATION_NAMES = {
     "submission-explanations.md",
     "submission-explanations-source.md",
 }
+SUBMISSION_PACKET_RE = re.compile(r"^submission-.*\.md$", re.IGNORECASE)
 
 
 @dataclass
@@ -341,6 +342,7 @@ def review(path: Path) -> dict:
         explanation_files = [
             name for name in files
             if Path(name).name.lower() in SUBMISSION_EXPLANATION_NAMES
+            or SUBMISSION_PACKET_RE.match(Path(name).name)
         ]
         for name in explanation_files:
             add(
