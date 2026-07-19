@@ -78,12 +78,19 @@ submission ZIP. Keep local drafts outside the task folder, preferably:
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+submissions/SUBMISSION-<task-slug>.md
 ```
 
 Write the source draft only after the task behavior, oracle, verifier, and
 available difficulty probes are stable. The source draft is the factual record;
-the second file is the concise copy-paste version for the platform UI.
+`submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet for
+the platform UI (same name/shape as `task-batch` and `task-clone` produce): the
+three explanations PLUS the Metadata answers ("approved canonical base image?"
+Yes/No + exact digest-pinned image; "Task Inspiration from the Task Gallery?"
+Yes/No + Inspiration ID), the full paste-ready Rubrics block (format rules:
+AGENTS.md §9 — `Agent`-prefixed single physical lines, closed score set with
+leading `+`, positive sum 10–40), and the matching zip file name. The packet is
+never shipped inside the ZIP.
 
 ### Difficulty Explanation
 

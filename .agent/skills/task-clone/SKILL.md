@@ -1018,13 +1018,26 @@ available solve probes are stable.
    - Solution: root cause, high-level oracle strategy, and preserved behavior.
    - Verification: requirement-to-test mapping, why cases discriminate, and
      actual oracle/nop results.
-2. Produce `submission-explanations.md` as the concise UI-ready version.
+2. Produce the complete platform packet at
+   `submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
+   `task-batch`) containing, beyond the three explanations:
+   - **Metadata**: "Does this task use an approved canonical base image?"
+     Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
+     a Task Inspiration from the Task Gallery?" Yes/No + the Inspiration ID
+     when yes (`mined-candidates/gallery_tasks_snapshot.md`).
+   - **Rubrics**: the full paste-ready block (NOT shipped in the zip) —
+     format rules in the Rubric quality section above and AGENTS.md §9: one
+     physical line per criterion starting with `Agent`, closed score set
+     {+1,+2,+3,+5,-1,-2,-3,-5} with mandatory leading `+`, positive sum
+     10–40, block appears once, behavior-not-work-steps, affirmative
+     penalties, no test paths, nothing leaking the hidden lever.
+   - **File zip name**: the matching zip in `submissions/`.
 3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
    an editorial pass. Do not add claims, remove thresholds, or change technical
    meaning.
 4. Compare the final version with `instruction.md`, `solution/fix.patch`,
    `tests/test_outputs.py`, and validation reports.
-5. Keep both files outside the task ZIP.
+5. Keep the source notes and the packet outside the task ZIP.
 
 Use this structure in both files:
 
