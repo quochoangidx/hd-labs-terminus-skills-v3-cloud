@@ -185,7 +185,13 @@ dedupe/saturation only, never as evidence a shape clears today's CI.
 History (AGENTS.md, memory, `index.jsonl`, gallery snapshot) has exactly three
 roles — never "source of ideas":
 1. **Forbidden-zone map**: every §6 dead-end archetype and every family with a
-   collapse verdict is off-limits; do not re-explore it.
+   collapse verdict is off-limits by default — but verdicts have TIERS
+   (2026-07-20): a verdict backed by a platform return or pooled N≥5 probes is
+   CONFIRMED-dead (never re-explore); a verdict from local n≤3 probes on a
+   single instance is SUSPECT-dead — skipped by default, but eligible for the
+   one retest-slot per batch (`task-batch`, Dry-round handling) with a
+   materially stronger instance, never a reskin. When logging a new dead
+   verdict, record its tier and the evidence (n, instance, probe_model).
 2. **Design laws**: every fresh idea must still name its hidden lever in one
    sentence (Master collapse law screen).
 3. **Dedupe + novelty check + Task Inspiration ID lookup.**
@@ -787,6 +793,18 @@ evaporated on the 2026-07-19 platform return (20/20 strong runs passed every
 other DKIM feature; the whole series dropped as single-lever fair⊥hard).
 Record `collapse_law_screen: pass|fail` with
 the named lever in the candidate artifact.
+
+**Screen calibration control group (mandatory per mining round, 2026-07-20):**
+the screen is a one-sentence PREDICTION, and screen-rejected candidates are
+never probed, so its false-negative rate is invisible by construction — a
+too-strict screen silently starves the pipeline while looking like "the design
+working". Each round, advance 2 screen-FAILED candidates (diverse, not from a
+§6 CONFIRMED-dead family) into the skeleton probe anyway, marked
+`screen_control: true` in `index.jsonl`. A control that HOLDS (0/2 semantic)
+is a measured false-negative: keep the candidate in the normal pipeline, log
+the finding as durable, and loosen the specific screen criterion that killed
+it. Controls that collapse confirm the screen at skeleton cost, not build
+cost.
 
 ### Mechanical patch-shape gate — RUN FIRST, pass/fail, before any scoring (CANONICAL fix-shape test)
 

@@ -42,12 +42,17 @@ category probe yourself with fresh subagents (Agent tool), never harbor LLM.
 1. harbor oracle = 1.0 and nop = 0.0.
 2. **Difficulty** — fair blind probe (inside the task image, `--network none`,
    terse prompt, no hints, scored by differential per
-   `task-local-solve-probe`): **2 failing runs suffice and STOP probing**
-   (early-stop, max N=3), under two hard riders: (a) failures are SEMANTIC —
+   `task-local-solve-probe`; every probe subagent pinned `model: opus` — never
+   session-inherited, `probe_model` recorded in the verdict; a PASS from a
+   stronger-than-pool model is invalid EASY evidence and must be re-run on
+   opus): **2 failing runs suffice and STOP probing** (early-stop, max N=3),
+   under two hard riders: (a) failures are SEMANTIC —
    setup/instruction/compile/infra failures count for nothing, fix the task
    and re-probe; (b) the 2 failures land in DIFFERENT places — both runs dying
    on the same single case/convention is the single-lever fair⊥hard
-   fingerprint → DROP, not deliver. Python tasks must be Hard (0/3 semantic).
+   fingerprint, but at n=2 it can be coincidence on a multi-cluster task:
+   spend ONE disambiguation run — same place again → DROP, a different place
+   or a pass → normal scoring. Python tasks must be Hard (0/3 semantic).
 3. **Pass-table pre-audit clean** (re-score stored probe diffs, no new runs):
    every case ≥1 probe passer; best union <100%; every feature cluster keeps a
    soft representative; any 0-probe cluster was oracle-authority-checked
@@ -77,6 +82,15 @@ with the collapse-law screen and log every verdict (rejects included) into
 `mined-candidates/index.jsonl` — that log is the batch's exploration map.
 Shortlist the 8–12 most diverse survivors (never two from one family).
 
+**Screen control group (mandatory per round):** the screen is a one-sentence
+prediction and screen-rejects are never probed, so its false-negative rate is
+invisible by construction. Advance 2 screen-FAILED candidates (diverse, not
+from a §6 CONFIRMED-dead family) into the skeleton probe anyway, marked
+`screen_control: true` in index.jsonl. A control that holds (0/2 semantic) is
+a measured screen false-negative: keep it in the normal pipeline, log the
+finding as durable, and loosen the screen criterion that killed it. Controls
+that collapse confirm the screen at skeleton cost, not build cost.
+
 ## Loop (repeat until quota or a stop condition)
 
 1. **MINE** fresh per the doctrine, starting with **Repo Prospecting**
@@ -87,7 +101,9 @@ Shortlist the 8–12 most diverse survivors (never two from one family).
 2. **SKELETON PROBE GATE** (mandatory): env + instruction.md + stub + rough
    grader, N≥3 fresh blind solvers in isolated dirs outside the repo
    (`/var/tmp/probe-*`), net forbidden, every known reference lib NAMED as
-   forbidden. Running harbor oracle on a candidate with no skeleton-probe log
+   forbidden, every solver pinned `model: opus` (session-inherited stronger
+   tiers invalidate EASY verdicts — `task-local-solve-probe` Core Rules).
+   Running harbor oracle on a candidate with no skeleton-probe log
    is a violation — log it as a wasted build. 3/3 pass → drop, next candidate.
 3. **BUILD** (`task-clone`): start from `scripts/new-task.sh <slug> <lang>
    <category>` (skeleton with the verifier/packaging hygiene pre-wired).
@@ -161,6 +177,16 @@ Escalate the exploration, in order:
    fresh-only doctrine and pools MEDIUM at best — never promise HARD from it.
    A fresh engine in a held archetype can still satisfy
    `gallery_novelty: novel`; a reskin of an existing engine does not.
+
+**Suspect-dead retest slot (max ONE per run):** §6 dead verdicts have tiers
+(AGENTS.md §6 header) — a verdict backed only by local n≤3 probes on a single
+instance is SUSPECT-dead, not CONFIRMED. Once per run, preferably during a dry
+round, you may retest ONE suspect-dead seam by building a materially STRONGER
+instance than the one that produced the verdict (bigger discovery surface,
+deeper coupling, richer state — never a reskin of the probed instance) and
+skeleton-probing it. Hold → the seam returns to live and re-enters the pool;
+collapse again → upgrade the seam to CONFIRMED-dead in AGENTS.md §6. Platform
+returns and pooled-N≥5 verdicts are CONFIRMED and never retested.
 
 Log each pivot in the round report. Never lower the handover bar; never
 backfill with ports. Only after ALL THREE pivots have been attempted in this

@@ -28,13 +28,27 @@ confidence.
   numbers would otherwise be variance (AGENTS.md §7), never the default.
 - Use parallel agents only when the user explicitly wants that and the
   orchestration is stable.
-- Select the default blind solver from the active runtime:
+- Select the default blind solver from the active runtime — and PIN it
+  mechanically, do not rely on inheritance:
   - Codex: use `gpt-5.5` with `reasoning_effort: medium`, even if the manager
     chat is using a higher effort.
   - Claude Code: use Claude Opus 4.8 with its normal/default reasoning
-    configuration.
-  Do not silently substitute a cheaper model across runtimes. Use a different
-  model or higher reasoning effort only when the user explicitly asks for it.
+    configuration. Pass `model: opus` EXPLICITLY on every probe Agent call —
+    subagents inherit the session model by default, so a session running a
+    stronger tier (Fable/Mythos) that omits the parameter probes with a
+    stronger solver than the platform grading pool (Opus 4.8 + GPT-5) and
+    systematically inflates false-EASY verdicts.
+  Do not silently substitute a cheaper OR stronger model across runtimes. Use a
+  different model or higher reasoning effort only when the user explicitly asks
+  for it.
+- Record `probe_model` in every run log and every verdict written to
+  `index.jsonl`. Verdict validity under model mismatch is ASYMMETRIC: a FAIL
+  from a stronger-than-pool solver is still valid hold evidence (the pool model
+  would also fail), but a PASS from a stronger-than-pool solver is INVALID as
+  EASY evidence — re-run that pass with the platform-matched model before
+  dropping the candidate. Any historical `2/2 pass` verdict whose `probe_model`
+  is missing or stronger than the pool is eligible for an opus re-probe on
+  request.
 - Default mode is `difficulty_probe`: each run is a one-shot solve attempt, like
   a Harbor/platform agent run. After the solver finalizes, verify the diff and
   record pass/fail. Do not send verifier logs, hidden cases, or expected
@@ -149,7 +163,12 @@ Early-stop rules (k=2 default):
 - If both runs fail for setup, unclear instruction, or verifier construction
   reasons, stop and fix the task before probing again.
 - If both runs fail semantically in fair ways, stop — `0/2` is the strongest
-  hold signal; no tie-break run is needed.
+  hold signal; no tie-break run is needed. EXCEPTION: if both failures land on
+  the SAME single case/convention (the single-lever fair⊥hard fingerprint),
+  n=2 convergence can be coincidence on a task with several hard clusters —
+  spend ONE disambiguation run before concluding. Same place again → confirmed
+  single-lever, DROP; a different failure place or a pass → score by the normal
+  geometry rules instead.
 
 ## Beating Opus 4.8 is a ~1/5 lottery — calibrate expectations (2026-06-21)
 
@@ -270,6 +289,8 @@ Return:
 - task slug
 - run count
 - pass count
+- `probe_model` (the pinned solver model; a pass recorded under a
+  stronger-than-pool model is flagged invalid-EASY, see Core Rules)
 - failure type distribution
 - whether failures are semantic/fair or setup/instruction noise
 - compact semantic failure patterns suitable as factual input to the Difficulty
