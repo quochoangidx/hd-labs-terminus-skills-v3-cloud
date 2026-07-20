@@ -1,6 +1,6 @@
 ---
 name: task-batch
-description: Use when the user wants an autonomous end-to-end batch of brand-new Terminus Regular tasks delivered to submissions/ — e.g. "/task-batch", "/task-batch 3", "/task-batch 10", "tạo batch task", "chạy batch". Runs the full gate pipeline (fresh-only mining with repo prospecting → collapse-law screen → skeleton probe → build → validate → package → SUBMISSION.md) without further prompting. Args: optional delivery quota (default 4); a quota >6 is treated as a cumulative target run in sequential rounds of 3-4. Do not use for single-task work, ports (needs an explicit port request via task-language-port), or remediation of returned tasks.
+description: "Use when the user wants an autonomous end-to-end batch of brand-new Terminus Regular tasks delivered to submissions/, including /task-batch, /task-batch 3, tạo batch task, or chạy batch. Run fresh-only mining, category and collapse screening, adaptive Difficulty × Fairness probes, build, validation, packaging, and SUBMISSION.md without further prompting. Accept an optional delivery quota, default 4; treat quotas above 6 as cumulative sequential rounds. Do not use for single-task work, ports, or remediation of returned tasks."
 ---
 
 # Task Batch — autonomous end-to-end delivery
@@ -11,22 +11,55 @@ drop/redesign/lane decision is yours, governed by AGENTS.md and the skills
 below. The quota is the commitment; every candidate is raw material — drop
 without regret, and NEVER lower the handover bar to hit the number.
 
+## Frontier-training calibration — read FIRST (this is training data)
+
+The tasks train/eval a frontier model, so the value of a task = it makes the
+STRONGEST model FAIL, FAIRLY, in an under-covered category. Four consequences
+override intuition:
+
+- **Probe in MEDIUM thinking mode, model-agnostic.** Run every skeleton and
+  difficulty probe subagent in **medium thinking mode** on whatever
+  frontier-tier backend is running this skill — do NOT hardcode a model name;
+  this prompt is ported across agents (GPT / Claude / DeepSeek). Aim the probe
+  at the strongest tier the backend offers: a PASS = EASY, drop it; only a
+  **fail-broad** task qualifies. For training data you want anything the
+  frontier solves gone — this raises the bar and lowers yield, which is correct.
+  Record `probe_model` (the actual backend used) in the verdict.
+- **Test-count ≠ difficulty.** 50–1000 corpus rows is a GRADING property
+  (coverage / anti-hardcode / no 0-N flag), never evidence of difficulty.
+  browscap has 171k patterns and is EASY. Difficulty is certified ONLY by the
+  blind probe landing 0–2/3 broad — never by corpus size. An honest execution
+  task may need only 20–40 complex scenarios; do not pad micro-cases to look hard.
+- **Category is GATE-ZERO, checked BEFORE any heavy build.** The dominant
+  failure this arsenal hits is spending a full oracle/corpus build on a shape
+  that then predicts software-engineering (the p0f build). Run the rules-first
+  category screen (`task-miner/category_rules.md`) on the skeleton instruction
+  at the SKELETON stage; a fired BLOCK rule kills the candidate before build.
+- **Diversity of FAILURE-MODE is the product.** A task that fails the model in a
+  NEW way beats three that fail it the old way (a monoculture of one lever =
+  low-rank gradient). The durable difficulty axis is EXECUTION / INTERACTION /
+  DISCOVERY (horizon, hidden state, no iterative feedback), which ages with
+  scale; information-asymmetry conformance/matcher shapes are mostly spent
+  (documented→EASY, undocumented→category-SWE) — keep them a minority lane, and
+  log a `failure_mode` field for every delivered task to track coverage.
+
 **Quota semantics — the quota is the target, honesty is the contract.** The
 run ends in one of exactly two ways: (a) `<quota>` tasks in `submissions/`,
 each passing all six handover conditions; or (b) the **honest-exhaustion
 exit** — the full pivot ladder (Dry-round handling below) has been walked AND
 two consecutive fully-pivoted rounds delivered nothing new, in which case the
 run ends below quota with the complete exploration map and a per-seam verdict
-report. Measured fresh HARD+category-safe yield is ~1–4 per batch (AGENTS.md
-§6: "treat 10-fresh as infeasible and report honestly rather than pad") — an
+report. Recent clean-slate evidence puts fresh HARD+category-safe yield at
+roughly 0–1 per large batch (AGENTS.md §6); treat 10-fresh as infeasible and
+report honestly rather than pad. An
 under-quota exit backed by a full exploration map is a CORRECT outcome, not a
 failure; padding with lowered-bar tasks or ports is the failure. Never ask the
 user anything mid-run, and never lower the handover bar to hit the number. A
-single round realistically yields 2–4 fresh tasks, so a quota >6 (e.g.
+quota >6 (e.g.
 `/task-batch 10`) runs sequential internal rounds of 3–4; BETWEEN rounds fold
-the exploration map + durable verdicts into AGENTS.md/memory/index.jsonl so
-the next round mines with an expanded forbidden-zone map (this is what makes
-later rounds cheaper and more accurate). Report progress after each round
+only durable, evidence-backed design laws and live/dead verdicts into
+`AGENTS.md`, the sole durable knowledge store. Local logs may support resume
+and audit but are not parallel knowledge stores. Report progress after each round
 (delivered so far / quota, plus that round's exploration map) — a status
 report, not a question. If the session is interrupted, re-invoking
 `/task-batch <quota>` resumes: count already-delivered zips in
@@ -42,21 +75,28 @@ category probe yourself with fresh subagents (Agent tool), never harbor LLM.
 1. harbor oracle = 1.0 and nop = 0.0.
 2. **Difficulty** — fair blind probe (inside the task image, `--network none`,
    terse prompt, no hints, scored by differential per
-   `task-local-solve-probe`; every probe subagent pinned `model: opus` — never
-   session-inherited, `probe_model` recorded in the verdict; a PASS from a
-   stronger-than-pool model is invalid EASY evidence and must be re-run on
-   opus): **2 failing runs suffice and STOP probing** (early-stop, max N=3),
+   `task-local-solve-probe`; because this skill creates frontier-training data,
+   pin the strongest frontier-tier backend available in the active runtime at
+   medium thinking and record `probe_model`): start with 2
+   runs and use at most 3. **Two de-correlated semantic failures suffice and
+   STOP probing**,
    under two hard riders: (a) failures are SEMANTIC —
    setup/instruction/compile/infra failures count for nothing, fix the task
    and re-probe; (b) the 2 failures land in DIFFERENT places — both runs dying
    on the same single case/convention is the single-lever fair⊥hard
    fingerprint, but at n=2 it can be coincidence on a multi-cluster task:
    spend ONE disambiguation run — same place again → DROP, a different place
-   or a pass → normal scoring. Python tasks must be Hard (0/3 semantic).
-3. **Pass-table pre-audit clean** (re-score stored probe diffs, no new runs):
-   every case ≥1 probe passer; best union <100%; every feature cluster keeps a
-   soft representative; any 0-probe cluster was oracle-authority-checked
-   BEFORE any prune/disclose (`task-revise-flag-remediation` Step 1.5).
+   or a pass → normal scoring. The target band is 0–1/3 solved. A 2/3 result is
+   AMBER, never automatic handover: keep it only for non-Python when the sole
+   failing run contains ≥2 broad semantic clusters and no setup/reference
+   advantage explains the two passes. Python tasks must be Hard (0/3 semantic).
+3. **Difficulty × Fairness pass-table clean** (re-score stored probe diffs, no
+   new runs): union coverage across runs = 100%; common-miss count = 0; every
+   feature cluster keeps a soft representative; and, when ≥2 runs fail, their
+   failure sets are de-correlated rather than one shared lever. `Every case has
+   a passer` means the UNION is 100%; do not confuse it with the best individual
+   run. Any 0-probe cluster must be oracle-authority-checked BEFORE any
+   prune/disclose (`task-revise-flag-remediation` Step 1.5).
 4. **Category check — rules first** (`task-miner/category_rules.md`): run the
    real-CI-calibrated rules against the task shape. A fired BLOCK rule ⇒
    reshape or drop, no probe run can override it; a fired ALLOW rule matching
@@ -80,11 +120,19 @@ law), and dedupe/novelty/Task-Inspiration lookup. 20–30 fresh ideas per
 mining round across ≥4 allowed categories and ≥4 source classes; screen ALL
 with the collapse-law screen and log every verdict (rejects included) into
 `mined-candidates/index.jsonl` — that log is the batch's exploration map.
-Shortlist the 8–12 most diverse survivors (never two from one family).
+Use a progressive beam: shortlist only the 4–6 highest-value, most diverse
+survivors for skeleton work (never two from one family), then full-build at
+most the 1–2 candidates whose probe geometry survives. Rank by expected value:
+`P(category-safe) × P(fair) × P(MEDIUM+) × P(novel) / expected model calls`.
+
+Structural diversity is mandatory, not cosmetic domain/language rotation.
+Give each shortlisted candidate a six-axis design signature — `work_surface`,
+`interaction`, `input_surface`, `oracle_type`, `verifier_type`, and
+`failure_mode`. Do not shortlist two tasks that match on more than 4/6 axes.
 
 **Screen control group (mandatory per round):** the screen is a one-sentence
 prediction and screen-rejects are never probed, so its false-negative rate is
-invisible by construction. Advance 2 screen-FAILED candidates (diverse, not
+invisible by construction. Advance 1 screen-FAILED candidate (not
 from a §6 CONFIRMED-dead family) into the skeleton probe anyway, marked
 `screen_control: true` in index.jsonl. A control that holds (0/2 semantic) is
 a measured screen false-negative: keep it in the normal pipeline, log the
@@ -98,19 +146,36 @@ that collapse confirm the screen at skeleton cost, not build cost.
    `gh search` by lever/archetype signal — never rely on the static Source
    Queue (famous repos are memorization-poison) or on repos the model happens
    to remember. Claim slugs (`tbrain-<problem-slug>`).
-2. **SKELETON PROBE GATE** (mandatory): env + instruction.md + stub + rough
-   grader, N≥3 fresh blind solvers in isolated dirs outside the repo
-   (`/var/tmp/probe-*`), net forbidden, every known reference lib NAMED as
-   forbidden, every solver pinned `model: opus` (session-inherited stronger
-   tiers invalidate EASY verdicts — `task-local-solve-probe` Core Rules).
-   Running harbor oracle on a candidate with no skeleton-probe log
-   is a violation — log it as a wasted build. 3/3 pass → drop, next candidate.
+2. **CATEGORY GATE-ZERO then SKELETON PROBE** (both BEFORE any heavy build):
+   FIRST run the rules-first category screen (`task-miner/category_rules.md`)
+   on the skeleton instruction + env tree — a fired BLOCK rule (SWE / debugging
+   / data-processing) kills the candidate NOW, before you sink an oracle/corpus
+   build into it (the p0f lesson: never build then discover category). THEN the
+   skeleton probe: env + instruction.md + stub + a rough grader of about 30–60
+   evaluation units spanning 6–8 independent behavior clusters. Start with 2
+   fresh blind solvers in isolated dirs outside the repo (`/var/tmp/probe-*`), net
+   forbidden, every known reference lib NAMED as forbidden, every solver in
+   **medium thinking mode** on the running frontier-tier backend (model-agnostic
+   but mechanically pinned for that runtime; do not silently inherit or swap
+   tiers). Run a 3rd solver only on a 1–1 split, a shared failure cluster, or
+   incomplete union coverage. Decision table: 2/2 pass → DROP; 0/2 with
+   de-correlated semantic failures and 100% union → BUILD; otherwise use the
+   3rd run; 0/3 on the same case/cluster → oracle-audit then DROP/redesign.
+   Running harbor oracle on a
+   candidate with no skeleton-probe log is a violation — log it as a wasted
+   build.
 3. **BUILD** (`task-clone`): start from `scripts/new-task.sh <slug> <lang>
    <category>` (skeleton with the verifier/packaging hygiene pre-wired).
-   Corpus soft cap ~100 curated cases, independent quirk families at ~40–80%
-   per-run pass, per-case parametrized, binary 0/1 reward, soft
-   representative per cluster, any case predicted <35% pass → disclose in
-   one sentence or drop. Verifier hygiene: build from /app + check build
+   Target 50–1000 evaluation units when they are cheap and meaningful; an
+   honest execution/stateful task may use only 20–80 expensive scenarios.
+   Count independent behavior, not pytest functions: a thousand variants of
+   one rule remain one correlated cluster. Use multiple verifier shapes
+   (scenario, property/metamorphic, mutation/anti-shortcut, final-state,
+   tolerance/differential where appropriate), keep independent feature
+   families around 40–80% per-run pass, preserve a soft representative per
+   cluster, and disclose or drop any case predicted below ~35% pass. Re-score
+   the stored skeleton diffs against the expanded corpus before buying another
+   model call. Verifier hygiene: build from /app + check build
    exit status, hide expected-value corpora before running the candidate,
    run the candidate unprivileged, no exec from bare /tmp, instruction/test
    symmetry both directions. Before condition-5 validation, run
@@ -119,8 +184,16 @@ that collapse confirm the screen at skeleton cost, not build cost.
    `task-revise-flag-remediation`, suspect the ORACLE first; single-lever
    fingerprint → DROP, never rescue; category drift → reshape the SHAPE and
    re-probe). Two fix rounds without passing → drop the task, refill the pool.
-5. Keep `index.jsonl` statuses current; one-line log per drop
-   (slug | killing gate | reason).
+5. Keep the local `index.jsonl` statuses current as an execution log; one-line log per drop
+   (slug | killing gate | reason). Every DELIVERED task also logs
+   `failure_mode` (the KIND of mistake the frontier model made on the probe —
+   missed-invariant / lost-state-over-horizon / premature-success /
+   wrong-tool-sequence / undocumented-quirk / accumulation-drift …) and
+   `pattern_axis` (execution / discovery / recovery / conformance), so the
+   round report can show failure-mode coverage and steer the next round away
+   from a monoculture. Fold only durable, evidence-backed conclusions into
+   `AGENTS.md`; do not create additional knowledge stores, dashboards, claim
+   systems, or memory mirrors.
 
 ## SUBMISSION.md (per delivered task → `submissions/SUBMISSION-<slug>.md`, NOT in the zip)
 
@@ -159,14 +232,13 @@ Escalate the exploration, in order:
 1. **Rotate source classes and categories** you haven't used yet this run
    (the ≤40%-per-class rule exists for this); switch prospecting queries to
    new archetype signals and new registries.
-2. **Change task SHAPE, not just domain**: the collapse law was validated on
-   minimal spec-engine tasks — move to interaction/scale-based shapes where
-   difficulty comes from multi-step environment work and discovery. The
-   build recipe is `task-miner/interaction_shape_recipe.md` (3 archetypes:
-   multi-service ops restoration, stateful data-store operations,
-   long-context cross-referencing; ≥3-coupled-causes doctrine, determinism
-   rules, category framing). These are more expensive to build, so
-   skeleton-probe them extra strictly before investing.
+2. **Change task SHAPE, not just domain**: rotate the six-axis design signature
+   (`work_surface`, `interaction`, `input_surface`, `oracle_type`,
+   `verifier_type`, `failure_mode`) and prospect for a genuinely new shape.
+   Do NOT fall back to the three old interaction/scale archetypes as a live
+   lane: ops restoration and DB migration fell 3/3, and long-context
+   cross-referencing is closed by AGENTS.md. They are eligible only through the
+   single SUSPECT-dead retest slot with a materially stronger/new instance.
 3. **Last resort — held §5/§4 archetype RECIPES, heavily constrained** (prefer
    staying in the bd-mgmt / interaction-scale lanes and genuinely novel shapes
    from rungs 1–2 first). §5 sim-in-verifier is allowed ONLY in the
@@ -192,15 +264,16 @@ Log each pivot in the round report. Never lower the handover bar; never
 backfill with ports. Only after ALL THREE pivots have been attempted in this
 run AND two consecutive fully-pivoted rounds delivered nothing new does the
 honest-exhaustion exit apply (Quota semantics above): end below quota with the
-full exploration map, per-seam verdicts folded into AGENTS.md §6/memory, and
+full exploration map, per-seam verdicts folded into AGENTS.md §6, and
 an explicit "delivered X of <quota>; remaining yield requires either the port
-lane (user request) or a new build recipe for interaction/scale shapes" line.
+lane (user request) or a genuinely new category-safe build recipe" line.
 
 ## Final handover (full quota reached, or honest-exhaustion exit)
 
 Report in the user's language. Table: slug | category | hidden lever (one
-sentence) | skeleton probe | fair probe (where each run failed) | pass-table |
-category probe | zip path | SUBMISSION.md path. Then: the exploration map
+sentence) | skeleton probe | fair probe (where each run failed) | pass-table
+(solve count, union coverage, common misses, failure clusters) | category probe
+| zip path | SUBMISSION.md path. Then: the exploration map
 (every screened idea: assumed lever | killing gate | one-line verdict), every
 pivot taken and why, and fold every durable verdict (new dead/live family)
-into AGENTS.md §6/§3 + memory per the self-update rule.
+into AGENTS.md §6/§3 per the self-update rule.

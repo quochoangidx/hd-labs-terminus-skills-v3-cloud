@@ -1,6 +1,6 @@
 ---
 name: task-miner
-description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The debugging, software-engineering, AND data-processing classifier labels are currently BLOCKED by automated eval/CI checks; mine tasks whose primary activity and I/O shape genuinely land in one of the 6 allowed categories. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks."
+description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty, structural diversity, category fit, fair-hard failure potential, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The debugging, software-engineering, and data-processing classifier labels are blocked; default to fresh category-first shapes in the 6 allowed categories, and use upstream bugfix PRs or spec-driven stub completion only when explicitly requested or independently category-safe."
 ---
 
 # Task Miner
@@ -9,11 +9,12 @@ Use this skill when sourcing task ideas for the Terminus task gallery
 (`/portal/tasks`). The gallery IS the target distribution — mine candidates that
 look like they belong in it and that do NOT already exist there.
 
-- **No direction given → default to Gallery-style mining** (Category Profile Mode
-  below): self-contained, spec-driven "implement a tool/engine/pipeline/algorithm
-  end-to-end" tasks (Lane A), spread across UNDER-represented ALLOWED categories
-  (see the Submission Blocks callout below). Do NOT default to upstream bugfix PRs —
-  those are a minority of the gallery.
+- **No direction given → default to fresh category-first mining** (Category
+  Profile Mode below), spread across under-represented ALLOWED categories and
+  structurally different work/input/oracle/verifier surfaces. The gallery's
+  historical spec-driven stub-fill majority is a distribution fact, not a
+  recipe: current rules often classify that shape as blocked software-engineering.
+  Do not default to upstream bugfix PRs either; those remain a minority lane.
 - **User names a category** → use the matching Category Profile (reject if it is
   blocked or still predicts as `software-engineering` after shaping).
 - **User names a subtype** → use the matching Subtype Profile.
@@ -109,14 +110,16 @@ Then mine against the refreshed menu. Re-run it any time the category counts loo
 or a candidate straddles a category boundary. For hands-off tracking, put this script on
 a schedule (e.g. weekly) so the local taxonomy never drifts from the live gallery.
 
-**Dominant shape — Lane A, self-contained spec-driven tasks.** The gallery is mostly
+**Historical dominant shape — do not copy blindly.** The gallery is mostly
 "build/implement a thing to a precise spec, end-to-end" — e.g.
 `airport-gate-scheduler`, `json-3way-merge-engine`,
 `yaml-job-scheduler-with-deadlock-detection`, `ssa-dead-code-eliminator`,
 `mini-sqs-server`, `multi-format-etl-pipeline`, `ml-explainability-cli`,
 `merkle-tree-collision`. Each is one problem, deterministic, offline, with a
 human-style instruction and a pytest verifier that shells out to the produced
-artifact. Bugfix-PR clones are the MINORITY — prefer Lane A unless the user asks.
+artifact. Many are grandfathered and the same stub-fill shape now predicts
+blocked software-engineering; use the examples for taxonomy alignment, not as
+the default fresh-task template. Bugfix-PR clones remain a minority.
 
 **Real distribution to mirror (sampled 2026-06-21):**
 - Category: software-engineering ~40%, data-processing ~20%, machine-learning ~11%,
@@ -182,7 +185,7 @@ before honoring even a user-requested port. That file's passes are largely
 grandfathered (pre-date category/template/originality enforcement): use it for
 dedupe/saturation only, never as evidence a shape clears today's CI.
 
-History (AGENTS.md, memory, `index.jsonl`, gallery snapshot) has exactly three
+History (`AGENTS.md`, local `index.jsonl`, gallery snapshot) has exactly three
 roles — never "source of ideas":
 1. **Forbidden-zone map**: every §6 dead-end archetype and every family with a
    collapse verdict is off-limits by default — but verdicts have TIERS
@@ -218,21 +221,28 @@ Per mining round:
   Source Queue or whatever the model happens to remember.
 - Screen ALL of them with the Master collapse law; record every verdict in
   `index.jsonl` INCLUDING rejects (a reject is map data — the batch deliverable
-  includes this exploration map, and durable verdicts get folded into
-  AGENTS.md §6/§3 + memory per the self-update rule).
-- Shortlist the 8–12 most DIVERSE survivors (never two from the same family)
-  for skeleton probing; expect ~2/3 of ideas to die at the screen and a 2–4
-  tasks/batch delivery rate — a high kill rate is the design working, never
-  backfill quota with ports.
+  includes this exploration map, and only durable evidence-backed verdicts get
+  folded into `AGENTS.md` §6/§3, the sole team-knowledge store).
+- Use a progressive beam: shortlist only the 4–6 highest-value survivors for
+  skeleton probing, then full-build at most 1–2. Rank by
+  `P(category-safe) × P(fair) × P(MEDIUM+) × P(novel) / expected model calls`.
+  Recent clean-slate yield is roughly 0–1 fresh shippable task per large batch;
+  a high kill rate is expected, never backfill quota with ports.
+- Assign each shortlist a structural signature over `work_surface`,
+  `interaction`, `input_surface`, `oracle_type`, `verifier_type`, and
+  `failure_mode`. Do not advance two candidates matching on >4/6 axes; changing
+  only repo, domain, or language does not create product diversity.
 
-### bd-mgmt seam — the highest-probability category-safe lane (prioritize per round)
+### bd-mgmt seam — strong category signal, not a proven difficulty lane
 
-The strongest real-CI category signal on record: purl canon predicted
+The strongest real-CI category signal on record remains purl canon, which predicted
 **build-and-dependency-management at 1.0** even though the blind probe
 insisted SWE 0.9 (`category_rules.md` R5). The classifier reads
 manifests/lockfiles/dependency-graphs-as-the-OBJECT as bd-mgmt even when the
-work is compute-heavy — so this seam clears the category gate that kills most
-fresh candidates. Target shapes (all fresh, none in the saturated ledger):
+work is compute-heavy. This clears only the CATEGORY gate: later Cargo, apt,
+and disclosed-resolver probes collapsed EASY. Do not prioritize the seam unless
+the candidate independently names a broad under-documented authority wall and
+passes the collapse screen. Possible shapes include:
 
 - offline lockfile reconstruction: manifest + a vendored registry snapshot
   in-image → regenerate the exact lockfile a real tool would produce;
@@ -253,17 +263,15 @@ managers, lockfile tools, registry-snapshot/vendoring tools, monorepo build
 resolvers — 100–5k stars, ≥2y history, never pip/cargo/npm themselves
 (memorization-poison).
 
-### Interaction/scale shapes — the second live lane (recipe: `interaction_shape_recipe.md`)
+### Interaction/scale shapes — CLOSED as a default HARD lane
 
-The other fresh lane that escapes the master collapse law: difficulty from
-**≥3 coupled causes + discovery breadth**, not a hidden spec rule. Three
-archetypes — multi-service ops restoration, stateful data-store operations,
-long-context cross-referencing — with the full build recipe (coupled-causes
-doctrine, determinism rules, category framing) in
-`.agent/skills/task-miner/interaction_shape_recipe.md`. Read that recipe before
-proposing one; these are more expensive to build, so skeleton-probe them extra
-strictly. Every fresh mining round should draw from this lane and the bd-mgmt
-seam above before anything else.
+The three documented archetypes are historical experiments, not a live source:
+multi-service ops restoration and stateful DB migration each fell 3/3, while
+long-context cross-referencing was closed by structural analysis and the user's
+current AGENTS.md verdict. Do not spend a normal batch slot on them or follow
+`interaction_shape_recipe.md` as a promise of hardness. Revisit only under the
+single SUSPECT-dead retest allowance with a materially new shape, or when the
+user explicitly accepts a Medium-oriented experiment.
 
 ### Upstream Bugfix Mode (minority lane)
 
@@ -707,15 +715,11 @@ Append one compact JSON line per decision:
 
 Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 
-**Family ledger (difficulty memory at the family level, not just exact dedupe).**
-Exact-candidate dedupe does not stop the team from re-mining the same SHAPE of
-bug in a different function. Maintain a `family_difficulty` ledger keyed by
-`library + bug_family` (e.g. `golang-crypto-ssh + validation-bound-check`,
-`go-yaml + parser-edge-condition`). Record the max platform rating observed for
-that family. If a family's ceiling is `<=EASY` (or `<=MEDIUM` after >=2 samples),
-skip new candidates in it unless a frontier-agent probe failed semantically.
-Append difficulty outcomes back into this ledger after platform rating so the
-miner stops feeding known-collapsed families.
+**Family difficulty knowledge lives only in `AGENTS.md`.** Exact-candidate
+entries in `index.jsonl` remain a local execution/dedupe log, but do not create
+or maintain a parallel `family_difficulty` memory. When a family obtains a
+durable ceiling or live verdict, fold the evidence and tier into the matching
+`AGENTS.md` section; later mining checks that verdict before spending quota.
 
 ## Hardness Filter
 
@@ -798,7 +802,7 @@ the named lever in the candidate artifact.
 the screen is a one-sentence PREDICTION, and screen-rejected candidates are
 never probed, so its false-negative rate is invisible by construction — a
 too-strict screen silently starves the pipeline while looking like "the design
-working". Each round, advance 2 screen-FAILED candidates (diverse, not from a
+working". Each round, advance 1 screen-FAILED candidate (not from a
 §6 CONFIRMED-dead family) into the skeleton probe anyway, marked
 `screen_control: true` in `index.jsonl`. A control that HOLDS (0/2 semantic)
 is a measured false-negative: keep the candidate in the normal pipeline, log
@@ -1038,6 +1042,18 @@ candidate:
   subcategories:           # the 5 cross-cutting subtypes: zero or more of long_context, tool_specific, api_integration, db_interaction, ui_building
   target_difficulty:       # hard | medium  (never easy; Python => must be hard)
   expected_codebase_size:  # minimal (~0-20 files) | small (~20+) | large (~200+)
+  design_signature:        # required for batch diversity; compare before shortlist
+    work_surface:          # cli | filesystem | service | database | build | game | numerical
+    interaction:           # single_shot | multi_step | stateful | streaming | recovery
+    input_surface:         # json | config_tree | binary | http | sql | manifest | logs | other
+    oracle_type:           # exact_reference | invariant | metamorphic | final_state | tolerance
+    verifier_type:         # corpus | scenario | property | mutation | end_to_end
+    failure_mode:          # missed_invariant | lost_state | wrong_sequence | drift | partial_fix | other
+  test_cluster_plan:       # 6–8 independent behavior clusters before skeleton probing
+    - cluster:
+      evaluation_units:
+      verifier_shape:
+      soft_representative:
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
   gallery_novelty:         # novel | twist-on-existing | duplicate — fresh-only doctrine (default): anything below novel => reject; twist-on-existing acceptable ONLY when the user explicitly asked for a variant/port
   objective_type: spec_implementation | data_pipeline | tool_workflow | api_service | db_interaction | ui_build | upstream_bugfix | feature | build | admin_config | security | scientific | ml | game
@@ -1164,12 +1180,12 @@ user N hard tasks from a pipeline:
   already-returned legacy L1 tasks (fairness audit, disclose-vs-collapse, 0/N
   remediation) — or for a shape that FIRST passes the rules-first category gate
   (`category_rules.md`).
-- **Live lanes for fresh mining (2026-07-19):** the **bd-mgmt seam**
-  (manifests/lockfiles/dep-graphs as the OBJECT, INTERACTING resolver rules —
-  see the seam section above) and **interaction/scale shapes**
-  (`.agent/skills/task-miner/interaction_shape_recipe.md` — ≥3 coupled causes +
-  discovery breadth, escapes the master collapse law). The general principles
-  from the L1 era still hold: probe honestly (warm loop, terse prompt, score by
+- **Fresh-lane status (updated 2026-07-20):** there is no default live lane.
+  The bd-mgmt seam remains category-friendly but its disclosed resolver engines
+  collapsed; all three interaction/scale archetypes are closed as HARD sources.
+  Start from genuinely fresh source classes and structural signatures, not
+  either label. The general principles from the L1 era still hold: probe
+  honestly (warm loop, terse prompt, score by
   differential; probe CENTRALLY from the manager, blind solvers must NOT paste
   source; audit any 0/N where all runs fail the SAME single narrow test — that
   is spec-ambiguity, not hardness), claim/dedupe resources in `index.jsonl`

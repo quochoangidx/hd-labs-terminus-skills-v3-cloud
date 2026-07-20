@@ -77,6 +77,8 @@ candidate:
   subcategories:           # the 5 cross-cutting subtypes
   target_difficulty:       # hard | medium (never easy; Python => hard)
   expected_codebase_size:  # minimal | small | large — recompute from environment/ before shipping
+  design_signature:        # work_surface, interaction, input_surface, oracle_type, verifier_type, failure_mode
+  test_cluster_plan:       # 6–8 independent clusters with evaluation units, verifier shape, soft representative
   closest_gallery_task:
   gallery_novelty:         # novel | twist-on-existing | duplicate — fresh-only doctrine (default): clone only novel; twist-on-existing needs an explicit user request for a variant/port
   subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
@@ -217,16 +219,20 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 10. **SKELETON PROBE GATE (mandatory — before any oracle/verifier investment).**
     At this point you have `instruction.md` + a buildable `environment/` + the
     stub, and that is ALL a difficulty probe needs. Assemble a ROUGH check
-    command (a thrown-together differential, or a dozen hand-verified
-    input→output cases — the real oracle and hidden corpus do not exist yet) and
-    run `task-local-solve-probe` in Skeleton mode, 2 fresh blind solvers by
-    default, adding a 3rd only on a 1–1 split (user probe default).
-    - 2/2 pass (or 2/3 after the tie-break run) → DROP the candidate or
+    command with about 30–60 evaluation units spanning 6–8 independent
+    behavior clusters — the real oracle and hidden corpus do not exist yet) and
+    run `task-local-solve-probe` in Skeleton mode with 2 fresh blind solvers.
+    Add a 3rd only on a 1–1 split, a shared failure cluster, or incomplete
+    per-case union.
+    - 2/2 pass (or 3/3 after an adaptive run) → DROP the candidate or
       redesign its lever NOW; do not write the oracle, the verifier corpus, or
       the packaging for a task the master collapse law already killed
       (AGENTS.md §1).
-    - 0/2, or 0–1/3 after a tie-break, with semantic failures → continue to
-      step 11.
+    - 0/2 with de-correlated semantic failures and 100% union, or 0–1/3 with
+      the same geometry → continue to step 11. A 2/3 result is AMBER and follows
+      `task-local-solve-probe`; it is never automatic handover.
+    - A repeated common miss after run 3 → authority-audit, then DROP/redesign
+      if it is a single-lever fingerprint.
     - Failures from setup / unclear instruction / broken skeleton → fix the
       skeleton and re-probe; those runs measure nothing about difficulty.
     The post-build full probe (step 14) remains the source of truth for the
@@ -241,14 +247,12 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 15. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
 
-> ⚙️ For interaction/scale-shaped candidates (multi-service ops restoration,
-> stateful data-store operations, long-context cross-referencing), the build
-> doctrine — ≥3 coupled causes, symptom≠site, end-to-end-behavior verifiers,
-> determinism rules, category framing — is in
-> `.agent/skills/task-miner/interaction_shape_recipe.md`; it overrides the
-> spec-engine corpus guidance below where they conflict (these tasks grade
-> final environment state, not a hidden case corpus). Scaffold with
-> `scripts/new-task.sh` all the same.
+> ⚠️ The three interaction/scale archetypes in
+> `.agent/skills/task-miner/interaction_shape_recipe.md` are historical and
+> currently closed as reliable HARD sources (ops restoration and DB migration
+> fell 3/3; long-context was closed by analysis). Use that recipe only for a
+> user-requested Medium experiment or the single SUSPECT-dead retest allowance,
+> never as a default batch lane.
 
 ## Regular Layout
 
@@ -780,14 +784,18 @@ clone, stack ALL of these (difficulty-neutral):
 
 **Structure conformance corpora for union-not-intersection difficulty (the
 "Some tests not passed by any agent run" gate is BLOCKING).** Score per-case
-(parametrized tests) or in graded bands whose top band a best realistic run can
-actually reach; never ONE monolithic all-N-cases-must-pass function — a single
+or in graded bands whose top band a best realistic run can actually reach.
+Verify CTRF reports each case independently; if parametrization collapses rows,
+generate uniquely named `test_case_001`-style functions. Never use ONE
+monolithic all-N-cases-must-pass function — a single
 universal blind spot then turns that whole test 0/N and the task gets returned.
 Before shipping, drop or disclose (one prose sentence) any case EVERY fresh
-implementation would miss; keep hardness as many independent quirk families
-each solver misses a different slice of. Corpus-curation rules: soft size cap
-~≤100 curated cases for a normal task (300+ only for a genuinely broad wall
-that has passed the pass-table pre-audit); every feature cluster keeps ≥1
+implementation would miss; keep hardness as many independent feature families
+each solver misses a different slice of. Corpus-curation rules: target 50–1000
+meaningful evaluation units when cheap, or 20–80 complex stateful/interaction
+scenarios; never pad one rule into hundreds of correlated rows. Mix verifier
+shapes when appropriate (scenario, property/metamorphic, mutation/anti-shortcut,
+final-state, tolerance/differential); every feature cluster keeps ≥1
 "soft" case a majority of runs pass; and the trimming direction is always
 data-driven from the per-case pass table — NEVER "drop the easy cases, keep
 the hard ones" (easy cases are the coverage that keeps the 0/N flag from
@@ -1004,12 +1012,15 @@ Before packaging or platform upload:
 - **run the per-case pass-table pre-audit (mandatory for any corpus-graded
   verifier).** Re-score the stored blind-probe solver diffs per-case against the
   FULL corpus (free — no new solver runs) and build the pass table. Then check
-  three conditions before zipping: (1) every case has ≥1 probe passer — any
+  three conditions before zipping: (1) every case has ≥1 probe passer, so union
+  coverage across runs is 100% and common-miss count is 0 — any
   0-probe-pass case is a correlated-blind-spot candidate, handle it via
   `task-revise-flag-remediation` NOW (and suspect the ORACLE first: authority-
-  check before pruning); (2) the best union still fails >0 cases (no run can
-  flip to 100% after any prune); (3) every feature cluster still has a soft
-  representative a majority of runs pass
+  check before pruning); (2) when ≥2 runs fail, their failure sets are
+  de-correlated across ≥2 clusters rather than sharing one load-bearing lever;
+  (3) every feature cluster still has a soft representative a majority of runs
+  pass. Do not confuse 100% UNION coverage with the best individual run; a
+  valid 1/3 result necessarily includes one 100% individual run.
 - **run the category check, rules first (mandatory — the real
   `category_classifier` is geoblocked from VN and cannot be preflighted).**
   FIRST apply the real-CI-calibrated rules in

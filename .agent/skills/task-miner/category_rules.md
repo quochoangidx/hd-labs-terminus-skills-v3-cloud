@@ -31,7 +31,8 @@ against it **in both directions** (see the labeled dataset below). Therefore:
   irrelevant.** The instruction's core ask is "reproduce / match / detect
   exactly as tool-or-library X's output" (or the corpus is visibly a named
   implementation's vectors). Security/WAF/email theme does not move it:
-  libinjection SWE 0.92, DKIM SWE 0.9+, both after blind probes said security.
+  libinjection SWE 0.92, DKIM SWE 0.9+, p0f SYN fingerprint SWE 0.92, all
+  after security framing or blind probes said security.
 - **R2 — dataset→report ⇒ data-processing (or DP/ML split).** Records,
   qrels, logs, or a dataset in; an aggregated report/metric table out. Eval/IR
   framing is thin cover (trec_eval split DP 0.55 / ML 0.55, SWE second).
@@ -85,6 +86,7 @@ post-enforcement real-CI verdicts belong in the dataset below.
 |---|---|---|---|
 | tbrain-libinjection-detect-verdict | security (2×) | SWE 0.92 blocked | R1 |
 | DKIM canonicalization series | security (2×) | SWE 0.9+ blocked | R1 |
+| tbrain-p0f-syn-fingerprint | — | SWE 0.92 blocked under p0f-reference framing | R1 |
 | purl canon series | SWE 0.9 | build-and-dependency-management 1.0 (allowed) | R5 |
 | tbrain-trec-eval-score | DP 0.55 / ML 0.55 | dataset→report blocked archetype | R2 |
 | license-classify | SWE 0.72/0.70 | blocked (classify shape) | R4 |

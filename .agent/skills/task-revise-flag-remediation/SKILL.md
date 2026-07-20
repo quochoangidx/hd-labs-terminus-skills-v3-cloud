@@ -98,7 +98,7 @@ to Step 2.
 | 0/N shape | Fix | Why / proven on |
 |---|---|---|
 | **Group-aggregate test sitting ON TOP of per-case parametrized tests** (asserts a whole category in one function, every case also has its own test) | **DELETE the group test.** Structurally 0/N forever — no single run passes an entire hard category — and 100% redundant. Difficulty-neutral. | semver: removed 9 group tests |
-| **Group test is the ONLY coverage of its cases, and the killer cases are NOT universal-miss** (per-trial data shows ≥1 agent passed them individually) | **PARAMETRIZE the corpus per-case** (`test_case[group:name]`, one test per vector). Coverage becomes per-case → killers covered by whoever got them right. Difficulty-neutral when `test.sh` reward is already all-or-nothing (pytest rc==0 → 1): you change the unit of *coverage*, not the win condition. | cargo-version-req: 3 killer P4 cases inside a 2400-case group |
+| **Group test is the ONLY coverage of its cases, and the killer cases are NOT universal-miss** (per-trial data shows ≥1 agent passed them individually) | **Split the corpus per-case** (`test_case_001`, `test_case_002`, one test per vector). Coverage becomes per-case → killers covered by whoever got them right. Difficulty-neutral when `test.sh` reward is already all-or-nothing (pytest rc==0 → 1): you change the unit of *coverage*, not the win condition. Caveat: `pytest-json-ctrf` can collapse `@pytest.mark.parametrize` rows into one test with `retries`; generate unique test functions or verify CTRF reports `summary.tests == case_count`. | cargo-version-req: 3 killer P4 cases inside a 2400-case group; renju: parametrized rows collapsed in CTRF until generated test functions were used |
 | **Per-case 0/N on an irreducible obscure feature** (every fresh impl will miss it; no fair way to teach it without gutting difficulty) | **PRUNE those cases from the corpus** (regenerate the `.gz`/json; keep any `corpus_present` minimum-count guard satisfied). | html5: script-data double-escape ×51; css-tokenization: 3 `url(`+ws+quote cases |
 | **0/N caused by an undisclosed convention or reference-class divergence — the cases ARE the lever** (agents implement the version they memorized; the corpus is the real implementation's behavior) | **DISCLOSE, do NOT prune**: pin the exact reference release in the instruction + a few oracle-verified contrast examples (embedded at the operation definitions as contract clarification, not a mapping table). The correlated blind spot becomes a de-correlated residual tail. | maven: 894/8015 identical misses; pinned "maven-artifact 3.9.9" + contrast pair |
 | **0/N because a large NON-derivable standard table is unreachable offline** (entities, Unicode data) | **SHIP the data in-env** (canonical-format file, `COPY` before the image's `git add -A`, point the instruction at the path). Fair and difficulty-neutral — mechanical data can't beat an algorithmic wall. | html5: `entities.json` (2231 entries), `whatwg-parsing.html` |
@@ -137,6 +137,13 @@ Don't chase ≤3/N unless forced — over-pruning the hardest cases raises the
 best-run ceiling toward 100% and risks the difficulty gate. Per-case counts in
 one report are a noisy sample; this is probabilistic de-risking, not a
 guarantee.
+
+Exception: do not margin-prune the ≤2/N tail when the best agents are already
+near-perfect and those low-pass cases are their only remaining misses. In that
+shape, prune only the true 0/N rows and leave the 1/N or 2/N rows as the
+residual wall; removing them can turn many failed trials into full passes and
+collapse HARD to EASY. Proven on renju-forbidden-move: after per-case CTRF,
+three 0/10 rows were pruned while two 1/10 rows were deliberately retained.
 
 Index bookkeeping when pruning repeatedly: report indices map to the current
 corpus via `cur = old if old < deleted_idx else old - 1` per prior deletion.
