@@ -105,6 +105,7 @@ For each key rule area, compare online content with local docs:
 | Difficulty thresholds | `understanding-tasks/difficulty-guidelines.md` | `accuracy` |
 | Diversity gates | `understanding-tasks/diversity-requirements.md` | `blocked` |
 | Instruction styling | `understanding-tasks/prompt-styling.md` | `canary` |
+| Category/policy live status | `reference/category-status.md` | `Blocked`, `allow_internet` |
 | Rubric format | `understanding-tasks/rubrics.md` | `rubric` |
 | tmux/asciinema | `creating-tasks/dockerfile-best-practices.md` | `tmux` |
 | allow_internet | `understanding-tasks/task-requirements.md` | `allow_internet` |
@@ -158,7 +159,7 @@ After docs are synced, audit the doctrine-coupled set:
 | verifier dependency placement | — | guidance | check |
 | Sanctioned base images | — | Docker Rules | check |
 | tmux/asciinema required | runtime risk | Docker Rules | check |
-| allow_internet = false | — | metadata defaults | check |
+| allow_internet accuracy (false default; true only if genuinely required) | — | metadata defaults | check |
 | codebase_size bands | — | metadata defaults | check |
 | Difficulty thresholds | scoring mapping | validation | check |
 | Python must be hard | hardness filter | metadata | check |

@@ -10,7 +10,7 @@ All Terminal-Bench task images must be:
 | **Cacheable** | Common layers are shared across tasks |
 | **Lazy-pull friendly** | Startup-critical files are accessible without pulling the full image |
 | **Auditable** | Images are digest-pinned, signed, labeled, and free of any secrets |
-| **Complete** | Tasks run without network access — images must contain all required dependencies |
+| **Complete** | Images contain all required dependencies — tasks run without network access by default (`allow_internet = false`); set `allow_internet = true` only when the task genuinely requires internet |
 | **Siloed** | The image must not leak task solutions or tests |
 | **Resourced** | Tasks must define CPU, memory, and storage needs in `task.toml` |
 
@@ -243,16 +243,25 @@ WORKDIR /app
 
 ## 7. Images Must Contain All Dependencies
 
-All tasks must operate correctly without network access during the agent run and verifier step.
+By default, tasks must operate correctly without network access during the agent run and verifier step (`allow_internet = false`). The requirements below apply to these offline tasks — the large majority. Tasks that **genuinely** require internet may set `allow_internet = true`; see the **Internet access** section below.
 
-**Requirements:**
+**Requirements (for `allow_internet = false` tasks):**
 - `tmux` and `asciinema` **must** be installed — the agent runtime requires both to start a session. Missing either will cause all agent runs to fail with no verifier output.
 - All package downloads happen at image build time
 - `test.sh` must not use `curl`, `wget`, `pip install`, `npm install`, `cargo fetch`, `mvn dependency:get`, or similar networked operations
 - Python wheels, npm packages, Maven artifacts, Cargo registry state, reference binaries, and fixtures must be preloaded during build
-- `task.toml` must set `allow_internet = false`
+- `task.toml` sets `allow_internet = false` (the default; see the **Internet access** section for when `true` is appropriate)
 - The Oracle agent must pass with network access disabled
 - Agents must be able to complete the task without any missing assets or dependencies
+
+### Internet access (`allow_internet`)
+
+Both `allow_internet = false` and `allow_internet = true` are allowed — the setting **must accurately match what the task genuinely needs.**
+
+- **`allow_internet = false` (default, most tasks):** the task must be fully solvable offline with the provided files, docs, dependencies, and environment. All dependencies are baked into the image and `test.sh` must not fetch from the network at runtime (the requirements above).
+- **`allow_internet = true`:** use **only when the task genuinely requires** internet to complete — for example, retrieving current or external information, interacting with web-based resources, or downloading an external model/resource that cannot reasonably be bundled into the task (e.g., pulling a model from HuggingFace). The need should be clear and grounded in the task design.
+
+Do not set `allow_internet = true` for convenience, or to make a task appear more complex. An eval checks whether internet is actually required, so tasks marked `true` without a genuine need may be rejected. If the task can be completed offline — even if internet access would be convenient — keep it `false`.
 
 ---
 
@@ -418,7 +427,7 @@ memory_mb = 2048
 storage_mb = 10240
 gpus = 0
 gpu_types = []
-allow_internet = false
+allow_internet = false  # default — set true only if the task genuinely requires internet (see Internet access above)
 ```
 
 **Note — `gpus`, `gpu_types`, and `docker_flags` are optional.** These are valid Harbor resource fields, not requirements. TB2 tasks should not require GPU, so `gpus` and `gpu_types` may be omitted or left blank — a task is equally valid with or without them. `gpu_types` only matters when a task actually requests GPUs (`gpus > 0`); for a typical non-GPU task, `gpu_types = []` adds nothing. The minimal form below is just as acceptable as the full block above:
@@ -429,7 +438,7 @@ build_timeout_sec = 600.0
 cpus = 1
 memory_mb = 2048
 storage_mb = 10240
-allow_internet = false
+allow_internet = false  # default — set true only if the task genuinely requires internet (see Internet access above)
 ```
 
 ---

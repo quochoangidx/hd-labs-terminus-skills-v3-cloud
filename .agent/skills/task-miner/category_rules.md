@@ -67,7 +67,11 @@ against it **in both directions** (see the labeled dataset below). Therefore:
 ## ⚠️ Grandfathering caveat — historical passes do not validate shapes
 
 Enforcement is date-gated (data-processing block 2026-07-10+,
-`template_detection` 2026-07-13+, originality flags 2026-07-19). The 91-task
+`template_detection` 2026-07-13+, originality flags 2026-07-19). Since the
+2026-07-17 portal update the block set is OFFICIALLY documented
+(`docs/reference/category-status.md`: debugging+SWE since 2026-06-18,
+data-processing since 2026-07-10, new milestone tasks since 2026-06-29;
+in-queue/awaiting-review tasks exempt). The 91-task
 platform-passed portfolio (`.agent/mined-candidates/platform-passed-portfolio.md`)
 contains many parse/normalize shapes (whatwg-url, html5-tokenizer,
 css-syntax-tokenize, 8 URL-canonicalize reskins) that passed BEFORE

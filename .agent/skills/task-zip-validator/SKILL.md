@@ -89,7 +89,7 @@ timeout_sec = N
 timeout_sec = N
 
 [environment]
-allow_internet = false         # MUST be false — CI rejects if missing or true
+allow_internet = false         # default — `true` is ALLOWED only when the task genuinely requires internet (eval-checked, policy 2026-07-13); our offline conformance tasks always use false
 build_timeout_sec = N
 cpus = N
 memory_mb = N
@@ -160,7 +160,7 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 
 | Check | Rule | Auto-fix |
 |-------|------|----------|
-| `allow_internet` | Must be `false` | ✅ set to false |
+| `allow_internet` | Must match the task's genuine need: `false` (default — correct for all our offline tasks); `true` allowed ONLY when the task genuinely requires internet (eval-checked; unjustified `true` may be rejected) | ✅ set to false for offline tasks |
 | `difficulty` | Must be `"medium"` or `"hard"`, NOT `"easy"` | ❌ manual |
 | **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
@@ -462,7 +462,7 @@ Print summary table:
 | Check                    | Status | Auto-fixed |
 |--------------------------|--------|------------|
 | task.toml structure      | ✅     | -          |
-| allow_internet = false   | ✅     | -          |
+| allow_internet accuracy  | ✅     | -          |
 | Python difficulty = hard | ✅     | -          |
 | codebase_size match      | ✅     | YES        |
 | docker-compose flags     | N/A    | -          |

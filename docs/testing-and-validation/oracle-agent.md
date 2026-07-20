@@ -6,10 +6,6 @@ The Oracle Agent will be run 3 times.
 
 ## Getting Started
 
-### Video Tutorial
-
-New video coming soon...
-
 ### Practice Notebook
 
 Download the Jupyter notebook for hands-on practice:

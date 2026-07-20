@@ -121,6 +121,11 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
+      <td><code>allow_internet</code> accurately matches the task's actual needs.</td>
+      <td>The <code>allow_internet</code> setting must reflect what the task genuinely requires. Use <code>false</code> (the default) for tasks fully solvable offline with the provided files, docs, dependencies, and environment. Use <code>true</code> only when the task genuinely requires internet — e.g., retrieving current/external information, interacting with web-based resources, or downloading an external model/resource that cannot reasonably be bundled. Do not set <code>true</code> for convenience or to make a task look more complex; an eval checks whether internet is actually required, so unjustified <code>true</code> tasks may be rejected.</td>
+      <td>High</td>
+    </tr>
+    <tr>
       <td>All dependencies use pinned versions</td>
       <td>Any dependencies installed must use pinned versions. This is only high severity for packages (excluding apt).</td>
       <td>High</td>
@@ -205,8 +210,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Oracle does not require grabbing information from the internet or downloading packages</td>
-      <td>The oracle solution must not have any actions that require accessing the internet. This includes downloading packages from the internet. Any dependencies required for the solution should be installed in the environment.</td>
+      <td>Oracle's internet use matches the <code>allow_internet</code> setting</td>
+      <td>When <code>allow_internet = false</code>, the oracle solution must not have any actions that require accessing the internet, including downloading packages — any dependencies required for the solution must be installed in the environment. When <code>allow_internet = true</code>, the oracle may access the internet where the task genuinely requires it.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -244,8 +249,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Dockerfile or build scripts do not grab content from the web (other than packages).</td>
-      <td>The test.sh or other verifier files must not rely on any content from the internet. All verifier dependencies must be baked into the Dockerfile and cannot be downloaded at runtime.</td>
+      <td>Verifier files' internet use matches the <code>allow_internet</code> setting</td>
+      <td>When <code>allow_internet = false</code>, <code>test.sh</code> and other verifier files must not rely on any content from the internet, and all verifier dependencies must be baked into the Dockerfile (not downloaded at runtime). When <code>allow_internet = true</code>, verifier network use is allowed only where the task genuinely requires it, and grading must still be deterministic (see the determinism criterion above).</td>
       <td>High</td>
     </tr>
     <tr>

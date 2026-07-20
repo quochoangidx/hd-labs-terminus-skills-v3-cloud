@@ -54,7 +54,7 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 
 ## Non-negotiable invariants
 
-Offline (`allow_internet = false`), 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
+Offline (`allow_internet = false` — our lane's default; the platform accepts `true` only when a task genuinely requires internet, eval-checked), 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
 `python3` pytest writing `/logs/verifier/reward.txt` within 450s, oracle passes /
 nop fails for the intended reason, no tests/solution/answer keys reachable from
 `environment/`, and difficulty is claimed only from blind-probe or platform agent

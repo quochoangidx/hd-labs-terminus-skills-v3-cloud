@@ -97,8 +97,10 @@ build_timeout_sec = 600.0
 cpus = 2
 memory_mb = 4096
 storage_mb = 10240
-allow_internet = false
+allow_internet = false  # default — set true only if the task genuinely requires internet
 ```
+
+> `allow_internet = false` is the default and correct for tasks solvable offline. Set `allow_internet = true` only when the task genuinely requires internet (e.g., retrieving external/current information or a resource that can't be bundled). See [Dockerfile Best Practices](/portal/docs/creating-tasks/dockerfile-best-practices).
 
 ## Step 4: Configure Docker Environment
 

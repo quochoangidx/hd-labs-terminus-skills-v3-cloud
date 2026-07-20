@@ -212,7 +212,7 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
-8. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false`, the artifact's valid category/subcategories, and realistic resources.
+8. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false` (default; platform allows `true` only when the task genuinely requires internet — eval-checked, not our lane), the artifact's valid category/subcategories, and realistic resources.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
 10. **SKELETON PROBE GATE (mandatory — before any oracle/verifier investment).**
     At this point you have `instruction.md` + a buildable `environment/` + the
@@ -908,6 +908,7 @@ handles the `/app` working directory.
 set -uo pipefail
 
 mkdir -p /logs/verifier
+echo 0 > /logs/verifier/reward.txt
 
 if [ "$PWD" = "/" ]; then
     echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."

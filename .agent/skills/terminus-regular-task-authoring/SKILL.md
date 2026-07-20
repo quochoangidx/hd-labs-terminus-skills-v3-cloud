@@ -48,7 +48,7 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
    repair shape still passes that gate — the repair shape fires the
    `debugging` BLOCK rule by default.
 2. Write concise `instruction.md` using absolute paths only.
-3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false`.
+3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false` (the default; `true` is allowed ONLY when the task genuinely requires internet — an eval checks this, so never set it for convenience).
 4. Build `environment/Dockerfile` with `tmux`, `asciinema`, pinned package versions, and digest-pinned `FROM`.
 5. Put the starting state under `environment/` (a deliberately buggy state
    only for the bug-repair variant that cleared the category gate).
@@ -558,7 +558,7 @@ if [ "$PWD" = "/" ]; then
     exit 0
 fi
 
-python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+python3 -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
 rc=$?
 if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
