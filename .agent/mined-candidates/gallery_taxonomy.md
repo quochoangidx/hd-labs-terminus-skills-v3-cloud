@@ -12,7 +12,7 @@ is the **authoritative taxonomy menu** the miner aligns candidates to. Pair it w
 - Source: the portal's own Supabase backend, read with the public anon key the
   portal JS bundle ships (the exact data the gallery renders). Pages repo and
   `snorkel-tb-tasks` are private (not readable via the user's GitHub).
-- Snapshot date: 2026-07-10 (auto-refresh).
+- Snapshot date: 2026-07-12 (auto-refresh).
 - Rows read: `v_tasks_with_priorities` = 4521 (curated/priority tasks, 3-level
   taxonomy); `task_inspiration_v2` = 6285 (inspiration pool; is_milestone
   true=0 / false=6285).
