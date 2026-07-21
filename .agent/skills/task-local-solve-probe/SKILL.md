@@ -1,6 +1,6 @@
 ---
 name: task-local-solve-probe
-description: Use when cheaply probing whether a Terminus Regular task is too easy or unfair before submission. Prepares isolated solve copies that exclude solution, tests, rubrics, and reports; starts with 2 fresh-agent runs and adds a 3rd only for a split, shared blind spot, or incomplete union; scores stored diffs per case; and reports both difficulty and 0/N coverage risk without modifying the source task.
+description: Use when cheaply probing whether a Terminus Regular task is too easy or unfair before submission. Prepares isolated solve copies that exclude solution, tests, rubrics, and reports; starts with 2 fresh-agent runs and adds a 3rd only for a split, shared blind spot, or incomplete union; scores stored diffs per case; reports difficulty and 0/N coverage risk; and supports an explicit user-approved non-Python pragmatic MEDIUM salvage lane.
 ---
 
 # Task Local Solve Probe
@@ -73,6 +73,18 @@ confidence.
   environment (AGENTS.md §7) — never plan a Harbor GPT/Claude follow-up run.
   Local fresh-subagent probes plus platform submission results are the only
   difficulty signals.
+- **Explicit pragmatic salvage mode (non-Python MEDIUM only):** when the user
+  explicitly says yield matters more than the strict dual gate, run at most one
+  final fresh blind solve after the first valid semantic run and close the
+  candidate as `deliverable_amber` when oracle/NOP are clean, no run failed for
+  setup or instruction contradiction, and the remaining common-miss cluster is
+  small and contract-remediable. Apply `task-revise-flag-remediation` before
+  packaging, record the caveat in the local probe log/submission notes, and do
+  not claim HARD. This mode never rescues Python, a bad/unproven oracle, an
+  all-pass task, or a task whose entire graded wall is the one cluster being
+  disclosed or pruned. Structural breadth may be established by independent
+  mutation coverage and a broadly failing starter, rather than requiring every
+  blind run itself to fail broadly.
 
 ## Workflow
 
@@ -280,6 +292,15 @@ diffs already produced — never spend additional solver runs on this:
      the task.** Do NOT prune your way out here — removing that case flips the
      near-perfect runs to 100% and leaves an EASY task.
 
+The strict verdict above remains the default for autonomous batches. Under the
+explicit pragmatic salvage mode, a non-Python candidate may instead end as
+`deliverable_amber` after one final fresh run plus coverage remediation. A
+small shared cluster is acceptable only when it is an instruction/reference
+contract issue that can be fully disclosed, split, or represented as in-env
+data while independent archive, ordering, state, or interaction behavior
+remains graded. Preserve the observed probe numbers in the handoff; do not
+rewrite an amber result as `submit_ready`.
+
 Caveats: `union coverage = 100%` means every case has at least one passer across
 the stored runs; it is not `best individual <100%`. A 2–3-run local union is a
 noisier sample than the platform's ~10 runs
@@ -337,3 +358,6 @@ Return:
     prune / disclose
   - `redesign_or_drop` — 0/N with the near-perfect single-blind-spot
     fingerprint
+  - `deliverable_amber` — explicit user-approved non-Python MEDIUM salvage;
+    oracle/NOP clean, one final fresh run completed, and the small shared
+    coverage cluster was remediated without removing the independent wall

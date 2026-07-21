@@ -25,11 +25,18 @@ override intuition:
   **fail-broad** task qualifies. For training data you want anything the
   frontier solves gone — this raises the bar and lowers yield, which is correct.
   Record `probe_model` (the actual backend used) in the verdict.
-- **Test-count ≠ difficulty.** 50–1000 corpus rows is a GRADING property
+- **Test-count ≠ difficulty, but verifier breadth is still a HARD gate.** For
+  cheap deterministic tasks, require 50–1000 **platform-visible, meaningful
+  evaluation units**; for genuinely expensive stateful/interaction tasks,
+  require 20–80 scenarios. A corpus row hidden inside one aggregate pytest
+  function is not platform-visible. Generate uniquely named test functions
+  (or prove from CTRF that `summary.tests == intended_case_count`) so the
+  per-case pass table can expose 0/N cases. Corpus size is a GRADING property
   (coverage / anti-hardcode / no 0-N flag), never evidence of difficulty.
   browscap has 171k patterns and is EASY. Difficulty is certified ONLY by the
-  blind probe landing 0–2/3 broad — never by corpus size. An honest execution
-  task may need only 20–40 complex scenarios; do not pad micro-cases to look hard.
+  blind probe landing 0–2/3 broad — never by corpus size. Do not pad micro-cases
+  to look hard. Conversely, 4–8 aggregate tests over one mechanism never
+  satisfy the breadth gate merely because each function loops over many rows.
 - **Category is GATE-ZERO, checked BEFORE any heavy build.** The dominant
   failure this arsenal hits is spending a full oracle/corpus build on a shape
   that then predicts software-engineering (the p0f build). Run the rules-first
@@ -90,13 +97,26 @@ category probe yourself with fresh subagents (Agent tool), never harbor LLM.
    AMBER, never automatic handover: keep it only for non-Python when the sole
    failing run contains ≥2 broad semantic clusters and no setup/reference
    advantage explains the two passes. Python tasks must be Hard (0/3 semantic).
-3. **Difficulty × Fairness pass-table clean** (re-score stored probe diffs, no
-   new runs): union coverage across runs = 100%; common-miss count = 0; every
+3. **Verifier architecture + Difficulty × Fairness pass-table clean**
+   (re-score stored probe diffs, no new runs): union coverage across runs =
+   100%; common-miss count = 0; every
    feature cluster keeps a soft representative; and, when ≥2 runs fail, their
    failure sets are de-correlated rather than one shared lever. `Every case has
    a passer` means the UNION is 100%; do not confuse it with the best individual
    run. Any 0-probe cluster must be oracle-authority-checked BEFORE any
-   prune/disclose (`task-revise-flag-remediation` Step 1.5).
+   prune/disclose (`task-revise-flag-remediation` Step 1.5). Attach a compact
+   verifier matrix to the local verdict with: platform-visible unit count,
+   feature-cluster counts, cross-cluster cases, verifier shapes, per-run
+   cluster pass rates, union, and common misses. Cheap deterministic tasks need
+   50–1000 visible units across ≥6 real behavior clusters; expensive
+   stateful/interaction tasks need 20–80 scenarios across ≥4 clusters. At least
+   two clusters must exercise interactions between rules/state, not isolated
+   happy-path variants. Structural/protocol smoke tests do not count as behavior
+   units. If one cluster contains >35% of the units, justify why it is internally
+   heterogeneous; otherwise rebalance it. Reject semantic duplicates and
+   boundary-value padding. Before accepting any model failure, prove the missed
+   behavior is stated, derivable, or reachable from an in-image reference; an
+   underdocumented cluster is a fairness FAIL, not difficulty evidence.
 4. **Category check — rules first** (`task-miner/category_rules.md`): run the
    real-CI-calibrated rules against the task shape. A fired BLOCK rule ⇒
    reshape or drop, no probe run can override it; a fired ALLOW rule matching
@@ -152,7 +172,11 @@ that collapse confirm the screen at skeleton cost, not build cost.
    / data-processing) kills the candidate NOW, before you sink an oracle/corpus
    build into it (the p0f lesson: never build then discover category). THEN the
    skeleton probe: env + instruction.md + stub + a rough grader of about 30–60
-   evaluation units spanning 6–8 independent behavior clusters. Start with 2
+   platform-visible evaluation units spanning 6–8 independent behavior
+   clusters. Before probing, write the proposed verifier matrix and kill any
+   candidate whose contract cannot naturally supply ≥6 clusters and ≥2
+   cross-cluster interactions without padding; this catches shallow single-fix
+   tasks before model quota is spent. Start with 2
    fresh blind solvers in isolated dirs outside the repo (`/var/tmp/probe-*`), net
    forbidden, every known reference lib NAMED as forbidden, every solver in
    **medium thinking mode** on the running frontier-tier backend (model-agnostic
@@ -166,12 +190,18 @@ that collapse confirm the screen at skeleton cost, not build cost.
    build.
 3. **BUILD** (`task-clone`): start from `scripts/new-task.sh <slug> <lang>
    <category>` (skeleton with the verifier/packaging hygiene pre-wired).
-   Target 50–1000 evaluation units when they are cheap and meaningful; an
-   honest execution/stateful task may use only 20–80 expensive scenarios.
-   Count independent behavior, not pytest functions: a thousand variants of
-   one rule remain one correlated cluster. Use multiple verifier shapes
-   (scenario, property/metamorphic, mutation/anti-shortcut, final-state,
-   tolerance/differential where appropriate), keep independent feature
+   Expand cheap deterministic tasks to 50–1000 platform-visible meaningful
+   units; an honest execution/stateful task may use 20–80 expensive scenarios.
+   Prefer individually named case tests over family aggregates; aggregate tests
+   are allowed only as extra smoke checks. Verify the actual CTRF/readback unit
+   count before handover. Measure semantic breadth separately from test count:
+   a thousand variants of one rule remain one correlated cluster. Choose verifier
+   shapes to fit the problem instead of copying one template; combine at least
+   two appropriate shapes from scenario, property/metamorphic,
+   mutation/anti-shortcut, preservation/final-state, tolerance/differential,
+   and runtime-reference checks. A single broad authority corpus may substitute
+   for a second shape only when its ≥6 semantic families and cross-family cases
+   are explicit in the verifier matrix. Keep independent feature
    families around 40–80% per-run pass, preserve a soft representative per
    cluster, and disclose or drop any case predicted below ~35% pass. Re-score
    the stored skeleton diffs against the expanded corpus before buying another

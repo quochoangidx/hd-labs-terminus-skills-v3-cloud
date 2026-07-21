@@ -1,6 +1,6 @@
 ---
 name: task-revise-flag-remediation
-description: Use when a Terminus task is returned with the platform flag "Some tests not passed by any agent run" (a 0/N coverage failure), or when pre-auditing a conformance-style task for correlated blind spots before submission. Classifies each 0/N test by root cause and applies the matching fix — delete redundant group test, parametrize per-case, prune the case, disclose the convention, or ship reference data in-env — while guarding that difficulty is retained.
+description: Use when a Terminus task is returned with the platform flag "Some tests not passed by any agent run" (a 0/N coverage failure), when pre-auditing correlated blind spots before submission, or when the user explicitly opts into pragmatic non-Python MEDIUM salvage. Classifies each 0/N test by root cause and applies the matching fix — delete redundant group test, parametrize per-case, prune the case, disclose the convention, or ship reference data in-env — while guarding that difficulty is retained.
 ---
 
 # Coverage-Flag Remediation — "Some tests not passed by any agent run"
@@ -92,6 +92,27 @@ gate were all late-drop lessons). This mirrors verdict case 4 in
 already have been screened at mining time (`task-miner`, Master collapse law
 screen). Only tasks with a BROAD residual wall beyond the 0/N cluster continue
 to Step 2.
+
+### Explicit pragmatic MEDIUM salvage
+
+The strict exit above is the default for autonomous batches and HARD claims.
+When the user explicitly accepts a less conservative gate to avoid discarding
+usable work, a non-Python task may take a bounded salvage lane:
+
+- run one final fresh blind solve after the first valid semantic run;
+- prove oracle=1 and NOP=0 and rule out setup, verifier, and authority defects;
+- require the shared misses to be a small, coherent contract/reference cluster
+  that Step 2 can fully disclose, split, prune, or supply as in-environment data;
+- require independent graded breadth outside that cluster, established by the
+  starter's broad failure, mutation coverage, or de-correlated behavior groups;
+- package it as MEDIUM with a recorded amber caveat, never relabel it HARD or
+  claim union-complete probe evidence.
+
+This lane is meant for shapes such as a resolver that still grades independent
+ordering, archive/group traversal, and symbol-state interactions after one
+precedence/output convention is clarified. It does not rescue an all-pass
+task, Python, a bad oracle, or a near-perfect single-lever task whose only wall
+would disappear after remediation.
 
 ## Step 2 — classify each 0/N test and apply the matching fix
 
