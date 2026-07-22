@@ -131,7 +131,12 @@ Ensure `environment/.dockerignore` exists:
 
 ```text
 .git
+**/.git
 .gitignore
+.pytest_cache
+.mypy_cache
+.ruff_cache
+node_modules
 **/__pycache__/
 **/*.pyc
 **/.pytest_cache/
@@ -147,6 +152,11 @@ Ensure `environment/.dockerignore` exists:
 solution/
 tests/
 ```
+
+Reviewers grep for the literal (non-globbed) entries `.gitignore`, `.pytest_cache`,
+`.mypy_cache`, `.ruff_cache`, `node_modules` plus `solution/`, `tests/`, `.env`, and
+`**/.git` (AGENTS.md §10) — keep them present verbatim; a missing entry passes local
+harbor but gets returned.
 
 ## Sanitization Discipline
 

@@ -5,6 +5,14 @@ description: Scan a GitHub repository's recently merged PRs and return the top ~
 
 # Find Task-Worthy PRs
 
+> ⛔ **Minority-lane gate (2026-07-19).** Under the fresh-only mining doctrine
+> (AGENTS.md §2) this upstream-PR lane runs only on explicit user request. Its
+> typical output shape — reproduce-a-fix / repair — fires the
+> repair-shape→debugging BLOCK rule (`task-miner/category_rules.md`) and the
+> §6 mechanical-fix collapse (mechanical fixes of real upstream bugs solve 3/3
+> regardless of file spread). Every candidate must pass the collapse-law screen
+> AND the rules-first category gate before any build effort.
+
 Given a GitHub repo, surface ~10 merged PRs that would make good tb-quality tasks.
 
 ## Inputs
@@ -104,9 +112,9 @@ Use `AskUserQuestion`:
 > "Which PR(s) should I turn into tb-quality tasks?"
 
 Options:
-- `Top 1` — invoke the `build-task-from-pr` skill for #1
+- `Top 1` — invoke the `task-clone` skill for #1
 - `Pick specific` — prompt for PR numbers
-- `All 10 (sequential)` — loop `build-task-from-pr` over each
+- `All 10 (sequential)` — loop `task-clone` over each
 - `Just save the list` — write `reports/<repo-slug>/pr-candidates.md` and stop
 
 ### 5. Saving the list (option 4)
@@ -119,4 +127,4 @@ When saving, create `reports/<owner>-<repo>/pr-candidates.md` with the table + f
 - Truncate diffs to `head -500` before sending to OpenAI — enough signal, bounded tokens.
 - If `.env` has no `OPENAI_API_KEY`, abort early with the hint to add it.
 - If the repo is huge and rate limits hit, report partial results instead of failing — tell the user how many PRs were actually scored.
-- Do NOT create task folders in this skill; that's what `build-task-from-pr` is for. Keep this skill read-only (plus the optional summary file).
+- Do NOT create task folders in this skill; that's what `task-clone` is for. Keep this skill read-only (plus the optional summary file).

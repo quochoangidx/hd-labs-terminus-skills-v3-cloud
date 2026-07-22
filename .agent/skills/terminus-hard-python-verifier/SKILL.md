@@ -1,11 +1,15 @@
 ---
 name: terminus-hard-python-verifier
-description: Use when writing pytest verifier suites and oracle solutions for hard Python debugging tasks in Terminus. Focuses on behavioral subprocess tests, anti-cheating coverage, edge cases, and making tasks hard enough that coding agents may fail.
+description: Use when writing pytest verifier suites and oracle solutions for hard Python tasks in Terminus (behavioral verifier suites; the `debugging` category label is blocked, so the task shape must pass the rules-first category gate in task-miner/category_rules.md). Focuses on behavioral subprocess tests, anti-cheating coverage, edge cases, and making tasks hard enough that coding agents may fail.
 ---
 
 # Terminus Hard Python Verifier
 
-Use this skill after choosing a Python debugging task.
+Use this skill after choosing a hard Python task. Note the `debugging` category
+label is BLOCKED by the platform's category classifier — the task's
+classifier-visible shape must pass the rules-first category gate
+(`task-miner/category_rules.md`) and land in one of the 6 allowed categories
+before this verifier work is worth spending.
 
 This skill is a gate, not just a test-writing checklist. It should reject or
 redesign tasks that are likely to be rated Medium, and it should prevent
@@ -86,6 +90,23 @@ For stronger Hard calibration, prefer 5-7 focused tests:
 
 Do not inflate difficulty with many near-duplicate tests. If two tests fail for
 the same shallow reason, merge or redesign.
+
+Corpus-graded verifiers (case tables, conformance vectors) add three design
+rules on top of the list above:
+
+- **Per-case floor:** any case you predict fewer than ~35% of runs will pass
+  is a statistical 0/N candidate at N=10 — disclose it in one prose sentence
+  or drop it at design time, before the platform flag forces the choice
+  (`lever_patterns.md` L1 step 6; `task-revise-flag-remediation`).
+- **Soft-representative rule and trimming direction:** every feature cluster
+  keeps ≥1 "soft" case a majority of runs pass; never build or trim toward a
+  hard-cases-only corpus. When cutting, cut data-driven from the per-case pass
+  table — easy cases are the coverage that keeps the 0/N flag from firing.
+- **Soft size cap and broad-wall preference:** ~≤100 curated cases is the
+  right default; prefer many INDEPENDENT quirk families each at ~40–80%
+  per-run pass rate (full-pass ≈ the product across families) over one or two
+  deep boundaries — a single deep boundary is the fair⊥hard single-lever
+  shape that cannot ship (hide = unfair 0/N, disclose = EASY).
 
 ## Instruction/Test Symmetry
 

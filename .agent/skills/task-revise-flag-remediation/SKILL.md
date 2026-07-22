@@ -1,6 +1,6 @@
 ---
 name: task-revise-flag-remediation
-description: Use when a Terminus task is returned with the platform flag "Some tests not passed by any agent run" (a 0/N coverage failure), or when pre-auditing a conformance-style task for correlated blind spots before submission. Classifies each 0/N test by root cause and applies the matching fix — delete redundant group test, parametrize per-case, prune the case, disclose the convention, or ship reference data in-env — while guarding that difficulty is retained.
+description: Use when a Terminus task is returned with the platform flag "Some tests not passed by any agent run" (a 0/N coverage failure), when pre-auditing correlated blind spots before submission, or when the user explicitly opts into pragmatic non-Python MEDIUM salvage. Classifies each 0/N test by root cause and applies the matching fix — delete redundant group test, parametrize per-case, prune the case, disclose the convention, or ship reference data in-env — while guarding that difficulty is retained.
 ---
 
 # Coverage-Flag Remediation — "Some tests not passed by any agent run"
@@ -57,12 +57,69 @@ misses were compound canonicalization conventions). Before writing any fix:
   while failing the enclosing group test? (This decides parametrize vs prune
   below.)
 
+## Step 1.5 — ⭐ suspect the ORACLE before you prune
+
+N independent strong agents each reconstruct the authority; when they ALL
+disagree with the oracle on the same cluster, the base rate says the oracle is
+wrong, not the agents. Before any prune/disclose:
+
+- Re-derive every expectation in the cluster by running the REAL authority (a
+  live `node_modules/semver`, the actual jar, the upstream binary) — not the
+  oracle, not the corpus.
+- Differential-fuzz the oracle against that authority over tens of thousands of
+  generated inputs. The corpus is self-consistent with the oracle's bugs *by
+  construction*, so `oracle == corpus` proves nothing; the gate is
+  `oracle == authority`.
+- Pruning first deletes the evidence: the semver-range family's two 0/N
+  clusters (numeric-after-wildcard, build-metadata-on-partial) were BOTH oracle
+  bugs; the prune cleared the flag and a client reviewer returned the sibling
+  task months later.
+
+Only once the oracle is proven conformant is a 0/N cluster evidence of a real
+agent blind spot — then, and only then, proceed to Step 2.
+
+## Step 1.75 — single-lever early exit (DROP, don't remediate)
+
+Before walking the decision tree, check the fair⊥hard fingerprint: agent runs
+are NEAR-PERFECT and miss only the 0/N cluster — i.e. the task's ENTIRE
+difficulty is that one boundary / convention / precedence / output-contract
+fact. Then no remediation path exists: hiding it stays unfair 0/N, disclosing
+or pruning it flips the near-perfect runs to 100% and the task grades EASY.
+**DROP or redesign around an orthogonal undisclosed second lever immediately**
+(arrhenius-clip-fit, calibration-threshold-select, hanabi, provenance-release-
+gate were all late-drop lessons). This mirrors verdict case 4 in
+`task-local-solve-probe` (Submit-readiness); the same fingerprint should
+already have been screened at mining time (`task-miner`, Master collapse law
+screen). Only tasks with a BROAD residual wall beyond the 0/N cluster continue
+to Step 2.
+
+### Explicit pragmatic MEDIUM salvage
+
+The strict exit above is the default for autonomous batches and HARD claims.
+When the user explicitly accepts a less conservative gate to avoid discarding
+usable work, a non-Python task may take a bounded salvage lane:
+
+- run one final fresh blind solve after the first valid semantic run;
+- prove oracle=1 and NOP=0 and rule out setup, verifier, and authority defects;
+- require the shared misses to be a small, coherent contract/reference cluster
+  that Step 2 can fully disclose, split, prune, or supply as in-environment data;
+- require independent graded breadth outside that cluster, established by the
+  starter's broad failure, mutation coverage, or de-correlated behavior groups;
+- package it as MEDIUM with a recorded amber caveat, never relabel it HARD or
+  claim union-complete probe evidence.
+
+This lane is meant for shapes such as a resolver that still grades independent
+ordering, archive/group traversal, and symbol-state interactions after one
+precedence/output convention is clarified. It does not rescue an all-pass
+task, Python, a bad oracle, or a near-perfect single-lever task whose only wall
+would disappear after remediation.
+
 ## Step 2 — classify each 0/N test and apply the matching fix
 
 | 0/N shape | Fix | Why / proven on |
 |---|---|---|
 | **Group-aggregate test sitting ON TOP of per-case parametrized tests** (asserts a whole category in one function, every case also has its own test) | **DELETE the group test.** Structurally 0/N forever — no single run passes an entire hard category — and 100% redundant. Difficulty-neutral. | semver: removed 9 group tests |
-| **Group test is the ONLY coverage of its cases, and the killer cases are NOT universal-miss** (per-trial data shows ≥1 agent passed them individually) | **PARAMETRIZE the corpus per-case** (`test_case[group:name]`, one test per vector). Coverage becomes per-case → killers covered by whoever got them right. Difficulty-neutral when `test.sh` reward is already all-or-nothing (pytest rc==0 → 1): you change the unit of *coverage*, not the win condition. | cargo-version-req: 3 killer P4 cases inside a 2400-case group |
+| **Group test is the ONLY coverage of its cases, and the killer cases are NOT universal-miss** (per-trial data shows ≥1 agent passed them individually) | **Split the corpus per-case** (`test_case_001`, `test_case_002`, one test per vector). Coverage becomes per-case → killers covered by whoever got them right. Difficulty-neutral when `test.sh` reward is already all-or-nothing (pytest rc==0 → 1): you change the unit of *coverage*, not the win condition. Caveat: `pytest-json-ctrf` can collapse `@pytest.mark.parametrize` rows into one test with `retries`; generate unique test functions or verify CTRF reports `summary.tests == case_count`. | cargo-version-req: 3 killer P4 cases inside a 2400-case group; renju: parametrized rows collapsed in CTRF until generated test functions were used |
 | **Per-case 0/N on an irreducible obscure feature** (every fresh impl will miss it; no fair way to teach it without gutting difficulty) | **PRUNE those cases from the corpus** (regenerate the `.gz`/json; keep any `corpus_present` minimum-count guard satisfied). | html5: script-data double-escape ×51; css-tokenization: 3 `url(`+ws+quote cases |
 | **0/N caused by an undisclosed convention or reference-class divergence — the cases ARE the lever** (agents implement the version they memorized; the corpus is the real implementation's behavior) | **DISCLOSE, do NOT prune**: pin the exact reference release in the instruction + a few oracle-verified contrast examples (embedded at the operation definitions as contract clarification, not a mapping table). The correlated blind spot becomes a de-correlated residual tail. | maven: 894/8015 identical misses; pinned "maven-artifact 3.9.9" + contrast pair |
 | **0/N because a large NON-derivable standard table is unreachable offline** (entities, Unicode data) | **SHIP the data in-env** (canonical-format file, `COPY` before the image's `git add -A`, point the instruction at the path). Fair and difficulty-neutral — mechanical data can't beat an algorithmic wall. | html5: `entities.json` (2231 entries), `whatwg-parsing.html` |
@@ -81,16 +138,33 @@ Cross-cutting rules:
 - Pre-audit any NEWLY added vector family for likely-universal-miss shapes
   before shipping (semver pre-emptively dropped vectors even the oracle
   originally got wrong).
+- **Soft-representative rule:** after any prune, every feature cluster must
+  still keep ≥1 "soft" case that a majority of runs pass. A hard-cases-only
+  corpus is forbidden — it maximizes 0/N exposure on the next re-run and trips
+  anti-hardcoding minimum-coverage guards. The trimming direction is always
+  pass-table-driven; never "drop the easy cases to keep the hard ones" (easy
+  cases ARE the coverage that keeps the flag from firing).
 
 ## Step 3 — margin-prune the ≤2/N tail
 
 The flag is stochastic across re-runs: a case at 1/N has ~35% chance of
 flipping to 0/N on the next sampled run, 2/N ~11%, 3/N ~2.8%. After fixing the
-clusters, prune the observed ≤2/N cases from the last report for margin.
+clusters, prune observed ≤2/N cases from the last report for margin — but do
+NOT prune the whole ≤2/N tail on the FIRST fix (pkgconf 2026-07-19, AGENTS.md
+§3): that tail can nearly equal the best agent's residual failure budget, and
+sweeping it risks flipping HARD to EASY. Prune conservatively, keep softer
+representatives of each cluster, and lean on disclosure first.
 Don't chase ≤3/N unless forced — over-pruning the hardest cases raises the
 best-run ceiling toward 100% and risks the difficulty gate. Per-case counts in
 one report are a noisy sample; this is probabilistic de-risking, not a
 guarantee.
+
+Exception: do not margin-prune the ≤2/N tail when the best agents are already
+near-perfect and those low-pass cases are their only remaining misses. In that
+shape, prune only the true 0/N rows and leave the 1/N or 2/N rows as the
+residual wall; removing them can turn many failed trials into full passes and
+collapse HARD to EASY. Proven on renju-forbidden-move: after per-case CTRF,
+three 0/10 rows were pruned while two 1/10 rows were deliberately retained.
 
 Index bookkeeping when pruning repeatedly: report indices map to the current
 corpus via `cur = old if old < deleted_idx else old - 1` per prior deletion.
@@ -127,7 +201,7 @@ reach full-pass.
 
 - Structure verifiers **per-case parametrized or graded bands** from day one;
   no monolithic all-N-cases functions, no group-aggregate tests on top of
-  per-case ones (`lever_patterns.md` L1 step 5).
+  per-case ones (`lever_patterns.md` L1 step 6).
 - Target each quirk family at ~40–80% expected per-run pass rate; a case you
   predict <~35% of runs will pass is a 0/N candidate — disclose or drop it at
   design time.

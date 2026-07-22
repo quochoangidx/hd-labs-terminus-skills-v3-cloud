@@ -10,6 +10,23 @@ identical behavior in a different language. The source task's `instruction.md`, 
 test judge define ground truth; nothing about *what* the task requires may change, only the
 language it's built in and (per the reskin rule below) its surface narrative.
 
+> ⛔ **Explicit-request gate + engine saturation cap (user-set 2026-07-19).** The
+> default mining doctrine is fresh-only (see `task-miner`, Fresh-only exploration
+> doctrine): ports/reskins run ONLY when the user explicitly asks for them —
+> never as autonomous quota backfill or a "cheap lane" in a batch prompt. Even
+> on explicit request, an engine with **≥5 shipped variants is
+> originality-saturated**: refuse further ports and say why (same-corpus series
+> are what reviewers flag as "not sufficiently original"; the byte-identical
+> corpus IS the signal they match on). DKIM is at 8 variants = permanently
+> closed. Count variants against the quantified ledger in
+> `.agent/mined-candidates/platform-passed-portfolio.md` before accepting any
+> request: UAX-14 wrap (10), UAX-29 sentence (8), WHATWG URL canonicalize
+> (8), version-constraint (8), viterbi decode (7), URI template (6), LOWESS
+> (5) are ALL closed; sub-threshold headroom exists only for CSS engines
+> (4/5), Postgres value parsers (3/5), grapheme-width (2/5) — and each new
+> variant must still clear today's CI gates (category rules, template shape),
+> which postdate the family's historical passes.
+
 ## Why this is usually safe
 
 Most Regular tasks verify a compiled/interpreted program as a **black box**: the verifier
@@ -43,8 +60,32 @@ is the task's difficulty. Do not simplify the placeholder's bug or improve the a
    assume sibling templates exist for other languages. A port series multiplies exposure:
    every sibling shares the core's shape, so if one flags, all will. If the SOURCE task has
    this stub-CLI shape, de-template the CORE first (realistic multi-module layout, in-repo
-   tests, domain-authentic file I/O where possible — levers UNVERIFIED, see AGENTS.md §9) and
+   tests, domain-authentic file I/O where possible — a multi-module restructure ALONE is
+   insufficient, stack all levers; see AGENTS.md §9) and
    only then port; never try to clear the flag per-port.
+
+   **Sweep the CORE before porting — defects multiply by series size.** A port series
+   inherits every core defect ×N siblings, and platform returns then hit the whole series
+   (the purl 6-language series needed the same fix in 5 of 6 zips, twice). Run this
+   checklist on the SOURCE task and fix the core FIRST, then port:
+   - **noexec `/tmp` verifier audit.** If the verifier stages AND execs anything under a
+     default `tempfile.mkdtemp()` — a compiled binary, an instrumented build, or a
+     `#!/bin/sh` wrapper script (`exec node …` / `exec java …`) — it dies on the
+     platform's noexec `/tmp` while passing locally. Fix in the core: yield an argv
+     prefix (`["node", main_js]`) instead of a staged wrapper, or use a
+     `_find_exec_base()` probe (`/app`, `/var/tmp`, `/dev/shm`); repro with
+     `docker run --tmpfs /tmp:noexec,nosuid …` (oracle 1, nop 0) before porting.
+   - **Corpus 0/N + rule-level coverage sweep.** Run the per-case pass-table pre-audit
+     (`task-local-solve-probe`) on the core, and audit that every SPEC rule has a
+     discriminating corpus input (input ≠ output on exactly that rule) — a shared-corpus
+     series inherits every gap, and added rows must be authority-generated and synced to
+     EVERY sibling.
+   - **Anti-cheat sweep.** If the verifier keeps an expected-value corpus readable under
+     `/tests` and execs the candidate as root, a corpus-reading candidate passes with
+     zero implementation. Fix in the core (hide-corpus unlink + chmod 700, run the
+     candidate as `nobody`, world-read the build artifacts; prove with a
+     cheat-emulation), then sweep every language sibling — pre-hardened siblings can
+     coexist with exposed ones in the same series.
 2. Identify the source language and what the program is actually coupled to: pure JSON/stdin
    logic ports to nearly anything; a task tightly bound to a source-ecosystem library (e.g. a
    C program driving `sqlite3` directly, a Node program parsing npm lockfile conventions, tar
@@ -122,19 +163,21 @@ abstract low/high/dwell schema fits almost any duty-cycle equipment; a schema wi
 software-flavored fields like `client`/`rate`/`banned_at` fits another software domain more
 naturally than a physical-process one).
 
-Update the task slug/folder/ZIP name and `task.toml` tags to match the new story. Check this
-portfolio's own sibling `task.toml` files for the actual `languages =` casing convention
-before trusting generic advice — this project's real accepted tasks use Title Case
-(`"Rust"`, `"Go"`, `"C"`, `"TypeScript"`) with `"C++"` as a fixed idiomatic exception, not the
-lowercase slugs some skill docs describe.
+Update the task slug/folder/ZIP name and `task.toml` tags to match the new story. `languages =`
+values are lowercase slugs (`"rust"`, `"go"`, `"c"`, `"typescript"`) — the single exception is
+`"C++"`, which stays capitalized (AGENTS.md §9; task-clone and task-zip-validator enforce the
+same convention). Do not use Title Case.
 
 ## Step 3 — Build, one parallel agent per confirmed language
 
 Each agent independently: rewrites `instruction.md` + spec/README in the new voice (run the
 `anti-llm` skill pass on the prose afterward, preserving every fact/number/path); adapts
 `environment/Dockerfile` to the target's base image plus this project's standing Docker rules
-(toolchain symlinked onto the login-shell PATH, warm build of the *unmodified* shipped source,
-`git init` after the build); ports the placeholder and the solution with identical behavior;
+(toolchain symlinked onto the login-shell PATH, `git init` after the build — a warm build of the
+*unmodified* shipped source is acceptable ONLY when the verifier's build helper clean-rebuilds:
+`make clean` → assert the artifact is gone → build → assert `returncode == 0`; otherwise drop
+the warm build step, since a stale warm binary can grade a non-compiling submission green,
+AGENTS.md §8); ports the placeholder and the solution with identical behavior;
 renames the CLI binary everywhere, including the one resolution line in the test file; updates
 `task.toml`; recomputes `codebase_size` honestly from the real file count. Then validates for
 real — `stb harbor run -a oracle -p .` must be `1.000` and `stb harbor run -a nop -p .` must be

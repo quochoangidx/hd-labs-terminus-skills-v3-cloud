@@ -35,9 +35,10 @@ Known INFRA failures — do not treat these as task defects:
   probe (`task-local-solve-probe`); the platform check at submit stays the
   source of truth.
 - From VN both providers geo-block direct API calls (OpenAI 403 country /
-  Anthropic not-allowed) — run via the platform or a VPN; never rewrite the
-  task in response.
-- Creds are budget-capped (~$10/30d) but rotatable via `stb keys refresh`.
+  Anthropic not-allowed) — no VPN/remote access is available; these calls
+  only ever run at platform submission time. Locally, substitute
+  fresh-subagent probes (`task-local-solve-probe`) and never rewrite the
+  task in response to the geoblock.
 
 Use the absolute binary path if PATH is stale:
 
@@ -105,6 +106,24 @@ Examples:
 - If review flags a missing trailing `exit` in `tests/test.sh`, treat that as stale feedback; the current docs say the canonical reward block ends the script.
 - If review flags hidden instructions in environment docs, remove procedural hints from README/spec/config/comments/scripts and keep all task goals in `instruction.md`.
 
+- **Platform "Oracle failed" while local harbor+docker are GREEN ⇒ suspect
+  noexec `/tmp` FIRST.** The platform mounts `/tmp` noexec; any verifier that
+  stages a binary — or a `#!/bin/sh` wrapper script — under bare
+  `tempfile.mkdtemp()` and then execs it dies with `PermissionError`/EACCES,
+  every test errors, and the oracle fails invisibly (local `/tmp` is exec).
+  Repro exactly with `docker run --tmpfs /tmp:noexec,nosuid,size=256m …`
+  (fails) vs without the flag (passes). Fix = a `_find_exec_base()` that
+  probes `[/app, /var/tmp, /dev/shm, gettempdir()]` by writing+running a tiny
+  `#!/bin/sh` script and passes the winner as `dir=` to every `mkdtemp`; for
+  interpreter wrappers, yield an argv prefix (`["node", main_js]`,
+  `["java", "-cp", classes, "Main"]`) instead of a staged executable —
+  interpreters read code fine from a noexec mount. `scripts/preflight.sh`
+  (repo root) now runs the noexec-/tmp oracle repro; validate every fix with
+  oracle=1 AND nop=0 under the `--tmpfs` flag.
+- **"Oracle failed" on a byte-identical locally-green artifact = stale
+  PLATFORM image** → fresh repackage + force-build. Repeated staleness means
+  content-hash caching — make a real difficulty-neutral content change (e.g.
+  trim a verifier loop) to bust it.
 - If oracle suddenly fails with a `[build failed] undefined: <symbol>` from the
   verifier AND `agent/oracle.txt` is empty, suspect a STALE cached Docker image:
   Harbor does not reliably rebuild when `environment/repo` or `solution/fix.patch`

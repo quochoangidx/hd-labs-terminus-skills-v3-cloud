@@ -26,9 +26,14 @@ file conflicts with those skills, the canonical skills win.
   (`/usr/local/bin` is on the reset login `PATH`), or wire `/usr/local/cargo/bin`
   into `/etc/bash.bashrc`. `RUSTUP_HOME`/`CARGO_HOME` survive the reset — only
   `PATH` needs restoring.
-- Warm the unmodified build during Docker image construction, for example with
-  `cargo build --tests --locked`, and preserve the dependency/build cache needed
-  for fast incremental agent rebuilds.
+- Do NOT warm-build the shipped source during Docker image construction unless
+  the verifier's build helper clean-rebuilds and checks exit status (clean →
+  assert the artifact is gone → build → assert `returncode == 0` with output in
+  the message). A warm `RUN cargo build` otherwise leaves a stale binary that
+  grades a non-compiling submission green (AGENTS.md §8, quill-plugin-resolver
+  return). Prove the gate by injecting a compile error and confirming reward 0.
+  Warming only the dependency cache (e.g. `cargo fetch --locked`) for fast
+  incremental agent rebuilds is fine.
 - Keep verifier dependencies in the Docker image. Never store wheels under
   `tests/` and never install packages from `tests/test.sh`.
 - Supply Rust verifier programs at verification time from
@@ -51,9 +56,13 @@ file conflicts with those skills, the canonical skills win.
   de-templating for a new Rust task: a realistic multi-module crate
   (`lib.rs` + several `src/*.rs` modules), in-repo unit tests and repo
   furniture, and — where the domain allows — a file-based I/O surface
-  instead of a stdin→stdout batch pipe. Remediation levers are still
-  UNVERIFIED (single data point); see AGENTS.md §9 for the current verdict
-  before relying on any one lever.
+  instead of a stdin→stdout batch pipe. A multi-module restructure ALONE is
+  INSUFFICIENT (confirmed 2026-07-18, tbrain-depgraph-purl-canon: still
+  flagged `rust_cli` 0.85 after the restructure) — stack ALL de-templating
+  levers before resubmitting: file-surface I/O, deeper module tree plus
+  realistic repo furniture, scrub stub-fill framing from instruction and
+  module docs, and enrich Cargo.toml (description, non-`0.1.0` version);
+  see AGENTS.md §9 for the current verdict.
 
 ## Submission Explanations
 

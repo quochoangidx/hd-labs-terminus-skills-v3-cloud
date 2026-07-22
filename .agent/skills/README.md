@@ -4,16 +4,24 @@
 platform, aligned to the live task gallery (`/portal/tasks`): self-contained, offline,
 deterministic problems with a Python-pytest verifier, targeting **Hard or Medium by
 MODEL PASS RATE** (Easy is blocked; Python tasks must be Hard). The default lane is
-gallery-style spec-driven work (Lane A); upstream bugfix PRs are a minority lane.
-`debugging` and `software-engineering` categories are BLOCKED (rejected by an
-automated eval check as of 2026-06-29), and new milestone tasks are also blocked
+the fresh-only mining doctrine (100% NEW tasks; ports only on explicit request), with
+the bd-mgmt seam and interaction/scale shapes as priority lanes — upstream bugfix PRs
+are a minority lane. `debugging` and `software-engineering` categories are BLOCKED
+(rejected by an automated eval check as of 2026-06-29), `data-processing` is ALSO
+BLOCKED (enforced since 2026-07-10/11), and new milestone tasks are also blocked
 — see the mirrored callouts in task-miner + task-clone (lift both together).
 
 ## Pipeline → skill map
 
+`task-batch` is the autonomous end-to-end orchestrator entry point — it runs the full
+gate pipeline below (fresh-only mining → collapse-law screen → skeleton probe → build →
+validate → package) without further prompting. Tooling: `scripts/new-task.sh <slug>
+<lang> <category>` stamps a hygiene-pre-wired skeleton; `scripts/preflight.sh <task-dir>`
+machine-checks the mechanical gates before every zip.
+
 | Stage | Skill(s) |
 |---|---|
-| 1. Mine candidates (metadata only) | `task-miner` (+ `find-task-prs` for the PR lane) |
+| 1. Mine candidates (metadata only) | `task-miner` (+ `find-task-prs` for the PR lane); rules-first category gate via `task-miner/category_rules.md` before any build |
 | 2. Build the task | `task-clone` (+ `upstream-repo-sanitizer` for repo staging; `issue-to-regression-test`, `terminus-hard-python-verifier` for verifiers; `terminus-regular-task-authoring`, `terminus-rust-task-authoring` for layout/prompt rules) |
 | 3. Probe difficulty cheaply | `task-local-solve-probe` (before any Harbor LLM spend) |
 | 4. Validate | `task-harbor-runner` (oracle / nop / `stb harbor check` / real-agent runs) |
@@ -35,11 +43,18 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 - `.agent/skills/task-miner/lever_patterns.md` — lever catalog **L1–L4** (conformance
   suite, synthetic interval-invariant ledger, differential-vs-authority, multi-vector
   security), claimed-resource ledger, and the complete L1 build runbook ("learn the
-  pattern, not the resource").
+  pattern, not the resource"). Note the default lane is now the fresh-only doctrine
+  (task-miner, "Fresh-only exploration doctrine") with the bd-mgmt seam and
+  interaction/scale shapes as priority lanes — not gallery-style spec-driven L1.
+- `.agent/skills/task-miner/category_rules.md` — rules-first category gate
+  (deterministic BLOCK/ALLOW rules calibrated on real-CI verdicts; run before
+  trusting any blind category probe).
+- `.agent/skills/task-miner/interaction_shape_recipe.md` — interaction/scale shape
+  recipe (≥3 coupled causes + discovery breadth; escapes the master collapse law).
 
 ## Non-negotiable invariants
 
-Offline (`allow_internet = false`), 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
+Offline (`allow_internet = false` — our lane's default; the platform accepts `true` only when a task genuinely requires internet, eval-checked), 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
 `python3` pytest writing `/logs/verifier/reward.txt` within 450s, oracle passes /
 nop fails for the intended reason, no tests/solution/answer keys reachable from
 `environment/`, and difficulty is claimed only from blind-probe or platform agent

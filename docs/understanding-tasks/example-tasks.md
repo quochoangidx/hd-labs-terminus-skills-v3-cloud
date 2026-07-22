@@ -26,15 +26,15 @@ Build a web scraper.
 
 **Problem:** No specific requirements, impossible to verify.
 
-### ❌ Requires External Resources
+### ❌ Requires Secrets or Unverifiable External State
 
 **File: `instruction.md`**
 
 ```markdown
-Query the Twitter API to get trending topics.
+Query the Twitter API to get today's trending topics.
 ```
 
-**Problem:** Requires API credentials, network access.
+**Problem:** Two issues — it needs private API **credentials/secrets** (which can't be bundled or committed), and its output is **nondeterministic** (trending topics change constantly), so no stable verifier can grade it. Needing internet **by itself** is *not* a problem — a task that genuinely requires the network is acceptable with `allow_internet = true`. The real issues here are the secret credentials and the unverifiable, ever-changing result.
 
 ### ❌ Ambiguous Success Criteria
 

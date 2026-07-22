@@ -32,6 +32,8 @@ Compile code, manage dependencies, build components.
 
 ### data-processing
 
+> 🚫 **Currently blocked — not accepting new submissions.** The `data-processing` category is paused. Do not submit new tasks under this category until this note is removed.
+
 Tasks that transform, parse, filter, aggregate datasets or files and directories and generate derived output.
 
 **Examples:**
@@ -126,7 +128,7 @@ Pick the category that best describes the **primary** activity:
 |--------------------------------|--------------|
 | OS/server configuration | system-administration |
 | Build systems, packages | build-and-dependency-management |
-| ETL, file processing | data-processing |
+| ETL, file processing | data-processing *(currently blocked)* |
 | Interactive challenges | games |
 | Code development, testing | software-engineering *(currently blocked)* |
 | ML model work | machine-learning |

@@ -19,13 +19,15 @@ the user explicitly asks for fixes.
 python .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
 ```
 
-For global skill use:
-
-```bash
-python "$HOME"/.codex/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
-```
+(The script lives in-repo at
+`.agent/skills/task-client-feedback-review/scripts/review_task.py` — run it
+from the repo root.)
 
 Use `--json` when another script will consume the result.
+
+Also run `scripts/preflight.sh <task-dir>` (repo root) for the mechanical
+subset review_task.py doesn't itself check (.dockerignore contents,
+`# syntax=` line, CRLF/arcnames, rubric closed-set).
 
 2. Read `instruction.md` and any provided/generated rubric manually for prompt
    realism:
@@ -109,11 +111,12 @@ Use `--json` when another script will consume the result.
    for these external files:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
 ```
 
-   These files must remain outside the submitted task and ZIP.
+   These files must remain outside the submitted task and ZIP (the review
+   script also flags any `submission-*.md` found inside the ZIP).
 
    Review each field separately:
 
@@ -237,6 +240,21 @@ workspace/reports/<task-slug>/submission-explanations.md
   KEEP genuine dependency tasks (depsolve, maven mediation, semver, rpm version)
   as build-and-dependency-management. When one parser is flagged, AUDIT the whole
   batch and shelve same-profile parsers proactively.
+- `allow_internet` not matching the task's genuine need (new High reviewer
+  criterion, policy 2026-07-13): `true` without a real requirement is
+  eval-checked and may be rejected; our offline tasks must stay `false`. A task
+  that genuinely needs the network (e.g. HuggingFace model download) MAY set
+  `true` — that alone is no longer a defect.
+- ⚠️ NOT blockers — official FAQ citations for pushback (portal FAQ, 2026-07-17):
+  (a) rigorous verifier logic in `tests/` is LEGITIMATE — running the agent's
+  binary, parsing its output, golden fixtures/hashes, spec-derived invariants,
+  and hardcoded expected RESULTS ("fine and often required") are all sanctioned;
+  the only real defects are a callable in `tests/` that maps task inputs to the
+  complete expected artifact (end-to-end solving belongs in `solution/`) or
+  hardcoding values the instruction says the agent must read from a config file.
+  (b) base images: tasks whose CI passed before 2026-06-15 are grandfathered —
+  reviewers shouldn't flag their base image (digest pinning still required).
+  Cite the FAQ instead of editing correct files.
 
 ## Existing Skills To Use For Fixes
 

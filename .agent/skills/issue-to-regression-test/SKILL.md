@@ -5,6 +5,13 @@ description: Use when converting a closed upstream issue or PR into behavioral p
 
 # Issue To Regression Test
 
+> ⛔ **Lane gate (2026-07-19).** The upstream-issue→regression-test lane serves a
+> mostly-dead shape: mechanical fixes of real upstream bugs collapse 3/3
+> regardless of file spread (AGENTS.md §6), and the repair shape fires the
+> repair-shape→debugging BLOCK rule (`task-miner/category_rules.md`). Run the
+> collapse-law screen + rules-first category gate on the candidate FIRST. The
+> test-design content below remains valid for verifier authoring generally.
+
 Use this skill after selecting an upstream closed issue/PR and before writing `tests/test_outputs.py`.
 
 ## Goal

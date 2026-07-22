@@ -1,6 +1,6 @@
 ---
 name: task-miner
-description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The debugging, software-engineering, AND data-processing classifier labels are currently BLOCKED by automated eval/CI checks; mine tasks whose primary activity and I/O shape genuinely land in one of the 6 allowed categories. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks."
+description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty, structural diversity, category fit, fair-hard failure potential, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The debugging, software-engineering, and data-processing classifier labels are blocked; default to fresh category-first shapes in the 6 allowed categories, and use upstream bugfix PRs or spec-driven stub completion only when explicitly requested or independently category-safe."
 ---
 
 # Task Miner
@@ -9,11 +9,12 @@ Use this skill when sourcing task ideas for the Terminus task gallery
 (`/portal/tasks`). The gallery IS the target distribution — mine candidates that
 look like they belong in it and that do NOT already exist there.
 
-- **No direction given → default to Gallery-style mining** (Category Profile Mode
-  below): self-contained, spec-driven "implement a tool/engine/pipeline/algorithm
-  end-to-end" tasks (Lane A), spread across UNDER-represented ALLOWED categories
-  (see the Submission Blocks callout below). Do NOT default to upstream bugfix PRs —
-  those are a minority of the gallery.
+- **No direction given → default to fresh category-first mining** (Category
+  Profile Mode below), spread across under-represented ALLOWED categories and
+  structurally different work/input/oracle/verifier surfaces. The gallery's
+  historical spec-driven stub-fill majority is a distribution fact, not a
+  recipe: current rules often classify that shape as blocked software-engineering.
+  Do not default to upstream bugfix PRs either; those remain a minority lane.
 - **User names a category** → use the matching Category Profile (reject if it is
   blocked or still predicts as `software-engineering` after shaping).
 - **User names a subtype** → use the matching Subtype Profile.
@@ -62,7 +63,9 @@ later by `task-clone`.
 ## Task Gallery Alignment (mine toward the live benchmark)
 
 The gallery is the live benchmark corpus (snapshot + dedupe list:
-`mined-candidates/gallery_tasks_snapshot.md`, 543 tasks as of 2026-06-21). Match its
+`mined-candidates/gallery_tasks_snapshot.md`; taxonomy working copy
+`mined-candidates/gallery_taxonomy.md` synced to the 2026-07-15 snapshot — 4521
+curated rows in `v_tasks_with_priorities`). Match its
 SHAPE, distribution, and difficulty, and never duplicate an existing task.
 
 **Canonical taxonomy (align every candidate to this).** The gallery organizes tasks
@@ -107,14 +110,16 @@ Then mine against the refreshed menu. Re-run it any time the category counts loo
 or a candidate straddles a category boundary. For hands-off tracking, put this script on
 a schedule (e.g. weekly) so the local taxonomy never drifts from the live gallery.
 
-**Dominant shape — Lane A, self-contained spec-driven tasks.** The gallery is mostly
+**Historical dominant shape — do not copy blindly.** The gallery is mostly
 "build/implement a thing to a precise spec, end-to-end" — e.g.
 `airport-gate-scheduler`, `json-3way-merge-engine`,
 `yaml-job-scheduler-with-deadlock-detection`, `ssa-dead-code-eliminator`,
 `mini-sqs-server`, `multi-format-etl-pipeline`, `ml-explainability-cli`,
 `merkle-tree-collision`. Each is one problem, deterministic, offline, with a
 human-style instruction and a pytest verifier that shells out to the produced
-artifact. Bugfix-PR clones are the MINORITY — prefer Lane A unless the user asks.
+artifact. Many are grandfathered and the same stub-fill shape now predicts
+blocked software-engineering; use the examples for taxonomy alignment, not as
+the default fresh-task template. Bugfix-PR clones remain a minority.
 
 **Real distribution to mirror (sampled 2026-06-21):**
 - Category: software-engineering ~40%, data-processing ~20%, machine-learning ~11%,
@@ -161,6 +166,112 @@ executable/API/DB/file outputs), agent default 900s (cap 1800), `environment/` �
 MiB. Codebase size minimal/small/large all accepted — aim for a mix.
 
 ## Operating Modes
+
+### Fresh-only exploration doctrine — DEFAULT for every mining run (user-set 2026-07-19)
+
+Default mining is **100% new tasks**. Do NOT recreate what already exists: no
+ports/reskins of shipped or held engines, no same-corpus variants, no twists on
+existing gallery/portfolio tasks — a candidate must reach
+`gallery_novelty: novel` (`twist-on-existing` is a reject under this doctrine,
+not just `duplicate`). Ports/reskins run ONLY on an explicit user request, via
+`task-language-port`, and an engine with ≥5 shipped variants is
+originality-saturated regardless (DKIM at 8 = closed).
+`.agent/mined-candidates/platform-passed-portfolio.md` is the quantified saturation
+ledger over the 91 platform-passed tasks: UAX-14 wrap (10), UAX-29 sentence
+(8), WHATWG URL canonicalize (8), version-constraint (8), viterbi decode (7),
+RFC 6570 URI template (6), LOWESS (5) are ALL closed — reject any new variant
+of these engines at dedupe, and count the sub-threshold families listed there
+before honoring even a user-requested port. That file's passes are largely
+grandfathered (pre-date category/template/originality enforcement): use it for
+dedupe/saturation only, never as evidence a shape clears today's CI.
+
+History (`AGENTS.md`, local `index.jsonl`, gallery snapshot) has exactly three
+roles — never "source of ideas":
+1. **Forbidden-zone map**: every §6 dead-end archetype and every family with a
+   collapse verdict is off-limits by default — but verdicts have TIERS
+   (2026-07-20): a verdict backed by a platform return or pooled N≥5 probes is
+   CONFIRMED-dead (never re-explore); a verdict from local n≤3 probes on a
+   single instance is SUSPECT-dead — skipped by default, but eligible for the
+   one retest-slot per batch (`task-batch`, Dry-round handling) with a
+   materially stronger instance, never a reskin. When logging a new dead
+   verdict, record its tier and the evidence (n, instance, probe_model).
+2. **Design laws**: every fresh idea must still name its hidden lever in one
+   sentence (Master collapse law screen).
+3. **Dedupe + novelty check + Task Inspiration ID lookup.**
+
+Per mining round:
+- Generate **20–30 fresh ideas** spread over ≥4 of the 6 allowed categories and
+  ≥4 of these source classes (each class ≤40% of the pool):
+  1. A REAL tool/library in the image whose observable behavior diverges from
+     its public spec — lever (a): run the real tool, find quirks the public
+     docs under-describe.
+  2. A REAL implementation diverging from an UNDER-documented standard — lever
+     (b); before accepting, answer "does the public spec fully describe the
+     authority's behavior?" Yes → reject (the SigV4 lesson).
+  3. Stateful systems/simulators with unstated counter-intuitive rules — games
+     with recursive/typed corners; true hidden-sim (solver submits an
+     estimate, the simulation stays INSIDE the verifier, dynamics undisclosed).
+  4. Upstream closed bugfix PRs (minority lane, patch-shape gate).
+  5. Taxonomy coverage gaps: run `refresh_gallery_taxonomy.py`, prefer
+     subcategories thin in the gallery AND absent from the portfolio.
+  6. Free-form ideas — any shape that names a hidden lever; no precedent
+     needed.
+  Concrete repos/tools for classes 1–3 come from **Repo Prospecting** (section
+  below) — actively discovered mature-but-obscure repos, never just the static
+  Source Queue or whatever the model happens to remember.
+- Screen ALL of them with the Master collapse law; record every verdict in
+  `index.jsonl` INCLUDING rejects (a reject is map data — the batch deliverable
+  includes this exploration map, and only durable evidence-backed verdicts get
+  folded into `AGENTS.md` §6/§3, the sole team-knowledge store).
+- Use a progressive beam: shortlist only the 4–6 highest-value survivors for
+  skeleton probing, then full-build at most 1–2. Rank by
+  `P(category-safe) × P(fair) × P(MEDIUM+) × P(novel) / expected model calls`.
+  Recent clean-slate yield is roughly 0–1 fresh shippable task per large batch;
+  a high kill rate is expected, never backfill quota with ports.
+- Assign each shortlist a structural signature over `work_surface`,
+  `interaction`, `input_surface`, `oracle_type`, `verifier_type`, and
+  `failure_mode`. Do not advance two candidates matching on >4/6 axes; changing
+  only repo, domain, or language does not create product diversity.
+
+### bd-mgmt seam — strong category signal, not a proven difficulty lane
+
+The strongest real-CI category signal on record remains purl canon, which predicted
+**build-and-dependency-management at 1.0** even though the blind probe
+insisted SWE 0.9 (`category_rules.md` R5). The classifier reads
+manifests/lockfiles/dependency-graphs-as-the-OBJECT as bd-mgmt even when the
+work is compute-heavy. This clears only the CATEGORY gate: later Cargo, apt,
+and disclosed-resolver probes collapsed EASY. Do not prioritize the seam unless
+the candidate independently names a broad under-documented authority wall and
+passes the collapse screen. Possible shapes include:
+
+- offline lockfile reconstruction: manifest + a vendored registry snapshot
+  in-image → regenerate the exact lockfile a real tool would produce;
+- dependency-graph conflict resolution with backtracking (real resolver
+  in-image as the authority);
+- toolchain/build migration: make a project build correctly against a second
+  pinned toolchain under stated constraints;
+- vendoring/patch resolution: apply override/patch precedence rules the way
+  the real tool does.
+
+The DIFFICULTY bar is unchanged — master collapse law still applies: the
+candidate needs a real in-image tool whose resolution rules INTERACT
+(conan/conda-style operator × bound × prerelease × endpoint coupling), not a
+table of standalone quirks (§6: portage/rubygems collapsed). Version
+COMPARISON alone is dead; resolution/backtracking/lockfile-shape carries the
+residual wall. Prospecting queries: `gh search repos` for alternative package
+managers, lockfile tools, registry-snapshot/vendoring tools, monorepo build
+resolvers — 100–5k stars, ≥2y history, never pip/cargo/npm themselves
+(memorization-poison).
+
+### Interaction/scale shapes — CLOSED as a default HARD lane
+
+The three documented archetypes are historical experiments, not a live source:
+multi-service ops restoration and stateful DB migration each fell 3/3, while
+long-context cross-referencing was closed by structural analysis and the user's
+current AGENTS.md verdict. Do not spend a normal batch slot on them or follow
+`interaction_shape_recipe.md` as a promise of hardness. Revisit only under the
+single SUSPECT-dead retest allowance with a materially new shape, or when the
+user explicitly accepts a Medium-oriented experiment.
 
 ### Upstream Bugfix Mode (minority lane)
 
@@ -222,6 +333,41 @@ For category-profile candidates, `fixing_commit` is optional. The artifact must 
 - `scientific-computing`: Mine numerical, simulation, geospatial, statistics, or domain-code tasks. Accept deterministic small fixtures with tolerances and boundary cases. Reject GPU, huge datasets, or compiled-extension rebuild requirements unless explicitly approved.
 - `machine-learning`: Mine tiny offline data-loader, inference, tokenizer, metric, or evaluation tasks. Accept deterministic seeds and small fixtures. Reject downloads, GPU, model registry, or expensive training.
 - `games`: Mine terminal game/puzzle/simulation rule tasks. Accept deterministic state transitions, move legality, scoring, or solver behavior. Reject visual-only or flaky/random tasks.
+
+### Classifier-visible surface artifacts — pick the category BEFORE building, then build the SHAPE to match
+
+The platform `category_classifier` predicts from the task's SHAPE — instruction
+verbs, I/O surface, repo furniture, rubric wording — and ignores the declared
+`task.toml` category entirely. A category mismatch is therefore a SHAPE bug,
+fixed at design time, not a labeling bug fixed at submit time. Choose the
+category first, then make sure the dominant surfaces below actually appear;
+a prose/vocabulary sweep alone does NOT flip a wrong prediction.
+
+| Category | Surfaces that pull the prediction toward it |
+|---|---|
+| build-and-dependency-management | manifests/lockfiles/build graphs are the OBJECT of the work; instruction verbs = resolve/install/build/package; verifier inspects build outputs or installed artifacts |
+| system-administration | services, config files, permissions, users, processes, logs; the agent OPERATES a system rather than authoring an algorithm |
+| security | threat/abuse framing; memory-safety verifier (ASan/UBSan); sanitization/authz/crypto; exploit-prevention PLUS legitimate-use preservation tests |
+| scientific-computing | continuous/numerical model with physical units; precision/tolerance output requirements; NO prescribed method steps — one method-shaped sentence ("solve the quadratic rather than stepping") flipped a task to software-engineering |
+| machine-learning | dataset/loader/metric/eval-loop artifacts with fixed seeds; conversely, ML SUBJECT ≠ ML category — scrub ML framing/tags when the activity is not ML |
+| games | game rules, state transitions, move legality, scoring; verbs = simulate/play/adjudicate |
+
+**Anti-tells that predict a BLOCKED slug** (any of these dominating the shape ⇒
+reshape honestly or reject): `implement`/`parse`/`render`/`cmp`/"extend the
+starter"/fill-the-stub and exact-reference-conformance framing →
+software-engineering; dataset→report / ETL pipelines → data-processing;
+"find the bug" / make-the-failing-test-pass → debugging. Rubric lines carry the
+same signal as instruction prose — de-shape both. If the honest reshape guts
+the difficulty (quartz-cron: reshaped clean, probed 3/3 EASY), drop instead of
+gambling. The real classifier is geoblocked from VN and cannot be preflighted
+directly — emulate it RULES-FIRST with `category_rules.md` (this directory):
+deterministic rules calibrated on real-CI verdicts, authoritative when they
+fire (the blind fresh-subagent probe has been wrong in BOTH directions —
+libinjection probe=security/real=SWE 0.92; purl probe=SWE/real=bd-mgmt 1.0).
+The blind category probe in `task-clone` (Quality Preflight) /
+`task-zip-validator` is the fallback for shapes no rule covers. At MINING
+time, run the rules against the candidate's intended shape: a BLOCK-rule hit
+with no honest reshape is a reject before any build cost.
 
 ## Subtype Profiles
 
@@ -303,10 +449,52 @@ Deliberately MIX languages across a batch to avoid the "17 tasks all Go libs"
 failure (June 2026 batch B). A healthy batch spans e.g. Rust + Go + TS + C/C++ +
 a niche language, not one library family.
 
-## Source Queue
+## Repo Prospecting — actively discover NEW repos (default; run BEFORE touching the Source Queue)
+
+The skill must PROSPECT for repos, not consume a fixed list. Two principles:
+
+- **Fame is memorization-poison.** Frontier solvers know famous repos
+  (pip/django/pandas/urllib3…) cold — behavior, quirks, and bug history — so
+  levers mined there collapse first. The sweet spot is **mature-but-obscure**:
+  real users, ≥2 years of history, roughly 100–5,000 stars; reject
+  "everyone-knows-it" repos (rule of thumb >20k stars) as difficulty sources.
+- **Prospect by archetype/lever signal, not by name.** Decide the target lever
+  and category first (surface-artifacts table), then search for repos matching
+  that signal. `gh` is not geoblocked from VN.
+
+Procedure per prospecting round:
+
+1. Pick target lever (a: in-image real-tool quirk / b: under-documented
+   divergence / stateful-counter-intuitive) + target category.
+2. Run discovery queries — examples to adapt, not an exhaustive list:
+   - `gh search repos --topic=<format-or-domain> --language=<lang> --stars=100..5000 --sort=updated`
+   - `gh search repos "<standard/RFC name> implementation" --stars=100..5000`
+   - `gh search repos "drop-in replacement" / "compatible with <tool>" / "port of <lib>"`
+     — reimplementations PROMISE divergence tails vs the original (lever b)
+   - `gh search repos "bug-compatible" / "quirks"` — self-declared divergence
+   - registry category browses (crates.io / npm / PyPI classifiers) for niche
+     parsers, engines, schedulers, numeric kernels
+   - category-shaped hunts: config validators / service supervisors
+     (system-administration), alternative package managers / lockfile tools
+     (build-and-dependency-management), simulation/roguelike engines (games),
+     numeric kernels (scientific-computing)
+3. Feasibility filter before claiming: permissive license; slims to <100 MiB
+   context; offline build <600s on a canonical base image; no runtime
+   network/GPU/hosted service.
+4. Anti-memorization + novelty: fame check above; dedupe vs `index.jsonl` and
+   the gallery snapshot (`gallery_novelty` must be `novel`).
+5. Output per prospect: repo | archetype | ONE-SENTENCE lever hypothesis |
+   category fit — feed straight into the Master collapse law screen, and log
+   every prospect (rejects included) into `index.jsonl` as exploration-map
+   data.
+
+## Source Queue (static FALLBACK — memorization-risk; prospect first)
 
 The repos below are the OPERATIONALLY-EASY Python lane (fast offline builds) —
-convenient, but NOT the default or the only lane. Do not let this list pull
+convenient, but NOT the default or the only lane, and every one of them is
+famous enough that frontier solvers have them memorized (weak difficulty
+sources — see Repo Prospecting above). Use them mainly for the bugfix minority
+lane or when prospecting is impossible. Do not let this list pull
 every batch back to Python parser/validator libs. Apply the archetype-first
 selection rule above and the patch-shape gate before using any of them.
 
@@ -527,15 +715,11 @@ Append one compact JSON line per decision:
 
 Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 
-**Family ledger (difficulty memory at the family level, not just exact dedupe).**
-Exact-candidate dedupe does not stop the team from re-mining the same SHAPE of
-bug in a different function. Maintain a `family_difficulty` ledger keyed by
-`library + bug_family` (e.g. `golang-crypto-ssh + validation-bound-check`,
-`go-yaml + parser-edge-condition`). Record the max platform rating observed for
-that family. If a family's ceiling is `<=EASY` (or `<=MEDIUM` after >=2 samples),
-skip new candidates in it unless a frontier-agent probe failed semantically.
-Append difficulty outcomes back into this ledger after platform rating so the
-miner stops feeding known-collapsed families.
+**Family difficulty knowledge lives only in `AGENTS.md`.** Exact-candidate
+entries in `index.jsonl` remain a local execution/dedupe log, but do not create
+or maintain a parallel `family_difficulty` memory. When a family obtains a
+durable ceiling or live verdict, fold the evidence and tier into the matching
+`AGENTS.md` section; later mining checks that verdict before spending quota.
 
 ## Hardness Filter
 
@@ -572,9 +756,65 @@ Reject false-hard candidates:
   trials show repeated failures for semantic reasons
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
-### Mechanical patch-shape gate — RUN FIRST, pass/fail, before any scoring
+### Master collapse law screen — RUN ON EVERY CANDIDATE, any lane, before scoring
 
-The fix-shape filter below is correct but kept getting ignored: 17 candidates
+⭐ Confirmed over a 15-task blind-probe batch (2026-07-12), lane-agnostic: a task
+holds under a fair blind probe **if and only if** it hides one of exactly two
+things:
+
+- **(a) an undisclosed in-image library-quirk differential** — behaviour the
+  solver can only match by differential-testing a real implementation present in
+  the image (and NOT re-derivable from a memorized spec or a reachable
+  stdlib/host reference);
+- **(b) an undisclosed counter-intuitive rule** — a rule a naive-but-careful
+  implementation gets wrong, with a broad enough footprint to survive fair
+  disclosure of the surrounding contract.
+
+Everything disclosed-and-derivable is EASY 3/3, regardless of rule count,
+cascade depth, stated counter-intuitiveness, or optimization shape. A
+**DISCLOSED** counter-intuitive rule is not hard either — Opus reads it straight
+from the spec (hanabi downward-rotation and maven memorized-reference both
+collapsed 820/820 once stated). Screen every candidate by naming which of the
+two levers it hides, in one sentence, in the artifact. Cannot name one → reject
+at mining time, cost zero. This subsumes the spec-task advice in "Opus-4.8
+resistance" and the bugfix-side "Fix-shape filter": both are projections of this
+law onto their lane.
+
+**fair⊥hard single-lever early-DROP (apply here, not after the platform flag):**
+if the candidate's ENTIRE difficulty is one boundary / convention / precedence /
+output-contract fact, there is no fair-and-hard path — hiding it produces an
+unfair 0/N coverage flag, disclosing it collapses the task to EASY. Reject at
+mining; do not wait to learn this from a platform return (arrhenius-clip-fit,
+calibration-threshold-select, hanabi, provenance-release-gate were all
+late-drop lessons). Fingerprints: a self-contained game-replay or
+single-invariant adjudicator; difficulty that lives in an uninferable OUTPUT
+contract rather than semantics; a "wall" that is one code path. The only
+escape: the candidate admits a SECOND lever that is orthogonal, undisclosed,
+and broad-footprint (hex-requirement intersection=0) —
+record it explicitly or reject. ⚠️ A claimed orthogonal second lever must be
+VERIFIED genuinely broad before you trust it: DKIM's supposed second wall
+evaporated on the 2026-07-19 platform return (20/20 strong runs passed every
+other DKIM feature; the whole series dropped as single-lever fair⊥hard).
+Record `collapse_law_screen: pass|fail` with
+the named lever in the candidate artifact.
+
+**Screen calibration control group (mandatory per mining round, 2026-07-20):**
+the screen is a one-sentence PREDICTION, and screen-rejected candidates are
+never probed, so its false-negative rate is invisible by construction — a
+too-strict screen silently starves the pipeline while looking like "the design
+working". Each round, advance 1 screen-FAILED candidate (not from a
+§6 CONFIRMED-dead family) into the skeleton probe anyway, marked
+`screen_control: true` in `index.jsonl`. A control that HOLDS (0/2 semantic)
+is a measured false-negative: keep the candidate in the normal pipeline, log
+the finding as durable, and loosen the specific screen criterion that killed
+it. Controls that collapse confirm the screen at skeleton cost, not build
+cost.
+
+### Mechanical patch-shape gate — RUN FIRST, pass/fail, before any scoring (CANONICAL fix-shape test)
+
+This is the single canonical fix-shape test — the former "Fix-shape filter" and
+"Pre-mine fix-shape probe" sections are folded in here. The principle kept
+getting ignored when stated loosely: 17 candidates
 shipped and 14 rated <=EASY (June 2026 batch B). So gate it MECHANICALLY. Open
 the fixing diff and answer these. A candidate is Hard-eligible ONLY if at least
 ONE is true:
@@ -590,8 +830,28 @@ ONE is true:
 
 If NONE hold — i.e. the entire fix is "+1..~20 lines inside ONE existing
 function / one obvious spot" — REJECT for Hard with no exception for CVE status,
-security/crypto domain, severity, or impressive component names. Record
+security/crypto domain, severity, or impressive component names (the "5-6
+components" heuristic does not save these: they look component-rich but the
+patch lives in one obvious spot). Record
 `patch_shape_gate: fail`. This is the single most important gate in this skill.
+
+**Framing question (apply while reading every diff):** "if I describe only the
+observable symptom to a strong agent, does it produce this patch by adding an
+obvious guard / validation / bound check / nil-check / early return, or by
+copying a check that already exists on another path?" If yes → EASY/TRIVIAL.
+The patch's REASONING content, not its severity or LOC spread, sets difficulty:
+a 7-line CVE fix that mirrors an existing guard onto a second path is TRIVIAL;
+a 7-line fix that requires inventing a new invariant is not. Empirical
+confirmations (all rated TRIVIAL/EASY on platform despite "hard" metadata):
+ssh RSA-modulus DoS (one `BitLen()>8192` check), knownhosts key-type mismatch /
+multiple-marker / revoked-CA, DSA param validation (three FIPS bound checks in
+one func), and even ssh source-address bypass CVE-2026-46595 (mirrors the
+existing source-address check onto the VerifiedPublicKeyCallback path). KEEP
+for Hard only when the fix requires designing a new abstraction (new
+type/interface/struct field, multi-method refactor), a non-obvious algorithm or
+state-machine change, or reconciling a genuine cross-component contradiction
+the agent cannot copy from an existing site — and prefer bugs where naming the
+observable symptom does NOT hand the agent the patch location and shape.
 
 ### Empirical override (2026-06 non-Python batch, 9 agent-RATED tasks): the count-based gate above is NECESSARY, NOT SUFFICIENT
 
@@ -677,43 +937,11 @@ building source" is RETRACTED for Hard mining — it is rich in TRIVIAL.
 
 ### Fix-shape filter — the #1 cause of EASY/TRIVIAL ratings (empirical, June 2026)
 
-Difficulty is set by the reasoning needed to PRODUCE THE FIX, NOT by the bug's
-severity, CVE status, security domain, file count, or impressive subsystem
-names. A security-critical, CVE-grade, multi-file bug still rates TRIVIAL/EASY
-if the fix is a small obvious guard. The "5-6 components" heuristic does NOT
-save such candidates — they look component-rich but the patch lives in one
-obvious spot.
-
-REJECT a candidate (for Hard) when the likely fix is any of:
-
-- a single bound / size / range check (`if N.BitLen() > 8192 { reject }`,
-  `if rounds > 2048 { reject }`, `Q must be 160 bits`)
-- a missing validation that is an obvious idiom (compare a declared type vs the
-  actual decoded type and reject mismatch; reject a malformed/duplicate marker;
-  anchor a regex)
-- MIRRORING an existing check onto another code path (the bug is "path B lacks
-  the guard that path A already has"; the agent copies A's logic to B)
-- adding a nil-guard, an early return, or a missing error return
-- anything a strong agent produces just by reading the observable symptom and
-  adding ~1-15 lines in the one function the symptom points to
-
-This holds even if the candidate is a published CVE, touches auth/crypto, or
-spans several files. Empirical confirmations (all rated TRIVIAL on platform
-despite "hard" metadata): ssh RSA-modulus DoS (one `BitLen()>8192` check), ssh
-knownhosts key-type mismatch (compare declared vs actual type), knownhosts
-multiple-marker rejection (reject host starting with `@`), DSA param validation
-(three FIPS bound checks in one func), and even ssh source-address bypass
-(CVE-2026-46595 — fix just mirrors the existing source-address check onto the
-VerifiedPublicKeyCallback path). knownhosts revoked-CA (also check the signing
-CA key against the revoked set) rated EASY.
-
-KEEP for Hard only when the fix requires at least one of: designing a new
-abstraction (new type/interface/struct field, multi-method refactor with new
-signatures); a non-obvious algorithm or state-machine change; reconciling a
-genuine cross-component contradiction the agent must reason through and CANNOT
-copy from an existing site; or prior frontier-agent trials that fail for
-semantic (not tooling) reasons. Prefer bugs where naming the observable symptom
-does NOT hand the agent the patch location and shape.
+Folded into the **Mechanical patch-shape gate** above (canonical): the reject
+fingerprints (obvious guard/bound/nil-check, idiom validation, mirrored check,
+~1-15 lines in the one function the symptom points to), the empirical TRIVIAL
+confirmations, and the KEEP-for-Hard criteria all live there. Run that gate;
+never re-derive difficulty from severity, CVE status, or file count.
 
 ### Mine TOWARD these Hard fix-signatures (positive selection)
 
@@ -780,6 +1008,8 @@ Score each axis from 1 to 5:
 
 Reject if:
 
+- the Master collapse law screen fails (no nameable lever, or single-lever
+  fair⊥hard fingerprint with no orthogonal second lever) — see Hardness Filter
 - `subsystem_interaction < 4` unless prior real-agent evidence shows the task is
   still hard for semantic reasons
 - `deterministic_reproducibility < 4`
@@ -812,8 +1042,20 @@ candidate:
   subcategories:           # the 5 cross-cutting subtypes: zero or more of long_context, tool_specific, api_integration, db_interaction, ui_building
   target_difficulty:       # hard | medium  (never easy; Python => must be hard)
   expected_codebase_size:  # minimal (~0-20 files) | small (~20+) | large (~200+)
+  design_signature:        # required for batch diversity; compare before shortlist
+    work_surface:          # cli | filesystem | service | database | build | game | numerical
+    interaction:           # single_shot | multi_step | stateful | streaming | recovery
+    input_surface:         # json | config_tree | binary | http | sql | manifest | logs | other
+    oracle_type:           # exact_reference | invariant | metamorphic | final_state | tolerance
+    verifier_type:         # corpus | scenario | property | mutation | end_to_end
+    failure_mode:          # missed_invariant | lost_state | wrong_sequence | drift | partial_fix | other
+  test_cluster_plan:       # 6–8 independent behavior clusters before skeleton probing
+    - cluster:
+      evaluation_units:
+      verifier_shape:
+      soft_representative:
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
-  gallery_novelty:         # novel | twist-on-existing | duplicate  (duplicate => reject)
+  gallery_novelty:         # novel | twist-on-existing | duplicate — fresh-only doctrine (default): anything below novel => reject; twist-on-existing acceptable ONLY when the user explicitly asked for a variant/port
   objective_type: spec_implementation | data_pipeline | tool_workflow | api_service | db_interaction | ui_build | upstream_bugfix | feature | build | admin_config | security | scientific | ml | game
   subtype_profile:         # fill ONLY the block(s) matching subcategories above
     long_context: { document_source:, approx_tokens:, format:, why_not_greppable: }
@@ -867,6 +1109,7 @@ candidate:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
+  collapse_law_screen:     # pass | fail — name the hidden lever in one sentence: in-image library-quirk differential | undisclosed counter-intuitive rule; fail (or single-lever fair⊥hard fingerprint) => reject
   patch_shape_gate:        # pass | fail — from the mechanical gate; fail => not Hard-eligible
   patch_shape_evidence:    # which gate condition passed (new symbol / >=2 interacting files / multi-commit / probe-fail)
   family_key:              # library + bug_family, checked against the family ledger
@@ -918,56 +1161,40 @@ user N hard tasks from a pipeline:
   cache-eviction, valkey resize policy, go-mysql FDS), but do not re-label these
   as another category unless the primary activity truly changes; cosmetic labels
   are caught by reviewers/classifiers.
-- **The strongest ALLOWED-category lever (2026-07-01, netted 10 HARD / 17 built):
-  an OFFICIAL machine-checkable conformance suite over a spec with a genuinely
-  DIVERGENT / irregular long tail, where NO host-stdlib matches.** Ship the stub,
-  bake the official suite HIDDEN under `tests/` (a leaked answer table in
-  `environment/repo` makes it trivial — see task-clone), oracle passes 100%. Wins:
-  WHATWG-URL (urltestdata.json), UTS-46 IDNA (IdnaTestV2), RFC 9535 JSONPath (CTS),
-  UAX-14 line-break (LineBreakTest), UAX-29 SENTENCE-break, JSON-Schema-2020-12
-  (unevaluated*+$dynamicRef), HTML5 tokenizer (html5lib). **LEARN THE PATTERN, NOT THE RESOURCE: those
-  named suites are ILLUSTRATIVE and by now mostly CLAIMED/BUILT by the team
-  (including sibling memories) — the LEVER is the reusable asset; a specific
-  suite is a shared, FINITE commodity. Do NOT default to a named suite. The
-  resource universe (WHATWG / Unicode UTS-UAX / RFC CTS / JSON-Schema / TOML
-  toml-test …) is small, so two miners who both "learned the resource"
-  independently reach for it and ship duplicates — confirmed: our TOML
-  (Go/toml-test) task collided outright with a teammate's, and our
-  html5-tree-construction collided with their whatwg-url-parse on the same
-  Rust × Data-Processing × WHATWG-conformance cell. Apply the pattern to a
-  FRESH spec+suite that is NOT already in the registry, and claim its
-  `conformance_suite`+`spec` in `index.jsonl` BEFORE building (see the
-  spec-conformance dedupe key below). The resource-agnostic spec for this
-  lever, the claimed-resource ledger, AND a complete step-by-step **L1 build
-  procedure** live in `.agent/skills/task-miner/lever_patterns.md` — follow that
-  runbook top-to-bottom (pivot-check for in-env reference impls, messy-spec check,
-  blind probe, fairness audit, disclose-vs-collapse, instruction_check). It is a
-  memory-free source of truth: anyone can build a fair-HARD task from it with NO
-  personal memory. Read it instead of relying on memory; it is shared, memory is
-  per-person.** Independent full
-  implementations each miss DIFFERENT tail cases → 0-1/3 solve. NON-winners with a
-  suite: clean CLEAN-RULE-SET segmenters (UAX-29 WORD-break was 3/3 EASY — a finite
-  rule set + a provided property table is learnable) and well-known algos (byte-BPE,
-  3/3). Clean bidirectional CODECS (bech32/punycode/structured-fields) and matching
-  engines (git-pathspec) also 3/3 EASY. So the suite is necessary-not-sufficient:
-  it must cover a spec people actually implement INCONSISTENTLY. Probe CENTRALLY
-  from the manager (this harness spawns subagents async-only); blind solvers must
-  NOT paste source (dumps blow up context). Audit any 0/3 for the unfair artifact:
-  if all runs fail the SAME single narrow test it is a spec-ambiguity, not hardness
-  (a MIME encoded-word task's encode-structure test had legit fold/B-vs-Q freedom).
-- **The full lever menu is codified as L1–L4 in
-  `.agent/skills/task-miner/lever_patterns.md` — spread batches across levers, not just
-  L1.** L1 conformance-suite resources are a SHARED FINITE commodity (claim first); L2
-  synthetic interval/continuous-time invariant ledgers are **SATURATED / on cooldown**
-  (10+ near-identical `-ledger` instances shipped; empirical ceiling MEDIUM; the
-  domain-port re-skin lane is CLOSED — see the L2 STATUS callout + anti-anchoring
-  naming rule in `lever_patterns.md` before proposing one); L3
-  differential-vs-in-env-authority is fair-by-construction (no disclose-vs-collapse
-  trap); L4 multi-vector security hardening is confirmed-HARD in an allowed category.
-  Plan every batch as a PORTFOLIO: beating the best model is a ~1/5 lottery per task,
-  so design each task for a fair-MEDIUM floor (union-of-misses corpus, per-case or
-  banded scoring — see L1 step 5) with HARD upside, and SUBMIT non-Python Medium
-  results (`target_difficulty: medium`) instead of discarding them.
+- **⛔ HISTORICAL — the L1 conformance-suite lever (2026-07-01, netted 10 HARD /
+  17 built) is DEAD for FRESH mining (2026-07-19).** The recipe — an OFFICIAL
+  machine-checkable conformance suite over a spec with a genuinely DIVERGENT /
+  irregular long tail, suite hidden under `tests/`, no host-stdlib reference —
+  produced WHATWG-URL, UTS-46 IDNA, RFC 9535 JSONPath, UAX-14 line-break,
+  UAX-29 SENTENCE-break, JSON-Schema-2020-12, HTML5 tokenizer. It is now
+  triple-dead for NEW tasks: (a) **category** — the normalize/parse-to-spec
+  stub-fill shape predicts software-engineering = BLOCKED (`category_rules.md`
+  R4; AGENTS.md §9: the entire conformance-parser port matrix —
+  idna/uax14/uax29/whatwg/html5 — is category-dead); (b) **saturation** — the
+  classic engines are originality-CLOSED in the ledger
+  (`.agent/mined-candidates/platform-passed-portfolio.md`); (c) **yield** — the
+  fresh/ported §3 conformance pincer (HARD ∩ category-safe ∩ oracle-correct ∩
+  broad) is nearly empty (AGENTS.md §9). Do NOT follow the L1 runbook for fresh
+  mining. The runbook + claimed-resource ledger in
+  `.agent/skills/task-miner/lever_patterns.md` stay valid ONLY for remediating
+  already-returned legacy L1 tasks (fairness audit, disclose-vs-collapse, 0/N
+  remediation) — or for a shape that FIRST passes the rules-first category gate
+  (`category_rules.md`).
+- **Fresh-lane status (updated 2026-07-20):** there is no default live lane.
+  The bd-mgmt seam remains category-friendly but its disclosed resolver engines
+  collapsed; all three interaction/scale archetypes are closed as HARD sources.
+  Start from genuinely fresh source classes and structural signatures, not
+  either label. The general principles from the L1 era still hold: probe
+  honestly (warm loop, terse prompt, score by
+  differential; probe CENTRALLY from the manager, blind solvers must NOT paste
+  source; audit any 0/N where all runs fail the SAME single narrow test — that
+  is spec-ambiguity, not hardness), claim/dedupe resources in `index.jsonl`
+  before building, and plan every batch as a PORTFOLIO — spread risk across
+  lanes, design for a fair-MEDIUM floor with HARD upside, and SUBMIT non-Python
+  Medium results (`target_difficulty: medium`) instead of discarding them. L2
+  interval ledgers remain SATURATED/closed; L3/L4 in `lever_patterns.md` are
+  historical reference, usable only after passing the collapse-law screen AND
+  the category gate.
 
 ## Hardness Calibration
 
@@ -983,14 +1210,9 @@ Downgrade or reject candidates when:
   and solve the task
 
 **Pre-mine fix-shape probe (apply to EVERY candidate before scoring it Hard):**
-read the actual fixing diff and ask, "if I describe only the observable symptom
-to a strong agent, does it produce this patch by adding an obvious guard /
-validation / bound check / nil-check, or by copying a check that already exists
-on another path?" If yes → EASY/TRIVIAL, reject for Hard regardless of CVE
-status, security domain, or component count (see the Fix-shape filter above).
-The patch's REASONING content, not its severity or LOC spread, sets difficulty.
-A 7-line CVE fix that mirrors an existing guard onto a second path is TRIVIAL;
-a 7-line fix that requires inventing a new invariant is not.
+this is the Mechanical patch-shape gate's framing question — run that gate
+(canonical, above) on the actual fixing diff before scoring; CVE status,
+security domain, and component count never override it.
 
 For Python tasks, keep only candidates likely to make strong agents fail after understanding the prompt, not merely candidates that look complex by subsystem name.
 

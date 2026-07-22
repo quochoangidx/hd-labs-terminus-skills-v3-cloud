@@ -77,8 +77,10 @@ candidate:
   subcategories:           # the 5 cross-cutting subtypes
   target_difficulty:       # hard | medium (never easy; Python => hard)
   expected_codebase_size:  # minimal | small | large — recompute from environment/ before shipping
+  design_signature:        # work_surface, interaction, input_surface, oracle_type, verifier_type, failure_mode
+  test_cluster_plan:       # 6–8 independent clusters with evaluation units, verifier shape, soft representative
   closest_gallery_task:
-  gallery_novelty:         # novel | twist-on-existing | duplicate (duplicate => do not clone)
+  gallery_novelty:         # novel | twist-on-existing | duplicate — fresh-only doctrine (default): clone only novel; twist-on-existing needs an explicit user request for a variant/port
   subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
   objective_type:
   source_url:
@@ -212,14 +214,45 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
-8. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false`, the artifact's valid category/subcategories, and realistic resources.
+8. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false` (default; platform allows `true` only when the task genuinely requires internet — eval-checked, not our lane), the artifact's valid category/subcategories, and realistic resources.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
-10. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
-11. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
-12. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
-13. Run structural checks, CI checks, and optional real-agent trials.
-14. After behavior and validation are stable, write reviewer-facing Difficulty,
+10. **SKELETON PROBE GATE (mandatory — before any oracle/verifier investment).**
+    At this point you have `instruction.md` + a buildable `environment/` + the
+    stub, and that is ALL a difficulty probe needs. Assemble a ROUGH check
+    command with about 30–60 evaluation units spanning 6–8 independent
+    behavior clusters — the real oracle and hidden corpus do not exist yet) and
+    run `task-local-solve-probe` in Skeleton mode with 2 fresh blind solvers.
+    Add a 3rd only on a 1–1 split, a shared failure cluster, or incomplete
+    per-case union.
+    - 2/2 pass (or 3/3 after an adaptive run) → DROP the candidate or
+      redesign its lever NOW; do not write the oracle, the verifier corpus, or
+      the packaging for a task the master collapse law already killed
+      (AGENTS.md §1).
+    - 0/2 with de-correlated semantic failures and 100% union, or 0–1/3 with
+      the same geometry → continue to step 11. A 2/3 result is AMBER and follows
+      `task-local-solve-probe`; it is never automatic handover.
+    - A repeated common miss after run 3 → authority-audit, then DROP/redesign
+      if it is a single-lever fingerprint.
+    - Failures from setup / unclear instruction / broken skeleton → fix the
+      skeleton and re-probe; those runs measure nothing about difficulty.
+    The post-build full probe (step 14) remains the source of truth for the
+    submit verdict; this gate only exists to stop full builds of all-pass-EASY
+    tasks.
+11. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
+12. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
+13. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
+14. Run structural checks, CI checks, and local fresh-subagent blind probes
+    (`task-local-solve-probe`) — stb real-agent trials are permanently
+    geoblocked from this environment (AGENTS.md §7).
+15. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
+
+> ⚠️ The three interaction/scale archetypes in
+> `.agent/skills/task-miner/interaction_shape_recipe.md` are historical and
+> currently closed as reliable HARD sources (ops restoration and DB migration
+> fell 3/3; long-context was closed by analysis). Use that recipe only for a
+> user-requested Medium experiment or the single SUSPECT-dead retest allowance,
+> never as a default batch lane.
 
 ## Regular Layout
 
@@ -248,11 +281,12 @@ Prefer external notes under `workspace/reports/<task-slug>/` when possible so su
 For the current platform submission form, create:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (the UI-ready platform packet — single canonical name)
 ```
 
-Never place these files under the submitted task root.
+Packet contents and format: the "platform packet" section near the end of
+this skill. Never place either file under the submitted task root or ZIP.
 
 ## Metadata Defaults
 
@@ -359,15 +393,21 @@ in pytest. Use LOWERCASE slugs: `["rust"]`, `["go"]`, `["c"]`, `["typescript"]`
 — NOT `["Rust"]`/`["Go"]` (reviewers return capitalized values; the docs examples
 are all lowercase).
 
-**`[environment].workdir` is MILESTONE-ONLY.** Do NOT set `workdir` in a
-non-milestone (`number_of_milestones = 0`) `task.toml` — the container working
-directory comes from the Dockerfile `WORKDIR /app`; a stray `workdir` line gets
-flagged. (Docs `task-components.md`: `workdir = "/app"  # Milestone tasks only`.)
+**`[environment].workdir` — default to Dockerfile-`WORKDIR`-only on
+non-milestone tasks.** With `number_of_milestones = 0`, let the container
+working directory come from the Dockerfile `WORKDIR /app` and omit `workdir`
+from `task.toml` (docs `task-components.md`: `workdir = "/app"  # Milestone
+tasks only`). BUT when a human reviewer explicitly requests `workdir = "/app"`
+on a non-milestone task, honor it — set it to the same dir as the Dockerfile
+`WORKDIR` and rebuild (reviewer-overridden 2026-07-16, card-stack-replay;
+the human reviewer sits above the static scanner). Both blocks are apparently
+accepted; the "a stray workdir line fails the check" claim is not reliable.
 
-⚠️ The der-canonical-codec reference `task.toml` predates these two rules — it
+⚠️ The der-canonical-codec reference `task.toml` predates these rules — it
 ships `languages = ["Rust"]` AND `[environment] workdir = "/app"` in a
-non-milestone task. Both are WRONG; do not copy them. Confirmed 2026-07-01 by a
-platform reviewer on a Rust task.
+non-milestone task. The capitalized language is WRONG (confirmed 2026-07-01 by
+a platform reviewer on a Rust task); the `workdir` line follows the
+default-omit-unless-reviewer-requested rule above — do not copy it by default.
 
 ## Rubric quality (rubric is entered in the UI, NOT in the ZIP — see task-zip-submit)
 Reward the END STATE, not the process. Do NOT add criteria for "reads/studies the
@@ -403,7 +443,7 @@ Write like a real engineer describing the requested observable work:
 - Before the first platform check, run the `instruction_check` binary preflight
   in `terminus-regular-task-authoring` (Prompt Rules). The escape hatches for a
   flip-flopping verdict, test-pinned literals, and custom output formats live in
-  `.agent/skills/task-miner/lever_patterns.md` (L1 step 8): ship the non-blocking
+  `.agent/skills/task-miner/lever_patterns.md` (L1 step 9): ship the non-blocking
   ⚠️ when the flagged items are test-pinned, use natural JSON + a semantic
   verifier instead of a bespoke byte format, and move unavoidable disclosures
   into an in-env reference file with a one-line pointer.
@@ -526,7 +566,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   neither of which is on that login PATH, so the agent cannot invoke the compiler
   even though oracle/nop can (they run in a non-login shell with PATH intact).
   Symlink them: Go `RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`;
-  Rust `ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`.
+  Rust `ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`;
+  Java `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac` (+ `java`).
+  `node`/`gcc` images already place tools in `/usr/local/bin`.
   Confirmed 2026-07-01: a Go task omitted this and ~3/10 agent trials failed with
   "no Go toolchain, unable to compile", scoring 0 for a pure environment reason
   while oracle stayed green. Verify with
@@ -559,16 +601,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   e.g. `RUN cargo build --tests`; `RUN go build ./... && go vet ./...`;
   `RUN npm ci && npm run build`; configure + `make` for autotools/CMake. A cold
   per-edit rebuild is the #1 cause of the Agent Timeout Gate (see that section).
-- **put the language toolchain on the agent's LOGIN-shell PATH by symlinking it
-  into `/usr/local/bin`** — the agent runs in a login shell that resets PATH to
-  the default and DROPS Docker `ENV PATH=...` additions, so a toolchain under
-  `/usr/local/cargo/bin` (Rust), `/usr/local/go/bin` (Go), or `${JAVA_HOME}/bin`
-  (Java) is invisible to the agent and causes wasted steps / timeouts even
-  though oracle/nop pass (they run as non-login subprocesses inheriting the
-  image ENV). e.g. `RUN ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo`
-  (+ `rustc`); `ln -sf /usr/local/go/bin/go /usr/local/bin/go`;
-  `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac`. `node`/`gcc` images
-  already place tools in `/usr/local/bin`. Sanity: `bash -lc 'which <tool>'`.
+- login-shell PATH: covered by the "expose the language toolchain on
+  `/usr/local/bin`" bullet above — the same symlink rule applies whenever the
+  agent must rebuild. Sanity: `bash -lc 'which <tool>'`.
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
@@ -716,16 +751,58 @@ Confirmed 2026-07-01: a UAX-14 line-break task shipped `src/cases.rs` with all
 -- that leaked the entire answer key; the fix was to move the check to the hidden
 `tests/` vectors and delete the repo table.
 
+**Anti-cheat: a `/tests`-readable expected-output corpus + candidate-run-as-root
+is a reviewer-blocking cheat surface (2026-07-18, sbom-purl-key + lowess —
+AGENTS.md §3).** A candidate that just reads the `/tests` corpus and echoes each
+row's `expected` passes every case with zero logic. For any conformance-style
+clone, stack ALL of these (difficulty-neutral):
+1. `_hide_corpus()` — load the corpus into memory, then (only when
+   `dirname(CORPUS) == "/tests"`) `os.unlink` the corpus file AND
+   `os.chmod("/tests", 0o700)` BEFORE compiling or running any candidate code.
+2. Run the candidate as an unprivileged user — `subprocess.run(...,
+   user="nobody", group="nogroup")` iff `os.geteuid() == 0` (else no kwargs, so
+   local non-root runs keep working) — and `chmod -R a+rX` the temp build dir
+   (plus `0644` file-argument inputs / `0755` their dirs) so `nobody` can read
+   root-owned artifacts.
+3. Checker-owned compile: never run a submitted Makefile/executable while the
+   corpus is readable; compile the submitted source with the verifier's own
+   command. Remove `/solution` in the build fixture (the oracle's solve.sh has
+   already copied its source into `/app` by verify time) and reject a
+   translation unit that is a symlink, resolves outside `/app`, or `#include`s
+   an absolute, `..`-containing, or `solution`-named path.
+4. Run pytest as `python3 -I -m pytest` from a fresh verifier-owned dir — this
+   blocks an agent-planted `/app/sitecustomize.py` that `os._exit(0)`s the
+   interpreter into a free reward.
+5. Prove it with a cheat-emulation: a corpus-reading candidate must pass the
+   OLD verifier (reward 1) and fail the NEW one (reward 0), while oracle stays
+   1 and nop 0. Sweep every language sibling of a shared-corpus port series —
+   they share the hole.
+6. Stage anything the verifier execs on an exec-capable base (`/app`,
+   `/var/tmp`, `/dev/shm`), never bare `/tmp` — the platform mounts `/tmp`
+   noexec; the `scripts/preflight.sh` `--tmpfs /tmp:noexec` repro in Quality
+   Preflight catches this.
+
 **Structure conformance corpora for union-not-intersection difficulty (the
 "Some tests not passed by any agent run" gate is BLOCKING).** Score per-case
-(parametrized tests) or in graded bands whose top band a best realistic run can
-actually reach; never ONE monolithic all-N-cases-must-pass function — a single
+or in graded bands whose top band a best realistic run can actually reach.
+Verify CTRF reports each case independently; if parametrization collapses rows,
+generate uniquely named `test_case_001`-style functions. Never use ONE
+monolithic all-N-cases-must-pass function — a single
 universal blind spot then turns that whole test 0/N and the task gets returned.
 Before shipping, drop or disclose (one prose sentence) any case EVERY fresh
-implementation would miss; keep hardness as many independent quirk families
-each solver misses a different slice of. Full remediation decision tree when
-the flag fires anyway: `.agent/skills/task-revise-flag-remediation/SKILL.md`
-(design-time rules: `lever_patterns.md` L1 step 5).
+implementation would miss; keep hardness as many independent feature families
+each solver misses a different slice of. Corpus-curation rules: target 50–1000
+meaningful evaluation units when cheap, or 20–80 complex stateful/interaction
+scenarios; never pad one rule into hundreds of correlated rows. Mix verifier
+shapes when appropriate (scenario, property/metamorphic, mutation/anti-shortcut,
+final-state, tolerance/differential); every feature cluster keeps ≥1
+"soft" case a majority of runs pass; and the trimming direction is always
+data-driven from the per-case pass table — NEVER "drop the easy cases, keep
+the hard ones" (easy cases are the coverage that keeps the 0/N flag from
+firing; a hard-only corpus maximizes 0/N exposure). Full remediation decision
+tree when the flag fires anyway:
+`.agent/skills/task-revise-flag-remediation/SKILL.md`
+(design-time rules: `lever_patterns.md` L1 step 6).
 
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
@@ -839,6 +916,7 @@ handles the `/app` working directory.
 set -uo pipefail
 
 mkdir -p /logs/verifier
+echo 0 > /logs/verifier/reward.txt
 
 if [ "$PWD" = "/" ]; then
     echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
@@ -924,6 +1002,49 @@ mistakes each cost a full rebuild this session — avoid them up front:
 
 Before packaging or platform upload:
 
+- **run `scripts/preflight.sh <task-dir>` (repo root) — zero FAIL rows
+  required.** It machine-checks layout, .dockerignore entries, Dockerfile
+  hygiene (syntax line, canonical digest-pinned base, bind-mounts),
+  task.toml fields, leak sweep, zip arcnames/CRLF, rubric format, docker
+  oracle=1.0/nop=0.0, and the oracle-under-`--tmpfs /tmp:noexec` repro.
+  (New tasks should have been stamped by `scripts/new-task.sh`, which
+  pre-wires the hygiene this checks.)
+- **run the per-case pass-table pre-audit (mandatory for any corpus-graded
+  verifier).** Re-score the stored blind-probe solver diffs per-case against the
+  FULL corpus (free — no new solver runs) and build the pass table. Then check
+  three conditions before zipping: (1) every case has ≥1 probe passer, so union
+  coverage across runs is 100% and common-miss count is 0 — any
+  0-probe-pass case is a correlated-blind-spot candidate, handle it via
+  `task-revise-flag-remediation` NOW (and suspect the ORACLE first: authority-
+  check before pruning); (2) when ≥2 runs fail, their failure sets are
+  de-correlated across ≥2 clusters rather than sharing one load-bearing lever;
+  (3) every feature cluster still has a soft representative a majority of runs
+  pass. Do not confuse 100% UNION coverage with the best individual run; a
+  valid 1/3 result necessarily includes one 100% individual run.
+- **run the category check, rules first (mandatory — the real
+  `category_classifier` is geoblocked from VN and cannot be preflighted).**
+  FIRST apply the real-CI-calibrated rules in
+  `.agent/skills/task-miner/category_rules.md` to the task shape: a fired
+  BLOCK rule (exact-reference-conformance → SWE; dataset→report → DP; repair
+  shape → debugging; stub-fill compute-to-spec → SWE) is authoritative —
+  reshape or drop, and do NOT run the probe hoping it disagrees; a fired
+  ALLOW rule matching the declared category needs at most one confirmatory
+  probe run, and a probe run disagreeing with it is noise (purl: probe SWE
+  0.9, real CI bd-mgmt 1.0). Only when no rule fires, fall back to the blind
+  category probe. For the probe: give a FRESH subagent
+  (zero task context) only the classifier-visible surfaces — `instruction.md`,
+  the `environment/` file tree listing, README, and the rubric text — WITHOUT
+  the declared category, and ask it to pick the task's primary-activity
+  category from the 9 slugs (software-engineering, debugging,
+  data-processing, build-and-dependency-management, system-administration,
+  security, scientific-computing, machine-learning, games) with a confidence
+  and a one-line reason. Run it twice, adding a 3rd run only on a 1–1 split
+  (user-set probe default; the platform's `llm_fallback` is noisy). Any run predicting a BLOCKED slug, or a majority predicting ≠ the
+  declared category → reshape the SHAPE (instruction verbs, I/O surface,
+  rubric lines, repo furniture — see `task-miner`, Classifier-visible surface
+  artifacts) and re-probe; do not just re-word prose or change `task.toml`.
+  The probe's one-line reasons tell you exactly which surface is leaking the
+  wrong shape
 - run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
 - include preservation/non-regression test coverage in the prompt, including modes not directly part of the bug trigger
 - run a verifier API sanity audit for every imported class/function and every
@@ -973,13 +1094,26 @@ available solve probes are stable.
    - Solution: root cause, high-level oracle strategy, and preserved behavior.
    - Verification: requirement-to-test mapping, why cases discriminate, and
      actual oracle/nop results.
-2. Produce `submission-explanations.md` as the concise UI-ready version.
+2. Produce the complete platform packet at
+   `submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
+   `task-batch`) containing, beyond the three explanations:
+   - **Metadata**: "Does this task use an approved canonical base image?"
+     Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
+     a Task Inspiration from the Task Gallery?" Yes/No + the Inspiration ID
+     when yes (`mined-candidates/gallery_tasks_snapshot.md`).
+   - **Rubrics**: the full paste-ready block (NOT shipped in the zip) —
+     format rules in the Rubric quality section above and AGENTS.md §9: one
+     physical line per criterion starting with `Agent`, closed score set
+     {+1,+2,+3,+5,-1,-2,-3,-5} with mandatory leading `+`, positive sum
+     10–40, block appears once, behavior-not-work-steps, affirmative
+     penalties, no test paths, nothing leaking the hidden lever.
+   - **File zip name**: the matching zip in `submissions/`.
 3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
    an editorial pass. Do not add claims, remove thresholds, or change technical
    meaning.
 4. Compare the final version with `instruction.md`, `solution/fix.patch`,
    `tests/test_outputs.py`, and validation reports.
-5. Keep both files outside the task ZIP.
+5. Keep the source notes and the packet outside the task ZIP.
 
 Use this structure in both files:
 
@@ -1026,8 +1160,12 @@ agent runs need an explicit `-a terminus-2` because `-a` defaults to oracle):
 stb harbor run -a oracle -p <task-folder>
 stb harbor run -a nop -p <task-folder>
 stb harbor check <task-folder>
-stb harbor run -a terminus-2 -m @openai/gpt-5.5 -k 3 -p <task-folder>   # difficulty, needs approval
 ```
+
+stb agent runs (`-a terminus-2 -m ...`) and Harbor LLM calls are PERMANENTLY
+geoblocked from this environment (AGENTS.md §7) — do not plan around them. The
+only local difficulty signal is fresh-subagent blind probes via
+`task-local-solve-probe`.
 
 If Docker is not running, still run static checks:
 
@@ -1041,7 +1179,9 @@ PY
 
 Before submission, real-agent pass rate must be below 80%; Python tasks should target hard.
 
-Difficulty gate:
+Difficulty gate (PLATFORM-result interpretation only — these numbers come from
+the platform's own agent runs after submission, not from anything runnable
+locally):
 
 - If any frontier reference agent passes `5/5`, treat the task as Medium unless another agent family consistently fails for implementation reasons.
 - If aggregate real-agent pass rate is `>= 80%`, do not submit as Hard; re-mine or redesign.
