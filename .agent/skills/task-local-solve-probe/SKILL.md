@@ -301,6 +301,22 @@ data while independent archive, ordering, state, or interaction behavior
 remains graded. Preserve the observed probe numbers in the handoff; do not
 rewrite an amber result as `submit_ready`.
 
+When invoked from `task-batch`, an additional user-approved output verdict is
+available after exactly 3 valid semantic runs:
+`platform_candidate_coverage_risk`. It acknowledges that 3-run local union is
+a much smaller sample than the platform's roughly 10 runs. Use it only when
+all non-coverage gates are clean, Python is 0/3 and non-Python is 0–2/3. A
+non-Python 2/3 is MEDIUM/AMBER and its failing run must miss at least two broad
+semantic clusters without setup/reference advantage. When common misses are
+present, union must be at least 85%, common misses at most 15% and at most 20
+units, the common
+set spans at least 3 independent clusters, every affected cluster has multiple
+soft representatives passed locally, and the best run's residual misses are
+at least 2× the common set across at least 3 clusters. It is not
+`submit_ready`, does not count toward quota or qualified standby, and must be
+rejected for oracle/fairness/setup doubt, a fully common-missed cluster, or a
+near-perfect single-lever task.
+
 Caveats: `union coverage = 100%` means every case has at least one passer across
 the stored runs; it is not `best individual <100%`. A 2–3-run local union is a
 noisier sample than the platform's ~10 runs
@@ -361,3 +377,6 @@ Return:
   - `deliverable_amber` — explicit user-approved non-Python MEDIUM salvage;
     oracle/NOP clean, one final fresh run completed, and the small shared
     coverage cluster was remediated without removing the independent wall
+  - `platform_candidate_coverage_risk` — batch-only 3-run sample risk; bounded
+    distributed common misses remain, package separately for wider platform
+    sampling without counting it as qualified or standby

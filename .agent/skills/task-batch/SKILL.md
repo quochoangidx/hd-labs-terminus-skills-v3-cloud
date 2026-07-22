@@ -73,6 +73,11 @@ report, not a question. If the session is interrupted, re-invoking
 `submissions/`, reload state from `index.jsonl`, and continue toward the same
 cumulative quota.
 
+The batch may also produce **platform candidates** under the bounded lane below.
+Those ZIPs live in `submissions/platform-candidates/`, are reported separately,
+and are useful outputs of the run, but they never count toward `<quota>` and
+never enter the qualified standby queue before platform readback clears them.
+
 Environment notes: harbor + Docker work locally (~3 min/oracle run) and need
 no LLM; harbor LLM / stb are geoblocked from VN — run every difficulty and
 category probe yourself with fresh subagents (Agent tool), never harbor LLM.
@@ -131,6 +136,39 @@ category probe yourself with fresh subagents (Agent tool), never harbor LLM.
    `task-llm-style-audit`; zip lands in `submissions/`.
 6. `submissions/SUBMISSION-<slug>.md` complete (section below).
 
+### Platform-candidate coverage-risk lane (3 local runs vs about 10 platform runs)
+
+Local union coverage from only 3 agents is a conservative pre-audit, not a
+faithful estimate of the platform's wider sample. After exactly 3 valid
+semantic runs, a task that misses handover condition 3 may still be packaged as
+`platform_candidate_coverage_risk` when ALL of these hold:
+
+- every other handover condition is clean, including Harbor oracle/NOP,
+  category, fairness, style, ZIP, and submission metadata;
+- difficulty still holds: Python is 0/3 solved; non-Python is 0–2/3 solved.
+  A non-Python 2/3 is MEDIUM/AMBER and qualifies only when the failing run
+  misses at least two broad semantic clusters with no setup/reference advantage;
+- local per-case union is at least 85%; common misses are at most 15% of the
+  platform-visible units and at most 20 units total;
+- common misses span at least 3 independent semantic clusters, and every
+  affected cluster retains multiple soft representatives passed by at least one
+  local run;
+- the best local run still misses at least twice as many units as the common
+  set and those residual misses span at least 3 clusters, proving the common
+  set is not the task's whole difficulty wall.
+
+This lane is FORBIDDEN when any common miss reflects an oracle/authority doubt,
+instruction contradiction, unreachable required knowledge, setup failure, a
+whole feature cluster missed by all runs, or the near-perfect single-lever
+fingerprint. Do not prune or disclose merely to force strict local union when
+the lane criteria hold; preserve the evidence for the wider platform sample.
+Write the exact 3-run matrix and caveat into the local verdict and a sibling
+`PLATFORM-CANDIDATE-<slug>.md` status file; keep the reviewer-facing
+`SUBMISSION-<slug>.md` free of model/test leakage. Package under
+`submissions/platform-candidates/`, and continue mining toward the strict
+quota. A later platform 10-run pass promotes the task into the qualified queue;
+a platform 0/N return stays retained for remediation but remains unqualified.
+
 ## Strategy — 100% new tasks
 
 Follow `task-miner` → **Fresh-only exploration doctrine** exactly: no
@@ -144,6 +182,10 @@ Use a progressive beam: shortlist only the 4–6 highest-value, most diverse
 survivors for skeleton work (never two from one family), then full-build at
 most the 1–2 candidates whose probe geometry survives. Rank by expected value:
 `P(category-safe) × P(fair) × P(MEDIUM+) × P(novel) / expected model calls`.
+For this user's fresh-source runs, do not open or consult
+`.agent/mined-candidates/gallery_taxonomy.md`; prospect from newly discovered
+upstream sources and judge the resulting shapes directly against the live
+category/collapse rules.
 
 Structural diversity is mandatory, not cosmetic domain/language rotation.
 Give each shortlisted candidate a six-axis design signature — `work_surface`,
@@ -213,7 +255,10 @@ that collapse confirm the screen at skeleton cost, not build cost.
 4. **VALIDATE** against all six conditions. On a miss, fix per playbook (0/N →
    `task-revise-flag-remediation`, suspect the ORACLE first; single-lever
    fingerprint → DROP, never rescue; category drift → reshape the SHAPE and
-   re-probe). Two fix rounds without passing → drop the task, refill the pool.
+   re-probe). If only strict local union remains and the bounded platform-
+   candidate criteria hold, package into that lane without counting it. Two fix
+   rounds without either strict passage or platform-candidate eligibility →
+   drop the task, refill the pool.
 5. Keep the local `index.jsonl` statuses current as an execution log; one-line log per drop
    (slug | killing gate | reason). Every DELIVERED task also logs
    `failure_mode` (the KIND of mistake the frontier model made on the probe —
@@ -307,3 +352,6 @@ sentence) | skeleton probe | fair probe (where each run failed) | pass-table
 (every screened idea: assumed lever | killing gate | one-line verdict), every
 pivot taken and why, and fold every durable verdict (new dead/live family)
 into AGENTS.md §6/§3 per the self-update rule.
+Add a separate `platform_candidate_coverage_risk` table after the qualified
+table. State explicitly that these packages are outputs but contribute zero to
+the quota and qualified standby count.

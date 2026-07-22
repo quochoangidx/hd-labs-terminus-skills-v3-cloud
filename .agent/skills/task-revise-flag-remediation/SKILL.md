@@ -29,6 +29,29 @@ as a "spec table" to the instruction checker). The move that satisfies both:
 doc, a standard's table), not in instruction.md as prose** — see the
 disclosure ladder in `terminus-regular-task-authoring` (Prompt Rules).
 
+## Local 3-run pre-audit is not a platform 0/10 verdict
+
+When this skill is called from `task-batch`, treat a test missed by all 3 local
+solvers as a coverage-risk observation, not proof that all roughly 10 platform
+solvers will miss it. Always build the per-case × per-run matrix first:
+
+- non-Python may remain eligible through 2/3 solved; 2/3 is MEDIUM/AMBER and
+  the failing run must contain at least two broad semantic clusters;
+- Python still requires 0/3 solved;
+- union 100% and clean fairness needs no coverage remediation;
+- bounded distributed common misses that satisfy the
+  `platform_candidate_coverage_risk` thresholds in `task-batch` are preserved
+  unchanged and packaged separately for the wider platform sample;
+- common misses caused by infra, oracle, contract, aggregation, or unreachable
+  data follow Steps 0–2 below;
+- concentrated single-lever misses or candidates outside the bounded lane are
+  redesigned/dropped from the qualified pipeline, while their artifacts remain
+  retained for audit rather than being silently deleted.
+
+Do not margin-prune a task from local 0/3 evidence alone merely to manufacture
+100% local union. Platform per-trial readback is stronger evidence than the
+three-run pre-audit.
+
 ## Step 0 — rule out infrastructure look-alikes FIRST
 
 Two known non-difficulty causes produce this exact flag; check them before
