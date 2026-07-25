@@ -36,25 +36,37 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 > verifier hygiene (canonical digest-pinned base, full .dockerignore,
 > `_hide_corpus`/`nobody`-candidate/`_find_exec_base`/build-exit-check
 > helpers, per-case parametrize) pre-wired — fill its TODOs instead of
-> re-deriving the boilerplate. `scripts/preflight.sh <task-dir>` then runs
+> re-deriving the boilerplate. `scripts/preflight.sh <task-dir> --strict
+> --report-json workspace/reports/<slug>/preflight.json` then runs
 > every mechanical gate (layout, .dockerignore, Dockerfile, task.toml, leak
 > sweep, zip arcnames, rubric format, docker oracle=1/nop=0, and the
 > oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
 > zipping, every time.
 
-1. Pick the task shape: fresh default is an allowed-category shape (bd-mgmt /
-   interaction lanes etc. — see the rules-first category gate below). Pick a
+1. Pick a shape whose primary activity is machine-learning, games, or
+   system-administration (the only open net-new categories; see the rules-first
+   category gate below). Pick a
    real engineering bug with multi-step reasoning ONLY when the resulting
    repair shape still passes that gate — the repair shape fires the
    `debugging` BLOCK rule by default.
 2. Write concise `instruction.md` using absolute paths only.
-3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false` (the default; `true` is allowed ONLY when the task genuinely requires internet — an eval checks this, so never set it for convenience).
+3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false` by default. Keep `allow_internet = true` when network access is the task's point; hard-pin every live dependency/source to exact versions and immutable digests/hashes, and grade stable invariants rather than mutable live values, keys, or API shapes.
 4. Build `environment/Dockerfile` with `tmux`, `asciinema`, pinned package versions, and digest-pinned `FROM`.
 5. Put the starting state under `environment/` (a deliberately buggy state
    only for the bug-repair variant that cleared the category gate).
 6. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
-7. Write Python `pytest` verifier tests in `tests/test_outputs.py`.
-8. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
+7. Write Python `pytest` verifier tests in `tests/test_outputs.py`. Keep the
+   end-to-end solution only in `solution/`: tests may run the agent program,
+   parse its output, use golden fixtures/hashes, and assert spec-derived
+   invariants or sealed truth, but must not map task inputs to the complete
+   expected artifact themselves.
+   When the task requires reading a config/input file whose values can vary,
+   load those values at verifier runtime, mutate at least one meaningful value,
+   and re-run. A submission that ignores the file and hardcodes its parameters
+   must fail this check. Hardcoded expected results and format constants remain
+   legitimate when they are not config-claimed values.
+8. Preserve the scaffolded `tests/test.sh` from `scripts/templates/test.sh`;
+   do not reconstruct or hand-edit the runner.
 9. Run oracle, CI checks, and real-agent trials before packaging.
 
 > ⛔ Blocking CI shape gates (both judge the task's structural SHAPE, not its
@@ -190,6 +202,15 @@ phrases, verifier/test leakage, mapping-chain density) mechanically. A clean run
 is necessary, not sufficient — the content rules below (algorithm narration,
 mechanism leaks, sufficiency of tested values) still need a read.
 
+**Mandatory semantic sufficiency gate:** before any difficulty probe, create
+`workspace/reports/<slug>/instruction-sufficiency.json`, run two blind contract
+reviews, and validate it with
+`scripts/sufficiency_manifest_check.py`. Follow
+[`references/instruction-sufficiency-gate.md`](references/instruction-sufficiency-gate.md)
+exactly. Hidden cases and expected outputs are allowed; hidden contract rules
+are not. Oracle/NOP success, solver pass rates, union coverage, or a larger
+platform sample never override this gate.
+
 **`instruction_check` — pass on the FIRST try. Two DIFFERENT checks share the word
 "instruction" and pull in OPPOSITE directions, so blindly adding or cutting detail
 ping-pongs between them. Identify which one failed, then pull the matching lever:**
@@ -265,9 +286,10 @@ tripping the structural check, escalate in this order; never iterate wording sid
 - Style: a realistic engineering artifact a team would keep in the repo — states
   what the system requires, never how to implement it, no trap-pointing ("note the
   tricky…"), no algorithm walkthrough (the env-docs rules below apply in full).
-- Disclosure budget: teach only already-disclosable conventions and the families
-  blind runs universally missed; keep surviving difficulty levers OUT of the file,
-  or the task collapses to EASY.
+- Disclosure budget: state every graded contract rule while withholding worked
+  solutions, fixture literals, expected outputs, root cause, and implementation
+  method. If stating a required rule collapses the task to EASY, drop or redesign
+  the task; never preserve difficulty by hiding that rule.
 
 Copyable skeleton (no headers/bullets/tables, ≤300 words):
 
@@ -543,41 +565,18 @@ Avoid quality-check failures:
 
 ## tests/test.sh
 
-Use this shape:
-
-```bash
-#!/bin/bash
-set -uo pipefail
-
-mkdir -p /logs/verifier
-echo 0 > /logs/verifier/reward.txt
-
-if [ "$PWD" = "/" ]; then
-    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
-    echo 0 > /logs/verifier/reward.txt
-    exit 0
-fi
-
-python3 -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-rc=$?
-if [ "$rc" -eq 0 ]; then
-    echo 1 > /logs/verifier/reward.txt
-else
-    echo 0 > /logs/verifier/reward.txt
-fi
-```
+Use `scripts/templates/test.sh` as the sole canonical source. Install that file
+rather than copying a Markdown block or writing an equivalent runner.
 
 Write the default `echo 0 > /logs/verifier/reward.txt` **immediately after
 `mkdir -p /logs/verifier`, before any risky verifier work** (the rebuild
 fixture, pytest, anything that could crash/timeout). Reviewers explicitly ask
 for this (KDL + HOCON, 2026-07): if the verifier dies before the final block
 runs, the reward must already be 0, not absent. The final reward block still
-overwrites it to 1 only on a clean pytest pass and must end the script. The current `check_test_sh` gate
-accepts either `if [ $? -eq 0 ]` immediately after pytest or the preferred
-defensive form above, where `rc=$?` is captured immediately after pytest and
-used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
-commands between pytest and the capture/conditional, or rewrite it as
-`pytest && echo 1`.
+overwrites it to 1 only on a clean pytest pass and must end the script.
+`scripts/task-policy.py validate-task <task-dir>` requires the exact canonical
+multiline footer; one-line conditionals and equivalent helper forms are
+rejected.
 Do not add `exit $?` or any trailing exit after the final `fi`: Harbor records
 pass/fail from `/logs/verifier/reward.txt`; the script's own exit code is not
 the reward signal.
@@ -661,6 +660,10 @@ Quality preflight:
   no `/var/run/docker.sock` mounts; compose volume mounts must not shadow the
   reserved paths `/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`
 - no runtime dependency setup in `tests/test.sh`
+- no end-to-end solution generator in `tests/`; golden data, parsed output,
+  sealed truth, and spec-derived invariants are allowed
+- whenever the task promises configurable input, a mutation re-run proves that
+  the verifier reads the config dynamically rather than restating its values
 - no rubric or instruction references to tests, verifier logic, `test.sh`,
   `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, pytest, or final
   test results

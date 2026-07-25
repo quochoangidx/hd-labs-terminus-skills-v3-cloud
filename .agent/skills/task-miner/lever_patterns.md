@@ -426,9 +426,10 @@ unfair-hard, never real difficulty.
 
 ## L4 — `multi-vector-security-hardening`
 
-- **intent:** confirmed-HARD security task (0/3 blind Opus — mathjs #3656): agents
-  close the OBVIOUS attack vectors and miss a subtle one. Category `security` (allowed
-  under the hold).
+- **intent:** historical confirmed-HARD security task (0/3 blind Opus — mathjs
+  #3656). Category `security` has been blocked for net-new submissions since
+  Jul 24, 2026, so retain this only as a difficulty/design record; do not mine
+  or build it unless the platform reopens the category.
 - **mechanism:** take a sandbox/escaping/auth surface with N exploit vectors of graded
   subtlety; the instruction states the security objective + every legitimate behavior
   to preserve (this satisfies behavior_in_task_description symmetry and is

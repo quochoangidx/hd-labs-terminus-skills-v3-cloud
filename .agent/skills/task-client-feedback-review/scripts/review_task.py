@@ -317,7 +317,81 @@ def check_blacklisted_db(view: TaskView, findings: list[Finding]) -> None:
         add(findings, "blocker", "blacklisted-db", f"... and {len(hits) - 8} more file(s) containing 'maxscale'.", None, "upstream-repo-sanitizer")
 
 
-def review(path: Path) -> dict:
+def check_instruction_sufficiency_evidence(view: TaskView, findings: list[Finding]) -> None:
+    """Require the external semantic-sufficiency report for folders and ZIPs."""
+    if view.is_zip:
+        bases = [Path.cwd(), *view.path.resolve().parents]
+        candidates = [
+            base / "workspace" / "reports" / view.name / "instruction-sufficiency.json"
+            for base in bases
+        ]
+        report = next((path for path in candidates if path.is_file()), candidates[0])
+    else:
+        report = view.path.parent / "reports" / view.name / "instruction-sufficiency.json"
+    if not report.is_file():
+        add(
+            findings,
+            "blocker",
+            "instruction-sufficiency-evidence",
+            "Missing workspace/reports/<slug>/instruction-sufficiency.json; solver coverage cannot replace the semantic contract audit, including for a packaged ZIP.",
+            str(report),
+            "terminus-regular-task-authoring",
+        )
+        return
+    import subprocess
+
+    checker = (
+        Path(__file__).resolve().parents[2]
+        / "terminus-regular-task-authoring"
+        / "scripts"
+        / "sufficiency_manifest_check.py"
+    )
+    import tempfile
+
+    try:
+        if view.is_zip:
+            with tempfile.TemporaryDirectory(prefix="sufficiency_review_") as tmp:
+                task_path = Path(tmp) / view.name
+                for rel in view.files():
+                    destination = task_path / rel
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(view.read_bytes(rel))
+                proc = subprocess.run(
+                    [sys.executable, str(checker), str(task_path), str(report)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+        else:
+            proc = subprocess.run(
+                [sys.executable, str(checker), str(view.path), str(report)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+    except Exception as exc:
+        add(
+            findings,
+            "blocker",
+            "instruction-sufficiency-evidence",
+            f"Could not validate instruction-sufficiency evidence: {exc}",
+            str(report),
+            "terminus-regular-task-authoring",
+        )
+        return
+    if proc.returncode != 0:
+        detail = " ".join((proc.stdout + " " + proc.stderr).split())[:700]
+        add(
+            findings,
+            "blocker",
+            "instruction-sufficiency-evidence",
+            f"Instruction-sufficiency manifest failed validation: {detail}",
+            str(report),
+            "terminus-regular-task-authoring",
+        )
+
+
+def review(path: Path, revision_exception: bool = False) -> dict:
     view = TaskView(path)
     findings: list[Finding] = []
     files = view.files()
@@ -358,6 +432,17 @@ def review(path: Path) -> dict:
         metadata = task.get("metadata", {}) if isinstance(task, dict) else {}
         codebase_size = metadata.get("codebase_size")
         languages = metadata.get("languages", [])
+        category = metadata.get("category")
+        open_categories = {"machine-learning", "games", "system-administration"}
+        if category not in open_categories and not revision_exception:
+            add(
+                findings,
+                "blocker",
+                "category-availability",
+                "Net-new submissions are currently limited to machine-learning, games, and system-administration. This category is blocked unless the task is already in the platform revision/awaiting-review exception.",
+                "task.toml",
+                "task-miner",
+            )
 
         if "pyproject.toml" in file_set:
             add(findings, "blocker", "root-pyproject", "Root-level pyproject.toml should not be submitted.", "pyproject.toml", "task-zip-submit")
@@ -450,6 +535,7 @@ def review(path: Path) -> dict:
 
         run_ruff(view, findings)
         check_blacklisted_db(view, findings)
+        check_instruction_sufficiency_evidence(view, findings)
 
         for name in files:
             if re.search(r"(^|/)(\.DS_Store|__MACOSX|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache)(/|$)", name) or name.endswith(".pyc") or "/._" in name or name.startswith("._"):
@@ -543,9 +629,14 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+", help="Task folders or submission ZIPs")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")
+    parser.add_argument(
+        "--revision-exception",
+        action="store_true",
+        help="Allow blocked categories for tasks already in revision or awaiting review",
+    )
     args = parser.parse_args(argv)
 
-    results = [review(Path(p)) for p in args.paths]
+    results = [review(Path(p), revision_exception=args.revision_exception) for p in args.paths]
     if args.json:
         print(json.dumps(results, indent=2, sort_keys=True))
     else:

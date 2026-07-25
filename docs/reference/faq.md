@@ -66,6 +66,9 @@ Keys have a usage budget. Run `stb keys refresh` for a new one. There's a cap on
 **I'm having trouble upgrading `stb`.**
 Follow the upgrade command in the [CLI User Guide](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/cli-user-guide). A 403 Forbidden error usually means the download link was temporarily rotated — try again later. Always verify your version with `stb --version` before troubleshooting other issues.
 
+**Installing `harbor` gives a 403 Forbidden.**
+That install method is retired — the old Harbor wheel URL no longer serves. Install the Snorkel CLI (`snorkelai-stb`) instead, per the [Quick Start](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/getting-started/quick-start). You no longer need to set `OPENAI_API_KEY` / `OPENAI_BASE_URL` manually — `stb login` and `stb keys refresh` handle AI credentials for agent runs.
+
 ---
 
 ## 3. Task Structure: Milestones & File Layout
@@ -123,6 +126,9 @@ Yes — both settings are allowed; the setting just has to **match the task**. U
 **What qualifies as HARD?**
 A task is HARD when accuracy is **≤ 20%** on either the **best** model OR the **worst** model (across GPT-5.5 and Claude Opus 4.8). See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for the full breakdown of Easy / Medium / Hard thresholds.
 
+**Why did my difficulty check only run one model?**
+Difficulty checks run **Claude Opus 4.8 first**. If Opus 4.8 already rates your task as **HARD** (≤ 20% accuracy), the GPT-5.5 run is skipped — a HARD result from either model already settles the rating, so the second run can't change it. Results from only one model on a HARD-rated task are **expected behavior, not a bug**, and there's no need to flag it. Tasks that aren't HARD on Opus 4.8 still run against both models.
+
 **My task keeps coming back as TRIVIAL. What types of tasks pass as HARD?**
 Complex multi-step debugging, nuanced edge cases, larger codebases, and workflows requiring discovery across multiple files. Single-bug or template-based tasks tend to be flagged as too easy.
 
@@ -156,7 +162,7 @@ It's possible, but **not encouraged** — expect API errors and much faster key 
 ### Blocked Categories
 
 **Which categories are currently blocked?**
-As of Jul 10, 2026: **`debugging`**, **`software-engineering`** (both since Jun 18, 2026), and **`data-processing`** (since Jul 10) are paused — no net-new submissions, and they're hidden from the Task Gallery. **New milestone tasks are also blocked** (Jun 29). Tasks already in your revision queue or awaiting review continue through to Accepted as normal. Check the [Task Category Status](/portal/category-status) page for the live list.
+As of Jul 24, 2026, submissions are limited to **three open categories**: **`machine-learning`**, **`games`**, and **`system-administration`**. All other categories — `build-and-dependency-management`, `scientific-computing`, `security` (blocked Jul 24), plus `data-processing` (Jul 10), `debugging` and `software-engineering` (Jun 18) — are paused for net-new submissions while we balance the benchmark's category distribution. **New milestone tasks are also blocked** (Jun 29). Tasks already in your revision queue or awaiting review continue through to Accepted as normal. Check the [Task Category Status](/portal/category-status) page for the live list.
 
 ---
 

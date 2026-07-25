@@ -256,7 +256,53 @@ def test_cli_help():
     assert "Usage:" in result.stdout
 ```
 
+## What a Good Verifier Legitimately Does
+
+A rigorous verifier often contains substantial logic — that is expected and fine. The following are **legitimate and encouraged**, not violations:
+
+- **Run the agent's own program.** Build and run the agent's binary/CLI, then grade its output.
+- **Parse the agent's output** to check semantics (e.g., interpreting the config, policy, or files the agent produced).
+- **Precomputed golden fixtures or hashes** for exact-match or byte-exact tasks (numerical, ML, reporting). Hardcoding the *expected result* is fine and often required.
+- **Spec-derived invariants** — compute an expected property from the task's spec/config and check the output against it (e.g., a floor, budget, or cost ceiling).
+- **Held-out ground truth**, ideally **sealed into memory and unlinked from `tests/` before the agent's program is built or run**, so a rebuilt program cannot read the answer key at grade time.
+- **Perturbation / holdout re-runs** — re-run the agent's program on modified or held-out inputs and assert the output changes. This is the recommended way to prove the solution is *computed*, not hardcoded.
+
+The line to hold is narrow: don't put a **callable end-to-end solver** in `tests/` that maps task inputs to the complete expected artifact (that belongs in `solution/`), and don't hardcode a value the instruction says the agent must read from a config file. Everything above stays fair game.
+
 ## Anti-Patterns to Avoid
+
+### Reimplementing the Solution in Tests
+
+Keep the end-to-end solution in `solution/` (never present in the agent's environment). A test file must not contain a callable function that maps task inputs to the **complete expected artifact** — if it does, the reference implementation can leak (e.g., a partner harness that bundles `tests/`, or a misconfigured image) and it becomes a maintenance/contamination liability.
+
+```python
+# BAD: tests/ contains a reusable solver that produces the expected artifact
+def compute_expected(inputs):
+    ...                                   # the whole task, reimplemented
+    return full_expected_output
+
+# GOOD: run the agent's program and grade its output against invariants or a golden fixture
+def test_output():
+    out = run_agent_binary("data")        # the agent's own program
+    assert out["worst_case"] >= FLOOR     # spec-derived invariant
+```
+
+Rule of thumb: if deleting `solution/` would still let the test compute the expected answer itself, the test is doing the solving. Running the agent's binary, parsing its output, golden fixtures, and invariants are all fine (see *What a Good Verifier Legitimately Does*).
+
+### Hardcoded Config Inputs (config-driven tasks only)
+
+This applies **only** when the instruction says the agent must read a config/input file that can vary. Then the verifier should read those values from the same config at runtime, so an agent that ignores the config and hardcodes the parameters can't pass.
+
+```python
+# BAD (config-driven task): verifier re-declares a value the task says to read from config
+assert model.features == ["age", "income", "score"]   # copied from config.json
+
+# GOOD: read the config the task is supposed to honor
+cfg = json.load(open("/app/config.json"))
+assert model.features == cfg["features"]
+```
+
+**Not a ban on hardcoded values.** Hardcoding the expected *result* — exact numeric/ML targets (with tolerance), byte-exact outputs, format constants — is fine and often required. For config-driven tasks, confirm the dependency by **mutating the config and re-running** (the output must change).
 
 ### Brittle String Matching
 

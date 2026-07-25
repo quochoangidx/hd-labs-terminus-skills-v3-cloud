@@ -1,6 +1,6 @@
 ---
 name: task-clone
-description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders, including closed upstream bugfix candidates and explicit category-profile candidates such as build-and-dependency-management, system-administration, security, scientific-computing, machine-learning, or games. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Do not clone tasks whose classifier-visible shape still predicts a blocked category (software-engineering, debugging, or data-processing); reshape honestly into one of the 6 allowed categories or stop."
+description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Net-new submissions must predict as machine-learning, games, or system-administration; stop on every other category."
 ---
 
 # Task Clone
@@ -196,7 +196,8 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
    conformance, it will likely predict `software-engineering`; ETL/dataset→report
    pipelines predict `data-processing` — BOTH are blocked (data-processing since
    2026-07-11, so the dataset→report reshape is no longer an escape route).
-   Reshape the I/O into one of the 6 allowed categories only if the primary
+   Reshape the I/O into `machine-learning`, `games`, or
+   `system-administration` only if the primary
    activity truly changes; otherwise stop and mark
    `category_classifier_<predicted_slug>` (e.g.
    `category_classifier_software_engineering`, `category_classifier_data_processing`).
@@ -210,17 +211,28 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
    `template_detection_<template_name>` and see AGENTS.md §9 for current
    (UNVERIFIED) remediation levers.
 3. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
-4. Create `workspace/tbrain-<problem-slug>` using the naming rule.
+4. Create `workspace/tbrain-<problem-slug>` by running
+   `scripts/new-task.sh <slug> <lang> <category>`. Do not hand-write
+   `task.toml`, `.dockerignore`, or `tests/test.sh`; custom generators must call
+   the scaffolder first and then edit task-specific surfaces only.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
-8. Write `task.toml` using `version = "2.0"`, `number_of_milestones = 0`, `allow_internet = false` (default; platform allows `true` only when the task genuinely requires internet — eval-checked, not our lane), the artifact's valid category/subcategories, and realistic resources.
+8. Edit the scaffolded `task.toml` task-specific metadata while preserving
+   `version = "2.0"` and `number_of_milestones = 0`. Default to
+   `allow_internet = false`; retain `true` when network access is the task's
+   point, hard-pin every live source to exact versions and immutable
+   digests/hashes, and grade stable invariants rather than mutable values.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
 10. **SKELETON PROBE GATE (mandatory — before any oracle/verifier investment).**
     At this point you have `instruction.md` + a buildable `environment/` + the
     stub, and that is ALL a difficulty probe needs. Assemble a ROUGH check
     command with about 30–60 evaluation units spanning 6–8 independent
-    behavior clusters — the real oracle and hidden corpus do not exist yet) and
+    behavior clusters — the real oracle and hidden corpus do not exist yet).
+    Before launching a solver, draft the contract-source rows for every rough
+    cluster and run two blind contract-only reviews as specified in
+    `terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
+    Any ambiguity or oracle mismatch is a skeleton defect, not difficulty. Then
     run `task-local-solve-probe` in Skeleton mode with 2 fresh blind solvers.
     Add a 3rd only on a 1–1 split, a shared failure cluster, or incomplete
     per-case union.
@@ -239,11 +251,20 @@ For Python Hard tasks, the final task must realistically target `difficulty = "h
     submit verdict; this gate only exists to stop full builds of all-pass-EASY
     tasks.
 11. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
-12. Write behavioral `tests/test_outputs.py` and offline `tests/test.sh`.
+12. Write behavioral `tests/test_outputs.py`; keep the scaffolded
+    `tests/test.sh` byte-for-byte from `scripts/templates/test.sh`.
+    Tests may execute the candidate, parse output, use golden/sealed truth, and
+    assert spec-derived invariants, but must not recreate the complete expected
+    artifact from task inputs. If the task declares a variable config/input
+    file, add a mutation re-run that proves the verifier reads it dynamically.
 13. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
 14. Run structural checks, CI checks, and local fresh-subagent blind probes
     (`task-local-solve-probe`) — stb real-agent trials are permanently
     geoblocked from this environment (AGENTS.md §7).
+    Before packaging, run `scripts/preflight.sh <task-dir> --strict
+    --report-json workspace/reports/<slug>/preflight.json --emit-zip
+    submissions/<slug>.zip`; it must pass and is the only batch path allowed
+    to emit the ZIP.
 15. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
 
@@ -324,11 +345,13 @@ memory_mb = 4096
 storage_mb = 10240
 ```
 
-> **⛔ BLOCKED CATEGORY CLASSIFIER (active — 2026-07-10; `data-processing` added
-> 2026-07-11).** A task can fail CI with
+> **⛔ BLOCKED CATEGORY CLASSIFIER (active — updated 2026-07-24).** Only
+> `machine-learning`, `games`, and `system-administration` accept net-new
+> submissions. Every other predicted category can fail CI with
 > `Predicted category '<slug>' ... is blocked` even when `task.toml` declares an
-> allowed category — blocked predicted slugs are `software-engineering`,
-> `debugging`, AND `data-processing` (observed live:
+> allowed category — blocked predicted slugs include `software-engineering`,
+> `debugging`, `data-processing`, `build-and-dependency-management`, `security`,
+> and `scientific-computing` (observed live:
 > `Predicted category 'data-processing' (confidence 0.9) is blocked`). The
 > in-progress exemption list is frozen and only shrinks; do NOT add submission IDs
 > or treat this as a reviewer override. Do not re-label bugfix work as another
@@ -337,11 +360,9 @@ storage_mb = 10240
 > Before cloning, check whether the actual deliverable still looks like
 > `implement parse/render/cmp`, public API or stub completion, exact reference
 > conformance, OR a dataset→report / ETL pipeline (now equally blocked as
-> data-processing). If yes, reshape the I/O into one of the 6 allowed categories
-> (`system-administration`, `build-and-dependency-management`, `games`,
-> `machine-learning`, `security`, `scientific-computing`) only when the primary
-> activity truly changes. A build/dependency artifact, admin config, security
-> outcome, scientific result, ML evaluation, or game-state workflow can pass; a
+> data-processing). If yes, reshape the I/O into `system-administration`,
+> `games`, or `machine-learning` only when the primary activity truly changes.
+> An admin operation, ML evaluation, or game-state workflow can pass; a
 > vocabulary sweep cannot, and the former dataset→report escape hatch cannot
 > either. Treat split preflight predictions as failure because any blocked
 > prediction fails CI. If the shape cannot be reshaped honestly, STOP and record
@@ -364,6 +385,11 @@ debugging
 security
 scientific-computing
 ```
+
+This schema list is not the live allowlist: net-new tasks may use only
+`system-administration`, `games`, or `machine-learning`. The category gate must
+stop every other predicted category unless the task is already exempt in the
+platform revision/awaiting-review queue.
 
 Valid subcategories are only:
 
@@ -607,7 +633,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
-- work with `allow_internet = false` at agent/verifier runtime
+- work with `allow_internet = false` unless network access is the task's point;
+  for `true`, hard-pin external inputs by exact version plus immutable
+  digest/hash and grade stable invariants rather than live values
 - avoid heredocs and opaque generated source in the Dockerfile; store source as
   files and `COPY` it
 - use one clean apt transaction per stage with `--no-install-recommends` and
@@ -911,42 +939,13 @@ Use the canonical test.sh pattern. The `check_test_sh` CI gate accepts the
 current reward block shapes documented below, and `WORKDIR` in the Dockerfile
 handles the `/app` working directory.
 
-```bash
-#!/bin/bash
-set -uo pipefail
-
-mkdir -p /logs/verifier
-echo 0 > /logs/verifier/reward.txt
-
-if [ "$PWD" = "/" ]; then
-    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
-    echo 0 > /logs/verifier/reward.txt
-    exit 0
-fi
-
-python3 -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-rc=$?
-if [ "$rc" -eq 0 ]; then
-    echo 1 > /logs/verifier/reward.txt
-else
-    echo 0 > /logs/verifier/reward.txt
-fi
-```
-
-Always invoke `python3`, never bare `python`: non-Python base images (node, gcc,
-rust, go, debian) ship no `python` alias, so `python -m pytest` dies with
-`python: command not found` and the oracle silently scores 0 — read
-test-stdout first when a working patch scores 0 (confirmed on a node base,
-June 2026).
-
-The final reward block must end the script. The current `check_test_sh` gate
-accepts either `if [ $? -eq 0 ]` immediately after pytest or the preferred
-defensive form above, where `rc=$?` is captured immediately after pytest and
-used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
-commands between pytest and the capture/conditional, or rewrite it as
-`pytest && echo 1`.
-Do not append `exit $?` or any trailing exit after the final `fi`. Harbor uses
-`/logs/verifier/reward.txt`, not the script exit code.
+`scripts/templates/test.sh` is the sole canonical runner. Install or preserve
+that asset instead of copying a Markdown snippet or free-handing an equivalent
+shell block. `scripts/task-policy.py validate-task <task-dir>` checks the exact
+multiline reward footer, `python3`, shell syntax, line endings, and executable
+mode. A semantically equivalent one-line `if`, helper wrapper, bare `python`,
+or trailing command is a platform-static failure even when local oracle/NOP
+produce the expected reward.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
 `pytest`, `pytest-json-ctrf`, and verifier-only dependencies in the Dockerfile
@@ -1029,8 +1028,9 @@ Before packaging or platform upload:
   shape → debugging; stub-fill compute-to-spec → SWE) is authoritative —
   reshape or drop, and do NOT run the probe hoping it disagrees; a fired
   ALLOW rule matching the declared category needs at most one confirmatory
-  probe run, and a probe run disagreeing with it is noise (purl: probe SWE
-  0.9, real CI bd-mgmt 1.0). Only when no rule fires, fall back to the blind
+  probe run, and a probe run disagreeing with it is noise (historical
+  calibration only: purl probe SWE 0.9, real CI bd-mgmt 1.0 before that
+  category closed). Only when no rule fires, fall back to the blind
   category probe. For the probe: give a FRESH subagent
   (zero task context) only the classifier-visible surfaces — `instruction.md`,
   the `environment/` file tree listing, README, and the rubric text — WITHOUT
@@ -1046,6 +1046,10 @@ Before packaging or platform upload:
   The probe's one-line reasons tell you exactly which surface is leaking the
   wrong shape
 - run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
+- create `workspace/reports/<slug>/instruction-sufficiency.json`, cover every
+  static test and semantic cluster, complete two blind contract reviews, and run
+  `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`; any
+  failure blocks the full solve probe and packaging
 - include preservation/non-regression test coverage in the prompt, including modes not directly part of the bug trigger
 - run a verifier API sanity audit for every imported class/function and every
   constructor used in tests
@@ -1068,6 +1072,9 @@ Before packaging or platform upload:
   results
 - verify `tests/` contains verifier scripts/fixtures only, not dependency
   wheels
+- verify `tests/` does not implement the end-to-end solution; for every
+  config/input file the instruction says can vary, mutate a meaningful value
+  and prove a hardcoded-original-value candidate fails
 - verify `tests/test.sh` does not run runtime setup, `apt-get`, `pip install`,
   `npm install`, or network downloads
 - verify Dockerfile does not `COPY tests/`, `COPY solution/`, or create `/tests`, `/solution`, `/oracle`, `/logs/verifier`
@@ -1106,7 +1113,8 @@ available solve probes are stable.
      physical line per criterion starting with `Agent`, closed score set
      {+1,+2,+3,+5,-1,-2,-3,-5} with mandatory leading `+`, positive sum
      10–40, block appears once, behavior-not-work-steps, affirmative
-     penalties, no test paths, nothing leaking the hidden lever.
+     penalties, no test paths, fixture values, oracle outputs, root-cause hints,
+     or implementation recipe.
    - **File zip name**: the matching zip in `submissions/`.
 3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
    an editorial pass. Do not add claims, remove thresholds, or change technical

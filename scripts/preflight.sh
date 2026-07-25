@@ -3,34 +3,59 @@
 # Runs every packaging/hygiene check from AGENTS.md §8/§9/§10 that a machine
 # can run, so returns for mechanical defects stop happening.
 #
-# Usage: scripts/preflight.sh <task-dir> [--no-docker] [--emit-zip <path>]
+# Usage: scripts/preflight.sh <task-dir> [--no-docker] [--strict]
+#        [--report-json <path>] [--emit-zip <path>]
 #   <task-dir>   folder containing task.toml, instruction.md, environment/,
 #                solution/, tests/
 #   --no-docker  skip the docker build + oracle/nop + noexec-/tmp reruns
-#   --emit-zip   also write the submission zip to <path> after checks pass
+#   --strict     promote every WARN to FAIL (required for batch handover)
+#   --report-json write a machine-readable evidence report
+#   --emit-zip   write the submission zip only after every check passes
 #
 # Exit 0 = no FAIL rows (WARNs allowed). Docker checks need a running daemon.
 set -uo pipefail
 
 TASK_DIR=""
 NO_DOCKER=0
+STRICT=0
+REPORT_JSON=""
 EMIT_ZIP=""
+usage() {
+  echo "usage: preflight.sh <task-dir> [--no-docker] [--strict] [--report-json <path>] [--emit-zip <path>]"
+}
 while [ $# -gt 0 ]; do
   case "$1" in
+    -h|--help) usage; exit 0 ;;
     --no-docker) NO_DOCKER=1 ;;
+    --strict) STRICT=1 ;;
+    --report-json) shift; REPORT_JSON="${1:?--report-json needs a path}" ;;
     --emit-zip) shift; EMIT_ZIP="${1:?--emit-zip needs a path}" ;;
-    *) TASK_DIR="$1" ;;
+    --*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *)
+      [ -z "$TASK_DIR" ] || { echo "only one task directory may be provided" >&2; usage >&2; exit 2; }
+      TASK_DIR="$1"
+      ;;
   esac
   shift
 done
-[ -n "$TASK_DIR" ] || { echo "usage: preflight.sh <task-dir> [--no-docker] [--emit-zip <path>]" >&2; exit 2; }
+[ -n "$TASK_DIR" ] || { usage >&2; exit 2; }
 TASK_DIR="$(cd "$TASK_DIR" && pwd)" || exit 2
 SLUG="$(basename "$TASK_DIR")"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPORT_ROWS="$(mktemp)"
+trap 'rm -f "$REPORT_ROWS"' EXIT
 
 FAILS=0
 report() { # report <PASS|WARN|FAIL> <check> <detail>
-  printf '%-4s | %-28s | %s\n' "$1" "$2" "$3"
-  if [ "$1" = "FAIL" ]; then FAILS=$((FAILS + 1)); fi
+  STATUS="$1"
+  DETAIL="$(printf '%s' "$3" | tr '\t\r\n' '   ')"
+  if [ "$STRICT" -eq 1 ] && [ "$STATUS" = "WARN" ]; then
+    STATUS="FAIL"
+    DETAIL="strict mode: $DETAIL"
+  fi
+  printf '%-4s | %-28s | %s\n' "$STATUS" "$2" "$DETAIL"
+  printf '%s\t%s\t%s\n' "$STATUS" "$2" "$DETAIL" >> "$REPORT_ROWS"
+  if [ "$STATUS" = "FAIL" ]; then FAILS=$((FAILS + 1)); fi
   return 0
 }
 echo "== preflight: $SLUG =="
@@ -78,16 +103,16 @@ if [ -f "$TT" ]; then
     && report PASS "toml:author" "anonymous" || report FAIL "toml:author" "must be literal anonymous/anonymous"
   grep -q '^subcategories = ' "$TT" && report PASS "toml:subcategories" "line present" \
     || report FAIL "toml:subcategories" "line must exist (empty [] is fine; deleting it fails CI)"
-  CAT="$(sed -n 's/^category = "\(.*\)"/\1/p' "$TT" | head -1)"
-  case "$CAT" in
-    system-administration|build-and-dependency-management|games|machine-learning|security|scientific-computing)
-      report PASS "toml:category" "$CAT (allowed; still run category_rules.md on the SHAPE)" ;;
-    software-engineering|debugging|data-processing)
-      report FAIL "toml:category" "$CAT is a blocked predicted slug" ;;
-    *) report FAIL "toml:category" "unrecognized: '$CAT'" ;;
-  esac
   grep -q '^expert_time_estimate_min' "$TT" && grep -q '^junior_time_estimate_min' "$TT" \
     && report PASS "toml:time-estimates" "present" || report FAIL "toml:time-estimates" "both CI-required"
+fi
+
+POLICY_OUTPUT="$(python3 "$REPO_ROOT/scripts/task-policy.py" validate-task "$TASK_DIR" 2>&1)"
+POLICY_RC=$?
+if [ "$POLICY_RC" -eq 0 ]; then
+  report PASS "policy:static" "category, languages, and canonical test runner pass"
+else
+  report FAIL "policy:static" "$POLICY_OUTPUT"
 fi
 
 # 5. Leak sweep
@@ -110,11 +135,11 @@ if [ -n "$BIN_NAME" ]; then
   [ -n "$MISS" ] && report WARN "binary-name:$BASE_BIN" "not mentioned in:$MISS (verify consistency)" \
     || report PASS "binary-name:$BASE_BIN" "consistent"
 else
-  report WARN "binary-name" "no BIN= found in tests; skip"
+  report PASS "binary-name" "not applicable (no BIN= declaration)"
 fi
 
 # 7. Zip build + arcname verification (python zipfile — never Compress-Archive/Explorer)
-ZIP_OUT="${EMIT_ZIP:-$(mktemp -d)/$SLUG.zip}"
+ZIP_OUT="$(mktemp -d)/$SLUG.zip"
 PYOUT="$(python3 - "$TASK_DIR" "$ZIP_OUT" <<'PYEOF'
 import os, sys, zipfile
 task_dir, zip_out = sys.argv[1], sys.argv[2]
@@ -155,7 +180,7 @@ CRLF="$(echo "$PYOUT" | sed -n 's/^CRLF://p')"; COUNT="$(echo "$PYOUT" | sed -n 
 [ "$BAD" = "none" ] && report PASS "zip:arcnames" "$COUNT entries, forward-slash clean" || report FAIL "zip:arcnames" "$BAD"
 [ "$WRAP" = "no" ] && report PASS "zip:no-wrapper-dir" "task.toml at root" || report FAIL "zip:no-wrapper-dir" "no root task.toml — wrapper dir?"
 [ "$CRLF" = "none" ] && report PASS "zip:crlf" "clean" || report FAIL "zip:crlf" "CRLF in: $CRLF (breaks git apply)"
-[ -n "$EMIT_ZIP" ] && echo "  zip written: $ZIP_OUT"
+[ -n "$EMIT_ZIP" ] && echo "  zip staged pending all checks: $ZIP_OUT"
 
 # 8. Rubric format (submissions/SUBMISSION-<slug>.md, if present)
 SUB_MD="$(dirname "$TASK_DIR")/../submissions/SUBMISSION-$SLUG.md"
@@ -224,5 +249,40 @@ else
 fi
 
 echo "----"
-if [ "$FAILS" -gt 0 ]; then echo "RESULT: $FAILS FAIL row(s) — fix before zipping/submitting."; exit 1
-else echo "RESULT: all checks passed (WARNs above, if any, need eyeballs)."; fi
+if [ -n "$REPORT_JSON" ]; then
+  mkdir -p "$(dirname "$REPORT_JSON")"
+  python3 - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" <<'PYEOF'
+import hashlib
+import json
+import sys
+
+slug, strict, fails, rows_path, output_path, zip_path = sys.argv[1:]
+checks = []
+with open(rows_path) as rows:
+    for line in rows:
+        status, check, detail = line.rstrip("\n").split("\t", 2)
+        checks.append({"status": status.lower(), "check": check, "detail": detail})
+payload = {
+    "task_slug": slug,
+    "status": "pass" if int(fails) == 0 else "fail",
+    "strict": strict == "1",
+    "fail_count": int(fails),
+    "artifact_sha256": hashlib.sha256(open(zip_path, "rb").read()).hexdigest(),
+    "checks": checks,
+}
+with open(output_path, "w") as output:
+    json.dump(payload, output, indent=2, sort_keys=True)
+    output.write("\n")
+PYEOF
+  echo "  report written: $REPORT_JSON"
+fi
+if [ "$FAILS" -gt 0 ]; then
+  echo "RESULT: $FAILS FAIL row(s) — fix before zipping/submitting."
+  exit 1
+fi
+if [ -n "$EMIT_ZIP" ]; then
+  mkdir -p "$(dirname "$EMIT_ZIP")"
+  cp "$ZIP_OUT" "$EMIT_ZIP"
+  echo "  zip written: $EMIT_ZIP"
+fi
+echo "RESULT: all checks passed."

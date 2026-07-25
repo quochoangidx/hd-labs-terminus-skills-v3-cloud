@@ -33,22 +33,23 @@ For the fastest setup experience, use [uv](https://github.com/astral-sh/uv), a m
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-**2. Install Harbor (Python 3.12 and 3.13 are supported):**
+**2. Install the Snorkel CLI (Python 3.12+):**
 ```bash
-uv tool install "harbor @ https://snorkel-public.s3.us-west-2.amazonaws.com/harbor/harbor-0.5.0%2Bpromptfix5-py3-none-any.whl" --python 3.13
+uv tool install snorkelai-stb \
+  --find-links https://snorkel-python-wheels.s3.us-west-2.amazonaws.com/stb/index.html \
+  --python ">=3.12"
 ```
 
-**3. Configure your API keys:**
+**3. Log in and configure credentials:**
 
-<small>Ensure the Snorkel CLI is installed and your API key is generated before proceeding. Refer to the [CLI User Guide](/portal/docs/submitting-tasks/cli-user-guide) for detailed setup instructions.</small>
 ```bash
-export OPENAI_API_KEY=<your-portkey-api-key>
-export OPENAI_BASE_URL=https://api.portkey.ai/v1
+stb login
+stb keys refresh   # if AI credentials are missing or expired
 ```
 
-> **Tip:** Add these to your `~/.bashrc` or `~/.zshrc` for persistence.
+For full CLI details, see the [CLI User Guide](/portal/docs/cli-user-guide).
 
-**4. You're ready!** to start working and submitting your tasks! 
+**4. You're ready!** to start working and submitting your tasks!
 
 > **Note:** You still need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (v24.0.0+) installed and running.
 
@@ -56,7 +57,7 @@ export OPENAI_BASE_URL=https://api.portkey.ai/v1
 
 ### Option B: Manual Setup
 
-If you prefer a traditional pip installation or need more control, follow these steps:
+If you need a more detailed setup path, follow these steps:
 
 <details>
 <summary><strong>Windows Users: Install WSL2 First</strong></summary>
@@ -118,12 +119,12 @@ sudo dseditgroup -o edit -a $USER -t user docker
 </details>
 
 <details>
-<summary><strong>Step 2: Install Harbor</strong></summary>
-
-Harbor is the main task validation and testing framework.
+<summary><strong>Step 2: Install the Snorkel CLI</strong></summary>
 
 ```bash
-pip install "harbor @ https://snorkel-public.s3.us-west-2.amazonaws.com/harbor/harbor-0.5.0+promptfix5-py3-none-any.whl"
+uv tool install snorkelai-stb \
+  --find-links https://snorkel-python-wheels.s3.us-west-2.amazonaws.com/stb/index.html \
+  --python ">=3.12"
 ```
 
 </details>
@@ -131,15 +132,12 @@ pip install "harbor @ https://snorkel-public.s3.us-west-2.amazonaws.com/harbor/h
 <details>
 <summary><strong>Step 3: Configure Your API Keys</strong></summary>
 
-<small>Ensure the Snorkel CLI is installed and your API key is generated before proceeding. Refer to the [CLI User Guide](/portal/docs/submitting-tasks/cli-user-guide) for detailed setup instructions.</small>
-
-**Set environment variables:**
 ```bash
-export OPENAI_API_KEY=<your-portkey-api-key>
-export OPENAI_BASE_URL=https://api.portkey.ai/v1
+stb login
+stb keys refresh   # if AI credentials are missing or expired
 ```
 
-> **Tip:** You can add these to your `~/.bashrc` or `~/.zshrc` for persistence.
+For detailed setup instructions, see the [CLI User Guide](/portal/docs/cli-user-guide).
 
 </details>
 

@@ -44,7 +44,8 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
   suite, synthetic interval-invariant ledger, differential-vs-authority, multi-vector
   security), claimed-resource ledger, and the complete L1 build runbook ("learn the
   pattern, not the resource"). Note the default lane is now the fresh-only doctrine
-  (task-miner, "Fresh-only exploration doctrine") with the bd-mgmt seam and
+  (task-miner, "Fresh-only exploration doctrine"); the historical bd-mgmt seam is
+  currently blocked for net-new submissions, so mine only the three open categories.
   interaction/scale shapes as priority lanes — not gallery-style spec-driven L1.
 - `.agent/skills/task-miner/category_rules.md` — rules-first category gate
   (deterministic BLOCK/ALLOW rules calibrated on real-CI verdicts; run before
@@ -54,7 +55,7 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 
 ## Non-negotiable invariants
 
-Offline (`allow_internet = false` — our lane's default; the platform accepts `true` only when a task genuinely requires internet, eval-checked), 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
+Offline (`allow_internet = false`) is the default, but retain `allow_internet = true` when network access is the task's point; hard-pin each live source by exact version and immutable digest/hash, then grade stable invariants rather than mutable responses. Keep 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
 `python3` pytest writing `/logs/verifier/reward.txt` within 450s, oracle passes /
 nop fails for the intended reason, no tests/solution/answer keys reachable from
 `environment/`, and difficulty is claimed only from blind-probe or platform agent

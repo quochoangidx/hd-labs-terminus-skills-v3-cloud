@@ -4,6 +4,20 @@ Solutions to common issues you might encounter.
 
 ---
 
+## Installation Issues
+
+### Installing `harbor` fails with 403 Forbidden
+
+That install method is retired — the old Harbor `promptfix` wheel URL no longer serves. Install the Snorkel CLI instead:
+
+```bash
+uv tool install snorkelai-stb \
+  --find-links https://snorkel-python-wheels.s3.us-west-2.amazonaws.com/stb/index.html \
+  --python ">=3.12"
+```
+
+See the [Quick Start](/portal/docs/getting-started/quick-start) or [CLI User Guide](/portal/docs/cli-user-guide). *(A 403 when **upgrading** `stb` is different — that's a temporarily rotated link; retry later.)*
+
 ## Docker Issues
 
 ### "Cannot connect to Docker daemon"
@@ -118,19 +132,21 @@ def test_output_exists():
 
 ### API key not working
 
+AI credentials are managed by the `stb` CLI — you don't set `OPENAI_API_KEY` / `OPENAI_BASE_URL` manually.
+
 **Check:**
-1. Key is set correctly:
+1. You're logged in with current credentials:
 ```bash
-echo $OPENAI_API_KEY
+stb login
+stb keys refresh
 ```
 
-2. Base URL is set:
+2. Check your remaining budget:
 ```bash
-echo $OPENAI_BASE_URL
-# Should be: https://api.portkey.ai/v1
+stb keys show
 ```
 
-3. Key hasn't expired (contact Slack if needed)
+3. If `stb keys refresh` fails with "Maximum refresh limit reached," you've hit the cap — ask an admin in Slack to reset it.
 
 ### Agent times out
 

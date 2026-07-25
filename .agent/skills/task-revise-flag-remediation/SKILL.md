@@ -41,7 +41,9 @@ solvers will miss it. Always build the per-case × per-run matrix first:
 - union 100% and clean fairness needs no coverage remediation;
 - bounded distributed common misses that satisfy the
   `platform_candidate_coverage_risk` thresholds in `task-batch` are preserved
-  unchanged and packaged separately for the wider platform sample;
+  unchanged and packaged separately for the wider platform sample only after
+  the task's validated `instruction-sufficiency.json` maps every affected
+  cluster to visible contract or training evidence;
 - common misses caused by infra, oracle, contract, aggregation, or unreachable
   data follow Steps 0–2 below;
 - concentrated single-lever misses or candidates outside the bounded lane are
@@ -108,7 +110,8 @@ are NEAR-PERFECT and miss only the 0/N cluster — i.e. the task's ENTIRE
 difficulty is that one boundary / convention / precedence / output-contract
 fact. Then no remediation path exists: hiding it stays unfair 0/N, disclosing
 or pruning it flips the near-perfect runs to 100% and the task grades EASY.
-**DROP or redesign around an orthogonal undisclosed second lever immediately**
+**DROP or redesign around an orthogonal implementation/reasoning challenge under
+a fully visible contract immediately**
 (arrhenius-clip-fit, calibration-threshold-select, hanabi, provenance-release-
 gate were all late-drop lessons). This mirrors verdict case 4 in
 `task-local-solve-probe` (Submit-readiness); the same fingerprint should

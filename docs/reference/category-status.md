@@ -2,19 +2,21 @@
 
 Live view of which task categories and policies are currently open for new submissions. Tasks already in your revision queue or awaiting review are **not affected** by a block — they continue through to Accepted as normal.
 
+> **As of Jul 24, 2026, new submissions are limited to three categories: `machine-learning`, `games`, and `system-administration`.** All other categories are temporarily blocked while we balance the benchmark's overall category distribution. Blocks will lift as distribution targets are met — announced here and in the [Changelog](/portal/changelog).
+
 ## Categories
 
 | Category | Status | Since |
 |---|---|---|
+| `machine-learning` | ✅ Open | — |
+| `games` | ✅ Open | — |
+| `system-administration` | ✅ Open | — |
+| `build-and-dependency-management` | 🚫 Blocked | Jul 24, 2026 |
+| `scientific-computing` | 🚫 Blocked | Jul 24, 2026 |
+| `security` | 🚫 Blocked | Jul 24, 2026 |
 | `data-processing` | 🚫 Blocked | Jul 10, 2026 |
 | `debugging` | 🚫 Blocked | Jun 18, 2026 |
 | `software-engineering` | 🚫 Blocked | Jun 18, 2026 |
-| `system-administration` | ✅ Open | — |
-| `build-and-dependency-management` | ✅ Open | — |
-| `games` | ✅ Open | — |
-| `machine-learning` | ✅ Open | — |
-| `security` | ✅ Open | — |
-| `scientific-computing` | ✅ Open | — |
 
 > **Note:** New **milestone tasks** are also blocked (since Jun 29, 2026) regardless of category. Blocked categories are hidden from the [Task Gallery](/portal/tasks). When a block lifts, this page and the [Changelog](/portal/changelog) will announce it.
 

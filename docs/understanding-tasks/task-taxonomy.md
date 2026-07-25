@@ -21,6 +21,8 @@ Tasks involving OS-level configuration, user management, package management, pro
 
 ### build-and-dependency-management
 
+> 🚫 **Currently blocked — not accepting new submissions.** The `build-and-dependency-management` category is paused. Do not submit new tasks under this category until this note is removed.
+
 Compile code, manage dependencies, build components.
 
 **Examples:**
@@ -93,6 +95,8 @@ Tasks that require identifying, diagnosing, and fixing errors in scripts, codeba
 
 ### Security
 
+> 🚫 **Currently blocked — not accepting new submissions.** The `security` category is paused. Do not submit new tasks under this category until this note is removed.
+
 Tasks related to cryptography, authentication, permissions, penetration-style tests, exploit, validate vulnerabilities, reverse engineering or security configuration.
 
 **Examples:**
@@ -103,6 +107,8 @@ Tasks related to cryptography, authentication, permissions, penetration-style te
 ---
 
 ### scientific-computing
+
+> 🚫 **Currently blocked — not accepting new submissions.** The `scientific-computing` category is paused. Do not submit new tasks under this category until this note is removed.
 
 Tasks using scientific libraries or workflows, such as numerical computation, simulations, or domain-specific research code.
 
@@ -127,14 +133,14 @@ Pick the category that best describes the **primary** activity:
 | If the task mainly involves... | Use category |
 |--------------------------------|--------------|
 | OS/server configuration | system-administration |
-| Build systems, packages | build-and-dependency-management |
+| Build systems, packages | build-and-dependency-management *(currently blocked)* |
 | ETL, file processing | data-processing *(currently blocked)* |
 | Interactive challenges | games |
 | Code development, testing | software-engineering *(currently blocked)* |
 | ML model work | machine-learning |
 | Finding/fixing bugs | debugging *(currently blocked)* |
-| Security issues | security |
-| Scientific code | scientific-computing |
+| Security issues | security *(currently blocked)* |
+| Scientific code | scientific-computing *(currently blocked)* |
 
 ## Domain-Specific Tasks
 
