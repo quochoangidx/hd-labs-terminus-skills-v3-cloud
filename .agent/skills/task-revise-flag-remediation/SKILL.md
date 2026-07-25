@@ -134,6 +134,30 @@ usable work, a non-Python task may take a bounded salvage lane:
 - package it as MEDIUM with a recorded amber caveat, never relabel it HARD or
   claim union-complete probe evidence.
 
+User-approved local pre-submit variant (2026-07-22): a local "some tests not
+passed" pre-audit is not automatically fatal when the common set is bounded
+and can be removed or fully clarified without gutting the residual wall.
+After the fix, re-score the stored diffs and require:
+
+- oracle=1, NOP=0, preflight/ZIP validation clean;
+- common misses = 0 on the revised corpus;
+- every retained behavior cluster still has soft representative cases;
+- at least two stored semantic solvers still score reward 0, or one solver
+  still misses a broad multi-cluster residual while the handoff is explicitly
+  marked `deliverable_amber`;
+- the handoff records the original common-miss count and the exact fix.
+
+Do **not** use this lane when pruning the common set makes a strong stored
+solver pass the remaining corpus completely; that is the battery-slurry
+collapse fingerprint, not a coverage fix. Do not use it for broad 0/N surfaces
+(dozens of common misses across most clusters), Python, setup failures, or
+bad-oracle cases. Positive examples: textile-dye-trim pruned 3 local common
+misses and retained two failing solvers (6/57 and 3/57 misses); paper-mill-
+furnish-trim pruned 12 common misses and retained reward-0 residuals (1/48 and
+38/48 misses). Negative examples: battery-slurry-coat-trim pruned-to-one-
+solver-full-pass, ceramic-glaze-trim had 42/60 common, warehouse-coldchain had
+60/60 common.
+
 This lane is meant for shapes such as a resolver that still grades independent
 ordering, archive/group traversal, and symbol-state interactions after one
 precedence/output convention is clarified. It does not rescue an all-pass
