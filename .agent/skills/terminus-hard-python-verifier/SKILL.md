@@ -8,7 +8,8 @@ description: Use when writing pytest verifier suites and oracle solutions for ha
 Use this skill after choosing a hard Python task. Note the `debugging` category
 label is BLOCKED by the platform's category classifier — the task's
 classifier-visible shape must pass the rules-first category gate
-(`task-miner/category_rules.md`) and land in one of the 6 allowed categories
+(`task-miner/category_rules.md`) and land in one of the three currently open
+categories — `machine-learning`, `games`, or `system-administration` —
 before this verifier work is worth spending.
 
 This skill is a gate, not just a test-writing checklist. It should reject or
@@ -135,6 +136,19 @@ preserve assertion rewriting for nested package tests.
 
 If the instruction should stay narrower, remove the extra test instead of
 silently checking hidden behavior.
+
+## Verifier Integrity
+
+Keep the end-to-end solution in `solution/`, never in `tests/`. A verifier may
+run the candidate, parse output, use golden fixtures/hashes, check
+spec-derived invariants, or consume sealed held-out truth; it may not turn task
+inputs into the complete expected artifact itself.
+
+If the instruction requires a variable config/input file, read it at runtime
+and include a mutation re-run with a changed meaningful value. The original
+hardcoded parameter must no longer pass. This does not prohibit hardcoded
+expected results, tolerances, or format constants that are not claimed config
+values.
 
 ## Making Python Tasks Hard
 

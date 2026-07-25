@@ -45,6 +45,10 @@ file conflicts with those skills, the canonical skills win.
   Every subprocess should have a practical timeout and useful captured output.
 - Preserve instruction/test symmetry for feature flags, workspace layouts,
   target-specific behavior, generated artifacts, and compatibility paths.
+- Keep end-to-end expected-artifact generation in `solution/`, not `tests/`.
+  Tests may execute the candidate, parse output, use golden/sealed truth, and
+  assert invariants. If the task requires a variable config/input file, read it
+  dynamically and add a mutation re-run so an original-value hardcode fails.
 - **Do NOT ship the bare `cargo new` stub-CLI skeleton.** The CI
   `template_detection` static check (first observed 2026-07-13 on
   tbrain-bundler-resolve) BLOCKS submissions matching the named template

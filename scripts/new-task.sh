@@ -6,8 +6,7 @@
 # Usage: scripts/new-task.sh <slug> <lang> <category>
 #   slug      tbrain-<problem-slug>   (domain-named, no tool/repo filler)
 #   lang      rust | go | c | cpp | python | ruby | node | java | generic
-#   category  system-administration | build-and-dependency-management | games |
-#             machine-learning | security | scientific-computing
+#   category  system-administration | games | machine-learning
 #
 # Output: workspace/<slug>/ with task.toml, instruction.md, environment/,
 # solution/, tests/ pre-filled. Every TODO marker must be resolved before the
@@ -19,12 +18,10 @@ SLUG="${1:?usage: new-task.sh <slug> <lang> <category>}"
 LANG_ID="${2:?usage: new-task.sh <slug> <lang> <category>}"
 CATEGORY="${3:?usage: new-task.sh <slug> <lang> <category>}"
 
-case "$CATEGORY" in
-  system-administration|build-and-dependency-management|games|machine-learning|security|scientific-computing) ;;
-  software-engineering|debugging|data-processing)
-    echo "REJECT: '$CATEGORY' is a blocked predicted slug (category_classifier). Pick one of the 6 allowed." >&2; exit 1 ;;
-  *) echo "REJECT: unknown category '$CATEGORY'." >&2; exit 1 ;;
-esac
+if ! POLICY_RESULT="$(python3 "$REPO_ROOT/scripts/task-policy.py" category "$CATEGORY" 2>&1)"; then
+  echo "$POLICY_RESULT" >&2
+  exit 1
+fi
 
 # Canonical digest-pinned bases (extracted from platform-passed zips).
 # node/temurin digests were not recoverable from the repo: resolve the
@@ -47,14 +44,14 @@ case "$LANG_ID" in
           EXTRA_RUN='ENV GOTOOLCHAIN=auto
 RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go && git config --system safe.directory /app' ;;
   c)      BASE="$BASE_GCC"; APT_COMMON="tmux asciinema" ;;   # gcc image ships build tools + patch
-  cpp)    BASE="$BASE_GCC"; APT_COMMON="tmux asciinema"; LANG_TOML='"C++"' ;;
+  cpp)    BASE="$BASE_GCC"; APT_COMMON="tmux asciinema"; LANG_TOML='"c++"' ;;
   python) BASE="$BASE_PY"
           echo "NOTE: Python tasks must realistically target difficulty=hard (0/3 semantic)." >&2 ;;
   ruby)   BASE="$BASE_RUBY" ;;
   node)   BASE="$BASE_NODE" ;;
   java)   BASE="$BASE_JAVA"
           EXTRA_RUN='RUN git config --system safe.directory /app' ;;
-  generic) BASE="$BASE_DEBIAN" ;;
+  generic) BASE="$BASE_DEBIAN"; LANG_TOML='"bash"' ;;
   *) echo "REJECT: unknown lang '$LANG_ID'." >&2; exit 1 ;;
 esac
 
@@ -146,29 +143,7 @@ cd /app
 EOF
 chmod +x "$TASK_DIR/solution/solve.sh"
 
-cat > "$TASK_DIR/tests/test.sh" <<'EOF'
-#!/bin/bash
-set -uo pipefail
-
-mkdir -p /logs/verifier
-
-if [ "$PWD" = "/" ]; then
-    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
-    echo 0 > /logs/verifier/reward.txt
-    exit 0
-fi
-
-RUN_DIR="$(mktemp -d)"
-cd "$RUN_DIR"
-python3 -I -m pytest -p no:cacheprovider --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-rc=$?
-if [ "$rc" -eq 0 ]; then
-    echo 1 > /logs/verifier/reward.txt
-else
-    echo 0 > /logs/verifier/reward.txt
-fi
-EOF
-chmod +x "$TASK_DIR/tests/test.sh"
+install -m 0755 "$REPO_ROOT/scripts/templates/test.sh" "$TASK_DIR/tests/test.sh"
 
 cat > "$TASK_DIR/tests/test_outputs.py" <<'EOF'
 """Behavioral verifier skeleton. The hygiene helpers below are load-bearing:

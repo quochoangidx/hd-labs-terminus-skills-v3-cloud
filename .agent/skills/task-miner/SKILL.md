@@ -1,6 +1,6 @@
 ---
 name: task-miner
-description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty, structural diversity, category fit, fair-hard failure potential, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The debugging, software-engineering, and data-processing classifier labels are blocked; default to fresh category-first shapes in the 6 allowed categories, and use upstream bugfix PRs or spec-driven stub completion only when explicitly requested or independently category-safe."
+description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty, structural diversity, category fit, fair-hard failure potential, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. Net-new submissions are currently limited to machine-learning, games, and system-administration; reject every other predicted category."
 ---
 
 # Task Miner
@@ -26,17 +26,18 @@ This is a lightweight mining pass. Do not create a task folder, Dockerfile,
 verifier, or oracle here. The output is a compact mined candidate artifact consumed
 later by `task-clone`.
 
-> **⛔ SUBMISSION BLOCKS (active — escalated 2026-07-10; `data-processing` added 2026-07-11).**
+> **⛔ SUBMISSION BLOCKS (active — updated 2026-07-24).**
 > Two platform blocks are live and enforced by an automated eval check:
-> 1. **The `debugging`, `software-engineering`, and `data-processing` classifier labels
->    are BLOCKED** — net-new debugging submissions are rejected, and CI fails with
+> 1. **Only `machine-learning`, `games`, and `system-administration` are OPEN.**
+>    `build-and-dependency-management`, `security`, and
+>    `scientific-computing` joined `debugging`, `software-engineering`, and
+>    `data-processing` as BLOCKED on 2026-07-24. CI fails with
 >    `Predicted category '<slug>' ... is blocked` for ANY blocked prediction, even when
 >    `task.toml` declares another category. Observed live:
 >    `Predicted category 'data-processing' (confidence 0.9) is blocked` (2026-07-11).
 >    The in-progress exemption list is frozen and only shrinks; do NOT add submission
->    IDs or treat this as an override problem. **Allowed categories (6):**
->    `system-administration`, `build-and-dependency-management`, `games`,
->    `machine-learning`, `security`, `scientific-computing`.
+>    IDs or treat this as an override problem. **Allowed categories (3):**
+>    `system-administration`, `games`, `machine-learning`.
 >
 >    Design the task so its PRIMARY ACTIVITY and I/O shape genuinely predict as
 >    an ALLOWED category. A prose/vocabulary sweep is not enough:
@@ -45,9 +46,8 @@ later by `task-clone`.
 >    software-engineering. ⚠️ The former escape hatch — reshaping into a
 >    dataset→report `data-processing` job — is now equally blocked: a successful
 >    flip to a data-processing prediction fails CI the same way. ETL/report/
->    pipeline candidates must be shelved or honestly land in one of the 6 allowed
->    categories (build artifact, admin config, security outcome, scientific
->    computation, ML evaluation, or game-state work). If the shape cannot be
+>    pipeline candidates must be shelved or honestly land in one of the 3 open
+>    categories (admin operation, ML evaluation, or game-state work). If the shape cannot be
 >    honestly reshaped, reject/shelve with
 >    `rejection_reason: category_classifier_<predicted_slug>` (e.g.
 >    `category_classifier_software_engineering`,
@@ -160,10 +160,12 @@ gallery already has the same problem (e.g. another CSV-merger, another gate-sche
 REJECT as duplicate unless the candidate adds a clearly distinct twist. Record the
 closest existing gallery task in the artifact (`closest_gallery_task`).
 
-**Operational invariants (unchanged):** offline (`allow_internet=false`), 2 CPU / 4 GB,
-build ≤600s, verifier ≤450s (always Python pytest shelling out to the task's
-executable/API/DB/file outputs), agent default 900s (cap 1800), `environment/` ≤100
-MiB. Codebase size minimal/small/large all accepted — aim for a mix.
+**Operational invariants:** 2 CPU / 4 GB, build ≤600s, verifier ≤450s (always
+Python pytest shelling out to the task's executable/API/DB/file outputs), agent
+default 900s (cap 1800), `environment/` ≤100 MiB. Default to
+`allow_internet=false`; use `true` only when live network access is the task's
+point, with exact version plus immutable digest/hash pins and stable-invariant
+grading. Codebase size minimal/small/large all accepted — aim for a mix.
 
 ## Operating Modes
 
@@ -195,27 +197,28 @@ roles — never "source of ideas":
    one retest-slot per batch (`task-batch`, Dry-round handling) with a
    materially stronger instance, never a reskin. When logging a new dead
    verdict, record its tier and the evidence (n, instance, probe_model).
-2. **Design laws**: every fresh idea must still name its hidden lever in one
-   sentence (Master collapse law screen).
+2. **Design laws**: every fresh idea must name the implementation/reasoning
+   challenge that remains after its visible contract passes the sufficiency
+   gate (Master collapse law screen).
 3. **Dedupe + novelty check + Task Inspiration ID lookup.**
 
 Per mining round:
-- Generate **20–30 fresh ideas** spread over ≥4 of the 6 allowed categories and
+- Generate **20–30 fresh ideas** spread across all 3 open categories and
   ≥4 of these source classes (each class ≤40% of the pool):
-  1. A REAL tool/library in the image whose observable behavior diverges from
-     its public spec — lever (a): run the real tool, find quirks the public
-     docs under-describe.
-  2. A REAL implementation diverging from an UNDER-documented standard — lever
-     (b); before accepting, answer "does the public spec fully describe the
-     authority's behavior?" Yes → reject (the SigV4 lesson).
-  3. Stateful systems/simulators with unstated counter-intuitive rules — games
-     with recursive/typed corners; true hidden-sim (solver submits an
-     estimate, the simulation stays INSIDE the verifier, dynamics undisclosed).
+  1. A REAL tool/library in the image whose observable behavior is broad and
+     non-obvious — contract source: pin the tool and prove it is offline
+     reachable; the implementation may stay opaque.
+  2. A REAL implementation diverging from an under-documented standard — allow
+     only when that implementation is offline reachable or its complete graded
+     contract/reference data is shipped agent-visible.
+  3. Stateful systems/simulators with counter-intuitive interactions under a
+     complete visible contract — the simulation implementation may stay inside
+     the verifier, but no graded dynamic or event-order rule may be hidden.
   4. Upstream closed bugfix PRs (minority lane, patch-shape gate).
   5. Taxonomy coverage gaps: run `refresh_gallery_taxonomy.py`, prefer
      subcategories thin in the gallery AND absent from the portfolio.
-  6. Free-form ideas — any shape that names a hidden lever; no precedent
-     needed.
+  6. Free-form ideas — any shape that names a visible-contract implementation
+     challenge; no precedent needed.
   Concrete repos/tools for classes 1–3 come from **Repo Prospecting** (section
   below) — actively discovered mature-but-obscure repos, never just the static
   Source Queue or whatever the model happens to remember.
@@ -233,35 +236,18 @@ Per mining round:
   `failure_mode`. Do not advance two candidates matching on >4/6 axes; changing
   only repo, domain, or language does not create product diversity.
 
-### bd-mgmt seam — strong category signal, not a proven difficulty lane
+### bd-mgmt seam — historical category signal (blocked for net-new work)
 
 The strongest real-CI category signal on record remains purl canon, which predicted
 **build-and-dependency-management at 1.0** even though the blind probe
 insisted SWE 0.9 (`category_rules.md` R5). The classifier reads
 manifests/lockfiles/dependency-graphs-as-the-OBJECT as bd-mgmt even when the
-work is compute-heavy. This clears only the CATEGORY gate: later Cargo, apt,
-and disclosed-resolver probes collapsed EASY. Do not prioritize the seam unless
-the candidate independently names a broad under-documented authority wall and
-passes the collapse screen. Possible shapes include:
-
-- offline lockfile reconstruction: manifest + a vendored registry snapshot
-  in-image → regenerate the exact lockfile a real tool would produce;
-- dependency-graph conflict resolution with backtracking (real resolver
-  in-image as the authority);
-- toolchain/build migration: make a project build correctly against a second
-  pinned toolchain under stated constraints;
-- vendoring/patch resolution: apply override/patch precedence rules the way
-  the real tool does.
-
-The DIFFICULTY bar is unchanged — master collapse law still applies: the
-candidate needs a real in-image tool whose resolution rules INTERACT
-(conan/conda-style operator × bound × prerelease × endpoint coupling), not a
-table of standalone quirks (§6: portage/rubygems collapsed). Version
-COMPARISON alone is dead; resolution/backtracking/lockfile-shape carries the
-residual wall. Prospecting queries: `gh search repos` for alternative package
-managers, lockfile tools, registry-snapshot/vendoring tools, monorepo build
-resolvers — 100–5k stars, ≥2y history, never pip/cargo/npm themselves
-(memorization-poison).
+work is compute-heavy. It no longer clears the submission gate: the category
+has been blocked since Jul 24, 2026. Preserve the evidence only for historical
+classification/dedupe; do not prospect, skeleton-build, or reframe into this
+lane for net-new submissions.
+The prior candidate shapes and prospecting queries are intentionally retired
+until the category reopens.
 
 ### Interaction/scale shapes — CLOSED as a default HARD lane
 
@@ -325,13 +311,10 @@ For category-profile candidates, `fixing_commit` is optional. The artifact must 
 
 ## Category Profiles
 
-- `data-processing`: BLOCKED by the category classifier since 2026-07-11 (`Predicted category 'data-processing' (confidence 0.9) is blocked`). Do not mine new tasks here and do not use dataset→report reshaping as an escape route for other blocked shapes; reject/shelve with `category_classifier_data_processing`, or reshape only when the primary activity honestly becomes one of the 6 allowed categories.
-- `build-and-dependency-management`: Mine build config, packaging, lockfile, Docker, Make/Cargo/npm/pip workflows. Accept reproducible offline build/install/test tasks with inspectable artifacts. Reject version bumps, CI metadata, or live registry requirements.
-- `software-engineering`: BLOCKED by the category classifier for current submissions. Do not mine new tasks here; reshape only when the primary activity truly becomes an allowed category (data-processing no longer qualifies — it is blocked too), otherwise reject/shelve with `category_classifier_software_engineering`.
+- `data-processing`, `build-and-dependency-management`, `security`, and `scientific-computing`: BLOCKED for net-new submissions. Do not mine them, and do not use them as a reframe for another blocked shape. Preserve historical results only as category-calibration evidence.
+- `software-engineering` and `debugging`: BLOCKED by the category classifier for current submissions. Do not mine new tasks here; reshape only when the primary activity truly becomes `system-administration`, `games`, or `machine-learning`, otherwise reject/shelve with `category_classifier_<predicted_slug>`.
 - `system-administration`: Mine local service/config/process/permissions tasks. Accept Docker-contained health checks, config validation, shell automation, users/groups, or process supervision. Reject tasks needing privileged host daemons or external services.
-- `security`: Mine local auth, escaping, sanitization, crypto, permissions, or reverse-engineering style tasks. Accept exploit-prevention plus legitimate-use preservation. Reject vague hardening, live targets, secrets, or network-only validation.
-- `scientific-computing`: Mine numerical, simulation, geospatial, statistics, or domain-code tasks. Accept deterministic small fixtures with tolerances and boundary cases. Reject GPU, huge datasets, or compiled-extension rebuild requirements unless explicitly approved.
-- `machine-learning`: Mine tiny offline data-loader, inference, tokenizer, metric, or evaluation tasks. Accept deterministic seeds and small fixtures. Reject downloads, GPU, model registry, or expensive training.
+- `machine-learning`: Mine deterministic data-loader, inference, tokenizer, metric, or evaluation tasks. Prefer offline fixtures, but retain `allow_internet = true` when live network access is genuinely the task's point; pin every live input to exact versions and immutable digests/hashes and verify stable invariants.
 - `games`: Mine terminal game/puzzle/simulation rule tasks. Accept deterministic state transitions, move legality, scoring, or solver behavior. Reject visual-only or flaky/random tasks.
 
 ### Classifier-visible surface artifacts — pick the category BEFORE building, then build the SHAPE to match
@@ -345,10 +328,7 @@ a prose/vocabulary sweep alone does NOT flip a wrong prediction.
 
 | Category | Surfaces that pull the prediction toward it |
 |---|---|
-| build-and-dependency-management | manifests/lockfiles/build graphs are the OBJECT of the work; instruction verbs = resolve/install/build/package; verifier inspects build outputs or installed artifacts |
 | system-administration | services, config files, permissions, users, processes, logs; the agent OPERATES a system rather than authoring an algorithm |
-| security | threat/abuse framing; memory-safety verifier (ASan/UBSan); sanitization/authz/crypto; exploit-prevention PLUS legitimate-use preservation tests |
-| scientific-computing | continuous/numerical model with physical units; precision/tolerance output requirements; NO prescribed method steps — one method-shaped sentence ("solve the quadratic rather than stepping") flipped a task to software-engineering |
 | machine-learning | dataset/loader/metric/eval-loop artifacts with fixed seeds; conversely, ML SUBJECT ≠ ML category — scrub ML framing/tags when the activity is not ML |
 | games | game rules, state transitions, move legality, scoring; verbs = simulate/play/adjudicate |
 
@@ -419,9 +399,11 @@ language. Docs treat "niche tools/languages" as a Hard lever (less training data
 → frontier agents fail more), so a non-Python codebase often HELPS difficulty.
 
 The real gate is operational viability, not language: build <=600s after
-slimming, verifier <=450s, offline (`allow_internet=false`), deterministic,
-2 CPU / 4 GB, `environment/` <=100 MiB. Language matters only INDIRECTLY through
-build cost.
+slimming, verifier <=450s, deterministic, 2 CPU / 4 GB, `environment/` <=100
+MiB. Default to offline (`allow_internet=false`); when live internet access is
+the task's point, keep `allow_internet=true`, hard-pin sources to exact versions
+and immutable digests/hashes, and verify stable invariants rather than mutable
+responses. Language matters only INDIRECTLY through build cost.
 
 Hard-dense archetypes (language-agnostic) — mine TOWARD these:
 
@@ -758,27 +740,26 @@ Reject false-hard candidates:
 
 ### Master collapse law screen — RUN ON EVERY CANDIDATE, any lane, before scoring
 
-⭐ Confirmed over a 15-task blind-probe batch (2026-07-12), lane-agnostic: a task
-holds under a fair blind probe **if and only if** it hides one of exactly two
-things:
+⭐ Confirmed over a 15-task blind-probe batch (2026-07-12), lane-agnostic:
+fully specified transcription engines usually collapse. Fair survivors must
+derive difficulty from work the visible contract does not solve for the agent,
+not from a rule it withholds. The two useful signatures are:
 
-- **(a) an undisclosed in-image library-quirk differential** — behaviour the
-  solver can only match by differential-testing a real implementation present in
-  the image (and NOT re-derivable from a memorized spec or a reachable
-  stdlib/host reference);
-- **(b) an undisclosed counter-intuitive rule** — a rule a naive-but-careful
-  implementation gets wrong, with a broad enough footprint to survive fair
-  disclosure of the surrounding contract.
+- **(a) an in-image authority differential** — the contract pins an
+  offline-reachable implementation, while matching its broad accreted behavior
+  still requires investigation and differential work;
+- **(b) a counter-intuitive observable outcome under a sufficient contract** —
+  every graded rule is stated, reachable, or supported by visible data, but the
+  correct implementation still requires non-obvious cross-file, state, or
+  interaction reasoning.
 
-Everything disclosed-and-derivable is EASY 3/3, regardless of rule count,
-cascade depth, stated counter-intuitiveness, or optimization shape. A
-**DISCLOSED** counter-intuitive rule is not hard either — Opus reads it straight
-from the spec (hanabi downward-rotation and maven memorized-reference both
-collapsed 820/820 once stated). Screen every candidate by naming which of the
-two levers it hides, in one sentence, in the artifact. Cannot name one → reject
-at mining time, cost zero. This subsumes the spec-task advice in "Opus-4.8
-resistance" and the bugfix-side "Fix-shape filter": both are projections of this
-law onto their lane.
+Everything straightforward-and-derivable is EASY 3/3, regardless of rule count,
+cascade depth, stated counter-intuitiveness, or optimization shape. Screen every
+candidate by naming the remaining implementation/reasoning challenge after the
+Task Instruction Sufficiency gate passes. If difficulty exists only while a
+contract fact is omitted, reject at mining time; a hidden rule is a fairness
+defect, not a lever. This subsumes the spec-task advice in "Opus-4.8 resistance"
+and the bugfix-side "Fix-shape filter".
 
 **fair⊥hard single-lever early-DROP (apply here, not after the platform flag):**
 if the candidate's ENTIRE difficulty is one boundary / convention / precedence /
@@ -1109,7 +1090,7 @@ candidate:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
-  collapse_law_screen:     # pass | fail — name the hidden lever in one sentence: in-image library-quirk differential | undisclosed counter-intuitive rule; fail (or single-lever fair⊥hard fingerprint) => reject
+  collapse_law_screen:     # pass | fail — after sufficiency passes, name the visible-contract implementation challenge: in-image authority differential | counter-intuitive cross-file/state/interaction reasoning; hidden contract or single-lever fair-hard fingerprint => reject
   patch_shape_gate:        # pass | fail — from the mechanical gate; fail => not Hard-eligible
   patch_shape_evidence:    # which gate condition passed (new symbol / >=2 interacting files / multi-commit / probe-fail)
   family_key:              # library + bug_family, checked against the family ledger

@@ -110,6 +110,11 @@ For each key rule area, compare online content with local docs:
 | tmux/asciinema | `creating-tasks/dockerfile-best-practices.md` | `tmux` |
 | allow_internet | `understanding-tasks/task-requirements.md` | `allow_internet` |
 | Docker-compose flags | `reviewing-tasks/reviewer-checklist.md` | `docker_compose` |
+| Verifier integrity | `creating-tasks/writing-tests.md`, `reviewing-tasks/reviewer-checklist.md` | `complete expected artifact`, `dynamically`, `config` |
+| CLI installation and credentials | `getting-started/quick-start.md`, `testing-and-validation/running-real-agents.md` | `snorkelai-stb`, `stb login`, `keys refresh` |
+| One-model Hard early exit | `understanding-tasks/difficulty-guidelines.md` | `Opus 4.8 first`, `skipped` |
+| Live category availability | `reference/category-status.md`, `reference/changelog.md` | `limited to three`, `Blocked` |
+| Internet-enabled reproducibility | announcement / `creating-tasks/dockerfile-best-practices.md` | `allow_internet = true`, `digest`, `stable invariants` |
 
 ### Diff format
 
@@ -149,6 +154,8 @@ After docs are synced, audit the doctrine-coupled set:
 .agent/skills/task-harbor-runner/SKILL.md
 .agent/skills/task-llm-style-audit/SKILL.md
 .agent/skills/task-revise-flag-remediation/SKILL.md
+.agent/skills/terminus-hard-python-verifier/SKILL.md
+.agent/skills/terminus-rust-task-authoring/SKILL.md
 ```
 
 ### Audit checklist (check each rule in each skill):
@@ -170,6 +177,12 @@ After docs are synced, audit the doctrine-coupled set:
 | Env spec anti-bypass | — | — | check |
 | Instruction styling | prompt template | instruction style | check |
 | Build context size | — | quality preflight | check |
+| No end-to-end solver in `tests/` | — | verifier architecture | check |
+| Config values read dynamically when the task requires config input | — | verifier architecture | check |
+| Snorkel CLI credential flow | — | agent-run commands | check |
+| One-model platform-Hard early exit | scoring mapping | validation | check |
+| Net-new category availability | candidate filter | category gate | check |
+| Internet-enabled source pinning | viability | Docker/verifier review | check |
 
 For each cell, verify the skill's text matches the current docs. Report discrepancies.
 

@@ -17,7 +17,8 @@ A single argument: path to a `.zip` file (absolute or relative).
 
 ## Workflow
 
-> ⚙️ For an UNZIPPED task folder, run `scripts/preflight.sh <task-dir>`
+> ⚙️ For an UNZIPPED task folder, run `scripts/preflight.sh <task-dir>
+> --strict --report-json workspace/reports/<slug>/preflight.json`
 > (repo root) first — it covers the mechanical subset below (layout,
 > .dockerignore entries, Dockerfile hygiene, task.toml fields, leak sweep,
 > zip arcnames, rubric format, docker oracle/nop, noexec-/tmp repro) in one
@@ -26,10 +27,34 @@ A single argument: path to a `.zip` file (absolute or relative).
 
 1. **Unzip** to a temp directory
 2. **Structural audit** — check every file against rules
-3. **Auto-fix** — apply fixes for known issues
-4. **Oracle + Nop** — run harbor tests if Docker available
-5. **Report** — summarize findings and fixes
-6. **Re-zip** — if fixes applied, create updated ZIP
+3. **Instruction sufficiency** — recreate or locate the external contract-source
+   manifest, run two blind contract reviews, and pass
+   `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`
+4. **Auto-fix** — apply fixes for known issues
+5. **Oracle + Nop** — run harbor tests if Docker available
+6. **Report** — summarize findings and fixes
+7. **Re-zip** — if fixes applied, create updated ZIP
+
+The sufficiency manifest is intentionally absent from the ZIP. Look first for
+`workspace/reports/<slug>/instruction-sufficiency.json`. If it is unavailable,
+rebuild it from the extracted instruction/environment/tests using
+`terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
+Do not mark a ZIP ready merely because every test has a passer: coverage and
+solver success cannot certify that the visible contract defines the expected
+behavior.
+
+### Verifier-integrity review (manual, blocking when violated)
+
+Read the verifier before auto-fixing it. `tests/` may legitimately run the
+candidate, parse output, consume golden fixtures/hashes, check invariants, or
+use sealed held-out truth. It must not contain a callable that maps task inputs
+to the complete expected artifact; move that end-to-end logic to `solution/`.
+
+When the task says the candidate must read a variable config or input file,
+change one meaningful config value and re-run the verifier. The verifier must
+read it dynamically and reject a candidate that hardcodes the original value.
+Do not flag hardcoded expected results, tolerances, or format constants unless
+they replace values the instruction says come from that file.
 
 ## Step 1 — Unzip and Identify
 
@@ -109,14 +134,20 @@ security
 scientific-computing
 ```
 
-> ⛔ The toml enum above is only syntax validity. The CI `category_classifier`
-> BLOCKS submissions whose PREDICTED category is `software-engineering`,
-> `debugging`, or `data-processing` (the last added 2026-07-11:
+This is the `task.toml` schema enum, not the current submission allowlist.
+For net-new submissions, only `system-administration`, `games`, and
+`machine-learning` are open; the other six must be treated as blockers unless
+the task is already in the platform's revision/awaiting-review exception.
+
+> ⛔ The toml enum above is only syntax validity. For net-new submissions, only
+> `machine-learning`, `games`, and `system-administration` are open. The CI
+> `category_classifier` BLOCKS every other PREDICTED category, including
+> `software-engineering`, `debugging`, and `data-processing` (the last added 2026-07-11:
 > `Predicted category 'data-processing' (confidence 0.9) is blocked`) — the
 > prediction is independent of the declared `category`, and the exemption list is
 > frozen. If the task's shape (spec-conformance component, stub completion, or
 > dataset→report/ETL pipeline) predicts a blocked slug, flag it as a manual
-> BLOCKER: the task needs an honest reshape into one of the 6 allowed categories
+> BLOCKER: the task needs an honest reshape into one of the three open categories
 > or a shelve — never a category re-label.
 >
 > **Make this check operational rules-first** (the real classifier is
@@ -160,14 +191,14 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 
 | Check | Rule | Auto-fix |
 |-------|------|----------|
-| `allow_internet` | Must match the task's genuine need: `false` (default — correct for all our offline tasks); `true` allowed ONLY when the task genuinely requires internet (eval-checked; unjustified `true` may be rejected) | ✅ set to false for offline tasks |
+| `allow_internet` | Must match the task's genuine need: `false` (default — correct for offline tasks); retain `true` when network access is the task's point. Pin every live source to exact versions and immutable digests/hashes, and grade stable invariants rather than mutable live values. | ✅ set to false only for offline-solvable tasks |
 | `difficulty` | Must be `"medium"` or `"hard"`, NOT `"easy"` | ❌ manual |
 | **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
-| `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` — EXCEPT `"C++"` stays capitalized | ✅ lowercase them (preserve `"C++"`) |
+| `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`,`"c++"`), never `"Rust"`/`"Go"`/`"C++"` | ✅ lowercase them |
 | `workdir` (informational) | For `number_of_milestones = 0`, default is Dockerfile-`WORKDIR`-only (no `[environment].workdir`), but BOTH forms are accepted — a reviewer may explicitly request `workdir = "/app"` (reviewer-overridden 2026-07-16); honor that. Do NOT auto-remove | ℹ️ flag only |
 | `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
-| `category` | Must be one of the 9 valid values; ALSO flag `software-engineering`/`debugging`/`data-processing` (declared or shape-predicted) as blocked by `category_classifier` — shape-predicted is checked rules-first via `category_rules.md`, probe only as fallback (see the callout below the toml block) | ❌ manual + rules/probe |
+| `category` | Must be one of the 9 valid values; for net-new work it must also be `machine-learning`, `games`, or `system-administration` (declared and shape-predicted). Other categories are blocked unless the platform revision/awaiting-review exception applies. Check the shape rules-first via `category_rules.md`, then probe only as fallback. | ❌ manual + rules/probe |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
 | `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
 
@@ -233,26 +264,10 @@ Check `tests/test.sh`:
 | CTRF output | Uses `--ctrf /logs/verifier/ctrf.json` | ✅ add flag |
 
 **Canonical test.sh template** (auto-fix target):
-```bash
-#!/bin/bash
-set -uo pipefail
-
-mkdir -p /logs/verifier
-
-if [ "$PWD" = "/" ]; then
-    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
-    echo 0 > /logs/verifier/reward.txt
-    exit 0
-fi
-
-python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
-rc=$?
-if [ "$rc" -eq 0 ]; then
-    echo 1 > /logs/verifier/reward.txt
-else
-    echo 0 > /logs/verifier/reward.txt
-fi
-```
+Use the repository asset `scripts/templates/test.sh`; do not reconstruct it
+from prose. After extraction or auto-fix, run
+`scripts/task-policy.py validate-task <task-dir>`. The exact multiline footer,
+`python3`, LF endings, executable mode, and `bash -n` result are blocking.
 
 ### 2e. Dependency wheels and root pyproject
 
@@ -445,12 +460,12 @@ tomllib.load(open("task.toml", "rb"))
 ## Step 5 — Harbor Tests (if Docker available)
 
 ```bash
-harbor run -a oracle -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-oracle -q   # Must return 1.0
-harbor run -a nop -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-nop -q         # Must return 0.0
+stb harbor run -a oracle -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-oracle -q   # Must return 1.0
+stb harbor run -a nop -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-nop -q         # Must return 0.0
 ```
 
-(Plain `harbor run` — the `stb` prefix is only for real-agent runs; see
-task-harbor-runner.)
+Use the current Snorkel CLI surface for both Harbor and real-agent runs; see
+`task-harbor-runner` for triage and credential handling.
 
 ## Step 6 — Report and Re-zip
 

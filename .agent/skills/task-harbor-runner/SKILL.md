@@ -9,15 +9,18 @@ Use this skill after a task folder exists and the user wants to run or debug it.
 
 ## Command Order
 
-Prefer this sequence (CLI surface verified 2026-06-24; mind the version skew —
-bare `harbor` is 0.5.0 while the stb-bundled one is 0.7.0, and `harbor tasks
-check` was REMOVED in 0.7.0):
+Use the Snorkel CLI installed by the current Quick Start. The retired standalone
+Harbor wheel may be absent or stale; `stb harbor` is the supported surface, and
+`harbor tasks check` was removed in its bundled 0.7.0 version:
 
 ```bash
-harbor run -a oracle -p <task-folder>
-harbor run -a nop -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
+stb harbor run -a nop -p <task-folder>
 stb harbor check <task-folder>          # replaces the removed `harbor tasks check`
 ```
+
+If agent credentials are missing or expired, run `stb login` and `stb keys
+refresh`; do not set `OPENAI_API_KEY` or `OPENAI_BASE_URL` manually.
 
 Run real agents only when the user approves API usage. `-a` DEFAULTS TO ORACLE —
 always pass the agent explicitly, and the agent name is `terminus-2` (not
@@ -40,12 +43,6 @@ Known INFRA failures — do not treat these as task defects:
   fresh-subagent probes (`task-local-solve-probe`) and never rewrite the
   task in response to the geoblock.
 
-Use the absolute binary path if PATH is stale:
-
-```bash
-"$HOME/.local/bin/harbor" --version
-```
-
 Keep Harbor/agent outputs under the ignored workspace:
 
 ```text
@@ -55,7 +52,7 @@ workspace/reports/
 When a command supports an output directory, prefer:
 
 ```bash
-harbor run -a oracle -p <task-folder> -o workspace/reports/<task-slug>/oracle
+stb harbor run -a oracle -p <task-folder> -o workspace/reports/<task-slug>/oracle
 ```
 
 ## Failure Discipline
@@ -127,7 +124,7 @@ Examples:
 - If oracle suddenly fails with a `[build failed] undefined: <symbol>` from the
   verifier AND `agent/oracle.txt` is empty, suspect a STALE cached Docker image:
   Harbor does not reliably rebuild when `environment/repo` or `solution/fix.patch`
-  change on disk. Re-run with `harbor run --force-build -a oracle -p <task>` (and
+  change on disk. Re-run with `stb harbor run --force-build -a oracle -p <task>` (and
   for nop). Do not chase the "undefined symbol" as a patch/code bug until you
   have force-built. To get ground truth without Harbor, build the image and run
   the real flow in one container: `docker build -t dbg environment/ && docker run
@@ -202,7 +199,7 @@ Real agents / Agent Timeout Gate:
   hard blocker, not a difficulty signal. It means the environment is too heavy:
   agents spend the 1800s budget on cold rebuilds, navigating an un-slimmed repo,
   or a slow test suite, and never converge.
-- Pre-check WITHOUT spending agent budget: build once, then `time harbor run -a
+- Pre-check WITHOUT spending agent budget: build once, then `time stb harbor run -a
   oracle -p <task-folder>` against the cached image. The cached-image oracle run
   approximates one agent edit→build→test cycle; if it is a large fraction of
   1800s, agents will time out.

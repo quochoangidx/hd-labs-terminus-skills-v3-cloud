@@ -17,6 +17,12 @@ confidence.
 
 - Never solve in a chat that has already seen the task's solution, verifier,
   rubric, platform analysis, or intended patch.
+- Refuse a full difficulty probe unless
+  `workspace/reports/<slug>/instruction-sufficiency.json` passes
+  `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`.
+  Skeleton probes require the same contract-source and two-reviewer audit in
+  draft form. A solver guessing a hidden rule correctly is not sufficiency
+  evidence, and no probe result may override a failed gate.
 - Do not change the source task while probing.
 - Solve copies must exclude `solution/`, `tests/`, `reports/`, `rubric*`,
   `*_rubric*`, prior run logs, and generated submission zips.
@@ -36,8 +42,8 @@ confidence.
   mechanically, do not rely on inheritance:
   - Codex: use `gpt-5.5` with `reasoning_effort: medium`, even if the manager
     chat is using a higher effort.
-  - Claude Code: use Claude Opus 4.8 with its normal/default reasoning
-    configuration. Pass `model: opus` EXPLICITLY on every probe Agent call —
+  - Claude Code: use Claude Opus 4.8 with medium reasoning. Pass `model: opus`
+    and the medium reasoning setting EXPLICITLY on every probe Agent call —
     subagents inherit the session model by default, so a session running a
     stronger tier (Fable/Mythos) that omits the parameter probes with a
     stronger solver than the platform grading pool (Opus 4.8 + GPT-5) and
@@ -45,9 +51,9 @@ confidence.
   Do not silently substitute a cheaper OR stronger model across runtimes. Use a
   different model or higher reasoning effort only when the user explicitly asks
   for it.
-- **`task-batch` frontier-training override:** when this probe is invoked from
-  `task-batch`, use the strongest frontier-tier backend available in the active
-  runtime at medium thinking. In that mode a PASS is deliberately valid EASY
+- **`task-batch` frontier-training profile:** when this probe is invoked from
+  `task-batch`, keep the same runtime pin above (`gpt-5.5` medium in Codex;
+  Opus 4.8 medium in Claude Code). In that mode a PASS is deliberately valid EASY
   evidence because the product excludes anything the strongest tier solves;
   this is stricter than ordinary platform-pool calibration.
 - Record `probe_model` in every run log and every verdict written to
@@ -141,8 +147,8 @@ burned the whole build cost on candidates that then probed all-pass EASY.
   - 2/2 pass (or 3/3 after an adaptive run) → DROP or redesign the lever
     before building anything more. A 2/3 skeleton result is AMBER and follows
     the non-Python qualification rule below. Apply the master collapse law (AGENTS.md
-    §1): if no undisclosed in-image library-quirk differential and no
-    undisclosed counter-intuitive rule survives, there is nothing to redesign
+    §1): if no non-obvious in-image authority behavior and no counter-intuitive
+    outcome under a fully visible contract survives, there is nothing to redesign
     around — drop.
   - 0/2 with de-correlated semantic failures and 100% per-case union → proceed
     to the full build without a 3rd run.
@@ -224,8 +230,9 @@ even with the reference in hand. Both wins were gitignore-family path matching
 where the discriminating fixture was `<dir>/**` + a query of the directory itself
 (trailing-slash / `type=dir`) — random fuzzers under-generate directory-typed
 queries at a `/**` parent, so ~1/3 of solvers miss it. Recipe: large spec, bury
-the discriminator in a non-headline rule, do NOT spell out its subtle implication,
-and put fixtures in the under-fuzzed shape.
+the discriminator in a non-headline rule, state its observable contract without
+a worked example or implementation hint, and put fixtures in the under-fuzzed
+shape. Never omit the rule itself.
 
 ## This probe is OVER-GENEROUS — make it fair, and know its limit
 

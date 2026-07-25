@@ -204,11 +204,11 @@ This should **PASS**. If it doesn't, fix issues before proceeding.
 
 ## Step 9: Test with Real Agents
 
-1. Set up your API key (received via email):
+1. Make sure your `stb` credentials are current (no manual `OPENAI_*` variables needed):
 
 ```bash
-export OPENAI_API_KEY=<your-portkey-api-key>
-export OPENAI_BASE_URL=https://api.portkey.ai/v1
+stb login
+stb keys refresh   # if credentials are missing or expired
 ```
 
 2. Run with GPT-5.5:

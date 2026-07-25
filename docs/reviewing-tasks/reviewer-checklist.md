@@ -268,6 +268,16 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>The verifiers must actually verify that an implemented solution is correct. They should not just settle for checking high level requirements or general formatting.</td>
       <td>High</td>
     </tr>
+    <tr>
+      <td>Solution logic is not reimplemented in <code>tests/</code>.</td>
+      <td>No function in <code>tests/</code> may map task inputs to the <strong>complete expected artifact</strong> except by running the agent's own program. End-to-end solution generation belongs in <code>solution/</code> (never present in the agent environment). <strong>Legitimate and not flagged:</strong> running the agent's binary/CLI, parsing the agent's output, precomputed golden fixtures/hashes, spec-derived invariants (floors/budgets/ceilings), and sealed held-out truth. Rule of thumb: if deleting <code>solution/</code> would still let the test compute the expected answer, trim the solver logic.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Config-claimed values are read dynamically, not hardcoded.</td>
+      <td>Applies <strong>only</strong> when the instruction says the agent must read a config/input file that can vary. Then the verifier must read those values from the config at runtime rather than re-declaring them as literals, so an agent that ignores the config and hardcodes the parameters cannot pass. <strong>Not a general ban on hardcoded values:</strong> hardcoding the expected <em>result</em> — exact numeric/ML targets (with tolerance), byte-exact outputs, format constants — is fine and often required. Confirm config dependence by mutating the config and re-running.</td>
+      <td>Medium</td>
+    </tr>
   </tbody>
 </table>
 

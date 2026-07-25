@@ -16,14 +16,20 @@ Difficulty is calculated from accuracy across two evaluation models. The thresho
 
 ### Why "best" vs "worst" model?
 
-Both models are run against every task. The **worst model** sets the difficulty floor for most tasks: if even the weaker model can solve it most of the time, the task is Easy. The **best model** matters for the hardest tasks: a task where the *strongest* model still only scores ≤ 20% earns Hard difficulty even if the worst model also struggles, because the failure isn't just a weak-model artifact.
+Both models are normally run against every task (see [Evaluation Process](#evaluation-process) for the one exception). The **worst model** sets the difficulty floor for most tasks: if even the weaker model can solve it most of the time, the task is Easy. The **best model** matters for the hardest tasks: a task where the *strongest* model still only scores ≤ 20% earns Hard difficulty even if the worst model also struggles, because the failure isn't just a weak-model artifact.
 
 ## Evaluation Process
 
 Each task is evaluated against:
-- **GPT-5.5** with Codex agent
 - **Claude Opus 4.8** with Claude Code agent
+- **GPT-5.5** with Codex agent
 - **5 runs each** to determine average accuracy
+
+### One-model early exit for Hard tasks
+
+Difficulty checks run **Claude Opus 4.8 first**. If Opus 4.8 already rates your task as **Hard** (≤ 20% accuracy), the **GPT-5.5 run is skipped** and the task is finalized as Hard.
+
+This doesn't lose any rigor: a task is Hard whenever *either* model scores ≤ 20%, so an Opus-4.8 Hard result already settles the rating — the GPT-5.5 run couldn't change it. The practical effect is that you'll sometimes see difficulty results from **only one model instead of two**. That's expected behavior, not a bug — if GPT-5.5 results are missing on a Hard-rated task, there's no need to flag it. Tasks that aren't Hard on Opus 4.8 still run against both models.
 
 ## Designing for Difficulty
 

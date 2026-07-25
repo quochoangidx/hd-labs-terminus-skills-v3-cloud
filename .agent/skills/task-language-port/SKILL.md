@@ -46,12 +46,13 @@ is the task's difficulty. Do not simplify the placeholder's bug or improve the a
 
 ## Step 0 — Feasibility and scope (do this before touching any file)
 
-1. **Category hold check, first.** If the source task's `task.toml` category is `debugging`,
-   `software-engineering`, or `data-processing` (blocked since 2026-07-11) — or its shape would
-   PREDICT one of those to the category classifier — tell the user these are currently ON HOLD
-   on the platform (see `task-miner`/`task-clone`); a port would sit un-submittable regardless
-   of language. Confirm they still want it (e.g. for later, once the hold lifts) before
-   spending build effort.
+1. **Category hold check, first.** Net-new ports are currently submittable only
+   when the source task predicts as `machine-learning`, `games`, or
+   `system-administration`. If it predicts any other category — including
+   `build-and-dependency-management`, `security`, or `scientific-computing`
+   newly blocked on 2026-07-24 — tell the user the port is on hold regardless
+   of language and confirm they still want a future-only artifact before any
+   build effort.
 
    **Template-shape check, same gate.** The CI `template_detection` static check (first
    observed 2026-07-13) BLOCKS submissions whose structural shape matches a named template —
