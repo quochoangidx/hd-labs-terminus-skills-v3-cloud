@@ -200,7 +200,7 @@ RUN pip install pandas==2.0.0
 
 ### Runtime Network Installs in test.sh
 
-With `allow_internet = false`, `tests/test.sh` cannot fetch packages from the network at runtime. All verifier dependencies must be baked into the Docker image. A `test.sh` that runs `apt-get install`, `curl … install.sh`, `uvx`, `pip install`, `npm install`, `git clone`, or `wget` will succeed locally during development (where the network is available) and fail in production with `RewardNotFoundError`.
+With `allow_internet = false`, `tests/test.sh` cannot fetch packages from the network at runtime. All verifier dependencies must be baked into the Docker image. A `test.sh` that runs `apt-get install`, `curl … install.sh`, `uvx`, `pip install`, `npm install`, `git clone`, or `wget` will succeed locally during development (where the network is available) and fail in production with `RewardNotFoundError`. This applies to the default `allow_internet = false`; for `allow_internet = true` tasks that genuinely require the network, runtime network use is permitted — though bundling dependencies into the image is still preferred where possible for deterministic grading.
 
 ```bash
 # Bad - test.sh installs deps at runtime, fails with allow_internet = false

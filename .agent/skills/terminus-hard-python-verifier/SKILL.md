@@ -1,11 +1,12 @@
 ---
 name: terminus-hard-python-verifier
-description: Use when writing pytest verifier suites and oracle solutions for hard Python debugging tasks in Terminus. Focuses on behavioral subprocess tests, anti-cheating coverage, edge cases, and making tasks hard enough that coding agents may fail.
+description: Use when writing pytest verifier suites and oracle solutions for hard Python tasks in Terminus. Focuses on behavioral subprocess tests, anti-cheating coverage, edge cases, and making tasks hard enough that coding agents may fail. All nine Regular categories are open, but the declared category must match the visible primary activity.
 ---
 
 # Terminus Hard Python Verifier
 
-Use this skill after choosing a Python debugging task.
+Use this skill after choosing a hard Python task. Use `debugging` when the primary
+activity is diagnosis and repair; otherwise choose the matching open category.
 
 This skill is a gate, not just a test-writing checklist. It should reject or
 redesign tasks that are likely to be rated Medium, and it should prevent

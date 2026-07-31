@@ -225,18 +225,14 @@ workspace/reports/<task-slug>/submission-explanations.md
   non-blocking cleanup reviewers still call out).
 - a config/format PARSER task (HCL2, Dockerfile, HOCON, nginx, …) whose deliverable
   is "parse document → canonical JSON" but `category = "build-and-dependency-management"`
-  — reviewers reject it as software-engineering (BLOCKED): "the actual work is
-  implementing a full X parser from a stub." ⛔ The old fix — retarget
-  `category = "data-processing"` with a transformation-first reframe — is DEAD:
-  since 2026-07-11 `data-processing` is itself a blocked predicted category
-  (`Predicted category 'data-processing' (confidence 0.9) is blocked`), so that
-  retarget just swaps one blocked slug for another. A flagged parser task must
-  either honestly become one of the 6 allowed categories
-  (`system-administration`, `build-and-dependency-management`, `games`,
-  `machine-learning`, `security`, `scientific-computing`) or be shelved/dropped.
+  — reviewers classify the primary activity as `software-engineering`: "the actual
+  work is implementing a full X parser from a stub." Since all nine categories are
+  open, the normal fix is to relabel it `software-engineering`, not force it into
+  `data-processing`, admin, or another theme category. Reshape only when the actual
+  primary activity changes.
   KEEP genuine dependency tasks (depsolve, maven mediation, semver, rpm version)
   as build-and-dependency-management. When one parser is flagged, AUDIT the whole
-  batch and shelve same-profile parsers proactively.
+  batch and correct the same category mismatch proactively.
 
 ## Existing Skills To Use For Fixes
 

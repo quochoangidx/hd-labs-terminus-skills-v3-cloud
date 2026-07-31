@@ -8,16 +8,16 @@ Test your task against real AI agents to validate difficulty and ensure your tas
 
 > **Note:** You'll need the `stb` CLI installed to run agents locally. See [Quick Start](/portal/docs/getting-started/quick-start) or [CLI User Guide](/portal/docs/cli-user-guide) for installation instructions.
 
-## Environment Setup
+## Credentials
 
-Set the following environment variables:
+Agent runs use the AI credentials managed by the `stb` CLI — you do **not** need to set `OPENAI_API_KEY` / `OPENAI_BASE_URL` manually. Just make sure you're logged in with current credentials:
 
 ```bash
-export OPENAI_API_KEY=<your-portkey-api-key>
-export OPENAI_BASE_URL=https://api.portkey.ai/v1
+stb login
+stb keys refresh   # if credentials are missing or expired
 ```
 
-> **Tip:** Add these to your `~/.bashrc` or `~/.zshrc` for persistence.
+Check your remaining budget anytime with `stb keys show`. See the [CLI User Guide](/portal/docs/cli-user-guide).
 
 ## Available Models
 

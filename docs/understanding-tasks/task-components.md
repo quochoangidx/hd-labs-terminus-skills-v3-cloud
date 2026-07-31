@@ -103,7 +103,7 @@ build_timeout_sec = 600.0
 cpus = 2
 memory_mb = 4096
 storage_mb = 10240
-allow_internet = false
+allow_internet = false  # default — set true only if the task genuinely requires internet
 # workdir = "/app"  # Milestone tasks only — sets the working directory shared across all milestones
 ```
 
@@ -199,7 +199,7 @@ The verifier tests themselves must always be Python pytest tests. For non-Python
 #!/bin/bash
 
 # All test dependencies must be pre-installed in the Dockerfile.
-# test.sh must not install packages or fetch from the network at runtime (allow_internet = false).
+# test.sh must not install packages or fetch from the network at runtime (with allow_internet = false, the default).
 
 # Run tests
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
@@ -273,7 +273,7 @@ Before submission, verify:
 - [ ] Every Docker base image is digest-pinned
 - [ ] Final runtime base image is sanctioned or explicitly exempt
 - [ ] `environment/` is at most 100 MiB total, with no file over 50 MiB
-- [ ] `allow_internet = false` is set in `task.toml` under `[environment]`
+- [ ] `allow_internet` is set correctly for the task — `false` (default) for offline-solvable tasks, `true` only when the task genuinely requires internet
 - [ ] All test/verifier dependencies are pre-installed in the Dockerfile (no runtime installs in `test.sh`)
 - [ ] Tests are written in Python and run with pytest
 - [ ] Solution demonstrates command sequence (if provided)

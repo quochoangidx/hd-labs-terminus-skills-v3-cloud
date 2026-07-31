@@ -1,6 +1,6 @@
 ---
 name: task-miner
-description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. The debugging, software-engineering, AND data-processing classifier labels are currently BLOCKED by automated eval/CI checks; mine tasks whose primary activity and I/O shape genuinely land in one of the 6 allowed categories. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks."
+description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. All nine Regular categories are open; choose the category that honestly matches the task's visible primary activity. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks."
 ---
 
 # Task Miner
@@ -11,53 +11,35 @@ look like they belong in it and that do NOT already exist there.
 
 - **No direction given → default to Gallery-style mining** (Category Profile Mode
   below): self-contained, spec-driven "implement a tool/engine/pipeline/algorithm
-  end-to-end" tasks (Lane A), spread across UNDER-represented ALLOWED categories
-  (see the Submission Blocks callout below). Do NOT default to upstream bugfix PRs —
+  end-to-end" tasks (Lane A), spread across under-represented categories
+  (see the Current Category Policy callout below). Do NOT default to upstream bugfix PRs —
   those are a minority of the gallery.
-- **User names a category** → use the matching Category Profile (reject if it is
-  blocked or still predicts as `software-engineering` after shaping).
+- **User names a category** → use the matching Category Profile and reject only
+  when the task's primary activity does not honestly match that category.
 - **User names a subtype** → use the matching Subtype Profile.
 - **User asks for a bugfix / closed PR** → use Upstream Bugfix Mode (minority lane)
-  only for explicit debugging/revision work; do not relabel a bugfix as another
-  category just to dodge a blocked classifier.
+  only for explicit debugging/revision work; do not relabel a bugfix merely to
+  chase another category.
 
 This is a lightweight mining pass. Do not create a task folder, Dockerfile,
 verifier, or oracle here. The output is a compact mined candidate artifact consumed
 later by `task-clone`.
 
-> **⛔ SUBMISSION BLOCKS (active — escalated 2026-07-10; `data-processing` added 2026-07-11).**
-> Two platform blocks are live and enforced by an automated eval check:
-> 1. **The `debugging`, `software-engineering`, and `data-processing` classifier labels
->    are BLOCKED** — net-new debugging submissions are rejected, and CI fails with
->    `Predicted category '<slug>' ... is blocked` for ANY blocked prediction, even when
->    `task.toml` declares another category. Observed live:
->    `Predicted category 'data-processing' (confidence 0.9) is blocked` (2026-07-11).
->    The in-progress exemption list is frozen and only shrinks; do NOT add submission
->    IDs or treat this as an override problem. **Allowed categories (6):**
->    `system-administration`, `build-and-dependency-management`, `games`,
->    `machine-learning`, `security`, `scientific-computing`.
->
->    Design the task so its PRIMARY ACTIVITY and I/O shape genuinely predict as
->    an ALLOWED category. A prose/vocabulary sweep is not enough:
->    `implement parse/render/cmp to match a reference`, stub completion, public
->    API extension, and exact-conformance component work still read as
->    software-engineering. ⚠️ The former escape hatch — reshaping into a
->    dataset→report `data-processing` job — is now equally blocked: a successful
->    flip to a data-processing prediction fails CI the same way. ETL/report/
->    pipeline candidates must be shelved or honestly land in one of the 6 allowed
->    categories (build artifact, admin config, security outcome, scientific
->    computation, ML evaluation, or game-state work). If the shape cannot be
->    honestly reshaped, reject/shelve with
->    `rejection_reason: category_classifier_<predicted_slug>` (e.g.
->    `category_classifier_software_engineering`,
->    `category_classifier_data_processing`); do not gamble on a split preflight
->    prediction because any blocked prediction fails CI.
+> **✅ CURRENT CATEGORY POLICY (updated 2026-07-30).**
+> 1. **All nine Regular-task categories are open** for net-new submissions until
+>    further notice. The category classifier check is looser, but the declared
+>    label must still match the task's visible primary activity. Exact-reference,
+>    public-API, and stub-completion work normally maps to `software-engineering`;
+>    dataset/report/ETL work maps to `data-processing`; diagnosis and repair maps
+>    to `debugging`. Historical blocked-category outcomes are calibration evidence,
+>    not current rejection rules. Use `category_mismatch_<predicted_slug>` when the
+>    declared category disagrees with the visible work.
 > 2. **New milestone tasks are BLOCKED** — net-new milestone submissions are rejected by an
 >    eval check (milestone tasks already in your revision queue or awaiting review are exempt
 >    and continue through to Accepted). Mine non-milestone tasks only.
 >
-> Re-enable by editing this one callout (and the mirrored note in `task-clone`) only when
-> the platform reopens the block; do not use the frozen in-progress exemption list.
+> Keep this callout and the mirrored note in `task-clone` synchronized when the
+> platform changes category availability again.
 
 ## Task Gallery Alignment (mine toward the live benchmark)
 
@@ -124,14 +106,13 @@ artifact. Bugfix-PR clones are the MINORITY — prefer Lane A unless the user as
   BALANCED — every category sits ~390–600 curated rows (Security 600, Debugging 592,
   Scientific 589, Games 520, ML 516, Software-Eng 499, Data-Processing 417, System
   Setup 396, Build 392). So treat all 9 as first-class; the diversity rule (no single
-  category >~30%, ≥4 categories ≥10%) still holds. Do not mine toward
-  software-engineering, debugging, or data-processing while those classifier labels
-  are blocked.
+  category >~30%, ≥4 categories ≥10%) still holds. Treat all nine categories as
+  first-class and keep the portfolio structurally diverse.
 - Difficulty: hard ~53%, medium ~38%, easy ~4%. Mine Hard-or-Medium ONLY.
 
-**Archetype catalog (counts = gallery prevalence across 543; skip archetypes whose
-category is blocked — log/ETL pipelines predict `data-processing`, blocked since 2026-07-11):**
-log/ETL/data-processing pipelines (88, ⛔ blocked) · API/web/DB services (50) · build/deps
+**Archetype catalog (counts = gallery prevalence across 543; classify each by its
+visible primary activity — log/ETL pipelines normally predict `data-processing`):**
+log/ETL/data-processing pipelines (88) · API/web/DB services (50) · build/deps
 toolchains (39) · sysadmin/ops automation (35) · crypto/security (34) ·
 compiler/language/parsing engines (31) · ML/AI CLIs & loaders (30) · algorithmic
 solvers/schedulers (29) · games/puzzles/simulations (24) · scientific/numeric (14).
@@ -199,10 +180,9 @@ security
 scientific-computing
 ```
 
-**Do not choose `debugging`, `software-engineering`, or `data-processing` for
-net-new submissions, and do not accept tasks that still predict as any blocked
-slug after shaping** (see the Submission Blocks callout above). These kebab labels
-map 1:1 to
+**All nine labels are available for net-new Regular submissions. Choose the one
+that honestly matches the visible primary activity** (see the Current Category
+Policy callout above). These kebab labels map 1:1 to
 the gallery's canonical category names (see the table in
 `mined-candidates/gallery_taxonomy.md`). The gallery also has a 10th category, **Large
 Codebase Tasks** (milestone-heavy multi-layer repos) — mine it only when the user asks
@@ -214,10 +194,11 @@ For category-profile candidates, `fixing_commit` is optional. The artifact must 
 
 ## Category Profiles
 
-- `data-processing`: BLOCKED by the category classifier since 2026-07-11 (`Predicted category 'data-processing' (confidence 0.9) is blocked`). Do not mine new tasks here and do not use dataset→report reshaping as an escape route for other blocked shapes; reject/shelve with `category_classifier_data_processing`, or reshape only when the primary activity honestly becomes one of the 6 allowed categories.
+- `data-processing`: Mine deterministic ETL, parsing, filtering, aggregation, transformation, and report-generation tasks with explicit schemas and stable sorting/aggregation rules. Reject ambiguous inputs, live data sources, or tasks whose real primary activity belongs to another category.
 - `build-and-dependency-management`: Mine build config, packaging, lockfile, Docker, Make/Cargo/npm/pip workflows. Accept reproducible offline build/install/test tasks with inspectable artifacts. Reject version bumps, CI metadata, or live registry requirements.
-- `software-engineering`: BLOCKED by the category classifier for current submissions. Do not mine new tasks here; reshape only when the primary activity truly becomes an allowed category (data-processing no longer qualifies — it is blocked too), otherwise reject/shelve with `category_classifier_software_engineering`.
+- `software-engineering`: Mine APIs, parsers, algorithms, refactors, integrations, and feature implementation tasks with realistic multi-file behavior. Reject trivial one-line changes, under-specified contracts, or tasks that are only themed as software engineering.
 - `system-administration`: Mine local service/config/process/permissions tasks. Accept Docker-contained health checks, config validation, shell automation, users/groups, or process supervision. Reject tasks needing privileged host daemons or external services.
+- `debugging`: Mine reproducible repair tasks that require diagnosis across interacting code paths or state. Reject message-only, typo-only, or obvious one-line fixes.
 - `security`: Mine local auth, escaping, sanitization, crypto, permissions, or reverse-engineering style tasks. Accept exploit-prevention plus legitimate-use preservation. Reject vague hardening, live targets, secrets, or network-only validation.
 - `scientific-computing`: Mine numerical, simulation, geospatial, statistics, or domain-code tasks. Accept deterministic small fixtures with tolerances and boundary cases. Reject GPU, huge datasets, or compiled-extension rebuild requirements unless explicitly approved.
 - `machine-learning`: Mine tiny offline data-loader, inference, tokenizer, metric, or evaluation tasks. Accept deterministic seeds and small fixtures. Reject downloads, GPU, model registry, or expensive training.
@@ -879,7 +860,7 @@ candidate:
   heavy_repo_mode:
   slimming_plan:
   runtime_budget:
-  rejection_reason:        # use category_classifier_<predicted_slug> (…_software_engineering, …_data_processing) when the task shape still predicts a blocked category
+  rejection_reason:        # use category_mismatch_<predicted_slug> when the declared category disagrees with the visible primary activity
 ```
 
 Use `rejection_reason: null` only when the candidate is suitable for cloning.
@@ -963,7 +944,7 @@ user N hard tasks from a pipeline:
   domain-port re-skin lane is CLOSED — see the L2 STATUS callout + anti-anchoring
   naming rule in `lever_patterns.md` before proposing one); L3
   differential-vs-in-env-authority is fair-by-construction (no disclose-vs-collapse
-  trap); L4 multi-vector security hardening is confirmed-HARD in an allowed category.
+  trap); L4 multi-vector security hardening is confirmed-HARD in its honest category.
   Plan every batch as a PORTFOLIO: beating the best model is a ~1/5 lottery per task,
   so design each task for a fair-MEDIUM floor (union-of-misses corpus, per-case or
   banded scoring — see L1 step 5) with HARD upside, and SUBMIT non-Python Medium

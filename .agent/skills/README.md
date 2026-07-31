@@ -5,9 +5,10 @@ platform, aligned to the live task gallery (`/portal/tasks`): self-contained, of
 deterministic problems with a Python-pytest verifier, targeting **Hard or Medium by
 MODEL PASS RATE** (Easy is blocked; Python tasks must be Hard). The default lane is
 gallery-style spec-driven work (Lane A); upstream bugfix PRs are a minority lane.
-`debugging` and `software-engineering` categories are BLOCKED (rejected by an
-automated eval check as of 2026-06-29), and new milestone tasks are also blocked
-— see the mirrored callouts in task-miner + task-clone (lift both together).
+All nine Regular-task categories are open for net-new submissions as of
+2026-07-30. Category labels must still match the task's primary activity. New
+milestone tasks remain blocked — see the mirrored policy in task-miner +
+task-clone.
 
 ## Pipeline → skill map
 
@@ -50,4 +51,4 @@ evidence — never from build time, repo size, or timeouts.
 Skills live ONLY here; `.claude/skills`, `.codex/skills`, `.gemini/skills` are symlinks
 to `.agent/skills` — never fork a copy. Battle-tested lessons get codified into the
 relevant SKILL.md (dated, with the incident), not left in personal memory; when a rule
-must exist in two files (e.g. the category hold), each copy names its mirror.
+must exist in two files (for example category availability), each copy names its mirror.

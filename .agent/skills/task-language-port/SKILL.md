@@ -29,12 +29,12 @@ is the task's difficulty. Do not simplify the placeholder's bug or improve the a
 
 ## Step 0 — Feasibility and scope (do this before touching any file)
 
-1. **Category hold check, first.** If the source task's `task.toml` category is `debugging`,
-   `software-engineering`, or `data-processing` (blocked since 2026-07-11) — or its shape would
-   PREDICT one of those to the category classifier — tell the user these are currently ON HOLD
-   on the platform (see `task-miner`/`task-clone`); a port would sit un-submittable regardless
-   of language. Confirm they still want it (e.g. for later, once the hold lifts) before
-   spending build effort.
+1. **Category fit check, first.** All nine Regular categories are open as of
+   2026-07-30. Confirm that the source task's declared category matches its visible
+   primary activity, and preserve it across the port unless the required narrative
+   reskin genuinely changes that activity. Do not block a port solely because an
+   older platform result marked `debugging`, `software-engineering`, or
+   `data-processing` as unavailable. New milestone tasks remain blocked.
 
    **Template-shape check, same gate.** The CI `template_detection` static check (first
    observed 2026-07-13) BLOCKS submissions whose structural shape matches a named template —

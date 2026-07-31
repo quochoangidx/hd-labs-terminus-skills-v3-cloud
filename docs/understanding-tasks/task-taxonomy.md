@@ -54,8 +54,6 @@ Tasks centered on game-like or simulated environments, interactive puzzles, or s
 
 ### software-engineering
 
-> 🚫 **Currently blocked — not accepting new submissions.** The `software-engineering` category is paused. Do not submit new tasks under this category until this note is removed.
-
 Tasks focused on developing or testing features and algorithms, fixing bugs and improving/optimizing an existing feature, implementing tests, or maintaining software projects.
 
 **Examples:**
@@ -77,8 +75,6 @@ Tasks requiring training, fine-tuning, running inference, or evaluating machine 
 ---
 
 ### debugging
-
-> 🚫 **Currently blocked — not accepting new submissions.** The `debugging` category is paused. Do not submit new tasks under this category until this note is removed.
 
 Tasks that require identifying, diagnosing, and fixing errors in scripts, codebases, or system configurations.
 
@@ -128,9 +124,9 @@ Pick the category that best describes the **primary** activity:
 | Build systems, packages | build-and-dependency-management |
 | ETL, file processing | data-processing |
 | Interactive challenges | games |
-| Code development, testing | software-engineering *(currently blocked)* |
+| Code development, testing | software-engineering |
 | ML model work | machine-learning |
-| Finding/fixing bugs | debugging *(currently blocked)* |
+| Finding/fixing bugs | debugging |
 | Security issues | security |
 | Scientific code | scientific-computing |
 

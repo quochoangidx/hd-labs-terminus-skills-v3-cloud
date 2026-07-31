@@ -1,6 +1,6 @@
 # Terminus 2nd Edition — Frequently Asked Questions
 
-*Last updated: June 29, 2026*
+*Last updated: July 27, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
@@ -51,7 +51,7 @@ No — work on and submit multiple tasks in parallel.
 **I'm getting "Your account is not assigned to any Terminal-Bench project."**
 Expected if you haven't been onboarded to the main project yet. Complete and pass the assessment first, then wait for team confirmation. CLI and API keys only work after assignment.
 
-**I hit the maximum key refresh limit (10).**
+**I hit the maximum key refresh limit (20).**
 Post in #terminus-2nd-edition-submission and ask an admin to reset your key. They can delete the old key so you can regenerate, or top it up manually. You don't need to run the refresh command after an admin resets it.
 
 **`stb login` works but `stb keys refresh` fails with "Authentication failed."**
@@ -65,6 +65,9 @@ Keys have a usage budget. Run `stb keys refresh` for a new one. There's a cap on
 
 **I'm having trouble upgrading `stb`.**
 Follow the upgrade command in the [CLI User Guide](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/cli-user-guide). A 403 Forbidden error usually means the download link was temporarily rotated — try again later. Always verify your version with `stb --version` before troubleshooting other issues.
+
+**Installing `harbor` gives a 403 Forbidden.**
+That install method is retired — the old Harbor wheel URL no longer serves. Install the Snorkel CLI (`snorkelai-stb`) instead, per the [Quick Start](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/getting-started/quick-start). You no longer need to set `OPENAI_API_KEY` / `OPENAI_BASE_URL` manually — `stb login` and `stb keys refresh` handle AI credentials for agent runs.
 
 ---
 
@@ -103,6 +106,12 @@ The old flat layout (root-level `milestone_x.md`, `solution/solve1.sh`, `tests/t
 **Do new file structure requirements apply to my older submissions that came back for revision?**
 No — new guidelines apply to new submissions only. If automated checks block a revision with new-only rules, report it in Slack. Workaround: make a trivial change (add a space, capitalize a letter) and resubmit to force a fresh check instead of cached results.
 
+**Do I need `gpus`, `gpu_types`, or `docker_flags` in my `task.toml`?**
+No — they're valid but **optional** Harbor fields. Both the full `[environment]` block (with them) and the minimal block (without) are accepted, and reviewers won't send a task back for omitting or blanking them. TB2 tasks should not require GPU. See [Dockerfile Best Practices §14](/portal/docs/creating-tasks/dockerfile-best-practices).
+
+**Can I set `allow_internet = true`?**
+Yes — both settings are allowed; the setting just has to **match the task**. Use `false` (default) when the task is fully solvable offline, and `true` only when it genuinely requires internet — retrieving current/external information, interacting with web resources, or downloading a resource that can't be bundled (e.g., a HuggingFace model). An eval checks whether internet is actually required, so `true` without a real need may be rejected. See [Dockerfile Best Practices → Internet access](/portal/docs/creating-tasks/dockerfile-best-practices).
+
 ---
 
 ## 4. Difficulty, Language & Codebase Size
@@ -116,6 +125,9 @@ No — new guidelines apply to new submissions only. If automated checks block a
 
 **What qualifies as HARD?**
 A task is HARD when accuracy is **≤ 20%** on either the **best** model OR the **worst** model (across GPT-5.5 and Claude Opus 4.8). See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for the full breakdown of Easy / Medium / Hard thresholds.
+
+**Why did my difficulty check only run one model?**
+Difficulty checks run **Claude Opus 4.8 first**. If Opus 4.8 already rates your task as **HARD** (≤ 20% accuracy), the GPT-5.5 run is skipped — a HARD result from either model already settles the rating, so the second run can't change it. Results from only one model on a HARD-rated task are **expected behavior, not a bug**, and there's no need to flag it. Tasks that aren't HARD on Opus 4.8 still run against both models.
 
 **My task keeps coming back as TRIVIAL. What types of tasks pass as HARD?**
 Complex multi-step debugging, nuanced edge cases, larger codebases, and workflows requiring discovery across multiple files. Single-bug or template-based tasks tend to be flagged as too easy.
@@ -145,7 +157,18 @@ Use files from public open-source repos to build a realistic project environment
 **1800 seconds** (30 minutes). Agents failing due to timeout contribute to difficulty.
 
 **Can I run concurrent agent tests (GPT-5.5 and Opus at the same time)?**
-Yes, but expect API errors and faster key exhaustion. Refresh keys more frequently if you do.
+It's possible, but **not encouraged** — expect API errors and much faster key exhaustion. Run one model's tests to completion before starting the other. See [Using Your API Key Efficiently](/portal/docs/cli-user-guide#using-your-api-key-efficiently) in the CLI User Guide for tips on stretching your key budget.
+
+### Category Status
+
+**Can I submit new tasks?**
+Yes. **As of Jul 30, 2026, submissions are open across every category** for the final push — the Jul 27 pause has been lifted.
+
+**Which categories are currently blocked?**
+None. All nine categories are open until further notice, including `debugging`, `software-engineering`, and `data-processing`, which had been paused earlier. **New milestone tasks remain blocked** (since Jun 29, 2026) regardless of category. Check the [Task Category Status](/portal/category-status) page for the live list.
+
+**Should I still work my revision queue?**
+Yes. Revisions continue as normal, and clearing your Revision Queue is still the most direct path to getting existing submissions to **Accepted**.
 
 ---
 
@@ -243,6 +266,12 @@ Run `docker network prune` to clean up stale networks.
 **My Dockerfile references a base image that seems unavailable.**
 Some images may not be accessible on the platform. Post the exact image name and task UUID in Slack.
 
+**Which base image should I use?**
+Prefer one of the **10 canonical digest-pinned images** (Python, Node, Go, Rust, Java, Ruby, GCC, Maven, Debian, Ubuntu) listed in [Dockerfile Best Practices §2](/portal/docs/creating-tasks/dockerfile-best-practices). Non-canonical images are allowed with a brief, credible justification in the Dockerfile or task README; missing/vague justifications are blocked. Tasks whose CI passed before Jun 15, 2026 are grandfathered — reviewers shouldn't flag their base image (pinning is still required).
+
+**Can my tests contain solution logic or hardcoded values?**
+Rigorous verifier logic is fine — running your own binary, parsing its output, golden fixtures/hashes, and spec-derived invariants are all **legitimate**. Two things to avoid: a callable function in `tests/` that maps task inputs to the complete expected artifact (end-to-end solving belongs in `solution/`), and hardcoding values the instruction says the agent must read from a config file. Hardcoded expected *results* (exact numeric/ML targets) are fine and often required. See [Writing Tests → What a Good Verifier Legitimately Does](/portal/docs/creating-tasks/writing-tests).
+
 ---
 
 ## 6. Submissions & Reviews
@@ -292,6 +321,12 @@ Known intermittent issue. Resubmit. If persistent, post your submission ID and f
 **All my quality checks pass and say "READY TO USE," but a reviewer still sent it back.**
 "READY TO USE" is the *automated* agent review — it's not a guarantee of human approval. Reviewers evaluate rubric quality, instruction clarity, test coverage, and task design beyond what automated tools can assess.
 
+**Do I have to build the task exactly as the gallery idea describes?**
+No — task ideas are **starting points, not strict specs**. Adapt, extend, or deviate as needed; your task just has to meet the quality and difficulty requirements.
+
+**Can I still download the task skeleton after claiming?**
+Yes. The skeleton download appears on the claim-success screen and stays available anytime from **My Tasks** — open the claimed task and use **Download Skeleton**. (Previously it was only available pre-claim.)
+
 ### Reviews & Disputes
 
 **How long does review take?**
@@ -316,6 +351,9 @@ They shouldn't be — new rules are for new submissions only. If a reviewer enfo
 |---|---|
 | ≥1 negative criterion per milestone rubric | **Hard requirement** — triggers revision if missing |
 | 10–40 points per milestone (max cumulative score) | **Flaggable**, but not a sole reason for revision |
+
+**Do positive rubric scores need an explicit `+` sign?**
+Yes. Every positive score must be written `+1`/`+2`/`+3`/`+5` — a bare `3` will be sent back for revision (High severity). Negative scores use `-`. See [Rubrics → Strict Formatting Rules](/portal/docs/understanding-tasks/rubrics).
 
 **How do I generate rubrics?**
 Check "Generate Rubric(s)" and submit _without_ checking "Send to Reviewer". Generation happens during CI checks (not Fast Static Checks) — rubrics don't appear instantly. Editing is only possible through the portal UI.

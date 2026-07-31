@@ -57,6 +57,22 @@ stb keys refresh
 stb keys show
 ```
 
+### Using Your API Key Efficiently
+
+Here are some tips for using your API key efficiently to avoid exhausting it quickly:
+
+- **Run agents sequentially, not concurrently.** Running GPT-5.5 and Claude Opus 4.8 at the same time burns through your key budget much faster. Finish one model's runs before starting the other.
+
+- **Test your task thoroughly with the oracle agent first.** Run `stb harbor run -a oracle -p <task-folder>` and make sure it passes consistently before spending key budget on real agent runs. If your oracle fails, you'll waste agent runs on a broken task.
+
+- **Start with fewer runs.** You don't need 5 runs per model during early development. Do 1–2 runs per model to get a rough difficulty signal, then do the full set only when you're confident the task is ready.
+
+- **Fix issues between runs.** If the first agent run fails for a "bad reason" (unclear instructions, environment problems, missing dependencies), fix the issue before running again rather than burning more attempts on a known-broken task.
+
+- **Use interactive mode for debugging.** Instead of running full agent attempts to troubleshoot, use `stb harbor tasks start-env -p <task-folder> -i` to test commands manually — this doesn't consume API key budget.
+
+- **Run `stb keys show` periodically** to check your remaining budget before starting a batch of agent runs.
+
 ---
 
 ## Task Submission Workflow
