@@ -6,7 +6,7 @@
 # Usage: scripts/new-task.sh <slug> <lang> <category>
 #   slug      tbrain-<problem-slug>   (domain-named, no tool/repo filler)
 #   lang      rust | go | c | cpp | python | ruby | node | java | generic
-#   category  system-administration | games | machine-learning
+#   category  one of the nine open Regular-task categories
 #
 # Output: workspace/<slug>/ with task.toml, instruction.md, environment/,
 # solution/, tests/ pre-filled. Every TODO marker must be resolved before the
@@ -173,7 +173,7 @@ def _find_exec_base():
             f.write("#!/bin/sh\nexit 0\n")
         os.chmod(probe, 0o755)
         try:
-            if subprocess.run([probe]).returncode == 0:
+            if subprocess.run([probe], check=False).returncode == 0:
                 return base
         except OSError:
             pass
@@ -220,7 +220,7 @@ def built_binary():
     build_dir = tempfile.mkdtemp(dir=EXEC_TMP_BASE)
     # TODO: build command, e.g.:
     # r = subprocess.run(["go", "build", "-o", out, "./cmd/..."], cwd=APP_DIR,
-    #                    capture_output=True, text=True,
+    #                    capture_output=True, text=True, check=False,
     #                    env={**os.environ, "GOCACHE": build_dir, "HOME": build_dir})
     # assert r.returncode == 0, f"build failed:\n{r.stdout}\n{r.stderr}"
     # os.chmod / chmod -R a+rX so the demoted candidate user can exec it.
@@ -237,6 +237,7 @@ def test_case(built_binary, case):
         capture_output=True,
         text=True,
         timeout=30,
+        check=False,
         **_candidate_user_kwargs(),
     )
     assert r.returncode == 0, r.stderr

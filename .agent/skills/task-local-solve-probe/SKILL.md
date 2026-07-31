@@ -26,8 +26,9 @@ confidence.
 - Do not change the source task while probing.
 - Solve copies must exclude `solution/`, `tests/`, `reports/`, `rubric*`,
   `*_rubric*`, prior run logs, and generated submission zips.
-- Verification copies may include the full task; apply only the solve diff into
-  them before running verifier commands.
+- Verification copies may include the full task; create them with
+  `probe.py materialize` so they contain only the exact solver delta on top of
+  the current full task before running verifier commands.
 - Default to 2 sequential fresh-context runs. Add a 3rd ONLY on a 1–1 split,
   when both failures share a case/feature cluster, or when their per-case union
   is incomplete. Use 1 run for a quick smoke probe. Pooling
@@ -51,6 +52,10 @@ confidence.
   Do not silently substitute a cheaper OR stronger model across runtimes. Use a
   different model or higher reasoning effort only when the user explicitly asks
   for it.
+- If the runtime cannot create a fresh subagent on the required profile, stop
+  the difficulty gate as `unverified`. Never replace the run with `stb`, a
+  Harbor LLM agent, a manager-authored surrogate implementation, or a
+  handwritten result. The solver must edit its own isolated `solve/` copy.
 - **`task-batch` frontier-training profile:** when this probe is invoked from
   `task-batch`, keep the same runtime pin above (`gpt-5.5` medium in Codex;
   Opus 4.8 medium in Claude Code). In that mode a PASS is deliberately valid EASY
@@ -79,6 +84,11 @@ confidence.
   environment (AGENTS.md §7) — never plan a Harbor GPT/Claude follow-up run.
   Local fresh-subagent probes plus platform submission results are the only
   difficulty signals.
+- For post-build handover, follow
+  [references/evidence-schema.md](references/evidence-schema.md). Use
+  `probe.py prepare`, `diff`, `materialize`, and `record` to create the probe
+  state and run results. `batch-handover.py` derives the verdict from those
+  artifacts; prose in `probe-verdict.json` cannot substitute for them.
 - **Explicit pragmatic salvage mode (non-Python MEDIUM only):** when the user
   explicitly says yield matters more than the strict dual gate, run at most one
   final fresh blind solve after the first valid semantic run and close the
@@ -102,12 +112,16 @@ confidence.
    task environment and `instruction.md`.
 3. The solver edits only that run's `solve/` copy and returns one final
    candidate patch.
-4. Capture the diff from the solve copy.
-5. Apply the diff into the matching `verify/` copy, which contains the full
-   task including verifier files.
+4. Capture the diff against the immutable sanitized `baseline/` copy.
+5. Run `probe.py materialize run_N`. It rebuilds `verify/` from the current full
+   task plus exactly the `baseline/`→`solve/` delta and rejects edits outside
+   `environment/`.
 6. Run the same local verifier command you would normally trust for the task.
-7. Record pass/fail plus failure type: `semantic`, `compile`, `setup`,
-   `timeout`, or `unknown`.
+7. Export the raw agent transcript, verifier log, and raw CTRF report, then
+   use `probe.py record` with the runtime-generated fresh-agent session ID,
+   actual model, and launch provenance. `record` derives `case-matrix.json`
+   from CTRF; do not hand-author it. Compile/setup/timeout/unknown failures are
+   recorded for diagnosis but can never qualify as difficulty.
 8. For fair semantic failures, record the missed invariant, compatibility path,
    state transition, or project layer without exposing verifier fixture names.
 9. Summarize the observed pass rate and whether the task is worth submitting
@@ -119,14 +133,33 @@ Use the helper script when possible:
 ```bash
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare workspace/tbrain-example
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py record workspace/local-solve-probes/tbrain-example/run_1 --result fail --type semantic --notes "missed target-specific manifest section"
+python3 .agent/skills/task-local-solve-probe/scripts/probe.py materialize workspace/local-solve-probes/tbrain-example/run_1
+python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
+  workspace/local-solve-probes/tbrain-example/run_1 \
+  --result fail --type semantic \
+  --notes "missed target-specific manifest section" \
+  --runner codex-subagent --runtime codex --model gpt-5.5 \
+  --reasoning-effort medium --agent-session-id '<runtime agent id>' \
+  --launch-command '<runtime generated launch provenance>' \
+  --agent-transcript /path/to/raw-agent-transcript.md \
+  --verifier-log /path/to/verifier.log \
+  --verification-ctrf /path/to/verification-ctrf.json \
+  --verification-command '<offline verifier command>' \
+  --verification-exit-code 1 --reward 0
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
 ```
 
-Do NOT use `probe.py apply` on sanitized solve copies — its `diff -ruN` records
-the sanitized-away `solution/`/`tests/` as deletions and corrupts `verify/`.
-Instead, copy the solver's changed source file(s) into the `verify/` copy by
-hand (see the fair-probe section below).
+`summarize` is diagnostic only. It returns `needs_handover_validation` for a
+promising fully evidenced band; it never emits `submit_ready`. Only
+`batch-handover.py` may do that after checking the verifier matrix, hashes,
+three-run Python rule, union, common misses, and de-correlation. As the final
+trust boundary, handover reruns the fixed local NOP verifier against every
+`verify/` tree and compares its raw CTRF/result/reward with the recorded run.
+Docker/Harbor failure is `unverified`; caller-supplied output never substitutes.
+
+Do NOT use `probe.py apply` or copy files into `verify/` by hand. Use
+`probe.py materialize`; the handover gate later recomputes the diff and proves
+that `verify/` is the current full task plus that exact solver delta.
 
 ## Skeleton mode — probe BEFORE the full build (mandatory gate in task-clone)
 
@@ -252,9 +285,9 @@ reference is reachable.
   image — but it does NOT stop a determined solver from running host `python3`
   against a stdlib reference, so **design reference-reachability away at mining
   time** (don't pick a behavior whose ground truth is a host stdlib).
-- Apply the solver's diff by **copying the changed source file(s)** into the
-  `verify/` copy and running `harbor --force-build -a nop -p run_N/verify`
-  (reward 1.0 = solved). Do NOT use `probe.py apply` — its `diff -ruN` treats the
+- Materialize the solver's delta with `probe.py materialize`, then run the
+  supported local NOP verification surface against `run_N/verify` (reward 1.0
+  = solved). Do NOT use `probe.py apply`; its `diff -ruN` treats the
   sanitized-away `solution/`,`tests/` as deletions and corrupts `verify/`.
 - **Probe copies go STALE the moment the source task is edited** (spec fix,
   corpus prune, test change after probe prep). Score solver diffs against the
@@ -369,8 +402,11 @@ Return:
 - for 0/2 (or 0/3) conformance-corpus tasks: the per-case union verdict (all
   cases covered by ≥1 run, or the list of 0-probe correlated-blind-spot cases)
 - recommendation, from this shared vocabulary (`probe.py summarize` emits the
-  first four automatically; the last two require the manual per-case scoring
-  above):
+  diagnostic states automatically; only the handover gate may emit
+  `submit_ready`):
+  - `incomplete_evidence` — one or more run artifacts are absent or legacy
+  - `needs_handover_validation` — semantic run evidence is complete; run the
+    fail-closed handover gate
   - `submit_ready` — 0/2, or 0–1/3 after a tie-break, with fair semantic
     failures AND union covers every case
   - `gray_zone_review` — a 1–1 split awaiting its tie-break run, a 2/3 AMBER

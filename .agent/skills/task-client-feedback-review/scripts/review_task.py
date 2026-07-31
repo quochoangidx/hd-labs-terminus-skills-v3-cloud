@@ -265,7 +265,8 @@ def root_entries(files: Iterable[str]) -> set[str]:
 
 def run_ruff(view: TaskView, findings: list[Finding]) -> None:
     """Mirror the platform CI ruff gate, which lints the WHOLE task tree
-    (default E4/E7/E9/F rules) INCLUDING upstream .py under environment/repo."""
+    (default E4/E7/E9/F plus PLW1510) INCLUDING upstream .py under
+    environment/repo."""
     import shutil
     import subprocess
     import tempfile
@@ -278,7 +279,7 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
         cand = os.path.expanduser("~/.local/share/uv/tools/harbor/bin/ruff")
         ruff = cand if os.path.exists(cand) else None
     if not ruff:
-        add(findings, "should_fix", "ruff-unavailable", f"Could not run ruff locally; {len(py_files)} .py file(s) (incl. environment/repo) are unverified. CI lints the whole task tree (default E4/E7/E9/F); ensure all .py are clean.", None, "upstream-repo-sanitizer")
+        add(findings, "should_fix", "ruff-unavailable", f"Could not run ruff locally; {len(py_files)} .py file(s) (incl. environment/repo) are unverified. CI lints the whole task tree (default E4/E7/E9/F plus PLW1510); ensure all .py are clean.", None, "upstream-repo-sanitizer")
         return
     if view.is_zip:
         target = tempfile.mkdtemp(prefix="ruff_review_")
@@ -290,7 +291,21 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
     else:
         target = str(view.path)
     try:
-        proc = subprocess.run([ruff, "check", "--output-format", "concise", target], capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(
+            [
+                ruff,
+                "check",
+                "--extend-select",
+                "PLW1510",
+                "--output-format",
+                "concise",
+                target,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
     except Exception as exc:
         add(findings, "should_fix", "ruff-error", f"ruff could not run: {exc}", None, "upstream-repo-sanitizer")
         return
@@ -298,7 +313,13 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
     err_lines = [ln.strip() for ln in out.splitlines() if re.search(r":\d+:\d+:", ln)]
     for ln in err_lines[:10]:
         msg = ln.replace(target.rstrip("/") + "/", "")
-        add(findings, "blocker", "ruff", f"ruff: {msg}", None, "upstream-repo-sanitizer")
+        relpath = msg.split(":", 1)[0]
+        fix_skill = (
+            "terminus-regular-task-authoring"
+            if relpath.startswith(("tests/", "solution/"))
+            else "upstream-repo-sanitizer"
+        )
+        add(findings, "blocker", "ruff", f"ruff: {msg}", relpath, fix_skill)
     if len(err_lines) > 10:
         add(findings, "blocker", "ruff", f"... and {len(err_lines) - 10} more ruff error(s).", None, "upstream-repo-sanitizer")
 
@@ -361,6 +382,7 @@ def check_instruction_sufficiency_evidence(view: TaskView, findings: list[Findin
                     capture_output=True,
                     text=True,
                     timeout=30,
+                    check=False,
                 )
         else:
             proc = subprocess.run(
@@ -368,6 +390,7 @@ def check_instruction_sufficiency_evidence(view: TaskView, findings: list[Findin
                 capture_output=True,
                 text=True,
                 timeout=30,
+                check=False,
             )
     except Exception as exc:
         add(
@@ -433,13 +456,23 @@ def review(path: Path, revision_exception: bool = False) -> dict:
         codebase_size = metadata.get("codebase_size")
         languages = metadata.get("languages", [])
         category = metadata.get("category")
-        open_categories = {"machine-learning", "games", "system-administration"}
+        open_categories = {
+            "build-and-dependency-management",
+            "data-processing",
+            "debugging",
+            "games",
+            "machine-learning",
+            "scientific-computing",
+            "security",
+            "software-engineering",
+            "system-administration",
+        }
         if category not in open_categories and not revision_exception:
             add(
                 findings,
                 "blocker",
                 "category-availability",
-                "Net-new submissions are currently limited to machine-learning, games, and system-administration. This category is blocked unless the task is already in the platform revision/awaiting-review exception.",
+                "This is not one of the nine currently open Terminus categories.",
                 "task.toml",
                 "task-miner",
             )
@@ -632,7 +665,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--revision-exception",
         action="store_true",
-        help="Allow blocked categories for tasks already in revision or awaiting review",
+        help="Legacy compatibility flag; all nine Regular-task categories are currently open",
     )
     args = parser.parse_args(argv)
 

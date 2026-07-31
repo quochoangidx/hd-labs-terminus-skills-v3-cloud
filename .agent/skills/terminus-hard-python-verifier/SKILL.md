@@ -1,16 +1,15 @@
 ---
 name: terminus-hard-python-verifier
-description: Use when writing pytest verifier suites and oracle solutions for hard Python tasks in Terminus (behavioral verifier suites; the `debugging` category label is blocked, so the task shape must pass the rules-first category gate in task-miner/category_rules.md). Focuses on behavioral subprocess tests, anti-cheating coverage, edge cases, and making tasks hard enough that coding agents may fail.
+description: Use when writing pytest verifier suites and oracle solutions for hard Python tasks in Terminus. All nine Regular-task categories are open, but the visible primary activity must match the declared category. Focuses on behavioral subprocess tests, anti-cheating coverage, edge cases, and making tasks hard enough that coding agents may fail.
 ---
 
 # Terminus Hard Python Verifier
 
-Use this skill after choosing a hard Python task. Note the `debugging` category
-label is BLOCKED by the platform's category classifier — the task's
-classifier-visible shape must pass the rules-first category gate
-(`task-miner/category_rules.md`) and land in one of the three currently open
-categories — `machine-learning`, `games`, or `system-administration` —
-before this verifier work is worth spending.
+Use this skill after choosing a hard Python task. All nine Regular-task
+categories are open as of Jul 30, 2026. The classifier-visible shape must still
+pass the rules-first category check (`task-miner/category_rules.md`) and match
+the declared category before this verifier work is worth spending. Python tasks
+must still grade Hard.
 
 This skill is a gate, not just a test-writing checklist. It should reject or
 redesign tasks that are likely to be rated Medium, and it should prevent

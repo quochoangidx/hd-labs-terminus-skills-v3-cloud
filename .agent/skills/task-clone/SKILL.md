@@ -1,11 +1,11 @@
 ---
 name: task-clone
-description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. Net-new submissions must predict as machine-learning, games, or system-administration; stop on every other category."
+description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. All nine Regular-task categories are open; the declared category must match the visible primary activity."
 ---
 
 # Task Clone
 
-Use this skill when the user wants to turn a mined candidate into a hard Terminus Regular task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category unless it is invalid or the task's visible shape still predicts as a blocked category (`software-engineering`, `debugging`, or `data-processing`).
+Use this skill when the user wants to turn a mined candidate into a hard Terminus Regular task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category unless it is invalid or the task's visible shape predicts a different category.
 
 Preferred split:
 
@@ -345,28 +345,19 @@ memory_mb = 4096
 storage_mb = 10240
 ```
 
-> **⛔ BLOCKED CATEGORY CLASSIFIER (active — updated 2026-07-24).** Only
-> `machine-learning`, `games`, and `system-administration` accept net-new
-> submissions. Every other predicted category can fail CI with
-> `Predicted category '<slug>' ... is blocked` even when `task.toml` declares an
-> allowed category — blocked predicted slugs include `software-engineering`,
-> `debugging`, `data-processing`, `build-and-dependency-management`, `security`,
-> and `scientific-computing` (observed live:
-> `Predicted category 'data-processing' (confidence 0.9) is blocked`). The
-> in-progress exemption list is frozen and only shrinks; do NOT add submission IDs
-> or treat this as a reviewer override. Do not re-label bugfix work as another
-> category unless the primary activity truly changes.
+> **✅ CATEGORY AVAILABILITY (active — updated 2026-07-30).** All nine
+> Regular-task categories accept net-new submissions until further notice; new
+> milestone tasks remain blocked. The classifier check has been loosened, but
+> the declared category must still match the primary activity. Do not re-label
+> bugfix work, exact-reference conformance, ETL/report work, or another visible
+> shape merely to chase a preferred category.
 >
-> Before cloning, check whether the actual deliverable still looks like
-> `implement parse/render/cmp`, public API or stub completion, exact reference
-> conformance, OR a dataset→report / ETL pipeline (now equally blocked as
-> data-processing). If yes, reshape the I/O into `system-administration`,
-> `games`, or `machine-learning` only when the primary activity truly changes.
-> An admin operation, ML evaluation, or game-state workflow can pass; a
-> vocabulary sweep cannot, and the former dataset→report escape hatch cannot
-> either. Treat split preflight predictions as failure because any blocked
-> prediction fails CI. If the shape cannot be reshaped honestly, STOP and record
-> `category_classifier_<predicted_slug>`.
+> Before cloning, apply `task-miner/category_rules.md` to the actual
+> deliverable. `implement parse/render/cmp`, public API or stub completion, and
+> exact-reference conformance normally predict `software-engineering`;
+> dataset→report/ETL predicts `data-processing`; repair work predicts
+> `debugging`. Those are now valid categories. Relabel or reshape only when the
+> task's primary activity genuinely differs from the prediction.
 >
 > Pick an accurate gallery-leaf tag after any reshape: a pattern matcher that
 > classifies given paths is *Pattern Extraction & Regex Matching*, NOT *File
@@ -386,10 +377,9 @@ security
 scientific-computing
 ```
 
-This schema list is not the live allowlist: net-new tasks may use only
-`system-administration`, `games`, or `machine-learning`. The category gate must
-stop every other predicted category unless the task is already exempt in the
-platform revision/awaiting-review queue.
+This schema list is also the live Regular-task allowlist as of Jul 30, 2026:
+all nine categories accept net-new submissions. The category gate must still
+make the declared label match the visible primary activity.
 
 Valid subcategories are only:
 
@@ -1023,14 +1013,12 @@ Before packaging or platform upload:
 - **run the category check, rules first (mandatory — the real
   `category_classifier` is geoblocked from VN and cannot be preflighted).**
   FIRST apply the real-CI-calibrated rules in
-  `.agent/skills/task-miner/category_rules.md` to the task shape: a fired
-  BLOCK rule (exact-reference-conformance → SWE; dataset→report → DP; repair
-  shape → debugging; stub-fill compute-to-spec → SWE) is authoritative —
-  reshape or drop, and do NOT run the probe hoping it disagrees; a fired
-  ALLOW rule matching the declared category needs at most one confirmatory
-  probe run, and a probe run disagreeing with it is noise (historical
-  calibration only: purl probe SWE 0.9, real CI bd-mgmt 1.0 before that
-  category closed). Only when no rule fires, fall back to the blind
+  `.agent/skills/task-miner/category_rules.md` to the task shape. A fired rule
+  is authoritative category evidence (exact-reference-conformance → SWE;
+  dataset→report → DP; repair shape → debugging; manifests/lockfiles as the
+  object → bd-mgmt). Make the declared category match the dominant activity; a
+  matching rule needs at most one confirmatory probe. Only when no rule fires,
+  or multiple rules leave the primary activity genuinely ambiguous, fall back to the blind
   category probe. For the probe: give a FRESH subagent
   (zero task context) only the classifier-visible surfaces — `instruction.md`,
   the `environment/` file tree listing, README, and the rubric text — WITHOUT
@@ -1061,10 +1049,11 @@ Before packaging or platform upload:
 - set `codebase_size` to match the actual `environment/` file count (excluding
   `Dockerfile`/`docker-compose*`): 0-19 `minimal`, 20-199 `small`, 200+ `large`.
   CI rejects a mismatch.
-- run `ruff check <task-folder>` over the WHOLE task dir. Platform CI lints
-  `environment/repo` too (default E4/E7/E9/F rules), so a non-`ruff`-clean
-  upstream dev/codegen `.py` fails the build. Remove non-build-required upstream
-  `.py` that has lint errors; fix build-required generators in place
+- run `ruff check --extend-select PLW1510 <task-folder>` over the WHOLE task
+  dir. Platform CI lints `environment/repo` too. Every `subprocess.run(...)`
+  must pass explicit `check=True` or `check=False`, even when the verifier
+  inspects `returncode` afterward. Remove non-build-required upstream `.py`
+  that has lint errors; fix build-required generators in place
   (output-preserving, e.g. move an `E402` import to the top) and re-run oracle.
   Also clear `F401`/`E741` in `tests/test_outputs.py`.
 - verify rubrics do not reference tests, verifier logic, `test.sh`,

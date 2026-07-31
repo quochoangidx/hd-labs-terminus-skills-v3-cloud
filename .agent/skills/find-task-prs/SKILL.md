@@ -8,7 +8,7 @@ description: Scan a GitHub repository's recently merged PRs and return the top ~
 > ⛔ **Minority-lane gate (2026-07-19).** Under the fresh-only mining doctrine
 > (AGENTS.md §2) this upstream-PR lane runs only on explicit user request. Its
 > typical output shape — reproduce-a-fix / repair — fires the
-> repair-shape→debugging BLOCK rule (`task-miner/category_rules.md`) and the
+> repair-shape→debugging prediction rule (`task-miner/category_rules.md`) and the
 > §6 mechanical-fix collapse (mechanical fixes of real upstream bugs solve 3/3
 > regardless of file spread). Every candidate must pass the collapse-law screen
 > AND the rules-first category gate before any build effort.

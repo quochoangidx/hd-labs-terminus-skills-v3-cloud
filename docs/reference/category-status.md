@@ -1,24 +1,28 @@
 # Task Category Status
 
-Live view of which task categories and policies are currently open for new submissions. Tasks already in your revision queue or awaiting review are **not affected** by a block — they continue through to Accepted as normal.
+> ## ✅ Submissions are open again — all categories
+>
+> **Effective Jul 30, 2026, net-new submissions are open across every category** for the final push. The Jul 27 pause is lifted, and the previously blocked categories — including `debugging`, `software-engineering`, and `data-processing` — are accepting new tasks again.
+>
+> **Revisions continue as normal.** Clearing your Revision Queue is still the most direct path to getting existing submissions to **Accepted**.
 
-> **As of Jul 24, 2026, new submissions are limited to three categories: `machine-learning`, `games`, and `system-administration`.** All other categories are temporarily blocked while we balance the benchmark's overall category distribution. Blocks will lift as distribution targets are met — announced here and in the [Changelog](/portal/changelog).
+Live view of which task categories and policies are currently open for new submissions.
 
 ## Categories
 
 | Category | Status | Since |
 |---|---|---|
-| `machine-learning` | ✅ Open | — |
-| `games` | ✅ Open | — |
-| `system-administration` | ✅ Open | — |
-| `build-and-dependency-management` | 🚫 Blocked | Jul 24, 2026 |
-| `scientific-computing` | 🚫 Blocked | Jul 24, 2026 |
-| `security` | 🚫 Blocked | Jul 24, 2026 |
-| `data-processing` | 🚫 Blocked | Jul 10, 2026 |
-| `debugging` | 🚫 Blocked | Jun 18, 2026 |
-| `software-engineering` | 🚫 Blocked | Jun 18, 2026 |
+| `build-and-dependency-management` | ✅ Open | Jul 30, 2026 |
+| `data-processing` | ✅ Open | Jul 30, 2026 |
+| `debugging` | ✅ Open | Jul 30, 2026 |
+| `games` | ✅ Open | Jul 30, 2026 |
+| `machine-learning` | ✅ Open | Jul 30, 2026 |
+| `scientific-computing` | ✅ Open | Jul 30, 2026 |
+| `security` | ✅ Open | Jul 30, 2026 |
+| `software-engineering` | ✅ Open | Jul 30, 2026 |
+| `system-administration` | ✅ Open | Jul 30, 2026 |
 
-> **Note:** New **milestone tasks** are also blocked (since Jun 29, 2026) regardless of category. Blocked categories are hidden from the [Task Gallery](/portal/tasks). When a block lifts, this page and the [Changelog](/portal/changelog) will announce it.
+> **Note:** All categories are open **until further notice**. New **milestone tasks** remain blocked (since Jun 29, 2026) regardless of category. If a category is paused again, it will be listed here and announced in the [Changelog](/portal/changelog).
 
 ## Policies & Settings
 

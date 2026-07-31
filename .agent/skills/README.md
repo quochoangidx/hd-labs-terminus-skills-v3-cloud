@@ -44,11 +44,11 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
   suite, synthetic interval-invariant ledger, differential-vs-authority, multi-vector
   security), claimed-resource ledger, and the complete L1 build runbook ("learn the
   pattern, not the resource"). Note the default lane is now the fresh-only doctrine
-  (task-miner, "Fresh-only exploration doctrine"); the historical bd-mgmt seam is
-  currently blocked for net-new submissions, so mine only the three open categories.
+  (task-miner, "Fresh-only exploration doctrine"); all nine Regular-task
+  categories are open, including the historical bd-mgmt seam.
   interaction/scale shapes as priority lanes — not gallery-style spec-driven L1.
 - `.agent/skills/task-miner/category_rules.md` — rules-first category gate
-  (deterministic BLOCK/ALLOW rules calibrated on real-CI verdicts; run before
+  (deterministic prediction rules calibrated on real-CI verdicts; run before
   trusting any blind category probe).
 - `.agent/skills/task-miner/interaction_shape_recipe.md` — interaction/scale shape
   recipe (≥3 coupled causes + discovery breadth; escapes the master collapse law).

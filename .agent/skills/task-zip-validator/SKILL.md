@@ -134,42 +134,32 @@ security
 scientific-computing
 ```
 
-This is the `task.toml` schema enum, not the current submission allowlist.
-For net-new submissions, only `system-administration`, `games`, and
-`machine-learning` are open; the other six must be treated as blockers unless
-the task is already in the platform's revision/awaiting-review exception.
+All nine enum values are open for net-new Regular tasks as of Jul 30, 2026.
+New milestone tasks remain blocked.
 
-> ⛔ The toml enum above is only syntax validity. For net-new submissions, only
-> `machine-learning`, `games`, and `system-administration` are open. The CI
-> `category_classifier` BLOCKS every other PREDICTED category, including
-> `software-engineering`, `debugging`, and `data-processing` (the last added 2026-07-11:
-> `Predicted category 'data-processing' (confidence 0.9) is blocked`) — the
-> prediction is independent of the declared `category`, and the exemption list is
-> frozen. If the task's shape (spec-conformance component, stub completion, or
-> dataset→report/ETL pipeline) predicts a blocked slug, flag it as a manual
-> BLOCKER: the task needs an honest reshape into one of the three open categories
-> or a shelve — never a category re-label.
+> The category classifier check has been loosened, but the declared category
+> must still match the visible primary activity. A spec-conformance component
+> or stub completion normally predicts `software-engineering`; a
+> dataset→report/ETL pipeline predicts `data-processing`; repair work predicts
+> `debugging`. These are valid categories now. Flag only an actual mismatch
+> between the task shape and the declared label.
 >
 > **Make this check operational rules-first** (the real classifier is
 > geoblocked from VN and cannot be preflighted): apply the real-CI-calibrated
 > rules in `.agent/skills/task-miner/category_rules.md` to the task shape
-> BEFORE any probe. A fired BLOCK rule (exact-reference-conformance → SWE;
-> dataset→report → DP; repair shape → debugging; stub-fill compute-to-spec →
-> SWE) IS the BLOCKER above and no probe run overrides it; a fired ALLOW rule
-> matching the declared category clears the check with at most one
-> confirmatory probe run. Only when no rule fires, fall back to the blind
+> BEFORE any probe. A fired prediction rule is strong evidence for its mapped
+> category; make the declared label match the dominant activity. A matching
+> rule clears the check with at most one confirmatory probe run. Only when no
+> rule fires or multiple rules leave the primary activity ambiguous, fall back to the blind
 > category probe: give a FRESH subagent only the classifier-visible surfaces —
 > `instruction.md`, the `environment/` file-tree listing, README, rubric
 > text — WITHOUT the declared category, and ask it to pick the
 > primary-activity category from the 9 slugs with a confidence and a one-line
 > reason; run twice, a 3rd only on a 1–1 split (the platform's
-> `llm_fallback` is noisy). Any run
-> predicting a blocked slug, or a majority disagreeing with the declared
-> category, is the BLOCKER above; the probe's reasons name the leaking
-> surface. Fix by reshaping the SHAPE (instruction verbs, I/O surface, rubric
-> lines, repo furniture — see `task-miner`, "Classifier-visible surface
-> artifacts"), then re-check; never by re-wording prose or editing `task.toml`
-> alone.
+> `llm_fallback` is noisy). A majority disagreeing with the declared category
+> is a mismatch to resolve; the probe's reasons name the relevant surface.
+> Relabel when the existing shape is honest, or reshape the task when its
+> intended primary activity is genuinely different.
 
 > ⛔ The CI `template_detection` static check (first observed 2026-07-13) BLOCKS
 > submissions whose structural shape matches a named template library entry —
@@ -198,7 +188,7 @@ long_context, tool_specific, api_integration, db_interaction, ui_building
 | `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`,`"c++"`), never `"Rust"`/`"Go"`/`"C++"` | ✅ lowercase them |
 | `workdir` (informational) | For `number_of_milestones = 0`, default is Dockerfile-`WORKDIR`-only (no `[environment].workdir`), but BOTH forms are accepted — a reviewer may explicitly request `workdir = "/app"` (reviewer-overridden 2026-07-16); honor that. Do NOT auto-remove | ℹ️ flag only |
 | `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
-| `category` | Must be one of the 9 valid values; for net-new work it must also be `machine-learning`, `games`, or `system-administration` (declared and shape-predicted). Other categories are blocked unless the platform revision/awaiting-review exception applies. Check the shape rules-first via `category_rules.md`, then probe only as fallback. | ❌ manual + rules/probe |
+| `category` | Must be one of the 9 currently open values and match the task's visible primary activity. Check the shape rules-first via `category_rules.md`, then probe only as fallback. | ❌ manual + rules/probe |
 | `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
 | `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
 
