@@ -166,12 +166,14 @@ Authoritative machine copy = the `lever:"conformance-suite-divergent-tail"` line
 
 ### Fresh-resource ideas for L1 — ⛔ HISTORICAL / DEAD (kept as a forbidden-zone map)
 
-**Do NOT mine from this table (2026-07-19).** Every entry is an L1
-parse/normalize stub-fill shape — category-dead per the banner above — and
-robots.txt is an AGENTS.md §6 dead-end outright ("hardening a memorized public
-library is futile"). The table survives only as a forbidden-zone map for
-dedupe; fresh mining follows the fresh-only doctrine (task-miner SKILL.md) and
-the saturation ledger (`.agent/mined-candidates/platform-passed-portfolio.md`).
+**Do NOT mine from this table (2026-07-19; category note updated 2026-07-30).**
+The software-engineering category has reopened, but these L1 parse/normalize
+stub-fill entries remain closed by saturation, originality, and repeated
+difficulty collapse; robots.txt is an AGENTS.md §6 dead-end outright
+("hardening a memorized public library is futile"). The table survives only as
+a forbidden-zone map for dedupe; fresh mining follows the fresh-only doctrine
+(task-miner SKILL.md) and the saturation ledger
+(`.agent/mined-candidates/platform-passed-portfolio.md`).
 Original guidance, for legacy-remediation context only: probe each ≥3× blind
 before trusting difficulty. (Former entries RFC 3986 resolution, ICU/CLDR
 plural rules, JSON5, and CSS
@@ -427,9 +429,9 @@ unfair-hard, never real difficulty.
 ## L4 — `multi-vector-security-hardening`
 
 - **intent:** historical confirmed-HARD security task (0/3 blind Opus — mathjs
-  #3656). Category `security` has been blocked for net-new submissions since
-  Jul 24, 2026, so retain this only as a difficulty/design record; do not mine
-  or build it unless the platform reopens the category.
+  #3656). Category `security` reopened on Jul 30, 2026; the pattern remains a
+  historical difficulty/design record and may be mined only when it is fresh,
+  novel, fair, and structurally distinct under the current gates.
 - **mechanism:** take a sandbox/escaping/auth surface with N exploit vectors of graded
   subtlety; the instruction states the security objective + every legitimate behavior
   to preserve (this satisfies behavior_in_task_description symmetry and is

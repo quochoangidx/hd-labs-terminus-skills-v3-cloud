@@ -201,10 +201,12 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
 - `codebase_size` not matching the `environment/` file count (excluding
   `Dockerfile`/`docker-compose*`): 0-19 `minimal`, 20-199 `small`, 200+ `large`.
   CI (`run_static_checks.py`) enforces this mechanically and rejects a mismatch.
-- `ruff` errors anywhere ruff scans the task dir — INCLUDING upstream `.py`
-  under `environment/repo` (CI lints the whole tree, default E4/E7/E9/F). Common
-  hits: `F401`/`E741` in `tests/test_outputs.py`, `E402`/`E701`/`E731` in
-  upstream dev/codegen scripts. Fix per `upstream-repo-sanitizer`.
+- `ruff` errors anywhere Ruff scans the task dir — INCLUDING upstream `.py`
+  under `environment/repo`. Run the default E4/E7/E9/F set plus `PLW1510`.
+  Every `subprocess.run(...)` must pass explicit `check=True` or `check=False`,
+  even when the following line inspects `returncode`. Common hits also include
+  `F401`/`E741` in `tests/test_outputs.py` and `E402`/`E701`/`E731` in upstream
+  dev/codegen scripts. Fix per `upstream-repo-sanitizer`.
 - `agent.timeout_sec` outside `[1, 1800]` — CI hard-caps it at 1800 (a heavy
   build does not justify raising it; the build runs under `build_timeout_sec`
   and the verifier under `verifier.timeout_sec`, both separate from the agent
@@ -249,17 +251,12 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
   non-blocking cleanup reviewers still call out).
 - a config/format PARSER task (HCL2, Dockerfile, HOCON, nginx, …) whose deliverable
   is "parse document → canonical JSON" but `category = "build-and-dependency-management"`
-  — reviewers reject it as software-engineering (BLOCKED): "the actual work is
-  implementing a full X parser from a stub." ⛔ The old fix — retarget
-  `category = "data-processing"` with a transformation-first reframe — is DEAD:
-  since 2026-07-11 `data-processing` is itself a blocked predicted category
-  (`Predicted category 'data-processing' (confidence 0.9) is blocked`), so that
-  retarget just swaps one blocked slug for another. A flagged parser task must
-  either honestly become `system-administration`, `games`, or
-  `machine-learning`, or be shelved/dropped. Build/dependency, security, and
-  scientific-computing tasks are also blocked for net-new submissions as of
-  Jul 24; do not recommend them as a reframe. When one parser is flagged, AUDIT the whole
-  batch and shelve same-profile parsers proactively.
+  — reviewers classify the primary activity as software-engineering: "the
+  actual work is implementing a full X parser from a stub." Since all nine
+  categories reopened on Jul 30, the normal fix is to relabel it
+  `software-engineering`, not to force a data-processing/admin/ML/game
+  narrative. Reshape only when the actual work changes. When one parser is
+  flagged, audit the whole batch for the same category mismatch.
 - `allow_internet` not matching the task's genuine need (new High reviewer
   criterion, policy 2026-07-13): `true` without a real requirement is
   eval-checked and may be rejected; our offline tasks must stay `false`. A task

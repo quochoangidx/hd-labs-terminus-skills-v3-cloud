@@ -1,404 +1,291 @@
 ---
 name: task-batch
-description: "Use when the user wants an autonomous end-to-end batch of brand-new Terminus Regular tasks delivered to submissions/, including /task-batch, /task-batch 3, tạo batch task, or chạy batch. Run fresh-only mining, category and collapse screening, adaptive Difficulty × Fairness probes, build, validation, packaging, and SUBMISSION.md without further prompting. Accept an optional delivery quota, default 4; treat quotas above 6 as cumulative sequential rounds. Do not use for single-task work, ports, or remediation of returned tasks."
+description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new, non-Python Terminus Regular tasks ready for platform submission. Run task-miner, task-clone, Docker/Oracle/NOP/Harbor validation, task-zip-submit, task-client-feedback-review with authorized fixes, a two-attempt task-local-solve-probe using fresh subagents, and task-llm-style-audit; then create one SUBMISSION file per task. Do not use for ports, returned-task remediation, or ordinary single-task work."
 ---
 
-# Task Batch — autonomous end-to-end delivery
+# Task Batch
 
-Mission: deliver `<quota>` (default 4) brand-new Terminus Regular tasks at
-≥ MEDIUM, fully autonomously. Do not ask the user questions mid-run; every
-drop/redesign/lane decision is yours, governed by AGENTS.md and the skills
-below. The quota is a target; evidence-backed handover is the commitment.
-Every candidate is raw material — drop without regret, and NEVER lower the
-handover bar to hit the number.
+Create a fresh autonomous batch of submit-ready Terminus Regular tasks.
 
-## Frontier-training calibration — read FIRST (this is training data)
+## Invocation
 
-The tasks train/eval a frontier model, so the value of a task = it makes the
-STRONGEST model FAIL, FAIRLY, in an under-covered category. Four consequences
-override intuition:
+Accept either form:
 
-- **Probe with the active runtime's MEDIUM profile.** In Codex use `gpt-5.5`
-  with `reasoning_effort=medium`; in Claude Code use Claude Opus 4.8 with
-  medium reasoning. Record `probe_runtime`, `probe_model`, and
-  `reasoning_effort` in `probe-verdict.json`. Do not silently substitute
-  another model or effort. If that profile is unavailable, leave the task
-  `unverified` and keep
-  mining/validation work that does not depend on the probe. A PASS = EASY,
-  drop it; only a
-  **fail-broad** task qualifies. For training data you want anything the
-  frontier solves gone — this raises the bar and lowers yield, which is correct.
-  Record `probe_model` (the actual backend used) in the verdict.
-- **Test-count ≠ difficulty, but verifier breadth is still a HARD gate.** For
-  cheap deterministic tasks, require 50–1000 **platform-visible, meaningful
-  evaluation units**; for genuinely expensive stateful/interaction tasks,
-  require 20–80 scenarios. A corpus row hidden inside one aggregate pytest
-  function is not platform-visible. Generate uniquely named test functions
-  (or prove from CTRF that `summary.tests == intended_case_count`) so the
-  per-case pass table can expose 0/N cases. Corpus size is a GRADING property
-  (coverage / anti-hardcode / no 0-N flag), never evidence of difficulty.
-  browscap has 171k patterns and is EASY. Difficulty is certified ONLY by the
-  blind probe landing 0–2/3 broad — never by corpus size. Do not pad micro-cases
-  to look hard. Conversely, 4–8 aggregate tests over one mechanism never
-  satisfy the breadth gate merely because each function loops over many rows.
-- **Category is GATE-ZERO, checked BEFORE any heavy build.** The dominant
-  failure this arsenal hits is spending a full oracle/corpus build on a shape
-  that then predicts software-engineering (the p0f build). Run the rules-first
-  category screen (`task-miner/category_rules.md`) on the skeleton instruction
-  at the SKELETON stage; a fired BLOCK rule kills the candidate before build.
-- **Diversity of FAILURE-MODE is the product.** A task that fails the model in a
-  NEW way beats three that fail it the old way (a monoculture of one lever =
-  low-rank gradient). The durable difficulty axis is EXECUTION / INTERACTION /
-  DISCOVERY (horizon, hidden state, no iterative feedback), which ages with
-  scale; information-asymmetry conformance/matcher shapes are mostly spent
-  (documented→EASY, undocumented→category-SWE) — keep them a minority lane, and
-  log a `failure_mode` field for every delivered task to track coverage.
+```text
+task-batch N
+/task-batch N
+```
 
-**Quota semantics — the quota is the target, honesty is the contract.** The
-run ends in one of exactly two ways: (a) `<quota>` tasks in `submissions/`,
-each passing all six handover conditions; or (b) the **honest-exhaustion
-exit** — the full pivot ladder (Dry-round handling below) has been walked AND
-two consecutive fully-pivoted rounds delivered nothing new, in which case the
-run ends below quota with the complete exploration map and a per-seam verdict
-report. Recent clean-slate evidence puts fresh HARD+category-safe yield at
-roughly 0–1 per large batch (AGENTS.md §6); treat 10-fresh as infeasible and
-report honestly rather than pad. An
-under-quota exit backed by a full exploration map is a CORRECT outcome, not a
-failure; padding with lowered-bar tasks or ports is the failure. Never ask the
-user anything mid-run, and never lower the handover bar to hit the number. A
-quota >6 (e.g.
-`/task-batch 10`) runs sequential internal rounds of 3–4; BETWEEN rounds fold
-only durable, evidence-backed design laws and live/dead verdicts into
-`AGENTS.md`, the sole durable knowledge store. Local logs may support resume
-and audit but are not parallel knowledge stores. Report progress after each round
-(delivered so far / quota, plus that round's exploration map) — a status
-report, not a question. If the session is interrupted, re-invoking
-`/task-batch <quota>` resumes from `index.jsonl`, but never count ZIP files
-directly. Count only tasks whose
-`workspace/reports/<slug>/handover.json` says `status=delivered`, whose stored
-SHA-256 matches the current ZIP, and whose evidence files still validate.
+Treat `N` as the required delivery quota. It must be a positive integer.
 
-The batch may also produce **platform candidates** under the bounded lane below.
-Those ZIPs live in `submissions/platform-candidates/`, are reported separately,
-and are useful outputs of the run, but they never count toward `<quota>` and
-never enter the qualified standby queue before platform readback clears them.
+When invoked:
 
-Environment notes: harbor + Docker work locally (~3 min/oracle run) and need
-no LLM; harbor LLM / stb are geoblocked from VN — run every difficulty and
-category probe yourself with fresh subagents (Agent tool), never harbor LLM.
+- Do not ask the user to choose repositories, languages, categories, candidates, or fixes.
+- Make all normal task-building decisions autonomously.
+- Deliver exactly `N` accepted tasks.
+- Use any suitable language except Python.
+- Target HARD task designs. Use `MEDIUM+` as the local two-probe verdict defined below; do not claim platform HARD from only two local probes.
+- Keep mining replacements until the quota is met.
+- Treat every invocation as a fresh batch. Do not port, reskin, or reuse an existing task unless the user explicitly requests that separately.
 
-## Handover conditions — a task counts ONLY when ALL eight hold
+## Required Skills
 
-1. harbor oracle = 1.0 and nop = 0.0.
-2. **Task Instruction Sufficiency** — before any difficulty probe, create
-   `workspace/reports/<slug>/instruction-sufficiency.json` and pass
-   `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py` using
-   the workflow in `references/instruction-sufficiency-gate.md`. Every graded
-   behavior must resolve to instruction prose, an agent-visible environment
-   reference, an offline-reachable authority, or visible training-data support.
-   Run two independent contract-only reviews; disagreement, oracle mismatch,
-   hidden-only ML features/interactions, or a reasonable alternative still
-   consistent with visible files is a BLOCKER. Fix, relax, or drop before probing.
-   Solver success and per-test coverage are never sufficiency evidence.
-3. **Difficulty** — fair blind probe (inside the task image, `--network none`,
-   terse prompt, no hints, scored by differential per
-   `task-local-solve-probe`; because this skill creates frontier-training data,
-   pin the active runtime profile (`gpt-5.5` medium in Codex; Opus 4.8 medium
-   in Claude Code) and record `probe_runtime`, `probe_model`, plus
-   `reasoning_effort`): start with 2
-   runs and use at most 3. **Two de-correlated semantic failures suffice and
-   STOP probing**,
-   under two hard riders: (a) failures are SEMANTIC —
-   setup/instruction/compile/infra failures count for nothing, fix the task
-   and re-probe; (b) the 2 failures land in DIFFERENT places — both runs dying
-   on the same single case/convention is the single-lever fair⊥hard
-   fingerprint, but at n=2 it can be coincidence on a multi-cluster task:
-   spend ONE disambiguation run — same place again → DROP, a different place
-   or a pass → normal scoring. The target band is 0–1/3 solved. A 2/3 result is
-   AMBER, never automatic handover: keep it only for non-Python when the sole
-   failing run contains ≥2 broad semantic clusters and no setup/reference
-   advantage explains the two passes. Python tasks must be Hard (0/3 semantic).
-4. **Verifier architecture + Difficulty × Fairness pass-table clean**
-   (re-score stored probe diffs, no new runs): union coverage across runs =
-   100%; common-miss count = 0; every
-   feature cluster keeps a soft representative; and, when ≥2 runs fail, their
-   failure sets are de-correlated rather than one shared lever. `Every case has
-   a passer` means the UNION is 100%; do not confuse it with the best individual
-   run. Any 0-probe cluster must be oracle-authority-checked BEFORE any
-   prune/disclose (`task-revise-flag-remediation` Step 1.5). Attach a compact
-   verifier matrix to the local verdict with: platform-visible unit count,
-   feature-cluster counts, cross-cluster cases, verifier shapes, per-run
-   cluster pass rates, union, and common misses. Cheap deterministic tasks need
-   50–1000 visible units across ≥6 real behavior clusters; expensive
-   stateful/interaction tasks need 20–80 scenarios across ≥4 clusters. At least
-   two clusters must exercise interactions between rules/state, not isolated
-   happy-path variants. Structural/protocol smoke tests do not count as behavior
-   units. If one cluster contains >35% of the units, justify why it is internally
-   heterogeneous; otherwise rebalance it. Reject semantic duplicates and
-   boundary-value padding. Before accepting any model failure, prove the missed
-   behavior is stated, derivable, or reachable from an in-image reference; an
-   underdocumented cluster is a fairness FAIL, not difficulty evidence.
-5. **Category check — rules first** (`task-miner/category_rules.md`): run the
-   real-CI-calibrated rules against the task shape. A fired BLOCK rule ⇒
-   reshape or drop, no probe run can override it; a fired ALLOW rule matching
-   the declared category ⇒ at most one confirmatory probe run. Only when NO
-   rule fires, fall back to the blind category probe — 2 runs, a 3rd only on
-   a 1–1 split (fresh subagent;
-   de-contaminated packet — only instruction.md + environment file tree +
-   README + rubric, copied outside the repo; the subagent must NOT read
-   AGENTS.md/CLAUDE.md/memory): no run predicts a blocked slug; majority
-   matches the declared category.
-6. No rust_cli/sibling template shape; passes `task-zip-validator` +
-   `task-llm-style-audit`; zip lands in `submissions/`.
-7. `submissions/SUBMISSION-<slug>.md` complete (section below).
-8. **Evidence-backed delivery** — create `category-screen.json`,
-   `design-signature.json`, `instruction-sufficiency.json`,
-   `probe-verdict.json`, and strict `preflight.json` under
-   `workspace/reports/<slug>/`; then run:
-   `scripts/batch-handover.py <task-dir> --report-dir <report-dir> --zip
-   <zip> --submission <SUBMISSION.md>`. Only that command may create a
-   `handover.json` with `status=delivered`. Missing, stale, malformed, or
-   contradictory evidence means `unverified`, never an inferred pass.
+Read each relevant `SKILL.md` completely before using that stage:
 
-### Platform-candidate coverage-risk lane (3 local runs vs about 10 platform runs)
+1. `task-miner`
+2. `task-clone`
+3. `task-harbor-runner`
+4. `task-zip-submit`
+5. `task-client-feedback-review`
+6. `task-local-solve-probe`
+7. `task-llm-style-audit`
 
-Local union coverage from only 3 agents is a conservative pre-audit, not a
-faithful estimate of the platform's wider sample. After exactly 3 valid
-semantic runs, a task that misses handover condition 4 may still be packaged as
-`platform_candidate_coverage_risk` when ALL of these hold:
+Use `terminus-regular-task-authoring` and any language-specific authoring skill when required by the selected task.
 
-- every other handover condition is clean, including Harbor oracle/NOP,
-  the validated instruction-sufficiency manifest, category, fairness, style,
-  ZIP, and submission metadata;
-- difficulty still holds: Python is 0/3 solved; non-Python is 0–2/3 solved.
-  A non-Python 2/3 is MEDIUM/AMBER and qualifies only when the failing run
-  misses at least two broad semantic clusters with no setup/reference advantage;
-- local per-case union is at least 85%; common misses are at most 15% of the
-  platform-visible units and at most 20 units total;
-- common misses span at least 3 independent semantic clusters, and every
-  affected cluster retains multiple soft representatives passed by at least one
-  local run;
-- the best local run still misses at least twice as many units as the common
-  set and those residual misses span at least 3 clusters, proving the common
-  set is not the task's whole difficulty wall.
+This file controls the batch policy when it is more specific than a dependent skill. In particular, use the actual fresh subagent model available in the current environment; do not require or claim an unavailable pinned model.
 
-This lane is FORBIDDEN when any common miss reflects an oracle/authority doubt,
-instruction contradiction, unreachable required knowledge, setup failure, a
-whole feature cluster missed by all runs, or the near-perfect single-lever
-fingerprint. Do not prune or disclose merely to force strict local union when
-the lane criteria hold; preserve the evidence for the wider platform sample.
-Write the exact 3-run matrix and caveat into the local verdict and a sibling
-`PLATFORM-CANDIDATE-<slug>.md` status file; keep the reviewer-facing
-`SUBMISSION-<slug>.md` free of model/test leakage. Package under
-`submissions/platform-candidates/`, and continue mining toward the strict
-quota. A later platform 10-run pass promotes the task into the qualified queue;
-a platform 0/N return stays retained for remediation but remains unqualified.
+## Truthfulness Rules
 
-## Strategy — 100% new tasks
+- Never claim that a command, validation, review, or probe ran without its real output and exit status.
+- Never invent a subagent, model name, transcript, run ID, score, diff, or test result.
+- Record the actual model reported by each probe environment when available.
+- Treat setup, Docker, tool, dependency, timeout, and compilation failures as infrastructure failures, not evidence of task difficulty.
+- Do not mark a task submit-ready while a required local check is blocked.
+- Harbor API-key-dependent LLM-agent runs are not required. Local Docker build, Oracle, NOP, and non-API Harbor checks are required.
+- If external infrastructure is unavailable, continue every safe independent step, preserve the artifacts, and report the exact blocker. Never fabricate completion to satisfy the quota.
 
-Follow `task-miner` → **Fresh-only exploration doctrine** exactly: no
-ports/reskins/twists (`gallery_novelty` must be `novel`); history is only the
-forbidden-zone map (§6 + collapse verdicts), the design laws (master collapse
-law), and dedupe/novelty/Task-Inspiration lookup. 20–30 fresh ideas per
-mining round across all three currently open categories and ≥3 source classes; screen ALL
-with the collapse-law screen and log every verdict (rejects included) into
-`mined-candidates/index.jsonl` — that log is the batch's exploration map.
-Use a progressive beam: shortlist only the 4–6 highest-value, most diverse
-survivors for skeleton work (never two from one family), then full-build at
-most the 1–2 candidates whose probe geometry survives. Rank by expected value:
-`P(category-safe) × P(fair) × P(MEDIUM+) × P(novel) / expected model calls`.
-For this user's fresh-source runs, do not open or consult
-`.agent/mined-candidates/gallery_taxonomy.md`; prospect from newly discovered
-upstream sources and judge the resulting shapes directly against the live
-category/collapse rules.
+## Preflight
 
-Structural diversity is mandatory, not cosmetic domain/language rotation.
-Give each shortlisted candidate a six-axis design signature — `work_surface`,
-`interaction`, `input_surface`, `oracle_type`, `verifier_type`, and
-`failure_mode`. Store it in `workspace/reports/<slug>/design-signature.json`
-with the compared candidates and `max_pairwise_matches`. Do not shortlist two
-tasks that match on more than 4/6 axes.
+Before mining:
 
-**Screen control group (mandatory per round):** the screen is a one-sentence
-prediction and screen-rejects are never probed, so its false-negative rate is
-invisible by construction. Advance 1 screen-FAILED candidate (not
-from a §6 CONFIRMED-dead family) into the skeleton probe anyway, marked
-`screen_control: true` in index.jsonl. A control that holds (0/2 semantic) is
-a measured screen false-negative: keep it in the normal pipeline, log the
-finding as durable, and loosen the screen criterion that killed it. Controls
-that collapse confirm the screen at skeleton cost, not build cost.
+1. Confirm the workspace and output directories.
+2. Confirm Docker is reachable.
+3. Confirm the local Terminus/Harbor tooling needed for Oracle and NOP runs is available.
+4. Confirm repository mining access is available.
+5. Inspect existing workspace and submission slugs so the batch cannot overwrite or duplicate them.
 
-## Loop (repeat until quota or a stop condition)
+Stop early only for a real external blocker that prevents all useful progress. Otherwise continue autonomously.
 
-1. **MINE** fresh per the doctrine, starting with **Repo Prospecting**
-   (`task-miner`, Repo Prospecting): discover mature-but-obscure repos via
-   `gh search` by lever/archetype signal — never rely on the static Source
-   Queue (famous repos are memorization-poison) or on repos the model happens
-   to remember. Claim slugs (`tbrain-<problem-slug>`).
-2. **CATEGORY GATE-ZERO then SKELETON PROBE** (both BEFORE any heavy build):
-   FIRST run the rules-first category screen (`task-miner/category_rules.md`)
-   on the skeleton instruction + env tree and write
-   `workspace/reports/<slug>/category-screen.json` with fired rules, visible
-   evidence, declared category, and predicted category — a fired BLOCK rule (SWE / debugging
-   / data-processing) kills the candidate NOW, before you sink an oracle/corpus
-   build into it (the p0f lesson: never build then discover category). THEN the
-   skeleton probe: env + instruction.md + stub + a rough grader of about 30–60
-   platform-visible evaluation units spanning 6–8 independent behavior
-   clusters. Before probing, write the proposed verifier matrix and kill any
-   candidate whose contract cannot naturally supply ≥6 clusters and ≥2
-   cross-cluster interactions without padding; this catches shallow single-fix
-   tasks before model quota is spent. Start with 2
-   fresh blind solvers in isolated dirs outside the repo (`/var/tmp/probe-*`), net
-   forbidden, every known reference lib NAMED as forbidden, every solver in
-   **medium thinking mode** on the active runtime profile (`gpt-5.5` in Codex;
-   Opus 4.8 in Claude Code), recorded mechanically in `probe-verdict.json`; do
-   not silently inherit or swap models/effort. Run a
-   3rd solver only on a 1–1 split, a shared failure cluster, or
-   incomplete union coverage. Decision table: 2/2 pass → DROP; 0/2 with
-   de-correlated semantic failures and 100% union → BUILD; otherwise use the
-   3rd run; 0/3 on the same case/cluster → oracle-audit then DROP/redesign.
-   Running harbor oracle on a
-   candidate with no skeleton-probe log is a violation — log it as a wasted
-   build.
-3. **BUILD** (`task-clone`): start from `scripts/new-task.sh <slug> <lang>
-   <category>` (skeleton with the verifier/packaging hygiene pre-wired).
-   A custom generator may fill task-specific files only after invoking this
-   scaffolder; it must never hand-write `task.toml`, `.dockerignore`, or
-   `tests/test.sh`. Treat the first output from every new or changed generator
-   as a canary: run strict static preflight on that one task before generating
-   any sibling. A canary failure stops fan-out and invalidates every artifact
-   already produced by that generator version.
-   Expand cheap deterministic tasks to 50–1000 platform-visible meaningful
-   units; an honest execution/stateful task may use 20–80 expensive scenarios.
-   Prefer individually named case tests over family aggregates; aggregate tests
-   are allowed only as extra smoke checks. Verify the actual CTRF/readback unit
-   count before handover. Measure semantic breadth separately from test count:
-   a thousand variants of one rule remain one correlated cluster. Choose verifier
-   shapes to fit the problem instead of copying one template; combine at least
-   two appropriate shapes from scenario, property/metamorphic,
-   mutation/anti-shortcut, preservation/final-state, tolerance/differential,
-   and runtime-reference checks. A single broad authority corpus may substitute
-   for a second shape only when its ≥6 semantic families and cross-family cases
-   are explicit in the verifier matrix. Keep independent feature
-   families around 40–80% per-run pass, preserve a soft representative per
-   cluster, and disclose or drop any case predicted below ~35% pass. Re-score
-   the stored skeleton diffs against the expanded corpus before buying another
-   model call. Verifier hygiene: build from /app + check build
-   exit status, hide expected-value corpora before running the candidate,
-   run the candidate unprivileged, no exec from bare /tmp, instruction/test
-   symmetry both directions, and verifier integrity: no end-to-end solution
-   generator in `tests/`; any config/input values the task requires the agent
-   to read are loaded dynamically and checked with a mutation re-run. Before
-   condition-5 validation, run
-   `scripts/preflight.sh <task-dir> --strict --report-json
-   workspace/reports/<slug>/preflight.json --emit-zip
-   submissions/<slug>.zip` — zero FAIL rows required. The command emits no ZIP
-   when any check fails.
-4. **VALIDATE** against all eight conditions. On a miss, fix per playbook (0/N →
-   `task-revise-flag-remediation`, suspect the ORACLE first; single-lever
-   fingerprint → DROP, never rescue; category drift → reshape the SHAPE and
-   re-probe). If only strict local union remains and the bounded platform-
-   candidate criteria hold, package into that lane without counting it. Two fix
-   rounds without either strict passage or platform-candidate eligibility →
-   drop the task, refill the pool.
-5. Keep the local `index.jsonl` statuses current as an execution log; one-line log per drop
-   (slug | killing gate | reason). The agent may write `candidate`,
-   `mechanically_valid`, `category_valid`, `probe_valid`, `packaged`, or
-   `unverified`; only `batch-handover.py` may write `delivered`. Every
-   DELIVERED task also logs
-   `failure_mode` (the KIND of mistake the frontier model made on the probe —
-   missed-invariant / lost-state-over-horizon / premature-success /
-   wrong-tool-sequence / undocumented-quirk / accumulation-drift …) and
-   `pattern_axis` (execution / discovery / recovery / conformance), so the
-   round report can show failure-mode coverage and steer the next round away
-   from a monoculture. Fold only durable, evidence-backed conclusions into
-   `AGENTS.md`; do not create additional knowledge stores, dashboards, claim
-   systems, or memory mirrors.
+## Batch Loop
 
-## SUBMISSION.md (per delivered task → `submissions/SUBMISSION-<slug>.md`, NOT in the zip)
+Maintain an accepted-task counter. Repeat the following workflow until the counter equals `N`.
 
-- **Difficulty Explanation** — your own words on why the task is hard for
-  humans and agents, grounded in the REAL semantic-failure patterns from the
-  probe (missed invariant/boundary/layer). Never name models/solvers, hidden
-  fixtures, the verifier/tests, or use runtime/test-count as difficulty
-  evidence.
-- **Solution Explanation** — high-level approach + key insights; MUST match
-  the submitted solve.sh/fix.patch exactly (never describe a different
-  solution than the shipped code).
-- **Verification Explanation** — how the tests verify correctness:
-  behavioral execution, per-case corpus, preservation, anti-shortcut/
-  anti-cheat. Describe the shape, never enumerate hidden cases.
-- **Metadata** — "Does this task use an approved canonical base image?"
-  Yes/No + the exact digest-pinned image; "Did you use a Task Inspiration
-  from the Task Gallery?" Yes/No + Inspiration ID if yes (from
-  `mined-candidates/gallery_tasks_snapshot.md`).
-- **Rubrics** — the complete paste-ready block (rubric is NOT in the zip):
-  each criterion exactly one physical line starting with the literal word
-  `Agent`; scores from the closed set {+1,+2,+3,+5,-1,-2,-3,-5} with the
-  leading `+` mandatory; positive sum 10–40; block appears exactly once;
-  grade final BEHAVIOR, never work-steps; penalties phrased affirmatively
-  ("Agent hardcodes expected outputs, -5"); no test paths, fixture values,
-  oracle outputs, root-cause hints, or implementation recipe.
-- **File zip name** — the matching zip in `submissions/`.
-- Run `task-llm-style-audit` over all three explanations (human-writing pass).
+### 1. Mine a Fresh Candidate
 
-## Dry-round handling — PIVOT before stopping, honest exit after the ladder
+Use `task-miner`.
 
-Dry rounds trigger PIVOTS, not an immediate stop — when ≥15 screened
-candidates are exhausted without a delivery, or 2 consecutive rounds put
-nothing through the skeleton gate, do not keep drilling the same seam.
-Escalate the exploration, in order:
+The candidate must:
 
-1. **Rotate source classes and categories** you haven't used yet this run
-   (the ≤40%-per-class rule exists for this); switch prospecting queries to
-   new archetype signals and new registries.
-2. **Change task SHAPE, not just domain**: rotate the six-axis design signature
-   (`work_surface`, `interaction`, `input_surface`, `oracle_type`,
-   `verifier_type`, `failure_mode`) and prospect for a genuinely new shape.
-   Do NOT fall back to the three old interaction/scale archetypes as a live
-   lane: ops restoration and DB migration fell 3/3, and long-context
-   cross-referencing is closed by AGENTS.md. They are eligible only through the
-   single SUSPECT-dead retest slot with a materially stronger/new instance.
-3. **Last resort — held §5/§4 archetype RECIPES, heavily constrained** (stay
-   within the three open categories and prefer genuinely novel shapes from
-   rungs 1–2 first). §5 sim-in-verifier is allowed ONLY in the
-   verifier-side-simulation form: the solver emits an estimate/plan, the
-   simulation implementation stays inside the verifier, and every graded
-   dynamic is still stated or reachable from an agent-visible reference. A
-   fresh stub-fill where the solver merely transcribes those dynamics usually
-   collapses EASY (AGENTS.md §6). §4's terse-spec ledger recipe is closed by the
-   fresh-only doctrine and pools MEDIUM at best — never promise HARD from it.
-   A fresh engine in a held archetype can still satisfy
-   `gallery_novelty: novel`; a reskin of an existing engine does not.
+- use a non-Python implementation language;
+- be brand-new and gallery-novel;
+- fit one honest Terminus Regular category;
+- have a fair, visible, offline-solvable contract;
+- have enough independent behavioral depth to plausibly resist a strong agent;
+- avoid saturated task families, known collapse patterns, hidden graded rules, and unreachable authorities;
+- record its source repository, base commit, task contract, category, language, and novelty evidence.
 
-**Suspect-dead retest slot (max ONE per run):** §6 dead verdicts have tiers
-(AGENTS.md §6 header) — a verdict backed only by local n≤3 probes on a single
-instance is SUSPECT-dead, not CONFIRMED. Once per run, preferably during a dry
-round, you may retest ONE suspect-dead seam by building a materially STRONGER
-instance than the one that produced the verdict (bigger discovery surface,
-deeper coupling, richer state — never a reskin of the probed instance) and
-skeleton-probing it. Hold → the seam returns to live and re-enters the pool;
-collapse again → upgrade the seam to CONFIRMED-dead in AGENTS.md §6. Platform
-returns and pooled-N≥5 verdicts are CONFIRMED and never retested.
+Reject weak candidates before building. Do not fill quota with ports or cosmetic variants.
 
-Log each pivot in the round report. Never lower the handover bar; never
-backfill with ports. Only after ALL THREE pivots have been attempted in this
-run AND two consecutive fully-pivoted rounds delivered nothing new does the
-honest-exhaustion exit apply (Quota semantics above): end below quota with the
-full exploration map, per-seam verdicts folded into AGENTS.md §6, and
-an explicit "delivered X of <quota>; remaining yield requires either the port
-lane (user request) or a genuinely new category-safe build recipe" line.
+### 2. Clone and Build the Task
 
-## Final handover (full quota reached, or honest-exhaustion exit)
+Use `task-clone` to create the task under `workspace/tbrain-<slug>/`.
 
-Report in the user's language. Table: slug | category | visible-contract
-implementation challenge (one sentence) | sufficiency manifest | skeleton
-probe | fair probe (where each run failed) | pass-table
-(solve count, union coverage, common misses, failure clusters) | category probe
-| zip path | SUBMISSION.md path. Then: the exploration map
-(every screened idea: assumed challenge | killing gate | one-line verdict), every
-pivot taken and why, and fold every durable verdict (new dead/live family)
-into AGENTS.md §6/§3 per the self-update rule.
-Add a separate `platform_candidate_coverage_risk` table after the qualified
-table. State explicitly that these packages are outputs but contribute zero to
-the quota and qualified standby count.
+Build the complete task:
+
+- `instruction.md`
+- `task.toml`
+- `environment/`
+- `solution/`
+- `tests/`
+- any required local references or fixtures
+
+Keep the primary activity aligned with the declared category. Keep the implementation language non-Python; verifier infrastructure may use Python where the platform format requires it.
+
+Before difficulty probing, verify instruction sufficiency:
+
+- Every graded behavior is stated in the instruction, demonstrated by an agent-visible example, supported by visible training data, or derivable from an offline-reachable authority.
+- No hidden test depends on an unstated rule, convention, tie-break, constant, or output format.
+- Every important instruction requirement has a matching verifier check.
+- Every verifier behavior has a visible contractual basis.
+- Reasonable alternative interpretations are unambiguously rejected by visible evidence.
+- The Oracle agrees with the visible contract.
+
+Create and validate the repository's instruction-sufficiency manifest when the authoring workflow requires it. Fix insufficiency before any solve probe.
+
+Run and pass:
+
+1. Whole-task Ruff validation with `--extend-select PLW1510`; every
+   `subprocess.run(...)` must include explicit `check=True` or `check=False`.
+2. Docker image build.
+3. Oracle validation with reward `1.0`.
+4. NOP validation with reward `0.0`.
+5. Applicable local Harbor/Terminus checks that do not require an API key.
+
+Use `task-harbor-runner` for Harbor execution and triage. Fix task defects and rerun the affected checks. Drop the candidate if the contract, authority, or environment cannot be made fair and reliable without collapsing the task.
+
+### 3. Package the Task
+
+Use `task-zip-submit`.
+
+- Zip the task contents, not the parent directory.
+- Exclude caches, local reports, solve copies, secrets, VCS metadata, and macOS resource forks.
+- Write the archive to `submissions/<slug>.zip`.
+- Inspect the archive listing after creation.
+
+### 4. Review the ZIP and Fix It
+
+Use `task-client-feedback-review` on the packaged ZIP.
+
+The user has explicitly authorized fixes for this batch. Apply all blockers and relevant should-fix findings, with special attention to:
+
+- instruction insufficiency or instruction/test asymmetry;
+- offline authority reachability;
+- prompt, rubric, solution, expected-output, or fixture leakage;
+- Docker and dependency placement;
+- canonical base image and metadata accuracy;
+- verifier robustness and behavioral coverage;
+- archive layout and submission hygiene.
+
+After any task change:
+
+1. Rerun Docker build.
+2. Rerun Oracle and NOP.
+3. Rerun applicable local Harbor checks.
+4. Recreate the ZIP.
+5. Review the new ZIP again.
+
+Do not advance while a review blocker remains.
+
+### 5. Run the Local Solve Probe
+
+Use `task-local-solve-probe` with fresh subagents and isolated solve copies. Do not expose the solution, verifier tests, rubrics, reports, expected outputs, or hidden fixtures.
+
+Use the actual subagent model available in the current environment. Preserve the real diff, verifier result, and failure classification for each attempt.
+
+#### Attempt 1
+
+- If the subagent fully solves the task and receives reward `1.0`, the task is too easy. Fairly harden it once and restart all affected validation, review, packaging, and probing from scratch, or drop it and mine a replacement.
+- If the subagent has a genuine semantic failure, run Attempt 2 with a fresh subagent and clean solve copy.
+- If the run fails because of infrastructure, setup, compilation, tooling, or timeout unrelated to task semantics, repair the probe environment and rerun it. Do not count that run.
+
+#### Attempt 2
+
+- If the second fresh subagent also has a genuine semantic failure, classify the candidate as `MEDIUM+` locally.
+- If the second subagent fully solves the task, fairly harden it once and restart the workflow, or drop it and mine a replacement. Do not classify it as `MEDIUM+`.
+- If the failure reveals underdocumentation, an Oracle defect, unavailable knowledge, or ambiguous behavior, repair the fairness defect and restart both probes. A broken contract is not difficulty.
+
+Two semantic failures qualify the task for this batch only when:
+
+- the task still passes Oracle, NOP, Docker, and local Harbor checks;
+- the failures are caused by the intended behavioral challenge;
+- the required behavior is fully supported by the visible contract;
+- neither solve run gained access to excluded artifacts.
+
+Do not claim that `0/2` local solves proves platform HARD. Set platform metadata conservatively unless stronger evidence exists.
+
+If hardening changes instructions, tests, fixtures, solution, environment, or metadata, rerun every affected gate and replace the ZIP before continuing.
+
+### 6. Audit LLM Writing Style
+
+Use `task-llm-style-audit` after the task has passed the technical and difficulty gates.
+
+Audit every reviewer-visible prose surface, including:
+
+- `instruction.md`;
+- environment documentation and code comments;
+- rubric text;
+- submission explanations;
+- metadata descriptions.
+
+Rewrite flagged prose in clear, natural English without changing technical meaning, adding unsupported claims, or breaking instruction/test symmetry.
+
+If the audit changes task contents, rerun the affected validation, recreate the ZIP, and confirm the final archive. If it changes only the external submission file, re-audit that file.
+
+## Submission File
+
+Create one file per accepted task:
+
+```text
+submissions/SUBMISSION-<slug>.md
+```
+
+Use this exact structure:
+
+```markdown
+# Difficulty Explanation
+
+Describe in original language why the task is challenging for humans and coding agents. Base the explanation on the actual task design and observed probe failures. Do not claim unsupported platform difficulty.
+
+# Solution Explanation
+
+Describe the high-level solution approach and the key implementation insights. Do not copy the full Oracle or expose hidden fixture values.
+
+# Verification Explanation
+
+Explain how the tests verify correctness, including the major behavior clusters, preservation checks, edge cases, and anti-shortcut coverage.
+
+# Metadata
+
+- Does this task use an approved canonical base image? Yes — `<exact image reference>` / No — `<reason>`
+- Did you use a Task Inspiration from the Task Gallery for this submission? Yes / No
+- Task Inspiration ID: `<ID or N/A>`
+
+# Rubrics
+
+Agent completes `<observable behavior>`, +5
+Agent completes `<observable behavior>`, +5
+Agent preserves `<observable behavior>`, +3
+Agent breaks `<observable behavior>`, -3
+```
+
+Rubrics must:
+
+- grade observable behavior, not implementation style;
+- use one physical line per rubric item;
+- start with `Agent`;
+- end with an allowed signed score;
+- avoid hidden fixture values, test names, solution details, and private failure evidence;
+- cover the task's main independent behavior clusters;
+- remain consistent with the instruction and verifier.
+
+Run the style audit on the completed submission file.
+
+## Acceptance Gate
+
+Count a task toward `N` only when all of the following are true:
+
+- The task is fresh and non-Python.
+- The task folder is complete.
+- The visible contract is instruction-sufficient.
+- Whole-task Ruff validation, including `PLW1510`, is clean.
+- Docker builds successfully.
+- Oracle reward is `1.0`.
+- NOP reward is `0.0`.
+- Applicable local Harbor checks pass without requiring an API key.
+- The final ZIP passes client-feedback review with no blocker.
+- Two valid fresh subagents both fail semantically, producing the local `MEDIUM+` verdict.
+- The LLM-style audit is clean.
+- `submissions/<slug>.zip` exists and matches the final task state.
+- `submissions/SUBMISSION-<slug>.md` exists and is accurate.
+
+Do not count rejected, blocked, one-pass/one-fail, infrastructure-failed, ambiguous, or merely packaged candidates.
+
+## Final Response
+
+Report one row per accepted task with:
+
+- slug;
+- language;
+- category;
+- Docker result;
+- Oracle reward;
+- NOP reward;
+- Harbor result;
+- ZIP review result;
+- probe Attempt 1;
+- probe Attempt 2;
+- local difficulty verdict;
+- ZIP path;
+- submission file path.
+
+Also list any discarded candidates and their concise rejection reasons. Distinguish verified results from unavailable external checks.

@@ -21,8 +21,6 @@ Tasks involving OS-level configuration, user management, package management, pro
 
 ### build-and-dependency-management
 
-> 🚫 **Currently blocked — not accepting new submissions.** The `build-and-dependency-management` category is paused. Do not submit new tasks under this category until this note is removed.
-
 Compile code, manage dependencies, build components.
 
 **Examples:**
@@ -33,8 +31,6 @@ Compile code, manage dependencies, build components.
 ---
 
 ### data-processing
-
-> 🚫 **Currently blocked — not accepting new submissions.** The `data-processing` category is paused. Do not submit new tasks under this category until this note is removed.
 
 Tasks that transform, parse, filter, aggregate datasets or files and directories and generate derived output.
 
@@ -58,8 +54,6 @@ Tasks centered on game-like or simulated environments, interactive puzzles, or s
 
 ### software-engineering
 
-> 🚫 **Currently blocked — not accepting new submissions.** The `software-engineering` category is paused. Do not submit new tasks under this category until this note is removed.
-
 Tasks focused on developing or testing features and algorithms, fixing bugs and improving/optimizing an existing feature, implementing tests, or maintaining software projects.
 
 **Examples:**
@@ -82,8 +76,6 @@ Tasks requiring training, fine-tuning, running inference, or evaluating machine 
 
 ### debugging
 
-> 🚫 **Currently blocked — not accepting new submissions.** The `debugging` category is paused. Do not submit new tasks under this category until this note is removed.
-
 Tasks that require identifying, diagnosing, and fixing errors in scripts, codebases, or system configurations.
 
 **Examples:**
@@ -95,8 +87,6 @@ Tasks that require identifying, diagnosing, and fixing errors in scripts, codeba
 
 ### Security
 
-> 🚫 **Currently blocked — not accepting new submissions.** The `security` category is paused. Do not submit new tasks under this category until this note is removed.
-
 Tasks related to cryptography, authentication, permissions, penetration-style tests, exploit, validate vulnerabilities, reverse engineering or security configuration.
 
 **Examples:**
@@ -107,8 +97,6 @@ Tasks related to cryptography, authentication, permissions, penetration-style te
 ---
 
 ### scientific-computing
-
-> 🚫 **Currently blocked — not accepting new submissions.** The `scientific-computing` category is paused. Do not submit new tasks under this category until this note is removed.
 
 Tasks using scientific libraries or workflows, such as numerical computation, simulations, or domain-specific research code.
 
@@ -133,14 +121,14 @@ Pick the category that best describes the **primary** activity:
 | If the task mainly involves... | Use category |
 |--------------------------------|--------------|
 | OS/server configuration | system-administration |
-| Build systems, packages | build-and-dependency-management *(currently blocked)* |
-| ETL, file processing | data-processing *(currently blocked)* |
+| Build systems, packages | build-and-dependency-management |
+| ETL, file processing | data-processing |
 | Interactive challenges | games |
-| Code development, testing | software-engineering *(currently blocked)* |
+| Code development, testing | software-engineering |
 | ML model work | machine-learning |
-| Finding/fixing bugs | debugging *(currently blocked)* |
-| Security issues | security *(currently blocked)* |
-| Scientific code | scientific-computing *(currently blocked)* |
+| Finding/fixing bugs | debugging |
+| Security issues | security |
+| Scientific code | scientific-computing |
 
 ## Domain-Specific Tasks
 

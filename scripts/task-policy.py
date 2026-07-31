@@ -13,8 +13,14 @@ from pathlib import Path
 
 
 OPEN_CATEGORIES = {
+    "build-and-dependency-management",
+    "data-processing",
+    "debugging",
     "games",
     "machine-learning",
+    "scientific-computing",
+    "security",
+    "software-engineering",
     "system-administration",
 }
 VALID_LANGUAGES = {

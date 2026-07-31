@@ -1,6 +1,6 @@
 # Terminus 2nd Edition — Frequently Asked Questions
 
-*Last updated: June 29, 2026*
+*Last updated: July 27, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
@@ -159,10 +159,16 @@ Use files from public open-source repos to build a realistic project environment
 **Can I run concurrent agent tests (GPT-5.5 and Opus at the same time)?**
 It's possible, but **not encouraged** — expect API errors and much faster key exhaustion. Run one model's tests to completion before starting the other. See [Using Your API Key Efficiently](/portal/docs/cli-user-guide#using-your-api-key-efficiently) in the CLI User Guide for tips on stretching your key budget.
 
-### Blocked Categories
+### Category Status
+
+**Can I submit new tasks?**
+Yes. **As of Jul 30, 2026, submissions are open across every category** for the final push — the Jul 27 pause has been lifted.
 
 **Which categories are currently blocked?**
-As of Jul 24, 2026, submissions are limited to **three open categories**: **`machine-learning`**, **`games`**, and **`system-administration`**. All other categories — `build-and-dependency-management`, `scientific-computing`, `security` (blocked Jul 24), plus `data-processing` (Jul 10), `debugging` and `software-engineering` (Jun 18) — are paused for net-new submissions while we balance the benchmark's category distribution. **New milestone tasks are also blocked** (Jun 29). Tasks already in your revision queue or awaiting review continue through to Accepted as normal. Check the [Task Category Status](/portal/category-status) page for the live list.
+None. All nine categories are open until further notice, including `debugging`, `software-engineering`, and `data-processing`, which had been paused earlier. **New milestone tasks remain blocked** (since Jun 29, 2026) regardless of category. Check the [Task Category Status](/portal/category-status) page for the live list.
+
+**Should I still work my revision queue?**
+Yes. Revisions continue as normal, and clearing your Revision Queue is still the most direct path to getting existing submissions to **Accepted**.
 
 ---
 

@@ -43,12 +43,10 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 > oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
 > zipping, every time.
 
-1. Pick a shape whose primary activity is machine-learning, games, or
-   system-administration (the only open net-new categories; see the rules-first
-   category gate below). Pick a
-   real engineering bug with multi-step reasoning ONLY when the resulting
-   repair shape still passes that gate — the repair shape fires the
-   `debugging` BLOCK rule by default.
+1. Pick a shape whose primary activity maps honestly to one of the nine open
+   Regular-task categories (see the rules-first category gate below). A real
+   engineering bug with multi-step reasoning normally maps to `debugging`; use
+   that label rather than reframing it cosmetically.
 2. Write concise `instruction.md` using absolute paths only.
 3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false` by default. Keep `allow_internet = true` when network access is the task's point; hard-pin every live dependency/source to exact versions and immutable digests/hashes, and grade stable invariants rather than mutable live values, keys, or API shapes.
 4. Build `environment/Dockerfile` with `tmux`, `asciinema`, pinned package versions, and digest-pinned `FROM`.
@@ -504,6 +502,10 @@ Docker build.
 Tests must:
 
 - Be Python pytest tests, even for non-Python tasks.
+- Pass an explicit `check=True` or `check=False` to every
+  `subprocess.run(...)`. Use `check=False` when the verifier intentionally
+  inspects or asserts the return code; use `check=True` when any non-zero exit
+  is immediately fatal. Run Ruff with `--extend-select PLW1510`.
 - Test behavior, not source-code strings.
 - Have docstrings on every test.
 - Cover every explicit and important implicit prompt requirement.
@@ -520,7 +522,8 @@ Tests must:
   source" contract — an agent can edit non-compiling source and the stale
   image-built binary still passes (reviewer-flagged, HOCON 2026-07). In a
   session-scoped autouse fixture: `rm -f <binary>`, then
-  `subprocess.run([...,"build","-o",<binary>,<pkg>], cwd="/app", capture_output=True)`,
+  `subprocess.run([...,"build","-o",<binary>,<pkg>], cwd="/app",
+  capture_output=True, check=False)`,
   assert returncode 0 (surface build stderr on failure), then assert the binary
   exists. Non-compiling source then fails the fixture and errors every case →
   reward 0; the toolchain is present (canonical `golang`/`rust` base) so the

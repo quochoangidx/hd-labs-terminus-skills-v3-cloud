@@ -1,6 +1,6 @@
 ---
 name: sync-doc-and-skill
-description: Sync Terminus docs from the Snorkel portal and update dependent Terminus skills to match. Run periodically or when you suspect docs have changed. Fetches each doc's markdown file DIRECTLY from the portal (…/docs/<slug>.md), diffs against local docs/, patches local files, then audits Terminus skills for discrepancies and auto-fixes them. Do NOT scrape the JS bundle for content — it is only the SPA shell and can carry stale hardcoded strings.
+description: Sync Terminus docs from the Snorkel portal and update dependent Terminus skills to match. Run periodically or when you suspect docs have changed. Fetch each document's markdown file directly from its portal docs path, diff it against local docs, patch local files, then audit Terminus skills for discrepancies and auto-fix them. Do not scrape the JS bundle for content because it is only the SPA shell and can carry stale hardcoded strings.
 ---
 
 # Sync Docs and Skills
@@ -113,7 +113,7 @@ For each key rule area, compare online content with local docs:
 | Verifier integrity | `creating-tasks/writing-tests.md`, `reviewing-tasks/reviewer-checklist.md` | `complete expected artifact`, `dynamically`, `config` |
 | CLI installation and credentials | `getting-started/quick-start.md`, `testing-and-validation/running-real-agents.md` | `snorkelai-stb`, `stb login`, `keys refresh` |
 | One-model Hard early exit | `understanding-tasks/difficulty-guidelines.md` | `Opus 4.8 first`, `skipped` |
-| Live category availability | `reference/category-status.md`, `reference/changelog.md` | `limited to three`, `Blocked` |
+| Live category availability | `reference/category-status.md`, `reference/changelog.md` | `open across every category`, `milestone tasks remain blocked` |
 | Internet-enabled reproducibility | announcement / `creating-tasks/dockerfile-best-practices.md` | `allow_internet = true`, `digest`, `stable invariants` |
 
 ### Diff format
