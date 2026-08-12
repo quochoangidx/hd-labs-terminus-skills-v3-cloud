@@ -141,9 +141,9 @@ stb login
 stb keys refresh
 ```
 
-2. Check your remaining budget:
+2. Your stored credentials are still valid:
 ```bash
-stb keys show
+stb keys verify
 ```
 
 3. If `stb keys refresh` fails with "Maximum refresh limit reached," you've hit the cap — ask an admin in Slack to reset it.
@@ -223,5 +223,5 @@ Include:
 
 ### Where to ask:
 
-- **Slack:** `#ec-terminus-submission`
+- **Slack:** `#terminus-3-submissions`
 - **Payment issues:** Reach out to Snorkel

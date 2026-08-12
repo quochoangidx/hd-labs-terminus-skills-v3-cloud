@@ -1,20 +1,17 @@
 ---
 name: terminus-hard-python-verifier
-description: Use when writing pytest verifier suites and oracle solutions for hard Python tasks in Terminus. All nine Regular-task categories are open, but the visible primary activity must match the declared category. Focuses on behavioral subprocess tests, anti-cheating coverage, edge cases, and making tasks hard enough that coding agents may fail.
+description: Use when writing pytest verifier suites and oracle solutions for Python-implemented Terminus 3 tasks. Focuses on isolated artifact-based behavioral tests, anti-cheating coverage, edge cases, and empirical difficulty evidence across all four Terminus 3 tiers.
 ---
 
-# Terminus Hard Python Verifier
+# Terminus 3 Python Verifier
 
-Use this skill after choosing a hard Python task. All nine Regular-task
-categories are open as of Jul 30, 2026. The classifier-visible shape must still
-pass the rules-first category check (`task-miner/category_rules.md`) and match
-the declared category before this verifier work is worth spending. Python tasks
-must still grade Hard.
+The filename is retained for compatibility, but Python has no special difficulty
+rule in Terminus 3. Choose the exact category/subcategory from the task's domain,
+not from the fact that the agent edits Python.
 
-This skill is a gate, not just a test-writing checklist. It should reject or
-redesign tasks that are likely to be rated Medium, and it should prevent
-quality-check failures caused by verifier behavior that is missing from
-`instruction.md`.
+This skill is a gate, not just a test-writing checklist. It should reject broken,
+ambiguous, trivial, or shortcut-prone tasks while preserving valid Base, Core,
+Advanced, and Frontier results.
 
 ## When To Stop
 
@@ -25,17 +22,16 @@ any of these are true:
   meaningful LOC in one obvious file
 - the prompt keywords point directly to the exact function/class to edit
 - all verifier tests exercise the same condition with only renamed inputs
-- the task has already shown frontier-agent pass rate >=80%, or any frontier
-  agent passes 5/5 runs
+- the task has reached 100% across the four-run platform iteration sample
 - the core bug is message-only, typo-only, docs-only, dependency-only, or config
   plumbing without cross-behavior interaction
-- the verifier needs live internet, credentials, a real external service, GPU,
-  browser automation, or long/flaky sleeps
+- the verifier needs credentials, a mutable external service, GPU, or
+  long/flaky sleeps
 
-Timeouts alone do not prove Hard. A task is Hard only when wrong or incomplete
-fixes fail for semantic reasons.
+Timeouts never establish a tier. Difficulty evidence must come from semantic
+failures tied to the stated crux.
 
-## Hardness Target
+## Difficulty-signal target
 
 Prefer tasks where the correct fix requires coordinating at least two concepts:
 
@@ -50,9 +46,8 @@ Prefer tasks where the correct fix requires coordinating at least two concepts:
 - stateful idempotency (e.g., executing a command multiple times to verify state transitions)
 - complex environment topologies (e.g., symlinks, read-only dirs, conflicting dependencies)
 
-Avoid repeating the same ecosystem too often. If recent tasks from one repo
-were rated Medium, mine a different source before making another task from the
-same subsystem.
+Avoid repeating the same ecosystem or behavior contract. Terminus 3 rejects
+variations and reskins even when the implementation language changes.
 
 ## Test Design
 
@@ -71,7 +66,7 @@ files, and public API results.
 
 ## Coverage Shape
 
-For hard tasks, include:
+For substantive tasks, include:
 
 - one direct regression reproducer
 - one boundary condition
@@ -79,7 +74,8 @@ For hard tasks, include:
 - one anti-shortcut test
 - one test proving the failure mode is recoverable, not just hidden
 
-For stronger Hard calibration, prefer 5-7 focused tests:
+For stronger Advanced/Frontier calibration, prefer several focused behavior
+clusters rather than one monolithic test:
 
 - 2 regression variants using different names/layouts/options
 - 1 edge or boundary case
@@ -149,7 +145,7 @@ hardcoded parameter must no longer pass. This does not prohibit hardcoded
 expected results, tolerances, or format constants that are not claimed config
 values.
 
-## Making Python Tasks Hard
+## Building stronger Python task signals
 
 Prefer bugs involving interactions:
 
@@ -262,13 +258,14 @@ if [ "$PWD" = "/" ]; then
     exit 0
 fi
 
-python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+python3 -I -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
 rc=$?
 if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt
 else
     echo 0 > /logs/verifier/reward.txt
 fi
+exit 0
 ```
 
 The final reward block must end the script. The current `check_test_sh` gate
@@ -277,14 +274,14 @@ defensive form above, where `rc=$?` is captured immediately after pytest and
 used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
 commands between pytest and the capture/conditional, or rewrite it as
 `pytest && echo 1`.
-Do not add `exit $?` or any other trailing exit after the final `fi`. Harbor
-reads `/logs/verifier/reward.txt` for pass/fail; the script's exit code is not
-the reward signal.
+End with `exit 0`. Harbor reads `/logs/verifier/reward.txt` for pass/fail; the
+script's exit code is not the reward signal.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
-`pytest`, `pytest-json-ctrf`, and other verifier-only packages in the Docker
-image with exact pins. Do not put dependency wheels in `tests/`, and do not run
-`pip install` from `tests/test.sh`.
+`pytest`, `pytest-json-ctrf`, and other verifier-only packages in the separate
+`tests/Dockerfile` with exact pins. Create the landing parents for every
+top-level artifact path there. Do not put dependency wheels in `tests/`, and do
+not run `pip install` from `tests/test.sh`.
 
 Keep project runtime dependencies separate from verifier-only packages.
 

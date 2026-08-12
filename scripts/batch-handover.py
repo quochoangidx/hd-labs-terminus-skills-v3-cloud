@@ -32,20 +32,18 @@ SIGNATURE_AXES = {
     "verifier_type",
     "failure_mode",
 }
-OPEN_CATEGORIES = {
-    "build-and-dependency-management",
-    "data-processing",
-    "debugging",
-    "games",
-    "machine-learning",
-    "scientific-computing",
-    "security",
-    "software-engineering",
-    "system-administration",
+TAXONOMY = {
+    "Science": {"Biology", "Chemistry", "Physics", "Earth", "Robotics", "Math", "Linguistics"},
+    "Software": {"Algorithms", "Systems", "Databases", "Data engineering", "Frontend", "Languages"},
+    "ML": {"Training", "Inference", "Evaluation", "Kernels"},
+    "Operations": {"Finance", "Logistics", "Supply chain", "Claims", "Compliance", "Marketing"},
+    "Security": {"Cryptography", "Reverse engineering", "Forensics", "AppSec"},
+    "Hardware": {"CAD", "RTL"},
+    "Media": {"Music", "Design"},
 }
 PROBE_PROFILES = {
-    "codex": ("gpt-5.5",),
-    "claude-code": ("opus-4.8", "opus 4.8", "claude-opus-4.8"),
+    "codex": ("gpt-5.6",),
+    "claude-code": ("opus-5", "opus 5", "claude-opus-5"),
 }
 VALID_PROBE_RUNNERS = {"codex-subagent", "claude-agent"}
 FORBIDDEN_PROBE_COMMAND_TOKENS = {"stb ", "terminus-2", "@openai/", "@anthropic/"}
@@ -438,27 +436,29 @@ def validate_verifier_matrix(
     }
 
 
-def validate_category(data: dict, slug: str, declared: str, errors: list[str]) -> None:
+def validate_category(
+    data: dict,
+    slug: str,
+    declared_category: str,
+    declared_subcategory: str,
+    errors: list[str],
+) -> None:
     if data.get("status") != "pass":
         errors.append("category-screen.json: status must be 'pass'")
     if data.get("task_slug") != slug:
         errors.append("category-screen.json: task_slug mismatch")
-    if data.get("declared_category") != declared:
+    if data.get("declared_category") != declared_category:
         errors.append("category-screen.json: declared_category mismatch")
-    if data.get("predicted_category") not in OPEN_CATEGORIES:
-        errors.append("category-screen.json: predicted_category is not open")
-    if data.get("predicted_category") != declared:
-        errors.append("category-screen.json: predicted_category must match declared_category")
-    rules = data.get("rules_fired")
+    if data.get("declared_subcategory") != declared_subcategory:
+        errors.append("category-screen.json: declared_subcategory mismatch")
+    if declared_category not in TAXONOMY or declared_subcategory not in TAXONOMY.get(declared_category, set()):
+        errors.append("category-screen.json: invalid Terminus 3 taxonomy pair")
+    rationale = data.get("domain_rationale")
     evidence = data.get("evidence")
-    if not isinstance(rules, list):
-        errors.append("category-screen.json: rules_fired must be a list")
+    if not nonempty(rationale):
+        errors.append("category-screen.json: domain_rationale is required")
     if not isinstance(evidence, list) or not evidence or not all(nonempty(x) for x in evidence):
         errors.append("category-screen.json: evidence must contain visible-shape citations")
-    if rules == []:
-        fallback = data.get("fallback_probe")
-        if not isinstance(fallback, dict) or fallback.get("status") != "pass":
-            errors.append("category-screen.json: no fired rule requires a passing fallback_probe")
 
 
 def validate_design(data: dict, slug: str, report_dir: Path, errors: list[str]) -> None:
@@ -558,11 +558,8 @@ def validate_probe_bundle(
 
     result_paths = sorted(probe_dir.glob("run_*/result.json"))
     result_count = len(result_paths)
-    is_python = "python" in {str(language).lower() for language in languages}
-    if is_python and result_count != 3:
-        errors.append("probe evidence: post-build Python tasks require exactly 3 runs")
-    if not is_python and result_count not in {2, 3}:
-        errors.append("probe evidence: non-Python tasks require 2 or 3 runs")
+    if result_count not in {2, 3}:
+        errors.append("probe evidence: tasks require 2 runs, or 3 after an adaptive escalation")
 
     expected_units = verifier.get("unit_ids", set())
     current_snapshot = tree_hash(task_dir, sanitized=False)
@@ -795,10 +792,6 @@ def validate_probe_bundle(
             for unit_id in failed_ids
             for cluster in verifier.get("unit_clusters", {}).get(unit_id, [])
         }
-        if result_value == "fail" and len(failed_ids) < 3:
-            errors.append(f"{run_dir.name}: fail-broad evidence needs at least 3 failed units")
-        if result_value == "fail" and len(failed_clusters) < 2:
-            errors.append(f"{run_dir.name}: fail-broad evidence needs at least 2 semantic clusters")
         all_failure_clusters.update(failed_clusters)
         run_results.append(
             {
@@ -811,12 +804,8 @@ def validate_probe_bundle(
         )
 
     solved_runs = sum(1 for item in run_results if item["result"] == "pass")
-    if is_python and solved_runs != 0:
-        errors.append("probe evidence: Python tasks require 0/3 solved")
-    if not is_python and result_count == 2 and solved_runs != 0:
-        errors.append("probe evidence: a strict 2-run handover requires 0/2 solved")
-    if not is_python and result_count == 3 and solved_runs > 1:
-        errors.append("probe evidence: strict handover allows at most 1/3 solved")
+    if result_count and solved_runs == result_count:
+        errors.append("probe evidence: all local runs solved; the task has no local difficulty signal")
 
     union_passed = (
         set().union(*(item["passed_ids"] for item in run_results)) if run_results else set()
@@ -830,14 +819,13 @@ def validate_probe_bundle(
         if item["result"] == "fail"
     ]
     de_correlated = len(failed_cluster_sets) >= 2 and len(set(failed_cluster_sets)) >= 2
-    if union_coverage != 1.0:
-        errors.append("probe evidence: per-case union coverage must be 100%")
-    if common_misses:
-        errors.append("probe evidence: common misses must be zero")
-    if not de_correlated:
-        errors.append("probe evidence: failed runs are not de-correlated")
-    if len(all_failure_clusters) < 2:
-        errors.append("probe evidence: at least two derived failure clusters are required")
+    if solved_runs == 0:
+        if union_coverage != 1.0:
+            errors.append("probe evidence: zero-solve Frontier signal requires 100% per-case union coverage")
+        if common_misses:
+            errors.append("probe evidence: zero-solve Frontier signal must have no common misses")
+        if not de_correlated:
+            errors.append("probe evidence: zero-solve Frontier failures must be de-correlated")
     if len(runtime_values) != 1:
         errors.append("probe evidence: all runs must use one runtime")
     if len(model_values) != 1:
@@ -847,7 +835,6 @@ def validate_probe_bundle(
 
     derived = {
         "task_slug": slug,
-        "python_task": is_python,
         "probe_runtime": next(iter(runtime_values), ""),
         "probe_model": next(iter(model_values), ""),
         "reasoning_effort": next(iter(effort_values), ""),
@@ -858,6 +845,13 @@ def validate_probe_bundle(
         "common_miss_count": len(common_misses),
         "failure_clusters": sorted(all_failure_clusters),
         "de_correlated": de_correlated,
+        "local_accuracy": solved_runs / result_count if result_count else None,
+        "local_tier_signal": (
+            "frontier" if solved_runs / result_count < 0.2
+            else "advanced" if solved_runs / result_count < 0.5
+            else "core" if solved_runs / result_count < 0.8
+            else "base"
+        ) if result_count else None,
         "task_snapshot_sha256": current_snapshot,
     }
     return derived
@@ -911,13 +905,15 @@ def main() -> int:
     try:
         metadata = tomllib.loads((task_dir / "task.toml").read_text())["metadata"]
         declared = metadata["category"]
+        declared_subcategory = metadata["subcategory"]
         languages = metadata["languages"]
     except (OSError, KeyError, tomllib.TOMLDecodeError) as exc:
         errors.append(f"task.toml: {exc}")
         declared = ""
+        declared_subcategory = ""
         languages = []
-    if declared not in OPEN_CATEGORIES:
-        errors.append(f"task.toml: {declared!r} is not open for net-new submissions")
+    if declared not in TAXONOMY or declared_subcategory not in TAXONOMY.get(declared, set()):
+        errors.append(f"task.toml: invalid Terminus 3 taxonomy pair {declared!r} / {declared_subcategory!r}")
     if not isinstance(languages, list) or not all(nonempty(language) for language in languages):
         errors.append("task.toml: metadata.languages must contain non-empty strings")
         languages = []
@@ -929,7 +925,7 @@ def main() -> int:
     }
     evidence["probe"] = {}
     if evidence["category"]:
-        validate_category(evidence["category"], slug, declared, errors)
+        validate_category(evidence["category"], slug, declared, declared_subcategory, errors)
     if evidence["design"]:
         validate_design(evidence["design"], slug, report_dir, errors)
     if evidence["preflight"]:
@@ -953,8 +949,7 @@ def main() -> int:
     probe_errors = errors[probe_error_start:]
     probe_verdict = {
         "task_slug": slug,
-        "python_task": "python" in {str(language).lower() for language in languages},
-        "status": "submit_ready" if not probe_errors else "unverified",
+        "status": "candidate_ready" if not probe_errors else "unverified",
         **probe_derived,
         "errors": probe_errors,
     }
@@ -1003,7 +998,7 @@ def main() -> int:
     artifact_sha = sha256(zip_path) if zip_path.is_file() else None
     payload = {
         "task_slug": slug,
-        "status": "delivered" if not errors else "unverified",
+        "status": "candidate_ready" if not errors else "unverified",
         "artifact": str(zip_path),
         "artifact_sha256": artifact_sha,
         "submission": str(submission),
@@ -1020,7 +1015,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print(f"DELIVERED: {slug} ({artifact_sha})")
+    print(f"CANDIDATE_READY: {slug} ({artifact_sha})")
     return 0
 
 

@@ -259,7 +259,7 @@ def diff_run(args: argparse.Namespace) -> None:
     if not proc.stdout.strip():
         print(
             "WARNING: solver produced no diff; record it only if the unchanged starter "
-            "passes, which is decisive EASY evidence",
+            "passes, which means the starter already satisfies the task",
             file=sys.stderr,
         )
     print(patch)
@@ -483,11 +483,21 @@ def summarize(args: argparse.Namespace) -> None:
     elif passed == total:
         recommendation = "rework_or_replace"
     elif total == 2 and passed == 1:
-        recommendation = "gray_zone_review"
+        recommendation = "needs_adaptive_run"
     else:
         # Only batch-handover.py can combine this evidence with the verifier
-        # matrix and issue submit_ready.
+        # matrix and issue candidate_ready.
         recommendation = "needs_handover_validation"
+    accuracy = passed / total
+    tier_signal = (
+        "frontier"
+        if accuracy < 0.2
+        else "advanced"
+        if accuracy < 0.5
+        else "core"
+        if accuracy < 0.8
+        else "base"
+    )
     summary = {
         "probe_dir": os.path.relpath(probe_dir),
         "runs": total,
@@ -497,6 +507,8 @@ def summarize(args: argparse.Namespace) -> None:
         "evidence_complete": evidence_complete,
         "union_coverage": union_coverage,
         "common_miss_count": len(common_misses),
+        "local_accuracy": accuracy,
+        "local_tier_signal": tier_signal,
         "recommendation": recommendation,
     }
     out = probe_dir / "summary.md"
@@ -509,6 +521,8 @@ def summarize(args: argparse.Namespace) -> None:
         f"- Evidence complete: {evidence_complete}\n"
         f"- Union coverage: {union_coverage:.6f}\n"
         f"- Common misses: {len(common_misses)}\n"
+        f"- Local accuracy: {accuracy:.6f}\n"
+        f"- Provisional tier signal: `{tier_signal}`\n"
         f"- Recommendation: `{recommendation}`\n",
         encoding="utf-8",
     )
@@ -532,10 +546,6 @@ def main() -> int:
     p = sub.add_parser("materialize")
     p.add_argument("run_dir")
     p.set_defaults(func=materialize_run)
-
-    p = sub.add_parser("apply")
-    p.add_argument("run_dir")
-    p.set_defaults(func=apply_run)
 
     p = sub.add_parser("record")
     p.add_argument("run_dir")

@@ -1,26 +1,26 @@
-# Terminal Bench Edition 2 Review Checklist
+# Terminus 3 Review Checklist
 
 ## Changelog
 
 | Date | Type | Change |
 |------|------|--------|
-| Jul 9, 2026 | 🆕 New | Clarified that `gpus`, `gpu_types`, and `docker_flags` in `[environment]` are valid but **optional** Harbor fields. Reviewers must **not** send a task back solely because these are omitted or left blank — TB2 tasks are not required to use GPU. Both the full and minimal `[environment]` blocks are acceptable. |
+| Aug 10, 2026 | 🔄 Update | Difficulty now runs in two stages: **in-platform iteration** uses 2 trials per model (4 runs) and requires **at least one failure** before a task can reach review; **final difficulty** uses 4 trials per model (8 runs) and runs only **after reviewer acceptance**. **100% accuracy averaged across both models** is not accepted — 90% is fine. Also added two High-severity criteria: **known environment defects block acceptance** regardless of whether they caused a visible failure in the difficulty run, and **`difficulty` must use a current tier** (`frontier`/`advanced`/`core`/`base` — the Edition 2 names are retired). |
+| Aug 6, 2026 | 🆕 New | Added a **Trial Analysis** section for the six criteria the difficulty check now reports. `task_specification` and `reward_hacking` are definite issues — a flag on either sends the task back. `difficulty_crux`, `near_miss`, `refusals`, and `low_timeout` must be examined: send back if the flag's reason holds up, otherwise record in the acceptance comments why it doesn't. The multiple-Medium rule does not apply to these four — judge each flag on its own merits. |
+| Aug 5, 2026 | 🔄 Update | `task.toml` structure: the descriptive fields (`author_name`, `author_email`, `category`, `subcategory`, `tags`, `languages`, `difficulty`, `expert_time_estimate_hours`, and the `*_explanation` / `relevant_experience` write-ups) now live under **`[metadata]`**. Top-level copies are no longer counted by the structure check. `artifacts` stays top-level and `name` resolves in either place. `is_multi_container` is also a `[metadata]` field, **optional and only needed when true** — do not flag its absence on a single-container task. |
+| Aug 4, 2026 | 🔄 Update | Instruction length ("2 short paragraphs or 20 bullets") is now guidance rather than a requirement, and the criterion moves from **High to Medium** severity. More complex Terminus 3 tasks may need more room to be well specified. |
+| Jul 9, 2026 | 🆕 New | Clarified that `gpus`, `gpu_types`, and `docker_flags` in `[environment]` are valid but **optional** Harbor fields. Reviewers must **not** send a task back solely because these are omitted or left blank — Terminus 3 tasks must not require GPU. Both the full and minimal `[environment]` blocks are acceptable. |
 | Jul 6, 2026 | 🆕 New | Added a High-severity Rubrics criterion: **positive scores must include an explicit `+` sign** (e.g., `+3`, not `3`). Rubrics with unsigned positive scores must be sent back for revision. |
 | Jun 12, 2026 | 🔄 Update | Replaced the "Final runtime base image is sanctioned or exempt" criterion with the new canonical-list criterion: *"Base image(s) are canonical for the task's language, or the non-canonical justification is present and credible."* Canonical image → passes; non-canonical with a credible justification → passes (surfaced to reviewer); non-canonical with missing or vague justification → blocked. (High severity) |
-| Jun 3, 2026 | 🔄 Update | Updated the Rubrics formatting criterion: milestone tasks must use `# Rubric 1`, `# Rubric 2`, etc. headers to delineate each milestone's block. Non-milestone tasks use a flat `Agent …` list; a single `# Rubric 1` header is tolerated but not required, and `# Rubric 2+` is reserved for milestone tasks. |
 | May 27, 2026 | 🆕 New | Added "Task environment does not contain hidden instructions or hints" criterion under Instruction Prompt (High severity). Environment files must not smuggle in step-by-step walkthroughs or solution hints. |
 | May 27, 2026 | 🆕 New | Added "Environment spec/doc files are realistic and do not bypass instruction rules" criterion under Instruction Prompt (High severity). Spec/doc files must not contain step-by-step solution guides, must not be used to split instructions out of `instruction.md` to dodge length limits, and must read like realistic engineering documents. See [Prompt Styling](/portal/docs/understanding-tasks/prompt-styling). |
 | May 19, 2026 | 🔄 Update | Added "No AI-framework scaffolding filenames" criterion under Environment (High severity). Filenames like `CLAUDE.md` or `skills.md` should not appear in task environments — they indicate incomplete cleanup and raise authenticity concerns. |
-| May 4, 2026 | 🔄 Update | Milestone task structure updated to use `steps/milestone_N/` directories (Harbor multi-step format). Root-level `milestone_X.md`, `solve_N.sh`, and `test_m_N.py` files are no longer used. See [Milestones page](/portal/docs/understanding-tasks/milestones) for full details. |
 | Apr 30, 2026 | 🔄 Update | Updated severity level for rubrics negative criterion in reviewer checklist from High to Medium. |
-| Apr 22, 2026 | 🔄 Update | Updated milestone files guidelines (must include milestone_X.md files if a milestone task. |
-| Apr 15, 2026 | 🆕 New | Added mandatory negative criteria requirement and standardized milestone point values for rubrics. |
 
-> Prefer the Google Docs format? View the checklist [here](https://docs.google.com/document/d/1cFfpOxuciUGSH8ApNVeOtf5B2Cdopi5s6QL30tDg8AE/edit?tab=t.0)
-
-This doc outlines the critical criteria required for evaluating the quality of a Terminus Edition 2 task. This will highlight key areas that require human review and/or must pass for a task to be acceptable. This list is subject to change and should be updated as new criteria are discovered.
+This doc outlines the critical criteria required for evaluating the quality of a Terminus 3 task. This will highlight key areas that require human review and/or must pass for a task to be acceptable. This list is subject to change and should be updated as new criteria are discovered.
 
 This is the verbose version of the list that outlines all of our requirements. Many of these should already be blocked by in-platform evals and thus are not relevant to the review. See condensed version for one that is more reviewer friendly (coming soon)
+
+> Criteria and severities evolve. Criteria may be added or removed, and severities adjusted, as the edition progresses — check this page rather than relying on a cached copy.
 
 ## Severity Guidance
 
@@ -48,12 +48,12 @@ Each criterion is marked with a different severity level (high, medium, or low).
   <tbody>
     <tr>
       <td>Task Instruction is concise</td>
-      <td>Task instructions should be concise and clear. This means outlining the task in as little as one sentence, and as much as three paragraphs.<br><br>Tasks should not be long running with many different instructions/requirements to follow.<br><br>The goal is to create tasks that represent genuinely challenging coding problems, not ones that challenge instruction following.<br><br>Task instructions should generally read like how a human would prompt a coding agent. This means no emojis, not a lot of markdown styling, and no longer running prompts.</td>
-      <td>High</td>
+      <td>Instructions should be as concise as the task allows. Around 2 short paragraphs, or a list of up to 20 bullets, is a good guide; more complex tasks may need more room to be well specified.<br><br>Flag length that comes from listing steps or restating requirements, rather than from the problem itself.<br><br>Tasks should not be long running with many different instructions/requirements to follow.<br><br>The goal is to create tasks that represent genuinely challenging coding problems, not ones that challenge instruction following.<br><br>Task instructions should generally read like how a human would prompt a coding agent. This means no emojis, not a lot of markdown styling, and no longer running prompts.</td>
+      <td>Medium</td>
     </tr>
     <tr>
       <td>Task Instruction is well specified</td>
-      <td>While task instructions are now required to be concise, they still must be well specified. This means that the goal of a task is clear and obvious to the human/agent.<br><br>The main criteria to look for here is tasks with a larger number of edge cases and requirements. If a task is primarily hard due to a large number of edge cases/requirements that are not handled well, it should be rejected.</td>
+      <td>While task instructions should be concise, they still must be well specified. This means that the goal of a task is clear and obvious to the human/agent.<br><br>The main criteria to look for here is tasks with a larger number of edge cases and requirements. If a task is primarily hard due to a large number of edge cases/requirements that are not handled well, it should be rejected.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -73,12 +73,12 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
     <tr>
       <td>Environment spec/doc files are realistic and do not bypass instruction rules</td>
-      <td>Environment documentation files (such as <code>spec.md</code>, <code>README.md</code>, or architecture docs) must (1) define only <em>what</em> the requirements, schemas, or protocols are — not step-by-step solution guides; (2) never be used to split a task's logical instructions out of <code>instruction.md</code> to artificially meet its length limits — all prompts and goals must remain in <code>instruction.md</code>; and (3) read like realistic engineering documents (API contracts, DB schemas, business-logic specs), not overly polished, hyper-structured LLM-style prompt extensions. See <a href="/portal/docs/understanding-tasks/prompt-styling">Prompt Styling</a> for the full rules.</td>
+      <td>Environment documentation files (such as <code>spec.md</code>, <code>README.md</code>, or architecture docs) must (1) define only <em>what</em> the requirements, schemas, or protocols are — not step-by-step solution guides; (2) never be used to split a task's logical instructions out of <code>instruction.md</code> to artificially shorten it — all prompts and goals must remain in <code>instruction.md</code>; and (3) read like realistic engineering documents (API contracts, DB schemas, business-logic specs), not overly polished, hyper-structured LLM-style prompt extensions. See <a href="/portal/docs/understanding-tasks/prompt-styling">Prompt Styling</a> for the full rules.</td>
       <td>High</td>
     </tr>
     <tr>
       <td>Task instruction is unique to previously submitted tasks and open source tasks</td>
-      <td>The task must be noticeably unique to any task in TB2, TB3 or Snorkel Terminal Bench Edition 1. Similarity search eval results are provided to help make this determination. Generally, the logic for too similar tasks is:<br><br>1. Are the initial state/instructions different in a way that is non trivial<br>OR<br>2. Is the expected output different in a way that is non trivial</td>
+      <td>The task must be noticeably unique to any task in Terminal-Bench 2.1, Terminal-Bench 3.0, or Snorkel's prior Terminus editions. Similarity search eval results are provided to help make this determination. Generally, the logic for too similar tasks is:<br><br>1. Are the initial state/instructions different in a way that is non trivial<br>OR<br>2. Is the expected output different in a way that is non trivial</td>
       <td>High</td>
     </tr>
     <tr>
@@ -98,6 +98,7 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
   </tbody>
 </table>
+
 
 ## Environment
 
@@ -121,8 +122,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td><code>allow_internet</code> accurately matches the task's actual needs.</td>
-      <td>The <code>allow_internet</code> setting must reflect what the task genuinely requires. Use <code>false</code> (the default) for tasks fully solvable offline with the provided files, docs, dependencies, and environment. Use <code>true</code> only when the task genuinely requires internet — e.g., retrieving current/external information, interacting with web-based resources, or downloading an external model/resource that cannot reasonably be bundled. Do not set <code>true</code> for convenience or to make a task look more complex; an eval checks whether internet is actually required, so unjustified <code>true</code> tasks may be rejected.</td>
+      <td><code>network_mode</code> accurately matches the task's actual needs.</td>
+      <td>The <code>network_mode</code> setting must reflect what the task genuinely requires. <code>"public"</code> is the default and applies to most tasks. <code>"no-network"</code> is correct only when the task does not make sense to complete with internet access — for example when network access would let the agent retrieve the answer directly rather than do the work. Do not flag <code>"public"</code> as a defect on its own.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -162,7 +163,7 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
     <tr>
       <td>Base image(s) are canonical for the task's language, or the non-canonical justification is present and credible</td>
-      <td>The final runtime stage should use a <a href="/portal/docs/creating-tasks/dockerfile-best-practices">canonical Terminal-Bench base image</a> from the published list when one matches the task's language. Non-canonical images are allowed only when a brief, credible justification is present (in the <code>Dockerfile</code> as a comment or in the task <code>README.md</code>) — for example, "the canonical Java image is JDK-only; this task needs full JRE + system libraries," or "targeting a runtime not yet in the canonical list."<br><br><strong>Outcome matrix:</strong><br>• Canonical image → ✅ passes<br>• Non-canonical + present, credible justification → ✅ passes; surface to reviewer for judgment<br>• Non-canonical + missing, vague, or boilerplate justification → ❌ blocked<br><br>Reject if the stated justification matches an existing canonical entry (i.e., a canonical image would have worked fine).</td>
+      <td>The final runtime stage should use a <a href="/portal/docs/creating-tasks/dockerfile-best-practices">canonical Terminal-Bench base image</a> from the published list when one matches the task's language. Non-canonical images are allowed only when a brief, credible justification is present (as a comment in the <code>Dockerfile</code>) — for example, "the canonical Java image is JDK-only; this task needs full JRE + system libraries," or "targeting a runtime not yet in the canonical list."<br><br><strong>Outcome matrix:</strong><br>• Canonical image → ✅ passes<br>• Non-canonical + present, credible justification → ✅ passes; surface to reviewer for judgment<br>• Non-canonical + missing, vague, or boilerplate justification → ❌ blocked<br><br>Reject if the stated justification matches an existing canonical entry (i.e., a canonical image would have worked fine).</td>
       <td>High</td>
     </tr>
     <tr>
@@ -172,7 +173,7 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
     <tr>
       <td>Apt usage is clean and reproducible</td>
-      <td>Use a single <code>apt-get update &amp;&amp; apt-get install -y --no-install-recommends ... &amp;&amp; rm -rf /var/lib/apt/lists/*</code> transaction per stage, avoid <code>apt-get upgrade</code>, and pin niche apt packages when version drift would affect behavior.</td>
+      <td>Use a single <code>apt-get update &amp;&amp; apt-get install -y --no-install-recommends ... &amp;&amp; rm -rf /var/lib/apt/lists/*</code> transaction per stage, avoid <code>apt-get upgrade</code>, and do not pin apt package versions — CI blocks pinned apt installs</td>
       <td>Medium</td>
     </tr>
     <tr>
@@ -184,6 +185,11 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>Avoids using heredocs in Dockerfile</td>
       <td>It is preferred that Dockerfiles do not use heredocs format like:<br><ul><li>cat &lt;&lt; EOF</li><li>RUN cat &gt; /app/script &lt;&lt;'EOF'</li></ul></td>
       <td>Low</td>
+    </tr>
+    <tr>
+      <td>Known environment defects block acceptance</td>
+      <td>A task must be able to run as configured. If the environment carries a known defect — a required dependency missing from the image, an environment that cannot build or start, or a task that needs network access at runtime while set to <code>no-network</code> — send it back for revision, <strong>whether or not that defect produced a visible failure during the difficulty run</strong>.<br><br>A handful of trials against two agents is a sample, not proof. A defect that no agent happened to hit can still break production runs with different agents, seeds, or timing. Acceptance judges the task as shipped, not as sampled.<br><br>This is separate from judging whether agents reasoned fairly to failure. A clean difficulty run does <strong>not</strong> clear a known environment defect — the two questions are independent, and both must pass. See <a href="/portal/docs/creating-tasks/dockerfile-best-practices">Dockerfile Requirements</a> for the required dependencies.</td>
+      <td>High</td>
     </tr>
   </tbody>
 </table>
@@ -210,8 +216,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Oracle's internet use matches the <code>allow_internet</code> setting</td>
-      <td>When <code>allow_internet = false</code>, the oracle solution must not have any actions that require accessing the internet, including downloading packages — any dependencies required for the solution must be installed in the environment. When <code>allow_internet = true</code>, the oracle may access the internet where the task genuinely requires it.</td>
+      <td>Oracle's internet use matches the <code>network_mode</code> setting</td>
+      <td>When <code>network_mode = "no-network"</code>, the oracle solution must not have any actions that require accessing the internet, including downloading packages — any dependencies required for the solution must be installed in the environment. When <code>network_mode = "public"</code>, the oracle may access the internet where the task genuinely requires it.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -249,8 +255,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Verifier files' internet use matches the <code>allow_internet</code> setting</td>
-      <td>When <code>allow_internet = false</code>, <code>test.sh</code> and other verifier files must not rely on any content from the internet, and all verifier dependencies must be baked into the Dockerfile (not downloaded at runtime). When <code>allow_internet = true</code>, verifier network use is allowed only where the task genuinely requires it, and grading must still be deterministic (see the determinism criterion above).</td>
+      <td>Verifier files' internet use matches the <code>network_mode</code> setting</td>
+      <td>When <code>network_mode = "no-network"</code>, <code>test.sh</code> and other verifier files must not rely on any content from the internet, and all verifier dependencies must be baked into the Dockerfile (not downloaded at runtime). When <code>network_mode = "public"</code>, verifier network use is allowed only where the task genuinely requires it, and grading must still be deterministic (see the determinism criterion above).</td>
       <td>High</td>
     </tr>
     <tr>
@@ -276,6 +282,66 @@ Each criterion is marked with a different severity level (high, medium, or low).
     <tr>
       <td>Config-claimed values are read dynamically, not hardcoded.</td>
       <td>Applies <strong>only</strong> when the instruction says the agent must read a config/input file that can vary. Then the verifier must read those values from the config at runtime rather than re-declaring them as literals, so an agent that ignores the config and hardcodes the parameters cannot pass. <strong>Not a general ban on hardcoded values:</strong> hardcoding the expected <em>result</em> — exact numeric/ML targets (with tolerance), byte-exact outputs, format constants — is fine and often required. Confirm config dependence by mutating the config and re-running.</td>
+      <td>Medium</td>
+    </tr>
+  </tbody>
+</table>
+
+## Trial Analysis
+
+The difficulty check ends with a **trial analysis** section. Each criterion returns **PASS**, **FAIL**, or **NOT_APPLICABLE** — a criterion is *flagged* when it returns **FAIL**. `NOT_APPLICABLE` is not a defect: it means there was not enough evidence to judge, or the agent hit an infrastructure error before engaging with the task.
+
+`task_specification` and `reward_hacking` are **definite issues**. If either is flagged, send the task back.
+
+The other four require you to examine the flag and decide whether its reason holds up:
+
+- **The reason is valid** — the flag identifies a real problem. **Send the task back for revision.**
+- **The reason is invalid** — the flag is a false positive. **Write a description explaining why, then accept.**
+
+Judge each flag on its own merits. The multiple-Medium rule in [Severity Guidance](#severity-guidance) does **not** apply here — two false positives are still two false positives, and a single valid flag is still grounds for revision. What is never acceptable is passing over a flag without examining it.
+
+<table class="checklist-table">
+  <colgroup>
+    <col style="width:32%;">
+    <col style="width:58%;">
+    <col style="width:10%;">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>Criteria</th>
+      <th>Description</th>
+      <th>Severity</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Trial analysis: <code>task_specification</code> not flagged</td>
+      <td>The instructions must be sufficient for an agent to succeed. Flagged when tests expect parameter names, file formats, or return values that <code>instruction.md</code> never specifies; when tests check behaviour the agent had to guess at; or when tests match exact strings or data structures that are undocumented. A flag here means the task is under-specified — not that the agent was weak. Send back for revision.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Trial analysis: <code>reward_hacking</code> not flagged</td>
+      <td>The agent must earn its reward legitimately. Flagged when the trajectory shows edits to <code>tests/test.sh</code> or <code>tests/test_*.py</code>, writes to <code>/logs/verifier/reward.txt</code> or <code>reward.json</code>, reads or copies from <code>solution/</code>, or any manipulation of the grading harness. Solving an easy task correctly is <strong>not</strong> a hack. Send back for revision.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Trial analysis: <code>difficulty_crux</code> examined</td>
+      <td>Compares why the agent actually failed against the author's <code>[metadata].difficulty_explanation</code>. Flagged when the agent failed for an unrelated reason — wrong file format, misread instructions, an environment issue, an incidental bug. That points to unintended difficulty or a specification problem. Send back if the reason holds up; otherwise record why you are accepting it.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Trial analysis: <code>near_miss</code> examined</td>
+      <td>Flagged when the agent produced a substantively working solution that fell just short — passing every structural check but missing a quantitative threshold by a small margin (95% achieved against 98% required, say). When many trials are near misses, the <strong>threshold</strong> is producing the difficulty rather than the conceptual challenge, and the task looks harder than it is. Send back if the reason holds up; otherwise record why you are accepting it.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Trial analysis: <code>refusals</code> examined</td>
+      <td>Flagged when the agent aborted on a content or safety policy rather than engaging — explicit refusal language, a policy cited as the reason for stopping, or a very short trajectory that exits before meaningful tool use. Distinct from a provider refusal during <code>stb harbor check</code> (see the <a href="/portal/docs/reference/faq">FAQ</a>). Send back if the reason holds up; otherwise record why you are accepting it.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Trial analysis: <code>low_timeout</code> examined</td>
+      <td>Flagged when the agent was still making meaningful progress at the timeout, or finished within a couple of minutes of it while still working productively. The fix is normally to raise <code>[agent].timeout_sec</code> so the difficulty comes from the problem rather than time pressure. Send back if the reason holds up; otherwise record why you are accepting it.</td>
       <td>Medium</td>
     </tr>
   </tbody>
@@ -308,11 +374,6 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Rubrics must contain some negative penalties.</td>
-      <td>Rubrics must contain at least 3 criteria that assign negative rewards (eg, -1). Negative rewards are applied for criteria that check for harmful or incorrect model behaviour.</td>
-      <td>High</td>
-    </tr>
-    <tr>
       <td>Rubrics scores must be one of (+/- 1, 2, 3, or 5).</td>
       <td>Rubrics scores can be positive or negative, but must be one of +1, +2, +3, +5, -1, -2, -3, or -5. Positive scores must carry the leading <code>+</code> (see the criterion below).</td>
       <td>High</td>
@@ -324,7 +385,7 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
     <tr>
       <td>Rubric block must be correctly formatted, with new lines separating each criterion.</td>
-      <td>Each criterion must be a single line. Each criterion line must start with 'Agent', contain a ',' at the end of the criterion and then contain a space and the score. An example format is:<br><br>'Agent must read the script at /app/script.py, 2'<br><br><strong>Milestone tasks:</strong> split the rubric into one block per milestone using <code># Rubric 1</code>, <code># Rubric 2</code>, etc. header lines. Each header is followed by that milestone's criterion lines.<br><br><strong>Non-milestone tasks:</strong> use a flat list of <code>Agent …, ±N</code> criterion lines. A single <code># Rubric 1</code> header is tolerated, but not required; do not use <code># Rubric 2+</code> unless the task is milestone-based.<br><br>See <a href="/portal/docs/understanding-tasks/rubrics">Rubrics</a> for examples.</td>
+      <td>Each criterion must be a single line, start with 'Agent', and end with a comma, a space, and the score (e.g. <code>Agent compiles the project with no warnings, +2</code>). Positive scores must carry an explicit <code>+</code>. Use a flat list of criterion lines. See <a href="/portal/docs/understanding-tasks/rubrics">Rubrics</a>.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -334,7 +395,7 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
     <tr>
       <td>Include at least one negative criterion.</td>
-      <td>Each milestone rubric must have a minimum of one negative criterion.</td>
+      <td>The rubric must have a minimum of one negative criterion.</td>
       <td>Medium</td>
     <tr>
       <td>Rubric scores must be correctly mapped to level of importance.</td>
@@ -352,8 +413,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>Medium</td>
     </tr>
     <tr>
-      <td>Point range: 10–40 points per milestone.</td>
-      <td>Each milestone should be valued between 10 and 40 points.</td>
+      <td>Point range: 10–40 points.</td>
+      <td>The rubric's maximum cumulative score should be between 10 and 40 points.</td>
       <td>Low</td>
   </tbody>
 </table>
@@ -376,12 +437,12 @@ Each criterion is marked with a different severity level (high, medium, or low).
   <tbody>
     <tr>
       <td>Every task should contain required files.</td>
-      <td>Required files differ between non-milestone and milestone tasks.<br><br><strong>Non-milestone tasks must contain:</strong><br><ul><li>environment/ directory for environment files<ul><li>environment/Dockerfile as the main agent entrypoint</li></ul></li><li>solution/ directory for solution files<ul><li>solution/solve.sh for solution entrypoint</li></ul></li><li>tests/ directory for verifier files<ul><li>tests/test.sh as main test entrypoint</li></ul></li><li>instruction.md for task instructions</li><li>task.toml for task metadata</li></ul><strong>Milestone tasks must contain:</strong><br><ul><li>environment/ directory (same as above)</li><li>task.toml with one [[steps]] block per milestone</li><li>steps/milestone_N/ directory for each milestone, each containing:<ul><li>instruction.md (per-milestone prompt)</li><li>tests/test.sh and tests/test_mN.py</li><li>solution/solve.sh and solution/solveN.sh</li></ul></li></ul>Milestone tasks must <strong>not</strong> have root-level instruction.md, tests/, solution/, or milestone_x.md files. See <a href="/portal/docs/understanding-tasks/milestones">Milestones page</a> for the full layout.</td>
+      <td>Required files: <code>task.toml</code>, <code>instruction.md</code>, <code>environment/Dockerfile</code>, <code>solution/solve.sh</code>, <code>tests/Dockerfile</code>, <code>tests/test.sh</code>, <code>tests/test_outputs.py</code>. <code>rubrics.txt</code> and <code>README.md</code> are added by Snorkel at packaging and are not expected in the submitted ZIP.</td>
       <td>High</td>
     </tr>
     <tr>
       <td>Tasks should not contain unnecessary files in the parent directory.</td>
-      <td>Additional files that are not used in the parent directory should be cleaned up. This includes:<br><br><ul><li>jobs/: leftover job logs</li><li>README.md: not necessary to include</li><li>data/: all environment data should be stored in the environment</li></ul></td>
+      <td>Additional files that are not used in the parent directory should be cleaned up. This includes:<br><br><ul><li>jobs/: leftover job logs</li><li>data/: all environment data should be stored in the environment</li></ul></td>
       <td>Low</td>
     </tr>
   </tbody>
@@ -405,122 +466,53 @@ Each criterion is marked with a different severity level (high, medium, or low).
   <tbody>
     <tr>
       <td>Task.toml must contain all required metadata fields.</td>
-      <td>Required metadata fields in the task.toml include:<br><br><pre>[Task configuration schema version]
-version = "2.0"
-
+      <td>Required metadata fields in the task.toml include:<br><br><pre>artifacts     (TOP-LEVEL - nesting under [verifier] silently drops it)
+name          (top level or under [metadata])
 [metadata]
-author_name
-author_email
+author_name   (may be "anonymous")
+author_email  (may be "anonymous")
 category
-subcategories
-difficulty
-codebase_size
-number_of_milestones
+subcategory
+tags          (3-6)
 languages
-tags
-expert_time_estimate_min
-junior_time_estimate_min
-
-# Non-milestone tasks ONLY:
+difficulty    (frontier | advanced | core | base)
+expert_time_estimate_hours
+difficulty_explanation
+solution_explanation
+verification_explanation
+relevant_experience
 [verifier]
 timeout_sec
-
+environment_mode = "separate"
 [agent]
-timeout_sec
-
-# Always required:
+timeout_sec   (minimum 1800)
 [environment]
+network_mode  ("public" default | "no-network")
 build_timeout_sec
 cpus
 memory_mb
-storage_mb
-allow_internet = false
-
-# Optional (Harbor resource fields — not required):
-# gpus, gpu_types, docker_flags
-
-# Milestone tasks ONLY:
-[environment]
-workdir
-
-# Milestone tasks ONLY 
-# (one [[steps]] block 
-# per milestone);
-# count must equal 
-# number_of_milestones):
-[[steps]]
-name = "milestone_1"
-[steps.agent]
-timeout_sec
-[steps.verifier]
-timeout_sec</pre></td>
+storage_mb</pre><br>Descriptive fields must sit under <code>[metadata]</code> — the structure check no longer counts top-level copies. <code>artifacts</code> stays top-level.</td>
       <td>High</td>
     </tr>
     <tr>
       <td>Task.toml must correctly flag multi container and custom docker compose tasks.</td>
-      <td>If a task uses a docker-compose.yaml, it must be tagged in the task.toml [metadata] section with custom_docker_compose=true.<br><br>Additionally, if that docker-compose.yaml specifies a multi-container system, it must be tagged with is_multi_container=true</td>
+      <td>If a task runs a multi-container system, it must be tagged in <code>task.toml</code> with <code>is_multi_container = true</code> under <code>[metadata]</code>. The field is optional and only needed when it is true — do not flag its absence on a single-container task. The harness detects <code>environment/docker-compose.yaml</code> on its own, so no other field points at it.</td>
       <td>High</td>
     </tr>
     <tr>
-      <td>Tags, languages, categories, and subcategories must be applicable to the task.</td>
+      <td><code>difficulty</code> uses a current Terminus 3 tier.</td>
+      <td>Only <code>frontier</code>, <code>advanced</code>, <code>core</code>, and <code>base</code> are valid. The Terminus 2nd Edition names — <code>easy</code>, <code>medium</code>, <code>hard</code> — were retired and must be sent back for correction. Check the tier against the measured accuracy too: <strong>Frontier</strong> &lt; 20%, <strong>Advanced</strong> 20–50%, <strong>Core</strong> 50–80%, <strong>Base</strong> 80–100%.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Tags, languages, category, and subcategory must be applicable to the task.</td>
       <td>Any assigned tag, language, category, or subcategory must be aligned with the actual content of the task. The definitions for categories and subcategories can be found in our documentation.</td>
       <td>Medium</td>
     </tr>
     <tr>
       <td>Do not reject a task for omitted or blank optional resource fields.</td>
-      <td>The <code>gpus</code>, <code>gpu_types</code>, and <code>docker_flags</code> fields in <code>[environment]</code> are valid but <strong>optional</strong> Harbor resource fields. Since TB2 tasks should not require GPU, do <strong>not</strong> send a task back for revision solely because these fields are omitted or left blank. A task is equally valid with the full block (including <code>gpus</code>/<code>gpu_types</code>/<code>docker_flags</code>) or the minimal block (without them). <code>gpu_types</code> only matters when a task requests GPUs (<code>gpus &gt; 0</code>).</td>
+      <td>The <code>gpus</code>, <code>gpu_types</code>, and <code>docker_flags</code> fields in <code>[environment]</code> are valid but <strong>optional</strong> Harbor resource fields. Since Terminus 3 tasks must not require GPU, do <strong>not</strong> send a task back for revision solely because these fields are omitted or left blank. A task is equally valid with the full block (including <code>gpus</code>/<code>gpu_types</code>/<code>docker_flags</code>) or the minimal block (without them). <code>gpu_types</code> only matters when a task requests GPUs (<code>gpus &gt; 0</code>).</td>
       <td>Low</td>
-    </tr>
-  </tbody>
-</table>
-
-## For Milestone Tasks
-
-### Task Structure
-
-<table class="checklist-table">
-  <colgroup>
-    <col style="width:32%;">
-    <col style="width:58%;">
-    <col style="width:10%;">
-  </colgroup>
-  <thead>
-    <tr>
-      <th>Criteria</th>
-      <th>Description</th>
-      <th>Severity</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Milestone tasks must have at least 2 milestones</td>
-      <td>The <code>number_of_milestones</code> field in <code>task.toml</code> must be set to 2 or greater for milestone tasks. A single milestone does not constitute a milestone task and should either be converted to a non-milestone task or expanded to include at least one additional milestone.</td>
-      <td>High</td>
-    </tr>
-    <tr>
-      <td>Milestone tasks must use the steps/ directory layout.</td>
-      <td>Milestone tasks must place each milestone in its own subdirectory under <code>steps/</code> (e.g., <code>steps/milestone_1/</code>, <code>steps/milestone_2/</code>). Each subdirectory must contain its own <code>instruction.md</code>, <code>tests/</code>, and <code>solution/</code>. There must be no root-level <code>instruction.md</code>, <code>tests/</code>, <code>solution/</code>, or <code>milestone_x.md</code> files.</td>
-      <td>High</td>
-    </tr>
-    <tr>
-      <td>task.toml must declare one [[steps]] block per milestone.</td>
-      <td>For milestone tasks, <code>task.toml</code> must include one <code>[[steps]]</code> array-of-tables entry per milestone, with <code>name = "milestone_N"</code> matching the directory name under <code>steps/</code>. The number of <code>[[steps]]</code> blocks must equal <code>number_of_milestones</code> in <code>[metadata]</code>. Each step must include <code>[steps.agent]</code> with <code>timeout_sec</code> and <code>[steps.verifier]</code> with <code>timeout_sec</code>.</td>
-      <td>High</td>
-    </tr>
-    <tr>
-      <td>Each milestone must have a solveN.sh file.</td>
-      <td>All milestones must have a <code>steps/milestone_N/solution/solveN.sh</code> file containing the oracle solution scoped only to that milestone, plus a <code>steps/milestone_N/solution/solve.sh</code> wrapper that invokes it. The <code>solveN.sh</code> files must be independently scoped to the milestone they correspond to.</td>
-      <td>High</td>
-    </tr>
-    <tr>
-      <td>Each milestone must have a test_mN.py file.</td>
-      <td>All milestones must have a <code>steps/milestone_N/tests/test_mN.py</code> file (with a <code>TestMilestoneN</code> class) plus a <code>steps/milestone_N/tests/test.sh</code> runner that produces <code>/logs/verifier/reward.txt</code>. The unit tests must be scored ONLY against the completion of that milestone. <code>solve1.sh</code> corresponds to <code>test_m1.py</code> and so on.</td>
-      <td>High</td>
-    </tr>
-    <tr>
-      <td>Per-milestone instruction.md files cover only that milestone.</td>
-      <td>Each <code>steps/milestone_N/instruction.md</code> should describe only the requirements for that milestone. The first milestone's instruction.md should also include the overall task context the agent needs to get oriented; subsequent milestones can be shorter.</td>
-      <td>Medium</td>
     </tr>
   </tbody>
 </table>

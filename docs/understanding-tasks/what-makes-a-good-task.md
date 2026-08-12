@@ -1,108 +1,56 @@
 # What Makes a Good Task
 
-Creating high-quality tasks is both an art and a science. This guide covers what separates excellent tasks from mediocre ones.
+Terminal-Bench 2.1 asked agents to perform a difficult terminal or software task. **Terminal-Bench 3.0** asks something different: **understand a specialized domain, manipulate the right system or artifact inside it, and prove the result satisfies interacting hidden invariants.**
 
-## The Core Principle
+This is not simply "harder." The difficulty moves from isolated technical execution toward vertically integrated engineering. A strong Terminus 3 task usually follows this chain:
 
-> **A good task is one that an expert human can solve confidently, but that challenges or stumps current AI coding agents.**
-
-We're not looking for trivia or trick questions. We want genuine engineering challenges that require:
-
-- Multi-step reasoning
-- Domain expertise
-- Practical problem-solving skills
-
-## Key Requirements
-
-### 1. Difficulty Target
-
-**The worst-performing model's accuracy must be ≤ 80%** across GPT-5.5 and Claude Opus 4.8.
-
-| Difficulty | Threshold | Description |
-|------------|-----------|-------------|
-| **Hard** | Accuracy ≤ 20% on the **best** model, OR ≤ 20% on the **worst** model | Requires deep expertise, multi-step reasoning |
-| **Medium** | 20% < accuracy ≤ 60% on the **worst** model | Moderate complexity, some domain knowledge |
-| **Easy** | 60% < accuracy ≤ 80% on the **worst** model | Straightforward but still non-trivial |
-
-> Tasks where the worst model scores above 80% will NOT be accepted. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
-
-### 2. Multi-Step Complexity
-
-Tasks must require chaining multiple commands, handling intermediate states, and reasoning. Single-command tasks are too easy.
-
-**Good:** "Debug the failing test suite, fix the three bugs causing failures, and verify all tests pass."
-
-**Bad:** "Run the test suite." (Too simple)
-
-### 3. Clear & Unambiguous
-
-The task must be fully specified. An agent should understand exactly what to do without guessing.
-
-**Good:**
-> "Implement a function `find_longest_palindrome(s: str) -> str` that returns the longest palindromic substring. If there are ties, return the first one."
-
-**Bad:**
-> "Write code for palindromes." (Ambiguous)
-
-### 4. Testable & Verifiable
-
-Every task must have deterministic tests that verify completion.
-
-```python
-def test_longest_palindrome():
-    assert find_longest_palindrome("babad") in ["bab", "aba"]
-    assert find_longest_palindrome("cbbd") == "bb"
-    assert find_longest_palindrome("") == ""
+```
+specialized evidence
+        ↓
+domain-specific inference
+        ↓
+algorithm/system manipulation
+        ↓
+native artifact or live state
+        ↓
+hidden, structural, performance, and safety verification
 ```
 
-### 5. No Cheating Opportunities
+## Six Properties of Strong Tasks
 
-Think like a malicious agent. Ensure they cannot:
-- Look inside test files for answers
-- Edit data files to pass tests
-- Delete tests to avoid failures
-- Hardcode expected outputs
+**1. The specification must be inferred.** The correct model of the problem is not handed over as a checklist. The agent has to work out what the requirements *mean* in the domain before implementing anything — reconstructing structure from instrument output, deriving geometry from an engineering drawing, inferring rules from examples.
 
-## How to Make Tasks Harder
+**2. Output semantics matter, not appearance.** Require a native, structurally valid artifact: an editable parametric feature tree rather than a baked mesh, a checkable proof without `admit`s, synthesizable RTL, correctly mutated live database state. Producing something that merely looks similar must not pass.
 
-### Debugging-Style Tasks
-When an agent must figure out the root cause of an issue, it inherently requires reasoning.
+**3. Correctness is multidimensional.** Rather than one dominant axis, combine several that must hold simultaneously — functional correctness, performance, determinism, safety, provenance, state consistency, structure, generalization to hidden instances.
 
-### Niche Knowledge
-Use publicly available but rarely-trained knowledge. Example: [Blockchain/NFT task](https://github.com/snorkel-ai/snorkel-tb-tasks/pull/103)
+**4. Constraints interact.** The point is not that constraints are numerous, but that they affect one another: a navigation error changes fuel burn, which changes feasible routing, which changes crosswind exposure. Interacting dependencies are far more demanding than a list of independent assertions.
 
-### Bespoke Rules
-A custom rule buried among common rules confuses agents. Example: [Bespoke rule PR](https://github.com/snorkel-ai/snorkel-tb-tasks/pull/174#discussion_r2497044356)
+**5. State is part of the problem.** Strong tasks often are not "edit files and run pytest." They involve operating databases under live traffic, stream processors, ERP workflows, model-serving runtimes, or multi-service systems — understanding current state, sequencing operations correctly, recovering from partial progress, and validating the result from a clean process.
 
-### Multi-Step Tasks
-Each step has a chance of failure, making overall failure rate higher.
+**6. Hidden checks probe understanding.** Verify semantic equivalence across variations and metamorphic properties, not just more examples. A solution should not be able to pass by satisfying its author's happy path.
 
-## What to Avoid
+## From TB-Style to Terminus 3-Style
 
-| Anti-Pattern | Why It's Bad |
-|--------------|--------------|
-| Trivia questions | Tests memorization, not reasoning |
-| Ambiguous requirements | Agents can't know what's expected |
-| External dependencies | Requires API keys, network, etc. |
-| Simple one-liners | Agent solves instantly |
-| Brittle tests | String matching, hardcoded values |
+| TB-style task | Terminus 3-style extension |
+|---|---|
+| Compile and repair a package | Repair a runtime while preserving batching, caching, streaming, numerical, and performance semantics |
+| Recover a fixed database file | Maintain recovery ordering guarantees, or perform a zero-downtime live cutover |
+| Solve an explicitly specified scheduling problem | Operate dispatch or ERP state under capacity, lineage, safety, and workflow constraints |
+| Read a value from an image and compute output | Infer geometry from a drawing and construct an editable parametric model |
+| Implement an algorithm | Produce a behaviorally compatible, performance-qualified reimplementation under hidden workloads |
+| Process a scientific dataset | Infer the scientific interpretation, implement the analysis, and emit convention-correct, provenance-preserving results |
 
-## Quality Checklist
+## What Still Disqualifies a Task
 
-Before submitting, verify:
+Ambiguity, non-determinism, unstated requirements, and hidden knowledge the agent could not possibly obtain. Difficulty must come from the problem, never from the description.
 
-- [ ] Problem statement is clear and complete
-- [ ] Difficulty is < 80% pass rate
-- [ ] Multi-step reasoning required
-- [ ] All constraints explicitly stated
-- [ ] Test cases cover all requirements
-- [ ] No cheating opportunities
-- [ ] Human-written (not LLM-generated instruction.md)
+A task is also disqualified if the agent can shortcut it — reading the tests, finding the answer in the environment, or satisfying the checks without doing the work. See [Writing Tests](/portal/docs/creating-tasks/writing-tests).
 
 ---
 
 ## Next Steps
 
-- [Understand task components](/portal/docs/understanding-tasks/task-components)
-- [See the task taxonomy](/portal/docs/understanding-tasks/task-taxonomy)
-- [Review example tasks](/portal/docs/understanding-tasks/example-tasks)
+- [Task Requirements](/portal/docs/understanding-tasks/task-requirements)
+- [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines)
+- [Example Tasks](/portal/docs/understanding-tasks/example-tasks)

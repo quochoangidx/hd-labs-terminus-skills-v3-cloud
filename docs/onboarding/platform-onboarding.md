@@ -1,4 +1,6 @@
-# Expert Platform Onboarding
+# Onboarding Videos and Slides
+
+> **New versions coming.** These were produced for Terminus 2nd Edition. Updated onboarding videos and slides for Terminus 3 are in production; this section will be replaced once they're available.
 
 Get started on Project Terminus by watching the onboarding videos below. 
 
@@ -13,7 +15,7 @@ Snorkel staff goes through everything you need to know about Project Terminus an
 >[_Download the slides from this video_](https://snorkelai.box.com/s/5vifce6oenvkegxqs83xk2fatddb8pvo)
 
 #### For Returning Experts:
-Snorkel staff covers the changes from Terminus Edition 1 to Edition 2. Intended for Experts alreadt familiar with Project Terminus from Edition 1. 
+Snorkel staff covers the changes introduced in Terminus 2nd Edition. Intended for Experts already familiar with Project Terminus from Edition 1.
 
 [Watch Returning Expert Onboarding Video](https://www.loom.com/share/c705f782b01d40b4ab14e23930af65bd)
 

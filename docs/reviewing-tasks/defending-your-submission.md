@@ -90,7 +90,7 @@ explaining this, or do you still think I should change it?"
 If you can't resolve disagreement with the reviewer:
 
 1. **Document your position** clearly in the submission
-2. **Reach out on Slack** to `#ec-terminus-submission`;
+2. **Reach out on Slack** to `#terminus-3-submissions`;
 
 Snorkel make final decisions on disputes.
 

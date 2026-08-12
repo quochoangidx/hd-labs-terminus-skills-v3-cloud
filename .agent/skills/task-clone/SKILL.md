@@ -1,11 +1,20 @@
 ---
 name: task-clone
-description: "Use when transforming a mined candidate into a Terminus Regular task under workspace/tbrain-* folders. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, behavioral verifier design, oracle creation, and Harbor validation. All nine Regular-task categories are open; the declared category must match the visible primary activity."
+description: "Use when transforming a mined candidate into a Terminus 3 task under workspace/tbrain-* folders. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, isolated behavioral verifier design, oracle creation, and Harbor validation. All seven Terminus 3 categories are open; category and subcategory must match the task's domain."
 ---
 
 # Task Clone
 
-Use this skill when the user wants to turn a mined candidate into a hard Terminus Regular task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category unless it is invalid or the task's visible shape predicts a different category.
+Use this skill when the user wants to turn a mined candidate into a Terminus 3 task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category and subcategory unless either is invalid or the task's domain clearly belongs elsewhere.
+
+> **Terminus 3 operational baseline (2026-07-31).** Every task uses one of the
+> seven Title Case category families plus exactly one taxonomy subcategory,
+> difficulty `frontier|advanced|core|base`, top-level `artifacts`, an isolated
+> verifier built from `tests/Dockerfile`, `network_mode` instead of
+> `allow_internet`, and an agent timeout between 1800 and 18000 seconds.
+> Milestones, `codebase_size`, the old `subcategories` list, and the Python-must-
+> be-hard rule are gone. Historical Terminus 2 evidence later in this file may
+> still describe old labels; it is calibration evidence, not current metadata.
 
 Preferred split:
 
@@ -71,16 +80,11 @@ When available, clone should start from:
 ```yaml
 candidate:
   category:
-  gallery_category:        # canonical gallery name (Title Case) — goes into tags, NOT task.toml category
-  subcategory:             # gallery leaf — slugged into tags
-  subsubcategory:          # gallery leaf — slugged into tags
-  subcategories:           # the 5 cross-cutting subtypes
-  target_difficulty:       # hard | medium (never easy; Python => hard)
-  expected_codebase_size:  # minimal | small | large — recompute from environment/ before shipping
-  design_signature:        # work_surface, interaction, input_surface, oracle_type, verifier_type, failure_mode
-  test_cluster_plan:       # 6–8 independent clusters with evaluation units, verifier shape, soft representative
+  subcategory:             # exact Terminus 3 taxonomy value
+  target_difficulty:       # frontier | advanced | core | base
+  artifacts:               # final paths the isolated verifier receives
   closest_gallery_task:
-  gallery_novelty:         # novel | twist-on-existing | duplicate — fresh-only doctrine (default): clone only novel; twist-on-existing needs an explicit user request for a variant/port
+  gallery_novelty:         # novel | twist-on-existing | duplicate — Terminus 3 submissions require novel; reject twist-on-existing and duplicate
   subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
   objective_type:
   source_url:
@@ -108,7 +112,7 @@ candidate:
   difficulty_rationale:
   reasoning_bottlenecks:
   tempting_partial_fixes:
-  why_not_debugging:
+  domain_rationale:
   test_surface:
     primary_api:
     secondary_apis:
@@ -123,7 +127,7 @@ candidate:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
-  patch_shape_gate:        # pass | fail — fail means not Hard-eligible, do not clone as Hard
+  patch_shape_gate:        # pass | fail — fail means no credible high-tier signal
   patch_shape_evidence:
   family_key:              # library + bug_family, for the family ledger
   agent_probe:             # {ran, passed_oneshot} — blind-probe evidence backing the difficulty claim
@@ -135,7 +139,7 @@ If the artifact is missing `test_surface` details for a secondary implementation
 that tests will cover, fill that gap before writing verifier tests. Do not guess
 constructor signatures from class names.
 
-For non-debugging category-profile artifacts, treat `category`, `target_behavior`,
+For domain-profile artifacts, treat `category`, `subcategory`, `target_behavior`,
 `required_work`, `input_fixtures`, and `output_contract` as the source of truth.
 Do not rewrite the task as a bugfix just because the source has issues or PRs.
 
@@ -152,7 +156,7 @@ If a shared team registry exists, check it too. Treat any matching `repo + fixin
 During clone, update or append a compact JSON line:
 
 ```json
-{"category":"debugging","repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"cloned","rejection_reason":null}
+{"category":"Software","subcategory":"Languages","repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"cloned","rejection_reason":null}
 ```
 
 Use `bug_signature` for near-duplicate detection when issue and PR URLs differ but the fix is the same behavior.
@@ -186,93 +190,49 @@ Reject all candidates that are:
 - impossible to test offline in Docker
 - likely to pass current frontier agents in one shot
 
-For Python Hard tasks, the final task must realistically target `difficulty = "hard"`.
+Difficulty is language-independent. Keep a candidate only when it is non-trivial
+and likely to produce at least one failure in the four-run iteration gate; do not
+force Python into a special tier.
 
 ## Workflow
 
 1. Load the mined artifact or verify the source URL with the smallest needed browse/`gh` pass.
-2. Gate the category shape before scaffolding: if the work is still `implement`
-   / `parse` / `render` / `cmp` / public API or stub completion / exact reference
-   conformance, it will likely predict `software-engineering`; ETL/dataset→report
-   pipelines predict `data-processing` — BOTH are blocked (data-processing since
-   2026-07-11, so the dataset→report reshape is no longer an escape route).
-   Reshape the I/O into `machine-learning`, `games`, or
-   `system-administration` only if the primary
-   activity truly changes; otherwise stop and mark
-   `category_classifier_<predicted_slug>` (e.g.
-   `category_classifier_software_engineering`, `category_classifier_data_processing`).
+2. Gate the domain before scaffolding with `task-miner/category_rules.md`.
+   Record exactly one Title Case category/subcategory pair and explain which
+   domain evidence makes it necessary. Do not classify by verbs such as
+   implement, parse, or repair: a training-loop repair is `ML / Training`, while
+   a compiler repair is `Software / Languages`.
    In the same gate, check the TEMPLATE shape: the CI `template_detection` check
    (first observed 2026-07-13) blocks submissions matching a named template —
    confirmed `rust_cli` = minimal single-source-file stub project, stdin→stdout
-   batch binary, "extend the starter" instruction, hidden vector-corpus verifier,
-   `codebase_size = minimal`; assume per-language siblings. Scaffold away from
+   batch binary, "extend the starter" instruction, and hidden vector-corpus verifier;
+   assume per-language siblings. Scaffold away from
    that shape from the start (realistic multi-module repo, in-repo tests,
    domain-authentic file I/O); if flagged anyway, mark
    `template_detection_<template_name>` and see AGENTS.md §9 for current
    (UNVERIFIED) remediation levers.
 3. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
 4. Create `workspace/tbrain-<problem-slug>` by running
-   `scripts/new-task.sh <slug> <lang> <category>`. Do not hand-write
+   `scripts/new-task.sh <slug> <lang> <category> <subcategory>`. Do not hand-write
    `task.toml`, `.dockerignore`, or `tests/test.sh`; custom generators must call
    the scaffolder first and then edit task-specific surfaces only.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
-8. Edit the scaffolded `task.toml` task-specific metadata while preserving
-   `version = "2.0"` and `number_of_milestones = 0`. Default to
-   `allow_internet = false`; retain `true` when network access is the task's
-   point, hard-pin every live source to exact versions and immutable
-   digests/hashes, and grade stable invariants rather than mutable values.
+8. Write Terminus 3 `task.toml` with top-level `artifacts`, one exact category/subcategory pair, descriptive fields under `[metadata]`, `environment_mode = "separate"`, `network_mode`, and realistic resources/timeouts.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
-10. **SKELETON PROBE GATE (mandatory — before any oracle/verifier investment).**
-    At this point you have `instruction.md` + a buildable `environment/` + the
-    stub, and that is ALL a difficulty probe needs. Assemble a ROUGH check
-    command with about 30–60 evaluation units spanning 6–8 independent
-    behavior clusters — the real oracle and hidden corpus do not exist yet).
-    Before launching a solver, draft the contract-source rows for every rough
-    cluster and run two blind contract-only reviews as specified in
-    `terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
-    Any ambiguity or oracle mismatch is a skeleton defect, not difficulty. Then
-    run `task-local-solve-probe` in Skeleton mode with 2 fresh blind solvers.
-    Add a 3rd only on a 1–1 split, a shared failure cluster, or incomplete
-    per-case union.
-    - 2/2 pass (or 3/3 after an adaptive run) → DROP the candidate or
-      redesign its lever NOW; do not write the oracle, the verifier corpus, or
-      the packaging for a task the master collapse law already killed
-      (AGENTS.md §1).
-    - 0/2 with de-correlated semantic failures and 100% union, or 0–1/3 with
-      the same geometry → continue to step 11. A 2/3 result is AMBER and follows
-      `task-local-solve-probe`; it is never automatic handover.
-    - A repeated common miss after run 3 → authority-audit, then DROP/redesign
-      if it is a single-lever fingerprint.
-    - Failures from setup / unclear instruction / broken skeleton → fix the
-      skeleton and re-probe; those runs measure nothing about difficulty.
-    The post-build full probe (step 14) remains the source of truth for the
-    submit verdict; this gate only exists to stop full builds of all-pass-EASY
-    tasks.
-11. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
-12. Write behavioral `tests/test_outputs.py`; keep the scaffolded
-    `tests/test.sh` byte-for-byte from `scripts/templates/test.sh`.
-    Tests may execute the candidate, parse output, use golden/sealed truth, and
-    assert spec-derived invariants, but must not recreate the complete expected
-    artifact from task inputs. If the task declares a variable config/input
-    file, add a mutation re-run that proves the verifier reads it dynamically.
-13. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
-14. Run structural checks, CI checks, and local fresh-subagent blind probes
-    (`task-local-solve-probe`) — stb real-agent trials are permanently
-    geoblocked from this environment (AGENTS.md §7).
-    Before packaging, run `scripts/preflight.sh <task-dir> --strict
-    --report-json workspace/reports/<slug>/preflight.json --emit-zip
-    submissions/<slug>.zip`; it must pass and is the only batch path allowed
-    to emit the ZIP.
-15. After behavior and validation are stable, write reviewer-facing Difficulty,
+10. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
+11. Write `tests/Dockerfile`, behavioral `tests/test_outputs.py`, and offline `tests/test.sh`; ensure every declared artifact has a landing directory in the verifier image.
+12. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
+13. Run structural checks, CI checks, and optional real-agent trials.
+14. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
 
 > ⚠️ The three interaction/scale archetypes in
 > `.agent/skills/task-miner/interaction_shape_recipe.md` are historical and
-> currently closed as reliable HARD sources (ops restoration and DB migration
+> currently closed as reliable Frontier sources (ops restoration and DB migration
 > fell 3/3; long-context was closed by analysis). Use that recipe only for a
-> user-requested Medium experiment or the single SUSPECT-dead retest allowance,
+> user-requested Base/Core experiment or the single SUSPECT-dead retest allowance,
 > never as a default batch lane.
 
 ## Regular Layout
@@ -289,6 +249,7 @@ workspace/tbrain-<problem-slug>/
 │   ├── solve.sh
 │   └── fix.patch
 ├── tests/
+│   ├── Dockerfile
 │   ├── test.sh
 │   └── test_outputs.py
 └── reports/                    # optional local notes; exclude from ZIP
@@ -311,97 +272,59 @@ this skill. Never place either file under the submitted task root or ZIP.
 
 ## Metadata Defaults
 
-Use artifact category/subcategories first. For upstream bugfix artifacts with no category, default to `debugging` and `["tool_specific"]`. For non-debugging category-profile artifacts, do not use the bugfix default.
-
-`category` MUST be one of the 9 kebab values below — NOT the gallery's Title Case name. The platform `task.toml` schema has only `category` (9), `subcategories` (the 5 subtypes) and `difficulty`; it has NO subcategory/subsubcategory field. If the artifact records the gallery's 3-level placement (`gallery_category`/`subcategory`/`subsubcategory`, see `mined-candidates/gallery_taxonomy.md`), carry that placement into `tags` (a slug of the chosen subsubcategory) so the task still lands under the right gallery leaf — do not put it in `category`.
+Use the artifact's Terminus 3 category/subcategory pair when valid. Choose by
+the domain knowledge needed to solve the task, not by the mere presence of code.
+For example, repairing a training loop is `ML / Training`; reserve `Software`
+for tasks whose subject is software engineering itself.
 
 ```toml
-version = "2.0"
+artifacts = ["/app/output.json"]
+name = "<task-slug>"
 
 [metadata]
 author_name = "anonymous"
 author_email = "anonymous"
-difficulty = "hard"
-category = "<artifact.category (one of the 9 kebab values below) or debugging for upstream bugfix; NOT the gallery Title Case name>"
-subcategories = ["<artifact subcategories, or tool_specific for upstream bugfix>"]
-number_of_milestones = 0
-codebase_size = "<minimal|small|large>"   # compute from env file count; CI enforces this, do NOT default to small
+difficulty = "<frontier|advanced|core|base>"
+category = "<exact Title Case category>"
+subcategory = "<exact matching Title Case subcategory>"
 languages = ["<main implementation language>"]
-tags = ["<3-6 useful tags; include a slug of the gallery subcategory/subsubcategory when the artifact records one>"]
-expert_time_estimate_min = 60
-junior_time_estimate_min = 180
+tags = ["<3-6 useful tags>"]
+expert_time_estimate_hours = 6
+difficulty_explanation = "<intrinsic crux>"
+solution_explanation = "<oracle approach>"
+verification_explanation = "<behavior and artifact checks>"
+relevant_experience = "<author background>"
 
 [verifier]
-timeout_sec = 600.0
+timeout_sec = 1800
+environment_mode = "separate"
 
 [agent]
-timeout_sec = 1800.0   # CI hard cap: agent.timeout_sec must be 1-1800 (do not raise above 1800 for heavy builds)
+timeout_sec = 5400      # minimum 1800, ceiling 18000
 
 [environment]
-allow_internet = false
-build_timeout_sec = 1800.0
+network_mode = "public" # use "no-network" only when internet defeats the task
+build_timeout_sec = 1800
 cpus = 2
-memory_mb = 4096
+memory_mb = 8192
 storage_mb = 10240
 ```
 
-> **✅ CATEGORY AVAILABILITY (active — updated 2026-07-30).** All nine
-> Regular-task categories accept net-new submissions until further notice; new
-> milestone tasks remain blocked. The classifier check has been loosened, but
-> the declared category must still match the primary activity. Do not re-label
-> bugfix work, exact-reference conformance, ETL/report work, or another visible
-> shape merely to chase a preferred category.
->
-> Before cloning, apply `task-miner/category_rules.md` to the actual
-> deliverable. `implement parse/render/cmp`, public API or stub completion, and
-> exact-reference conformance normally predict `software-engineering`;
-> dataset→report/ETL predicts `data-processing`; repair work predicts
-> `debugging`. Those are now valid categories. Relabel or reshape only when the
-> task's primary activity genuinely differs from the prediction.
->
-> Pick an accurate gallery-leaf tag after any reshape: a pattern matcher that
-> classifies given paths is *Pattern Extraction & Regex Matching*, NOT *File
-> Discovery & Search* (which implies walking a real filesystem).
-
-Valid categories are only:
+Valid taxonomy pairs are:
 
 ```text
-system-administration
-build-and-dependency-management
-data-processing
-games
-software-engineering
-machine-learning
-debugging
-security
-scientific-computing
+Science: Biology, Chemistry, Physics, Earth, Robotics, Math, Linguistics
+Software: Algorithms, Systems, Databases, Data engineering, Frontend, Languages
+ML: Training, Inference, Evaluation, Kernels
+Operations: Finance, Logistics, Supply chain, Claims, Compliance, Marketing
+Security: Cryptography, Reverse engineering, Forensics, AppSec
+Hardware: CAD, RTL
+Media: Music, Design
 ```
 
-This schema list is also the live Regular-task allowlist as of Jul 30, 2026:
-all nine categories accept net-new submissions. The category gate must still
-make the declared label match the visible primary activity.
-
-Valid subcategories are only:
-
-```text
-long_context
-tool_specific
-api_integration
-db_interaction
-ui_building
-```
-
-Python tasks must be hard. `codebase_size` may be `minimal`, `small`, or
-`large`; choose the honest size from useful files under `environment/` and aim
-for a portfolio mix instead of forcing every task to one size.
-
-**CI enforces `codebase_size` mechanically** from the file count under
-`environment/` EXCLUDING `Dockerfile`/`docker-compose*`: `minimal` = 0-19,
-`small` = 20-199, `large` = 200+. A mismatch is a blocking error
-(`run_static_checks.py`). Compute it, never default:
-```bash
-find <task>/environment -type f ! -name Dockerfile ! -name "docker-compose*" | wc -l
-```
+`artifacts` is top-level. Declare only final paths needed for grading; the
+isolated verifier cannot browse the rest of the agent filesystem. Create every
+artifact parent directory in `tests/Dockerfile` before Harbor uploads files.
 
 `languages` should list the main language(s) the agent works in or the oracle
 solution changes. Do not include Python solely because the verifier is written
@@ -409,30 +332,16 @@ in pytest. Use LOWERCASE slugs: `["rust"]`, `["go"]`, `["c"]`, `["typescript"]`
 — NOT `["Rust"]`/`["Go"]` (reviewers return capitalized values; the docs examples
 are all lowercase).
 
-**`[environment].workdir` — default to Dockerfile-`WORKDIR`-only on
-non-milestone tasks.** With `number_of_milestones = 0`, let the container
-working directory come from the Dockerfile `WORKDIR /app` and omit `workdir`
-from `task.toml` (docs `task-components.md`: `workdir = "/app"  # Milestone
-tasks only`). BUT when a human reviewer explicitly requests `workdir = "/app"`
-on a non-milestone task, honor it — set it to the same dir as the Dockerfile
-`WORKDIR` and rebuild (reviewer-overridden 2026-07-16, card-stack-replay;
-the human reviewer sits above the static scanner). Both blocks are apparently
-accepted; the "a stray workdir line fails the check" claim is not reliable.
-
-⚠️ The der-canonical-codec reference `task.toml` predates these rules — it
-ships `languages = ["Rust"]` AND `[environment] workdir = "/app"` in a
-non-milestone task. The capitalized language is WRONG (confirmed 2026-07-01 by
-a platform reviewer on a Rust task); the `workdir` line follows the
-default-omit-unless-reviewer-requested rule above — do not copy it by default.
+Do not carry removed Terminus 2 keys into the manifest: `version = "2.0"`,
+`number_of_milestones`, `codebase_size`, `subcategories`, `allow_internet`,
+`expert_time_estimate_min`, and `junior_time_estimate_min` are obsolete.
 
 ## Rubric quality (rubric is entered in the UI, NOT in the ZIP — see task-zip-submit)
-Reward the END STATE, not the process. Do NOT add criteria for "reads/studies the
-stub before starting", "compiles successfully with `cargo build`/`go build`"
-(compilation is a prerequisite implied by any output), or "verifies by running the
-binary on samples" — a reviewer strips these as process-not-state. Keep only
-behavioral end-state positives plus the required >=3 negative criteria, and make
-the max-score comment match the real positive sum. Confirmed 2026-07-01: a task
-shipped 3 such process lines (34 positives) and the reviewer cut them to 27.
+Rubrics grade trace-evidenced engineering behavior, not the final pytest result.
+Do not add generic meta-criteria for reading instructions or routine commands
+that say nothing task-specific. Keep diagnostic, binary criteria tied to the
+actual domain workflow, include at least one negative criterion, use only
+±1/2/3/5 with signed positives, and keep the positive total between 10 and 40.
 
 ## Instruction Style
 
@@ -531,7 +440,7 @@ The package in `/app` mishandles <scenario>. A user who <does normal workflow> c
 Fix it so `<public command or API>` <observable result>. The run should still <preserve important behavior>, and <edge case contract>.
 ```
 
-Good non-debugging shape:
+Good domain-profile shape:
 
 ```md
 The tool in `/app` needs to produce <target artifact or behavior> from <input surface>. Implement support for <public command/API/workflow> so it follows <observable contract>.
@@ -623,9 +532,8 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
-- work with `allow_internet = false` unless network access is the task's point;
-  for `true`, hard-pin external inputs by exact version plus immutable
-  digest/hash and grade stable invariants rather than live values
+- bake every dependency at build time; use `network_mode = "public"` by default
+  and `"no-network"` only when internet access would defeat the task
 - avoid heredocs and opaque generated source in the Dockerfile; store source as
   files and `COPY` it
 - use one clean apt transaction per stage with `--no-install-recommends` and
@@ -659,19 +567,13 @@ Do not leave AI-framework scaffolding filenames such as `CLAUDE.md`,
 
 ## Agent Timeout Gate
 
-The platform runs ~10 real-agent trials and **blocks the task (`❌`) when more
-than the threshold (~5) of them hit `agent.timeout_sec` without finishing** —
-e.g. `Agent Timeout Gate: ❌ 10/10 real-agent runs timed out (threshold: 5)`.
-This is a hard blocker, **not** a difficulty signal: a task where most agents
-never even produce a fix is treated as a broken/too-heavy environment, not as
-legitimately Hard. Hard must come from wrong or partial fixes, not from agents
-starving on tooling.
+Terminus 3 requires `[agent].timeout_sec` between **1800 and 18000 seconds**;
+1800 is the minimum, not the old maximum. Most substantial tasks should use
+3600–5400 seconds. Set the value to the real work budget and raise it when trial
+analysis flags `low_timeout`.
 
-Root cause is almost always that the agent burns its 30-minute budget on **cold
-tooling** instead of reasoning: rebuilding a large project from scratch on every
-edit, navigating an un-slimmed tree, or waiting on a slow test suite. It then
-gets only one or two edit→build→test cycles and never converges. Prevent it
-at build time:
+A timeout is still not difficulty. Warm and slim the environment so the agent
+spends its budget on the domain problem rather than cold tooling:
 
 - **Warm the build in the Dockerfile** so the agent's post-edit rebuild is
   incremental, not cold (see the Docker Rules bullet above). This is the single
@@ -679,19 +581,16 @@ at build time:
 - **Keep the warmed build/dependency cache in the final image** (the explicit
   exception in Docker Rules). A warm Dockerfile build is wasted if the cache is
   stripped before runtime.
-- **Budget the edit→build→test cycle.** A solving agent needs ~8–12 iterations
-  inside 1800s. Time one *warm* cycle locally (edit one source file, rebuild,
-  run the focused test). If a single warm cycle still exceeds ~2–3 min, the task
-  will trip the gate — slim further, shrink the test, or reject the candidate.
+- **Budget the edit→build→test cycle.** Time one warm cycle locally and leave
+  enough room for repeated inspection, editing, and validation.
 - **Slim the repo** so navigation and `grep`/`rg` are cheap (see
   `upstream-repo-sanitizer`); a multi-thousand-file tree wastes agent steps
-  before any reasoning starts. Keep `codebase_size` honest.
+  before any reasoning starts.
 - **Keep the verifier fast** — focused reproducer tests with short
   per-subprocess timeouts, never a full upstream suite
   (`terminus-hard-python-verifier`).
-- Set `agent.timeout_sec = 1800` (the cap) for any build-involving task; the
-  default already is. You cannot buy more than 30 min, so the fix is a faster
-  cycle, not a bigger timeout.
+- Set the timeout honestly within 1800–18000; do not pad a short task to make it
+  look substantial or starve a long task to manufacture failures.
 
 Pre-check before spending real-agent budget — time the warm oracle cycle:
 
@@ -700,11 +599,9 @@ stb harbor run --force-build -a oracle -p <task-folder>   # build the image once
 time stb harbor run -a oracle -p <task-folder>            # reuse cached image: this ~= the agent's per-cycle cost
 ```
 
-The oracle does *less* than a solving agent (it applies a known patch and runs
-the focused test — no exploration). If the cached-image oracle run is already a
-large fraction of 1800s, real agents will certainly time out. Treat a slow
-oracle as an early timeout-gate warning and warm/slim the build before running
-agents.
+The oracle does less than a solving agent. If it already consumes a large share
+of the configured agent budget, warm/slim the build or raise the honest timeout
+before running agents.
 
 ## Oracle Pattern
 
@@ -720,27 +617,25 @@ python -m pytest <focused smoke test or upstream regression>
 ```
 
 If the project requires build artifacts, rebuild them in `solve.sh`. The patch must solve the general bug, not only verifier examples.
-For non-debugging category-profile tasks, the patch must implement the general
+For domain-profile tasks, the patch must implement the general
 target behavior, not only the concrete verifier fixtures.
 
 ## Verifier Pattern
 
-`tests/test_outputs.py` should create temporary reproducer projects or inputs and run the target externally.
+`tests/test_outputs.py` runs inside the isolated verifier container. It may see
+only `/tests` plus the paths listed in top-level `artifacts`; it cannot browse
+the agent filesystem. Choose artifacts to match the deliverable:
 
-**Verifier tests MUST be supplied by the verifier at verify time, NEVER staged
-inside `environment/repo`.** A compiled-language reproducer (a `*_test.go`,
-`.rs`, `.exs`, `.java`, etc.) must either be embedded as a string in
-`test_outputs.py` and written into `/app` at verify, or shipped under `tests/`
-and copied into `/app` at verify (overwriting whatever is there). If the test
-file lives in `environment/repo`, the agent can edit or delete it and the
-`/app` working tree the agent gets is non-deterministic across trial instances
--- confirmed 2026-06-14: an h2 task staged its `concurrency.rs` in
-`environment/repo` and ran it directly; some agents altered it, so the
-verifier found the tests present in some instances and absent in others, which
-the reviewer flagged as **Task Instruction Sufficiency: FAIL** (1/9 trials
-passed). The agent fixes only the source; the verifier brings its own tests, so
-the prompt need not name any test file or function -- name only a new public
-API symbol the test must call (see Instruction Style).
+- file/report tasks: declare the final files or directories and inspect them
+- executable tasks: declare the built executable and run it with hidden inputs
+- source-repair tasks: declare the source/project directory, bake the required
+  compiler/toolchain into `tests/Dockerfile`, and rebuild there before testing
+- service/state tasks: export deterministic state or another portable artifact
+  that the verifier can inspect; do not assume the agent container remains live
+
+Verifier-only tests and expected data stay under `tests/` and are copied into
+the verifier image with `COPY . /tests/`; they are never staged in the agent
+environment. Create every artifact parent directory in `tests/Dockerfile`.
 
 **Re-check the RESOURCE is novel before scaffolding a conformance-style task.**
 The named-suite universe (WHATWG / Unicode UTS-UAX / RFC CTS / JSON-Schema /
@@ -845,7 +740,7 @@ Verifier matrix for upstream bugfixes must include:
 - no internal crash/traceback when the expected behavior is recoverable
 - output format/schema check when relevant
 
-Verifier matrix for category-profile tasks must include:
+Verifier matrix for domain-profile tasks must include:
 
 - primary target behavior from `instruction.md`
 - at least one edge case not identical to the main example
@@ -854,7 +749,9 @@ Verifier matrix for category-profile tasks must include:
 - anti-shortcut variation in names, ordering, values, or fixture layout
 - category-specific contract checks such as schema, build artifact, service health, security exploit failure, numeric tolerance, metric threshold, or game-state transition
 
-Every test function needs a docstring. Every asserted behavior must be present in `instruction.md`.
+Every test function needs a docstring. Every asserted behavior must be supported
+by `instruction.md`, an agent-visible environment reference, or domain evidence
+the instructions explicitly direct the agent to inspect.
 
 Preservation tests are not exempt from prompt coverage. If a verifier checks that non-target modes, aliases, fallback paths, legacy layouts, or normal behavior still work, `instruction.md` must say so naturally.
 
@@ -925,21 +822,34 @@ or quality signal is trusted.
 
 ## tests/test.sh
 
-Use the canonical test.sh pattern. The `check_test_sh` CI gate accepts the
-current reward block shapes documented below, and `WORKDIR` in the Dockerfile
-handles the `/app` working directory.
+Use the Terminus 3 verifier pattern below. The verifier runs in a separate image
+built from `tests/Dockerfile`; it sees only the declared artifacts.
 
-`scripts/templates/test.sh` is the sole canonical runner. Install or preserve
-that asset instead of copying a Markdown snippet or free-handing an equivalent
-shell block. `scripts/task-policy.py validate-task <task-dir>` checks the exact
-multiline reward footer, `python3`, shell syntax, line endings, and executable
-mode. A semantically equivalent one-line `if`, helper wrapper, bare `python`,
-or trailing command is a platform-static failure even when local oracle/NOP
-produce the expected reward.
+```bash
+#!/bin/bash
+set -uo pipefail
+
+mkdir -p /logs/verifier
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    echo 1 > /logs/verifier/reward.txt
+else
+    echo 0 > /logs/verifier/reward.txt
+fi
+
+exit 0
+```
+
+Do not use `set -e`; a failed pytest must still reach the reward block. The
+trailing `exit 0` is deliberate because Harbor grades from `reward.txt`. If the
+published Terminus 3 skeleton differs, the skeleton wins and must be flagged.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
-`pytest`, `pytest-json-ctrf`, and verifier-only dependencies in the Dockerfile
-with exact pins. `tests/test.sh` should run pytest and write
+`pytest`, `pytest-json-ctrf`, and verifier-only dependencies in
+`tests/Dockerfile` with exact pins. That Dockerfile must be digest-pinned,
+`COPY . /tests/`, and create parent directories for every top-level artifact.
+`tests/test.sh` should run pytest and write
 `/logs/verifier/reward.txt`; it must not install packages or fetch from the
 network.
 
@@ -998,41 +908,19 @@ Before packaging or platform upload:
   oracle=1.0/nop=0.0, and the oracle-under-`--tmpfs /tmp:noexec` repro.
   (New tasks should have been stamped by `scripts/new-task.sh`, which
   pre-wires the hygiene this checks.)
-- **run the per-case pass-table pre-audit (mandatory for any corpus-graded
-  verifier).** Re-score the stored blind-probe solver diffs per-case against the
-  FULL corpus (free — no new solver runs) and build the pass table. Then check
-  three conditions before zipping: (1) every case has ≥1 probe passer, so union
-  coverage across runs is 100% and common-miss count is 0 — any
-  0-probe-pass case is a correlated-blind-spot candidate, handle it via
-  `task-revise-flag-remediation` NOW (and suspect the ORACLE first: authority-
-  check before pruning); (2) when ≥2 runs fail, their failure sets are
-  de-correlated across ≥2 clusters rather than sharing one load-bearing lever;
-  (3) every feature cluster still has a soft representative a majority of runs
-  pass. Do not confuse 100% UNION coverage with the best individual run; a
-  valid 1/3 result necessarily includes one 100% individual run.
-- **run the category check, rules first (mandatory — the real
-  `category_classifier` is geoblocked from VN and cannot be preflighted).**
-  FIRST apply the real-CI-calibrated rules in
-  `.agent/skills/task-miner/category_rules.md` to the task shape. A fired rule
-  is authoritative category evidence (exact-reference-conformance → SWE;
-  dataset→report → DP; repair shape → debugging; manifests/lockfiles as the
-  object → bd-mgmt). Make the declared category match the dominant activity; a
-  matching rule needs at most one confirmatory probe. Only when no rule fires,
-  or multiple rules leave the primary activity genuinely ambiguous, fall back to the blind
-  category probe. For the probe: give a FRESH subagent
-  (zero task context) only the classifier-visible surfaces — `instruction.md`,
-  the `environment/` file tree listing, README, and the rubric text — WITHOUT
-  the declared category, and ask it to pick the task's primary-activity
-  category from the 9 slugs (software-engineering, debugging,
-  data-processing, build-and-dependency-management, system-administration,
-  security, scientific-computing, machine-learning, games) with a confidence
-  and a one-line reason. Run it twice, adding a 3rd run only on a 1–1 split
-  (user-set probe default; the platform's `llm_fallback` is noisy). Any run predicting a BLOCKED slug, or a majority predicting ≠ the
-  declared category → reshape the SHAPE (instruction verbs, I/O surface,
-  rubric lines, repo furniture — see `task-miner`, Classifier-visible surface
-  artifacts) and re-probe; do not just re-word prose or change `task.toml`.
-  The probe's one-line reasons tell you exactly which surface is leaking the
-  wrong shape
+- **run the per-case pass-table pre-audit for corpus-graded verifiers.**
+  Re-score stored blind-probe diffs against the full corpus. For a zero-solve
+  local Frontier signal, require 100% union coverage, zero common misses, and
+  de-correlated failures; otherwise the result may be an oracle defect or one
+  shared blind spot. For Core/Base candidates, shared misses are a review risk
+  rather than an automatic rejection, but every shared miss still needs an
+  authority and instruction-sufficiency audit before packaging.
+- **run the Terminus 3 domain screen.** Apply
+  `.agent/skills/task-miner/category_rules.md`, choose exactly one category and
+  subcategory, and write `workspace/reports/<slug>/category-screen.json` with a
+  domain rationale plus citations to the instruction and verifier evidence.
+  Do not use the legacy nine-slug classifier or reshape prose to chase an old
+  classifier result.
 - run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
 - create `workspace/reports/<slug>/instruction-sufficiency.json`, cover every
   static test and semantic cluster, complete two blind contract reviews, and run
@@ -1046,14 +934,16 @@ Before packaging or platform upload:
   from environment files, comments, README, configs, scripts, TODOs, `spec.md`,
   and architecture docs
 - verify the task root has no `pyproject.toml`
-- set `codebase_size` to match the actual `environment/` file count (excluding
-  `Dockerfile`/`docker-compose*`): 0-19 `minimal`, 20-199 `small`, 200+ `large`.
-  CI rejects a mismatch.
-- run `ruff check --extend-select PLW1510 <task-folder>` over the WHOLE task
-  dir. Platform CI lints `environment/repo` too. Every `subprocess.run(...)`
-  must pass explicit `check=True` or `check=False`, even when the verifier
-  inspects `returncode` afterward. Remove non-build-required upstream `.py`
-  that has lint errors; fix build-required generators in place
+- verify the manifest contains one exact Title Case category/subcategory pair,
+  3–6 tags, a current difficulty tier, and all required explanation fields
+- verify top-level `artifacts` lists every path the verifier reads, and
+  `tests/Dockerfile` creates their parent directories
+- verify `[verifier].environment_mode = "separate"` and that the agent image
+  never copies tests or solution data
+- run `ruff check <task-folder>` over the WHOLE task dir. Platform CI lints
+  `environment/repo` too (default E4/E7/E9/F rules), so a non-`ruff`-clean
+  upstream dev/codegen `.py` fails the build. Remove non-build-required upstream
+  `.py` that has lint errors; fix build-required generators in place
   (output-preserving, e.g. move an `E402` import to the top) and re-run oracle.
   Also clear `F401`/`E741` in `tests/test_outputs.py`.
 - verify rubrics do not reference tests, verifier logic, `test.sh`,
@@ -1061,9 +951,8 @@ Before packaging or platform upload:
   results
 - verify `tests/` contains verifier scripts/fixtures only, not dependency
   wheels
-- verify `tests/` does not implement the end-to-end solution; for every
-  config/input file the instruction says can vary, mutate a meaningful value
-  and prove a hardcoded-original-value candidate fails
+- verify `tests/Dockerfile` exists, digest-pins every `FROM`, copies the tests,
+  and bakes all verifier dependencies with exact pins
 - verify `tests/test.sh` does not run runtime setup, `apt-get`, `pip install`,
   `npm install`, or network downloads
 - verify Dockerfile does not `COPY tests/`, `COPY solution/`, or create `/tests`, `/solution`, `/oracle`, `/logs/verifier`
@@ -1150,19 +1039,20 @@ For large repos such as TypeScript, go-ethereum, PyTorch, pandas, or NumPy, use 
 ## Validation
 
 Run what is available (full verified CLI surface + infra-failure triage live in
-`task-harbor-runner` — notably `harbor tasks check` was removed in 0.7.0, and
-agent runs need an explicit `-a terminus-2` because `-a` defaults to oracle):
+`task-harbor-runner`):
 
 ```bash
 stb harbor run -a oracle -p <task-folder>
 stb harbor run -a nop -p <task-folder>
 stb harbor check <task-folder>
+stb harbor run -m @openai/gpt-5.6 -k 4 -p <task-folder>   # difficulty, needs approval
+stb harbor run -m @anthropic/claude-opus-5 -k 4 -p <task-folder>
 ```
 
-stb agent runs (`-a terminus-2 -m ...`) and Harbor LLM calls are PERMANENTLY
-geoblocked from this environment (AGENTS.md §7) — do not plan around them. The
-only local difficulty signal is fresh-subagent blind probes via
-`task-local-solve-probe`.
+Use the current Terminus 3 model commands when credentials and quota are
+available. Otherwise record fresh isolated local probes as preliminary evidence;
+they do not replace the platform's four-run iteration gate or eight-run final
+tier measurement.
 
 If Docker is not running, still run static checks:
 
@@ -1174,17 +1064,19 @@ tomllib.load(open("task.toml", "rb"))
 PY
 ```
 
-Before submission, real-agent pass rate must be below 80%; Python tasks should target hard.
+At the four-run iteration gate, at least one run must fail. Final difficulty is
+the average pass@1 across eight runs, four per current reference model.
 
 Difficulty gate (PLATFORM-result interpretation only — these numbers come from
 the platform's own agent runs after submission, not from anything runnable
 locally):
 
-- If any frontier reference agent passes `5/5`, treat the task as Medium unless another agent family consistently fails for implementation reasons.
-- If aggregate real-agent pass rate is `>= 80%`, do not submit as Hard; re-mine or redesign.
+- `frontier`: <20%; `advanced`: 20–<50%; `core`: 50–<80%; `base`: 80–<100%.
+- A result above 80% is acceptable as Base; only 100% across the iteration sample
+  cannot proceed because it provides no signal.
 - If the oracle patch is `<= 10` meaningful LOC in one obvious file, require empirical agent failures before keeping it.
-- Timeouts count as weak evidence only; a good Hard task should produce wrong/partial fixes, not mostly environment/tooling timeouts.
-- A high timeout rate is not Hard — it is a blocker. If `> ~5/10` real-agent runs time out, the platform fails the **Agent Timeout Gate** (`❌`); fix the environment per the Agent Timeout Gate section (warm build, keep the cache, slim, fast verifier), do not submit hoping the timeouts read as difficulty.
+- Timeouts, refusals, unclear instructions, and environment defects do not count
+  as legitimate difficulty; resolve the trial-analysis flags and re-measure.
 
 ## Final Packaging
 

@@ -62,7 +62,7 @@ echo "== preflight: $SLUG =="
 printf '%-4s | %-28s | %s\n' "----" "----------------------------" "------"
 
 # 1. Layout
-for f in task.toml instruction.md environment/Dockerfile environment/.dockerignore tests/test.sh; do
+for f in task.toml instruction.md environment/Dockerfile environment/.dockerignore tests/Dockerfile tests/test.sh; do
   if [ -e "$TASK_DIR/$f" ]; then report PASS "layout:$f" "present"
   else report FAIL "layout:$f" "missing"; fi
 done
@@ -84,15 +84,6 @@ if [ -f "$DF" ]; then
     || report PASS "dockerfile:syntax-line" "absent"
   grep -q -- '--mount=type=bind' "$DF" && report FAIL "dockerfile:bind-mount" "convert to plain COPY + rm -rf" \
     || report PASS "dockerfile:bind-mount" "absent"
-  FROM_LINE="$(grep -m1 '^FROM ' "$DF" || true)"
-  case "$FROM_LINE" in
-    *public.ecr.aws/docker/library/*@sha256:*)
-      case "$FROM_LINE" in
-        *TODO_RESOLVE*) report FAIL "dockerfile:base-image" "digest placeholder unresolved" ;;
-        *) report PASS "dockerfile:base-image" "${FROM_LINE#FROM }" ;;
-      esac ;;
-    *) report FAIL "dockerfile:base-image" "not canonical digest-pinned public.ecr.aws/docker/library/* : '$FROM_LINE'" ;;
-  esac
   grep -Eq '^FROM .*php:.*-cli' "$DF" && report FAIL "dockerfile:php-cli-base" "php:*-cli rejected; use debian bookworm-slim + apt php-cli"
 fi
 
@@ -101,16 +92,25 @@ TT="$TASK_DIR/task.toml"
 if [ -f "$TT" ]; then
   grep -q 'author_name = "anonymous"' "$TT" && grep -q 'author_email = "anonymous"' "$TT" \
     && report PASS "toml:author" "anonymous" || report FAIL "toml:author" "must be literal anonymous/anonymous"
-  grep -q '^subcategories = ' "$TT" && report PASS "toml:subcategories" "line present" \
-    || report FAIL "toml:subcategories" "line must exist (empty [] is fine; deleting it fails CI)"
-  grep -q '^expert_time_estimate_min' "$TT" && grep -q '^junior_time_estimate_min' "$TT" \
-    && report PASS "toml:time-estimates" "present" || report FAIL "toml:time-estimates" "both CI-required"
+  grep -q '^artifacts = ' "$TT" && report PASS "toml:artifacts" "top-level declaration present" \
+    || report FAIL "toml:artifacts" "top-level artifacts array is required"
+  grep -q '^subcategory = ' "$TT" && report PASS "toml:subcategory" "present" \
+    || report FAIL "toml:subcategory" "exact Terminus 3 subcategory is required"
+  grep -q '^expert_time_estimate_hours' "$TT" \
+    && report PASS "toml:expert-hours" "present" || report FAIL "toml:expert-hours" "required"
+  grep -q '^environment_mode = "separate"' "$TT" \
+    && report PASS "toml:separate-verifier" "enabled" || report FAIL "toml:separate-verifier" "required"
+  grep -q '^network_mode = \("public"\|"no-network"\)' "$TT" \
+    && report PASS "toml:network-mode" "valid" || report FAIL "toml:network-mode" "use public or no-network"
+  OBSOLETE="$(grep -nE '^(version|codebase_size|number_of_milestones|subcategories|allow_internet|expert_time_estimate_min|junior_time_estimate_min)[[:space:]]*=' "$TT" || true)"
+  [ -z "$OBSOLETE" ] && report PASS "toml:no-terminus2" "obsolete fields absent" \
+    || report FAIL "toml:no-terminus2" "$OBSOLETE"
 fi
 
 POLICY_OUTPUT="$(python3 "$REPO_ROOT/scripts/task-policy.py" validate-task "$TASK_DIR" 2>&1)"
 POLICY_RC=$?
 if [ "$POLICY_RC" -eq 0 ]; then
-  report PASS "policy:static" "category, languages, and canonical test runner pass"
+  report PASS "policy:static" "metadata, all Docker stages, verifier, compose, and test runner pass"
 else
   report FAIL "policy:static" "$POLICY_OUTPUT"
 fi
@@ -194,6 +194,7 @@ crit = [l.lstrip("- ").strip() for l in lines
         if re.search(r'[,:]?\s*[+-]\d+\s*\.?\s*$', l) and not l.startswith("#")]
 errors = []
 total_pos = 0
+negative_count = 0
 allowed = {1, 2, 3, 5}
 for c in crit:
     if not c.startswith("Agent"):
@@ -206,11 +207,15 @@ for c in crit:
         errors.append("score-outside-closed-set: " + c[:60])
     if sign == "+":
         total_pos += val
+    else:
+        negative_count += 1
     m2 = re.search(r'(?<![+-])\b(\d+)\s*\.?\s*$', c)
 if not crit:
     errors.append("no criteria lines detected")
 elif not 10 <= total_pos <= 40:
     errors.append(f"positive sum {total_pos} outside 10-40")
+if crit and negative_count < 1:
+    errors.append("at least one negative criterion is required")
 print("CRIT:%d" % len(crit))
 print("ERR:" + ("; ".join(errors) if errors else "none"))
 PYEOF
@@ -222,27 +227,92 @@ else
   report WARN "rubric:format" "no SUBMISSION-$SLUG.md found; rubric unchecked"
 fi
 
-# 9. Docker: build, oracle=1, nop=0, oracle-under-noexec-/tmp=1
+# 9. Docker: build both images, solve in the agent image, transfer only declared
+# artifacts, then run the separate verifier image.
 if [ "$NO_DOCKER" -eq 0 ]; then
-  IMG="preflight-$SLUG"
-  if docker build -q -t "$IMG" "$TASK_DIR/environment" >/dev/null 2>&1; then
-    report PASS "docker:build" "$IMG"
-    run_reward() { # run_reward <extra docker args...> ; DO_SOLVE=1|0
-      docker run --rm "$@" \
-        -v "$TASK_DIR/solution":/solution:ro -v "$TASK_DIR/tests":/tests-src:ro "$IMG" \
-        bash -c 'set -e; rm -rf /tests && cp -r /tests-src /tests && chmod -R u+w /tests; \
-                 if [ "${DO_SOLVE:-1}" = 1 ]; then cd /app && bash /solution/solve.sh >/tmp/s.log 2>&1 || { echo SOLVE_FAIL; exit 9; }; fi; \
-                 mkdir -p /logs/verifier; cd /tests && bash test.sh >/dev/null 2>&1 || true; cat /logs/verifier/reward.txt' 2>/dev/null
-    }
-    R_ORACLE="$(run_reward -e DO_SOLVE=1 || echo ERR)"
-    [ "$R_ORACLE" = "1" ] && report PASS "docker:oracle" "reward 1" || report FAIL "docker:oracle" "reward '$R_ORACLE' (expected 1)"
-    R_NOP="$(run_reward -e DO_SOLVE=0 || echo ERR)"
-    [ "$R_NOP" = "0" ] && report PASS "docker:nop" "reward 0" || report FAIL "docker:nop" "reward '$R_NOP' (expected 0)"
-    R_NOEXEC="$(run_reward -e DO_SOLVE=1 --tmpfs /tmp:noexec,nosuid,size=256m || echo ERR)"
-    [ "$R_NOEXEC" = "1" ] && report PASS "docker:noexec-tmp" "oracle reward 1 under noexec /tmp" \
-      || report FAIL "docker:noexec-tmp" "reward '$R_NOEXEC' — verifier execs from bare /tmp? (use _find_exec_base)"
+  AGENT_IMG="preflight-agent-$SLUG"
+  VERIFIER_IMG="preflight-verifier-$SLUG"
+  ARTIFACT_LIST="$(python3 - "$TT" <<'PYEOF'
+import sys, tomllib
+task = tomllib.load(open(sys.argv[1], "rb"))
+for path in task.get("artifacts", []):
+    print(path)
+PYEOF
+)"
+  NETWORK_MODE="$(python3 - "$TT" <<'PYEOF'
+import sys, tomllib
+task = tomllib.load(open(sys.argv[1], "rb"))
+print(task.get("environment", {}).get("network_mode", "public"))
+PYEOF
+)"
+  if docker build -q -t "$AGENT_IMG" "$TASK_DIR/environment" >/dev/null 2>&1; then
+    report PASS "docker:agent-build" "$AGENT_IMG"
   else
-    report FAIL "docker:build" "image build failed (run manually for the log)"
+    report FAIL "docker:agent-build" "agent image build failed (run manually for the log)"
+  fi
+  if docker build -q -t "$VERIFIER_IMG" "$TASK_DIR/tests" >/dev/null 2>&1; then
+    report PASS "docker:verifier-build" "$VERIFIER_IMG"
+  else
+    report FAIL "docker:verifier-build" "verifier image build failed (run manually for the log)"
+  fi
+
+  if docker image inspect "$AGENT_IMG" >/dev/null 2>&1 && docker image inspect "$VERIFIER_IMG" >/dev/null 2>&1; then
+    run_reward() { # run_reward <solve:0|1> <noexec:0|1>
+      DO_SOLVE="$1"
+      USE_NOEXEC="$2"
+      STAGE_DIR="$(mktemp -d)"
+      AGENT_ARGS=(--mount "type=bind,src=$TASK_DIR/solution,dst=/solution,readonly")
+      # Keep this non-empty: macOS ships Bash 3.2, where expanding an empty
+      # array under `set -u` raises "unbound variable".
+      VERIFIER_ARGS=(--label "terminus.preflight=$SLUG")
+      [ "$NETWORK_MODE" = "no-network" ] && AGENT_ARGS+=(--network none)
+      if [ "$USE_NOEXEC" -eq 1 ]; then
+        AGENT_ARGS+=(--tmpfs /tmp:noexec,nosuid,size=256m)
+        VERIFIER_ARGS+=(--tmpfs /tmp:noexec,nosuid,size=256m)
+      fi
+      AGENT_C="$(docker create "${AGENT_ARGS[@]}" "$AGENT_IMG" sleep infinity)" || { rm -rf "$STAGE_DIR"; return 1; }
+      docker start "$AGENT_C" >/dev/null || { docker rm -f "$AGENT_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; }
+      if [ "$DO_SOLVE" -eq 1 ]; then
+        docker exec "$AGENT_C" bash /solution/solve.sh >/dev/null 2>&1 || { docker rm -f "$AGENT_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; }
+      fi
+      while IFS= read -r artifact; do
+        [ -n "$artifact" ] || continue
+        # A NOP container may legitimately omit a declared file. Let the
+        # verifier observe the missing artifact and award 0 instead of
+        # treating the transfer as a preflight infrastructure failure.
+        docker exec "$AGENT_C" test -e "${artifact%/}" >/dev/null 2>&1 || continue
+        mkdir -p "$STAGE_DIR$(dirname "$artifact")"
+        case "$artifact" in
+          */) mkdir -p "$STAGE_DIR${artifact%/}"; docker cp "$AGENT_C:${artifact%/}/." "$STAGE_DIR${artifact%/}" >/dev/null || { docker rm -f "$AGENT_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; } ;;
+          *) docker cp "$AGENT_C:$artifact" "$STAGE_DIR$artifact" >/dev/null || { docker rm -f "$AGENT_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; } ;;
+        esac
+      done <<EOF
+$ARTIFACT_LIST
+EOF
+      docker rm -f "$AGENT_C" >/dev/null 2>&1
+
+      VERIFIER_C="$(docker create "${VERIFIER_ARGS[@]}" "$VERIFIER_IMG" bash -lc 'mkdir -p /logs/verifier; cd /tests; bash test.sh >/dev/null 2>&1 || true; cat /logs/verifier/reward.txt')" || { rm -rf "$STAGE_DIR"; return 1; }
+      while IFS= read -r artifact; do
+        [ -n "$artifact" ] || continue
+        case "$artifact" in
+          */) [ -d "$STAGE_DIR${artifact%/}" ] || continue; docker cp "$STAGE_DIR${artifact%/}/." "$VERIFIER_C:${artifact%/}" >/dev/null || { docker rm -f "$VERIFIER_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; } ;;
+          *) [ -e "$STAGE_DIR$artifact" ] || continue; docker cp "$STAGE_DIR$artifact" "$VERIFIER_C:$artifact" >/dev/null || { docker rm -f "$VERIFIER_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; } ;;
+        esac
+      done <<EOF
+$ARTIFACT_LIST
+EOF
+      RESULT="$(docker start -a "$VERIFIER_C" 2>/dev/null)"
+      docker rm "$VERIFIER_C" >/dev/null 2>&1
+      rm -rf "$STAGE_DIR"
+      printf '%s' "$RESULT"
+    }
+
+    R_ORACLE="$(run_reward 1 0 || echo ERR)"
+    [ "$R_ORACLE" = "1" ] && report PASS "docker:oracle" "separate-verifier reward 1" || report FAIL "docker:oracle" "reward '$R_ORACLE' (expected 1)"
+    R_NOP="$(run_reward 0 0 || echo ERR)"
+    [ "$R_NOP" = "0" ] && report PASS "docker:nop" "separate-verifier reward 0" || report FAIL "docker:nop" "reward '$R_NOP' (expected 0)"
+    R_NOEXEC="$(run_reward 1 1 || echo ERR)"
+    [ "$R_NOEXEC" = "1" ] && report PASS "docker:noexec-tmp" "oracle reward 1 under noexec /tmp" || report FAIL "docker:noexec-tmp" "reward '$R_NOEXEC' — executable staged under bare /tmp?"
   fi
 else
   report WARN "docker" "skipped (--no-docker)"

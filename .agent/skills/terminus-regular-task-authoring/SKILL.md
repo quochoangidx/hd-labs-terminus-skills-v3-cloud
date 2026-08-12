@@ -1,15 +1,15 @@
 ---
 name: terminus-regular-task-authoring
-description: Use when creating, reviewing, or repairing a Terminus-2nd-Edition Regular non-milestone task, especially from the Snorkel Platform Submission Guide. Covers required layout, Docker constraints, oracle/verifier expectations, CI readiness, and ZIP submission hygiene.
+description: Use when creating, reviewing, or repairing a Terminus 3 task, especially from the Snorkel Platform Submission Guide. Covers required layout, isolated-verifier constraints, oracle/verifier expectations, CI readiness, and ZIP submission hygiene.
 ---
 
-# Terminus Regular Task Authoring
+# Terminus 3 Task Authoring
 
-Use this skill when the user asks to create or audit a Regular Terminus task.
+Use this skill when the user asks to create or audit a Terminus 3 task.
 
 ## Required Layout
 
-Regular tasks must contain:
+Tasks must contain:
 
 ```text
 instruction.md
@@ -22,12 +22,14 @@ solution/
   solve.sh
   [optional fix.patch]
 tests/
+  Dockerfile
   test.sh
   test_outputs.py
   [optional fixtures]
 ```
 
-Do not use root-level `steps/` unless the task is explicitly milestone-based. Do not put `tests/` or `solution/` inside the image.
+Milestones are not part of Terminus 3. Do not put `tests/` or `solution/` inside
+the agent image; `tests/Dockerfile` builds a separate verifier image.
 
 ## Authoring Workflow
 
@@ -43,38 +45,30 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 > oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
 > zipping, every time.
 
-1. Pick a shape whose primary activity maps honestly to one of the nine open
-   Regular-task categories (see the rules-first category gate below). A real
-   engineering bug with multi-step reasoning normally maps to `debugging`; use
-   that label rather than reframing it cosmetically.
+1. Pick a domain that maps honestly to one exact Terminus 3
+   category/subcategory pair. A training-loop repair is `ML / Training`; a
+   compiler repair is `Software / Languages`. Do not classify by the repair
+   verb alone.
 2. Write concise `instruction.md` using absolute paths only.
-3. Configure `task.toml` with `version = "2.0"`, metadata, runtime limits, and `allow_internet = false` by default. Keep `allow_internet = true` when network access is the task's point; hard-pin every live dependency/source to exact versions and immutable digests/hashes, and grade stable invariants rather than mutable live values, keys, or API shapes.
+3. Configure Terminus 3 `task.toml` with top-level `artifacts`, one exact
+   category/subcategory pair, descriptive fields under `[metadata]`,
+   `environment_mode = "separate"`, `network_mode`, and honest runtime limits.
 4. Build `environment/Dockerfile` with `tmux`, `asciinema`, pinned package versions, and digest-pinned `FROM`.
 5. Put the starting state under `environment/` (a deliberately buggy state
    only for the bug-repair variant that cleared the category gate).
 6. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
-7. Write Python `pytest` verifier tests in `tests/test_outputs.py`. Keep the
-   end-to-end solution only in `solution/`: tests may run the agent program,
-   parse its output, use golden fixtures/hashes, and assert spec-derived
-   invariants or sealed truth, but must not map task inputs to the complete
-   expected artifact themselves.
-   When the task requires reading a config/input file whose values can vary,
-   load those values at verifier runtime, mutate at least one meaningful value,
-   and re-run. A submission that ignores the file and hardcodes its parameters
-   must fail this check. Hardcoded expected results and format constants remain
-   legitimate when they are not config-claimed values.
-8. Preserve the scaffolded `tests/test.sh` from `scripts/templates/test.sh`;
-   do not reconstruct or hand-edit the runner.
+7. Write digest-pinned `tests/Dockerfile` plus Python `pytest` verifier tests in
+   `tests/test_outputs.py`; create every artifact landing directory there.
+8. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
 9. Run oracle, CI checks, and real-agent trials before packaging.
 
-> ⛔ Blocking CI shape gates (both judge the task's structural SHAPE, not its
-> prose, so wording sweeps don't clear them): `category_classifier` blocks tasks
-> predicting `software-engineering`/`debugging`/`data-processing`, and
-> `template_detection` (first observed 2026-07-13) blocks tasks matching a named
+> ⚠️ All seven Terminus 3 categories are open. Choose exactly one Title Case
+> category/subcategory pair by the domain knowledge the task requires, not merely
+> because code is written. `template_detection` (first observed 2026-07-13) still blocks tasks matching a named
 > template library entry — confirmed `rust_cli` = minimal single-source-file
 > stub project + stdin→stdout batch binary + "extend the starter" instruction +
 > hidden vector-corpus verifier; assume per-language siblings. Design away from
-> both shapes up front (realistic multi-module repo, in-repo tests,
+> the template shape up front (realistic multi-module repo, in-repo tests,
 > domain-authentic file I/O). Details and current remediation verdicts live in
 > AGENTS.md §9.
 
@@ -82,25 +76,31 @@ Do not use root-level `steps/` unless the task is explicitly milestone-based. Do
 
 For new submissions:
 
-- Set `codebase_size` honestly from useful files in `environment/`.
-- Use `minimal` for roughly 0-19 useful files, `small` for roughly 20-199
-  useful files, and `large` for roughly 200+ useful files.
-- `minimal`, `small`, and `large` are all accepted; aim for a portfolio mix
-  instead of padding or pruning solely to hit one size.
+- Use difficulty `frontier`, `advanced`, `core`, or `base`; tiers are
+  language-independent.
+- Put `artifacts` at top level and every descriptive field under `[metadata]`.
+- Set `[verifier].environment_mode = "separate"`.
+- Use `[environment].network_mode = "public"` by default and `"no-network"`
+  only when internet access would defeat the task.
+- Set `[agent].timeout_sec` between 1800 and 18000 seconds.
+- Do not emit removed Terminus 2 fields: `version = "2.0"`, `codebase_size`,
+  `number_of_milestones`, `subcategories`, `allow_internet`,
+  `expert_time_estimate_min`, or `junior_time_estimate_min`.
 - `languages` lists the main language(s) used by the task/oracle changes. Do
   not include Python solely because verifier tests are written in pytest.
 
 ## Reviewer-Facing Submission Explanations
 
-The current submission form requires three reviewer-facing text fields:
+Terminus 3 requires four reviewer-facing metadata fields:
 
 - `Difficulty Explanation`
 - `Solution Explanation`
 - `Verification Explanation`
+- `Relevant Experience`
 
-These are submission metadata, not agent-visible task requirements. Do not put
-them in `instruction.md`, `task.toml`, `environment/`, a rubric, or the
-submission ZIP. Keep local drafts outside the task folder, preferably:
+These are submission metadata, not agent-visible task requirements. Store them
+under `[metadata]` in `task.toml`; Snorkel assembles `README.md` from them. Local
+drafts may remain outside the task folder:
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md
@@ -244,8 +244,8 @@ tripping the structural check, escalate in this order; never iterate wording sid
    compensate for a short prompt" rule below still applies — reference data a realistic
    engineering artifact would contain is fine, relocated prompt prose is not); examples
    must be disjoint from the hidden corpus and verified against the oracle before
-   writing; `COPY` the file before the image's `git add -A` initial commit; recheck the
-   `codebase_size` file-count gate after adding env files; keep the words
+   writing; `COPY` the file before the image's `git add -A` initial commit; recheck
+   build-context size after adding env files; keep the words
    "verifier"/"test" out of the file (bare-word scanner).
 3. **Keep the flagged items and ship the non-blocking ⚠️** when they are test-pinned
    literals/values and neither form clears the check — removing them trades a warning
@@ -286,7 +286,7 @@ tripping the structural check, escalate in this order; never iterate wording sid
   tricky…"), no algorithm walkthrough (the env-docs rules below apply in full).
 - Disclosure budget: state every graded contract rule while withholding worked
   solutions, fixture literals, expected outputs, root cause, and implementation
-  method. If stating a required rule collapses the task to EASY, drop or redesign
+  method. If stating a required rule makes the iteration sample 100%, drop or redesign
   the task; never preserve difficulty by hiding that rule.
 
 Copyable skeleton (no headers/bullets/tables, ≤300 words):
@@ -451,8 +451,8 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   score 0 ("Some tests not passed by any agent run"). Runs in the image, so it
   does not trip the `.git`-in-context hygiene warning; oracle/nop unaffected.
 - Pin language dependencies exactly.
-- Install verifier dependencies in the Docker image by default. Never fetch
-  packages from the network at verifier runtime.
+- Keep verifier dependencies out of the agent image. Bake them with exact pins
+  into the separate `tests/Dockerfile`; never fetch packages at verifier runtime.
 - Keep `environment/` under 100 MiB total and each file under 50 MiB.
 - Include `.dockerignore` for non-trivial environments, and always start from
   the standard clutter/secrets exclusion set (reviewers flag a thin `.dockerignore`
@@ -489,9 +489,9 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   AI-framework scaffolding filenames such as `CLAUDE.md` or `skills.md` out of
   `environment/`.
 
-For Python tasks, separate project/runtime dependencies from verifier-only
-dependencies. Install `pytest`, `pytest-json-ctrf`, and verifier packages in
-the Docker image with exact pins.
+`tests/Dockerfile` must digest-pin every `FROM`, install `pytest`,
+`pytest-json-ctrf`, and verifier packages with exact pins, `COPY . /tests/`,
+and create parent directories for every top-level artifact path.
 
 Do not put verifier dependency wheels in `tests/`. The `tests/` directory should
 contain verifier scripts and fixtures only; install verifier dependencies during
@@ -502,10 +502,7 @@ Docker build.
 Tests must:
 
 - Be Python pytest tests, even for non-Python tasks.
-- Pass an explicit `check=True` or `check=False` to every
-  `subprocess.run(...)`. Use `check=False` when the verifier intentionally
-  inspects or asserts the return code; use `check=True` when any non-zero exit
-  is immediately fatal. Run Ruff with `--extend-select PLW1510`.
+- Run in the isolated verifier and read only declared artifacts.
 - Test behavior, not source-code strings.
 - Have docstrings on every test.
 - Cover every explicit and important implicit prompt requirement.
@@ -516,19 +513,10 @@ Tests must:
   number of requests (and stdout ends cleanly) so a program that prints a banner,
   a debug line, or an extra/missing trailing line fails — indexing only the
   positions you expect silently lets stray output through.
-- **REBUILD the graded binary from the agent's SOURCE before running cases**
-  when the task ships a compiled artifact (Go/Rust/C). A verifier that only
-  checks the prebuilt binary exists does NOT enforce the "implement it in the
-  source" contract — an agent can edit non-compiling source and the stale
-  image-built binary still passes (reviewer-flagged, HOCON 2026-07). In a
-  session-scoped autouse fixture: `rm -f <binary>`, then
-  `subprocess.run([...,"build","-o",<binary>,<pkg>], cwd="/app",
-  capture_output=True, check=False)`,
-  assert returncode 0 (surface build stderr on failure), then assert the binary
-  exists. Non-compiling source then fails the fixture and errors every case →
-  reward 0; the toolchain is present (canonical `golang`/`rust` base) so the
-  build runs at verify time. Confirm oracle still passes and nop still fails on
-  BEHAVIOR (its stub source compiles) — not on the build.
+- When the instruction requires source changes, declare the project directory
+  as an artifact and rebuild it inside the verifier with a toolchain baked into
+  `tests/Dockerfile`. When the deliverable itself is a binary, declare and test
+  that binary directly. Never assume the agent container remains reachable.
 - Keep the verifier and the prompt SYMMETRIC on reject cases and on ordering.
   If `instruction.md` says an invalid input "writes nothing useful to stdout,"
   assert `proc.stdout == b""` for reject cases, not only `returncode != 0`
@@ -568,21 +556,27 @@ Avoid quality-check failures:
 
 ## tests/test.sh
 
-Use `scripts/templates/test.sh` as the sole canonical source. Install that file
-rather than copying a Markdown block or writing an equivalent runner.
+Use this shape:
 
-Write the default `echo 0 > /logs/verifier/reward.txt` **immediately after
-`mkdir -p /logs/verifier`, before any risky verifier work** (the rebuild
-fixture, pytest, anything that could crash/timeout). Reviewers explicitly ask
-for this (KDL + HOCON, 2026-07): if the verifier dies before the final block
-runs, the reward must already be 0, not absent. The final reward block still
-overwrites it to 1 only on a clean pytest pass and must end the script.
-`scripts/task-policy.py validate-task <task-dir>` requires the exact canonical
-multiline footer; one-line conditionals and equivalent helper forms are
-rejected.
-Do not add `exit $?` or any trailing exit after the final `fi`: Harbor records
-pass/fail from `/logs/verifier/reward.txt`; the script's own exit code is not
-the reward signal.
+```bash
+#!/bin/bash
+set -uo pipefail
+
+mkdir -p /logs/verifier
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    echo 1 > /logs/verifier/reward.txt
+else
+    echo 0 > /logs/verifier/reward.txt
+fi
+
+exit 0
+```
+
+Do not use `set -e`; pytest failure must reach the reward block. The trailing
+`exit 0` is deliberate because Harbor grades from `reward.txt`, not the script
+status. If the published Terminus 3 skeleton differs, the skeleton wins.
 
 Do not run runtime setup, `apt-get`, `npm install`, or network downloads in
 `tests/test.sh`. Bake verifier dependencies into the Docker image; `test.sh`
@@ -615,7 +609,9 @@ Run, when available:
 ```bash
 stb harbor run -a oracle -p <task-folder>
 stb harbor run -a nop -p <task-folder>
-stb harbor check -m @openai/gpt-5.5 <task-folder>
+stb harbor check <task-folder>
+stb harbor run -m @openai/gpt-5.6 -k 4 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-5 -k 4 -p <task-folder>
 ```
 
 For submission ZIPs, compress the contents of the task folder, not the folder itself.
@@ -627,33 +623,21 @@ Rubrics must be trace-focused. Every criterion line starts with `Agent` and
 ends with `, +/-N`; allowed values are only 1, 2, 3, or 5; do not use 4; and
 positive scores must carry an explicit leading `+` (write `+3`, not `3`) —
 unsigned positives are sent back for revision.
-Non-milestone rubrics should be a flat list of `Agent ...` criteria; a single
-`# Rubric 1` header is tolerated but not required, and `# Rubric 2+` is reserved
-for milestone tasks. Milestone rubrics must use one block per milestone:
-`# Rubric 1`, `# Rubric 2`, etc. Non-milestone positive totals should be 10-40
-points, and each milestone should account for 10-40 positive points. Include at
-least three negative criteria overall; for milestone tasks, also include at
-least one negative criterion per milestone.
-Rubrics must reward the observable behavior of the SOLUTION — what the
-implemented code does, judged from the artifact and its outputs (correct results
-on specific input classes, edge cases, boundary handling, and error contracts) —
-NOT the agent's PROCESS during the solve. Do not reward process steps that do not
-affect the result: "reads the stub / surrounding files to understand the
-signature", "successfully compiles with `cargo build --release` / `go build`
-without errors", or "verifies behavior by running the built binary on sample
-inputs" are all non-discriminating (the behavior criteria already pin the result,
-and a wrong-but-compiling solution earns them). Rephrase any such positive into an
-observable behavior of the implementation and keep the score. Do not
+Use a flat list, 10-40 total positive points, and at least one negative
+criterion. Rubrics grade trace-evidenced engineering behavior, not the final
+pytest result; make each line task-specific and diagnostic. Do not
 reference tests, verifier logic, `test.sh`, `test_outputs.py`, `/tests/`,
 hidden tests, CI, reward files, pytest, or final test results.
 
 Quality preflight:
 
-- `codebase_size` matches the useful environment file count and portfolio mix
+- top-level `artifacts`, isolated verifier mode, exact taxonomy pair, current
+  difficulty tier, 3-6 tags, and all four explanation/experience fields are present
 - `languages` excludes verifier-only Python
-- reviewer-facing submission explanations exist outside the task/ZIP, preserve
-  the factual source draft, and contain no unsupported claims or agent/AI meta
-  language
+- reviewer-facing submission explanations in `task.toml` contain no unsupported
+  claims or agent/AI meta language
+- `tests/Dockerfile` is digest-pinned, installs all verifier dependencies,
+  copies `/tests`, and creates artifact landing directories
 - no root-level `pyproject.toml`
 - final runtime base image is canonical for the task's language (or non-canonical with a credible justification)
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP

@@ -3,10 +3,10 @@
 # verifier hygiene from AGENTS.md §8/§10 baked in, so none of it is re-derived
 # by hand per task.
 #
-# Usage: scripts/new-task.sh <slug> <lang> <category>
+# Usage: scripts/new-task.sh <slug> <lang> <category> <subcategory>
 #   slug      tbrain-<problem-slug>   (domain-named, no tool/repo filler)
 #   lang      rust | go | c | cpp | python | ruby | node | java | generic
-#   category  one of the nine open Regular-task categories
+#   category/subcategory  one exact Terminus 3 taxonomy pair
 #
 # Output: workspace/<slug>/ with task.toml, instruction.md, environment/,
 # solution/, tests/ pre-filled. Every TODO marker must be resolved before the
@@ -14,26 +14,25 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SLUG="${1:?usage: new-task.sh <slug> <lang> <category>}"
-LANG_ID="${2:?usage: new-task.sh <slug> <lang> <category>}"
-CATEGORY="${3:?usage: new-task.sh <slug> <lang> <category>}"
+SLUG="${1:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
+LANG_ID="${2:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
+CATEGORY="${3:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
+SUBCATEGORY="${4:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
 
-if ! POLICY_RESULT="$(python3 "$REPO_ROOT/scripts/task-policy.py" category "$CATEGORY" 2>&1)"; then
+if ! POLICY_RESULT="$(python3 "$REPO_ROOT/scripts/task-policy.py" category "$CATEGORY" "$SUBCATEGORY" 2>&1)"; then
   echo "$POLICY_RESULT" >&2
   exit 1
 fi
 
-# Canonical digest-pinned bases (extracted from platform-passed zips).
-# node/temurin digests were not recoverable from the repo: resolve the
-# MANIFEST-LIST digest (docker buildx imagetools inspect <image>) before build.
+# Canonical digest-pinned bases from the current Terminus 3 Dockerfile guide.
 BASE_RUST="public.ecr.aws/docker/library/rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36"
 BASE_GO="public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac"
 BASE_GCC="public.ecr.aws/docker/library/gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c"
 BASE_PY="public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb"
 BASE_RUBY="public.ecr.aws/docker/library/ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df"
 BASE_DEBIAN="public.ecr.aws/docker/library/debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d"
-BASE_NODE="public.ecr.aws/docker/library/node:22-bookworm-slim@sha256:TODO_RESOLVE_MANIFEST_LIST_DIGEST"
-BASE_JAVA="public.ecr.aws/docker/library/eclipse-temurin:21-jdk-jammy@sha256:TODO_RESOLVE_MANIFEST_LIST_DIGEST"
+BASE_NODE="public.ecr.aws/docker/library/node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383"
+BASE_JAVA="public.ecr.aws/docker/library/eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14"
 
 APT_COMMON="tmux asciinema patch ca-certificates"
 LANG_TOML="\"$LANG_ID\""
@@ -45,11 +44,10 @@ case "$LANG_ID" in
 RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go && git config --system safe.directory /app' ;;
   c)      BASE="$BASE_GCC"; APT_COMMON="tmux asciinema" ;;   # gcc image ships build tools + patch
   cpp)    BASE="$BASE_GCC"; APT_COMMON="tmux asciinema"; LANG_TOML='"c++"' ;;
-  python) BASE="$BASE_PY"
-          echo "NOTE: Python tasks must realistically target difficulty=hard (0/3 semantic)." >&2 ;;
+  python) BASE="$BASE_PY" ;;
   ruby)   BASE="$BASE_RUBY" ;;
   node)   BASE="$BASE_NODE" ;;
-  java)   BASE="$BASE_JAVA"
+  java)   BASE="$BASE_JAVA"; APT_COMMON="$APT_COMMON git"
           EXTRA_RUN='RUN git config --system safe.directory /app' ;;
   generic) BASE="$BASE_DEBIAN"; LANG_TOML='"bash"' ;;
   *) echo "REJECT: unknown lang '$LANG_ID'." >&2; exit 1 ;;
@@ -60,32 +58,35 @@ TASK_DIR="$REPO_ROOT/workspace/$SLUG"
 mkdir -p "$TASK_DIR"/{environment/app,solution,tests}
 
 cat > "$TASK_DIR/task.toml" <<EOF
-version = "2.0"
+artifacts = ["/app/"]
+name = "$SLUG"
 
 [metadata]
 author_name = "anonymous"
 author_email = "anonymous"
-difficulty = "hard"
+difficulty = "core"
 category = "$CATEGORY"
-subcategories = []
-number_of_milestones = 0
-codebase_size = "minimal"
+subcategory = "$SUBCATEGORY"
 languages = [$LANG_TOML]
 tags = ["TODO", "TODO", "TODO"]
-expert_time_estimate_min = 90
-junior_time_estimate_min = 240
+expert_time_estimate_hours = 4
+difficulty_explanation = "TODO: summarize the empirically measured difficulty crux."
+solution_explanation = "TODO: summarize how the oracle solves the task."
+verification_explanation = "TODO: summarize how the isolated verifier evaluates the artifacts."
+relevant_experience = "TODO: summarize the relevant authoring experience."
 
 [verifier]
-timeout_sec = 600.0
+timeout_sec = 1800
+environment_mode = "separate"
 
 [agent]
-timeout_sec = 1800.0
+timeout_sec = 5400
 
 [environment]
-allow_internet = false
-build_timeout_sec = 1800.0
+network_mode = "public"
+build_timeout_sec = 900
 cpus = 2
-memory_mb = 4096
+memory_mb = 8192
 storage_mb = 10240
 EOF
 
@@ -144,6 +145,15 @@ EOF
 chmod +x "$TASK_DIR/solution/solve.sh"
 
 install -m 0755 "$REPO_ROOT/scripts/templates/test.sh" "$TASK_DIR/tests/test.sh"
+
+cat > "$TASK_DIR/tests/Dockerfile" <<EOF
+FROM $BASE_PY
+
+RUN pip install --no-cache-dir pytest==9.1.1 pytest-json-ctrf==0.5.2
+RUN mkdir -p /app /logs/verifier
+COPY . /tests/
+WORKDIR /tests
+EOF
 
 cat > "$TASK_DIR/tests/test_outputs.py" <<'EOF'
 """Behavioral verifier skeleton. The hygiene helpers below are load-bearing:
@@ -249,4 +259,3 @@ echo "Next: fill TODOs -> collapse-law screen -> skeleton probe (task-local-solv
 case "$LANG_ID" in
   rust|go|c|cpp) echo "WARNING: template_detection flags minimal single-source stdin->stdout CLI shapes (rust_cli + siblings). Build a multi-module layout, file-based I/O surface, and varied repo furniture — the stamped skeleton is NOT enough by itself." >&2 ;;
 esac
-case "$BASE" in *TODO_RESOLVE*) echo "WARNING: base image digest is a placeholder — resolve the manifest-list digest before building." >&2 ;; esac

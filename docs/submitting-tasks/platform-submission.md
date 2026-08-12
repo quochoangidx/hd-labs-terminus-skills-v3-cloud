@@ -4,9 +4,9 @@ Complete step-by-step guide for creating and submitting tasks through the Snorke
 
 ## High-Level Workflow
 
-Tasking is performed through the **Terminus-2nd-Edition** project on the Snorkel Expert Platform. The complete workflow:
+Tasking is performed through the **Terminus-3-Prod** project on the Snorkel Expert Platform. The complete workflow:
 
-1. Download the correct task skeleton template. _There are 3!_
+1. Download the task skeleton template _(coming soon)_
 2. Extract and rename the folder
 3. Write your task instructions and configure metadata
 4. Set up the Docker environment
@@ -29,21 +29,9 @@ Before starting, ensure you have:
 
 ---
 
-## Step 1: Download the Correct Task Skeleton
+## Step 1: Download the Task Skeleton
 
-Choose and download the appropriate task skeleton template for your task type:
-
-There are 3 task skeletons to choose from:
- - **_"Regular"_ Task Skeleton:** Use for all non-UI-Building and non-Milestone tasks
- - **UI Task Skeleton:** Use for all UI-Building subtype tasks
- - **Milestone Task Skeleton:** Use for all tasks which contain milestones
-
-<pdf-download src="/Terminus-EC-Training-stateful/Terminus-2nd-Edition/default-template.zip" title="Download Regular Task Skeleton"></pdf-download>
-
-<pdf-download src="/Terminus-EC-Training-stateful/Terminus-2nd-Edition/milestone-template.zip" title="Download Milestone Task Skeleton"></pdf-download>
-
-<pdf-download src="/Terminus-EC-Training-stateful/Terminus-2nd-Edition/ui-template.zip" title="Download UI Task Skeleton"></pdf-download>
-
+> **Pending.** The Terminus 3 task skeleton is being prepared. Milestone and UI skeletons no longer apply — milestone tasks are not part of this edition, and the old UI subtype has been replaced by the new taxonomy. This page will link the skeleton once available.
 
 ## Step 2: Extract and Rename
 
@@ -60,57 +48,51 @@ See the [Prompt Styling Guide](/portal/docs/understanding-tasks/prompt-styling) 
 Set up metadata and configuration:
 
 ```toml
-# Task configuration schema version
-version = "2.0"
+artifacts = ["/app/output.json"]
+name = "your-task-name"
 
-# Task metadata (author, difficulty, categorization)
 [metadata]
 author_name = "anonymous"
 author_email = "anonymous"
-difficulty = "unknown"
-category = "software-engineering"
-# Options for subcategories are: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building"
-subcategories = [ ]
-# The number of milestones in the task (can be zero if not a milestone task)
-number_of_milestones = 0
-# Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files. Include all files in the environment when counting.
-codebase_size = "minimal"
-# Coding languages used in the oracle solution or required by the agent
-languages = [ "bash" ]
-# For tool_specific, api_integration, and db_interaction subcategories, please include specific tool, api framework, or database software
-tags = [ "file-operations",]
-# Estimated time to complete (minutes)
-expert_time_estimate_min = 60
-junior_time_estimate_min = 120
+category = "Software"
+subcategory = "Databases"
+tags = ["python", "wal", "recovery", "concurrency", "storage-engine"]
+languages = ["python"]
+difficulty = "advanced"
+expert_time_estimate_hours = 6
+difficulty_explanation = "What makes this task hard — the core crux an agent has to get right."
+solution_explanation = "How the oracle solves it."
+verification_explanation = "How the verifier decides the task was solved."
+relevant_experience = "The background that qualified you to author this task."
 
-# Verifier: runs the test script to check task completion
 [verifier]
-timeout_sec = 450.0
+timeout_sec = 1800
+environment_mode = "separate"
 
-# Agent: limits how long the agent can run when attempting the task
 [agent]
-timeout_sec = 900.0
+timeout_sec = 7200
 
-# Sandbox environment limits
 [environment]
-build_timeout_sec = 600.0
+network_mode = "public"
+build_timeout_sec = 900
 cpus = 2
-memory_mb = 4096
+memory_mb = 8192
 storage_mb = 10240
-allow_internet = false  # default — set true only if the task genuinely requires internet
 ```
 
-> `allow_internet = false` is the default and correct for tasks solvable offline. Set `allow_internet = true` only when the task genuinely requires internet (e.g., retrieving external/current information or a resource that can't be bundled). See [Dockerfile Best Practices](/portal/docs/creating-tasks/dockerfile-best-practices).
+> Descriptive fields go under `[metadata]` — top-level copies are no longer counted by the structure check. `artifacts` stays top-level, and `name` resolves in either place.
+>
+> `network_mode = "public"` is the default. Use `"no-network"` only when the task does not make sense to complete with internet access. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
 
 ## Step 4: Configure Docker Environment
 
 Edit the `environment/Dockerfile` to set up your task environment:
 
-- Install `tmux` and `asciinema` — **required by the agent runtime**. Missing these will cause all agent runs to fail silently with no verifier output.
+- Install `tmux` and `asciinema` — **required by the agent runtime**. Leaving them out breaks any task running without network access, since nothing can fetch them at runtime. Install them explicitly regardless of `network_mode`.
 - Add any dependencies required by your task
 - Pin all package versions for reproducibility
 - Digest-pin every `FROM` image with `@sha256:<digest>`
-- For the final runtime stage, use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices) when one matches your task's language. Non-canonical images are allowed with a brief written justification in the Dockerfile or task `README.md`; missing justifications are blocked.
+- For the final runtime stage, use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices) when one matches your task's language. Non-canonical images are allowed with a brief written justification as a `Dockerfile` comment; missing justifications are blocked.
 - Keep `environment/` at or below 100 MiB total and no file over 50 MiB
 - Add `.dockerignore` for non-trivial environments
 - Never copy `solution/` or `tests/` folders in the Dockerfile
@@ -147,7 +129,6 @@ Create `solution/solve.sh` with the verified commands:
 - This file is used by the Oracle agent to verify the task is solvable
 - Must be deterministic (same result every run)
 - Should demonstrate the command sequence, not just output the answer
-- For milestone tasks: each milestone has its own `steps/milestone_N/solution/` directory containing `solve.sh` (a wrapper) and `solveN.sh` (the actual oracle solution scoped only to that milestone). See the [Milestones page](/portal/docs/understanding-tasks/milestones) for the full layout.
 
 See [Writing Oracle Solution](/portal/docs/creating-tasks/writing-oracle-solution) for guidance.
 
@@ -160,7 +141,6 @@ Create `tests/test.sh` and Python pytest files to verify task completion:
 - Do not use `tests/test.sh` to run another language-specific test framework; Python pytest tests should drive any non-Python system under test
 - Place any test fixtures or helper files in the `tests/` directory
 - Bake all test dependencies into the Docker image; `tests/test.sh` must not install packages or download from the network at runtime
-- For milestone tasks: each milestone has its own `steps/milestone_N/tests/` directory containing a `test.sh` runner and a `test_mN.py` pytest file (with a `TestMilestoneN` class) scored only against that milestone. See the [Milestones page](/portal/docs/understanding-tasks/milestones) for the full layout.
 
 Tests must fully cover the prompt: explicit requirements, implicitly expected behavior, and critical edge cases—with every prompt requirement mapped to a test. See [Writing Tests](/portal/docs/creating-tasks/writing-tests) for detail.
 
@@ -211,32 +191,32 @@ stb login
 stb keys refresh   # if credentials are missing or expired
 ```
 
-2. Run with GPT-5.5:
+2. Run with GPT-5.6:
 
 ```bash
-stb harbor run -m @openai/gpt-5.5 -p <task-folder>
+stb harbor run -m @openai/gpt-5.6 -p <task-folder>
 ```
 
-3. Run with Claude Opus 4.8:
+3. Run with Claude Opus 5:
 
 ```bash
-stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-5 -p <task-folder>
 ```
 
-Run each agent 2-3 times to gauge pass rate. Your task should have < 80% pass rate to be accepted.
+Run each agent 4 times per model. Difficulty is the mean pass@1 across both models — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines). Tasks above 80% are not rejected; that is the Base tier. 100% across both models is.
 
 ## Step 10: Run LLMaJ Checks Locally
 
 Run LLMaJ checks before submitting:
 
-**GPT-5.5:**
+**GPT-5.6:**
 ```bash
-stb harbor run -m @openai/gpt-5.5 -p <task-folder>
+stb harbor run -m @openai/gpt-5.6 -p <task-folder>
 ```
 
-**Claude Opus 4.8:**
+**Claude Opus 5:**
 ```bash
-stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-5 -p <task-folder>
 ```
 
 All checks should pass before submission.
@@ -247,7 +227,7 @@ Before submitting, verify:
 
 - Oracle agent passes
 - All LLMaJ checks pass
-- Tested against real agents (pass rate < 80%)
+- Tested against real agents (4 runs per model; tier recorded in `task.toml`)
 - All files are present and correct
 
 Run final checks:
@@ -257,64 +237,36 @@ Run final checks:
 stb harbor run -a oracle -p <task-folder>
 
 # LLMaJ checks
-stb harbor tasks check -m openai/@openai/gpt-5.5 harbor_tasks/<task_name>
+stb harbor check harbor_tasks/<task_name>
 ```
 
 ## Step 12: Create ZIP File
 
 **Important:** Select the individual files inside your task folder, not the folder itself.
 
-**Non-milestone task layout:**
+**Task layout:**
 
 ```
 .
-├── instruction.md   ← Select these
-├── task.toml       ←
-├── environment/     ←
-│   ├── Dockerfile   ← (or docker-compose.yaml)
-│   └── [build files]
-├── solution/        ←
+├── task.toml            ← Select these
+├── instruction.md       ←
+├── environment/         ←
+│   ├── Dockerfile       ← (or docker-compose.yaml)
+│   └── data/            ← Bundled inputs
+├── solution/            ←
 │   └── solve.sh
-└── tests/           ←
-    ├── test.sh
-    └── test_outputs.py
+└── tests/               ←
+    ├── Dockerfile       ← Verifier image
+    ├── test.sh          ← Verifier entrypoint
+    └── test_outputs.py  ← Python pytest assertions
 ```
 
-**Milestone task layout:**
-
-```
-.
-├── task.toml       ← Select these
-├── environment/     ←
-│   ├── Dockerfile   ← (or docker-compose.yaml)
-│   └── [build files]
-└── steps/           ←
-    ├── milestone_1/
-    │   ├── instruction.md
-    │   ├── tests/
-    │   │   ├── test.sh
-    │   │   └── test_m1.py
-    │   └── solution/
-    │       ├── solve.sh
-    │       └── solve1.sh
-    └── milestone_2/
-        └── ... (same structure)
-```
-
-**On macOS:**
-1. Open the task folder
-2. Select all files (`Cmd+A`)
-3. Right-click → Compress
-
-**On Windows:**
-1. Open the task folder
-2. Select all files (`Ctrl+A`)
-3. Right-click → Send to → Compressed folder
+> `rubrics.txt` and `README.md` are **not** part of your ZIP — Snorkel adds both during packaging: the rubric from the platform UI, and the README from your `task.toml` explanation fields.
 
 ## Step 13: Submit to Platform
 
 1. Go to the [Snorkel Expert Platform](https://experts.snorkel-ai.com/)
-2. Navigate to **Terminus-2nd-Edition**
+2. Navigate to **Terminus-3-Prod**
 3. Click **Start** on the _Submission_ node
 4. Upload your ZIP file
 5. Keep "Send to reviewer" unchecked
@@ -379,8 +331,7 @@ After submission. wait for peer review (1-7 business days)
 
 **Fix:** Verify all files are in ZIP before uploading.
 
-- **Non-milestone tasks:** check that `instruction.md`, `task.toml`, `environment/`, `solution/`, and `tests/` are all included.
-- **Milestone tasks:** check that `task.toml`, `environment/`, and one `steps/milestone_N/` directory per milestone are all included. Each `steps/milestone_N/` must contain `instruction.md`, `tests/test.sh`, `tests/test_mN.py`, `solution/solve.sh`, and `solution/solveN.sh`. There should be **no** root-level `instruction.md`, `tests/`, `solution/`, or `milestone_x.md` files.
+- check that `instruction.md`, `task.toml`, `environment/`, `solution/`, and `tests/` are all included.
 
 ### CI Failures After Upload
 

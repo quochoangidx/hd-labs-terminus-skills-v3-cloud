@@ -200,10 +200,10 @@ RUN pip install pandas==2.0.0
 
 ### Runtime Network Installs in test.sh
 
-With `allow_internet = false`, `tests/test.sh` cannot fetch packages from the network at runtime. All verifier dependencies must be baked into the Docker image. A `test.sh` that runs `apt-get install`, `curl … install.sh`, `uvx`, `pip install`, `npm install`, `git clone`, or `wget` will succeed locally during development (where the network is available) and fail in production with `RewardNotFoundError`. This applies to the default `allow_internet = false`; for `allow_internet = true` tasks that genuinely require the network, runtime network use is permitted — though bundling dependencies into the image is still preferred where possible for deterministic grading.
+With `network_mode = "no-network"`, `tests/test.sh` cannot fetch packages from the network at runtime. All verifier dependencies must be baked into the Docker image. A `test.sh` that runs `apt-get install`, `curl … install.sh`, `uvx`, `pip install`, `npm install`, `git clone`, or `wget` will succeed locally during development (where the network is available) and fail in production with `RewardNotFoundError`. This applies to the default `network_mode = "no-network"`; for `network_mode = "public"` tasks that genuinely require the network, runtime network use is permitted — though bundling dependencies into the image is still preferred where possible for deterministic grading.
 
 ```bash
-# Bad - test.sh installs deps at runtime, fails with allow_internet = false
+# Bad - test.sh installs deps at runtime, fails with network_mode = "no-network"
 #!/bin/bash
 apt-get update && apt-get install -y curl
 curl -LsSf https://astral.sh/uv/0.9.5/install.sh | sh
@@ -223,7 +223,7 @@ fi
 And the corresponding `Dockerfile` line that makes this work:
 
 ```dockerfile
-# In environment/Dockerfile
+# In tests/Dockerfile
 RUN pip install --no-cache-dir pytest==8.4.1 pytest-json-ctrf==0.3.5
 ```
 
@@ -441,7 +441,7 @@ Signs a task might be problematic:
 
 ## See Also
 
-- [Quality Guidelines](/portal/docs/reference/quality-guidelines) — Additional quality standards for TBench 2.0 tasks
+- [Quality Guidelines](/portal/docs/reference/quality-guidelines) — Additional quality quality standards for Terminus 3 tasks
 - [Reviewer Checklist — Environment](/portal/docs/reviewing-tasks/reviewer-checklist) — Formal High-severity criteria for Dockerfile/container issues
 - [Prompt Styling](/portal/docs/understanding-tasks/prompt-styling) — Detailed rules behind the `instruction_styling` and `expose_answers` categories
 - [Writing Oracle Solution](/portal/docs/creating-tasks/writing-oracle-solution) — Detailed rules behind the `oracle` category

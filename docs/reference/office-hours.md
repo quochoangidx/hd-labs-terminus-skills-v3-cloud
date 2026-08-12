@@ -11,9 +11,9 @@ Office hours are open forums scheduled regularly where you can:
 
 ## Schedule
 
-The current office hours schedule is **pinned at the top of the `#terminus-2nd-edition-announcements` Slack channel under the "Office Hours" section** — check there for the latest dates, times, and Zoom links. Sessions are held multiple times per week (typically each weekday).
+The current office hours schedule is **pinned at the top of the `#terminus-3-announcements` Slack channel under the "Office Hours" section** — check there for the latest dates, times, and Zoom links. Sessions are held multiple times per week (typically each weekday).
 
-If you have a question and can't make a session, post it in [`#terminus-2nd-edition-submission`](https://snorkel-team.enterprise.slack.com/archives/C0AEHEYFVFD) instead.
+If you have a question and can't make a session, post it in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0AEHEYFVFD) instead.
 
 ## Recordings & Slides
 

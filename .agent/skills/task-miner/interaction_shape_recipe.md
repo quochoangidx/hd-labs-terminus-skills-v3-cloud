@@ -1,6 +1,7 @@
 # Interaction/Scale Shape Recipe — building tasks OUTSIDE the spec-engine mold
 
-> ⚠️ **EMPIRICAL VERDICT (2026-07-19, batch-3-round2): Archetypes 1 & 2 probed EASY.**
+> ⚠️ **Historical Terminus 2 verdict (2026-07-19): Archetypes 1 & 2 landed in
+> the old EASY band.**
 > The coupling doctrine below (≥3 causally-coupled causes ⇒ HARD) did NOT hold
 > against fresh blind frontier solvers. **Archetype 1 (multi-service ops
 > restoration)** — a stack with 3 GENUINELY causal-unmasking misconfigs
@@ -10,11 +11,9 @@
 > silent double-count/ordering trap — was full-solved by **3/3** solvers who all
 > applied the canonical SQLite table-rebuild recipe, which defuses the trap by
 > construction. Sysadmin restoration is discoverable-by-iteration; DB migration
-> has a canonical recipe. **Do NOT build these expecting HARD.** Treat this whole
-> recipe as MEDIUM-at-best and unproven; the ops/DB archetypes are effectively
-> dead for HARD. Archetype 3 (long-context cross-referencing) is the only
-> untested one and is suspect. Skeleton-probe ANY interaction shape extra
-> strictly and expect EASY. See AGENTS.md §6 interaction-shape verdict.
+> has a canonical recipe. Treat this as a likely Base/Core source rather than a
+> Frontier strategy. Skeleton-probe every interaction shape and report the
+> observed Terminus 3 tier instead of forcing a top-tier result.
 
 
 The master collapse law was validated on minimal spec-engine tasks: anything
@@ -23,9 +22,9 @@ near-exhausted. This recipe covers the one seam that escapes the law's reach:
 tasks whose difficulty is **breadth of discovery and interaction inside a
 realistic environment**, not a hidden rule. A solver can't transcribe its way
 through — it must explore, correlate state across components, and sequence
-changes correctly. These shapes are also naturally category-safe
-(system-administration, bd-mgmt, games are allowed slugs) and don't match the
-`rust_cli`-family templates.
+changes correctly. The category still follows the domain evidence: a service
+implementation is normally `Software / Systems`, while a logistics restoration
+workflow may be `Operations / Logistics`.
 
 Cost warning: these builds are 2–5× a spec-engine build. The skeleton probe
 (task-local-solve-probe, Skeleton mode) is MANDATORY before full investment,
@@ -51,7 +50,7 @@ A candidate holds only when ALL of:
    Both failing on the same single cause = single-lever fingerprint → the
    coupling isn't real → redesign or drop.
 
-## Archetype 1 — multi-service ops restoration (system-administration)
+## Archetype 1 — multi-service restoration
 
 - **Environment**: a realistic small stack in one container — e.g. nginx (or
   haproxy) fronting an app process managed by a supervisor (runit/supervisord
@@ -61,11 +60,10 @@ A candidate holds only when ALL of:
   perms + socket path mismatch + proxy header/timeout + db migration
   half-applied). Verify the coupling: scripted single-fix and pair-fix
   emulations must still fail the verifier; only the full set passes.
-- **Instruction framing (category-critical)**: "bring service X back to
-  serving Y at Z with properties P" — an OPERATIONAL OUTCOME. Never "find
-  the bug"/"debug why it fails" (→ debugging, blocked, `category_rules.md`
-  R3) and never "implement/fix the handler" (→ SWE, R4). The agent OPERATES
-  a system.
+- **Instruction framing:** state the operational outcome and its evidence.
+  Choose `Software / Systems` when the system itself is the domain; choose an
+  `Operations` subcategory only when correctness depends on business or
+  operational constraints beyond restoring software.
 - **Verifier**: end-to-end behavioral checks only — HTTP responses through
   the front proxy (status/body/headers), service supervision state after a
   kill (restart policy actually works), timed-job artifacts, log invariants.
@@ -90,10 +88,9 @@ A candidate holds only when ALL of:
   attempts that must fail), plus preservation checks on untouched data.
   Order-dependence is graded through corrupted-state detection, never by
   watching the steps.
-- **Category shape**: frame as operating/migrating a live store
-  (system-administration) or as schema/build migration (bd-mgmt). Avoid
-  "write a query that returns…" phrasing — records-in→report-out is the
-  blocked data-processing shape (R2).
+- **Category shape:** database internals, migrations, constraints, and recovery
+  normally belong to `Software / Databases`. ETL and record-linkage pipelines
+  normally belong to `Software / Data engineering`.
 
 ## Archetype 3 — long-context cross-referencing discovery
 
@@ -113,7 +110,8 @@ A candidate holds only when ALL of:
 
 ## Determinism rules (flakiness kills these tasks in review)
 
-- `allow_internet = false`; every package baked into the image.
+- Bake every dependency into the images. Keep `network_mode = "public"` by
+  default; use `"no-network"` only when internet access would defeat the task.
 - No wall-clock dependence: pin timestamps/timezones; timed-job checks run
   the job binary directly or advance a fake clock — never sleep-and-hope.
 - No race-prone asserts: poll-with-timeout helpers for service readiness
@@ -125,16 +123,15 @@ A candidate holds only when ALL of:
 
 ## Category + template hygiene
 
-- Verbs in instruction/rubric: operate, restore, configure, migrate,
-  provision, rotate — never implement/parse/debug/find.
+- Use verbs that accurately describe the requested outcome. Do not rewrite
+  verbs merely to influence category selection.
 - Rubric grades final BEHAVIOR (endpoints serve, invariants hold, jobs
   fire), never investigation steps.
 - The multi-service repo furniture (configs, docs, logs) is naturally
   template-distant; keep it VARIED across tasks anyway — two tasks sharing
   the same stack layout invite a template match.
-- Run `category_rules.md` on the shape before building; expected
-  predictions: archetype 1/3 → system-administration, archetype 2 →
-  system-administration or bd-mgmt.
+- Run `category_rules.md` before building and record the exact domain pair in
+  `category-screen.json`.
 
 ## Skeleton probe adaptation
 

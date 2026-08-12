@@ -198,7 +198,7 @@ but they do not change the ZIP allowlist.
 
 On first upload:
 
-- upload ZIP to Snorkel Expert Platform -> Terminus-2nd-Edition
+- upload the ZIP through the Terminus 3 submission flow
 - copy the three explanation sections (plus rubric and metadata answers)
   from the UI-ready `submissions/SUBMISSION-<slug>.md` packet into their
   matching platform fields; do not copy headings, rewrite diagnostics, or the

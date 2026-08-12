@@ -1,6 +1,7 @@
 # Writing Oracle Solution
 
-The oracle solution (`solution/solve.sh`) is an expert-authored script that reliably completes the task. It's used to verify that the task is solvable. For milestone tasks, the oracle solution lives per-milestone under `steps/milestone_N/solution/`: each milestone has its own `solveN.sh` (independently scoped to that milestone) plus a `solve.sh` wrapper that runs it. See the [Milestones page](/portal/docs/understanding-tasks/milestones) for details.
+The oracle solution (`solution/solve.sh`) is an expert-authored script that reliably completes the task. It's used to verify that the task is solvable.
+
 
 ## Getting Started
 

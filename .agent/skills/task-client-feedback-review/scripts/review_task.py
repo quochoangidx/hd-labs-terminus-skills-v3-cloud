@@ -75,6 +75,23 @@ SUBMISSION_EXPLANATION_NAMES = {
     "submission-explanations-source.md",
 }
 SUBMISSION_PACKET_RE = re.compile(r"^submission-.*\.md$", re.IGNORECASE)
+TAXONOMY = {
+    "Science": {"Biology", "Chemistry", "Physics", "Earth", "Robotics", "Math", "Linguistics"},
+    "Software": {"Algorithms", "Systems", "Databases", "Data engineering", "Frontend", "Languages"},
+    "ML": {"Training", "Inference", "Evaluation", "Kernels"},
+    "Operations": {"Finance", "Logistics", "Supply chain", "Claims", "Compliance", "Marketing"},
+    "Security": {"Cryptography", "Reverse engineering", "Forensics", "AppSec"},
+    "Hardware": {"CAD", "RTL"},
+    "Media": {"Music", "Design"},
+}
+DIFFICULTIES = {"frontier", "advanced", "core", "base"}
+REMOVED_METADATA_FIELDS = {
+    "codebase_size",
+    "number_of_milestones",
+    "subcategories",
+    "junior_time_estimate_min",
+    "expert_time_estimate_min",
+}
 
 
 @dataclass
@@ -194,15 +211,12 @@ def parse_task_toml(view: TaskView, findings: list[Finding]) -> dict:
 
 def review_rubric_format(
     text: str,
-    is_milestone: bool,
     findings: list[Finding],
     path: str,
 ) -> None:
     headers: list[int] = []
     positives: list[int] = []
     negatives: list[int] = []
-    by_header: dict[int, dict[str, list[int]]] = {}
-    current_header: int | None = None
     invalid_lines = 0
 
     for raw in text.splitlines():
@@ -211,21 +225,15 @@ def review_rubric_format(
             continue
         header_match = RUBRIC_HEADER_RE.match(line)
         if header_match:
-            current_header = int(header_match.group(1))
-            headers.append(current_header)
-            by_header.setdefault(current_header, {"positive": [], "negative": []})
+            headers.append(int(header_match.group(1)))
             continue
         criterion_match = RUBRIC_CRITERION_RE.match(line)
         if criterion_match:
             score = int(criterion_match.group(2))
             if criterion_match.group(1) == "-":
                 negatives.append(score)
-                if current_header is not None:
-                    by_header.setdefault(current_header, {"positive": [], "negative": []})["negative"].append(score)
             else:
                 positives.append(score)
-                if current_header is not None:
-                    by_header.setdefault(current_header, {"positive": [], "negative": []})["positive"].append(score)
             continue
         if RUBRIC_BAD_SCORE_RE.search(line) or line.startswith("Agent") or line.startswith("# Rubric"):
             invalid_lines += 1
@@ -233,26 +241,15 @@ def review_rubric_format(
     if invalid_lines:
         add(findings, "blocker", "rubric-format", f"{invalid_lines} rubric line(s) do not match `Agent ..., +/-N` with allowed values 1, 2, 3, or 5.", path, "terminus-regular-task-authoring")
 
-    if is_milestone:
-        if not headers:
-            add(findings, "blocker", "rubric-headers", "Milestone rubric should use `# Rubric 1`, `# Rubric 2`, etc. blocks.", path, "terminus-regular-task-authoring")
-        if len(negatives) < 3:
-            add(findings, "should_fix", "rubric-negatives", "Rubric should include at least three negative criteria overall.", path, "terminus-regular-task-authoring")
-        for header, scores in sorted(by_header.items()):
-            positive_total = sum(scores["positive"])
-            if scores["positive"] and not 10 <= positive_total <= 40:
-                add(findings, "should_fix", "rubric-points", f"Rubric {header} positive total is {positive_total}; target range is 10-40 per milestone.", path, "terminus-regular-task-authoring")
-            if not scores["negative"]:
-                add(findings, "should_fix", "rubric-negatives", f"Rubric {header} should include at least one negative criterion.", path, "terminus-regular-task-authoring")
-    elif any(n > 1 for n in headers):
-        add(findings, "blocker", "rubric-headers", "Non-milestone rubric should be a flat list; `# Rubric 2+` is reserved for milestone tasks.", path, "terminus-regular-task-authoring")
+    if headers:
+        add(findings, "should_fix", "rubric-headers", "Terminus 3 rubrics should be a flat list of criterion lines.", path, "terminus-regular-task-authoring")
 
     if positives:
         positive_total = sum(positives)
-        if not is_milestone and not 10 <= positive_total <= 40:
-            add(findings, "should_fix", "rubric-points", f"Non-milestone positive rubric total is {positive_total}; target range is 10-40.", path, "terminus-regular-task-authoring")
-    if not is_milestone and len(negatives) < 3:
-        add(findings, "should_fix", "rubric-negatives", "Non-milestone rubric should include at least three negative criteria.", path, "terminus-regular-task-authoring")
+        if not 10 <= positive_total <= 40:
+            add(findings, "should_fix", "rubric-points", f"Positive rubric total is {positive_total}; target range is 10-40.", path, "terminus-regular-task-authoring")
+    if not negatives:
+        add(findings, "should_fix", "rubric-negatives", "Rubric should include at least one negative criterion.", path, "terminus-regular-task-authoring")
 
 
 def root_entries(files: Iterable[str]) -> set[str]:
@@ -414,7 +411,7 @@ def check_instruction_sufficiency_evidence(view: TaskView, findings: list[Findin
         )
 
 
-def review(path: Path, revision_exception: bool = False) -> dict:
+def review(path: Path) -> dict:
     view = TaskView(path)
     findings: list[Finding] = []
     files = view.files()
@@ -424,7 +421,18 @@ def review(path: Path, revision_exception: bool = False) -> dict:
         if view.parent_prefix:
             add(findings, "blocker", "zip-structure", "ZIP contains an extra top-level task folder.", view.parent_prefix.rstrip("/"), "task-zip-submit")
 
-        required = {"instruction.md", "task.toml", "environment/", "solution/", "tests/"}
+        required = {
+            "instruction.md",
+            "task.toml",
+            "environment/",
+            "solution/",
+            "tests/",
+            "environment/Dockerfile",
+            "solution/solve.sh",
+            "tests/Dockerfile",
+            "tests/test.sh",
+            "tests/test_outputs.py",
+        }
         roots = root_entries(files)
         missing = [r for r in required if r.endswith("/") and r not in roots]
         missing += [r for r in required if not r.endswith("/") and r not in file_set]
@@ -453,29 +461,57 @@ def review(path: Path, revision_exception: bool = False) -> dict:
 
         task = parse_task_toml(view, findings)
         metadata = task.get("metadata", {}) if isinstance(task, dict) else {}
-        codebase_size = metadata.get("codebase_size")
         languages = metadata.get("languages", [])
-        category = metadata.get("category")
-        open_categories = {
-            "build-and-dependency-management",
-            "data-processing",
-            "debugging",
-            "games",
-            "machine-learning",
-            "scientific-computing",
-            "security",
-            "software-engineering",
-            "system-administration",
+        artifacts = task.get("artifacts") if isinstance(task, dict) else None
+        if not isinstance(artifacts, list) or not artifacts:
+            add(findings, "blocker", "artifacts", "task.toml must declare a non-empty top-level artifacts array.", "task.toml", "terminus-regular-task-authoring")
+            artifacts = []
+        elif any(not isinstance(item, str) or not item.startswith("/") for item in artifacts):
+            add(findings, "blocker", "artifacts", "Every artifact path must be an absolute string.", "task.toml", "terminus-regular-task-authoring")
+
+        required_metadata = {
+            "author_name",
+            "author_email",
+            "category",
+            "subcategory",
+            "tags",
+            "languages",
+            "difficulty",
+            "expert_time_estimate_hours",
+            "difficulty_explanation",
+            "solution_explanation",
+            "verification_explanation",
+            "relevant_experience",
         }
-        if category not in open_categories and not revision_exception:
-            add(
-                findings,
-                "blocker",
-                "category-availability",
-                "This is not one of the nine currently open Terminus categories.",
-                "task.toml",
-                "task-miner",
-            )
+        for field in sorted(required_metadata - set(metadata)):
+            add(findings, "blocker", "metadata", f"Missing [metadata].{field}.", "task.toml", "terminus-regular-task-authoring")
+
+        removed = sorted(REMOVED_METADATA_FIELDS & set(metadata))
+        if isinstance(task, dict) and "version" in task:
+            removed.append("version")
+        environment = task.get("environment", {}) if isinstance(task, dict) else {}
+        if isinstance(environment, dict) and "allow_internet" in environment:
+            removed.append("allow_internet")
+        if removed:
+            add(findings, "blocker", "terminus2-metadata", f"Remove obsolete Terminus 2 field(s): {', '.join(removed)}.", "task.toml", "terminus-regular-task-authoring")
+
+        difficulty = metadata.get("difficulty")
+        if difficulty not in DIFFICULTIES:
+            add(findings, "blocker", "difficulty", "difficulty must be frontier, advanced, core, or base.", "task.toml", "terminus-regular-task-authoring")
+        category = metadata.get("category")
+        subcategory = metadata.get("subcategory")
+        if category not in TAXONOMY or subcategory not in TAXONOMY.get(category, set()):
+            add(findings, "blocker", "taxonomy", "category/subcategory must be one exact Terminus 3 Title Case pair.", "task.toml", "task-miner")
+        tags = metadata.get("tags")
+        if not isinstance(tags, list) or not 3 <= len(tags) <= 6:
+            add(findings, "blocker", "tags", "[metadata].tags must contain 3-6 values.", "task.toml", "terminus-regular-task-authoring")
+
+        verifier = task.get("verifier", {}) if isinstance(task, dict) else {}
+        if not isinstance(verifier, dict) or verifier.get("environment_mode") != "separate":
+            add(findings, "blocker", "verifier-mode", "[verifier].environment_mode must be 'separate'.", "task.toml", "terminus-regular-task-authoring")
+        network_mode = environment.get("network_mode") if isinstance(environment, dict) else None
+        if network_mode not in {"public", "no-network"}:
+            add(findings, "blocker", "network-mode", "[environment].network_mode must be 'public' or 'no-network'.", "task.toml", "terminus-regular-task-authoring")
 
         if "pyproject.toml" in file_set:
             add(findings, "blocker", "root-pyproject", "Root-level pyproject.toml should not be submitted.", "pyproject.toml", "task-zip-submit")
@@ -486,31 +522,10 @@ def review(path: Path, revision_exception: bool = False) -> dict:
         if len(wheels) > 10:
             add(findings, "blocker", "tests-wheels", f"{len(wheels) - 10} additional wheels under tests/.", "tests/", "terminus-regular-task-authoring")
 
-        if any(n.startswith("environment/data/") for n in files):
-            add(findings, "blocker", "environment-data", "environment/data is present; verify it is not an oversized prompt/spec extension.", "environment/data", "upstream-repo-sanitizer")
-
-        # codebase_size must match the environment/ file count; CI enforces this
-        # mechanically (excludes Dockerfile/docker-compose): 0-19 minimal,
-        # 20-199 small, 200+ large.
-        env_count = sum(
-            1 for n in files
-            if n.startswith("environment/")
-            and os.path.basename(n) != "Dockerfile"
-            and not os.path.basename(n).startswith("docker-compose")
-        )
-        expected_size = "minimal" if env_count <= 19 else "small" if env_count <= 199 else "large"
-        if codebase_size and codebase_size != expected_size:
-            add(findings, "blocker", "codebase-size", f"codebase_size is '{codebase_size}' but environment/ has {env_count} files (excluding Dockerfile/docker-compose), expected '{expected_size}'.", "task.toml", "task-clone")
-
-        # agent.timeout_sec must be in [1, 1800] (CI hard cap).
+        # Terminus 3 agent timeout is 1800-18000 seconds.
         agent_timeout = (task.get("agent") or {}).get("timeout_sec") if isinstance(task, dict) else None
-        if isinstance(agent_timeout, (int, float)) and not (1 <= agent_timeout <= 1800):
-            add(findings, "blocker", "agent-timeout", f"agent.timeout_sec is {agent_timeout}; CI requires 1-1800 seconds.", "task.toml", "terminus-regular-task-authoring")
-
-        if codebase_size in {"minimal", "small"}:
-            for name in files:
-                if name.startswith("environment/") and LICENSE_RE.search(name):
-                    add(findings, "blocker", "license-small", f"License/notice file appears in {codebase_size} codebase.", name, "upstream-repo-sanitizer")
+        if not isinstance(agent_timeout, (int, float)) or not (1800 <= agent_timeout <= 18000):
+            add(findings, "blocker", "agent-timeout", f"agent.timeout_sec is {agent_timeout!r}; Terminus 3 requires 1800-18000 seconds.", "task.toml", "terminus-regular-task-authoring")
         if isinstance(languages, list) and any(str(x).lower() == "python" for x in languages):
             env_py = [
                 n for n in files
@@ -530,12 +545,14 @@ def review(path: Path, revision_exception: bool = False) -> dict:
         else:
             if RUNTIME_SETUP_RE.search(test_sh):
                 add(findings, "blocker", "test-sh-runtime-setup", "tests/test.sh installs packages or downloads at verifier runtime.", "tests/test.sh", "terminus-regular-task-authoring")
-            mkdir_pos = test_sh.find("mkdir -p /logs/verifier")
-            pwd_pos = test_sh.find('if [ "$PWD" = "/" ]')
-            if mkdir_pos == -1 or (pwd_pos != -1 and mkdir_pos > pwd_pos):
-                add(findings, "blocker", "test-sh-logs", "tests/test.sh must create /logs/verifier before the PWD guard or other early exits.", "tests/test.sh", "terminus-regular-task-authoring")
-            if re.search(r"fi\s*\n\s*exit\b|exit \$\?", test_sh):
-                add(findings, "should_fix", "test-sh-exit", "tests/test.sh has a trailing exit; current template ends at the reward block.", "tests/test.sh", "terminus-regular-task-authoring")
+            if "mkdir -p /logs/verifier" not in test_sh:
+                add(findings, "blocker", "test-sh-logs", "tests/test.sh must create /logs/verifier before pytest.", "tests/test.sh", "terminus-regular-task-authoring")
+            if re.search(r"(?m)^\s*set\s+-[A-Za-z]*e[A-Za-z]*\b", test_sh):
+                add(findings, "blocker", "test-sh-set-e", "tests/test.sh must not use set -e; pytest failures must reach the reward block.", "tests/test.sh", "terminus-regular-task-authoring")
+            if "--ctrf /logs/verifier/ctrf.json" not in test_sh:
+                add(findings, "blocker", "test-sh-ctrf", "pytest must write /logs/verifier/ctrf.json with --ctrf.", "tests/test.sh", "terminus-regular-task-authoring")
+            if not re.search(r"(?m)^\s*exit\s+0\s*$", test_sh) or not test_sh.rstrip().endswith("exit 0"):
+                add(findings, "blocker", "test-sh-exit", "Terminus 3 tests/test.sh must end with exit 0 after writing reward.txt.", "tests/test.sh", "terminus-regular-task-authoring")
 
         dockerfile = view.read_text("environment/Dockerfile")
         if dockerfile:
@@ -558,6 +575,24 @@ def review(path: Path, revision_exception: bool = False) -> dict:
                 add(findings, "blocker", "dockerfile-hidden-paths", "Dockerfile creates benchmark runtime paths.", "environment/Dockerfile", "terminus-regular-task-authoring")
         else:
             add(findings, "blocker", "dockerfile", "Missing environment/Dockerfile.", "environment/Dockerfile", "terminus-regular-task-authoring")
+
+        verifier_dockerfile = view.read_text("tests/Dockerfile")
+        if verifier_dockerfile:
+            if re.search(r"(?im)^\s*FROM\s+[^@\n]+$", verifier_dockerfile):
+                add(findings, "blocker", "verifier-digest", "tests/Dockerfile FROM line appears to lack a sha256 digest.", "tests/Dockerfile", "terminus-regular-task-authoring")
+            for dep in ("pytest", "pytest-json-ctrf"):
+                if dep not in verifier_dockerfile:
+                    add(findings, "blocker", "verifier-deps", f"tests/Dockerfile does not bake in {dep}.", "tests/Dockerfile", "terminus-regular-task-authoring")
+            if not re.search(r"(?im)^\s*COPY\s+\.\s+/tests/?\s*$", verifier_dockerfile):
+                add(findings, "blocker", "verifier-copy", "tests/Dockerfile should copy its build context with `COPY . /tests/`.", "tests/Dockerfile", "terminus-regular-task-authoring")
+            for artifact in artifacts:
+                if not isinstance(artifact, str) or not artifact.startswith("/"):
+                    continue
+                landing = artifact.rstrip("/") if artifact.endswith("/") else str(Path(artifact).parent)
+                if landing != "/" and landing not in verifier_dockerfile:
+                    add(findings, "blocker", "artifact-landing-dir", f"tests/Dockerfile does not visibly create artifact landing directory {landing}.", "tests/Dockerfile", "terminus-regular-task-authoring")
+        else:
+            add(findings, "blocker", "verifier-dockerfile", "Missing tests/Dockerfile.", "tests/Dockerfile", "terminus-regular-task-authoring")
 
         env_size = view.environment_size()
         if env_size > 100 * 1024 * 1024:
@@ -582,12 +617,11 @@ def review(path: Path, revision_exception: bool = False) -> dict:
                 break
 
         rubric_files = [n for n in files if "rubric" in Path(n).name.lower()]
-        is_milestone = "steps/" in roots and "instruction.md" not in file_set
         for name in rubric_files:
             rubric_text = view.read_text(name)
             if EVAL_REF_RE.search(rubric_text):
                 add(findings, "blocker", "rubric-eval-ref", "Rubric references tests/verifier/evaluation language.", name, "terminus-regular-task-authoring")
-            review_rubric_format(rubric_text, is_milestone, findings, name)
+            review_rubric_format(rubric_text, findings, name)
 
         env_hits = []
         for name in text_files:
@@ -662,14 +696,9 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+", help="Task folders or submission ZIPs")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")
-    parser.add_argument(
-        "--revision-exception",
-        action="store_true",
-        help="Legacy compatibility flag; all nine Regular-task categories are currently open",
-    )
     args = parser.parse_args(argv)
 
-    results = [review(Path(p), revision_exception=args.revision_exception) for p in args.paths]
+    results = [review(Path(p)) for p in args.paths]
     if args.json:
         print(json.dumps(results, indent=2, sort_keys=True))
     else:

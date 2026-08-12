@@ -1,13 +1,13 @@
 ---
 name: task-revise-flag-remediation
-description: Use when a Terminus task is returned with the platform flag "Some tests not passed by any agent run" (a 0/N coverage failure), when pre-auditing correlated blind spots before submission, or when the user explicitly opts into pragmatic non-Python MEDIUM salvage. Classifies each 0/N test by root cause and applies the matching fix — delete redundant group test, parametrize per-case, prune the case, disclose the convention, or ship reference data in-env — while guarding that difficulty is retained.
+description: Use when a Terminus 3 task is returned with the platform flag "Some tests not passed by any agent run" or when pre-auditing correlated blind spots. Classifies each 0/N test by root cause and applies the matching fix while preserving fairness and the empirically observed tier.
 ---
 
 # Coverage-Flag Remediation — "Some tests not passed by any agent run"
 
 The platform flag `❌ Some tests not passed by any agent run` is **BLOCKING**:
-the task is returned until every verifier test is passed by ≥1 of the ~10
-agent runs. This skill is the remediation decision tree, distilled from ~10
+the task is returned until every verifier test is passed by at least one trial.
+This skill is the remediation decision tree, distilled from historical
 platform rounds across 6 tasks (html5-tree-construction, semver-range-satisfies,
 maven-version-order, collation-sortkey, css-tokenization, cargo-version-req).
 
@@ -16,9 +16,9 @@ maven-version-order, collation-sortkey, css-tokenization, cargo-version-req).
 0/N happens only for **CORRELATED** failures — every agent misses the SAME
 feature. De-correlated (independent) failures get covered by the union across
 runs and naturally reach ≥1/N. You cannot *guarantee* every test ≥1/N by
-editing — the flag is stochastic: at N=10 runs, keeping expected-0/N below 1
+editing — the flag is stochastic: for a sample of N runs, keeping expected-0/N below 1
 across ~1500 cases requires every case be passed by >~37% of runs, which
-contradicts HARD. The achievable goal is: **eliminate every correlated /
+conflicts with a very low pass-rate target. The achievable goal is: **eliminate every correlated /
 deterministic blind spot, then prune the residual low-probability tail for
 margin, then re-run to confirm.**
 
@@ -29,28 +29,23 @@ as a "spec table" to the instruction checker). The move that satisfies both:
 doc, a standard's table), not in instruction.md as prose** — see the
 disclosure ladder in `terminus-regular-task-authoring` (Prompt Rules).
 
-## Local 3-run pre-audit is not a platform 0/10 verdict
+## A local pre-audit is not the platform verdict
 
-When this skill is called from `task-batch`, treat a test missed by all 3 local
-solvers as a coverage-risk observation, not proof that all roughly 10 platform
-solvers will miss it. Always build the per-case × per-run matrix first:
+When this skill is called from `task-batch`, treat a test missed by every local
+run as a risk observation, not proof that the platform sample will miss it.
+Always build the per-case × per-run matrix first:
 
-- non-Python may remain eligible through 2/3 solved; 2/3 is MEDIUM/AMBER and
-  the failing run must contain at least two broad semantic clusters;
-- Python still requires 0/3 solved;
+- difficulty is language-independent;
 - union 100% and clean fairness needs no coverage remediation;
-- bounded distributed common misses that satisfy the
-  `platform_candidate_coverage_risk` thresholds in `task-batch` are preserved
-  unchanged and packaged separately for the wider platform sample only after
-  the task's validated `instruction-sufficiency.json` maps every affected
-  cluster to visible contract or training evidence;
+- shared misses require a validated instruction-sufficiency mapping before any
+  change;
 - common misses caused by infra, oracle, contract, aggregation, or unreachable
   data follow Steps 0–2 below;
 - concentrated single-lever misses or candidates outside the bounded lane are
   redesigned/dropped from the qualified pipeline, while their artifacts remain
   retained for audit rather than being silently deleted.
 
-Do not margin-prune a task from local 0/3 evidence alone merely to manufacture
+Do not margin-prune a task from a small local sample merely to manufacture
 100% local union. Platform per-trial readback is stronger evidence than the
 three-run pre-audit.
 
@@ -109,7 +104,7 @@ Before walking the decision tree, check the fair⊥hard fingerprint: agent runs
 are NEAR-PERFECT and miss only the 0/N cluster — i.e. the task's ENTIRE
 difficulty is that one boundary / convention / precedence / output-contract
 fact. Then no remediation path exists: hiding it stays unfair 0/N, disclosing
-or pruning it flips the near-perfect runs to 100% and the task grades EASY.
+or pruning it flips the near-perfect runs to 100% and the task has no signal.
 **DROP or redesign around an orthogonal implementation/reasoning challenge under
 a fully visible contract immediately**
 (arrhenius-clip-fit, calibration-threshold-select, hanabi, provenance-release-
@@ -119,50 +114,18 @@ already have been screened at mining time (`task-miner`, Master collapse law
 screen). Only tasks with a BROAD residual wall beyond the 0/N cluster continue
 to Step 2.
 
-### Explicit pragmatic MEDIUM salvage
+### Preserve the honest Terminus 3 tier
 
-The strict exit above is the default for autonomous batches and HARD claims.
-When the user explicitly accepts a less conservative gate to avoid discarding
-usable work, a non-Python task may take a bounded salvage lane:
+Coverage remediation is a fairness and observability repair, not a difficulty
+hardening tool. Base and Core outcomes are valid. After every disclosure, split,
+data addition, or prune:
 
-- run one final fresh blind solve after the first valid semantic run;
-- prove oracle=1 and NOP=0 and rule out setup, verifier, and authority defects;
-- require the shared misses to be a small, coherent contract/reference cluster
-  that Step 2 can fully disclose, split, prune, or supply as in-environment data;
-- require independent graded breadth outside that cluster, established by the
-  starter's broad failure, mutation coverage, or de-correlated behavior groups;
-- package it as MEDIUM with a recorded amber caveat, never relabel it HARD or
-  claim union-complete probe evidence.
-
-User-approved local pre-submit variant (2026-07-22): a local "some tests not
-passed" pre-audit is not automatically fatal when the common set is bounded
-and can be removed or fully clarified without gutting the residual wall.
-After the fix, re-score the stored diffs and require:
-
-- oracle=1, NOP=0, preflight/ZIP validation clean;
-- common misses = 0 on the revised corpus;
-- every retained behavior cluster still has soft representative cases;
-- at least two stored semantic solvers still score reward 0, or one solver
-  still misses a broad multi-cluster residual while the handoff is explicitly
-  marked `deliverable_amber`;
-- the handoff records the original common-miss count and the exact fix.
-
-Do **not** use this lane when pruning the common set makes a strong stored
-solver pass the remaining corpus completely; that is the battery-slurry
-collapse fingerprint, not a coverage fix. Do not use it for broad 0/N surfaces
-(dozens of common misses across most clusters), Python, setup failures, or
-bad-oracle cases. Positive examples: textile-dye-trim pruned 3 local common
-misses and retained two failing solvers (6/57 and 3/57 misses); paper-mill-
-furnish-trim pruned 12 common misses and retained reward-0 residuals (1/48 and
-38/48 misses). Negative examples: battery-slurry-coat-trim pruned-to-one-
-solver-full-pass, ceramic-glaze-trim had 42/60 common, warehouse-coldchain had
-60/60 common.
-
-This lane is meant for shapes such as a resolver that still grades independent
-ordering, archive/group traversal, and symbol-state interactions after one
-precedence/output convention is clarified. It does not rescue an all-pass
-task, Python, a bad oracle, or a near-perfect single-lever task whose only wall
-would disappear after remediation.
+- rerun oracle and nop in the separate-verifier flow;
+- re-score the stored solve diffs;
+- update the measured tier rather than retaining an older higher-tier claim;
+- reject the task if removing the shared cluster leaves a 100% sample or reveals
+  that the entire challenge was one hidden convention;
+- apply the same rule to Python and every other implementation language.
 
 ## Step 2 — classify each 0/N test and apply the matching fix
 
@@ -179,7 +142,7 @@ Cross-cutting rules:
 
 - **NEVER** delete the per-case parametrized suite or collapse the corpus to a
   few boundary cases to clear the flag — boundary cases are memorizable and
-  the task flips EASY (fails the difficulty gate).
+  the task flips to 100% (fails the iteration gate).
 - Pruning must be **feature-cluster-complete**: a literal predicate can be
   incomplete when cases reach the blind spot transitively (collation: BMP
   compat ideographs *decompose to* astral CJK — the prune predicate had to be
@@ -202,7 +165,7 @@ flipping to 0/N on the next sampled run, 2/N ~11%, 3/N ~2.8%. After fixing the
 clusters, prune observed ≤2/N cases from the last report for margin — but do
 NOT prune the whole ≤2/N tail on the FIRST fix (pkgconf 2026-07-19, AGENTS.md
 §3): that tail can nearly equal the best agent's residual failure budget, and
-sweeping it risks flipping HARD to EASY. Prune conservatively, keep softer
+sweeping it risks erasing the observed difficulty signal. Prune conservatively, keep softer
 representatives of each cluster, and lean on disclosure first.
 Don't chase ≤3/N unless forced — over-pruning the hardest cases raises the
 best-run ceiling toward 100% and risks the difficulty gate. Per-case counts in
@@ -213,8 +176,9 @@ Exception: do not margin-prune the ≤2/N tail when the best agents are already
 near-perfect and those low-pass cases are their only remaining misses. In that
 shape, prune only the true 0/N rows and leave the 1/N or 2/N rows as the
 residual wall; removing them can turn many failed trials into full passes and
-collapse HARD to EASY. Proven on renju-forbidden-move: after per-case CTRF,
-three 0/10 rows were pruned while two 1/10 rows were deliberately retained.
+collapse a historical high-tier result to no signal. Proven on
+renju-forbidden-move: after per-case CTRF, three 0/10 rows were pruned while two
+1/10 rows were deliberately retained.
 
 Index bookkeeping when pruning repeatedly: report indices map to the current
 corpus via `cur = old if old < deleted_idx else old - 1` per prior deletion.

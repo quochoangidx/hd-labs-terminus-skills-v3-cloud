@@ -4,6 +4,38 @@ The `tests/test_outputs.py` file contains pytest tests that verify task completi
 
 All verifier tests must be written in Python and run with pytest, regardless of the task's implementation language. For non-Python tasks, write Python tests that exercise the CLI, service, files, or processes under test. `tests/test.sh` is a bash entry point, but it should invoke the Python pytest suite rather than delegating to another language-specific test framework.
 
+## How Verification Works
+
+In Terminus 3 the verifier runs in a **separate container** the agent cannot see or reach:
+
+1. The agent works in the task environment until it stops or times out.
+2. Harbor collects the paths declared in `artifacts` from the agent's final environment.
+3. A separate verifier container, built from `tests/Dockerfile`, starts up.
+4. The collected artifacts are placed into that container.
+5. `tests/test.sh` runs and writes a reward.
+
+The verifier never runs inside the agent's environment, and it only ever sees the artifacts you declared.
+
+### Declaring Artifacts
+
+```toml
+artifacts = ["/app/output.json", "/app/results/"]
+```
+
+> ⚠️ **`artifacts` is a top-level key in `task.toml`.** Nesting it under `[verifier]` does not raise an error — the value is silently dropped and your verifier receives nothing.
+
+**Parent directories must already exist in the verifier image.** Harbor uploads declared artifacts into the verifier, and the upload fails if the landing directory is missing:
+
+```dockerfile
+RUN mkdir -p /app/results
+```
+
+A missing landing directory produces failures that look like broken tests. Check this first when a verifier fails inexplicably.
+
+### Verifier Dependencies
+
+Everything the verifier needs — pytest, plugins, browser drivers, wheels, npm packages — must be baked into `tests/Dockerfile`. Nothing may be installed or downloaded at trial time.
+
 ## Getting Started
 
 ### Video Tutorial
@@ -154,39 +186,63 @@ def test_special_characters():
     assert process("héllo 世界") == ["héllo", "世界"]
 ```
 
-## tests/test.sh
+## tests/test.sh and tests/Dockerfile
 
-The test runner script sets up the verifier command, runs Python pytest against the test file, and produces a reward file. Do not replace pytest with another test framework such as JUnit, Jest, or `go test`; use Python pytest tests to drive and validate those systems when needed. It must not install packages or fetch anything from the network at runtime. Bake pytest, plugins, browser drivers, wheels, npm packages, and any other verifier dependencies into the Docker image instead.
+`tests/test.sh` is the verifier entrypoint. It runs the Python pytest suite and writes the reward file. Do not replace pytest with another test framework such as JUnit, Jest, or `go test` — use Python pytest tests to drive and validate those systems when needed.
+
+What is settled for Terminus 3:
+
+- `tests/Dockerfile` builds the verifier image and must bake in **all** verifier dependencies.
+- `tests/test.sh` must **not** install packages or fetch anything from the network at runtime — no `uvx`, `pip install`, `npm install`, `curl`, `wget`, or `git clone`.
+- The reward is written to `/logs/verifier/reward.txt` (`1` pass, `0` fail).
+- pytest is run with `--ctrf /logs/verifier/ctrf.json` to emit a structured test report.
+- Pin verifier tooling to exact versions.
+
+### tests/Dockerfile
+
+```dockerfile
+FROM python:3.12-slim-bookworm@sha256:<digest>
+
+# Pin every verifier dependency to an exact version — nothing is installed at trial time.
+RUN pip install --no-cache-dir pytest==9.1.1 pytest-json-ctrf==0.5.2
+
+# Separate-mode verifiers do not receive an upload of tests/, so the image must own
+# /tests itself. The build context is your task's tests/ directory.
+COPY . /tests/
+
+# Artifact landing directories must exist before Harbor uploads declared artifacts.
+RUN mkdir -p /app
+```
+
+Every `FROM` in `tests/Dockerfile` must be digest-pinned and on a sanctioned base image, exactly as in `environment/Dockerfile`. This is currently reported as a **warning** rather than a hard failure, but treat it as required.
+
+### tests/test.sh
 
 ```bash
 #!/bin/bash
 set -uo pipefail
 
-# Check if we're in a valid working directory
-if [ "$PWD" = "/" ]; then
-    echo "Error: No working directory set. Please set a WORKDIR in your Dockerfile before running this script."
-    mkdir -p /logs/verifier
-    echo 0 > /logs/verifier/reward.txt
-    exit 0
-fi
-
 mkdir -p /logs/verifier
 
-# pytest and pytest-json-ctrf must be pre-installed in the Docker image.
 python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
 rc=$?
 
-# Produce reward file (REQUIRED)
 if [ "$rc" -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else
   echo 0 > /logs/verifier/reward.txt
-fi 
+fi
+
+exit 0
 ```
 
-> **Note:** Test dependencies must be installed in the Dockerfile, NOT in `tests/test.sh`. `tests/test.sh` should not use `uvx`, `pip install`, `npm install`, `curl`, `wget`, `git clone`, or other networked setup commands. Local-only installs from preloaded wheels, such as `pip install --no-index -f /opt/wheels pytest==8.4.1`, are acceptable when needed.
+Three things about this script are deliberate:
 
-> **On the reward block and exit codes:** The `if [ ... -eq 0 ] ... fi` reward block is the **canonical end of `test.sh`** (using either `$?` inline or a variable like `rc=$?` captured immediately after pytest — `check_test_sh` accepts both shapes). No trailing `exit` statement is required or desired after it. Harbor determines pass/fail by reading `/logs/verifier/reward.txt`, **not** the script's exit code — when pytest fails, the `else` branch writes `0` and the platform records a failure regardless of the script's own exit status. Reviewers must **not** flag the absence of a trailing `exit` as a defect. The `check_test_sh` static gate enforces this canonical shape, so adding `exit $?` after `fi` will actually fail CI.
+- **No `set -e`.** With `-e`, a failing pytest aborts the script before the reward file is written, and the trial records no result at all. Capture the exit code instead.
+- **Always `exit 0`.** Harbor grades from `/logs/verifier/reward.txt`, not from the script's exit status. A non-zero exit does not mark the task failed — it risks the trial being treated as errored.
+- **`--ctrf /logs/verifier/ctrf.json` is required** for any pytest-based verifier, and is enforced by an automated check.
+
+> **Verify against the task skeleton.** These shapes are confirmed by the team but predate the published Terminus 3 skeleton. If the skeleton differs, the skeleton wins — and please flag it. The `set -e` guidance and the digest-pinning scope for `tests/Dockerfile` are still being confirmed and may change.
 
 ## Common Patterns
 

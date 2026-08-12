@@ -57,8 +57,8 @@ runtime from `…/docs/<slug>.md` (content-type `text/markdown`). Fetch those
 
 > ⚠️ Do NOT grep the JS bundle for doc content. The bundle is only the React
 > shell; it carries stale hardcoded strings (confirmed 2026-06-14: the bundle
-> still showed eval models `GPT-5.2`/`Opus 4.6` while the live `.md` already had
-> `GPT-5.5`/`Opus 4.8`). Also, the bundle has a content-hashed filename, so an
+> still showed stale model names while the live `.md` had already changed).
+> Also, the bundle has a content-hashed filename, so an
 > UNCHANGED bundle name does NOT mean docs are unchanged — doc `.md` files change
 > independently. The only reliable change-detector is diffing the fetched `.md`.
 
@@ -99,22 +99,22 @@ For each key rule area, compare online content with local docs:
 | Rule Area | Local Doc File | Online Search Term |
 |-----------|---------------|-------------------|
 | Verifier dependency placement | `creating-tasks/writing-tests.md` | `test_deps_in_image`, `verifier dependencies`, `tests/wheels` |
+| Separate verifier + artifacts | `creating-tasks/writing-tests.md` | `tests/Dockerfile`, `environment_mode`, `artifacts` |
 | Sanctioned bases | `creating-tasks/dockerfile-best-practices.md` | `sanctioned` |
 | test.sh canonical form | `creating-tasks/writing-tests.md` | `reward.txt` |
-| codebase_size bands | `understanding-tasks/task-requirements.md` | `codebase_size` |
 | Difficulty thresholds | `understanding-tasks/difficulty-guidelines.md` | `accuracy` |
-| Diversity gates | `understanding-tasks/diversity-requirements.md` | `blocked` |
+| Category taxonomy | `understanding-tasks/task-taxonomy.md` | `subcategory` |
 | Instruction styling | `understanding-tasks/prompt-styling.md` | `canary` |
-| Category/policy live status | `reference/category-status.md` | `Blocked`, `allow_internet` |
+| Category/policy live status | `reference/category-status.md` | `Terminus 3`, `subcategory`, `network_mode` |
 | Rubric format | `understanding-tasks/rubrics.md` | `rubric` |
 | tmux/asciinema | `creating-tasks/dockerfile-best-practices.md` | `tmux` |
-| allow_internet | `understanding-tasks/task-requirements.md` | `allow_internet` |
+| Network mode | `understanding-tasks/task-requirements.md` | `network_mode` |
 | Docker-compose flags | `reviewing-tasks/reviewer-checklist.md` | `docker_compose` |
 | Verifier integrity | `creating-tasks/writing-tests.md`, `reviewing-tasks/reviewer-checklist.md` | `complete expected artifact`, `dynamically`, `config` |
 | CLI installation and credentials | `getting-started/quick-start.md`, `testing-and-validation/running-real-agents.md` | `snorkelai-stb`, `stb login`, `keys refresh` |
-| One-model Hard early exit | `understanding-tasks/difficulty-guidelines.md` | `Opus 4.8 first`, `skipped` |
-| Live category availability | `reference/category-status.md`, `reference/changelog.md` | `open across every category`, `milestone tasks remain blocked` |
-| Internet-enabled reproducibility | announcement / `creating-tasks/dockerfile-best-practices.md` | `allow_internet = true`, `digest`, `stable invariants` |
+| Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5` |
+| Live category availability | `reference/category-status.md`, `reference/changelog.md` | `seven categories`, `milestones are removed` |
+| Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | `network_mode = "public"`, `digest`, `stable invariants` |
 
 ### Diff format
 
@@ -134,7 +134,7 @@ For each discrepancy found:
 1. **Online added new content** → append to local doc file
 2. **Online changed a rule** → update local doc file with online version
 3. **Online removed content** → flag for manual review (don't auto-delete)
-4. **New page in online nav** → create new local doc file with placeholder, flag for content extraction
+4. **New page in online nav** → create the local file from the directly fetched Markdown
 
 **Always preserve local additions** (e.g., empirical notes, Go-specific guidance) that don't contradict online docs.
 
@@ -166,10 +166,11 @@ After docs are synced, audit the doctrine-coupled set:
 | verifier dependency placement | — | guidance | check |
 | Sanctioned base images | — | Docker Rules | check |
 | tmux/asciinema required | runtime risk | Docker Rules | check |
-| allow_internet accuracy (false default; true only if genuinely required) | — | metadata defaults | check |
-| codebase_size bands | — | metadata defaults | check |
+| Separate verifier + artifacts | candidate shape | layout/metadata | check |
+| network_mode | candidate viability | metadata defaults | check |
+| Terminus 3 taxonomy | candidate category | metadata defaults | check |
 | Difficulty thresholds | scoring mapping | validation | check |
-| Python must be hard | hardness filter | metadata | check |
+| Language-independent tiers | scoring mapping | metadata | check |
 | Rubric requirements | — | rubric section | reminder |
 | docker-compose flags | — | Docker Rules | check |
 | Canary string | — | instruction style | check |
@@ -224,7 +225,7 @@ Local pages: 42
 | Skill | Finding | Fix | Status |
 |-------|---------|-----|--------|
 | task-clone | test.sh template had rc=$? | canonical form | ✅ fixed |
-| task-miner | Python hard rule missing | added to hardness filter | ✅ fixed |
+| task-miner | Terminus 3 taxonomy missing | added exact category/subcategory screen | ✅ fixed |
 | ... | ... | ... | ... |
 
 New online pages not in local: 0
@@ -238,8 +239,8 @@ Manual review needed: 0
 ⚠️ The bundle filename hash is NOT a reliable change-detector. Doc `.md` files are
 served and updated independently of the SPA shell bundle, so docs can change while
 the bundle name stays the same (confirmed 2026-06-14: bundle `index-Bbhn77A_.js`
-unchanged for days while `difficulty-guidelines.md` flipped eval models to
-GPT-5.5/Opus 4.8). The GitHub Pages CDN can also serve curl a stale bundle while
+unchanged while `difficulty-guidelines.md` changed model names). The GitHub
+Pages CDN can also serve curl a stale bundle while
 serving fresh `.md`.
 
 **Reliable detection = diff the directly-fetched `.md` files** (Step 1b + Step 2).
@@ -253,20 +254,20 @@ These terms in the online bundle indicate rule changes that affect skills:
 ```
 test_deps_in_image
 sanctioned
-allow_internet
-codebase_size
-minimal
+tests/Dockerfile
+environment_mode
+artifacts
+network_mode
 tmux
 asciinema
 canary
 rubric
-custom_docker_compose
 is_multi_container
 difficulty
-hard
-medium
-easy
-blocked
+frontier
+advanced
+core
+base
 reward.txt
 set -uo pipefail
 CLAUDE.md

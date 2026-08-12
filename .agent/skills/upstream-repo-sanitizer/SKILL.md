@@ -1,6 +1,6 @@
 ---
 name: upstream-repo-sanitizer
-description: Use when staging an upstream repository under environment/repo for a Terminus task. Prunes large files and irrelevant content, enforces Docker build context limits, removes secret-shaped files, handles ruff exclusion, and keeps codebase_size metadata honest.
+description: Use when staging an upstream repository under environment/repo for a Terminus 3 task. Prunes large files and irrelevant content, enforces Docker build-context limits, removes secret-shaped files, and handles whole-tree Ruff exposure.
 ---
 
 # Upstream Repo Sanitizer

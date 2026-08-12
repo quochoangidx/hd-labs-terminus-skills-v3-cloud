@@ -1,16 +1,12 @@
-# Lever Pattern Catalog — shared, in-repo, read before mining a HARD task
+# Lever Pattern Catalog — historical shape evidence for Terminus 3 mining
 
-> **⛔ STATUS (2026-07-19) — this catalog predates the category classifier.** The
-> L1 conformance-parser stub-fill shape is CATEGORY-DEAD: it predicts
-> `software-engineering` = BLOCKED (rule R4 in `category_rules.md`), and the
-> classic engines (WHATWG-URL, IDNA, UAX-14/29, HTML5, version-constraint, URI
-> template, LOWESS…) are saturation-CLOSED in the ledger
-> (`.agent/mined-candidates/platform-passed-portfolio.md`). The L1 runbook below
-> remains valid ONLY for remediating already-returned legacy tasks, or for a
-> shape that FIRST passes the rules-first category gate. **Every build must run
-> the category gate (`category_rules.md`) BEFORE building — never after.**
+> **⛔ Terminus 3 status.** The classic L1 engines (WHATWG-URL, IDNA,
+> UAX-14/29, HTML5, version constraints, URI templates, LOWESS) are closed by
+> novelty, saturation, and repeated difficulty collapse. The old category-block
+> rationale no longer applies. Use this catalog as a forbidden-zone and design
+> evidence map, then run the current domain-first `category_rules.md` screen.
 
-**Why this file exists.** A *lever* (the technique that makes a task HARD *and* fair)
+**Why this file exists.** A *lever* (a technique that historically produced a strong, fair signal)
 is the reusable asset. The *resource* a lever is applied to — a conformance suite, a
 spec, a repo, a dataset — is a small, SHARED, finite commodity. This catalog lives in
 the repo (symlinked to every CLI), **not in anyone's personal memory**, so every
@@ -32,7 +28,7 @@ It replaces relying on any individual's memory for that rule.
    and add a row to the ledger below. The dedupe key for this lane is
    `conformance_suite + spec + language` — slug/repo/issue keys do NOT catch these
    collisions.
-4. Run the `fairness_gate` before you call it HARD.
+4. Run the `fairness_gate` before claiming any high-tier signal.
 
 For lever **L1**, do not improvise from these fields — follow the **L1 build procedure**
 near the end of this file top-to-bottom. It is a complete, memory-free runbook (pivot-check,
@@ -42,10 +38,10 @@ messy-spec check, blind probe, fairness audit, disclose-vs-collapse, instruction
 
 ```
 id:                 short kebab name of the lever
-intent:             the HARD + fair property it produces (resource-agnostic)
+intent:             the high-signal + fair property it aims to produce
 mechanism:          the recipe, written WITHOUT naming any specific resource
 necessary:          conditions the resource MUST satisfy
-disqualifiers:      resource shapes that collapse the task to EASY
+disqualifiers:      resource shapes that historically produced no signal
 fairness_gate:      how to detect an UNFAIR artifact before shipping
 resource_slot:      the VARIABLE — filled per task from a fresh, unclaimed resource
 dedupe_cell:        gallery_category × language × lever  (novelty is per-cell)
@@ -56,12 +52,9 @@ dedupe_key:         conformance_suite + spec + language  (mirror into index.json
 
 ## L1 — `conformance-suite-divergent-tail`
 
-> **⛔ CATEGORY-DEAD for fresh builds (2026-07-19):** this stub-fill
-> parse/normalize-to-spec shape predicts `software-engineering` = blocked
-> (`category_rules.md` R4), and the classic engines are saturation-CLOSED
-> (`.agent/mined-candidates/platform-passed-portfolio.md`). Use this runbook
-> only to remediate already-returned legacy L1 tasks, or after the shape
-> passes the rules-first category gate.
+> **⛔ Closed for fresh builds:** the classic engines are saturation-closed and
+> a language or narrative variation is not novel in Terminus 3. Use this
+> runbook for historical analysis or returned-task remediation only.
 
 - **intent:** a from-scratch implementation task that a strong agent solves only 0–1/3,
   because independent *full* implementations each miss a DIFFERENT slice of the spec's
@@ -127,7 +120,7 @@ Authoritative machine copy = the `lever:"conformance-suite-divergent-tail"` line
 | Unicode LineBreakTest            | UAX-14            | C          | nhonho-batch | built  | |
 | jsonpath CTS                     | RFC 9535          | TypeScript | nhonho-batch | built  | |
 | toml-lang/toml-test              | TOML 1.0.0        | Go         | nhonho-batch | built  | **DISQUALIFIED + COLLISION** — in-env `tomllib` reference (see disqualifiers) makes both this and our tbrain-toml-document-decoder unfair-hard; RETIRE both, do not rebuild TOML under L1 in a Python image |
-| html5lib tree-construction       | WHATWG HTML §13   | Rust       | this-workspace | built | near-neighbor of the URL task (same Rust × WHATWG-conformance cell; historically filed under Data-Processing — that classifier label is BLOCKED since 2026-07-11, grandfathered only) |
+| html5lib tree-construction       | WHATWG HTML §13   | Rust       | this-workspace | built | near-neighbor of the URL task (same Rust × WHATWG-conformance cell; the former Data-Processing classifier result is historical only) |
 | html5lib tokenizer               | WHATWG HTML §13   | (team)     | team         | built  | |
 | Unicode SENTENCE-break (UAX-29)  | UAX-29 sentence   | (team)     | team         | built  | |
 | JSON-Schema-2020-12 suite        | draft 2020-12     | (team)     | team         | built  | unevaluated* + $dynamicRef tail |
@@ -353,12 +346,11 @@ unfair-hard, never real difficulty.
   (`index.jsonl`: broadcast-airtime-, coldchain-excursion-, energy-reservoir-,
   infusion-dose-, metered-billing-, oxygen-deficit-, service-supervision-,
   thermal-duty-`ledger`, plus leader-lease / duty-cycle / settlement /
-  interval-arith). Empirical ceiling = **MEDIUM**: pure interval/gap/overlap logic
-  probed 3/3 EASY; even a fully-disclosed clamp+carry+reset work-budget variant
-  stayed 3/3 blind EASY; iterative frontier agents solve ledger-family tasks
-  reliably. Use L2 only as an occasional MEDIUM filler (non-Python) when the batch
-  portfolio needs one AND the invariant family is genuinely new; for HARD go
-  L1/L3/L4. The domain-port lane below is **CLOSED** — porting a proven invariant
+  interval-arith). Historical ceiling was the old **MEDIUM** band: pure
+  interval/gap/overlap logic often probed all-pass. In Terminus 3, retain a
+  genuinely novel Base/Core instance only when its setup, definition, and data
+  are new; difficulty is language-independent. The domain-port lane below is
+  **CLOSED** — porting a proven invariant
   into an 11th skin adds a near-duplicate, not a task.
 - **Anti-anchoring naming rule (mandatory, applies to EVERY lever):** name the task
   after the DOMAIN PROBLEM (what a real team's ticket would say), never after the

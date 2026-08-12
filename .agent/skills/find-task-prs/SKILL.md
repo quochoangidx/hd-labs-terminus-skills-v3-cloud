@@ -7,11 +7,9 @@ description: Scan a GitHub repository's recently merged PRs and return the top ~
 
 > ⛔ **Minority-lane gate (2026-07-19).** Under the fresh-only mining doctrine
 > (AGENTS.md §2) this upstream-PR lane runs only on explicit user request. Its
-> typical output shape — reproduce-a-fix / repair — fires the
-> repair-shape→debugging prediction rule (`task-miner/category_rules.md`) and the
-> §6 mechanical-fix collapse (mechanical fixes of real upstream bugs solve 3/3
-> regardless of file spread). Every candidate must pass the collapse-law screen
-> AND the rules-first category gate before any build effort.
+> typical output shape — reproduce-a-fix / repair — often collapses when the fix
+> is mechanical regardless of file spread. Every candidate must pass the
+> collapse-law screen and the Terminus 3 domain/subcategory screen before build.
 
 Given a GitHub repo, surface ~10 merged PRs that would make good tb-quality tasks.
 
@@ -20,7 +18,7 @@ Given a GitHub repo, surface ~10 merged PRs that would make good tb-quality task
 - **Repo**: `owner/repo` or full GitHub URL (required)
 - Optional: `--limit N` (how many merged PRs to fetch; default 50)
 - Optional: `--pick K` (how many to return; default 10)
-- Reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env` (default model: `gpt-5.5-codex`)
+- Reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env` (default model: `gpt-5.6`)
 
 ## Steps
 

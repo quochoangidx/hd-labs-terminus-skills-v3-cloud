@@ -1,22 +1,17 @@
 # Terminus task-authoring skills — project purpose & pipeline map
 
-**Purpose.** This repo produces Terminus-2nd-Edition **Regular tasks** for the Snorkel
-platform, aligned to the live task gallery (`/portal/tasks`): self-contained, offline,
-deterministic problems with a Python-pytest verifier, targeting **Hard or Medium by
-MODEL PASS RATE** (Easy is blocked; Python tasks must be Hard). The default lane is
-the fresh-only mining doctrine (100% NEW tasks; ports only on explicit request), with
-the bd-mgmt seam and interaction/scale shapes as priority lanes — upstream bugfix PRs
-are a minority lane. `debugging` and `software-engineering` categories are BLOCKED
-(rejected by an automated eval check as of 2026-06-29), `data-processing` is ALSO
-BLOCKED (enforced since 2026-07-10/11), and new milestone tasks are also blocked
-— see the mirrored callouts in task-miner + task-clone (lift both together).
+**Purpose.** This repo produces Terminus 3 tasks for the Snorkel platform:
+self-contained, deterministic, multi-step domain work with a Python-pytest
+verifier running in a separate container. All seven Terminus 3 categories are
+open. Tasks use one exact category/subcategory pair and the empirical tiers
+Frontier, Advanced, Core, or Base; difficulty is language-independent.
 
 ## Pipeline → skill map
 
 `task-batch` is the autonomous end-to-end orchestrator entry point — it runs the full
 gate pipeline below (fresh-only mining → collapse-law screen → skeleton probe → build →
 validate → package) without further prompting. Tooling: `scripts/new-task.sh <slug>
-<lang> <category>` stamps a hygiene-pre-wired skeleton; `scripts/preflight.sh <task-dir>`
+<lang> <category> <subcategory>` stamps a hygiene-pre-wired skeleton; `scripts/preflight.sh <task-dir>`
 machine-checks the mechanical gates before every zip.
 
 | Stage | Skill(s) |
@@ -27,8 +22,8 @@ machine-checks the mechanical gates before every zip.
 | 4. Validate | `task-harbor-runner` (oracle / nop / `stb harbor check` / real-agent runs) |
 | 5. Review & package | `task-client-feedback-review`, `task-llm-style-audit` (LLM-tell audit + re-author of all prose surfaces, last step before zip), `task-zip-validator`, `task-zip-submit` |
 | 6. Remediate a platform return | `task-revise-flag-remediation` ("Some tests not passed by any agent run" / 0/N coverage flag), `terminus-regular-task-authoring` Prompt Rules (instruction_check + disclosure ladder) |
-| 7. Port an existing task to new languages | `task-language-port` (feasibility screen, mandatory narrative reskin, faithful placeholder+solution translation, re-validation) |
-| 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `task-miner/refresh_gallery_taxonomy.py` (taxonomy, ~weekly), `anti-llm` (editorial pass) |
+| 7. Migrate an existing task to another runtime | `task-language-port` (explicit request only; internal/replacement use, never a separate reskinned submission) |
+| 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `anti-llm` (editorial pass) |
 
 Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<slug>.json`
 + a claim line in `index.jsonl`) — clone consumes it and must not re-mine.
@@ -38,32 +33,31 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 - `mined-candidates/index.jsonl` — team claim/dedupe registry (incl. the
   `conformance_suite + spec + language` key for the L1 lane).
 - `mined-candidates/gallery_tasks_snapshot.md` — novelty gate against the live gallery.
-- `mined-candidates/gallery_taxonomy.md` — category/subtype menu; refresh if the
-  snapshot date is older than ~7 days.
+- `docs/understanding-tasks/task-taxonomy.md` — authoritative Terminus 3
+  category/subcategory menu.
 - `.agent/skills/task-miner/lever_patterns.md` — lever catalog **L1–L4** (conformance
   suite, synthetic interval-invariant ledger, differential-vs-authority, multi-vector
   security), claimed-resource ledger, and the complete L1 build runbook ("learn the
-  pattern, not the resource"). Note the default lane is now the fresh-only doctrine
-  (task-miner, "Fresh-only exploration doctrine"); all nine Regular-task
-  categories are open, including the historical bd-mgmt seam.
-  interaction/scale shapes as priority lanes — not gallery-style spec-driven L1.
-- `.agent/skills/task-miner/category_rules.md` — rules-first category gate
-  (deterministic prediction rules calibrated on real-CI verdicts; run before
-  trusting any blind category probe).
+  pattern, not the resource"). The default lane is the fresh-only doctrine;
+  language ports and narrative reskins are not novel Terminus 3 tasks.
+- `.agent/skills/task-miner/category_rules.md` — domain-first Terminus 3
+  category/subcategory screen and evidence schema.
 - `.agent/skills/task-miner/interaction_shape_recipe.md` — interaction/scale shape
-  recipe (≥3 coupled causes + discovery breadth; escapes the master collapse law).
+  recipe (historically useful for breadth, but not a guaranteed Frontier lane).
 
 ## Non-negotiable invariants
 
-Offline (`allow_internet = false`) is the default, but retain `allow_internet = true` when network access is the task's point; hard-pin each live source by exact version and immutable digest/hash, then grade stable invariants rather than mutable responses. Keep 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
-`python3` pytest writing `/logs/verifier/reward.txt` within 450s, oracle passes /
-nop fails for the intended reason, no tests/solution/answer keys reachable from
-`environment/`, and difficulty is claimed only from blind-probe or platform agent
-evidence — never from build time, repo size, or timeouts.
+Top-level `artifacts`, `[verifier].environment_mode = "separate"`, a digest-pinned
+`tests/Dockerfile` with all verifier dependencies and artifact landing directories,
+`network_mode = "public"` by default, agent timeout 1800–18000 seconds, no GPU,
+roughly 2 CPU / 8 GB / 10 GB, oracle passes and nop fails for the intended reason,
+no tests/solution/answer keys reachable from `environment/`, and difficulty is
+claimed only from model-run evidence — never from ambiguity, build time, repo size,
+or timeouts.
 
 ## Editing rules for this directory
 
 Skills live ONLY here; `.claude/skills`, `.codex/skills`, `.gemini/skills` are symlinks
 to `.agent/skills` — never fork a copy. Battle-tested lessons get codified into the
 relevant SKILL.md (dated, with the incident), not left in personal memory; when a rule
-must exist in two files (e.g. the category hold), each copy names its mirror.
+must exist in two files (for example category availability), each copy names its mirror.

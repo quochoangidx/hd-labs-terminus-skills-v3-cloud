@@ -55,7 +55,7 @@ file conflicts with those skills, the canonical skills win.
   `rust_cli`: a minimal single-crate repo (`Cargo.toml` + one `src/main.rs`
   stub + README), a stdin-JSON→stdout-JSON batch binary, an "extend the
   starter" instruction, a hidden vector-corpus verifier, and
-  `codebase_size = "minimal"`. It judges structural SHAPE (an LLM fallback
+  minimal single-crate layout. It judges structural SHAPE (an LLM fallback
   scores the match), so a wording sweep will not clear it. Minimum
   de-templating for a new Rust task: a realistic multi-module crate
   (`lib.rs` + several `src/*.rs` modules), in-repo unit tests and repo

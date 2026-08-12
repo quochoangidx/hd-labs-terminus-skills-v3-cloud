@@ -120,24 +120,24 @@ The automated scanner cannot certify semantic sufficiency.
      orders of magnitude; precision=N -> tol 1e-N), and state the precision
      contract in the instruction. Exact match is fine for genuinely exact values
      (integer results, defined truncations, edge-case zero/error).
-   - Non-milestone rubrics should be flat `Agent ...` criteria; a single
-     `# Rubric 1` header is tolerated but not required. `# Rubric 2+` is only
-     for milestone tasks.
-   - Milestone rubrics must use one block per milestone with `# Rubric 1`,
-     `# Rubric 2`, etc.
-   - Rubrics need at least three negative criteria overall; milestone rubrics
-     also need at least one negative criterion per milestone.
+   - Terminus 3 rubrics are a flat list of `Agent ...` criteria generated and
+     edited in the platform UI; the submitted ZIP does not contain `rubrics.txt`.
+   - Rubrics need at least one negative criterion, signed positive scores, only
+     ±1/2/3/5 values, and 10–40 total positive points.
 
-3. Review reviewer-facing submission explanations when available. Look first
-   for these external files:
+3. Review the four Terminus 3 submission explanations under `[metadata]` in
+   `task.toml`: `difficulty_explanation`, `solution_explanation`,
+   `verification_explanation`, and `relevant_experience`. Older external drafts
+   may exist at:
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
 submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
 ```
 
-   These files must remain outside the submitted task and ZIP (the review
-   script also flags any `submission-*.md` found inside the ZIP).
+   These files are optional authoring notes and must remain outside the submitted
+   task and ZIP; the authoritative submitted values are in `task.toml`, from
+   which Snorkel assembles `README.md`.
 
    Review each field separately:
 
@@ -151,6 +151,8 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
    - **Verification Explanation:** maps behavioral cases to requirements,
      explains what catches partial fixes, and reports oracle/nop outcomes only
      when validation logs support them.
+   - **Relevant Experience:** gives concrete domain background without policy,
+     model, or reviewer-directed language.
 
    Compare the UI-ready file against the factual source draft. Flag removed
    thresholds, changed API names, altered paths, unsupported validation claims,
@@ -177,6 +179,16 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
 
 ## Current Client Blockers
 
+- missing `tests/Dockerfile`, missing `[verifier].environment_mode = "separate"`,
+  or an agent-facing `environment/Dockerfile` that copies `tests/`/`solution/`
+- missing top-level `artifacts`, artifact paths not covering everything the
+  verifier reads, or missing artifact parent directories in `tests/Dockerfile`
+- verifier dependencies not baked into `tests/Dockerfile` with exact pins
+- stale Terminus 2 metadata (`allow_internet`, `codebase_size`,
+  `number_of_milestones`, `subcategories`, `junior_time_estimate_min`, or
+  `easy`/`medium`/`hard` difficulty)
+- category/subcategory not using one exact Title Case Terminus 3 taxonomy pair
+- `[agent].timeout_sec` below 1800 or above 18000
 - root-level `pyproject.toml`
 - dependency wheels under `tests/`
 - dependency installation or downloads in `tests/test.sh`
@@ -187,8 +199,7 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
   sentence like "the verifier binary reads stdin" trips it as a false positive —
   rename to "binary"/"program"/"the checks" to dodge it
 - canary strings (`CANARY-*`)
-- `/logs/verifier` not prepared before early exits in `tests/test.sh`
-- license files in small or minimal codebases
+- `/logs/verifier` not prepared before pytest runs in `tests/test.sh`
 - `environment/data` used as an oversized prompt/spec extension
 - hidden solution walkthroughs or bug hints in environment docs/comments
 - missing `tmux`/`asciinema` in the task image (agent runs fail with
@@ -198,19 +209,12 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
   `/var/run/docker.sock` mounts in docker-compose
 - AI-scaffolding filenames in the environment (`CLAUDE.md`, `AGENTS.md`,
   `skills.md`, `.cursor/`)
-- `codebase_size` not matching the `environment/` file count (excluding
-  `Dockerfile`/`docker-compose*`): 0-19 `minimal`, 20-199 `small`, 200+ `large`.
-  CI (`run_static_checks.py`) enforces this mechanically and rejects a mismatch.
-- `ruff` errors anywhere Ruff scans the task dir — INCLUDING upstream `.py`
-  under `environment/repo`. Run the default E4/E7/E9/F set plus `PLW1510`.
-  Every `subprocess.run(...)` must pass explicit `check=True` or `check=False`,
-  even when the following line inspects `returncode`. Common hits also include
-  `F401`/`E741` in `tests/test_outputs.py` and `E402`/`E701`/`E731` in upstream
-  dev/codegen scripts. Fix per `upstream-repo-sanitizer`.
-- `agent.timeout_sec` outside `[1, 1800]` — CI hard-caps it at 1800 (a heavy
-  build does not justify raising it; the build runs under `build_timeout_sec`
-  and the verifier under `verifier.timeout_sec`, both separate from the agent
-  budget).
+- `ruff` errors anywhere ruff scans the task dir — INCLUDING upstream `.py`
+  under `environment/repo` (CI lints the whole tree, default E4/E7/E9/F). Common
+  hits: `F401`/`E741` in `tests/test_outputs.py`, `E402`/`E701`/`E731` in
+  upstream dev/codegen scripts. Fix per `upstream-repo-sanitizer`.
+- `agent.timeout_sec` outside `[1800, 18000]` — 1800 seconds is the Terminus 3
+  minimum, not the old maximum. Most substantial tasks should use 3600–5400.
 - commercial-DB blacklist (CI `check_blacklisted_databases`, SUBSTRING match):
   the confirmed blocking token is `maxscale` (MariaDB MaxScale), which commonly
   false-matches a decimal `MaxScale` identifier in SQL-engine repos and still
@@ -222,16 +226,15 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
   verifier behavior
 - submission explanations that materially contradict the task, oracle, or
   verifier, including unrun oracle/nop claims
-- `tests/test.sh` that does NOT write a default `echo 0 > /logs/verifier/reward.txt`
-  immediately after `mkdir -p /logs/verifier` (before pytest / any risky work).
-  Reviewers require reward to default to 0 so a crash/timeout before the final
-  block leaves 0, not an absent reward (KDL + HOCON 2026-07). Fix per
-  `terminus-regular-task-authoring` (test.sh shape).
-- verifier that runs a compiled binary but never REBUILDS it from the agent's
-  source (only asserts the prebuilt binary exists) — the tests then don't enforce
-  the "implement it in the source" contract (a stale image-built binary passes).
-  Fix: session-fixture `rm` + `go/cargo build` from `/app` before cases (see
-  `terminus-regular-task-authoring`, Verifier Rules).
+- `tests/test.sh` using `set -e`, omitting `--ctrf`, or returning a non-zero
+  script status. The current Terminus 3 form captures pytest's status, writes
+  reward 1/0, then ends with `exit 0`; if the published skeleton differs, the
+  skeleton wins.
+- when the instruction requires source changes, a verifier that checks only a
+  prebuilt binary does not enforce the source contract. Declare the project
+  directory as an artifact, bake the compiler into `tests/Dockerfile`, and
+  rebuild inside the separate verifier before cases. If the deliverable itself
+  is a binary, declaring and testing that binary is valid.
 - environment reference docs (`CANONICAL_FORM.md`, `FORMAT.md`, `SPEC.md`) that
   use GRADER vocabulary ("grading", "grader", "compares", "checks", "verifier",
   "test", "reward") OR contradict the instruction/rubric (e.g. doc says "key
@@ -246,42 +249,19 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
   ordering) while `test_outputs.py` compares PARSED values (order-independent,
   often to tolerate a float-repr gap). Drop the ungraded requirement from
   prompt/rubric/format-doc, or switch to a canonical-byte assertion.
-- `difficulty` in `task.toml` not matching the platform's difficulty artifact
-  (e.g. artifact reports `medium`, toml says `hard`) — align the metadata (a
-  non-blocking cleanup reviewers still call out).
-- a config/format PARSER task (HCL2, Dockerfile, HOCON, nginx, …) whose deliverable
-  is "parse document → canonical JSON" but `category = "build-and-dependency-management"`
-  — reviewers classify the primary activity as software-engineering: "the
-  actual work is implementing a full X parser from a stub." Since all nine
-  categories reopened on Jul 30, the normal fix is to relabel it
-  `software-engineering`, not to force a data-processing/admin/ML/game
-  narrative. Reshape only when the actual work changes. When one parser is
-  flagged, audit the whole batch for the same category mismatch.
-- `allow_internet` not matching the task's genuine need (new High reviewer
-  criterion, policy 2026-07-13): `true` without a real requirement is
-  eval-checked and may be rejected; our offline tasks must stay `false`. A task
-  that genuinely needs the network (e.g. HuggingFace model download) MAY set
-  `true` — keep it internet-enabled when that dependency is the task's point.
-  For every live source, require exact version and immutable digest/hash pins,
-  and grade stable invariants rather than drifting live values, rotating keys,
-  or mutable API shapes.
-- ⚠️ NOT blockers — official FAQ citations for pushback (portal FAQ, 2026-07-17):
-  (a) rigorous verifier logic in `tests/` is LEGITIMATE — running the agent's
-  binary, parsing its output, golden fixtures/hashes, spec-derived invariants,
-  and hardcoded expected RESULTS ("fine and often required") are all sanctioned;
-  the only real defects are a callable in `tests/` that maps task inputs to the
-  complete expected artifact (end-to-end solving belongs in `solution/`) or
-  hardcoding values the instruction says the agent must read from a config file.
-  (b) base images: tasks whose CI passed before 2026-06-15 are grandfathered —
-  reviewers shouldn't flag their base image (digest pinning still required).
-  Cite the FAQ instead of editing correct files.
+- `difficulty` in `task.toml` not matching the measured Terminus 3 tier:
+  Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%, averaged across
+  both current reference models. A 100% iteration result cannot proceed.
+- category chosen by coding activity instead of domain. Use `Software` only when
+  software itself is the subject; otherwise choose the domain category and its
+  exact subcategory (for example ML training repair is `ML / Training`).
 
 ## Existing Skills To Use For Fixes
 
 - `terminus-regular-task-authoring`: prompt, metadata, verifier, rubric, and
   `tests/test.sh` shape.
 - `upstream-repo-sanitizer`: environment size, license files, secret-shaped
-  files, hidden hint leakage, and codebase_size honesty.
+  files, hidden hint leakage, and build-context hygiene.
 - `task-zip-submit`: ZIP structure, allowlist, cleanup, metadata author fields,
   and final packaging.
 - `task-harbor-runner`: oracle/nop/CI/Harbor validation and Docker triage.

@@ -4,7 +4,7 @@ Test your task against real AI agents to validate difficulty and ensure your tas
 
 ## Prerequisites
 
-**Get your API key:** Use the [Snorkel CLI tool](/portal/docs/cli-user-guide) to self-generate and self-replenish your API key. If you run into limits or issues, post on the project Slack channel _(#terminus-2nd-edition-submission)_ for assistance
+**Get your API key:** Use the [Snorkel CLI tool](/portal/docs/cli-user-guide) to self-generate and self-replenish your API key. If you run into limits or issues, post on the project Slack channel _(#terminus-3-submissions)_ for assistance
 
 > **Note:** You'll need the `stb` CLI installed to run agents locally. See [Quick Start](/portal/docs/getting-started/quick-start) or [CLI User Guide](/portal/docs/cli-user-guide) for installation instructions.
 
@@ -17,29 +17,31 @@ stb login
 stb keys refresh   # if credentials are missing or expired
 ```
 
-Check your remaining budget anytime with `stb keys show`. See the [CLI User Guide](/portal/docs/cli-user-guide).
+Each key carries a $10 budget and expires after 30 days. There is no way to check how much of it you have spent, so plan your runs conservatively — see [Using Your API Key Efficiently](/portal/docs/cli-user-guide) in the CLI User Guide.
 
 ## Available Models
 
 | Model | Command Flag |
 |-------|--------------|
-| GPT-5.5 | `gpt-5.5` |
-| Claude Opus 4.8 | `claude-opus-4-8` |
+| GPT-5.6 | `-m @openai/gpt-5.6` |
+| Claude Opus 5 | `-m @anthropic/claude-opus-5` |
+
+Keep the `@provider/` prefix. Dropping it on the GPT string fails with `INVALID_MODEL_NOT_ALLOWED`.
 
 ## Running Agents
 
 Run these via the Snorkel CLI (`stb`). Replace `<path-to-task>` with your task directory.
 
-### GPT-5.5
+### GPT-5.6
 
 ```bash
-stb harbor run -m @openai/gpt-5.5 -p <path-to-task>
+stb harbor run -m @openai/gpt-5.6 -p <path-to-task>
 ```
 
-### Claude Opus 4.8
+### Claude Opus 5
 
 ```bash
-stb harbor run -m @anthropic/claude-opus-4-8 -p <path-to-task>
+stb harbor run -m @anthropic/claude-opus-5 -p <path-to-task>
 ```
 
 ---
@@ -70,34 +72,35 @@ This means your task needs revision.
 
 ## Determining Difficulty
 
-Run each agent **5 times** to get a reliable pass rate:
+Run each agent **5 times** per model. Difficulty is the **mean pass@1 across both models**:
 
-| Difficulty | Threshold | Description |
-|------------|-----------|-------------|
-| **Hard** | Accuracy ≤ 20% on the **best** model, OR ≤ 20% on the **worst** model | Requires deep expertise, multi-step reasoning |
-| **Medium** | 20% < accuracy ≤ 60% on the **worst** model | Moderate complexity, some domain knowledge |
-| **Easy** | 60% < accuracy ≤ 80% on the **worst** model | Straightforward but still non-trivial |
+| Tier | Accuracy |
+|---|---|
+| **Frontier** | < 20% |
+| **Advanced** | 20% – < 50% |
+| **Core** | 50% – < 80% |
+| **Base** | 80% – < 100% |
 
-> Tasks where the worst model scores above 80% will not be accepted. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for the full breakdown.
+There is no best-model / worst-model gate, and tasks above 80% are **not** rejected — that is the Base tier. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
 ### Example Testing
 
 ```
-Run 1 (GPT-5.5): FAIL
-Run 2 (GPT-5.5): PASS
-Run 3 (GPT-5.5): FAIL
-Run 4 (GPT-5.5): FAIL
-Run 5 (GPT-5.5): PASS
+Run 1 (GPT-5.6): FAIL
+Run 2 (GPT-5.6): PASS
+Run 3 (GPT-5.6): FAIL
+Run 4 (GPT-5.6): FAIL
+Run 5 (GPT-5.6): PASS
 Run 1 (Claude): FAIL
 Run 2 (Claude): FAIL
-Run 3 (Claude): FAIL
+Run 3 (Claude): PASS
 Run 4 (Claude): FAIL
 Run 5 (Claude): FAIL
 
-GPT-5.5: 2/5 = 40%   ← best model
-Claude: 0/5 = 0%   ← worst model
+GPT-5.6: 2/5 = 40%
+Claude:  1/5 = 20%
 
-Worst-model accuracy is 0% (≤ 20%) → Hard difficulty ✓
+Accuracy = mean of both = 30% → Advanced
 ```
 
 ## Analyzing Failures
@@ -130,17 +133,23 @@ Ask yourself:
 
 ### Task Too Easy?
 
-- Add more steps
-- Include hidden requirements
-- Use niche knowledge
-- Create debugging scenarios
+- Require the agent to infer the contract from domain evidence rather than stating it
+- Demand a semantically valid native artifact, not something that merely looks right
+- Add a second correctness axis that interacts with the first
+- Verify against hidden variations rather than a single example
+- Include **hidden requirements** — things the agent has to discover from the environment, a spec file, or the conventions of the domain
+
+**Hidden requirements are not the same as under-specification**, and the difference matters. A hidden requirement means the *goal is clear* but not everything needed to satisfy it is spelled out in the instruction — the agent has to read the config, notice the constraint in the spec, or infer the convention. Under-specification means the *goal itself* is unclear, so the agent cannot tell what success looks like. The first is good task design; the second is a broken task. It is a genuinely tricky balance.
+
+**Obscure trivia is out.** Difficulty should come from reasoning, not from knowing a fact the agent could not derive.
 
 ### Task Too Hard?
 
-- Simplify requirements
-- Make instructions clearer
-- Reduce step count
-- Provide more hints
+Usually there is nothing to fix. A low pass rate is the point — **Frontier is a wanted tier**, and a task should not be softened just because agents fail it.
+
+Intervene only when the task is hard for the *wrong* reasons: ambiguous goals, non-determinism, environment defects, or information the agent could not possibly obtain. Those are bugs rather than difficulty, and fixing them is not making the task easier — it is making it valid.
+
+**Do not add hints to raise the pass rate.** See [Instruction Prompt Styling](/portal/docs/understanding-tasks/prompt-styling) and [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
 ---
 

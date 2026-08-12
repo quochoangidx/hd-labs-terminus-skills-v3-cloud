@@ -5,7 +5,7 @@ description: Validate a Terminus task ZIP against Snorkel CI/review rules and au
 
 # Task ZIP Validator
 
-Validate and auto-fix a Terminus Edition 2 task ZIP before Snorkel upload. This skill catches the issues that cause CI failures and reviewer rejections, based on empirical patterns from hundreds of submissions.
+Validate and auto-fix a Terminus 3 task ZIP before Snorkel upload. This skill catches the issues that cause CI failures and reviewer rejections, based on the current portal documentation plus empirical submission feedback.
 
 ## Input
 
@@ -88,78 +88,54 @@ If nested, note for re-zip fix.
 Parse with `tomllib`. Required structure:
 
 ```toml
-version = "2.0"
+artifacts = ["/app/output.json"]
+name = "task-name"
 
 [metadata]
 author_name = "anonymous"
 author_email = "anonymous"
-difficulty = "hard"           # or "medium" — NOT "easy" (blocked by diversity gate)
-category = "<one-of-9>"       # see below
-subcategories = [...]
-number_of_milestones = 0
-codebase_size = "minimal"|"small"|"large"  # minimal=0-19, small=20-199, large=200+
-languages = [...]                  # task/oracle implementation languages; exclude verifier-only Python
-tags = [...]
-expert_time_estimate_min = N
-junior_time_estimate_min = N
+difficulty = "frontier"       # frontier | advanced | core | base
+category = "Software"         # one of the 7 Title Case categories below
+subcategory = "Systems"       # exactly one matching taxonomy value
+languages = [...]             # task implementation languages; exclude verifier-only Python
+tags = [...]                  # 3-6 values
+expert_time_estimate_hours = N
+difficulty_explanation = "..."
+solution_explanation = "..."
+verification_explanation = "..."
+relevant_experience = "..."
 
 # If using docker-compose:
-# custom_docker_compose = true
-# is_multi_container = true    # if >1 service
+# is_multi_container = true    # only if >1 service
 
 [verifier]
 timeout_sec = N
+environment_mode = "separate"
 
 [agent]
-timeout_sec = N
+timeout_sec = N                # 1800-18000
 
 [environment]
-allow_internet = false         # default — `true` is ALLOWED only when the task genuinely requires internet (eval-checked, policy 2026-07-13); our offline conformance tasks always use false
+network_mode = "public"        # default; "no-network" only when needed
 build_timeout_sec = N
 cpus = N
 memory_mb = N
 storage_mb = N
 ```
 
-Valid categories (EXACTLY these 9):
+Valid categories and subcategories are the exact Title Case values below:
 ```
-system-administration
-build-and-dependency-management
-data-processing
-games
-software-engineering
-machine-learning
-debugging
-security
-scientific-computing
+Science: Biology, Chemistry, Physics, Earth, Robotics, Math, Linguistics
+Software: Algorithms, Systems, Databases, Data engineering, Frontend, Languages
+ML: Training, Inference, Evaluation, Kernels
+Operations: Finance, Logistics, Supply chain, Claims, Compliance, Marketing
+Security: Cryptography, Reverse engineering, Forensics, AppSec
+Hardware: CAD, RTL
+Media: Music, Design
 ```
 
-All nine enum values are open for net-new Regular tasks as of Jul 30, 2026.
-New milestone tasks remain blocked.
-
-> The category classifier check has been loosened, but the declared category
-> must still match the visible primary activity. A spec-conformance component
-> or stub completion normally predicts `software-engineering`; a
-> dataset→report/ETL pipeline predicts `data-processing`; repair work predicts
-> `debugging`. These are valid categories now. Flag only an actual mismatch
-> between the task shape and the declared label.
->
-> **Make this check operational rules-first** (the real classifier is
-> geoblocked from VN and cannot be preflighted): apply the real-CI-calibrated
-> rules in `.agent/skills/task-miner/category_rules.md` to the task shape
-> BEFORE any probe. A fired prediction rule is strong evidence for its mapped
-> category; make the declared label match the dominant activity. A matching
-> rule clears the check with at most one confirmatory probe run. Only when no
-> rule fires or multiple rules leave the primary activity ambiguous, fall back to the blind
-> category probe: give a FRESH subagent only the classifier-visible surfaces —
-> `instruction.md`, the `environment/` file-tree listing, README, rubric
-> text — WITHOUT the declared category, and ask it to pick the
-> primary-activity category from the 9 slugs with a confidence and a one-line
-> reason; run twice, a 3rd only on a 1–1 split (the platform's
-> `llm_fallback` is noisy). A majority disagreeing with the declared category
-> is a mismatch to resolve; the probe's reasons name the relevant surface.
-> Relabel when the existing shape is honest, or reshape the task when its
-> intended primary activity is genuinely different.
+> ✅ All seven Terminus 3 categories are open as of 2026-07-31. Pick the category
+> for the domain the task lives in, not merely the fact that code is written.
 
 > ⛔ The CI `template_detection` static check (first observed 2026-07-13) BLOCKS
 > submissions whose structural shape matches a named template library entry —
@@ -172,25 +148,21 @@ New milestone tasks remain blocked.
 > prose; assume per-language sibling templates. Remediation levers UNVERIFIED —
 > see AGENTS.md §9.
 
-Valid subcategories:
-```
-long_context, tool_specific, api_integration, db_interaction, ui_building
-```
-
 **Checks:**
 
 | Check | Rule | Auto-fix |
 |-------|------|----------|
-| `allow_internet` | Must match the task's genuine need: `false` (default — correct for offline tasks); retain `true` when network access is the task's point. Pin every live source to exact versions and immutable digests/hashes, and grade stable invariants rather than mutable live values. | ✅ set to false only for offline-solvable tasks |
-| `difficulty` | Must be `"medium"` or `"hard"`, NOT `"easy"` | ❌ manual |
-| **Python must be hard** | If `"python"` is a task/oracle implementation language → `difficulty` must be `"hard"` | ❌ manual — BLOCKED by diversity gate |
+| `artifacts` | Required top-level array; every verifier input path must be declared | ❌ manual |
+| `network_mode` | `"public"` by default; `"no-network"` only when the task should be offline | ✅ set to public when absent |
+| `difficulty` | Must be `frontier`, `advanced`, `core`, or `base` and match measured accuracy | ❌ manual |
+| `environment_mode` | `[verifier].environment_mode` must be `"separate"` | ✅ set to separate |
+| `agent.timeout_sec` | Must be between 1800 and 18000 seconds | ❌ manual |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
-| `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`,`"c++"`), never `"Rust"`/`"Go"`/`"C++"` | ✅ lowercase them |
-| `workdir` (informational) | For `number_of_milestones = 0`, default is Dockerfile-`WORKDIR`-only (no `[environment].workdir`), but BOTH forms are accepted — a reviewer may explicitly request `workdir = "/app"` (reviewer-overridden 2026-07-16); honor that. Do NOT auto-remove | ℹ️ flag only |
-| `codebase_size` | Must match environment file count: 0-19 → `"minimal"`, 20-199 → `"small"`, 200+ → `"large"` | ✅ adjust |
-| `category` | Must be one of the 9 currently open values and match the task's visible primary activity. Check the shape rules-first via `category_rules.md`, then probe only as fallback. | ❌ manual + rules/probe |
-| `custom_docker_compose` | If `environment/docker-compose.yaml` exists → must be `true` | ✅ add flag |
+| `languages` casing | Values must be LOWERCASE slugs (`"rust"`,`"go"`,`"c"`,`"typescript"`), never `"Rust"`/`"Go"` | ✅ lowercase them |
+| `tags` | Must contain 3-6 values | ❌ manual |
+| `category` / `subcategory` | Exactly one valid Title Case pair from the Terminus 3 taxonomy | ❌ manual |
 | `is_multi_container` | If compose has >1 service → must be `true` | ✅ add flag |
+| removed fields | Reject Terminus 2 fields such as `codebase_size`, `number_of_milestones`, `subcategories`, `allow_internet`, and `junior_time_estimate_min` | ✅ remove |
 
 ### 2b. Dockerfile (BLOCKING)
 
@@ -210,9 +182,13 @@ Check `environment/Dockerfile`:
 | `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
 | No privileged/dangerous caps | docker-compose must NOT use `privileged: true`, `cap_add` of `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE`, or mount `/var/run/docker.sock`; volume mounts must not shadow reserved paths (`/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`) | ❌ manual |
 
-**Verifier deps:** Install `pytest`, `pytest-json-ctrf`, and verifier-only
-packages in the Dockerfile with exact pins. Do not put dependency wheels under
-`tests/`, and do not install packages in `tests/test.sh`.
+**Agent image vs verifier image:** `environment/Dockerfile` builds the agent
+environment and must never copy `tests/` or `solution/`. `tests/Dockerfile`
+builds the isolated verifier, must be digest-pinned, must bake in
+`pytest`, `pytest-json-ctrf`, and every verifier-only dependency with exact pins,
+must `COPY . /tests/`, and must create the parent directory for every declared
+artifact path. Do not put dependency wheels under `tests/`, and do not install
+packages in `tests/test.sh`.
 
 ### 2c. .dockerignore (WARNING → auto-fix)
 
@@ -254,10 +230,25 @@ Check `tests/test.sh`:
 | CTRF output | Uses `--ctrf /logs/verifier/ctrf.json` | ✅ add flag |
 
 **Canonical test.sh template** (auto-fix target):
-Use the repository asset `scripts/templates/test.sh`; do not reconstruct it
-from prose. After extraction or auto-fix, run
-`scripts/task-policy.py validate-task <task-dir>`. The exact multiline footer,
-`python3`, LF endings, executable mode, and `bash -n` result are blocking.
+```bash
+#!/bin/bash
+set -uo pipefail
+
+mkdir -p /logs/verifier
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    echo 1 > /logs/verifier/reward.txt
+else
+    echo 0 > /logs/verifier/reward.txt
+fi
+
+exit 0
+```
+
+The current portal explicitly requires no `set -e`, requires a trailing
+`exit 0`, and grades from `reward.txt`. If the published Terminus 3 skeleton
+differs, the skeleton wins and the discrepancy must be reported.
 
 ### 2e. Dependency wheels and root pyproject
 
@@ -380,7 +371,7 @@ Common gaps:
 | No "task.toml" | Don't mention task metadata |
 | No "verifier" | Don't mention the verification system |
 | No "rubric" | Don't mention scoring |
-| No "milestone" | Don't mention task structure |
+| No edition/framework metadata | Don't mention task packaging or verifier structure |
 
 ### 3e. Content prescriptiveness (WARNING — instruction_check)
 
@@ -467,13 +458,16 @@ Print summary table:
 | Check                    | Status | Auto-fixed |
 |--------------------------|--------|------------|
 | task.toml structure      | ✅     | -          |
-| allow_internet accuracy  | ✅     | -          |
-| Python difficulty = hard | ✅     | -          |
-| codebase_size match      | ✅     | YES        |
+| artifacts top-level      | ✅     | -          |
+| verifier separate mode   | ✅     | YES        |
+| network_mode             | ✅     | -          |
+| category/subcategory     | ✅     | -          |
 | docker-compose flags     | N/A    | -          |
 | Dockerfile digest pin    | ✅     | -          |
 | Canonical base image     | ✅     | -          |
 | tmux + asciinema         | ✅     | -          |
+| tests/Dockerfile         | ✅     | -          |
+| artifact landing dirs    | ✅     | -          |
 | test.sh canonical form   | ✅     | YES        |
 | .dockerignore            | ✅     | YES        |
 | verifier deps in image   | ✅     | -          |
@@ -502,28 +496,16 @@ zip -rX "${ZIPFILE}" instruction.md task.toml environment solution tests \
 ## Rubric Reminder
 
 After upload to Snorkel, remind the user to create a rubric in the platform UI:
-- Non-milestone tasks: flat `Agent ...` criterion list; a single `# Rubric 1`
-  header is tolerated but not required.
-- Milestone tasks: one block per milestone using `# Rubric 1`, `# Rubric 2`,
-  etc.
-- Minimum **3 negative-reward criteria** overall; milestone tasks also need at
-  least one negative criterion per milestone.
+- Use a flat `Agent ...` criterion list.
+- Include at least **one negative-reward criterion**.
 - Format: `"Agent <did/did not> <observable action>, +/-N"`
 - Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
 - **Positive scores need an explicit leading `+`** (write `+3`, not `3`); unsigned positives are sent back for revision
-- **Every criterion is exactly ONE physical line** — no mid-criterion wrapping;
-  a wrapped line is unparseable by the CI rubric parser = High reject
-  (2026-07-15)
-- **The whole rubric block appears exactly ONCE** — a duplicated/concatenated
-  paste (e.g. "…-2.Verdicts match…") is unparseable = High reject; the block
-  lives in the platform rubric FIELD, so a malformed paste is invisible in
-  local files — verify programmatically
-- Total points: 10–40 for non-milestone tasks
-- Reward the END STATE, not the process: no "reads/studies the stub", no
-  "compiles successfully with `cargo build`/`go build`" (compilation is implied by
-  any output), no "verifies by running the binary on samples". Reviewers strip
-  these; keep behavioral end-state criteria only, and make any max-score comment
-  match the real positive sum.
+- Total positive points: 10–40
+- Rubrics grade trace-evidenced engineering behavior, not the final pytest result.
+  Keep criteria task-specific and diagnostic; avoid generic meta-checks such as
+  reading instructions, and include validation/recovery actions only when they
+  are meaningful for this task.
 - Do NOT reference tests, verifier logic, `test.sh`, `test_outputs.py`,
   `/tests/`, hidden tests, CI, reward files, pytest results, metadata, or
   instruction items
@@ -532,8 +514,8 @@ After upload to Snorkel, remind the user to create a rubric in the platform UI:
 
 Top recurring CI failures from empirical data:
 
-1. **verifier deps** — missing pinned pytest/pytest-json-ctrf in Dockerfile or wheels under tests
-2. **codebase_size mismatch** — file count doesn't match declared size
+1. **verifier isolation** — missing `tests/Dockerfile`, `environment_mode = "separate"`, top-level artifacts, or artifact landing directories
+2. **verifier deps** — missing pinned pytest/pytest-json-ctrf in `tests/Dockerfile` or runtime installation in test.sh
 3. **FROM not digest-pinned** — missing `@sha256:` suffix
 4. **check_sanctioned_base_images** — final stage uses a non-canonical base with no (or vague) justification; or uses a different digest/registry than the canonical entry for that language (e.g. bare `golang@sha256:…` instead of the canonical `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d…`)
 5. **ruff errors** — unused imports, ambiguous variable names
@@ -545,7 +527,7 @@ Top recurring CI failures from empirical data:
 11. **AI scaffolding files** — CLAUDE.md, .cursorrules in environment/
 12. **build context size** — environment/ exceeds 100MiB or single file >50MiB
 13. **root pyproject.toml** — remove from submission ZIP
-14. **Python difficulty** — Python task with `difficulty = "medium"` blocked
+14. **Terminus 2 metadata** — stale difficulty/category/network/milestone fields remain
 
 ## Go-specific Checks
 

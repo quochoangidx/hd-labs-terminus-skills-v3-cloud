@@ -1,6 +1,6 @@
 ---
 name: task-batch
-description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new, non-Python Terminus Regular tasks ready for platform submission. Run task-miner, task-clone, Docker/Oracle/NOP/Harbor validation, task-zip-submit, task-client-feedback-review with authorized fixes, a two-attempt task-local-solve-probe using fresh subagents, and task-llm-style-audit; then create one SUBMISSION file per task. Do not use for ports, returned-task remediation, or ordinary single-task work."
+description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new Terminus 3 tasks ready for platform iteration. Run task-miner, task-clone, separate-verifier Oracle/NOP validation, task-zip-submit, task-client-feedback-review, adaptive task-local-solve-probe runs, and task-llm-style-audit. Do not use for ports, returned-task remediation, or ordinary single-task work."
 ---
 
 # Task Batch
@@ -23,8 +23,9 @@ When invoked:
 - Do not ask the user to choose repositories, languages, categories, candidates, or fixes.
 - Make all normal task-building decisions autonomously.
 - Deliver exactly `N` accepted tasks.
-- Use any suitable language except Python.
-- Target HARD task designs. Use `MEDIUM+` as the local two-probe verdict defined below; do not claim platform HARD from only two local probes.
+- Use any suitable implementation language, including Python when it fits.
+- Build a useful Terminus 3 difficulty mix. Preserve valid Base/Core candidates;
+  do not force every task toward Frontier.
 - Keep mining replacements until the quota is met.
 - Treat every invocation as a fresh batch. Do not port, reskin, or reuse an existing task unless the user explicitly requests that separately.
 
@@ -76,9 +77,9 @@ Use `task-miner`.
 
 The candidate must:
 
-- use a non-Python implementation language;
+- use a domain-appropriate implementation language;
 - be brand-new and gallery-novel;
-- fit one honest Terminus Regular category;
+- fit one exact Terminus 3 category/subcategory pair;
 - have a fair, visible, offline-solvable contract;
 - have enough independent behavioral depth to plausibly resist a strong agent;
 - avoid saturated task families, known collapse patterns, hidden graded rules, and unreachable authorities;
@@ -99,7 +100,8 @@ Build the complete task:
 - `tests/`
 - any required local references or fixtures
 
-Keep the primary activity aligned with the declared category. Keep the implementation language non-Python; verifier infrastructure may use Python where the platform format requires it.
+Keep the task's domain aligned with its exact category/subcategory pair. Python
+used only by the verifier is not an implementation language.
 
 Before difficulty probing, verify instruction sufficiency:
 
@@ -162,26 +164,26 @@ Use `task-local-solve-probe` with fresh subagents and isolated solve copies. Do 
 
 Use the actual subagent model available in the current environment. Preserve the real diff, verifier result, and failure classification for each attempt.
 
-#### Attempt 1
+Run two fresh attempts initially. Add a third only after a split, a shared blind
+spot, or incomplete per-case union.
 
-- If the subagent fully solves the task and receives reward `1.0`, the task is too easy. Fairly harden it once and restart all affected validation, review, packaging, and probing from scratch, or drop it and mine a replacement.
-- If the subagent has a genuine semantic failure, run Attempt 2 with a fresh subagent and clean solve copy.
-- If the run fails because of infrastructure, setup, compilation, tooling, or timeout unrelated to task semantics, repair the probe environment and rerun it. Do not count that run.
+- A semantic failure is valid difficulty evidence only when it matches the
+  documented crux and the contract is instruction-sufficient.
+- Setup, compilation, dependency, refusal, and timeout failures do not count.
+- If all local attempts solve the task, fairly strengthen it once or replace it;
+  do not spend platform iteration quota on a locally 100% candidate.
+- If at least one attempt fails semantically, retain the candidate and record a
+  provisional tier signal from the observed local pass rate. Do not present that
+  signal as the final platform tier.
+- For a zero-solve Frontier signal, require 100% per-case union, zero common
+  misses, and de-correlated failures. Otherwise audit the oracle and visible
+  authority before proceeding.
+- A split result is a valid Core/Advanced signal when both the passing and
+  failing runs are trustworthy. Python follows the same rule as every language.
 
-#### Attempt 2
-
-- If the second fresh subagent also has a genuine semantic failure, classify the candidate as `MEDIUM+` locally.
-- If the second subagent fully solves the task, fairly harden it once and restart the workflow, or drop it and mine a replacement. Do not classify it as `MEDIUM+`.
-- If the failure reveals underdocumentation, an Oracle defect, unavailable knowledge, or ambiguous behavior, repair the fairness defect and restart both probes. A broken contract is not difficulty.
-
-Two semantic failures qualify the task for this batch only when:
-
-- the task still passes Oracle, NOP, Docker, and local Harbor checks;
-- the failures are caused by the intended behavioral challenge;
-- the required behavior is fully supported by the visible contract;
-- neither solve run gained access to excluded artifacts.
-
-Do not claim that `0/2` local solves proves platform HARD. Set platform metadata conservatively unless stronger evidence exists.
+The platform iteration stage uses two runs per current reference model and
+requires at least one failure across all four. Final difficulty is measured over
+eight runs, so local evidence remains provisional.
 
 If hardening changes instructions, tests, fixtures, solution, environment, or metadata, rerun every affected gate and replace the ZIP before continuing.
 
@@ -254,7 +256,7 @@ Run the style audit on the completed submission file.
 
 Count a task toward `N` only when all of the following are true:
 
-- The task is fresh and non-Python.
+- The task is fresh and uses a domain-appropriate language.
 - The task folder is complete.
 - The visible contract is instruction-sufficient.
 - Whole-task Ruff validation, including `PLW1510`, is clean.
@@ -263,12 +265,14 @@ Count a task toward `N` only when all of the following are true:
 - NOP reward is `0.0`.
 - Applicable local Harbor checks pass without requiring an API key.
 - The final ZIP passes client-feedback review with no blocker.
-- Two valid fresh subagents both fail semantically, producing the local `MEDIUM+` verdict.
+- Two valid fresh attempts exist, with an adaptive third when required, and at
+  least one trustworthy semantic failure provides a local difficulty signal.
 - The LLM-style audit is clean.
 - `submissions/<slug>.zip` exists and matches the final task state.
 - `submissions/SUBMISSION-<slug>.md` exists and is accurate.
 
-Do not count rejected, blocked, one-pass/one-fail, infrastructure-failed, ambiguous, or merely packaged candidates.
+Do not count rejected, infrastructure-failed, ambiguous, locally all-pass, or
+merely packaged candidates. A trustworthy split is valid Terminus 3 evidence.
 
 ## Final Response
 
@@ -282,9 +286,8 @@ Report one row per accepted task with:
 - NOP reward;
 - Harbor result;
 - ZIP review result;
-- probe Attempt 1;
-- probe Attempt 2;
-- local difficulty verdict;
+- probe run results and any adaptive third run;
+- provisional local tier signal;
 - ZIP path;
 - submission file path.
 
