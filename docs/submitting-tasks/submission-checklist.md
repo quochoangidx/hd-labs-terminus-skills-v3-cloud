@@ -1,199 +1,118 @@
 # Submission Checklist
 
-Use this checklist before every submission to ensure your task is complete and will pass review.
-
-> **For detailed requirements:** See [Task Requirements](/portal/docs/understanding-tasks/task-requirements) for complete specifications on each component.
+Run through this before every submission.
 
 ---
 
-## Pre-Submission Verification
+## Task Design
 
-### Task Design
+- [ ] Goal is clear and unambiguous; requirements are inferable from the materials provided
+- [ ] Instruction is as concise as the task allows (around 2 short paragraphs or 20 bullets), and not LLM-generated
+- [ ] Uses absolute paths (e.g. `/app/output.json`)
+- [ ] Output files and formats are specified
+- [ ] Not solvable in a single command or a straight-line burst — requires chaining, intermediate state, and reacting along the way
+- [ ] Novel — not a variation of an existing task or a reskin of your own earlier work
+- [ ] Exactly one `category` and one `subcategory` from the taxonomy
+- [ ] No canary strings in any component
 
-- [ ] Problem statement is clear and unambiguous
-- [ ] All requirements are explicitly stated
-- [ ] Uses absolute paths (e.g., `/app/file.txt`)
-- [ ] Output files are named in instructions
-- [ ] Data schemas are fully specified
-- [ ] Difficulty target: < 80% pass rate
+## Required Files
 
-### Required Files
+- [ ] `task.toml` — all required fields present
+- [ ] `instruction.md`
+- [ ] `environment/Dockerfile` — builds successfully; dependencies pinned; every `FROM` digest-pinned
+- [ ] `solution/solve.sh` — deterministic, human-written
+- [ ] `tests/Dockerfile` — verifier image with dependencies baked in
+- [ ] `tests/test.sh` — verifier entrypoint
+- [ ] `tests/test_outputs.py` — Python pytest tests with docstrings
 
-**Always required:**
-- [ ] `task.toml` — Complete configuration with all required sections ([requirements](/portal/docs/understanding-tasks/task-requirements#tasktoml-requirements))
-- [ ] `environment/Dockerfile` — Builds successfully; language dependencies pinned, every `FROM` image digest-pinned, final runtime base canonical (or non-canonical with a justification), and `environment/` within size limits ([requirements](/portal/docs/understanding-tasks/task-requirements#dependency-pinning))
+> `rubrics.txt` and `README.md` are added by Snorkel during packaging — you don't ship either. The README is built from your `task.toml` explanation fields.
 
-**Non-milestone tasks** (`number_of_milestones = 0`):
-- [ ] `instruction.md` — Clear, human-written instructions ([requirements](/portal/docs/understanding-tasks/task-requirements#instructionmd-requirements))
-- [ ] `environment/Dockerfile` — Builds successfully; application dependencies pinned to exact versions; all base images use `@sha256:<digest>` pins ([requirements](/portal/docs/understanding-tasks/task-requirements#dependency-pinning))
-- [ ] `solution/solve.sh` — Deterministic, human-written solution ([requirements](/portal/docs/understanding-tasks/task-requirements#solution-requirements))
-- [ ] `tests/test.sh` — Runs Python pytest tests with pre-installed verifier dependencies and produces reward file ([requirements](/portal/docs/understanding-tasks/task-requirements#test-requirements))
-- [ ] `tests/test_outputs.py` — Python pytest tests with docstrings that verify behavior
+## Verifier
 
-**Milestone tasks** (`number_of_milestones >= 2`) — see the [Milestones page](/portal/docs/understanding-tasks/milestones) for the full layout:
-- [ ] `task.toml` includes one `[[steps]]` block per milestone (count must equal `number_of_milestones`)
-- [ ] No root-level `instruction.md`, `tests/`, `solution/`, or `milestone_x.md` files
-- [ ] For each milestone `N`, a `steps/milestone_N/` directory containing:
-  - [ ] `instruction.md` — prompt for milestone `N` only (milestone 1 should include the overall task context)
-  - [ ] `tests/test.sh` — milestone `N`'s test runner
-  - [ ] `tests/test_mN.py` — pytest assertions scored only against milestone `N`
-  - [ ] `solution/solve.sh` — wrapper that runs `solveN.sh`
-  - [ ] `solution/solveN.sh` — oracle solution scoped only to milestone `N`
+- [ ] `[verifier].environment_mode = "separate"`
+- [ ] `artifacts` is a **top-level** key and lists every path the verifier needs
+- [ ] Parent directories for those artifacts exist in the verifier image
+- [ ] `solution/` and `tests/` are absent from the agent image
+- [ ] Tests are deterministic — no network, no wall-clock dependence, no unseeded randomness
+- [ ] Tests check semantics, not appearance
+- [ ] Verification covers every correctness axis the task claims to care about
 
-### Rubric
-- Every submission should include a rubric that is aligned to the task. 
-- You generate a synthetic rubric via the submission UI in the Snorkel Platform, then edit it for accuracy and completeness.
-- The rubric must include **at least three** criteria that assign **negative** rewards (for example, `-1`).
-- See the  [Rubrics page](/portal/docs/understanding-tasks/rubrics) for workflow details and quality criteria.
+## Configuration
 
-### Quality Standards
+- [ ] `[agent].timeout_sec` is at least **1800** (30 min) and reflects the time the task actually needs
+- [ ] `[verifier].timeout_sec` and `[environment].build_timeout_sec` set
+- [ ] `network_mode` is `"public"` unless the task specifically needs to run offline
+- [ ] No GPU required; runs within ~2 CPU cores, ~8 GB memory, ~10 GB storage
+- [ ] Descriptive fields are under `[metadata]`, not at the top level
+- [ ] 3–6 `tags`; `languages` and `expert_time_estimate_hours` set
+- [ ] `author_name` and `author_email` set (`"anonymous"` is fine)
+- [ ] `difficulty_explanation`, `solution_explanation`, `verification_explanation`, and `relevant_experience` written
 
-- [ ] All requirements have corresponding tests
-- [ ] All tests verify described requirements with complete coverage of the prompt (explicit, implicit, and edgecases.)
-- [ ] Tests are written in Python and run with pytest
-- [ ] Anti-cheating measures in place (no hints or exposed answers)
-- [ ] Tests check behavior, not implementation
-- [ ] Complies with [Quality Guidelines](/portal/docs/reference/quality-guidelines)
+## Rubric
+
+- [ ] Rubric generated and edited in the platform submission UI
+- [ ] Maximum cumulative score is 10–40 points
+- [ ] **At least one** criterion assigns a negative reward
+- [ ] Every line starts with "Agent" and ends with `, ±N`; positives carry an explicit `+`
+- [ ] Only ±1, 2, 3, 5 used — no 4s
+- [ ] Checkbox unchecked before sending to reviewer
 
 ---
 
 ## Automated Checks
-
-### Oracle Agent
 
 ```bash
 stb harbor run -a oracle -p <task-folder>
 ```
 
 - [ ] Oracle agent PASSES
+- [ ] `stb harbor check` clean — all errors resolved, warnings fixed unless a reviewer approved an exception
 
-### CI Checks
+---
+
+## Difficulty Measurement
 
 ```bash
-stb harbor tasks check <task-folder> -m openai/@openai/gpt-5.5
+stb harbor run -m @openai/gpt-5.6 -p <task-folder> -k 4
+stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 ```
 
-- [ ] pinned_dependencies ✓
-- [ ] check_pinned_images ✓
-- [ ] check_sanctioned_base_images ✓
-- [ ] check_build_context_size ✓
-- [ ] typos ✓
-- [ ] tests_or_solution_in_image ✓
-- [ ] check_dockerfile_references ✓
-- [ ] check_test_sh ✓
-- [ ] check_task_absolute_path ✓
-- [ ] check_privileged_containers ✓
-- [ ] ruff ✓
-- [ ] check_task_sizes ✓
-- [ ] validate_task_fields ✓
+- GPT-5.6 pass rate: ____%
+- Claude Opus 5 pass rate: ____%
+- **Accuracy** (average across both): ____%
 
-Warnings should also be fixed unless an explicit reviewer-approved exception applies:
+| Tier | Accuracy |
+|---|---|
+| **Frontier** | < 20% |
+| **Advanced** | 20% – < 50% |
+| **Core** | 50% – < 80% |
+| **Base** | 80% – < 100% |
 
-- [ ] check_dockerignore (warn)
-- [ ] check_dockerfile_hygiene (warn)
-- [ ] check_offline_tests (warn)
-- [ ] check_apt_usage (warn)
-- [ ] check_reproducible_builds (warn)
-- [ ] check_layer_volatility (warn)
-- [ ] check_no_build_tools_in_runtime (warn)
-- [ ] check_file_extraction (warn)
-- [ ] check_heredoc_usage (warn)
-- [ ] check_recursive_permissions (warn)
-
-### LLMaJ Checks
-
-- [ ] behavior_in_task_description ✓
-- [ ] behavior_in_tests ✓
-- [ ] informative_test_docstrings ✓
-- [ ] anti_cheating_measures ✓
-- [ ] structured_data_schema ✓
-- [ ] hardcoded_solution ✓
-- [ ] file_reference_mentioned ✓
+- [ ] `difficulty` in `task.toml` matches the measured tier
+- [ ] Failures reflect genuine task difficulty — not unclear instructions, environment defects, or flaky tests
 
 ---
 
-## Real Agent Testing
+## Self-Check
 
-### Run Against GPT-5.5
-
-```bash
-stb harbor run -m @openai/gpt-5.5 -p <task-folder>
-```
-
-- [ ] Run 1: PASS / FAIL
-- [ ] Run 2: PASS / FAIL
-- [ ] Run 3: PASS / FAIL
-
-### Run Against Claude Opus 4.8
-
-```bash
-stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
-```
-
-- [ ] Run 1: PASS / FAIL
-- [ ] Run 2: PASS / FAIL
-
-### Difficulty Calculation
-
-| Difficulty | Threshold | Description |
-|------------|-----------|-------------|
-| **Hard** | Accuracy ≤ 20% on the **best** model, OR ≤ 20% on the **worst** model | Requires deep expertise, multi-step reasoning |
-| **Medium** | 20% < accuracy ≤ 60% on the **worst** model | Moderate complexity, some domain knowledge |
-| **Easy** | 60% < accuracy ≤ 80% on the **worst** model | Straightforward but still non-trivial |
-
-- Worst-model pass rate: ____%
-- Best-model pass rate: ____%
-- Difficulty: Easy / Medium / Hard
-
-> Tasks where the worst model scores above 80% will not be accepted. Full criteria: [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
+1. Would a first-time reader understand what is being asked?
+2. Can the agent obtain everything it needs from the environment?
+3. Could a plausible-but-wrong solution pass my tests?
+4. Do my tests check semantics rather than appearance?
+5. Is everything deterministic?
 
 ---
 
-## Final Review
+## Submit
 
-Use the [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) to validate your task against the same criteria reviewers use before you submit.
-
-### Self-Check Questions
-
-1. **Would I understand this task as a first-time reader?**
-   - If no → Clarify instructions
-
-2. **Are there any ambiguous requirements?**
-   - If yes → Make them explicit
-
-3. **Could an agent cheat on this task?**
-   - If yes → Add anti-cheating measures
-
-4. **Do tests verify actual behavior?**
-   - If no → Rewrite to test behavior
-
-5. **Is the solution deterministic?**
-   - If no → Add seeds, remove randomness
-
----
-
-## Submission Method
-
-- [ ] Created ZIP of files (not folder)
-- [ ] All required files included in ZIP
-- [ ] Uploaded to terminus-project-v2 on Snorkel Expert Platform
-- [ ] Metadata filled in
-
-See [Platform Submission Guide](/portal/docs/submitting-tasks/platform-submission) for detailed submission steps.
-
----
-
-## Ready?
-
-If you've completed all items above, upload your ZIP file to the Snorkel Expert Platform.
-
-**Good luck!** 🎉
+- [ ] ZIP contains the task **files**, not the enclosing folder
+- [ ] All required files included
+- [ ] Submitted under the **`Terminus-3-Prod`** project
 
 ---
 
 ## Need Help?
 
-- Slack: `#ec-terminus-submission`
+- Slack: [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W)
 - [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist)
-- [Troubleshooting guide](/portal/docs/reference/troubleshooting)
 - [FAQ](/portal/docs/reference/faq)

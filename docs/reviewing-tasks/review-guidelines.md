@@ -25,7 +25,7 @@ _If the EC addresses your comments, the task should be ready for acceptance, ass
 
 ### Authentic Prompt Styling
 
-We have overhauled the way instructions are written. In Edition 2, the `instruction.md` file should index on **realistic prompts** that real users and engineers would use when interacting with coding agents in their daily life, and be as succinct as possible.
+We have overhauled the way instructions are written. In Terminus 3, the `instruction.md` file should index on **realistic prompts** that real users and engineers would use when interacting with coding agents in their daily life, and be as succinct as possible.
 
 The instructions for every task should adhere to these six general principles:
 1. Task instructions **must be concise.**
@@ -181,7 +181,7 @@ Issues need fixing before acceptance. Be specific:
 ### Decline
 
 Fundamental issues that can't be easily fixed:
-- Too easy (worst-model accuracy consistently above 80%)
+- Too easy (100% accuracy averaged across both models provides no signal; 90% is acceptable, 100% is not)
 - Essentially duplicate of existing task
 - Core concept is flawed
 
@@ -193,6 +193,6 @@ Explain clearly why, and whether revision could salvage it.
 
 - [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) — Full high/medium/low acceptance criteria for reviews
 - [Reviewer Training](/portal/docs/reviewing-tasks/reviewer-training) — Training videos and materials for reviewers
-- [Rubrics](/portal/docs/reviewing-tasks/rubrics) — How to write and review rubrics for evaluating agent traces
+- [Rubrics](/portal/docs/understanding-tasks/rubrics) — How to write and review rubrics for evaluating agent traces
 - [Quality Guidelines](/portal/docs/reference/quality-guidelines) — Required quality standards for all tasks
 - [Common errors to watch for](/portal/docs/reviewing-tasks/common-errors)

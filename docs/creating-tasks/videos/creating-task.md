@@ -1,20 +1,16 @@
 # Creating a Task
 
+> **Note:** These videos were recorded for Terminus 2nd Edition. The workflow still applies, but the task structure has changed — see [What's New](/portal/docs/getting-started/whats-new) and [Task Components](/portal/docs/understanding-tasks/task-components).
+
 Learn how to create a new task from scratch using the task skeleton template.
 
 ## Getting Started
 
 To create a new task, you'll start with the task skeleton template and customize it for your specific task.
 
-## Step 1: Download the Correct Task Skeleton
+## Step 1: Download the Task Skeleton
 
-Download the ZIP file of the correct task skeleton from the the [Slack channel's resources tab](https://snorkel-team.enterprise.slack.com/docs/TFHL9C8JG/F0AG6BP7WN5) located at the top of the channel.
-
-There are 3 task skeletons:
- - **_"Regular"_ Task Skeleton:** Use for all non-UI-Building and non-Milestone tasks
- - **UI Task Skeleton:** Use for all UI-Building subtype tasks
- - **Milestone Task Skeleton:** Use for all tasks with milestones
-
+> **Coming soon.** The Terminus 3 task skeleton is being prepared — there is a single skeleton for this edition. This page will link it once available.
 ## Step 2: Extract and Rename
 
 1. **Extract the ZIP file** to your desired location
@@ -39,46 +35,22 @@ There are 3 task skeletons:
 
 After extracting and renaming, you'll have a folder structure like this:
 
-**Non-milestone tasks (Regular and UI skeletons):**
+**Task layout:**
 
 ```
 your-task-name/
-├── instruction.md      # Task instructions (markdown)
 ├── task.toml           # Task configuration and metadata
+├── instruction.md      # Task instructions (markdown)
 ├── environment/        # Environment definition folder
 │   ├── Dockerfile      # OR docker-compose.yaml
-│   └── [build files]   # Additional environment files
+│   └── data/           # Bundled inputs
 ├── solution/           # Oracle solution
 │   └── solve.sh        # Solution script + dependencies
-└── tests/              # Test verification
-      ├── test.sh         # Test execution script
-      └── test_outputs.py # Python pytest assertions
+└── tests/              # Verifier (runs in a separate container)
+    ├── Dockerfile      # Verifier image
+    ├── test.sh         # Verifier entrypoint
+    └── test_outputs.py # Python pytest assertions
 ```
-
-**Milestone tasks (Milestone skeleton):**
-
-```
-your-task-name/
-├── task.toml                       # Task config + one [[steps]] block per milestone
-├── environment/                    # Shared environment for all milestones
-│   ├── Dockerfile                  # OR docker-compose.yaml
-│   └── [build files]
-└── steps/
-    ├── milestone_1/
-    │   ├── instruction.md          # Prompt for milestone 1 (include overall task context)
-    │   ├── tests/
-    │   │   ├── test.sh             # Per-milestone test runner
-    │   │   └── test_m1.py          # Pytest assertions (TestMilestone1 class)
-    │   └── solution/
-    │       ├── solve.sh            # Wrapper — calls solve1.sh
-    │       └── solve1.sh           # Oracle solution scoped to milestone 1
-    └── milestone_2/
-        └── ...                     # Same structure
-```
-
-Milestone tasks have **no** root-level `instruction.md`, `tests/`, `solution/`, or `milestone_x.md` files. See the [Milestones page](/portal/docs/understanding-tasks/milestones) for full details.
-
-> **Note:** This structure follows the Harbor 2.0 task format. See [Task Components](/portal/docs/understanding-tasks/task-components) for details on each file.
 
 ## Next Steps
 

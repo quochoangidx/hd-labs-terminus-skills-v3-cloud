@@ -1,288 +1,129 @@
 ---
 name: task-miner
-description: "Use when mining Terminus Regular task candidates that fit the live task gallery taxonomy and subtype menu. This metadata-only skill scores candidates, checks novelty against the existing gallery, and records source/base commits, behavior contracts, category fit, verifier shape, runtime risk, dedupe keys, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. All nine Regular categories are open; choose the category that honestly matches the task's visible primary activity. Default to gallery-style spec-driven mining; use upstream bugfix PRs only as a minority lane or when the user asks."
+description: "Use when mining novel Terminus 3 task candidates. This metadata-only skill scores candidates, checks novelty, records source/base commits, behavior contracts, exact category/subcategory fit, artifact and isolated-verifier shape, runtime risk, and rejection reasons, but does not scaffold tasks, write verifiers, or patch code. All seven Terminus 3 categories are open."
 ---
 
 # Task Miner
 
-Use this skill when sourcing task ideas for the Terminus task gallery
-(`/portal/tasks`). The gallery IS the target distribution — mine candidates that
-look like they belong in it and that do NOT already exist there.
+Use this skill to source new Terminus 3 task ideas. Mine for domain depth,
+multi-step work, interacting correctness axes, and a final artifact that an
+isolated verifier can grade. Do not create a task folder, Dockerfile, verifier,
+or oracle here; return a compact artifact for task-clone.
 
-- **No direction given → default to Gallery-style mining** (Category Profile Mode
-  below): self-contained, spec-driven "implement a tool/engine/pipeline/algorithm
-  end-to-end" tasks (Lane A), spread across under-represented categories
-  (see the Current Category Policy callout below). Do NOT default to upstream bugfix PRs —
-  those are a minority of the gallery.
-- **User names a category** → use the matching Category Profile and reject only
-  when the task's primary activity does not honestly match that category.
-- **User names a subtype** → use the matching Subtype Profile.
-- **User asks for a bugfix / closed PR** → use Upstream Bugfix Mode (minority lane)
-  only for explicit debugging/revision work; do not relabel a bugfix merely to
-  chase another category.
+- No direction given: fan out across under-represented Terminus 3 domains.
+- User names a category or subcategory: stay within that exact taxonomy pair.
+- User asks for a bugfix or closed PR: use the upstream bugfix lane.
+- Always reject reskins and near-duplicates of Terminal-Bench 2.1, Terminal-Bench
+  3.0, prior Terminus editions, and this repository's portfolio.
 
-This is a lightweight mining pass. Do not create a task folder, Dockerfile,
-verifier, or oracle here. The output is a compact mined candidate artifact consumed
-later by `task-clone`.
-
-> **✅ CURRENT CATEGORY POLICY (updated 2026-07-30).**
-> 1. **All nine Regular-task categories are open** for net-new submissions until
->    further notice. The category classifier check is looser, but the declared
->    label must still match the task's visible primary activity. Exact-reference,
->    public-API, and stub-completion work normally maps to `software-engineering`;
->    dataset/report/ETL work maps to `data-processing`; diagnosis and repair maps
->    to `debugging`. Historical blocked-category outcomes are calibration evidence,
->    not current rejection rules. Use `category_mismatch_<predicted_slug>` when the
->    declared category disagrees with the visible work.
-> 2. **New milestone tasks are BLOCKED** — net-new milestone submissions are rejected by an
->    eval check (milestone tasks already in your revision queue or awaiting review are exempt
->    and continue through to Accepted). Mine non-milestone tasks only.
+> **Terminus 3 baseline (live since 2026-07-31).**
 >
-> Keep this callout and the mirrored note in `task-clone` synchronized when the
-> platform changes category availability again.
+> - Seven categories are open: Science, Software, ML, Operations, Security,
+>   Hardware, and Media.
+> - Every task has exactly one Title Case category and one matching subcategory.
+> - Difficulty is frontier, advanced, core, or base; it is language-independent.
+> - Milestones and the old cross-cutting subcategories list are gone.
+> - The verifier is separate and sees only top-level declared artifacts.
+> - network_mode = "public" is the default; use "no-network" only when internet
+>   access would defeat the task.
+> - Agent timeout is 1800–18000 seconds; most tasks should need 60–90 minutes.
+> - Historical HARD/MEDIUM/EASY labels later in this file are retained only as
+>   empirical evidence about idea shapes, never as current metadata.
 
-## Task Gallery Alignment (mine toward the live benchmark)
+## Terminus 3 Taxonomy
 
-The gallery is the live benchmark corpus (snapshot + dedupe list:
-`mined-candidates/gallery_tasks_snapshot.md`, 543 tasks as of 2026-06-21). Match its
-SHAPE, distribution, and difficulty, and never duplicate an existing task.
+Choose by the domain knowledge the task requires, not merely because the agent
+writes code:
 
-**Canonical taxonomy (align every candidate to this).** The gallery organizes tasks
-on TWO orthogonal axes; the full menu — 10 categories → subcategory → subsubcategory,
-the 5 subtypes, and the language mix, read live from the portal's Supabase backend on
-2026-06-21 — is in `mined-candidates/gallery_taxonomy.md`. Read it before mining.
+- Science: Biology, Chemistry, Physics, Earth, Robotics, Math, Linguistics
+- Software: Algorithms, Systems, Databases, Data engineering, Frontend, Languages
+- ML: Training, Inference, Evaluation, Kernels
+- Operations: Finance, Logistics, Supply chain, Claims, Compliance, Marketing
+- Security: Cryptography, Reverse engineering, Forensics, AppSec
+- Hardware: CAD, RTL
+- Media: Music, Design
 
-- **Axis 1 — 3-level category taxonomy** (`category` → `subcategory` →
-  `subsubcategory`). 10 canonical categories (skill kebab alias in parens):
-  Software Engineering & Development (`software-engineering`), Data Processing &
-  Scripting (`data-processing`), Machine Learning & AI (`machine-learning`), Security
-  & Cryptography (`security`), System Setup & Configuration (`system-administration`),
-  Build & Dependency Management (`build-and-dependency-management`), Debugging &
-  Troubleshooting (`debugging`), Scientific Computing & Analysis
-  (`scientific-computing`), Interactive Challenges & Games (`games`), and **Large
-  Codebase Tasks** (milestone-heavy large multi-layer repos — the milestone lane, NOT
-  one of the 9 kebab categories). Pick ONE category, then the nearest
-  subcategory/subsubcategory leaf; prefer near-empty leaves (`[1]` in the reference)
-  for novelty.
-- **Axis 2 — 5 cross-cutting subtypes** (`long_context`, `tool_specific`,
-  `api_integration`, `db_interaction`, `ui_building`). The gallery's
-  `task_inspiration_v2.subtypes`, orthogonal to the category; a task has zero or more.
-  SQL being the #2 language in the pool reflects the `db_interaction` weight. See
-  Subtype Profiles.
+Reserve Software for work whose subject is software. A training-loop repair is
+ML / Training; spectra-to-structure work is Science / Chemistry; a CAD artifact
+is Hardware / CAD.
 
-Gallery difficulty is an `easy|medium|hard` field but is currently unpopulated
-(all-null in the data), so keep gating hardness by MODEL PASS RATE (below), not the
-gallery field.
+## Difficulty and Signal
 
-**Keep the taxonomy fresh (the gallery changes continuously).** `gallery_taxonomy.md`
-is regenerated by `.agent/skills/task-miner/refresh_gallery_taxonomy.py`, which re-discovers
-the portal's live Supabase backend on each run (so it survives bundle-hash and anon-key
-rotation) and rewrites the file stamped with today's date. At the START of any mining
-batch, read the `Snapshot date:` line in `gallery_taxonomy.md`; if it is missing or
-older than ~7 days, refresh first:
+Difficulty is average pass@1 across both current reference models:
 
-```bash
-python3 .agent/skills/task-miner/refresh_gallery_taxonomy.py
-```
+- frontier: below 20%
+- advanced: 20% to below 50%
+- core: 50% to below 80%
+- base: 80% to below 100%
 
-Then mine against the refreshed menu. Re-run it any time the category counts look stale
-or a candidate straddles a category boundary. For hands-off tracking, put this script on
-a schedule (e.g. weekly) so the local taxonomy never drifts from the live gallery.
+The in-platform iteration gate runs four trials and requires at least one
+failure. Base tasks are accepted; only 100% across the iteration sample cannot
+proceed. Python has no special difficulty requirement.
 
-**Dominant shape — Lane A, self-contained spec-driven tasks.** The gallery is mostly
-"build/implement a thing to a precise spec, end-to-end" — e.g.
-`airport-gate-scheduler`, `json-3way-merge-engine`,
-`yaml-job-scheduler-with-deadlock-detection`, `ssa-dead-code-eliminator`,
-`mini-sqs-server`, `multi-format-etl-pipeline`, `ml-explainability-cli`,
-`merkle-tree-collision`. Each is one problem, deterministic, offline, with a
-human-style instruction and a pytest verifier that shells out to the produced
-artifact. Bugfix-PR clones are the MINORITY — prefer Lane A unless the user asks.
+Mine toward genuine signal:
 
-**Real distribution to mirror (sampled 2026-06-21):**
-- Category: software-engineering ~40%, data-processing ~20%, machine-learning ~11%,
-  security ~9%, system-administration ~7%, debugging ~5%, scientific-computing ~4%,
-  games ~4%, build-and-dependency-management present. NOTE: those percentages are from
-  a 55-task sample. The FULL Supabase corpus (see `gallery_taxonomy.md`) is far more
-  BALANCED — every category sits ~390–600 curated rows (Security 600, Debugging 592,
-  Scientific 589, Games 520, ML 516, Software-Eng 499, Data-Processing 417, System
-  Setup 396, Build 392). So treat all 9 as first-class; the diversity rule (no single
-  category >~30%, ≥4 categories ≥10%) still holds. Treat all nine categories as
-  first-class and keep the portfolio structurally diverse.
-- Difficulty: hard ~53%, medium ~38%, easy ~4%. Mine Hard-or-Medium ONLY.
+- several correctness constraints interact rather than forming an unrelated list
+- the agent must infer or validate domain facts from evidence in the environment
+- the result is a semantically valid native artifact, not a superficial rendering
+- hidden variations test the learned contract, not an unstated convention
+- failures should come from the task crux, not ambiguity, setup, refusal, or timeout
 
-**Archetype catalog (counts = gallery prevalence across 543; classify each by its
-visible primary activity — log/ETL pipelines normally predict `data-processing`):**
-log/ETL/data-processing pipelines (88) · API/web/DB services (50) · build/deps
-toolchains (39) · sysadmin/ops automation (35) · crypto/security (34) ·
-compiler/language/parsing engines (31) · ML/AI CLIs & loaders (30) · algorithmic
-solvers/schedulers (29) · games/puzzles/simulations (24) · scientific/numeric (14).
+## Operational Viability
 
-**Difficulty band (model pass rate, NOT the `task.toml` field) — platform rule:**
-- Hard — accuracy ≤20% on the **best** OR **worst** model. Python MUST be Hard.
-- Medium — 20% < accuracy ≤60% on the **worst** model. ACCEPTABLE for non-Python;
-  tag `target_difficulty: medium`, do not discard.
-- Easy — 60–80% on worst model → BLOCKED. >80% → auto-rejected. NEVER mine toward Easy.
+A candidate must support:
 
-**Subtypes (the `subcategories` enum) — optional, orthogonal to the one category:**
-`long_context` (≥50k-token doc, semantic-not-greppable), `tool_specific`
-(Blender/FFmpeg/ImageMagick/Graphviz/MLFlow/… offline), `api_integration` (API source
-in-env, mocked in Docker, terminal-only, avoid FastAPI), `db_interaction` (real
-engine, not flat-file CSV), `ui_building` (pytest + Playwright **Python** bindings).
-Add a subtype only if it genuinely fits; otherwise leave `[]`. See Subtype Profiles.
-
-**Novelty gate (gallery-specific, MANDATORY):** before accepting a candidate, check
-its name/archetype+domain against `mined-candidates/gallery_tasks_snapshot.md`. If the
-gallery already has the same problem (e.g. another CSV-merger, another gate-scheduler),
-REJECT as duplicate unless the candidate adds a clearly distinct twist. Record the
-closest existing gallery task in the artifact (`closest_gallery_task`).
-
-**Operational invariants (unchanged):** offline (`allow_internet=false`), 2 CPU / 4 GB,
-build ≤600s, verifier ≤450s (always Python pytest shelling out to the task's
-executable/API/DB/file outputs), agent default 900s (cap 1800), `environment/` ≤100
-MiB. Codebase size minimal/small/large all accepted — aim for a mix.
+- a deterministic oracle and Python pytest verifier
+- a top-level artifact plan naming the final paths the separate verifier receives
+- a tests/Dockerfile that contains every verifier dependency and artifact landing
+  directory
+- no GPU requirement; roughly 2 CPU, 8 GB memory, and 10 GB storage
+- all dependencies baked into images at build time
+- network_mode = "public" unless offline execution is important to the task
+- an honest 1800–18000 second agent budget and a fast repeatable edit/test loop
+- no canary strings and no AI-generated instruction prose
 
 ## Operating Modes
 
-### Upstream Bugfix Mode (minority lane)
+### Upstream Bugfix Mode
 
-Use ONLY when the user asks for a bugfix, or for the small bugfix/debug slice of the
-gallery (`debugging` is ~5% of the corpus). For closed upstream issues/PRs where the
-task is to diagnose and fix bad behavior. These candidates normally become:
+Use for a closed issue/PR when the task requires diagnosis across interacting
+code paths or state. Record fixing_commit, parent_commit, observable bad and
+expected behavior, preservation requirements, and the upstream regression
+context. Reject message-only, typo-only, dependency-bump, and obvious one-guard
+fixes.
 
-```yaml
-category: debugging
-subcategories: []   # add a subtype ONLY if one genuinely applies (see Subtype Profiles)
-```
+Classify the domain honestly. A vulnerability repair may be Security / AppSec
+or Security / Reverse engineering; a database engine recovery bug may be
+Software / Databases; a training bug may be ML / Training.
 
-`subcategories` is OPTIONAL and orthogonal to `category` — leave it `[]` unless a
-subtype truly fits; do not auto-stamp `tool_specific`. This mode needs
-`fixing_commit`, `parent_commit`, `bad_behavior`, `expected_behavior`, and upstream
-regression-test context. Prefer Gallery-style Lane A (Category Profile Mode) by
-default. Never reframe a bugfix as `data-processing`,
-`build-and-dependency-management`, or another category unless the primary work
-genuinely is that category's activity.
+### Domain Profile Mode
 
-### Category Profile Mode
+Use for new feature, analysis, system, or artifact tasks. Select one exact
+taxonomy pair before mining, then record domain evidence that makes the pair
+necessary. Strong examples include:
 
-Use when the user asks for a non-debugging category or a balanced category batch. Choose the category before mining, then select sources and acceptance criteria that fit that category. Do not accept a candidate whose primary work is bug diagnosis unless the requested category is `debugging`.
+- Science: scientific inference, simulation, formal mathematics, or robotics
+- Software: algorithms, storage engines, language tooling, systems, frontend,
+  or data engineering where software itself is the domain
+- ML: training, inference, evaluation, or CPU-simulated/compile-only kernels
+- Operations: finance, logistics, supply chain, claims, compliance, marketing
+- Security: cryptography, reverse engineering, forensics, AppSec
+- Hardware: CAD or RTL
+- Media: music/audio or visual/layout design
 
-Valid categories:
+For every candidate, state why the chosen subcategory is required and name the
+closest competing pair that was rejected.
 
-```text
-system-administration
-build-and-dependency-management
-data-processing
-games
-software-engineering
-machine-learning
-debugging
-security
-scientific-computing
-```
+## Selection Axis — Domain Shape × Build Viability
 
-**All nine labels are available for net-new Regular submissions. Choose the one
-that honestly matches the visible primary activity** (see the Current Category
-Policy callout above). These kebab labels map 1:1 to
-the gallery's canonical category names (see the table in
-`mined-candidates/gallery_taxonomy.md`). The gallery also has a 10th category, **Large
-Codebase Tasks** (milestone-heavy multi-layer repos) — mine it only when the user asks
-for the milestone / large-codebase lane; standard Regular tasks use the 9 above. After
-choosing a category, also record the gallery `subcategory` and `subsubcategory` the
-candidate maps to (pick the nearest leaf from the taxonomy reference).
+Pick the domain and work surface first; language is secondary. Multi-language
+tasks are preferred when natural, but the primary implementation languages are
+simply recorded under metadata.languages. Python used only by the verifier does
+not count.
 
-For category-profile candidates, `fixing_commit` is optional. The artifact must instead include `base_commit`, `target_behavior`, `required_work`, `input_fixtures`, `output_contract`, and `why_not_debugging` when the category is not `debugging`.
-
-## Category Profiles
-
-- `data-processing`: Mine deterministic ETL, parsing, filtering, aggregation, transformation, and report-generation tasks with explicit schemas and stable sorting/aggregation rules. Reject ambiguous inputs, live data sources, or tasks whose real primary activity belongs to another category.
-- `build-and-dependency-management`: Mine build config, packaging, lockfile, Docker, Make/Cargo/npm/pip workflows. Accept reproducible offline build/install/test tasks with inspectable artifacts. Reject version bumps, CI metadata, or live registry requirements.
-- `software-engineering`: Mine APIs, parsers, algorithms, refactors, integrations, and feature implementation tasks with realistic multi-file behavior. Reject trivial one-line changes, under-specified contracts, or tasks that are only themed as software engineering.
-- `system-administration`: Mine local service/config/process/permissions tasks. Accept Docker-contained health checks, config validation, shell automation, users/groups, or process supervision. Reject tasks needing privileged host daemons or external services.
-- `debugging`: Mine reproducible repair tasks that require diagnosis across interacting code paths or state. Reject message-only, typo-only, or obvious one-line fixes.
-- `security`: Mine local auth, escaping, sanitization, crypto, permissions, or reverse-engineering style tasks. Accept exploit-prevention plus legitimate-use preservation. Reject vague hardening, live targets, secrets, or network-only validation.
-- `scientific-computing`: Mine numerical, simulation, geospatial, statistics, or domain-code tasks. Accept deterministic small fixtures with tolerances and boundary cases. Reject GPU, huge datasets, or compiled-extension rebuild requirements unless explicitly approved.
-- `machine-learning`: Mine tiny offline data-loader, inference, tokenizer, metric, or evaluation tasks. Accept deterministic seeds and small fixtures. Reject downloads, GPU, model registry, or expensive training.
-- `games`: Mine terminal game/puzzle/simulation rule tasks. Accept deterministic state transitions, move legality, scoring, or solver behavior. Reject visual-only or flaky/random tasks.
-
-## Subtype Profiles
-
-The 5 subtypes are the gallery's **cross-cutting axis** (`task_inspiration_v2.subtypes`)
-— distinct from the 3-level `subcategory`/`subsubcategory` taxonomy, do not confuse the
-two. They target areas where frontier agents underperform. OPTIONAL and orthogonal to
-`category`: a task has one category and zero-or-more subtypes. Do not shoehorn a subtype
-that does not fit.
-
-- `long_context`: ONE large document (**≥50k tokens**) the agent must understand
-  SEMANTICALLY — the answer must NOT be reachable by `grep`, keyword search, or pure
-  programmatic parse. Formats: PDF (papers, 10-K, ISO standards), DOCX, MD/TXT
-  (transcripts, handbooks), HTML (a docs site flattened), JSON/YAML (huge schemas),
-  CSV (metadata-heavy), chat logs, long email threads. Accept when the answer needs
-  cross-referencing/synthesis and is deterministic offline. Reject greppable single
-  strings, docs <50k tokens, or docs needing network. Honor the portal **Long Context
-  Task Checklist**. Artifact: `document_source`, `approx_tokens` (≥50k), `format`,
-  `why_not_greppable`.
-- `tool_specific`: Real workflows for tools with SDKs/APIs where models underperform —
-  Blender, FFmpeg, ImageMagick, Graphviz, MLFlow, WandB, Prefect, Superset, GIMP,
-  QGIS, etc. Accept when the tool installs/runs OFFLINE in Docker (no
-  GPU/display/license/network) and produces a deterministic inspectable artifact via a
-  non-trivial multi-step workflow. Reject single-command usage or live services.
-  Artifact: `tool` + offline install plan.
-- `api_integration`: Build/interact/debug an API whose **source code is in the
-  environment** and **fully mocked in Docker (no external deps)**; the agent uses the
-  terminal only (curl/CLI — NO MCP). Frameworks: Flask, Rails, Rustapi, Spring Boot,
-  Django, Express, Fastify, Play, Gin, etc. **Avoid FastAPI** (oversaturated) unless
-  the user insists, and record why. Accept multi-endpoint/multi-step, deterministic,
-  offline. Reject live external APIs or a single trivial endpoint. Artifact:
-  `api_framework`, `mock_plan`, `endpoints`.
-- `db_interaction`: Solved by INTERACTING with a database engine (SQL, NoSQL, vector,
-  in-memory) — the agent must query the engine, not read the data directly. Accept a
-  real engine running offline in Docker. Reject when the "DB" is just a CSV the agent
-  reads directly (flat-file/CSV-as-DB must stay a MINORITY) or needs a hosted/cloud DB.
-  Artifact: `db_engine`, `why_engine_not_flatfile`.
-- `ui_building`: Create/edit/update a UI. **Verification MUST be Python pytest**; for
-  browser automation use **Playwright's Python bindings** from pytest — never a JS/TS
-  suite. Use the UI Task Skeleton downstream. Accept deterministic, checkable UI
-  behavior offline. Reject purely visual/subjective goals. Artifact: `ui_stack`,
-  `playwright_python_plan`.
-
-## Selection axis — archetype × build-viability, NOT language
-
-Pick by ARCHETYPE first; language is free. Only the verifier must be Python
-pytest, and it merely shells out to the task's executable / API / file outputs —
-so the codebase the agent works in (`languages` in task.toml) can be ANY
-language. Docs treat "niche tools/languages" as a Hard lever (less training data
-→ frontier agents fail more), so a non-Python codebase often HELPS difficulty.
-
-The real gate is operational viability, not language: build <=600s after
-slimming, verifier <=450s, offline (`allow_internet=false`), deterministic,
-2 CPU / 4 GB, `environment/` <=100 MiB. Language matters only INDIRECTLY through
-build cost.
-
-Hard-dense archetypes (language-agnostic) — mine TOWARD these:
-
-| Language | Hard archetypes | Build/viability |
-|---|---|---|
-| Go | scheduler/reconciler, SQL planner, protocol state machine, EVM/consensus (scoped) | fast static build ✅ — AVOID one-guard parser/crypto libs |
-| Rust | async cancellation, trait resolution, borrow/lifetime, codegen | slow but cacheable; pick small crates |
-| TypeScript/JS | TS compiler inference/narrowing, type-level libs | TS compiler heavy but offline |
-| C/C++ | optimizer pass, UB/codegen, numerical algorithm | small make/cmake builds fast; watch toolchain |
-| Java/Kotlin/C# | Roslyn/javac analyzer, query engine, bytecode | JVM/.NET build heavier (use offline mode) |
-| Haskell/OCaml/Scala | type inference, parser-combinator engine, evaluator | NICHE BONUS for Hard; build can be heavy |
-| Lua/PHP/Perl/Elixir/Erlang/R/Fortran/Lisp/Prolog | interpreter/engine quirks, version-ordering & canonicalization tails, numeric kernels | apt-installable on the canonical Debian/Ubuntu base (Fortran: gcc image) — fast offline install, NICHE BONUS, widens the dedupe cell; vet the language's OWN stdlib for in-env reference impls (Ruby `URI`, PHP `parse_url` count like `tomllib`) and confirm agents still write it competently |
-| Python | mypy, Django ORM compile, scientific, multi-layer interpreter | fastest build — convenient, NOT mandatory |
-
-3-step selection rule (replaces "prefer Python"):
-
-1. Choose a hard archetype (compiler / planner / state-machine / numerical /
-   multi-layer interpreter), regardless of language.
-2. Confirm that scope builds offline within 600s after slimming. If yes, accept
-   — any language.
-3. Tie-break between equally-hard candidates by preferring the NICHE language
-   (Haskell/OCaml/Rust earn the Hard bonus) and the lighter build.
-
-Deliberately MIX languages across a batch to avoid the "17 tasks all Go libs"
-failure (June 2026 batch B). A healthy batch spans e.g. Rust + Go + TS + C/C++ +
-a niche language, not one library family.
+Prefer work that requires reacting to intermediate state rather than one command
+or a straight-line burst. The “at least five steps” phrase is a complexity
+heuristic, not a count to game.
 
 ## Source Queue
 
@@ -316,10 +157,10 @@ Heavy repos are allowed only with explicit opt-in and strict limits:
 
 For pandas, mine only localized bugs with small dataframes and no compiled-extension rebuild requirement.
 
-For category-profile mode, use sources that naturally match the requested
-category, including small CLI tools, example apps, data pipelines, build scripts,
-admin config repos, numerical utilities, and terminal games. The Source Queue is
-not a category-diversity limit.
+For domain-profile mode, use sources that naturally match the requested
+category/subcategory, including scientific code, storage and language systems,
+ML infrastructure, operational models, security tooling, CAD/RTL, and media
+pipelines. The Source Queue is not a domain-diversity limit.
 
 ## Heavy Repo Mode
 
@@ -447,7 +288,7 @@ Do:
 - choose the category first when the user asks for category diversity
 - verify the issue/PR is closed or merged for upstream bugfix mode
 - identify the fixing commit and a parent commit before the fix for upstream bugfix mode
-- identify a stable `base_commit` and observable target behavior for category-profile mode
+- identify a stable `base_commit` and observable target behavior for domain-profile mode
 - inspect only the source text, changed file list, focused diff hunks, docs/examples, and tests needed to evaluate the candidate
 - score candidate quality and runtime risk
 - write a compact artifact such as `mined-candidates/<slug>.json`
@@ -471,7 +312,7 @@ Before mining deeply, check these:
 ```text
 mined-candidates/index.jsonl               # candidates already mined/claimed/cloned by the team (incl. the spec-conformance resource-claim lane)
 mined-candidates/gallery_tasks_snapshot.md # task NAMES already IN the live gallery — do not duplicate
-mined-candidates/gallery_taxonomy.md       # the category/subcategory/subsubcategory + subtype menu to align to
+docs/understanding-tasks/task-taxonomy.md  # authoritative Terminus 3 category/subcategory menu
 .agent/skills/task-miner/lever_patterns.md # SHARED, resource-agnostic pattern specs + claimed-resource ledger — the in-repo home of "learn the pattern, not the resource" (replaces relying on any personal memory)
 ```
 
@@ -494,7 +335,7 @@ Registry identity keys:
   differ and there is no repo/issue, so two teammates independently pick the
   same official suite and only discover the clash after both are built. Claim
   the suite+spec HERE before building. Cell-dedup on
-  `gallery_category × language × lever` requires a NOVEL resource within the
+  `category/subcategory × language × lever` requires a NOVEL resource within the
   cell — a different suite than the ones the lever catalog names, not just a
   different slug.**
 
@@ -503,7 +344,7 @@ Reject or skip candidates already marked `cloned`, `submitted`, or `claimed` by 
 Append one compact JSON line per decision:
 
 ```json
-{"category":"debugging","repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"mined","rejection_reason":null}
+{"category":"Software","subcategory":"Systems","repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"mined","rejection_reason":null}
 ```
 
 Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
@@ -625,7 +466,7 @@ resize/rebalance, numerical kernels — rated HARD. Codec / parser / scheduler-f
 archetypes UP; treat the latter as MEDIUM-at-best absent an agent-probe failure.
 
 **Operational-ease inversion (why the other scores mislead):** high
-`offline_viability` / `deterministic_reproducibility` / low `runtime_cost`
+`runtime_viability` / `deterministic_reproducibility` / low `runtime_cost`
 correlate NEGATIVELY with difficulty here. Parser, validator, crypto-blob, and
 numeric-precision bugs score perfectly on those axes PRECISELY because they are
 localized one-spot fixes. A candidate that is "clean and easy to test" is a
@@ -732,16 +573,14 @@ count is NECESSARY-NOT-SUFFICIENT. A bug can touch many components yet have a
 one-spot fix (rates TRIVIAL). Always apply the fix-shape probe on top of the
 component count; the fix-shape is the real difficulty test.
 
-For category-profile mode, reject candidates when:
+For domain-profile mode, reject candidates when:
 
 - the target behavior can be solved by one obvious expression, option, or config line
 - the verifier would only check one happy-path example
 - the source repo/app is so small that there is no meaningful discovery work
 - the prompt would need to reveal the exact implementation approach
-- the category label is only cosmetic and the real work is debugging
-- the declared category is cosmetic and the classifier-visible shape is still
-  software-engineering (`implement`, `parse`, `render`, `cmp`, exact reference
-  matching, API/stub completion)
+- the category label is cosmetic and does not match the domain knowledge needed
+  to solve the task
 - the task does not naturally involve at least 4 meaningful components,
   behavior surfaces, or project layers; prefer 5-6 when available
 
@@ -753,9 +592,10 @@ Score each axis from 1 to 5:
   must be coordinated; 4 means four components and is borderline; 3 or lower is
   too shallow for new Hard mining unless empirical agent failures justify it
 - `deterministic_reproducibility`: reproduces offline with stable inputs
-- `offline_viability`: no external service or missing plugin dependency
+- `runtime_viability`: dependencies are baked in and required services are
+  deterministic; public network access is not used as a tooling substitute
 - `anti_shortcut_hardness`: hard to satisfy with a narrow hardcode
-- `verifier_complexity`: can be tested behaviorally with 4-6 focused tests
+- `verifier_complexity`: can be tested behaviorally from declared artifacts
 - `runtime_cost`: 5 is lightweight, 1 is too heavy
 - `leakage_risk`: 5 is low leakage, 1 exposes exact patch/test names
 
@@ -765,7 +605,7 @@ Reject if:
   still hard for semantic reasons
 - `deterministic_reproducibility < 4`
 - `anti_shortcut_hardness < 3`
-- `offline_viability < 4`
+- `runtime_viability < 4`
 - the agent's edit→build→test cycle cannot be made fast. If testing a change
   requires a long cold rebuild that cannot be warmed to an incremental per-edit
   rebuild (Dockerfile pre-build + retained cache), the task trips the **Agent
@@ -786,22 +626,16 @@ Write or return this schema. Keep it compact; raw diffs stay out unless needed.
 
 ```yaml
 candidate:
-  category:                # skill kebab category (one of the 9; or the Large Codebase lane)
-  gallery_category:        # canonical gallery category name, Title Case — see gallery_taxonomy.md
-  subcategory:             # nearest gallery subcategory leaf (from gallery_taxonomy.md)
-  subsubcategory:          # nearest gallery subsubcategory leaf (from gallery_taxonomy.md)
-  subcategories:           # the 5 cross-cutting subtypes: zero or more of long_context, tool_specific, api_integration, db_interaction, ui_building
-  target_difficulty:       # hard | medium  (never easy; Python => must be hard)
-  expected_codebase_size:  # minimal (~0-20 files) | small (~20+) | large (~200+)
+  category:                # exact Title Case Terminus 3 category
+  subcategory:             # exact matching Terminus 3 subcategory
+  category_rationale:      # why this domain, plus closest rejected pair
+  target_difficulty:       # frontier | advanced | core | base
+  artifacts:               # absolute final paths received by verifier
+  verifier_landing_dirs:   # parent dirs tests/Dockerfile must create
+  network_mode:            # public | no-network
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
   gallery_novelty:         # novel | twist-on-existing | duplicate  (duplicate => reject)
-  objective_type: spec_implementation | data_pipeline | tool_workflow | api_service | db_interaction | ui_build | upstream_bugfix | feature | build | admin_config | security | scientific | ml | game
-  subtype_profile:         # fill ONLY the block(s) matching subcategories above
-    long_context: { document_source:, approx_tokens:, format:, why_not_greppable: }
-    tool_specific: { tool:, offline_install_plan: }
-    api_integration: { api_framework:, mock_plan:, endpoints: }
-    db_interaction: { db_engine:, why_engine_not_flatfile: }
-    ui_building: { ui_stack:, playwright_python_plan: }
+  objective_type:          # concise domain/work-surface label
   source_url:
   issue_or_pr_id:
   repo:
@@ -843,15 +677,15 @@ candidate:
   scoring:
     subsystem_interaction:
     deterministic_reproducibility:
-    offline_viability:
+    runtime_viability:
     anti_shortcut_hardness:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
-  patch_shape_gate:        # pass | fail — from the mechanical gate; fail => not Hard-eligible
-  patch_shape_evidence:    # which gate condition passed (new symbol / >=2 interacting files / multi-commit / probe-fail)
+  patch_shape_gate:        # pass | fail — historical hard-shape calibration
+  patch_shape_evidence:
   family_key:              # library + bug_family, checked against the family ledger
-  agent_probe:             # {ran: bool, passed_oneshot: bool} — required if claiming Hard
+  agent_probe:             # model, run count, pass count, trial-analysis flags
   hardness_score:
   reproducibility_score:
   verifier_complexity:
@@ -860,12 +694,14 @@ candidate:
   heavy_repo_mode:
   slimming_plan:
   runtime_budget:
-  rejection_reason:        # use category_mismatch_<predicted_slug> when the declared category disagrees with the visible primary activity
+  rejection_reason:
 ```
 
 Use `rejection_reason: null` only when the candidate is suitable for cloning.
 
-For non-debugging category profiles, prefer `base_commit`, `target_behavior`, `required_work`, `input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only fields empty instead of inventing a `fixing_commit`.
+For domain profiles, prefer `base_commit`, `target_behavior`, `required_work`,
+`input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only
+fields empty instead of inventing a `fixing_commit`.
 
 ## Opus-4.8 resistance — what actually makes a from-scratch SPEC task hard (2026-06-21, hard-won)
 
@@ -947,8 +783,8 @@ user N hard tasks from a pipeline:
   trap); L4 multi-vector security hardening is confirmed-HARD in its honest category.
   Plan every batch as a PORTFOLIO: beating the best model is a ~1/5 lottery per task,
   so design each task for a fair-MEDIUM floor (union-of-misses corpus, per-case or
-  banded scoring — see L1 step 5) with HARD upside, and SUBMIT non-Python Medium
-  results (`target_difficulty: medium`) instead of discarding them.
+  banded scoring — see L1 step 5) with higher-tier upside, and keep valid Base or
+  Core results rather than discarding them; map new results to Terminus 3 tiers.
 
 ## Hardness Calibration
 
@@ -959,11 +795,12 @@ Downgrade or reject candidates when:
 - the likely oracle is a tiny one-file patch
 - all tests reduce to variants of the same condition
 - a strong agent can locate the fix by grepping one or two obvious symbols from the prompt
-- a previous difficulty check shows any frontier agent at `5/5` or aggregate pass rate `>= 80%`
+- the four-run iteration sample is 4/4 solved; redesign because it provides no
+  signal. Results above 80% but below 100% are valid Base-tier evidence.
 - fewer than 4 meaningful components/surfaces/layers are required to understand
   and solve the task
 
-**Pre-mine fix-shape probe (apply to EVERY candidate before scoring it Hard):**
+**Pre-mine fix-shape probe (apply before targeting Frontier/Advanced):**
 read the actual fixing diff and ask, "if I describe only the observable symptom
 to a strong agent, does it produce this patch by adding an obvious guard /
 validation / bound check / nil-check, or by copying a check that already exists
@@ -973,7 +810,7 @@ The patch's REASONING content, not its severity or LOC spread, sets difficulty.
 A 7-line CVE fix that mirrors an existing guard onto a second path is TRIVIAL;
 a 7-line fix that requires inventing a new invariant is not.
 
-For Python tasks, keep only candidates likely to make strong agents fail after understanding the prompt, not merely candidates that look complex by subsystem name.
+Apply the same tier logic to every language, including Python.
 
 ## Clone Handoff
 
@@ -1003,7 +840,7 @@ These fields are mining evidence, not final submission prose.
 
 ## Transformation Hints
 
-1. Pin `environment/repo/` to a parent commit before the fix for upstream bugfixes, or to `base_commit` for category-profile tasks.
+1. Pin `environment/repo/` to a parent commit before the fix for upstream bugfixes, or to `base_commit` for domain-profile tasks.
 2. Remove upstream tests that reveal the exact patch if needed.
 3. Write a prompt describing user-visible behavior only.
 4. Put reproducer projects inside verifier tests, not in the prompt.

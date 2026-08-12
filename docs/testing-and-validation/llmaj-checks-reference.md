@@ -1,12 +1,12 @@
 # LLMaJ Checks Reference
 
-LLM-as-Judge (LLMaJ) checks use GPT-5.5 to evaluate task quality and correctness. These go beyond syntax to assess whether your task is well-designed.
+LLM-as-Judge (LLMaJ) checks use Claude Sonnet 4.6 to evaluate task quality and correctness. These go beyond syntax to assess whether your task is well-designed.
 
 ## Running LLMaJ Locally
 
 ```bash
-# GPT-5.5 (matches CI)
-stb harbor tasks check -m openai/@openai/gpt-5.5 -o output.json harbor_tasks/<task_name>
+# Judge defaults to Claude Sonnet, as in CI
+stb harbor check -o output.json harbor_tasks/<task_name>
 ```
 
 ## LLMaJ Checks

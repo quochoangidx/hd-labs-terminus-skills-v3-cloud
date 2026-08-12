@@ -1,142 +1,110 @@
-# Task Type Taxonomy (Category)
+# Task Category Taxonomy
 
-Each task must be labeled with a category from this taxonomy. The category describes the primary theme, topic, or activity in the task.
+Every task carries **exactly one category and exactly one subcategory**, set in `task.toml`:
 
-In addition, there exists another axis of categorization called subtypes, or subcategories _(in task.toml)_
+```toml
+[metadata]
+category = "Science"
+subcategory = "Chemistry"
+```
 
-**[Refer to our page on subtypes/subcategories for more information](/portal/docs/understanding-tasks/task-subtypes)**
+Values are **Title Case** and must match the taxonomy exactly.
 
 ## Categories
 
-### system-administration
+### Science
 
-Tasks involving OS-level configuration, user management, package management, processes, or installing, configuring, and bringing up services, networks, and environments.
+Natural sciences, mathematics, and engineering science.
 
-**Examples:**
-- Configure a systemd service
-- Set up user permissions
-- Install and configure Nginx
+| Subcategory | Covers |
+|---|---|
+| `Biology` | Genomics, proteomics, structural/computational biology, bioinformatics |
+| `Chemistry` | Molecular structure, spectra, crystallography, reaction/property analysis |
+| `Physics` | Simulation and numerical modeling of physical systems, including electromagnetic/FDTD device simulation and inverse design |
+| `Earth` | Earth, climate, hydrology, and environmental modeling |
+| `Robotics` | Dynamics, trajectory optimization, control |
+| `Math` | Formalized mathematics and theorem proving (Coq/Lean/Isabelle), formal verification |
+| `Linguistics` | Computational and historical linguistics |
 
----
+### Software
 
-### build-and-dependency-management
+General software engineering — where the domain *is* software.
 
-Compile code, manage dependencies, build components.
+| Subcategory | Covers |
+|---|---|
+| `Algorithms` | Algorithmic problems, solvers, computational geometry, optimization |
+| `Systems` | Concurrency, backends, distributed systems, infrastructure; build pipelines, bundling, release engineering |
+| `Databases` | Storage engines, transactions, indexing, recovery |
+| `Data engineering` | ETL, record linkage, data processing at scale; ontologies, RDF/OWL, SPARQL, knowledge graphs |
+| `Frontend` | Web/UI applications and their client/server pipelines |
+| `Languages` | Language tooling, compilers, program analysis |
 
-**Examples:**
-- Fix a broken build configuration
-- Resolve dependency conflicts
-- Set up a multi-stage Docker build
+### ML
 
----
+Machine-learning training, serving, evaluation, and infrastructure.
 
-### data-processing
+| Subcategory | Covers |
+|---|---|
+| `Training` | Training loops, optimization, debugging training runs; training infrastructure (checkpointing, cluster recovery, data integrity) |
+| `Inference` | Inference implementations and LLM serving stacks; serving infrastructure, production monitoring/drift |
+| `Evaluation` | Eval harnesses, benchmark construction, grading |
+| `Kernels` | Custom compute kernels and accelerator programming — CPU-simulated or compile-only, since tasks must not require a GPU |
 
-Tasks that transform, parse, filter, aggregate datasets or files and directories and generate derived output.
+> **`Kernels` without a GPU.** Terminus 3 tasks must not require a GPU, but kernel and accelerator work is still in scope. Two patterns work: **CPU-simulated kernels**, where the agent implements the kernel logic and the verifier checks numerical correctness against a reference on CPU; and **compile-only verification**, where the verifier checks that the kernel compiles and passes static or structural checks without executing it on device. All other requirements still apply — deterministic tests, an oracle solution that runs within the [compute limits](/portal/docs/understanding-tasks/task-requirements), and a verifier in a separate container.
 
-**Examples:**
-- Parse and transform CSV data
-- Aggregate log files
-- Filter and sort JSON datasets
+### Operations
 
----
+Business, financial, and operational domain reasoning.
 
-### games
-
-Tasks centered on game-like or simulated environments, interactive puzzles, or simulation games that run in the terminal.
-
-**Examples:**
-- Complete a VimGolf challenge
-- Solve a terminal-based puzzle
-- Navigate a text adventure
-
----
-
-### software-engineering
-
-Tasks focused on developing or testing features and algorithms, fixing bugs and improving/optimizing an existing feature, implementing tests, or maintaining software projects.
-
-**Examples:**
-- Implement a caching algorithm
-- Fix a race condition
-- Optimize database queries
-
----
-
-### machine-learning
-
-Tasks requiring training, fine-tuning, running inference, or evaluating machine learning models, including dependency setup, running training loops, and managing data pipelines for ML tasks.
-
-**Examples:**
-- Fine-tune a model on custom data
-- Debug a training pipeline
-- Optimize inference performance
-
----
-
-### debugging
-
-Tasks that require identifying, diagnosing, and fixing errors in scripts, codebases, or system configurations.
-
-**Examples:**
-- Find and fix a memory leak
-- Debug a failing test suite
-- Diagnose a production crash
-
----
+| Subcategory | Covers |
+|---|---|
+| `Finance` | Quantitative finance, risk, regulatory capital |
+| `Logistics` | Dispatch, routing, fleet/flight planning, transportation |
+| `Supply chain` | Procurement, production planning, manufacturing, ERP |
+| `Claims` | Insurance/utility claims, billing rules, adjudication |
+| `Compliance` | Regulatory reporting and compliance workflows |
+| `Marketing` | Ads, CTR, marketing analytics |
 
 ### Security
 
-Tasks related to cryptography, authentication, permissions, penetration-style tests, exploit, validate vulnerabilities, reverse engineering or security configuration.
+Offensive and defensive security.
 
-**Examples:**
-- Find a SQL injection vulnerability
-- Configure secure TLS settings
-- Reverse engineer a binary
+| Subcategory | Covers |
+|---|---|
+| `Cryptography` | Ciphers, cryptographic protocols and analysis |
+| `Reverse engineering` | Binary RE, vulnerability hunting and patching, malware/backdoor analysis |
+| `Forensics` | Network/host forensics, incident analysis and remediation |
+| `AppSec` | Application- and web-layer vulnerabilities and defenses |
 
----
+### Hardware
 
-### scientific-computing
+Physical and digital hardware design.
 
-Tasks using scientific libraries or workflows, such as numerical computation, simulations, or domain-specific research code.
+| Subcategory | Covers |
+|---|---|
+| `CAD` | Parametric CAD, mechanical part design |
+| `RTL` | HDL, RTL, digital logic |
 
-**Examples:**
-- Implement a numerical solver
-- Debug a simulation
-- Optimize a scientific computation
+### Media
 
----
+Creative and design work.
 
-## Distribution Guidelines
+| Subcategory | Covers |
+|---|---|
+| `Music` | Music theory, audio transcription and processing |
+| `Design` | Visual/layout design and reconstruction |
 
-To ensure benchmark diversity:
+## Choosing Your Category
 
-- **No single type** should exceed ~30% of total tasks
-- **At least four types** should each represent ≥10%
+Pick the category describing the **domain the task lives in**, then the subcategory describing the specific work.
 
-## Choosing a Category
+The most common tagging mistake is defaulting to **Software** because the task involves writing code. Nearly every task involves writing code. Ask instead: *what does the agent have to understand to get this right?* A task that debugs a training loop is `ML / Training`, not `Software / Systems`. A task that parses mass spectra to infer a molecular structure is `Science / Chemistry`, not `Software / Algorithms`. Reserve **Software** for tasks where software engineering itself is the subject matter.
 
-Pick the category that best describes the **primary** activity:
-
-| If the task mainly involves... | Use category |
-|--------------------------------|--------------|
-| OS/server configuration | system-administration |
-| Build systems, packages | build-and-dependency-management |
-| ETL, file processing | data-processing |
-| Interactive challenges | games |
-| Code development, testing | software-engineering |
-| ML model work | machine-learning |
-| Finding/fixing bugs | debugging |
-| Security issues | security |
-| Scientific code | scientific-computing |
-
-## Domain-Specific Tasks
-
-If your tasks are designed for a particular domain (e.g., financial services), an additional taxonomy specific to that domain can be developed. Discuss with the team on Slack.
+If a task genuinely spans two categories, choose the one whose domain knowledge the agent cannot succeed without.
 
 ---
 
 ## Next Steps
 
-- [See example tasks](/portal/docs/understanding-tasks/example-tasks)
-- [Learn difficulty guidelines](/portal/docs/understanding-tasks/difficulty-guidelines)
+- [Task Components](/portal/docs/understanding-tasks/task-components)
+- [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines)

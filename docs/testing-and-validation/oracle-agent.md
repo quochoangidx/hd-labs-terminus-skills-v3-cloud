@@ -183,7 +183,7 @@ Error: Task exceeded timeout (1800s)
 
 ## Oracle vs Real Agents
 
-| Oracle Agent | Real Agents (GPT-5.5, etc.) |
+| Oracle Agent | Real Agents (GPT-5.6, etc.) |
 |--------------|---------------------------|
 | Runs your solution/solve.sh | Generate their own solution |
 | Always deterministic | May vary between runs |

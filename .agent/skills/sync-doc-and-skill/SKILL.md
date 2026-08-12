@@ -99,15 +99,15 @@ For each key rule area, compare online content with local docs:
 | Rule Area | Local Doc File | Online Search Term |
 |-----------|---------------|-------------------|
 | Verifier dependency placement | `creating-tasks/writing-tests.md` | `test_deps_in_image`, `verifier dependencies`, `tests/wheels` |
+| Separate verifier + artifacts | `creating-tasks/writing-tests.md` | `tests/Dockerfile`, `environment_mode`, `artifacts` |
 | Sanctioned bases | `creating-tasks/dockerfile-best-practices.md` | `sanctioned` |
 | test.sh canonical form | `creating-tasks/writing-tests.md` | `reward.txt` |
-| codebase_size bands | `understanding-tasks/task-requirements.md` | `codebase_size` |
 | Difficulty thresholds | `understanding-tasks/difficulty-guidelines.md` | `accuracy` |
-| Diversity gates | `understanding-tasks/diversity-requirements.md` | `blocked` |
+| Category taxonomy | `understanding-tasks/task-taxonomy.md` | `subcategory` |
 | Instruction styling | `understanding-tasks/prompt-styling.md` | `canary` |
 | Rubric format | `understanding-tasks/rubrics.md` | `rubric` |
 | tmux/asciinema | `creating-tasks/dockerfile-best-practices.md` | `tmux` |
-| allow_internet | `understanding-tasks/task-requirements.md` | `allow_internet` |
+| Network mode | `understanding-tasks/task-requirements.md` | `network_mode` |
 | Docker-compose flags | `reviewing-tasks/reviewer-checklist.md` | `docker_compose` |
 
 ### Diff format
@@ -128,7 +128,7 @@ For each discrepancy found:
 1. **Online added new content** → append to local doc file
 2. **Online changed a rule** → update local doc file with online version
 3. **Online removed content** → flag for manual review (don't auto-delete)
-4. **New page in online nav** → create new local doc file with placeholder, flag for content extraction
+4. **New page in online nav** → create the local file from the directly fetched Markdown
 
 **Always preserve local additions** (e.g., empirical notes, Go-specific guidance) that don't contradict online docs.
 
@@ -151,10 +151,11 @@ After docs are synced, audit these skills:
 | verifier dependency placement | — | guidance | check |
 | Sanctioned base images | — | Docker Rules | check |
 | tmux/asciinema required | runtime risk | Docker Rules | check |
-| allow_internet = false | — | metadata defaults | check |
-| codebase_size bands | — | metadata defaults | check |
+| Separate verifier + artifacts | candidate shape | layout/metadata | check |
+| network_mode | candidate viability | metadata defaults | check |
+| Terminus 3 taxonomy | candidate category | metadata defaults | check |
 | Difficulty thresholds | scoring mapping | validation | check |
-| Python must be hard | hardness filter | metadata | check |
+| Language-independent tiers | scoring mapping | metadata | check |
 | Rubric requirements | — | rubric section | reminder |
 | docker-compose flags | — | Docker Rules | check |
 | Canary string | — | instruction style | check |
@@ -232,20 +233,20 @@ These terms in the online bundle indicate rule changes that affect skills:
 ```
 test_deps_in_image
 sanctioned
-allow_internet
-codebase_size
-minimal
+tests/Dockerfile
+environment_mode
+artifacts
+network_mode
 tmux
 asciinema
 canary
 rubric
-custom_docker_compose
 is_multi_container
 difficulty
-hard
-medium
-easy
-blocked
+frontier
+advanced
+core
+base
 reward.txt
 set -uo pipefail
 CLAUDE.md

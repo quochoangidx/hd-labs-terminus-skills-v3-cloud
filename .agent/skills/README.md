@@ -1,14 +1,10 @@
 # Terminus task-authoring skills — project purpose & pipeline map
 
-**Purpose.** This repo produces Terminus-2nd-Edition **Regular tasks** for the Snorkel
-platform, aligned to the live task gallery (`/portal/tasks`): self-contained, offline,
-deterministic problems with a Python-pytest verifier, targeting **Hard or Medium by
-MODEL PASS RATE** (Easy is blocked; Python tasks must be Hard). The default lane is
-gallery-style spec-driven work (Lane A); upstream bugfix PRs are a minority lane.
-All nine Regular-task categories are open for net-new submissions as of
-2026-07-30. Category labels must still match the task's primary activity. New
-milestone tasks remain blocked — see the mirrored policy in task-miner +
-task-clone.
+**Purpose.** This repo produces Terminus 3 tasks for the Snorkel platform:
+self-contained, deterministic, multi-step domain work with a Python-pytest
+verifier running in a separate container. All seven Terminus 3 categories are
+open. Tasks use one exact category/subcategory pair and the empirical tiers
+Frontier, Advanced, Core, or Base; difficulty is language-independent.
 
 ## Pipeline → skill map
 
@@ -21,7 +17,7 @@ task-clone.
 | 5. Review & package | `task-client-feedback-review`, `task-llm-style-audit` (LLM-tell audit + re-author of all prose surfaces, last step before zip), `task-zip-validator`, `task-zip-submit` |
 | 6. Remediate a platform return | `task-revise-flag-remediation` ("Some tests not passed by any agent run" / 0/N coverage flag), `terminus-regular-task-authoring` Prompt Rules (instruction_check + disclosure ladder) |
 | 7. Port an existing task to new languages | `task-language-port` (feasibility screen, mandatory narrative reskin, faithful placeholder+solution translation, re-validation) |
-| 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `task-miner/refresh_gallery_taxonomy.py` (taxonomy, ~weekly), `anti-llm` (editorial pass) |
+| 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `anti-llm` (editorial pass) |
 
 Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<slug>.json`
 + a claim line in `index.jsonl`) — clone consumes it and must not re-mine.
@@ -31,8 +27,8 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 - `mined-candidates/index.jsonl` — team claim/dedupe registry (incl. the
   `conformance_suite + spec + language` key for the L1 lane).
 - `mined-candidates/gallery_tasks_snapshot.md` — novelty gate against the live gallery.
-- `mined-candidates/gallery_taxonomy.md` — category/subtype menu; refresh if the
-  snapshot date is older than ~7 days.
+- `docs/understanding-tasks/task-taxonomy.md` — authoritative Terminus 3
+  category/subcategory menu.
 - `.agent/skills/task-miner/lever_patterns.md` — lever catalog **L1–L4** (conformance
   suite, synthetic interval-invariant ledger, differential-vs-authority, multi-vector
   security), claimed-resource ledger, and the complete L1 build runbook ("learn the
@@ -40,11 +36,13 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 
 ## Non-negotiable invariants
 
-Offline (`allow_internet = false`), 2 CPU / 4 GB, `environment/` ≤ 100 MiB, verifier =
-`python3` pytest writing `/logs/verifier/reward.txt` within 450s, oracle passes /
-nop fails for the intended reason, no tests/solution/answer keys reachable from
-`environment/`, and difficulty is claimed only from blind-probe or platform agent
-evidence — never from build time, repo size, or timeouts.
+Top-level `artifacts`, `[verifier].environment_mode = "separate"`, a digest-pinned
+`tests/Dockerfile` with all verifier dependencies and artifact landing directories,
+`network_mode = "public"` by default, agent timeout 1800–18000 seconds, no GPU,
+roughly 2 CPU / 8 GB / 10 GB, oracle passes and nop fails for the intended reason,
+no tests/solution/answer keys reachable from `environment/`, and difficulty is
+claimed only from model-run evidence — never from ambiguity, build time, repo size,
+or timeouts.
 
 ## Editing rules for this directory
 
