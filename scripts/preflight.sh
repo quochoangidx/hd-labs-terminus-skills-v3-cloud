@@ -84,15 +84,6 @@ if [ -f "$DF" ]; then
     || report PASS "dockerfile:syntax-line" "absent"
   grep -q -- '--mount=type=bind' "$DF" && report FAIL "dockerfile:bind-mount" "convert to plain COPY + rm -rf" \
     || report PASS "dockerfile:bind-mount" "absent"
-  FROM_LINE="$(grep -m1 '^FROM ' "$DF" || true)"
-  case "$FROM_LINE" in
-    *public.ecr.aws/docker/library/*@sha256:*)
-      case "$FROM_LINE" in
-        *TODO_RESOLVE*) report FAIL "dockerfile:base-image" "digest placeholder unresolved" ;;
-        *) report PASS "dockerfile:base-image" "${FROM_LINE#FROM }" ;;
-      esac ;;
-    *) report FAIL "dockerfile:base-image" "not canonical digest-pinned public.ecr.aws/docker/library/* : '$FROM_LINE'" ;;
-  esac
   grep -Eq '^FROM .*php:.*-cli' "$DF" && report FAIL "dockerfile:php-cli-base" "php:*-cli rejected; use debian bookworm-slim + apt php-cli"
 fi
 
@@ -119,7 +110,7 @@ fi
 POLICY_OUTPUT="$(python3 "$REPO_ROOT/scripts/task-policy.py" validate-task "$TASK_DIR" 2>&1)"
 POLICY_RC=$?
 if [ "$POLICY_RC" -eq 0 ]; then
-  report PASS "policy:static" "category, languages, and canonical test runner pass"
+  report PASS "policy:static" "metadata, all Docker stages, verifier, compose, and test runner pass"
 else
   report FAIL "policy:static" "$POLICY_OUTPUT"
 fi
