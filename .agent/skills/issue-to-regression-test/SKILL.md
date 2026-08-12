@@ -1,9 +1,15 @@
 ---
 name: issue-to-regression-test
-description: Use when converting a closed upstream issue or PR into behavioral pytest verifier tests for a hard Terminus task. Helps derive reproducer, normal behavior preservation, boundary cases, anti-shortcut checks, and instruction/test symmetry.
+description: Use when converting a closed upstream issue or PR into behavioral pytest verifier tests for a Terminus 3 task. Helps derive reproducer, preservation, boundary cases, anti-shortcut checks, instruction/test symmetry, and isolated artifact verification.
 ---
 
 # Issue To Regression Test
+
+> ⛔ **Lane gate (2026-07-19).** The upstream-issue→regression-test lane serves a
+> mostly-dead shape: mechanical fixes of real upstream bugs collapse 3/3
+> regardless of file spread (AGENTS.md §6). Run the collapse-law screen and the
+> Terminus 3 domain/subcategory screen on the candidate first. The
+> test-design content below remains valid for verifier authoring generally.
 
 Use this skill after selecting an upstream closed issue/PR and before writing `tests/test_outputs.py`.
 

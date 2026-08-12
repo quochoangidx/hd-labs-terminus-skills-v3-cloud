@@ -5,6 +5,12 @@ description: Scan a GitHub repository's recently merged PRs and return the top ~
 
 # Find Task-Worthy PRs
 
+> ⛔ **Minority-lane gate (2026-07-19).** Under the fresh-only mining doctrine
+> (AGENTS.md §2) this upstream-PR lane runs only on explicit user request. Its
+> typical output shape — reproduce-a-fix / repair — often collapses when the fix
+> is mechanical regardless of file spread. Every candidate must pass the
+> collapse-law screen and the Terminus 3 domain/subcategory screen before build.
+
 Given a GitHub repo, surface ~10 merged PRs that would make good tb-quality tasks.
 
 ## Inputs
@@ -12,7 +18,7 @@ Given a GitHub repo, surface ~10 merged PRs that would make good tb-quality task
 - **Repo**: `owner/repo` or full GitHub URL (required)
 - Optional: `--limit N` (how many merged PRs to fetch; default 50)
 - Optional: `--pick K` (how many to return; default 10)
-- Reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env` (default model: `gpt-5.5-codex`)
+- Reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env` (default model: `gpt-5.6`)
 
 ## Steps
 
@@ -104,9 +110,9 @@ Use `AskUserQuestion`:
 > "Which PR(s) should I turn into tb-quality tasks?"
 
 Options:
-- `Top 1` — invoke the `build-task-from-pr` skill for #1
+- `Top 1` — invoke the `task-clone` skill for #1
 - `Pick specific` — prompt for PR numbers
-- `All 10 (sequential)` — loop `build-task-from-pr` over each
+- `All 10 (sequential)` — loop `task-clone` over each
 - `Just save the list` — write `reports/<repo-slug>/pr-candidates.md` and stop
 
 ### 5. Saving the list (option 4)
@@ -119,4 +125,4 @@ When saving, create `reports/<owner>-<repo>/pr-candidates.md` with the table + f
 - Truncate diffs to `head -500` before sending to OpenAI — enough signal, bounded tokens.
 - If `.env` has no `OPENAI_API_KEY`, abort early with the hint to add it.
 - If the repo is huge and rate limits hit, report partial results instead of failing — tell the user how many PRs were actually scored.
-- Do NOT create task folders in this skill; that's what `build-task-from-pr` is for. Keep this skill read-only (plus the optional summary file).
+- Do NOT create task folders in this skill; that's what `task-clone` is for. Keep this skill read-only (plus the optional summary file).

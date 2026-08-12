@@ -17,12 +17,44 @@ A single argument: path to a `.zip` file (absolute or relative).
 
 ## Workflow
 
+> ⚙️ For an UNZIPPED task folder, run `scripts/preflight.sh <task-dir>
+> --strict --report-json workspace/reports/<slug>/preflight.json`
+> (repo root) first — it covers the mechanical subset below (layout,
+> .dockerignore entries, Dockerfile hygiene, task.toml fields, leak sweep,
+> zip arcnames, rubric format, docker oracle/nop, noexec-/tmp repro) in one
+> command; this skill then focuses on the judgment checks (category shape,
+> instruction/test symmetry, template shape).
+
 1. **Unzip** to a temp directory
 2. **Structural audit** — check every file against rules
-3. **Auto-fix** — apply fixes for known issues
-4. **Oracle + Nop** — run harbor tests if Docker available
-5. **Report** — summarize findings and fixes
-6. **Re-zip** — if fixes applied, create updated ZIP
+3. **Instruction sufficiency** — recreate or locate the external contract-source
+   manifest, run two blind contract reviews, and pass
+   `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`
+4. **Auto-fix** — apply fixes for known issues
+5. **Oracle + Nop** — run harbor tests if Docker available
+6. **Report** — summarize findings and fixes
+7. **Re-zip** — if fixes applied, create updated ZIP
+
+The sufficiency manifest is intentionally absent from the ZIP. Look first for
+`workspace/reports/<slug>/instruction-sufficiency.json`. If it is unavailable,
+rebuild it from the extracted instruction/environment/tests using
+`terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
+Do not mark a ZIP ready merely because every test has a passer: coverage and
+solver success cannot certify that the visible contract defines the expected
+behavior.
+
+### Verifier-integrity review (manual, blocking when violated)
+
+Read the verifier before auto-fixing it. `tests/` may legitimately run the
+candidate, parse output, consume golden fixtures/hashes, check invariants, or
+use sealed held-out truth. It must not contain a callable that maps task inputs
+to the complete expected artifact; move that end-to-end logic to `solution/`.
+
+When the task says the candidate must read a variable config or input file,
+change one meaningful config value and re-run the verifier. The verifier must
+read it dynamically and reject a candidate that hardcodes the original value.
+Do not flag hardcoded expected results, tolerances, or format constants unless
+they replace values the instruction says come from that file.
 
 ## Step 1 — Unzip and Identify
 
@@ -145,6 +177,8 @@ Check `environment/Dockerfile`:
 | No reserved dirs | NO `mkdir /tests`, `/oracle`, `/logs/verifier`, `/solution` | ✅ remove line |
 | apt hygiene | `apt-get update && apt-get install ... && rm -rf /var/lib/apt/lists/*` in one RUN | ❌ manual |
 | `patch` installed | For Go/Rust tasks: `patch` must be in apt-get install list | ✅ add to apt-get |
+| No `# syntax=` line | NO `# syntax=docker/dockerfile:1` line — platform build nodes can't pull the frontend → "Oracle failed" (preflight.sh checks this) | ✅ delete line |
+| No `--mount=type=bind` | NO BuildKit `RUN --mount=type=bind` — convert to plain `COPY` + `rm -rf` in the same layer | ❌ manual (convert to COPY + rm) |
 | `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
 | No privileged/dangerous caps | docker-compose must NOT use `privileged: true`, `cap_add` of `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE`, or mount `/var/run/docker.sock`; volume mounts must not shadow reserved paths (`/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`) | ❌ manual |
 
@@ -161,7 +195,11 @@ packages in `tests/test.sh`.
 Must exist at `environment/.dockerignore` with ALL of:
 ```
 .git
+**/.git
 .gitignore
+.env
+solution/
+tests/
 **/__pycache__/
 **/*.pyc
 **/.pytest_cache/
@@ -170,7 +208,12 @@ Must exist at `environment/.dockerignore` with ALL of:
 **/node_modules/
 ```
 
-**Auto-fix**: create/overwrite with standard content.
+`solution/`, `tests/`, and `.env` are mandatory (AGENTS.md §10): missing them
+passes local harbor (NOP=0, Oracle=1) but gets reviewer-returned;
+`scripts/preflight.sh` FAILs on each.
+
+**Auto-fix**: create/overwrite with standard content (including `solution/`,
+`tests/`, `.env`, `**/.git`).
 
 ### 2d. test.sh (BLOCKING)
 
@@ -221,7 +264,7 @@ test -f pyproject.toml && echo "FAIL: root pyproject.toml should not be submitte
 **Auto-fix**: remove wheels from `tests/`; remove root `pyproject.toml` from
 the submission package.
 
-### 2g. Secret-shaped files (WARNING)
+### 2f. Secret-shaped files (WARNING)
 
 Scan `environment/` for:
 ```bash
@@ -230,7 +273,7 @@ find environment/ -type f \( -name '*.pem' -o -name '*.key' -o -name '*.crt' -o 
 
 **Auto-fix**: delete them (after checking no test depends on them).
 
-### 2h. AI scaffolding files (WARNING — High severity in reviewer checklist)
+### 2g. AI scaffolding files (WARNING — High severity in reviewer checklist)
 
 Scan `environment/` for AI-generated framework files:
 ```bash
@@ -239,7 +282,7 @@ find environment/ -type f \( -name 'CLAUDE.md' -o -name 'skills.md' -o -name '.c
 
 **Auto-fix**: delete them.
 
-### 2i. Junk files
+### 2h. Junk files
 
 Scan for and remove:
 ```bash
@@ -249,7 +292,7 @@ find . \( -name '.DS_Store' -o -name '._*' -o -name '__MACOSX' -o -name '__pycac
 
 **Auto-fix**: always delete.
 
-### 2j. Build context size (BLOCKING)
+### 2i. Build context size (BLOCKING)
 
 ```bash
 # Total environment/ must be <= 100 MiB
@@ -259,7 +302,7 @@ du -sm environment/ | awk '{if ($1 > 100) print "FAIL: environment/ is "$1"MiB (
 find environment/ -size +50M -exec echo "FAIL: {} exceeds 50MiB" \;
 ```
 
-### 2k. Blacklisted databases
+### 2j. Blacklisted databases
 
 Scan for commercial database references:
 ```bash
@@ -398,9 +441,12 @@ tomllib.load(open("task.toml", "rb"))
 ## Step 5 — Harbor Tests (if Docker available)
 
 ```bash
-stb harbor run -a oracle -p "$TMPDIR"   # Must return 1.0
-stb harbor run -a nop -p "$TMPDIR"      # Must return 0.0
+stb harbor run -a oracle -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-oracle -q   # Must return 1.0
+stb harbor run -a nop -p "$TMPDIR" -o "$JOBS_DIR" --job-name validate-nop -q         # Must return 0.0
 ```
+
+Use the current Snorkel CLI surface for both Harbor and real-agent runs; see
+`task-harbor-runner` for triage and credential handling.
 
 ## Step 6 — Report and Re-zip
 
@@ -490,6 +536,6 @@ For Go tasks (detected by `languages = ["go"]` in task.toml):
 - `patch` must be in Dockerfile apt-get install
 - `go.mod` and `go.sum` must exist in `environment/repo/`
 - Dockerfile should have `COPY repo/go.mod repo/go.sum /app/` before `COPY repo/ /app/`
-- `ENV PATH` or symlink for Go binary (see go-task-ci-checklist memory)
+- `ENV PATH` or symlink for the Go binary (`ln -sf /usr/local/go/bin/go /usr/local/bin/go` — platform login shells reset PATH)
 - No `.github/workflows/` directories (may contain blacklisted DB references)
 - For Go tasks, the canonical base IS the full `golang` image: `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac` (covers all Go 1.21–1.26 + alpine/bullseye/bookworm). A single-stage final image using THIS exact ref passes `check_sanctioned_base_images` — no exemption needed. A bare `golang@sha256:<other digest>` or a different registry/tag is **blocked**; replace the digest with the canonical one.

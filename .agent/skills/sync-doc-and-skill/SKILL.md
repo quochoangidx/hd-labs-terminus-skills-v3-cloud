@@ -1,6 +1,6 @@
 ---
 name: sync-doc-and-skill
-description: Sync Terminus docs from the Snorkel portal and update dependent Terminus skills to match. Run periodically or when you suspect docs have changed. Fetches each doc's markdown file DIRECTLY from the portal (…/docs/<slug>.md), diffs against local docs/, patches local files, then audits Terminus skills for discrepancies and auto-fixes them. Do NOT scrape the JS bundle for content — it is only the SPA shell and can carry stale hardcoded strings.
+description: Sync Terminus docs from the Snorkel portal and update dependent Terminus skills to match. Run periodically or when you suspect docs have changed. Fetch each document's markdown file directly from its portal docs path, diff it against local docs, patch local files, then audit Terminus skills for discrepancies and auto-fix them. Do not scrape the JS bundle for content because it is only the SPA shell and can carry stale hardcoded strings.
 ---
 
 # Sync Docs and Skills
@@ -57,8 +57,8 @@ runtime from `…/docs/<slug>.md` (content-type `text/markdown`). Fetch those
 
 > ⚠️ Do NOT grep the JS bundle for doc content. The bundle is only the React
 > shell; it carries stale hardcoded strings (confirmed 2026-06-14: the bundle
-> still showed eval models `GPT-5.2`/`Opus 4.6` while the live `.md` already had
-> `GPT-5.5`/`Opus 4.8`). Also, the bundle has a content-hashed filename, so an
+> still showed stale model names while the live `.md` had already changed).
+> Also, the bundle has a content-hashed filename, so an
 > UNCHANGED bundle name does NOT mean docs are unchanged — doc `.md` files change
 > independently. The only reliable change-detector is diffing the fetched `.md`.
 
@@ -105,10 +105,16 @@ For each key rule area, compare online content with local docs:
 | Difficulty thresholds | `understanding-tasks/difficulty-guidelines.md` | `accuracy` |
 | Category taxonomy | `understanding-tasks/task-taxonomy.md` | `subcategory` |
 | Instruction styling | `understanding-tasks/prompt-styling.md` | `canary` |
+| Category/policy live status | `reference/category-status.md` | `Terminus 3`, `subcategory`, `network_mode` |
 | Rubric format | `understanding-tasks/rubrics.md` | `rubric` |
 | tmux/asciinema | `creating-tasks/dockerfile-best-practices.md` | `tmux` |
 | Network mode | `understanding-tasks/task-requirements.md` | `network_mode` |
 | Docker-compose flags | `reviewing-tasks/reviewer-checklist.md` | `docker_compose` |
+| Verifier integrity | `creating-tasks/writing-tests.md`, `reviewing-tasks/reviewer-checklist.md` | `complete expected artifact`, `dynamically`, `config` |
+| CLI installation and credentials | `getting-started/quick-start.md`, `testing-and-validation/running-real-agents.md` | `snorkelai-stb`, `stb login`, `keys refresh` |
+| Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5` |
+| Live category availability | `reference/category-status.md`, `reference/changelog.md` | `seven categories`, `milestones are removed` |
+| Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | `network_mode = "public"`, `digest`, `stable invariants` |
 
 ### Diff format
 
@@ -134,13 +140,22 @@ For each discrepancy found:
 
 ## Step 4 — Audit Skills Against Updated Docs
 
-After docs are synced, audit these skills:
+After docs are synced, audit the doctrine-coupled set:
 
 ```
-.agent/skills/task-miner/SKILL.md
+.agent/skills/task-miner/SKILL.md (+ category_rules.md)
 .agent/skills/task-clone/SKILL.md
+.agent/skills/task-batch/SKILL.md
 .agent/skills/task-zip-validator/SKILL.md
+.agent/skills/task-zip-submit/SKILL.md
 .agent/skills/task-client-feedback-review/SKILL.md
+.agent/skills/task-language-port/SKILL.md
+.agent/skills/terminus-regular-task-authoring/SKILL.md
+.agent/skills/task-harbor-runner/SKILL.md
+.agent/skills/task-llm-style-audit/SKILL.md
+.agent/skills/task-revise-flag-remediation/SKILL.md
+.agent/skills/terminus-hard-python-verifier/SKILL.md
+.agent/skills/terminus-rust-task-authoring/SKILL.md
 ```
 
 ### Audit checklist (check each rule in each skill):
@@ -163,6 +178,12 @@ After docs are synced, audit these skills:
 | Env spec anti-bypass | — | — | check |
 | Instruction styling | prompt template | instruction style | check |
 | Build context size | — | quality preflight | check |
+| No end-to-end solver in `tests/` | — | verifier architecture | check |
+| Config values read dynamically when the task requires config input | — | verifier architecture | check |
+| Snorkel CLI credential flow | — | agent-run commands | check |
+| One-model platform-Hard early exit | scoring mapping | validation | check |
+| Net-new category availability | candidate filter | category gate | check |
+| Internet-enabled source pinning | viability | Docker/verifier review | check |
 
 For each cell, verify the skill's text matches the current docs. Report discrepancies.
 
@@ -204,7 +225,7 @@ Local pages: 42
 | Skill | Finding | Fix | Status |
 |-------|---------|-----|--------|
 | task-clone | test.sh template had rc=$? | canonical form | ✅ fixed |
-| task-miner | Python hard rule missing | added to hardness filter | ✅ fixed |
+| task-miner | Terminus 3 taxonomy missing | added exact category/subcategory screen | ✅ fixed |
 | ... | ... | ... | ... |
 
 New online pages not in local: 0
@@ -218,8 +239,8 @@ Manual review needed: 0
 ⚠️ The bundle filename hash is NOT a reliable change-detector. Doc `.md` files are
 served and updated independently of the SPA shell bundle, so docs can change while
 the bundle name stays the same (confirmed 2026-06-14: bundle `index-Bbhn77A_.js`
-unchanged for days while `difficulty-guidelines.md` flipped eval models to
-GPT-5.5/Opus 4.8). The GitHub Pages CDN can also serve curl a stale bundle while
+unchanged while `difficulty-guidelines.md` changed model names). The GitHub
+Pages CDN can also serve curl a stale bundle while
 serving fresh `.md`.
 
 **Reliable detection = diff the directly-fetched `.md` files** (Step 1b + Step 2).

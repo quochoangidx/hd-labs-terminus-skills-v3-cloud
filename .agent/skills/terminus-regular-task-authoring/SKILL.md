@@ -33,13 +33,29 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 
 ## Authoring Workflow
 
-1. Pick a real engineering bug with multi-step reasoning.
+> ⚙️ Tooling shortcuts (repo root): `scripts/new-task.sh <slug> <lang>
+> <category>` stamps steps 2–4 and 7–8 as a skeleton with the packaging +
+> verifier hygiene (canonical digest-pinned base, full .dockerignore,
+> `_hide_corpus`/`nobody`-candidate/`_find_exec_base`/build-exit-check
+> helpers, per-case parametrize) pre-wired — fill its TODOs instead of
+> re-deriving the boilerplate. `scripts/preflight.sh <task-dir> --strict
+> --report-json workspace/reports/<slug>/preflight.json` then runs
+> every mechanical gate (layout, .dockerignore, Dockerfile, task.toml, leak
+> sweep, zip arcnames, rubric format, docker oracle=1/nop=0, and the
+> oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
+> zipping, every time.
+
+1. Pick a domain that maps honestly to one exact Terminus 3
+   category/subcategory pair. A training-loop repair is `ML / Training`; a
+   compiler repair is `Software / Languages`. Do not classify by the repair
+   verb alone.
 2. Write concise `instruction.md` using absolute paths only.
 3. Configure Terminus 3 `task.toml` with top-level `artifacts`, one exact
    category/subcategory pair, descriptive fields under `[metadata]`,
    `environment_mode = "separate"`, `network_mode`, and honest runtime limits.
 4. Build `environment/Dockerfile` with `tmux`, `asciinema`, pinned package versions, and digest-pinned `FROM`.
-5. Put a deliberately buggy starting state under `environment/`.
+5. Put the starting state under `environment/` (a deliberately buggy state
+   only for the bug-repair variant that cleared the category gate).
 6. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
 7. Write digest-pinned `tests/Dockerfile` plus Python `pytest` verifier tests in
    `tests/test_outputs.py`; create every artifact landing directory there.
@@ -88,12 +104,19 @@ drafts may remain outside the task folder:
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+submissions/SUBMISSION-<task-slug>.md
 ```
 
 Write the source draft only after the task behavior, oracle, verifier, and
 available difficulty probes are stable. The source draft is the factual record;
-the second file is the concise copy-paste version for the platform UI.
+`submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet for
+the platform UI (same name/shape as `task-batch` and `task-clone` produce): the
+three explanations PLUS the Metadata answers ("approved canonical base image?"
+Yes/No + exact digest-pinned image; "Task Inspiration from the Task Gallery?"
+Yes/No + Inspiration ID), the full paste-ready Rubrics block (format rules:
+AGENTS.md §9 — `Agent`-prefixed single physical lines, closed score set with
+leading `+`, positive sum 10–40), and the matching zip file name. The packet is
+never shipped inside the ZIP.
 
 ### Difficulty Explanation
 
@@ -177,6 +200,15 @@ phrases, verifier/test leakage, mapping-chain density) mechanically. A clean run
 is necessary, not sufficient — the content rules below (algorithm narration,
 mechanism leaks, sufficiency of tested values) still need a read.
 
+**Mandatory semantic sufficiency gate:** before any difficulty probe, create
+`workspace/reports/<slug>/instruction-sufficiency.json`, run two blind contract
+reviews, and validate it with
+`scripts/sufficiency_manifest_check.py`. Follow
+[`references/instruction-sufficiency-gate.md`](references/instruction-sufficiency-gate.md)
+exactly. Hidden cases and expected outputs are allowed; hidden contract rules
+are not. Oracle/NOP success, solver pass rates, union coverage, or a larger
+platform sample never override this gate.
+
 **`instruction_check` — pass on the FIRST try. Two DIFFERENT checks share the word
 "instruction" and pull in OPPOSITE directions, so blindly adding or cutting detail
 ping-pongs between them. Identify which one failed, then pull the matching lever:**
@@ -252,9 +284,10 @@ tripping the structural check, escalate in this order; never iterate wording sid
 - Style: a realistic engineering artifact a team would keep in the repo — states
   what the system requires, never how to implement it, no trap-pointing ("note the
   tricky…"), no algorithm walkthrough (the env-docs rules below apply in full).
-- Disclosure budget: teach only already-disclosable conventions and the families
-  blind runs universally missed; keep surviving difficulty levers OUT of the file,
-  or the task collapses to EASY.
+- Disclosure budget: state every graded contract rule while withholding worked
+  solutions, fixture literals, expected outputs, root cause, and implementation
+  method. If stating a required rule makes the iteration sample 100%, drop or redesign
+  the task; never preserve difficulty by hiding that rule.
 
 Copyable skeleton (no headers/bullets/tables, ≤300 words):
 
@@ -279,7 +312,7 @@ For **L1 conformance tasks**, "implement <spec>; treat <spec> + its official sui
 definition" normally satisfies BOTH. But if a SINGLE tested edge is both undisclosed AND
 trivially pivotable via an in-env reference (TOML + BOM + `tomllib`), you are in the
 disclose-vs-collapse trap — fix the RESOURCE, not the prose (see
-`.agent/skills/task-miner/lever_patterns.md`, L1 step 7).
+`.agent/skills/task-miner/lever_patterns.md`, L1 step 8).
 
 `instruction.md` should:
 
@@ -394,14 +427,20 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   `ubuntu:24.04@sha256:0d39…e932`. (Full digests live in `docs/creating-tasks/dockerfile-best-practices.md`.)
   A non-canonical base is allowed only with a brief, credible justification in the
   `Dockerfile` or task `README.md`; missing/vague justification is blocked.
-  - **Reviewer reality (Terminal-Bench 2.0):** reviewers treat `ghcr.io/laude-institute/t-bench/*`
-    as the canonical registry and will flag `public.ecr.aws/docker/library/*` images —
-    especially `golang`/`rust`, which have no t-bench-family equivalent — as *non-canonical*,
-    returning the task for revision even when the image is digest-pinned. When you must use the
-    ECR mirror (the common case for Go/Rust), pre-empt the revision by putting the justified-exception
-    comment **directly above the `FROM` line in the Dockerfile** (canonical registry has no image for
-    this language; digest-pinned for reproducibility; consistent with the rest of the suite). A
-    justification the reviewer can see in-file resolves the warning; one buried elsewhere does not.
+  - **Reviewer reality (Terminal-Bench 2.0):** a review demanding
+    `ghcr.io/laude-institute/t-bench/*` over the digest-pinned
+    `public.ecr.aws/docker/library/*` images is a known **FALSE POSITIVE** —
+    push back with citations rather than switch registries (AGENTS.md §9;
+    inventory-purl 2026-07-18: the public.ecr.aws digest-pinned image IS the
+    sanctioned one). To pre-empt the flag, put a brief justified comment
+    **directly above the `FROM` line in the Dockerfile** (canonical
+    digest-pinned base per the sanctioned list; pinned for reproducibility;
+    consistent with the rest of the suite). A justification the reviewer can
+    see in-file resolves the warning; one buried elsewhere does not.
+- Never include a `# syntax=docker/dockerfile:1` line — platform build nodes
+  cannot pull the BuildKit frontend, so it fails as "Oracle failed". Likewise
+  no `RUN --mount=type=bind`; convert mounts to a plain `COPY` plus `rm -rf`
+  in the same layer.
 - Install `tmux` and `asciinema`.
 - For cloned-repo tasks, `git init` the task workdir after the final source
   `COPY` (`RUN git init -q && git config user.email task@example.com && git
@@ -424,6 +463,9 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   .git
   .gitignore
   **/.git
+  .env
+  solution/
+  tests/
   **/.DS_Store
   **/._*
   **/__pycache__/
@@ -433,6 +475,10 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
   **/.ruff_cache/
   **/node_modules/
   ```
+
+  `solution/`, `tests/`, and `.env` are mandatory: omitting them passes local
+  harbor (NOP=0, Oracle=1) but gets reviewer-returned — grep-verify all three
+  before zipping (`scripts/preflight.sh` FAILs on each).
 - Avoid heredocs for source files; store files on disk and `COPY` them.
 - Pin downloaded binaries by version and checksum; avoid `curl | sh`.
 - Order Dockerfile layers from stable dependencies to volatile task source.
@@ -601,6 +647,10 @@ Quality preflight:
   no `/var/run/docker.sock` mounts; compose volume mounts must not shadow the
   reserved paths `/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`
 - no runtime dependency setup in `tests/test.sh`
+- no end-to-end solution generator in `tests/`; golden data, parsed output,
+  sealed truth, and spec-derived invariants are allowed
+- whenever the task promises configurable input, a mutation re-run proves that
+  the verifier reads the config dynamically rather than restating its values
 - no rubric or instruction references to tests, verifier logic, `test.sh`,
   `test_outputs.py`, `/tests/`, hidden tests, CI, reward files, pytest, or final
   test results
@@ -610,7 +660,13 @@ Quality preflight:
   instructions in environment files, comments, README, configs, scripts, TODOs,
   `spec.md`, or architecture docs
 - oracle passes, nop fails, and failures are behavioral rather than infrastructure
+- for any corpus-graded verifier, the per-case pass-table pre-audit has run
+  before zipping (see `task-clone` Quality Preflight / `task-local-solve-probe`):
+  re-score the stored blind-probe diffs per-case and confirm (1) every case has
+  ≥1 probe passer, (2) the best union still fails >0 cases, (3) every feature
+  cluster keeps a soft representative a majority of runs pass
 
 If the platform returns the task with `❌ Some tests not passed by any agent
 run` (blocking 0/N coverage flag), do not improvise — follow the decision tree
-in `.agent/skills/task-revise-flag-remediation/SKILL.md`.
+in `.agent/skills/task-revise-flag-remediation/SKILL.md` (Step 1.5 first:
+suspect the oracle before pruning; Step 1.75: single-lever fingerprint → DROP).

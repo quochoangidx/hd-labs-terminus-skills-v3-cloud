@@ -9,23 +9,26 @@ Use this skill after a task folder exists and the user wants to run or debug it.
 
 ## Command Order
 
-Prefer this sequence (CLI surface verified 2026-06-24; mind the version skew —
-bare `harbor` is 0.5.0 while the stb-bundled one is 0.7.0, and `harbor tasks
-check` was REMOVED in 0.7.0):
+Use the Snorkel CLI installed by the current Quick Start. The retired standalone
+Harbor wheel may be absent or stale; `stb harbor` is the supported surface, and
+`harbor tasks check` was removed in its bundled 0.7.0 version:
 
 ```bash
-harbor run -a oracle -p <task-folder>
-harbor run -a nop -p <task-folder>
+stb harbor run -a oracle -p <task-folder>
+stb harbor run -a nop -p <task-folder>
 stb harbor check <task-folder>          # replaces the removed `harbor tasks check`
 ```
 
-Run real agents only when the user approves API usage. `-a` DEFAULTS TO ORACLE —
-always pass the agent explicitly, and the agent name is `terminus-2` (not
-`terminus`); models are Portkey `@provider/model` slugs:
+If agent credentials are missing or expired, run `stb login` and `stb keys
+refresh`; do not set `OPENAI_API_KEY` or `OPENAI_BASE_URL` manually.
+
+Run real agents only when the user approves API usage. Terminus 3 difficulty
+uses four runs per model for the final tier; the in-platform iteration stage
+uses two per model:
 
 ```bash
-stb harbor run -a terminus-2 -m @openai/gpt-5.5 -k 3 -p <task-folder>
-stb harbor run -a terminus-2 -m @anthropic/claude-opus-4-8 -k 3 -p <task-folder>
+stb harbor run -m @openai/gpt-5.6 -k 4 -p <task-folder>
+stb harbor run -m @anthropic/claude-opus-5 -k 4 -p <task-folder>
 ```
 
 Known INFRA failures — do not treat these as task defects:
@@ -34,16 +37,9 @@ Known INFRA failures — do not treat these as task defects:
   harness, not the task. Fall back to Docker oracle/nop plus a blind solve
   probe (`task-local-solve-probe`); the platform check at submit stays the
   source of truth.
-- From VN both providers geo-block direct API calls (OpenAI 403 country /
-  Anthropic not-allowed) — run via the platform or a VPN; never rewrite the
-  task in response.
-- Creds are budget-capped (~$10/30d) but rotatable via `stb keys refresh`.
-
-Use the absolute binary path if PATH is stale:
-
-```bash
-"$HOME/.local/bin/harbor" --version
-```
+- A provider authentication, quota, or regional error is infrastructure, not
+  task evidence. Record it as unverified and use isolated local probes only as
+  a preliminary signal.
 
 Keep Harbor/agent outputs under the ignored workspace:
 
@@ -54,7 +50,7 @@ workspace/reports/
 When a command supports an output directory, prefer:
 
 ```bash
-harbor run -a oracle -p <task-folder> -o workspace/reports/<task-slug>/oracle
+stb harbor run -a oracle -p <task-folder> -o workspace/reports/<task-slug>/oracle
 ```
 
 ## Failure Discipline
@@ -96,25 +92,43 @@ Examples:
 - If CI `ruff` fails on an upstream `.py` under `environment/repo`, the platform
   lints the whole task dir; delete non-build-required dev scripts or fix
   build-required ones in place (see `upstream-repo-sanitizer`).
-- If `test.sh` reward block is rejected, use the current canonical reward
-  ending: run pytest, immediately capture `rc=$?` or branch on `$?`, write
-  `/logs/verifier/reward.txt`, and do not add a trailing `exit` after the final
-  `fi`. Harbor reads `/logs/verifier/reward.txt`, not the script exit code.
+- If `test.sh` reward handling is rejected, use the current canonical ending:
+  run pytest, immediately capture `rc=$?`, write
+  `/logs/verifier/reward.txt`, and finish with `exit 0`. Harbor grades the
+  reward file, not the script exit status.
 - If build output names a missing package, add it to Dockerfile build-time or verifier dependency installation. Do not move dependency setup into `tests/test.sh` or bundle dependency wheels under `tests/`.
 - If LLMaJ says tests assert behavior not in instructions, update `instruction.md` or remove the test requirement.
-- If review flags a missing trailing `exit` in `tests/test.sh`, treat that as stale feedback; the current docs say the canonical reward block ends the script.
+- If review flags a missing trailing `exit 0`, add it; the Terminus 3 test
+  runner requires it.
 - If review flags hidden instructions in environment docs, remove procedural hints from README/spec/config/comments/scripts and keep all task goals in `instruction.md`.
 
+- **Platform "Oracle failed" while local harbor+docker are GREEN ⇒ suspect
+  noexec `/tmp` FIRST.** The platform mounts `/tmp` noexec; any verifier that
+  stages a binary — or a `#!/bin/sh` wrapper script — under bare
+  `tempfile.mkdtemp()` and then execs it dies with `PermissionError`/EACCES,
+  every test errors, and the oracle fails invisibly (local `/tmp` is exec).
+  Repro exactly with `docker run --tmpfs /tmp:noexec,nosuid,size=256m …`
+  (fails) vs without the flag (passes). Fix = a `_find_exec_base()` that
+  probes `[/app, /var/tmp, /dev/shm, gettempdir()]` by writing+running a tiny
+  `#!/bin/sh` script and passes the winner as `dir=` to every `mkdtemp`; for
+  interpreter wrappers, yield an argv prefix (`["node", main_js]`,
+  `["java", "-cp", classes, "Main"]`) instead of a staged executable —
+  interpreters read code fine from a noexec mount. `scripts/preflight.sh`
+  (repo root) now runs the noexec-/tmp oracle repro; validate every fix with
+  oracle=1 AND nop=0 under the `--tmpfs` flag.
+- **"Oracle failed" on a byte-identical locally-green artifact = stale
+  PLATFORM image** → fresh repackage + force-build. Repeated staleness means
+  content-hash caching — make a real difficulty-neutral content change (e.g.
+  trim a verifier loop) to bust it.
 - If oracle suddenly fails with a `[build failed] undefined: <symbol>` from the
   verifier AND `agent/oracle.txt` is empty, suspect a STALE cached Docker image:
   Harbor does not reliably rebuild when `environment/repo` or `solution/fix.patch`
-  change on disk. Re-run with `harbor run --force-build -a oracle -p <task>` (and
+  change on disk. Re-run with `stb harbor run --force-build -a oracle -p <task>` (and
   for nop). Do not chase the "undefined symbol" as a patch/code bug until you
-  have force-built. To get ground truth without Harbor, build the image and run
-  the real flow in one container: `docker build -t dbg environment/ && docker run
-  --rm -v "$PWD/<task>/solution:/solution:ro" -v "$PWD/<task>/tests:/tests:ro"
-  dbg bash -c 'set -e; bash /solution/solve.sh; bash /tests/test.sh; cat
-  /logs/verifier/reward.txt'`.
+  have force-built. To get ground truth without Harbor, run
+  `scripts/preflight.sh <task-folder>`; the preflight must build both the agent
+  and separate verifier images and transfer only declared artifacts. A legacy
+  one-container Docker run is not a valid Terminus 3 reproduction.
 
 Always quote the shortest useful error excerpt in the handoff.
 
@@ -147,12 +161,14 @@ Dockerfile:
   base image (e.g. `rust:1.85-slim`) EVERY agent run dies at setup — the
   harness builds tmux from source and hits the 360s `AgentSetupTimeoutError` —
   and the platform report disguises it as external "tmux-build-timeout" infra
-  plus a spurious HARD verdict. Fingerprint: `verifier_did_not_run: N/N` +
+  plus a spurious difficulty verdict. Fingerprint: `verifier_did_not_run: N/N` +
   oracle passes + nop fails = contaminated signal, NOT difficulty. Fix:
   apt-install `tmux` + `asciinema` in the Dockerfile, re-verify oracle=1/nop=0,
   re-zip. Mandatory check whenever the base image is not a tb-canonical one.
 - missing `asciinema` can fail agent runtime.
-- `apt-get` in verifier fails when `allow_internet = false`; install deps at image build time.
+- Runtime dependency installation in the verifier is invalid. Install every
+  verifier dependency in `tests/Dockerfile`; `network_mode` does not permit
+  fetching verifier tooling at trial time.
 - `COPY tests/` or `COPY solution/` is a hard failure.
 
 Oracle:
@@ -179,18 +195,17 @@ LLMaJ:
 
 Real agents / Agent Timeout Gate:
 
-- `Agent Timeout Gate: ❌ N/10 real-agent runs timed out (threshold: 5)` is a
-  hard blocker, not a difficulty signal. It means the environment is too heavy:
-  agents spend the 1800s budget on cold rebuilds, navigating an un-slimmed repo,
-  or a slow test suite, and never converge.
-- Pre-check WITHOUT spending agent budget: build once, then `time harbor run -a
+- Repeated real-agent timeouts are blockers, not difficulty evidence. They mean
+  the environment is too heavy or the configured budget is too low for genuine
+  progress.
+- Pre-check WITHOUT spending agent budget: build once, then `time stb harbor run -a
   oracle -p <task-folder>` against the cached image. The cached-image oracle run
-  approximates one agent edit→build→test cycle; if it is a large fraction of
-  1800s, agents will time out.
-- Fix the environment, do not just raise the timeout (capped at 1800): warm the
-  build in the Dockerfile so rebuilds are incremental, keep the build/dependency
-  cache in the final image, slim the repo, and shrink the verifier. See the
-  `task-clone` "Agent Timeout Gate" section.
+  approximates one agent edit→build→test cycle; if it consumes a large fraction
+  of the configured timeout, agents will time out.
+- Fix environment waste first. Terminus 3 permits 1800–18000 seconds, so raise
+  the budget only when traces show continued meaningful progress. Keep rebuilds
+  incremental, preserve dependency caches, slim the repo, and shrink the
+  verifier where possible.
 
 ## Reporting
 

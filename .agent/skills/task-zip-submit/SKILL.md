@@ -7,13 +7,19 @@ description: Use when packaging a Terminus task for Snorkel upload or checking Z
 
 Use this skill when creating or validating a submission ZIP.
 
+**Mandatory pre-zip gate:** run `scripts/preflight.sh <task-dir>` (repo root)
+before every zip — it machine-checks the mechanical gates (layout,
+.dockerignore entries, Dockerfile hygiene, task.toml, leak sweep, zip
+arcnames/CRLF, rubric format, docker oracle=1/nop=0, noexec-/tmp repro). Zero
+FAIL rows required.
+
 ## Zip Rule
 
 Zip the contents of the task folder, not the folder itself.
 
 Task folders usually live under `workspace/`. Zip from inside the task folder, not from the repository root. Put submission ZIPs under `workspace/submissions/` so generated artifacts stay ignored.
 
-The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist (`instruction.md task.toml environment solution tests`) rather than zipping `.` — a `.` glob silently pulls in files reviewers reject. Do not include `rubric.md` or `SUBMISSION.md` (rubrics are entered in the platform UI only; `SUBMISSION.md` is a local meta-doc — reviewers return the task if either ships in the ZIP), nor `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
+The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist (`instruction.md task.toml environment solution tests`) rather than zipping `.` — a `.` glob silently pulls in files reviewers reject. Do not include `rubric.md` or `SUBMISSION-<slug>.md` (rubrics are entered in the platform UI only; `SUBMISSION-<slug>.md` is the local UI-ready packet — reviewers return the task if either ships in the ZIP), nor `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
 
 **Make shell scripts executable before zipping.** Reviewers reject a ZIP whose `tests/test.sh` or `solution/solve.sh` is non-executable. Run `chmod +x tests/test.sh solution/solve.sh` first, then verify the stored Unix mode with `unzip -Z <zip> tests/test.sh solution/solve.sh` (expect `-rwxr-xr-x`). `zip -X` preserves the Unix permission mode — it only strips uid/gid and timestamps — so the allowlist command below keeps the exec bit intact.
 
@@ -99,10 +105,10 @@ zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
 ```bash
 TASK_NAME="$(basename "$PWD")"
 unzip -l "../submissions/${TASK_NAME}.zip" | head -40
-unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|/\.env|\.ruff_cache|\.pytest_cache|CLAUDE\.md|skills\.md|AGENTS\.md|rubric\.md|SUBMISSION\.md|reports/|submissions/|jobs/|workspace/' || true
+unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|/\.env|\.ruff_cache|\.pytest_cache|CLAUDE\.md|skills\.md|AGENTS\.md|rubric\.md|SUBMISSION[-.]|reports/|submissions/|jobs/|workspace/' || true
 ```
 
-Any hit from that grep is a blocker — re-zip with the allowlist. In particular `rubric.md` and `SUBMISSION.md` must not appear.
+Any hit from that grep is a blocker — re-zip with the allowlist. In particular `rubric.md` and `SUBMISSION-<slug>.md` must not appear (the grep pattern `SUBMISSION[-.]` catches both the unified name and any legacy bare `SUBMISSION.md`).
 
 **Verifier self-containment:** files that ship in `tests/` must not reference paths that are absent at verify time. The verifier container mounts only `/app` and `tests/`; `reports/`, `solution/`, and root docs are NOT present. Grep the verifier for stray references before zipping — a docstring or comment pointing at `reports/...` (or `solution/...`) is a review blocker even though it is "just a comment":
 
@@ -158,11 +164,13 @@ in `instruction.md`.
 Before sending the task to a reviewer, locate:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
 ```
 
-The UI-ready file must contain exactly these three sections:
+The UI-ready packet must contain (alongside Metadata and Rubrics — see
+`task-clone`/`task-batch` for the full packet format) exactly these three
+explanation sections:
 
 ```text
 Difficulty Explanation
@@ -190,10 +198,11 @@ but they do not change the ZIP allowlist.
 
 On first upload:
 
-- upload ZIP to Snorkel Expert Platform -> Terminus-2nd-Edition
-- copy the three sections from the UI-ready `submission-explanations.md` into
-  their matching platform fields; do not copy headings, rewrite diagnostics, or
-  the factual source draft
+- upload the ZIP through the Terminus 3 submission flow
+- copy the three explanation sections (plus rubric and metadata answers)
+  from the UI-ready `submissions/SUBMISSION-<slug>.md` packet into their
+  matching platform fields; do not copy headings, rewrite diagnostics, or the
+  factual source draft
 - check "Generate Rubric(s)" while "Send to Reviewer" is unchecked
 - keep "Send to Reviewer" unchecked
 - inspect CI and generated rubric before final reviewer submission
@@ -207,9 +216,10 @@ On first upload:
   milestone tasks
 - for milestone tasks, use `# Rubric 1`, `# Rubric 2`, etc. blocks matching the
   milestones
-- ensure rubrics have at least three negative criteria overall; milestone
-  rubrics also need at least one negative criterion and 10-40 positive points
-  per milestone
+- ensure rubrics have at least three negative criteria overall and a
+  cumulative positive total of 10-40 points (the same 10-40 band applies to
+  non-milestone tasks); milestone rubrics also need at least one negative
+  criterion and 10-40 positive points per milestone
 - before final reviewer submission, uncheck "Generate Rubric(s)" so the edited
   rubric is not overwritten, then check "Send to Reviewer"
 - after final submission, expect peer review in 1-7 business days; total review

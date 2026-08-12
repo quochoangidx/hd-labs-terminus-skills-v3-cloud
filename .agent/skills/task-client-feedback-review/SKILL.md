@@ -19,13 +19,28 @@ the user explicitly asks for fixes.
 python .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
 ```
 
-For global skill use:
-
-```bash
-python "$HOME"/.codex/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
-```
+(The script lives in-repo at
+`.agent/skills/task-client-feedback-review/scripts/review_task.py` — run it
+from the repo root.)
 
 Use `--json` when another script will consume the result.
+
+For a task that was already in the platform revision queue or awaiting review
+before its category closed, pass `--revision-exception`. Never use this flag for
+a net-new task; category availability remains a blocker by default.
+
+Also run `scripts/preflight.sh <task-dir>` (repo root) for the mechanical
+subset review_task.py doesn't itself check (.dockerignore contents,
+`# syntax=` line, CRLF/arcnames, rubric closed-set).
+
+For a workspace task, require and validate
+`workspace/reports/<slug>/instruction-sufficiency.json` with
+`terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`. Missing
+or failing evidence is a blocker. For a standalone ZIP, the report is correctly
+absent from the archive; recreate the contract-source matrix manually from the
+ZIP and apply the blind-review procedure in
+`terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
+The automated scanner cannot certify semantic sufficiency.
 
 2. Read `instruction.md` and any provided/generated rubric manually for prompt
    realism:
@@ -53,6 +68,9 @@ Use `--json` when another script will consume the result.
        Flag any tested cutoff/value that the instruction leaves implicit
        (`should_fix`). Naming the spec value the test checks is required
        sufficiency, not over-spec; optionally cite an in-repo precedent.
+       Treat a reasonable implementation that passes every visible statement
+       but fails a test as a blocker even when another solver guessed the hidden
+       rule or every test has at least one passer.
        The "spec value" here means VALUES (numbers, output keys, data schema,
        exact-match constants) — docs want these explicit
        (`structured_data_schema`, `behavior_in_task_description`). Distinguish
@@ -75,6 +93,11 @@ Use `--json` when another script will consume the result.
        sentence. Only when a brand-new exported symbol genuinely cannot be made
        behavioral, name that single symbol minimally (the type/function the test
        must call) and nothing more. Recommend the redesign via `task-clone`.
+     - **Config dependence is real.** When the instruction tells the agent to
+       read a config/input file whose values may vary, mutate one meaningful
+       value and rerun the verifier. It must read that value at runtime; a
+       submission that ignores the file and hardcodes the original parameter
+       must fail. Do not apply this to fixed output constants or golden results.
      - **Not broader than the tests (else Test Quality VULNERABLE).** Every
        condition the instruction promises must have a DISCRIMINATING test (one
        that fails on a partial fix omitting it). If the instruction lists a
@@ -108,8 +131,8 @@ Use `--json` when another script will consume the result.
    may exist at:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
 ```
 
    These files are optional authoring notes and must remain outside the submitted

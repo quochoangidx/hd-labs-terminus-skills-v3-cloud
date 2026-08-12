@@ -74,6 +74,7 @@ SUBMISSION_EXPLANATION_NAMES = {
     "submission-explanations.md",
     "submission-explanations-source.md",
 }
+SUBMISSION_PACKET_RE = re.compile(r"^submission-.*\.md$", re.IGNORECASE)
 TAXONOMY = {
     "Science": {"Biology", "Chemistry", "Physics", "Earth", "Robotics", "Math", "Linguistics"},
     "Software": {"Algorithms", "Systems", "Databases", "Data engineering", "Frontend", "Languages"},
@@ -261,7 +262,8 @@ def root_entries(files: Iterable[str]) -> set[str]:
 
 def run_ruff(view: TaskView, findings: list[Finding]) -> None:
     """Mirror the platform CI ruff gate, which lints the WHOLE task tree
-    (default E4/E7/E9/F rules) INCLUDING upstream .py under environment/repo."""
+    (default E4/E7/E9/F plus PLW1510) INCLUDING upstream .py under
+    environment/repo."""
     import shutil
     import subprocess
     import tempfile
@@ -274,7 +276,7 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
         cand = os.path.expanduser("~/.local/share/uv/tools/harbor/bin/ruff")
         ruff = cand if os.path.exists(cand) else None
     if not ruff:
-        add(findings, "should_fix", "ruff-unavailable", f"Could not run ruff locally; {len(py_files)} .py file(s) (incl. environment/repo) are unverified. CI lints the whole task tree (default E4/E7/E9/F); ensure all .py are clean.", None, "upstream-repo-sanitizer")
+        add(findings, "should_fix", "ruff-unavailable", f"Could not run ruff locally; {len(py_files)} .py file(s) (incl. environment/repo) are unverified. CI lints the whole task tree (default E4/E7/E9/F plus PLW1510); ensure all .py are clean.", None, "upstream-repo-sanitizer")
         return
     if view.is_zip:
         target = tempfile.mkdtemp(prefix="ruff_review_")
@@ -286,7 +288,21 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
     else:
         target = str(view.path)
     try:
-        proc = subprocess.run([ruff, "check", "--output-format", "concise", target], capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(
+            [
+                ruff,
+                "check",
+                "--extend-select",
+                "PLW1510",
+                "--output-format",
+                "concise",
+                target,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
     except Exception as exc:
         add(findings, "should_fix", "ruff-error", f"ruff could not run: {exc}", None, "upstream-repo-sanitizer")
         return
@@ -294,7 +310,13 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
     err_lines = [ln.strip() for ln in out.splitlines() if re.search(r":\d+:\d+:", ln)]
     for ln in err_lines[:10]:
         msg = ln.replace(target.rstrip("/") + "/", "")
-        add(findings, "blocker", "ruff", f"ruff: {msg}", None, "upstream-repo-sanitizer")
+        relpath = msg.split(":", 1)[0]
+        fix_skill = (
+            "terminus-regular-task-authoring"
+            if relpath.startswith(("tests/", "solution/"))
+            else "upstream-repo-sanitizer"
+        )
+        add(findings, "blocker", "ruff", f"ruff: {msg}", relpath, fix_skill)
     if len(err_lines) > 10:
         add(findings, "blocker", "ruff", f"... and {len(err_lines) - 10} more ruff error(s).", None, "upstream-repo-sanitizer")
 
@@ -311,6 +333,82 @@ def check_blacklisted_db(view: TaskView, findings: list[Finding]) -> None:
         add(findings, "blocker", "blacklisted-db", "Contains 'maxscale' — CI blocks this as MariaDB MaxScale (often a false match on a decimal `MaxScale` identifier; rename to break the substring or remove the file if it is not build-required).", name, "upstream-repo-sanitizer")
     if len(hits) > 8:
         add(findings, "blocker", "blacklisted-db", f"... and {len(hits) - 8} more file(s) containing 'maxscale'.", None, "upstream-repo-sanitizer")
+
+
+def check_instruction_sufficiency_evidence(view: TaskView, findings: list[Finding]) -> None:
+    """Require the external semantic-sufficiency report for folders and ZIPs."""
+    if view.is_zip:
+        bases = [Path.cwd(), *view.path.resolve().parents]
+        candidates = [
+            base / "workspace" / "reports" / view.name / "instruction-sufficiency.json"
+            for base in bases
+        ]
+        report = next((path for path in candidates if path.is_file()), candidates[0])
+    else:
+        report = view.path.parent / "reports" / view.name / "instruction-sufficiency.json"
+    if not report.is_file():
+        add(
+            findings,
+            "blocker",
+            "instruction-sufficiency-evidence",
+            "Missing workspace/reports/<slug>/instruction-sufficiency.json; solver coverage cannot replace the semantic contract audit, including for a packaged ZIP.",
+            str(report),
+            "terminus-regular-task-authoring",
+        )
+        return
+    import subprocess
+
+    checker = (
+        Path(__file__).resolve().parents[2]
+        / "terminus-regular-task-authoring"
+        / "scripts"
+        / "sufficiency_manifest_check.py"
+    )
+    import tempfile
+
+    try:
+        if view.is_zip:
+            with tempfile.TemporaryDirectory(prefix="sufficiency_review_") as tmp:
+                task_path = Path(tmp) / view.name
+                for rel in view.files():
+                    destination = task_path / rel
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(view.read_bytes(rel))
+                proc = subprocess.run(
+                    [sys.executable, str(checker), str(task_path), str(report)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+        else:
+            proc = subprocess.run(
+                [sys.executable, str(checker), str(view.path), str(report)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+    except Exception as exc:
+        add(
+            findings,
+            "blocker",
+            "instruction-sufficiency-evidence",
+            f"Could not validate instruction-sufficiency evidence: {exc}",
+            str(report),
+            "terminus-regular-task-authoring",
+        )
+        return
+    if proc.returncode != 0:
+        detail = " ".join((proc.stdout + " " + proc.stderr).split())[:700]
+        add(
+            findings,
+            "blocker",
+            "instruction-sufficiency-evidence",
+            f"Instruction-sufficiency manifest failed validation: {detail}",
+            str(report),
+            "terminus-regular-task-authoring",
+        )
 
 
 def review(path: Path) -> dict:
@@ -349,6 +447,7 @@ def review(path: Path) -> dict:
         explanation_files = [
             name for name in files
             if Path(name).name.lower() in SUBMISSION_EXPLANATION_NAMES
+            or SUBMISSION_PACKET_RE.match(Path(name).name)
         ]
         for name in explanation_files:
             add(
@@ -363,7 +462,6 @@ def review(path: Path) -> dict:
         task = parse_task_toml(view, findings)
         metadata = task.get("metadata", {}) if isinstance(task, dict) else {}
         languages = metadata.get("languages", [])
-
         artifacts = task.get("artifacts") if isinstance(task, dict) else None
         if not isinstance(artifacts, list) or not artifacts:
             add(findings, "blocker", "artifacts", "task.toml must declare a non-empty top-level artifacts array.", "task.toml", "terminus-regular-task-authoring")
@@ -458,8 +556,17 @@ def review(path: Path) -> dict:
 
         dockerfile = view.read_text("environment/Dockerfile")
         if dockerfile:
-            if re.search(r"(?im)^\s*FROM\s+[^@\n]+$", dockerfile):
-                add(findings, "blocker", "dockerfile-digest", "Dockerfile FROM line appears to lack a sha256 digest.", "environment/Dockerfile", "terminus-regular-task-authoring")
+            stage_aliases = {
+                m.group(1).lower()
+                for m in re.finditer(r"(?im)^\s*FROM\s+\S+\s+AS\s+(\S+)", dockerfile)
+            }
+            for m in re.finditer(r"(?im)^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)", dockerfile):
+                image = m.group(1)
+                if image.lower() in stage_aliases:
+                    continue  # multi-stage FROM <earlier-alias> needs no digest
+                if "@" not in image:
+                    add(findings, "blocker", "dockerfile-digest", "Dockerfile FROM line appears to lack a sha256 digest.", "environment/Dockerfile", "terminus-regular-task-authoring")
+                    break
             if "tmux" not in dockerfile or "asciinema" not in dockerfile:
                 add(findings, "blocker", "dockerfile-agent-deps", "Dockerfile should install tmux and asciinema.", "environment/Dockerfile", "terminus-regular-task-authoring")
             if re.search(r"(?im)^\s*COPY\s+.*\b(tests|solution)\b", dockerfile):
@@ -496,6 +603,7 @@ def review(path: Path) -> dict:
 
         run_ruff(view, findings)
         check_blacklisted_db(view, findings)
+        check_instruction_sufficiency_evidence(view, findings)
 
         for name in files:
             if re.search(r"(^|/)(\.DS_Store|__MACOSX|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache)(/|$)", name) or name.endswith(".pyc") or "/._" in name or name.startswith("._"):

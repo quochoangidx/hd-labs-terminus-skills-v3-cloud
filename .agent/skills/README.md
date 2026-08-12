@@ -8,15 +8,21 @@ Frontier, Advanced, Core, or Base; difficulty is language-independent.
 
 ## Pipeline → skill map
 
+`task-batch` is the autonomous end-to-end orchestrator entry point — it runs the full
+gate pipeline below (fresh-only mining → collapse-law screen → skeleton probe → build →
+validate → package) without further prompting. Tooling: `scripts/new-task.sh <slug>
+<lang> <category> <subcategory>` stamps a hygiene-pre-wired skeleton; `scripts/preflight.sh <task-dir>`
+machine-checks the mechanical gates before every zip.
+
 | Stage | Skill(s) |
 |---|---|
-| 1. Mine candidates (metadata only) | `task-miner` (+ `find-task-prs` for the PR lane) |
+| 1. Mine candidates (metadata only) | `task-miner` (+ `find-task-prs` for the PR lane); rules-first category gate via `task-miner/category_rules.md` before any build |
 | 2. Build the task | `task-clone` (+ `upstream-repo-sanitizer` for repo staging; `issue-to-regression-test`, `terminus-hard-python-verifier` for verifiers; `terminus-regular-task-authoring`, `terminus-rust-task-authoring` for layout/prompt rules) |
 | 3. Probe difficulty cheaply | `task-local-solve-probe` (before any Harbor LLM spend) |
 | 4. Validate | `task-harbor-runner` (oracle / nop / `stb harbor check` / real-agent runs) |
 | 5. Review & package | `task-client-feedback-review`, `task-llm-style-audit` (LLM-tell audit + re-author of all prose surfaces, last step before zip), `task-zip-validator`, `task-zip-submit` |
 | 6. Remediate a platform return | `task-revise-flag-remediation` ("Some tests not passed by any agent run" / 0/N coverage flag), `terminus-regular-task-authoring` Prompt Rules (instruction_check + disclosure ladder) |
-| 7. Port an existing task to new languages | `task-language-port` (feasibility screen, mandatory narrative reskin, faithful placeholder+solution translation, re-validation) |
+| 7. Migrate an existing task to another runtime | `task-language-port` (explicit request only; internal/replacement use, never a separate reskinned submission) |
 | 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `anti-llm` (editorial pass) |
 
 Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<slug>.json`
@@ -32,7 +38,12 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 - `.agent/skills/task-miner/lever_patterns.md` — lever catalog **L1–L4** (conformance
   suite, synthetic interval-invariant ledger, differential-vs-authority, multi-vector
   security), claimed-resource ledger, and the complete L1 build runbook ("learn the
-  pattern, not the resource").
+  pattern, not the resource"). The default lane is the fresh-only doctrine;
+  language ports and narrative reskins are not novel Terminus 3 tasks.
+- `.agent/skills/task-miner/category_rules.md` — domain-first Terminus 3
+  category/subcategory screen and evidence schema.
+- `.agent/skills/task-miner/interaction_shape_recipe.md` — interaction/scale shape
+  recipe (historically useful for breadth, but not a guaranteed Frontier lane).
 
 ## Non-negotiable invariants
 

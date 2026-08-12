@@ -1,6 +1,12 @@
-# Lever Pattern Catalog — shared, in-repo, read before mining a HARD task
+# Lever Pattern Catalog — historical shape evidence for Terminus 3 mining
 
-**Why this file exists.** A *lever* (the technique that makes a task HARD *and* fair)
+> **⛔ Terminus 3 status.** The classic L1 engines (WHATWG-URL, IDNA,
+> UAX-14/29, HTML5, version constraints, URI templates, LOWESS) are closed by
+> novelty, saturation, and repeated difficulty collapse. The old category-block
+> rationale no longer applies. Use this catalog as a forbidden-zone and design
+> evidence map, then run the current domain-first `category_rules.md` screen.
+
+**Why this file exists.** A *lever* (a technique that historically produced a strong, fair signal)
 is the reusable asset. The *resource* a lever is applied to — a conformance suite, a
 spec, a repo, a dataset — is a small, SHARED, finite commodity. This catalog lives in
 the repo (symlinked to every CLI), **not in anyone's personal memory**, so every
@@ -22,7 +28,7 @@ It replaces relying on any individual's memory for that rule.
    and add a row to the ledger below. The dedupe key for this lane is
    `conformance_suite + spec + language` — slug/repo/issue keys do NOT catch these
    collisions.
-4. Run the `fairness_gate` before you call it HARD.
+4. Run the `fairness_gate` before claiming any high-tier signal.
 
 For lever **L1**, do not improvise from these fields — follow the **L1 build procedure**
 near the end of this file top-to-bottom. It is a complete, memory-free runbook (pivot-check,
@@ -32,10 +38,10 @@ messy-spec check, blind probe, fairness audit, disclose-vs-collapse, instruction
 
 ```
 id:                 short kebab name of the lever
-intent:             the HARD + fair property it produces (resource-agnostic)
+intent:             the high-signal + fair property it aims to produce
 mechanism:          the recipe, written WITHOUT naming any specific resource
 necessary:          conditions the resource MUST satisfy
-disqualifiers:      resource shapes that collapse the task to EASY
+disqualifiers:      resource shapes that historically produced no signal
 fairness_gate:      how to detect an UNFAIR artifact before shipping
 resource_slot:      the VARIABLE — filled per task from a fresh, unclaimed resource
 dedupe_cell:        gallery_category × language × lever  (novelty is per-cell)
@@ -45,6 +51,10 @@ dedupe_key:         conformance_suite + spec + language  (mirror into index.json
 ---
 
 ## L1 — `conformance-suite-divergent-tail`
+
+> **⛔ Closed for fresh builds:** the classic engines are saturation-closed and
+> a language or narrative variation is not novel in Terminus 3. Use this
+> runbook for historical analysis or returned-task remediation only.
 
 - **intent:** a from-scratch implementation task that a strong agent solves only 0–1/3,
   because independent *full* implementations each miss a DIFFERENT slice of the spec's
@@ -110,7 +120,7 @@ Authoritative machine copy = the `lever:"conformance-suite-divergent-tail"` line
 | Unicode LineBreakTest            | UAX-14            | C          | nhonho-batch | built  | |
 | jsonpath CTS                     | RFC 9535          | TypeScript | nhonho-batch | built  | |
 | toml-lang/toml-test              | TOML 1.0.0        | Go         | nhonho-batch | built  | **DISQUALIFIED + COLLISION** — in-env `tomllib` reference (see disqualifiers) makes both this and our tbrain-toml-document-decoder unfair-hard; RETIRE both, do not rebuild TOML under L1 in a Python image |
-| html5lib tree-construction       | WHATWG HTML §13   | Rust       | this-workspace | built | near-neighbor of the URL task (same Rust × Data-Processing × WHATWG cell) |
+| html5lib tree-construction       | WHATWG HTML §13   | Rust       | this-workspace | built | near-neighbor of the URL task (same Rust × WHATWG-conformance cell; the former Data-Processing classifier result is historical only) |
 | html5lib tokenizer               | WHATWG HTML §13   | (team)     | team         | built  | |
 | Unicode SENTENCE-break (UAX-29)  | UAX-29 sentence   | (team)     | team         | built  | |
 | JSON-Schema-2020-12 suite        | draft 2020-12     | (team)     | team         | built  | unevaluated* + $dynamicRef tail |
@@ -147,10 +157,19 @@ Authoritative machine copy = the `lever:"conformance-suite-divergent-tail"` line
 | PostgreSQL 16 array_in (differential) | PG array text repr | Go | this-workspace | **built HARD** 2026-07-06 | blind Opus 0/2 offline (miss PG16 hex/octal/binary int literals + empty/adjacent-quote rejection). Ground truth = real postgres:16 `array_to_json(...::text[])`. tbrain-postgres-array-parse |
 | GNU cpp / gcc -E -P (differential) | C preprocessor §6.10.3 | Go | this-workspace | **built HARD** 2026-07-06 | blind Opus 0/2 offline (miss func-spanning-lines + `#`-stringize-vaargs). Blue-paint/hide-set + prescan is the tail. No cpp in Go image. tbrain-cpp-macro-expand |
 
-### Fresh-resource ideas for L1 (unclaimed — verify `necessary`/`disqualifiers` first)
+### Fresh-resource ideas for L1 — ⛔ HISTORICAL / DEAD (kept as a forbidden-zone map)
 
-These are pointers, not endorsements — probe each ≥3× blind before trusting the
-difficulty. (Former entries RFC 3986 resolution, ICU/CLDR plural rules, JSON5, and CSS
+**Do NOT mine from this table (2026-07-19; category note updated 2026-07-30).**
+The software-engineering category has reopened, but these L1 parse/normalize
+stub-fill entries remain closed by saturation, originality, and repeated
+difficulty collapse; robots.txt is an AGENTS.md §6 dead-end outright
+("hardening a memorized public library is futile"). The table survives only as
+a forbidden-zone map for dedupe; fresh mining follows the fresh-only doctrine
+(task-miner SKILL.md) and the saturation ledger
+(`.agent/mined-candidates/platform-passed-portfolio.md`).
+Original guidance, for legacy-remediation context only: probe each ≥3× blind
+before trusting difficulty. (Former entries RFC 3986 resolution, ICU/CLDR
+plural rules, JSON5, and CSS
 Syntax L3 have moved into the ledger above with verdicts — check the ledger FIRST;
 several "obvious" ideas probed EASY.)
 
@@ -170,7 +189,8 @@ behavior (wildmatch / gitignore / gitattributes — git is a required agent tool
 globbing / word-splitting (`bash` is required), POSIX TZ strings (Python `time.tzset`
 is a near-complete reference).
 
-Pick one NOT in the ledger, in a language NOT already paired with it, confirm
+(Legacy context only — superseded by the fresh-only doctrine:) pick one NOT in
+the ledger, in a language NOT already paired with it, confirm
 independent impls diverge on the tail, and claim before building.
 
 ### Widen the language axis (dedupe-cell relief)
@@ -220,7 +240,17 @@ unfair-hard, never real difficulty.
    that real implementers get INCONSISTENTLY wrong. Reject clean finite rule-sets, named
    algorithms, and clean bidirectional codecs — those probe EASY even *with* an official suite.
 4. **Claim it** in `mined-candidates/index.jsonl` (dedupe_key = `conformance_suite + spec + language`).
-5. **Build.** Ship a stub (reads input, emits nothing/minimal). Put the official suite
+5. **Skeleton probe gate — probe BEFORE building the full oracle/verifier.** As soon as
+   you have `instruction.md` + a buildable `environment/` + the stub + a ROUGH check
+   command (a thrown-together differential or a handful of hand-checked cases — the
+   real oracle and hidden suite do not exist yet), run the skeleton probe
+   (`task-local-solve-probe`, Skeleton mode), N≥3. 3/3 pass → DROP or redesign the
+   lever now; do NOT spend the oracle/verifier/Docker build on a candidate the
+   collapse law already killed. 0–2/3 with semantic failures → proceed to step 6.
+   Setup/instruction failures → fix the skeleton and re-probe. This gate exists
+   because the old ordering (full build first, probe last) burned the entire build
+   cost on candidates that then probed 3/3 EASY.
+6. **Build.** Ship a stub (reads input, emits nothing/minimal). Put the official suite
    HIDDEN under `tests/`; oracle = a full correct impl that passes 100%; nop/stub fails.
    NEVER commit the answer table (input→expected) into `environment/repo` — grep for it
    before shipping (see task-clone). Read binary suite files (`.dat`, `LineBreakTest`) in
@@ -231,22 +261,27 @@ unfair-hard, never real difficulty.
    rates (10 families × ~70% each ≈ 3% ⇒ HARD, with a fair-MEDIUM floor since partial
    solutions still score). Target each family at ~40–80% expected per-run pass rate; a
    case you predict fewer than ~35% of runs will pass is a statistical 0/N candidate
-   at N=10. A case EVERY fresh implementation will miss (insider quirk,
+   at N=10. **Soft-representative rule:** every feature cluster keeps ≥1 "soft" case
+   that a majority of runs pass — never a hard-cases-only corpus (soft cases are the
+   coverage that keeps the 0/N flag from firing, and they satisfy anti-hardcoding
+   minimum-coverage guards). **Soft size cap:** a curated corpus of ~≤100 cases is
+   the right default for a normal task; a large corpus (300+) is justified only when
+   the wall is genuinely broad AND the per-case pass-table pre-audit below has run. A case EVERY fresh implementation will miss (insider quirk,
    undisclosed convention, data-table-only knowledge) is intersection-of-misses = a
    guaranteed 0/N flag — disclose it in one prose sentence or drop it BEFORE shipping.
    Structure the verifier per-case (parametrized) or as graded bands whose top band the
    best realistic run can actually reach; never ONE monolithic all-N-cases-must-pass
    function, where a single universal blind spot turns the whole test 0/N, and never a
    group-aggregate test sitting on top of per-case tests (structurally 0/N forever).
-   Cheap pre-audit: after the blind probe (step 6), score the probe solvers' diffs
+   Cheap pre-audit: after the blind probe (step 7), score the probe solvers' diffs
    per-case against the corpus — any case NO probe run passes is a correlated blind
    spot to disclose/prune now (see task-local-solve-probe, Coverage pre-audit).
-6. **Probe difficulty AND fairness — do BOTH before trusting the task:**
+7. **Probe difficulty AND fairness — do BOTH before trusting the task:**
    - Run ≥3 BLIND solvers (fresh agent, no `solution/`, no `tests/`). HARD ≈ 0–1/3 solve.
    - Do NOT let a solver paste the spec source (blows up context, distorts the probe).
    - Sanity gate: oracle must PASS and nop/stub must FAIL, or the harness is broken —
      that is not a difficulty signal (see the missing-tmux / verifier-did-not-run traps).
-7. **Fairness audit — a green `✅ HARD` verdict is NECESSARY-NOT-SUFFICIENT; read the
+8. **Fairness audit — a green `✅ HARD` verdict is NECESSARY-NOT-SUFFICIENT; read the
    per-test failure distribution, not just the pass rate.** A task can report
    `✅ HARD / ✅ Solvable / oracle 100% / agents 0/5` and STILL be an invalid, fake-hard
    task — the disqualified TOML decoder did exactly that: its "hardness" was pure artifact
@@ -276,7 +311,7 @@ unfair-hard, never real difficulty.
      the 0/N cases ARE the lever (undisclosed reference-class divergence → disclose
      instead). The flag is stochastic across re-runs — re-run to confirm both the
      failure and the fix.
-8. **instruction_check pre-flight — run the binary preflight in
+9. **instruction_check pre-flight — run the binary preflight in
    `terminus-regular-task-authoring` (Prompt Rules) BEFORE the first platform check.**
    Prose only: objective + I/O protocol + the authoritative spec/suite reference; no
    `##` headers, no lookup tables, no bullet rule-lists, no algorithm narration, no
@@ -300,7 +335,7 @@ unfair-hard, never real difficulty.
      COPY'd into the image before `git add -A`) plus a one-line declarative pointer in
      the instruction — clears instruction_check while keeping sufficiency/symmetry
      (semver, 2026-07-02).
-9. Ship.
+10. Ship.
 
 ---
 
@@ -311,12 +346,11 @@ unfair-hard, never real difficulty.
   (`index.jsonl`: broadcast-airtime-, coldchain-excursion-, energy-reservoir-,
   infusion-dose-, metered-billing-, oxygen-deficit-, service-supervision-,
   thermal-duty-`ledger`, plus leader-lease / duty-cycle / settlement /
-  interval-arith). Empirical ceiling = **MEDIUM**: pure interval/gap/overlap logic
-  probed 3/3 EASY; even a fully-disclosed clamp+carry+reset work-budget variant
-  stayed 3/3 blind EASY; iterative frontier agents solve ledger-family tasks
-  reliably. Use L2 only as an occasional MEDIUM filler (non-Python) when the batch
-  portfolio needs one AND the invariant family is genuinely new; for HARD go
-  L1/L3/L4. The domain-port lane below is **CLOSED** — porting a proven invariant
+  interval-arith). Historical ceiling was the old **MEDIUM** band: pure
+  interval/gap/overlap logic often probed all-pass. In Terminus 3, retain a
+  genuinely novel Base/Core instance only when its setup, definition, and data
+  are new; difficulty is language-independent. The domain-port lane below is
+  **CLOSED** — porting a proven invariant
   into an 11th skin adds a near-duplicate, not a task.
 - **Anti-anchoring naming rule (mandatory, applies to EVERY lever):** name the task
   after the DOMAIN PROBLEM (what a real team's ticket would say), never after the
@@ -386,9 +420,10 @@ unfair-hard, never real difficulty.
 
 ## L4 — `multi-vector-security-hardening`
 
-- **intent:** confirmed-HARD security task (0/3 blind Opus — mathjs #3656): agents
-  close the OBVIOUS attack vectors and miss a subtle one. Category `security` (allowed
-  under the hold).
+- **intent:** historical confirmed-HARD security task (0/3 blind Opus — mathjs
+  #3656). Category `security` reopened on Jul 30, 2026; the pattern remains a
+  historical difficulty/design record and may be mined only when it is fresh,
+  novel, fair, and structurally distinct under the current gates.
 - **mechanism:** take a sandbox/escaping/auth surface with N exploit vectors of graded
   subtlety; the instruction states the security objective + every legitimate behavior
   to preserve (this satisfies behavior_in_task_description symmetry and is

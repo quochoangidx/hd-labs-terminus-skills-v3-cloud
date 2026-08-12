@@ -84,7 +84,7 @@ candidate:
   target_difficulty:       # frontier | advanced | core | base
   artifacts:               # final paths the isolated verifier receives
   closest_gallery_task:
-  gallery_novelty:         # novel | twist-on-existing | duplicate (duplicate => do not clone)
+  gallery_novelty:         # novel | twist-on-existing | duplicate — Terminus 3 submissions require novel; reject twist-on-existing and duplicate
   subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
   objective_type:
   source_url:
@@ -112,7 +112,7 @@ candidate:
   difficulty_rationale:
   reasoning_bottlenecks:
   tempting_partial_fixes:
-  why_not_debugging:
+  domain_rationale:
   test_surface:
     primary_api:
     secondary_apis:
@@ -127,7 +127,7 @@ candidate:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
-  patch_shape_gate:        # pass | fail — fail means not Hard-eligible, do not clone as Hard
+  patch_shape_gate:        # pass | fail — fail means no credible high-tier signal
   patch_shape_evidence:
   family_key:              # library + bug_family, for the family ledger
   agent_probe:             # {ran, passed_oneshot} — blind-probe evidence backing the difficulty claim
@@ -139,7 +139,7 @@ If the artifact is missing `test_surface` details for a secondary implementation
 that tests will cover, fill that gap before writing verifier tests. Do not guess
 constructor signatures from class names.
 
-For non-debugging category-profile artifacts, treat `category`, `target_behavior`,
+For domain-profile artifacts, treat `category`, `subcategory`, `target_behavior`,
 `required_work`, `input_fixtures`, and `output_contract` as the source of truth.
 Do not rewrite the task as a bugfix just because the source has issues or PRs.
 
@@ -156,7 +156,7 @@ If a shared team registry exists, check it too. Treat any matching `repo + fixin
 During clone, update or append a compact JSON line:
 
 ```json
-{"category":"debugging","repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"cloned","rejection_reason":null}
+{"category":"Software","subcategory":"Languages","repo":"pytest-dev/pytest","issue_or_pr_id":"14465","source_url":"...","fixing_commit":"...","parent_commit":"...","bug_signature":"maxfail session fixture teardown reporting","task_slug":"tbrain-maxfail-teardown-reporting","status":"cloned","rejection_reason":null}
 ```
 
 Use `bug_signature` for near-duplicate detection when issue and PR URLs differ but the fix is the same behavior.
@@ -197,24 +197,25 @@ force Python into a special tier.
 ## Workflow
 
 1. Load the mined artifact or verify the source URL with the smallest needed browse/`gh` pass.
-2. Gate the category shape before scaffolding: `implement` / `parse` / `render`
-   / `cmp`, public API or stub completion, and exact-reference conformance usually
-   belong to `software-engineering`; ETL/dataset→report pipelines usually belong
-   to `data-processing`; diagnosis and repair usually belong to `debugging`.
-   All three categories are open, so use the honest label instead of reshaping the
-   prose. Record `category_mismatch_<predicted_slug>` when the artifact's declared
-   category disagrees with its visible primary activity.
+2. Gate the domain before scaffolding with `task-miner/category_rules.md`.
+   Record exactly one Title Case category/subcategory pair and explain which
+   domain evidence makes it necessary. Do not classify by verbs such as
+   implement, parse, or repair: a training-loop repair is `ML / Training`, while
+   a compiler repair is `Software / Languages`.
    In the same gate, check the TEMPLATE shape: the CI `template_detection` check
    (first observed 2026-07-13) blocks submissions matching a named template —
    confirmed `rust_cli` = minimal single-source-file stub project, stdin→stdout
-   batch binary, "extend the starter" instruction, hidden vector-corpus verifier,
-   `codebase_size = minimal`; assume per-language siblings. Scaffold away from
+   batch binary, "extend the starter" instruction, and hidden vector-corpus verifier;
+   assume per-language siblings. Scaffold away from
    that shape from the start (realistic multi-module repo, in-repo tests,
    domain-authentic file I/O); if flagged anyway, mark
    `template_detection_<template_name>` and see AGENTS.md §9 for current
    (UNVERIFIED) remediation levers.
 3. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
-4. Create `workspace/tbrain-<problem-slug>` using the naming rule.
+4. Create `workspace/tbrain-<problem-slug>` by running
+   `scripts/new-task.sh <slug> <lang> <category> <subcategory>`. Do not hand-write
+   `task.toml`, `.dockerignore`, or `tests/test.sh`; custom generators must call
+   the scaffolder first and then edit task-specific surfaces only.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
@@ -226,6 +227,13 @@ force Python into a special tier.
 13. Run structural checks, CI checks, and optional real-agent trials.
 14. After behavior and validation are stable, write reviewer-facing Difficulty,
     Solution, and Verification explanations outside the task folder.
+
+> ⚠️ The three interaction/scale archetypes in
+> `.agent/skills/task-miner/interaction_shape_recipe.md` are historical and
+> currently closed as reliable Frontier sources (ops restoration and DB migration
+> fell 3/3; long-context was closed by analysis). Use that recipe only for a
+> user-requested Base/Core experiment or the single SUSPECT-dead retest allowance,
+> never as a default batch lane.
 
 ## Regular Layout
 
@@ -255,11 +263,12 @@ Prefer external notes under `workspace/reports/<task-slug>/` when possible so su
 For the current platform submission form, create:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/reports/<task-slug>/submission-explanations.md
+workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
+submissions/SUBMISSION-<task-slug>.md                             (the UI-ready platform packet — single canonical name)
 ```
 
-Never place these files under the submitted task root.
+Packet contents and format: the "platform packet" section near the end of
+this skill. Never place either file under the submitted task root or ZIP.
 
 ## Metadata Defaults
 
@@ -359,7 +368,7 @@ Write like a real engineer describing the requested observable work:
 - Before the first platform check, run the `instruction_check` binary preflight
   in `terminus-regular-task-authoring` (Prompt Rules). The escape hatches for a
   flip-flopping verdict, test-pinned literals, and custom output formats live in
-  `.agent/skills/task-miner/lever_patterns.md` (L1 step 8): ship the non-blocking
+  `.agent/skills/task-miner/lever_patterns.md` (L1 step 9): ship the non-blocking
   ⚠️ when the flagged items are test-pinned, use natural JSON + a semantic
   verifier instead of a bespoke byte format, and move unavoidable disclosures
   into an in-env reference file with a one-line pointer.
@@ -431,7 +440,7 @@ The package in `/app` mishandles <scenario>. A user who <does normal workflow> c
 Fix it so `<public command or API>` <observable result>. The run should still <preserve important behavior>, and <edge case contract>.
 ```
 
-Good non-debugging shape:
+Good domain-profile shape:
 
 ```md
 The tool in `/app` needs to produce <target artifact or behavior> from <input surface>. Implement support for <public command/API/workflow> so it follows <observable contract>.
@@ -482,7 +491,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   neither of which is on that login PATH, so the agent cannot invoke the compiler
   even though oracle/nop can (they run in a non-login shell with PATH intact).
   Symlink them: Go `RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`;
-  Rust `ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`.
+  Rust `ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc`;
+  Java `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac` (+ `java`).
+  `node`/`gcc` images already place tools in `/usr/local/bin`.
   Confirmed 2026-07-01: a Go task omitted this and ~3/10 agent trials failed with
   "no Go toolchain, unable to compile", scoring 0 for a pure environment reason
   while oracle stayed green. Verify with
@@ -515,16 +526,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
   e.g. `RUN cargo build --tests`; `RUN go build ./... && go vet ./...`;
   `RUN npm ci && npm run build`; configure + `make` for autotools/CMake. A cold
   per-edit rebuild is the #1 cause of the Agent Timeout Gate (see that section).
-- **put the language toolchain on the agent's LOGIN-shell PATH by symlinking it
-  into `/usr/local/bin`** — the agent runs in a login shell that resets PATH to
-  the default and DROPS Docker `ENV PATH=...` additions, so a toolchain under
-  `/usr/local/cargo/bin` (Rust), `/usr/local/go/bin` (Go), or `${JAVA_HOME}/bin`
-  (Java) is invisible to the agent and causes wasted steps / timeouts even
-  though oracle/nop pass (they run as non-login subprocesses inheriting the
-  image ENV). e.g. `RUN ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo`
-  (+ `rustc`); `ln -sf /usr/local/go/bin/go /usr/local/bin/go`;
-  `ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac`. `node`/`gcc` images
-  already place tools in `/usr/local/bin`. Sanity: `bash -lc 'which <tool>'`.
+- login-shell PATH: covered by the "expose the language toolchain on
+  `/usr/local/bin`" bullet above — the same symlink rule applies whenever the
+  agent must rebuild. Sanity: `bash -lc 'which <tool>'`.
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
@@ -613,7 +617,7 @@ python -m pytest <focused smoke test or upstream regression>
 ```
 
 If the project requires build artifacts, rebuild them in `solve.sh`. The patch must solve the general bug, not only verifier examples.
-For non-debugging category-profile tasks, the patch must implement the general
+For domain-profile tasks, the patch must implement the general
 target behavior, not only the concrete verifier fixtures.
 
 ## Verifier Pattern
@@ -660,16 +664,58 @@ Confirmed 2026-07-01: a UAX-14 line-break task shipped `src/cases.rs` with all
 -- that leaked the entire answer key; the fix was to move the check to the hidden
 `tests/` vectors and delete the repo table.
 
+**Anti-cheat: a `/tests`-readable expected-output corpus + candidate-run-as-root
+is a reviewer-blocking cheat surface (2026-07-18, sbom-purl-key + lowess —
+AGENTS.md §3).** A candidate that just reads the `/tests` corpus and echoes each
+row's `expected` passes every case with zero logic. For any conformance-style
+clone, stack ALL of these (difficulty-neutral):
+1. `_hide_corpus()` — load the corpus into memory, then (only when
+   `dirname(CORPUS) == "/tests"`) `os.unlink` the corpus file AND
+   `os.chmod("/tests", 0o700)` BEFORE compiling or running any candidate code.
+2. Run the candidate as an unprivileged user — `subprocess.run(...,
+   user="nobody", group="nogroup")` iff `os.geteuid() == 0` (else no kwargs, so
+   local non-root runs keep working) — and `chmod -R a+rX` the temp build dir
+   (plus `0644` file-argument inputs / `0755` their dirs) so `nobody` can read
+   root-owned artifacts.
+3. Checker-owned compile: never run a submitted Makefile/executable while the
+   corpus is readable; compile the submitted source with the verifier's own
+   command. Remove `/solution` in the build fixture (the oracle's solve.sh has
+   already copied its source into `/app` by verify time) and reject a
+   translation unit that is a symlink, resolves outside `/app`, or `#include`s
+   an absolute, `..`-containing, or `solution`-named path.
+4. Run pytest as `python3 -I -m pytest` from a fresh verifier-owned dir — this
+   blocks an agent-planted `/app/sitecustomize.py` that `os._exit(0)`s the
+   interpreter into a free reward.
+5. Prove it with a cheat-emulation: a corpus-reading candidate must pass the
+   OLD verifier (reward 1) and fail the NEW one (reward 0), while oracle stays
+   1 and nop 0. Sweep every language sibling of a shared-corpus port series —
+   they share the hole.
+6. Stage anything the verifier execs on an exec-capable base (`/app`,
+   `/var/tmp`, `/dev/shm`), never bare `/tmp` — the platform mounts `/tmp`
+   noexec; the `scripts/preflight.sh` `--tmpfs /tmp:noexec` repro in Quality
+   Preflight catches this.
+
 **Structure conformance corpora for union-not-intersection difficulty (the
 "Some tests not passed by any agent run" gate is BLOCKING).** Score per-case
-(parametrized tests) or in graded bands whose top band a best realistic run can
-actually reach; never ONE monolithic all-N-cases-must-pass function — a single
+or in graded bands whose top band a best realistic run can actually reach.
+Verify CTRF reports each case independently; if parametrization collapses rows,
+generate uniquely named `test_case_001`-style functions. Never use ONE
+monolithic all-N-cases-must-pass function — a single
 universal blind spot then turns that whole test 0/N and the task gets returned.
 Before shipping, drop or disclose (one prose sentence) any case EVERY fresh
-implementation would miss; keep hardness as many independent quirk families
-each solver misses a different slice of. Full remediation decision tree when
-the flag fires anyway: `.agent/skills/task-revise-flag-remediation/SKILL.md`
-(design-time rules: `lever_patterns.md` L1 step 5).
+implementation would miss; keep hardness as many independent feature families
+each solver misses a different slice of. Corpus-curation rules: target 50–1000
+meaningful evaluation units when cheap, or 20–80 complex stateful/interaction
+scenarios; never pad one rule into hundreds of correlated rows. Mix verifier
+shapes when appropriate (scenario, property/metamorphic, mutation/anti-shortcut,
+final-state, tolerance/differential); every feature cluster keeps ≥1
+"soft" case a majority of runs pass; and the trimming direction is always
+data-driven from the per-case pass table — NEVER "drop the easy cases, keep
+the hard ones" (easy cases are the coverage that keeps the 0/N flag from
+firing; a hard-only corpus maximizes 0/N exposure). Full remediation decision
+tree when the flag fires anyway:
+`.agent/skills/task-revise-flag-remediation/SKILL.md`
+(design-time rules: `lever_patterns.md` L1 step 6).
 
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
@@ -855,7 +901,31 @@ mistakes each cost a full rebuild this session — avoid them up front:
 
 Before packaging or platform upload:
 
+- **run `scripts/preflight.sh <task-dir>` (repo root) — zero FAIL rows
+  required.** It machine-checks layout, .dockerignore entries, Dockerfile
+  hygiene (syntax line, canonical digest-pinned base, bind-mounts),
+  task.toml fields, leak sweep, zip arcnames/CRLF, rubric format, docker
+  oracle=1.0/nop=0.0, and the oracle-under-`--tmpfs /tmp:noexec` repro.
+  (New tasks should have been stamped by `scripts/new-task.sh`, which
+  pre-wires the hygiene this checks.)
+- **run the per-case pass-table pre-audit for corpus-graded verifiers.**
+  Re-score stored blind-probe diffs against the full corpus. For a zero-solve
+  local Frontier signal, require 100% union coverage, zero common misses, and
+  de-correlated failures; otherwise the result may be an oracle defect or one
+  shared blind spot. For Core/Base candidates, shared misses are a review risk
+  rather than an automatic rejection, but every shared miss still needs an
+  authority and instruction-sufficiency audit before packaging.
+- **run the Terminus 3 domain screen.** Apply
+  `.agent/skills/task-miner/category_rules.md`, choose exactly one category and
+  subcategory, and write `workspace/reports/<slug>/category-screen.json` with a
+  domain rationale plus citations to the instruction and verifier evidence.
+  Do not use the legacy nine-slug classifier or reshape prose to chase an old
+  classifier result.
 - run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
+- create `workspace/reports/<slug>/instruction-sufficiency.json`, cover every
+  static test and semantic cluster, complete two blind contract reviews, and run
+  `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`; any
+  failure blocks the full solve probe and packaging
 - include preservation/non-regression test coverage in the prompt, including modes not directly part of the bug trigger
 - run a verifier API sanity audit for every imported class/function and every
   constructor used in tests
@@ -909,13 +979,27 @@ available solve probes are stable.
    - Solution: root cause, high-level oracle strategy, and preserved behavior.
    - Verification: requirement-to-test mapping, why cases discriminate, and
      actual oracle/nop results.
-2. Produce `submission-explanations.md` as the concise UI-ready version.
+2. Produce the complete platform packet at
+   `submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
+   `task-batch`) containing, beyond the three explanations:
+   - **Metadata**: "Does this task use an approved canonical base image?"
+     Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
+     a Task Inspiration from the Task Gallery?" Yes/No + the Inspiration ID
+     when yes (`mined-candidates/gallery_tasks_snapshot.md`).
+   - **Rubrics**: the full paste-ready block (NOT shipped in the zip) —
+     format rules in the Rubric quality section above and AGENTS.md §9: one
+     physical line per criterion starting with `Agent`, closed score set
+     {+1,+2,+3,+5,-1,-2,-3,-5} with mandatory leading `+`, positive sum
+     10–40, block appears once, behavior-not-work-steps, affirmative
+     penalties, no test paths, fixture values, oracle outputs, root-cause hints,
+     or implementation recipe.
+   - **File zip name**: the matching zip in `submissions/`.
 3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
    an editorial pass. Do not add claims, remove thresholds, or change technical
    meaning.
 4. Compare the final version with `instruction.md`, `solution/fix.patch`,
    `tests/test_outputs.py`, and validation reports.
-5. Keep both files outside the task ZIP.
+5. Keep the source notes and the packet outside the task ZIP.
 
 Use this structure in both files:
 
@@ -965,6 +1049,11 @@ stb harbor run -m @openai/gpt-5.6 -k 4 -p <task-folder>   # difficulty, needs ap
 stb harbor run -m @anthropic/claude-opus-5 -k 4 -p <task-folder>
 ```
 
+Use the current Terminus 3 model commands when credentials and quota are
+available. Otherwise record fresh isolated local probes as preliminary evidence;
+they do not replace the platform's four-run iteration gate or eight-run final
+tier measurement.
+
 If Docker is not running, still run static checks:
 
 ```bash
@@ -978,7 +1067,9 @@ PY
 At the four-run iteration gate, at least one run must fail. Final difficulty is
 the average pass@1 across eight runs, four per current reference model.
 
-Difficulty gate:
+Difficulty gate (PLATFORM-result interpretation only — these numbers come from
+the platform's own agent runs after submission, not from anything runnable
+locally):
 
 - `frontier`: <20%; `advanced`: 20–<50%; `core`: 50–<80%; `base`: 80–<100%.
 - A result above 80% is acceptable as Base; only 100% across the iteration sample
