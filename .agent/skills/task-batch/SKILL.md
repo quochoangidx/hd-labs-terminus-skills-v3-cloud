@@ -54,6 +54,12 @@ This file controls the batch policy when it is more specific than a dependent sk
 - Do not mark a task submit-ready while a required local check is blocked.
 - Harbor API-key-dependent LLM-agent runs are not required. Local Docker build, Oracle, NOP, and non-API Harbor checks are required.
 - If external infrastructure is unavailable, continue every safe independent step, preserve the artifacts, and report the exact blocker. Never fabricate completion to satisfy the quota.
+- Treat `scripts/batch-handover.py` as the only authority allowed to emit
+  `candidate_ready`. A prose checklist, a successful ZIP command, or copied
+  terminal output cannot increment the accepted-task counter.
+- Evidence is immutable and snapshot-bound. Preserve raw logs, CTRF, diffs,
+  agent/reviewer transcripts, runtime/model/session provenance, and SHA-256
+  digests. Any task or submission change invalidates dependent receipts.
 
 ## Preflight
 
@@ -134,6 +140,9 @@ Use `task-zip-submit`.
 - Write the archive to `submissions/<slug>.zip`.
 - Inspect the archive listing after creation.
 
+This is an intermediate archive. The final preflight in step 7 must regenerate
+the archive and bind its digest to the final task snapshot.
+
 ### 4. Review the ZIP and Fix It
 
 Use `task-client-feedback-review` on the packaged ZIP.
@@ -190,6 +199,8 @@ If hardening changes instructions, tests, fixtures, solution, environment, or me
 ### 6. Audit LLM Writing Style
 
 Use `task-llm-style-audit` after the task has passed the technical and difficulty gates.
+Create the final submission file described below before this audit so the same
+auditor and receipt cover it.
 
 Audit every reviewer-visible prose surface, including:
 
@@ -201,7 +212,75 @@ Audit every reviewer-visible prose surface, including:
 
 Rewrite flagged prose in clear, natural English without changing technical meaning, adding unsupported claims, or breaking instruction/test symmetry.
 
-If the audit changes task contents, rerun the affected validation, recreate the ZIP, and confirm the final archive. If it changes only the external submission file, re-audit that file.
+If the audit changes task contents, rerun the affected validation and all local
+solve probes because their task snapshots are now stale. Recreate the ZIP and
+re-review it. If it changes only the external submission file, re-audit that
+file. Preserve the raw audit transcript at
+`workspace/reports/<slug>/style-audit-transcript.md`, then create the hash-bound
+receipt with:
+
+```bash
+python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
+  workspace/<slug> \
+  --submission submissions/SUBMISSION-<slug>.md \
+  --transcript workspace/reports/<slug>/style-audit-transcript.md \
+  --runtime <actual-runtime> --model <actual-model> \
+  --session-id <actual-session-id> \
+  --output workspace/reports/<slug>/style-audit.json
+```
+
+Do not create a passing receipt unless the named auditor actually reviewed every
+surface listed in it.
+
+### 7. Seal the Final Snapshot
+
+After all task, submission, probe, and style changes are complete, create the
+final mechanical evidence and ZIP in one strict run:
+
+```bash
+scripts/preflight.sh workspace/<slug> --strict \
+  --report-json workspace/reports/<slug>/preflight.json \
+  --evidence-dir workspace/reports/<slug>/preflight-logs \
+  --emit-zip submissions/<slug>.zip
+```
+
+The receipt must include successful policy, agent/verifier image builds,
+Oracle=1, NOP=0, Oracle under noexec `/tmp`, and hashes for the raw build,
+solve, verifier, CTRF, and reward artifacts. A summary without those raw files
+is not auditable evidence.
+
+Run the client scanner on that exact final ZIP and save its receipt:
+
+```bash
+python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+  submissions/<slug>.zip --json \
+  --manual-review-pass \
+  --review-transcript workspace/reports/<slug>/client-review-transcript.md \
+  --review-runtime <actual-runtime> --review-model <actual-model> \
+  --review-session-id <actual-session-id> \
+  --evidence-output workspace/reports/<slug>/client-review.json
+```
+
+Complete the manual portions required by `task-client-feedback-review`; the
+scanner is a fail-closed mechanical subset, not a substitute for semantic
+review. Preserve that manual review as the named non-empty transcript before
+running this command. Then run the final handover gate:
+
+```bash
+python3 scripts/batch-handover.py workspace/<slug> \
+  --report-dir workspace/reports/<slug> \
+  --probe-dir workspace/local-solve-probes/<slug> \
+  --zip submissions/<slug>.zip \
+  --submission submissions/SUBMISSION-<slug>.md \
+  --output workspace/reports/<slug>/handover.json
+```
+
+Count the task only when this command exits `0`, prints `CANDIDATE_READY`, and
+the saved handover has `status: candidate_ready`. It independently recomputes
+the task/ZIP file map, receipt hashes, sufficiency sources and transcripts,
+probe diffs/CTRF, style surfaces, submission hash, and trusted probe verifier
+results. Never hand-edit receipts to clear a failure; rerun the originating
+stage.
 
 ## Submission File
 
@@ -216,7 +295,7 @@ Use this exact structure:
 ```markdown
 # Difficulty Explanation
 
-Describe in original language why the task is challenging for humans and coding agents. Base the explanation on the actual task design and observed probe failures. Do not claim unsupported platform difficulty.
+Describe in original language why the task is challenging for humans and coding agents. Base the explanation on the actual task design and observed probe failures. Name the professional role that would perform this work and why it is relevant. State where any corpus, fixtures, captures, traces, or dataset came from and why they are realistic; if the task uses no external data, say that explicitly. Do not claim unsupported platform difficulty.
 
 # Solution Explanation
 
@@ -270,6 +349,9 @@ Count a task toward `N` only when all of the following are true:
 - The LLM-style audit is clean.
 - `submissions/<slug>.zip` exists and matches the final task state.
 - `submissions/SUBMISSION-<slug>.md` exists and is accurate.
+- The final `workspace/reports/<slug>/handover.json` is schema version 2,
+  hash-binds every required evidence file, and says `candidate_ready` after a
+  successful `scripts/batch-handover.py` run.
 
 Do not count rejected, infrastructure-failed, ambiguous, locally all-pass, or
 merely packaged candidates. A trustworthy split is valid Terminus 3 evidence.
@@ -289,6 +371,7 @@ Report one row per accepted task with:
 - probe run results and any adaptive third run;
 - provisional local tier signal;
 - ZIP path;
-- submission file path.
+- submission file path;
+- final ZIP SHA-256 and handover receipt path.
 
 Also list any discarded candidates and their concise rejection reasons. Distinguish verified results from unavailable external checks.

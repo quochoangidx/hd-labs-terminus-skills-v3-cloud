@@ -6,21 +6,25 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import tomllib
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 
 EVIDENCE_FILES = {
     "category": "category-screen.json",
+    "client_review": "client-review.json",
     "design": "design-signature.json",
     "preflight": "preflight.json",
     "probe": "probe-verdict.json",
+    "style": "style-audit.json",
     "sufficiency": "instruction-sufficiency.json",
     "verifier": "verifier-matrix.json",
 }
@@ -50,6 +54,28 @@ FORBIDDEN_PROBE_COMMAND_TOKENS = {"stb ", "terminus-2", "@openai/", "@anthropic/
 VOLATILE_HASH_DIRS = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", "reports", "submissions"}
 SANITIZED_HASH_DIRS = VOLATILE_HASH_DIRS | {"solution", "tests"}
 RUBRIC_SUFFIXES = ("_rubric.md", "_rubric.txt", "-rubric.md", "-rubric.txt")
+STYLE_TEXT_SUFFIXES = {
+    "",
+    ".bash",
+    ".c",
+    ".cc",
+    ".cpp",
+    ".go",
+    ".h",
+    ".java",
+    ".js",
+    ".jsx",
+    ".kt",
+    ".md",
+    ".py",
+    ".rb",
+    ".rs",
+    ".sh",
+    ".toml",
+    ".ts",
+    ".tsx",
+    ".txt",
+}
 
 
 def load_json(path: Path, errors: list[str]) -> dict:
@@ -204,13 +230,30 @@ def run_trusted_nop_verifier(run_dir: Path) -> dict:
             "1",
             "-y",
         ]
-        proc = subprocess.run(
-            command,
-            cwd=run_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            proc = subprocess.run(
+                command,
+                cwd=run_dir,
+                capture_output=True,
+                text=True,
+                timeout=2400,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            (run_dir / "handover-verifier.log").write_text(
+                stdout + stderr,
+                encoding="utf-8",
+            )
+            raise RuntimeError(
+                "trusted NOP rerun exceeded 2400 seconds; "
+                f"see {run_dir / 'handover-verifier.log'}"
+            ) from exc
         log = proc.stdout + proc.stderr
         (run_dir / "handover-verifier.log").write_text(log, encoding="utf-8")
         if proc.returncode != 0:
@@ -514,7 +557,12 @@ def validate_design(data: dict, slug: str, report_dir: Path, errors: list[str]) 
         )
 
 
-def validate_preflight(data: dict, slug: str, errors: list[str]) -> None:
+def validate_preflight(
+    data: dict,
+    slug: str,
+    report_dir: Path,
+    errors: list[str],
+) -> None:
     if data.get("task_slug") != slug:
         errors.append("preflight.json: task_slug mismatch")
     if data.get("status") != "pass" or data.get("fail_count") != 0:
@@ -524,8 +572,304 @@ def validate_preflight(data: dict, slug: str, errors: list[str]) -> None:
     checks = data.get("checks")
     if not isinstance(checks, list) or not checks:
         errors.append("preflight.json: checks must be a non-empty list")
-    elif not any(check.get("check") == "policy:static" for check in checks if isinstance(check, dict)):
-        errors.append("preflight.json: policy:static evidence is missing")
+    else:
+        check_status = {
+            check.get("check"): check.get("status")
+            for check in checks
+            if isinstance(check, dict)
+        }
+        required_checks = {
+            "policy:static",
+            "verifier:reward-dir-mode",
+            "docker:daemon",
+            "docker:agent-build",
+            "docker:verifier-build",
+            "docker:oracle",
+            "docker:nop",
+            "docker:noexec-tmp",
+        }
+        missing = sorted(required_checks - set(check_status))
+        if missing:
+            errors.append("preflight.json: required checks missing: " + ", ".join(missing))
+        failed = sorted(name for name in required_checks if check_status.get(name) != "pass")
+        if failed:
+            errors.append("preflight.json: required checks not passing: " + ", ".join(failed))
+    evidence_files = data.get("evidence_files")
+    required_logs = {
+        "docker-agent-build.log",
+        "docker-verifier-build.log",
+        "oracle-solve.log",
+        "oracle-verifier.log",
+        "oracle-ctrf.json",
+        "oracle-reward.txt",
+        "nop-verifier.log",
+        "nop-ctrf.json",
+        "nop-reward.txt",
+        "oracle-noexec-solve.log",
+        "oracle-noexec-verifier.log",
+        "oracle-noexec-ctrf.json",
+        "oracle-noexec-reward.txt",
+    }
+    if not isinstance(evidence_files, dict):
+        errors.append("preflight.json: evidence_files must hash-bind build and verifier logs")
+        return
+    missing_logs = sorted(required_logs - set(evidence_files))
+    if missing_logs:
+        errors.append("preflight.json: required audit logs missing: " + ", ".join(missing_logs))
+    validated_paths: dict[str, Path] = {}
+    for name, receipt in evidence_files.items():
+        if not isinstance(receipt, dict) or not nonempty(receipt.get("path")):
+            errors.append(f"preflight.json: invalid evidence receipt for {name}")
+            continue
+        path = Path(str(receipt["path"]))
+        try:
+            path.resolve().relative_to(report_dir.resolve())
+        except ValueError:
+            errors.append(f"preflight.json: evidence must stay inside report directory: {path}")
+            continue
+        if not path.is_file():
+            errors.append(f"preflight.json: evidence file missing: {path}")
+            continue
+        validated_paths[name] = path
+        if receipt.get("sha256") != sha256(path):
+            errors.append(f"preflight.json: evidence sha256 mismatch: {name}")
+        if receipt.get("size") != path.stat().st_size:
+            errors.append(f"preflight.json: evidence size mismatch: {name}")
+    for name in required_logs - {"oracle-solve.log", "oracle-noexec-solve.log"}:
+        path = validated_paths.get(name)
+        if path is not None and path.stat().st_size == 0:
+            errors.append(f"preflight.json: required audit artifact is empty: {name}")
+    for label, expected_reward, expect_all_pass in (
+        ("oracle", "1", True),
+        ("nop", "0", False),
+        ("oracle-noexec", "1", True),
+    ):
+        reward_path = validated_paths.get(f"{label}-reward.txt")
+        if reward_path is not None and reward_path.read_text(errors="replace").strip() != expected_reward:
+            errors.append(f"preflight.json: {label} raw reward does not equal {expected_reward}")
+        ctrf_path = validated_paths.get(f"{label}-ctrf.json")
+        if ctrf_path is None:
+            continue
+        matrix = matrix_from_ctrf(ctrf_path, f"preflight-{label}", errors)
+        if not matrix:
+            continue
+        failed = matrix.get("failed_case_ids", [])
+        if expect_all_pass and failed:
+            errors.append(f"preflight.json: {label} CTRF contains failed tests")
+        if not expect_all_pass and not failed:
+            errors.append("preflight.json: NOP CTRF contains no failed tests")
+
+
+def validate_client_review(
+    data: dict,
+    slug: str,
+    zip_path: Path,
+    report_dir: Path,
+    errors: list[str],
+) -> None:
+    if data.get("schema_version") != 1:
+        errors.append("client-review.json: schema_version must be 1")
+    scanner = (
+        Path(__file__).resolve().parents[1]
+        / ".agent"
+        / "skills"
+        / "task-client-feedback-review"
+        / "scripts"
+        / "review_task.py"
+    )
+    if not scanner.is_file() or data.get("scanner_sha256") != sha256(scanner):
+        errors.append("client-review.json: scanner hash is stale or invalid")
+    results = data.get("results")
+    if not isinstance(results, list) or len(results) != 1 or not isinstance(results[0], dict):
+        errors.append("client-review.json: results must contain exactly one task review")
+        return
+    result = results[0]
+    if result.get("schema_version") != 2:
+        errors.append("client-review.json: task review schema_version must be 2")
+    if result.get("task") != slug:
+        errors.append("client-review.json: task slug mismatch")
+    expected_sha = sha256(zip_path) if zip_path.is_file() else None
+    if result.get("artifact_sha256") != expected_sha:
+        errors.append("client-review.json: artifact_sha256 does not match final ZIP")
+    if result.get("status") != "ready":
+        errors.append("client-review.json: final ZIP review status must be ready")
+    counts = result.get("counts")
+    if not isinstance(counts, dict):
+        errors.append("client-review.json: counts are missing")
+    else:
+        if counts.get("blocker") != 0:
+            errors.append("client-review.json: blocking findings remain")
+        if counts.get("should_fix") != 0:
+            errors.append("client-review.json: should-fix findings remain")
+    manual = data.get("manual_review")
+    if not isinstance(manual, dict) or manual.get("status") != "pass":
+        errors.append("client-review.json: passing manual review evidence is required")
+        return
+    for key in ("runtime", "model", "session_id", "transcript", "transcript_sha256"):
+        if not nonempty(manual.get(key)):
+            errors.append(f"client-review.json: manual_review.{key} is required")
+    transcript_value = manual.get("transcript")
+    if not nonempty(transcript_value):
+        return
+    transcript = (report_dir / str(transcript_value)).resolve()
+    try:
+        transcript.relative_to(report_dir.resolve())
+    except ValueError:
+        errors.append("client-review.json: manual transcript must stay inside report directory")
+        return
+    if not transcript.is_file() or transcript.stat().st_size == 0:
+        errors.append("client-review.json: manual transcript is missing or empty")
+    elif manual.get("transcript_sha256") != sha256(transcript):
+        errors.append("client-review.json: manual transcript sha256 mismatch")
+
+
+def style_surface_hashes(task_dir: Path) -> dict[str, str]:
+    surfaces: dict[str, str] = {}
+    for path in sorted(task_dir.rglob("*")):
+        if not path.is_file() or any(part in VOLATILE_HASH_DIRS for part in path.relative_to(task_dir).parts):
+            continue
+        if path.name == "Dockerfile" or path.suffix.lower() in STYLE_TEXT_SUFFIXES:
+            try:
+                path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            surfaces[path.relative_to(task_dir).as_posix()] = sha256(path)
+    return surfaces
+
+
+def markdown_section(text: str, heading: str) -> str:
+    match = re.search(
+        rf"(?ms)^# {re.escape(heading)}\s*$\n(.*?)(?=^# |\Z)",
+        text,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def validate_submission(
+    submission: Path,
+    task_dir: Path,
+    errors: list[str],
+) -> None:
+    if not submission.is_file():
+        errors.append(f"submission metadata not found: {submission}")
+        return
+    try:
+        text = submission.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        errors.append(f"submission metadata is not readable UTF-8: {exc}")
+        return
+    sections = {
+        heading: markdown_section(text, heading)
+        for heading in (
+            "Difficulty Explanation",
+            "Solution Explanation",
+            "Verification Explanation",
+            "Metadata",
+            "Rubrics",
+        )
+    }
+    missing = sorted(heading for heading, body in sections.items() if not body)
+    if missing:
+        errors.append("submission metadata: missing/empty sections: " + ", ".join(missing))
+    difficulty = sections["Difficulty Explanation"]
+    role_re = re.compile(
+        r"(?i)\b(engineer|developer|maintainer|operator|analyst|administrator|"
+        r"researcher|specialist|team)\b"
+    )
+    origin_re = re.compile(
+        r"(?i)\b(corpus|capture|trace|dataset|archive|fixture|generated|collected|"
+        r"derived|recorded|synthetic|production|real[- ]world|no external data)\b"
+    )
+    if difficulty and not role_re.search(difficulty):
+        errors.append("submission metadata: difficulty explanation must name a professional role")
+    if difficulty and not origin_re.search(difficulty):
+        errors.append(
+            "submission metadata: difficulty explanation must state data origin/realism "
+            "or explicitly say no external data"
+        )
+    scaffold_markers = (
+        "TODO: summarize",
+        "TODO: <=3 short paragraphs",
+        "TODO: apply the reference solution",
+        "TODO: 2-4 sentences of realistic project framing",
+        "replace the TODO test bodies",
+    )
+    authored_paths = (
+        task_dir / "instruction.md",
+        task_dir / "task.toml",
+        task_dir / "solution" / "solve.sh",
+        task_dir / "tests" / "test_outputs.py",
+        task_dir / "environment" / "app" / "README.md",
+    )
+    authored_text = text + "\n" + "\n".join(
+        path.read_text(encoding="utf-8", errors="ignore")
+        for path in authored_paths
+        if path.is_file()
+    )
+    if any(marker in authored_text for marker in scaffold_markers):
+        errors.append("submission/task snapshot: unresolved scaffold marker remains")
+
+
+def validate_style_audit(
+    data: dict,
+    slug: str,
+    task_dir: Path,
+    submission: Path,
+    report_dir: Path,
+    errors: list[str],
+) -> None:
+    if data.get("schema_version") != 1:
+        errors.append("style-audit.json: schema_version must be 1")
+    if data.get("task_slug") != slug or data.get("status") != "pass":
+        errors.append("style-audit.json: task_slug/status mismatch")
+    if data.get("task_snapshot_sha256") != tree_hash(task_dir, sanitized=False):
+        errors.append("style-audit.json: task changed after style audit")
+    if not submission.is_file() or data.get("submission_sha256") != sha256(submission):
+        errors.append("style-audit.json: submission file hash mismatch")
+    expected = style_surface_hashes(task_dir)
+    surfaces = data.get("surfaces")
+    if not isinstance(surfaces, list):
+        errors.append("style-audit.json: surfaces must be a list")
+        surfaces = []
+    recorded: dict[str, str] = {}
+    for item in surfaces:
+        if not isinstance(item, dict) or item.get("status") != "verified":
+            errors.append("style-audit.json: every surface must be an object marked verified")
+            continue
+        path = item.get("path")
+        if not nonempty(path) or not nonempty(item.get("sha256")):
+            errors.append("style-audit.json: every surface needs path and sha256")
+            continue
+        recorded[str(path)] = str(item["sha256"])
+    if recorded != expected:
+        missing = sorted(set(expected) - set(recorded))
+        extra = sorted(set(recorded) - set(expected))
+        changed = sorted(path for path in set(expected) & set(recorded) if expected[path] != recorded[path])
+        errors.append(
+            "style-audit.json: surface inventory/hash mismatch"
+            + (f"; missing={missing}" if missing else "")
+            + (f"; extra={extra}" if extra else "")
+            + (f"; changed={changed}" if changed else "")
+        )
+    auditor = data.get("auditor")
+    if not isinstance(auditor, dict):
+        errors.append("style-audit.json: auditor evidence is required")
+        return
+    for field in ("runtime", "model", "session_id", "transcript"):
+        if not nonempty(auditor.get(field)):
+            errors.append(f"style-audit.json: auditor.{field} is required")
+    transcript_value = auditor.get("transcript")
+    if nonempty(transcript_value):
+        transcript = (report_dir / str(transcript_value)).resolve()
+        try:
+            transcript.relative_to(report_dir.resolve())
+        except ValueError:
+            errors.append("style-audit.json: auditor transcript escapes report directory")
+        else:
+            if not transcript.is_file() or transcript.stat().st_size == 0:
+                errors.append("style-audit.json: auditor transcript missing or empty")
+            elif auditor.get("transcript_sha256") != sha256(transcript):
+                errors.append("style-audit.json: auditor transcript sha256 mismatch")
 
 
 def validate_probe_bundle(
@@ -879,6 +1223,22 @@ def validate_zip(path: Path, errors: list[str]) -> None:
         errors.append("zip: unsafe or non-POSIX archive path")
 
 
+def zip_file_hash_map(path: Path, errors: list[str]) -> dict[str, str]:
+    files: dict[str, str] = {}
+    try:
+        with zipfile.ZipFile(path) as archive:
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                name = info.filename
+                if "\\" in name or name.startswith("/") or ".." in Path(name).parts:
+                    continue
+                files[name] = hashlib.sha256(archive.read(info)).hexdigest()
+    except (OSError, zipfile.BadZipFile) as exc:
+        errors.append(f"zip payload: {exc}")
+    return files
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("task_dir", type=Path)
@@ -929,7 +1289,20 @@ def main() -> int:
     if evidence["design"]:
         validate_design(evidence["design"], slug, report_dir, errors)
     if evidence["preflight"]:
-        validate_preflight(evidence["preflight"], slug, errors)
+        validate_preflight(evidence["preflight"], slug, report_dir, errors)
+    if evidence["client_review"]:
+        validate_client_review(
+            evidence["client_review"], slug, zip_path, report_dir, errors
+        )
+    if evidence["style"]:
+        validate_style_audit(
+            evidence["style"],
+            slug,
+            task_dir,
+            submission,
+            report_dir,
+            errors,
+        )
     verifier = (
         validate_verifier_matrix(evidence["verifier"], slug, report_dir, errors)
         if evidence["verifier"]
@@ -990,19 +1363,47 @@ def main() -> int:
         errors.append(f"zip not found: {zip_path}")
     else:
         validate_zip(zip_path, errors)
+        zip_files = zip_file_hash_map(zip_path, errors)
+        task_files = file_hash_map(task_dir, sanitized=False)
+        if zip_files != task_files:
+            missing = sorted(set(task_files) - set(zip_files))
+            extra = sorted(set(zip_files) - set(task_files))
+            changed = sorted(
+                name
+                for name in set(task_files) & set(zip_files)
+                if task_files[name] != zip_files[name]
+            )
+            errors.append(
+                "zip: payload is not byte-identical to the current task tree"
+                + (f"; missing={missing}" if missing else "")
+                + (f"; extra={extra}" if extra else "")
+                + (f"; changed={changed}" if changed else "")
+            )
         if evidence["preflight"] and evidence["preflight"].get("artifact_sha256") != sha256(zip_path):
             errors.append("preflight.json: artifact_sha256 does not match the current ZIP")
-    if not submission.is_file():
-        errors.append(f"submission metadata not found: {submission}")
+    validate_submission(submission, task_dir, errors)
 
     artifact_sha = sha256(zip_path) if zip_path.is_file() else None
     payload = {
+        "schema_version": 2,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "handover_script_sha256": sha256(Path(__file__)),
         "task_slug": slug,
         "status": "candidate_ready" if not errors else "unverified",
+        "task_snapshot_sha256": tree_hash(task_dir, sanitized=False),
         "artifact": str(zip_path),
         "artifact_sha256": artifact_sha,
         "submission": str(submission),
-        "evidence": {key: str(report_dir / filename) for key, filename in EVIDENCE_FILES.items()},
+        "submission_sha256": sha256(submission) if submission.is_file() else None,
+        "evidence": {
+            key: {
+                "path": str(report_dir / filename),
+                "sha256": sha256(report_dir / filename)
+                if (report_dir / filename).is_file()
+                else None,
+            }
+            for key, filename in EVIDENCE_FILES.items()
+        },
         "probe_evidence": str(probe_dir),
         "probe_derived": probe_derived,
         "errors": errors,

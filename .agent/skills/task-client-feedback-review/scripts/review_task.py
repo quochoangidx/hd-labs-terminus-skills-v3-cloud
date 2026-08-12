@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -11,6 +12,7 @@ import sys
 import tomllib
 import zipfile
 from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -177,6 +179,20 @@ class TaskView:
     def environment_size(self) -> int:
         return sum(self.file_size(n) for n in self.files() if n.startswith("environment/"))
 
+    def artifact_sha256(self) -> str:
+        digest = hashlib.sha256()
+        if self.is_zip:
+            with self.path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            return digest.hexdigest()
+        for name in sorted(self.files()):
+            digest.update(name.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(self.read_bytes(name))
+            digest.update(b"\0")
+        return digest.hexdigest()
+
 
 def add(
     findings: list[Finding],
@@ -335,17 +351,21 @@ def check_blacklisted_db(view: TaskView, findings: list[Finding]) -> None:
         add(findings, "blocker", "blacklisted-db", f"... and {len(hits) - 8} more file(s) containing 'maxscale'.", None, "upstream-repo-sanitizer")
 
 
-def check_instruction_sufficiency_evidence(view: TaskView, findings: list[Finding]) -> None:
+def check_instruction_sufficiency_evidence(
+    view: TaskView,
+    findings: list[Finding],
+    task_slug: str,
+) -> None:
     """Require the external semantic-sufficiency report for folders and ZIPs."""
     if view.is_zip:
         bases = [Path.cwd(), *view.path.resolve().parents]
         candidates = [
-            base / "workspace" / "reports" / view.name / "instruction-sufficiency.json"
+            base / "workspace" / "reports" / task_slug / "instruction-sufficiency.json"
             for base in bases
         ]
         report = next((path for path in candidates if path.is_file()), candidates[0])
     else:
-        report = view.path.parent / "reports" / view.name / "instruction-sufficiency.json"
+        report = view.path.parent / "reports" / task_slug / "instruction-sufficiency.json"
     if not report.is_file():
         add(
             findings,
@@ -461,6 +481,9 @@ def review(path: Path) -> dict:
 
         task = parse_task_toml(view, findings)
         metadata = task.get("metadata", {}) if isinstance(task, dict) else {}
+        task_slug = task.get("name") if isinstance(task, dict) else None
+        if not isinstance(task_slug, str) or not task_slug.strip():
+            task_slug = view.name
         languages = metadata.get("languages", [])
         artifacts = task.get("artifacts") if isinstance(task, dict) else None
         if not isinstance(artifacts, list) or not artifacts:
@@ -506,6 +529,38 @@ def review(path: Path) -> dict:
         if not isinstance(tags, list) or not 3 <= len(tags) <= 6:
             add(findings, "blocker", "tags", "[metadata].tags must contain 3-6 values.", "task.toml", "terminus-regular-task-authoring")
 
+        difficulty_text = str(metadata.get("difficulty_explanation", ""))
+        data_bearing = any(
+            token in "\n".join(files).lower()
+            for token in ("corpus", "fixture", "dataset", "capture", "trace", "archive")
+        )
+        role_re = re.compile(
+            r"(?i)\b(engineer|developer|maintainer|operator|analyst|administrator|"
+            r"researcher|specialist|team)\b"
+        )
+        origin_re = re.compile(
+            r"(?i)\b(corpus|capture|trace|dataset|archive|fixture|generated|collected|"
+            r"derived|recorded|synthetic|production|real[- ]world|no external data)\b"
+        )
+        if difficulty_text and not role_re.search(difficulty_text):
+            add(
+                findings,
+                "blocker",
+                "difficulty-explanation-role",
+                "difficulty_explanation must name the professional role that performs this work.",
+                "task.toml",
+                "terminus-regular-task-authoring",
+            )
+        if difficulty_text and data_bearing and not origin_re.search(difficulty_text):
+            add(
+                findings,
+                "blocker",
+                "difficulty-explanation-data",
+                "difficulty_explanation must state the origin/realism of the accompanying corpus, captures, fixtures, or dataset.",
+                "task.toml",
+                "terminus-regular-task-authoring",
+            )
+
         verifier = task.get("verifier", {}) if isinstance(task, dict) else {}
         if not isinstance(verifier, dict) or verifier.get("environment_mode") != "separate":
             add(findings, "blocker", "verifier-mode", "[verifier].environment_mode must be 'separate'.", "task.toml", "terminus-regular-task-authoring")
@@ -545,8 +600,15 @@ def review(path: Path) -> dict:
         else:
             if RUNTIME_SETUP_RE.search(test_sh):
                 add(findings, "blocker", "test-sh-runtime-setup", "tests/test.sh installs packages or downloads at verifier runtime.", "tests/test.sh", "terminus-regular-task-authoring")
-            if "mkdir -p /logs/verifier" not in test_sh:
-                add(findings, "blocker", "test-sh-logs", "tests/test.sh must create /logs/verifier before pytest.", "tests/test.sh", "terminus-regular-task-authoring")
+            secure_logs = bool(
+                re.search(r"(?m)^\s*install\s+-d\s+-m\s+0?700\s+/logs/verifier\s*$", test_sh)
+                or (
+                    "mkdir -p /logs/verifier" in test_sh
+                    and re.search(r"(?m)^\s*chmod\s+0?700\s+/logs/verifier\s*$", test_sh)
+                )
+            )
+            if not secure_logs:
+                add(findings, "blocker", "test-sh-logs-mode", "tests/test.sh must create /logs/verifier with mode 0700 before reward/CTRF files or candidate code.", "tests/test.sh", "terminus-regular-task-authoring")
             if re.search(r"(?m)^\s*set\s+-[A-Za-z]*e[A-Za-z]*\b", test_sh):
                 add(findings, "blocker", "test-sh-set-e", "tests/test.sh must not use set -e; pytest failures must reach the reward block.", "tests/test.sh", "terminus-regular-task-authoring")
             if "--ctrf /logs/verifier/ctrf.json" not in test_sh:
@@ -594,6 +656,88 @@ def review(path: Path) -> dict:
         else:
             add(findings, "blocker", "verifier-dockerfile", "Missing tests/Dockerfile.", "tests/Dockerfile", "terminus-regular-task-authoring")
 
+        verifier_python = "\n".join(
+            view.read_text(name)
+            for name in files
+            if name.startswith("tests/") and name.endswith(".py")
+        )
+        runs_demoted_candidate = bool(
+            re.search(r"(?i)(_candidate_user_kwargs|\buser\s*=|[\"']user[\"']\s*:|\bnobody\b)", verifier_python)
+        )
+        if runs_demoted_candidate:
+            missing_isolation = []
+            if "subprocess.Popen" not in verifier_python:
+                missing_isolation.append("Popen")
+            if not re.search(r"start_new_session\s*=\s*True", verifier_python):
+                missing_isolation.append("start_new_session=True")
+            if "killpg" not in verifier_python:
+                missing_isolation.append("killpg")
+            if not re.search(r"except\s+subprocess\.TimeoutExpired", verifier_python):
+                missing_isolation.append("TimeoutExpired cleanup")
+            if missing_isolation:
+                add(
+                    findings,
+                    "blocker",
+                    "verifier-process-isolation",
+                    "Candidate execution needs a fresh process group and whole-group kill/reap; missing "
+                    + ", ".join(missing_isolation)
+                    + ".",
+                    "tests/test_outputs.py",
+                    "terminus-regular-task-authoring",
+                )
+
+        contract_text = "\n".join(
+            view.read_text(name)
+            for name in files
+            if name == "instruction.md"
+            or (
+                name.startswith("environment/")
+                and Path(name).suffix.lower() in {".md", ".txt", ".rst"}
+            )
+        )
+        order_promised = bool(
+            re.search(r"(?i)(keys?.{0,32}in this order|key order|ordered keys?|sorted keys?)", contract_text)
+        )
+        order_asserted = bool(
+            re.search(
+                r"(object_pairs_hook|expected_key_order|key_order|list\s*\([^\n]{0,80}\.keys\s*\(|list\s*\([^\n]{0,80}\)\s*==\s*\[)",
+                verifier_python,
+            )
+        )
+        if order_promised and "json.load" in verifier_python and not order_asserted:
+            add(
+                findings,
+                "blocker",
+                "contract-output-order",
+                "The visible contract promises serialized key order, but the verifier appears to compare parsed JSON without an order assertion.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+
+        write_failure_promised = bool(
+            re.search(
+                r"(?i)(cannot be written|cannot write|write failures?|not created or modified|"
+                r"leaves? no output|must not (?:create|modify).{0,40}(?:output|file))",
+                contract_text,
+            )
+        )
+        write_failure_asserted = bool(
+            re.search(
+                r"(?i)(unwritable|read[_ -]?only|sentinel|permission denied|0o4(?:00|44)|"
+                r"byte-identical|unchanged.{0,40}(?:output|file))",
+                verifier_python,
+            )
+        )
+        if write_failure_promised and not write_failure_asserted:
+            add(
+                findings,
+                "blocker",
+                "contract-output-write-failure",
+                "The visible contract promises output-write failure behavior, but no discriminating unwritable/sentinel-preservation test was found.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+
         env_size = view.environment_size()
         if env_size > 100 * 1024 * 1024:
             add(findings, "blocker", "environment-size", f"environment/ is {env_size / (1024 * 1024):.1f} MiB, above 100 MiB.", "environment/", "upstream-repo-sanitizer")
@@ -603,7 +747,7 @@ def review(path: Path) -> dict:
 
         run_ruff(view, findings)
         check_blacklisted_db(view, findings)
-        check_instruction_sufficiency_evidence(view, findings)
+        check_instruction_sufficiency_evidence(view, findings, task_slug)
 
         for name in files:
             if re.search(r"(^|/)(\.DS_Store|__MACOSX|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache)(/|$)", name) or name.endswith(".pyc") or "/._" in name or name.startswith("._"):
@@ -655,8 +799,10 @@ def review(path: Path) -> dict:
         if any(f.check in {"instruction-eval-ref", "rubric-eval-ref"} for f in findings):
             status = "needs prompt/rubric review"
         return {
-            "task": view.name,
+            "schema_version": 2,
+            "task": task_slug,
             "path": str(path),
+            "artifact_sha256": view.artifact_sha256(),
             "status": status,
             "counts": {
                 "blocker": sum(f.severity == "blocker" for f in findings),
@@ -696,9 +842,62 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+", help="Task folders or submission ZIPs")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")
+    parser.add_argument(
+        "--evidence-output",
+        type=Path,
+        help="Write a hash-bound machine-readable review receipt.",
+    )
+    parser.add_argument("--manual-review-pass", action="store_true")
+    parser.add_argument("--review-transcript", type=Path)
+    parser.add_argument("--review-runtime")
+    parser.add_argument("--review-model")
+    parser.add_argument("--review-session-id")
     args = parser.parse_args(argv)
 
     results = [review(Path(p)) for p in args.paths]
+    if args.evidence_output:
+        manual_values = (
+            args.manual_review_pass,
+            args.review_transcript,
+            args.review_runtime,
+            args.review_model,
+            args.review_session_id,
+        )
+        if any(manual_values) and not all(manual_values):
+            parser.error(
+                "manual review evidence requires --manual-review-pass, --review-transcript, "
+                "--review-runtime, --review-model, and --review-session-id"
+            )
+        manual_review = None
+        if all(manual_values):
+            transcript = args.review_transcript.resolve()
+            output_parent = args.evidence_output.resolve().parent
+            if not transcript.is_file() or transcript.stat().st_size == 0:
+                parser.error(f"manual review transcript is missing or empty: {transcript}")
+            try:
+                transcript_rel = transcript.relative_to(output_parent)
+            except ValueError:
+                parser.error("manual review transcript must be inside the evidence directory")
+            manual_review = {
+                "status": "pass",
+                "runtime": args.review_runtime,
+                "model": args.review_model,
+                "session_id": args.review_session_id,
+                "transcript": transcript_rel.as_posix(),
+                "transcript_sha256": hashlib.sha256(transcript.read_bytes()).hexdigest(),
+            }
+        payload = {
+            "schema_version": 1,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "scanner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "manual_review": manual_review,
+            "results": results,
+        }
+        args.evidence_output.parent.mkdir(parents=True, exist_ok=True)
+        args.evidence_output.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if args.json:
         print(json.dumps(results, indent=2, sort_keys=True))
     else:

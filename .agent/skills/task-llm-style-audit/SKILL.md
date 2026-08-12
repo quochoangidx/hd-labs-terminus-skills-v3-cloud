@@ -136,6 +136,56 @@ Every surface must end `verified` before `task-zip-submit`. If a surface cannot 
 made human-sounding without breaking symmetry or fairness, stop and redesign that
 surface via `terminus-regular-task-authoring` instead of shipping a compromise.
 
+For `task-batch`, also write the machine-auditable receipt at
+`workspace/reports/<slug>/style-audit.json`. Bind it to the exact final task and
+submission file; `scripts/batch-handover.py` rejects stale or incomplete receipts.
+
+```json
+{
+  "schema_version": 1,
+  "task_slug": "tbrain-example",
+  "status": "pass",
+  "task_snapshot_sha256": "<full task tree hash from batch-handover.py>",
+  "submission_sha256": "<sha256 of submissions/SUBMISSION-tbrain-example.md>",
+  "auditor": {
+    "runtime": "codex",
+    "model": "<actual model>",
+    "session_id": "<actual session id>",
+    "transcript": "style-audit-transcript.md",
+    "transcript_sha256": "<sha256>"
+  },
+  "surfaces": [
+    {
+      "path": "instruction.md",
+      "sha256": "<sha256>",
+      "status": "verified"
+    }
+  ],
+  "deleted_as_leak": []
+}
+```
+
+Inventory every UTF-8 reviewer-visible task file, including source files whose
+comments are visible. Record actual model/session provenance and preserve the raw
+audit transcript beside the receipt. Any content change after this receipt requires
+a new style audit; do not update hashes without re-reading the changed surfaces.
+
+After the real audit is complete and its transcript is saved, generate the
+surface inventory and hashes mechanically:
+
+```bash
+python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
+  workspace/<slug> \
+  --submission submissions/SUBMISSION-<slug>.md \
+  --transcript workspace/reports/<slug>/style-audit-transcript.md \
+  --runtime <actual-runtime> --model <actual-model> \
+  --session-id <actual-session-id> \
+  --output workspace/reports/<slug>/style-audit.json
+```
+
+This command records hashes; it does not perform the audit. Never run it as a
+replacement for reading the surfaces.
+
 ## Out of scope (route elsewhere)
 
 - Unpinned git commit dates in the Dockerfile (nondeterministic builds),

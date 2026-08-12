@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -37,6 +38,14 @@ def static_test_names(task_dir: Path) -> set[str]:
 
 def nonempty_string(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def validate(task_dir: Path, report_path: Path) -> list[str]:
@@ -75,6 +84,41 @@ def validate(task_dir: Path, report_path: Path) -> list[str]:
     if policy != expected_policy:
         fail(errors, f"hidden_case_policy must equal {expected_policy}")
 
+    source_rows = report.get("contract_source_files")
+    source_hashes: dict[str, str] = {}
+    if not isinstance(source_rows, list) or not source_rows:
+        fail(errors, "contract_source_files must be a non-empty list")
+        source_rows = []
+    for index, item in enumerate(source_rows):
+        label = f"contract_source_files[{index}]"
+        if not isinstance(item, dict):
+            fail(errors, f"{label} must be an object")
+            continue
+        rel = item.get("path")
+        expected_hash = item.get("sha256")
+        if not nonempty_string(rel):
+            fail(errors, f"{label}.path must be a non-empty string")
+            continue
+        rel = str(rel)
+        if rel in source_hashes:
+            fail(errors, f"duplicate contract source path: {rel}")
+            continue
+        source_path = (task_dir / rel).resolve()
+        try:
+            source_path.relative_to(task_dir.resolve())
+        except ValueError:
+            fail(errors, f"{label}.path escapes the task folder: {rel}")
+            continue
+        if not source_path.is_file():
+            fail(errors, f"{label}.path does not exist: {rel}")
+            continue
+        actual_hash = sha256(source_path)
+        source_hashes[rel] = actual_hash
+        if expected_hash != actual_hash:
+            fail(errors, f"{label}.sha256 does not match current {rel}")
+    if "instruction.md" not in source_hashes:
+        fail(errors, "contract_source_files must include instruction.md")
+
     rows = report.get("contract_rows")
     if not isinstance(rows, list) or not rows:
         fail(errors, "contract_rows must be a non-empty list")
@@ -83,6 +127,7 @@ def validate(task_dir: Path, report_path: Path) -> list[str]:
     row_ids: set[str] = set()
     row_locators: dict[str, str] = {}
     selectors: list[str] = []
+    referenced_source_files = {"instruction.md"}
     for index, row in enumerate(rows):
         label = f"contract_rows[{index}]"
         if not isinstance(row, dict):
@@ -122,6 +167,8 @@ def validate(task_dir: Path, report_path: Path) -> list[str]:
             rel = str(locator).split(":", 1)[0]
             if not rel.startswith("environment/") or not (task_dir / rel).is_file():
                 fail(errors, f"{label} environment reference does not exist: {rel}")
+            else:
+                referenced_source_files.add(rel)
         elif source_type == "reachable_authority":
             if row.get("offline_reachable") is not True or not nonempty_string(row.get("authority_command")):
                 fail(errors, f"{label} reachable authority needs offline_reachable=true and authority_command")
@@ -133,6 +180,8 @@ def validate(task_dir: Path, report_path: Path) -> list[str]:
             training_path = support.get("training_path")
             if not nonempty_string(training_path) or not (task_dir / str(training_path)).is_file():
                 fail(errors, f"{label} visible training path does not exist: {training_path}")
+            else:
+                referenced_source_files.add(str(training_path))
             for field in ("positive_examples", "contrast_examples"):
                 value = support.get(field)
                 if not isinstance(value, int) or isinstance(value, bool) or value < 2:
@@ -146,6 +195,13 @@ def validate(task_dir: Path, report_path: Path) -> list[str]:
     )
     if uncovered:
         fail(errors, "static pytest functions missing from contract rows: " + ", ".join(uncovered))
+    missing_sources = sorted(referenced_source_files - set(source_hashes))
+    if missing_sources:
+        fail(
+            errors,
+            "contract_source_files missing referenced visible sources: "
+            + ", ".join(missing_sources),
+        )
 
     review = report.get("blind_contract_review")
     if not isinstance(review, dict):
@@ -154,6 +210,58 @@ def validate(task_dir: Path, report_path: Path) -> list[str]:
     reviewer_count = review.get("reviewer_count")
     if not isinstance(reviewer_count, int) or isinstance(reviewer_count, bool) or reviewer_count < 2:
         fail(errors, "blind_contract_review.reviewer_count must be >= 2")
+    if review.get("contract_inventory_complete") is not True:
+        fail(errors, "blind_contract_review.contract_inventory_complete must be true")
+    reviewers = review.get("reviewers")
+    if not isinstance(reviewers, list) or len(reviewers) < 2:
+        fail(errors, "blind_contract_review.reviewers must contain at least two evidence records")
+        reviewers = []
+    if isinstance(reviewer_count, int) and not isinstance(reviewer_count, bool):
+        if reviewer_count != len(reviewers):
+            fail(errors, "blind_contract_review.reviewer_count must equal len(reviewers)")
+    reviewer_ids: set[str] = set()
+    reviewer_sessions: set[str] = set()
+    report_dir = report_path.resolve().parent
+    expected_reviewed_sources = sorted(source_hashes)
+    for index, reviewer in enumerate(reviewers):
+        label = f"blind_contract_review.reviewers[{index}]"
+        if not isinstance(reviewer, dict):
+            fail(errors, f"{label} must be an object")
+            continue
+        for field in ("reviewer_id", "runtime", "model", "session_id", "transcript"):
+            if not nonempty_string(reviewer.get(field)):
+                fail(errors, f"{label}.{field} must be a non-empty string")
+        reviewer_id = reviewer.get("reviewer_id")
+        session_id = reviewer.get("session_id")
+        if nonempty_string(reviewer_id):
+            if str(reviewer_id) in reviewer_ids:
+                fail(errors, f"{label}.reviewer_id must be unique")
+            reviewer_ids.add(str(reviewer_id))
+        if nonempty_string(session_id):
+            if str(session_id) in reviewer_sessions:
+                fail(errors, f"{label}.session_id must be unique")
+            reviewer_sessions.add(str(session_id))
+        if reviewer.get("fresh_context") is not True:
+            fail(errors, f"{label}.fresh_context must be true")
+        if reviewer.get("source_only") is not True:
+            fail(errors, f"{label}.source_only must be true")
+        if reviewer.get("reviewed_source_files") != expected_reviewed_sources:
+            fail(
+                errors,
+                f"{label}.reviewed_source_files must equal the hash-bound contract source list",
+            )
+        transcript_value = reviewer.get("transcript")
+        if nonempty_string(transcript_value):
+            transcript = (report_dir / str(transcript_value)).resolve()
+            try:
+                transcript.relative_to(report_dir)
+            except ValueError:
+                fail(errors, f"{label}.transcript escapes the report directory")
+            else:
+                if not transcript.is_file() or transcript.stat().st_size == 0:
+                    fail(errors, f"{label}.transcript is missing or empty")
+                elif reviewer.get("transcript_sha256") != sha256(transcript):
+                    fail(errors, f"{label}.transcript_sha256 mismatch")
     questions = review.get("questions")
     if not isinstance(questions, list) or not questions:
         fail(errors, "blind_contract_review.questions must be a non-empty list")

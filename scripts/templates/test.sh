@@ -1,7 +1,7 @@
 #!/bin/bash
 set -uo pipefail
 
-mkdir -p /logs/verifier
+install -d -m 700 /logs/verifier
 echo 0 > /logs/verifier/reward.txt
 
 if [ "$PWD" = "/" ]; then

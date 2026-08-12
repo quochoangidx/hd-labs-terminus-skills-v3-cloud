@@ -18,6 +18,12 @@ folder and ZIP. The report is local audit evidence, not agent-facing material.
     "hidden_expected_outputs": true,
     "hidden_contract_rules": false
   },
+  "contract_source_files": [
+    {
+      "path": "instruction.md",
+      "sha256": "<sha256 of the reviewed instruction.md>"
+    }
+  ],
   "contract_rows": [
     {
       "id": "transport_policy",
@@ -31,6 +37,31 @@ folder and ZIP. The report is local audit evidence, not agent-facing material.
   ],
   "blind_contract_review": {
     "reviewer_count": 2,
+    "contract_inventory_complete": true,
+    "reviewers": [
+      {
+        "reviewer_id": "contract-review-1",
+        "runtime": "codex",
+        "model": "<actual model>",
+        "session_id": "<actual fresh session id>",
+        "fresh_context": true,
+        "source_only": true,
+        "reviewed_source_files": ["instruction.md"],
+        "transcript": "contract-review-1.md",
+        "transcript_sha256": "<sha256>"
+      },
+      {
+        "reviewer_id": "contract-review-2",
+        "runtime": "codex",
+        "model": "<actual model>",
+        "session_id": "<different fresh session id>",
+        "fresh_context": true,
+        "source_only": true,
+        "reviewed_source_files": ["instruction.md"],
+        "transcript": "contract-review-2.md",
+        "transcript_sha256": "<sha256>"
+      }
+    ],
     "questions": [
       {
         "id": "transport_boundary",
@@ -103,6 +134,14 @@ The gate fails when reviewers disagree, agree on an answer different from the
 oracle, cannot cite a visible source, or infer a rule only from existing buggy
 code that contradicts the expected policy. Fix the contract and repeat the
 blind review with fresh context.
+
+Record the actual runtime, model, unique session ID, raw transcript, and SHA-256
+for both reviews. Hash every reviewed contract source in
+`contract_source_files`; any later instruction/reference edit invalidates the
+manifest. `contract_inventory_complete: true` is an explicit two-reviewer
+attestation that every normative promise was classified as graded or deliberately
+ungraded, so the audit covers both directions: tests-to-contract and
+contract-to-discriminating-tests.
 
 ## Separation from other gates
 
