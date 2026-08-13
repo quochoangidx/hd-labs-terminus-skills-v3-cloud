@@ -366,11 +366,12 @@
   }
 
   // ---- Revise prompt (flag remediation) ----
-  // Builds the paste-ready prompt for the "Some tests not passed by any agent
-  // run" + instruction-sufficiency revision loop, pre-filled with this task's
-  // slug, its 0/N test table, and every non-empty platform feedback block.
+  // The paste-ready prompt for the "Some tests not passed by any agent run" +
+  // instruction-sufficiency loop. Kept to the bare template: the only thing
+  // filled in is where the export put the task and its report, so the agent
+  // reads the feedback from disk instead of carrying hundreds of pasted lines.
 
-  // The task slug the repo folder uses, taken from the uploaded bundle name.
+  // The task slug the extracted bundle uses, taken from the uploaded zip name.
   function taskSlug(task) {
     try {
       var sd = submissionDoc(task);
@@ -381,99 +382,33 @@
     return taskId(task);
   }
 
-  // Split the per-test results into the two buckets the remediation skill acts
-  // on: never passed (0/N -> the blocking flag) and barely passed (<=2/N ->
-  // rerun risk that must not be pruned blindly).
-  function testBuckets(task) {
-    var sd = submissionDoc(task);
-    var tr = sd.test_results || {};
-    var zero = [], thin = [], runs = 0;
-    Object.keys(tr).forEach(function (name) {
-      var r = tr[name] || [];
-      runs = Math.max(runs, r.length);
-      var npass = r.filter(function (x) { return x === "passed"; }).length;
-      if (!r.length) return;
-      if (npass === 0) zero.push({ name: name, pass: 0, total: r.length });
-      // Thin = survived, but not on every run. A test that passed all its runs
-      // is healthy no matter how few runs there were.
-      else if (npass <= 2 && npass < r.length) thin.push({ name: name, pass: npass, total: r.length });
-    });
-    return { zero: zero, thin: thin, runs: runs };
-  }
-
-  function promptBlock(title, body) {
-    var text = String(body == null ? "" : body).replace(/\s+$/, "");
-    if (!text) return "";
-    return "### " + title + "\n\n```\n" + text + "\n```\n\n";
-  }
-
-  function generateRevisePrompt(task) {
+  // opts.root: the export folder the popup wrote into (a picked directory name
+  // or a Downloads subpath). Omitted when the user exported to Downloads root.
+  function generateRevisePrompt(task, opts) {
     var t = task || {};
-    var sd = submissionDoc(t);
-    var slug = taskSlug(t);
-    var b = testBuckets(t);
-    var P = [];
-    function w(s) { P.push(s === undefined ? "" : s); }
+    var id = taskId(t);
+    var root = (opts && opts.root ? String(opts.root).replace(/\/+$/, "") + "/" : "");
+    var base = root + id + "/";
 
-    w("2. Revise (Some test not passed và Instruction Sufficiency)");
-    w("Revise task tại:");
-    w("");
-    w(slug);
-    w("");
-    w("Platform feedback:");
-    w("");
-
-    // Concrete per-test evidence first — this is what the skill classifies.
-    if (b.zero.length) {
-      w("#### Tests không có agent run nào pass (0/" + b.runs + ")");
-      w("");
-      b.zero.forEach(function (x) { w("- `" + x.name + "` — 0/" + x.total); });
-      w("");
-    } else if (b.runs) {
-      w("#### Tests không có agent run nào pass");
-      w("");
-      w("_(không có test 0/N trong dữ liệu difficulty check hiện tại)_");
-      w("");
-    }
-    if (b.thin.length) {
-      w("#### Tests pass rất ít (rerun risk — cân nhắc kỹ trước khi prune)");
-      w("");
-      b.thin.forEach(function (x) { w("- `" + x.name + "` — " + x.pass + "/" + x.total); });
-      w("");
-    }
-
-    // Then the raw platform blocks, verbatim, so nothing is paraphrased away.
-    var blocks =
-      promptBlock("Difficulty check — text summary", sd.text_summary) +
-      promptBlock("Quality check summary", sd.quality_check_summary) +
-      promptBlock("TB 3.0 Rubric Feedback Checks", sd.tb_3_rubric_feedback_checks) +
-      promptBlock("Agent review", sd.test_review) +
-      promptBlock("Test Quality Report", sd.test_quality_judge_report) +
-      promptBlock("CI checks summary", sd.ci_checks_summary);
-
-    // Reviewer's own words outrank the automated blocks when present.
-    var docs = collectAnswerDocs(t, sd);
-    var revisionNotes = pickField(docs, ["textarea-revision_notes", "revision_notes"]);
-    var errorCats = normalizeErrorCategories(
-      pickField(docs, ["multiselect-error-categories", "error_categories"]), t);
-    var reviewer = promptBlock("Revision notes (reviewer)", revisionNotes);
-    if (errorCats.length) {
-      reviewer += "### Error Categories\n\n" +
-        errorCats.map(function (c) { return "- " + c; }).join("\n") + "\n\n";
-    }
-
-    w((reviewer + blocks).replace(/\s+$/, ""));
-    w("");
-    w("- Sử dụng task-revise-flag-remediation để phân loại từng test 0/N, kiểm tra");
-    w("instruction sufficiency và correlated blind spots trước khi quyết định");
-    w("disclose, parametrize, prune hoặc bổ sung reference data.");
-    w("- Hãy xác minh từng feedback bằng code, instruction và verifier trước khi sửa.");
-    w("Tự động xử lý toàn bộ blocker trong phạm vi task, chạy lại Oracle/NOP và");
-    w("preflight, giữ nguyên evidence về difficulty, rồi tạo ZIP thay thế sẵn sàng");
-    w("upload. Không che lỗi bằng cách nới assertion hoặc xóa coverage quan trọng.");
-    w("");
-
-    return P.join("\n");
+    return [
+      "2. Revise (Some test not passed và Instruction Sufficiency)",
+      "Revise task tại:",
+      "",
+      base + taskSlug(t),
+      "",
+      "Platform feedback:",
+      "",
+      base + id + ".md",
+      "",
+      "- Sử dụng task-revise-flag-remediation để phân loại từng test 0/N, kiểm tra",
+      "instruction sufficiency và correlated blind spots trước khi quyết định",
+      "disclose, parametrize, prune hoặc bổ sung reference data.",
+      "- Hãy xác minh từng feedback bằng code, instruction và verifier trước khi sửa.",
+      "Tự động xử lý toàn bộ blocker trong phạm vi task, chạy lại Oracle/NOP và",
+      "preflight, giữ nguyên evidence về difficulty, rồi tạo ZIP thay thế sẵn sàng",
+      "upload. Không che lỗi bằng cách nới assertion hoặc xóa coverage quan trọng.",
+      ""
+    ].join("\n");
   }
 
   // ---- Markdown -> standalone HTML ----

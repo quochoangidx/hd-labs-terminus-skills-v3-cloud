@@ -159,9 +159,16 @@ function buildMarkdown() {
   return TBGen.generateMarkdown(state.current.task);
 }
 
+// Where the export lands, so the prompt's paths match what is on disk: the
+// picked folder's name, or the Downloads subfolder typed into the path box.
+function exportRoot() {
+  if (state.useFolder && dirHandle) return dirHandle.name;
+  return sanitizeSubpath(els.pathInput.value);
+}
+
 function buildRevisePrompt() {
   if (!state.current || !state.current.task) throw new Error("Chưa có task đang mở.");
-  return TBGen.generateRevisePrompt(state.current.task);
+  return TBGen.generateRevisePrompt(state.current.task, { root: exportRoot() });
 }
 
 function currentTaskId() { return state.current ? state.current.task_id : ""; }
@@ -291,7 +298,8 @@ async function exportBundle(taskId) {
   await writeFileInto(taskDir, taskId + ".md", TBGen.generateMarkdown(t));
   // Paste-ready remediation prompt, pre-filled with this task's 0/N table and
   // platform feedback blocks.
-  await writeFileInto(taskDir, "revise-prompt.md", TBGen.generateRevisePrompt(t));
+  await writeFileInto(taskDir, "revise-prompt.md",
+    TBGen.generateRevisePrompt(t, { root: exportRoot() }));
 
   // 2. Fetch the submission zip. Its contents land in a subfolder named after
   //    the zip (the task slug): <uuid>/express-gateway-hardening-polars/…

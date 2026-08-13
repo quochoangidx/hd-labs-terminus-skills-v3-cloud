@@ -125,10 +125,10 @@ Ghi chú:
 - **Tải difficulty .zip** lấy riêng tệp ở ô "Download difficulty check results".
   Ở chế độ thư mục, nội dung được giải nén vào `<uuid>/difficulty-check/`; ngược
   lại tệp rơi vào `Downloads/<uuid>/`. Nút báo lỗi nếu task chưa chạy difficulty check.
-- **Chép prompt Revise** dựng sẵn prompt sửa lỗi "Some test not passed + Instruction
-  Sufficiency", điền sẵn slug task, bảng test 0/N, danh sách test pass mỏng (rerun
-  risk) và toàn bộ khối feedback không rỗng. Bản xuất theo thư mục cũng ghi kèm
-  `<uuid>/revise-prompt.md`.
+- **Chép prompt Revise** dựng prompt sửa lỗi "Some test not passed + Instruction
+  Sufficiency", điền sẵn đường dẫn tới thư mục task đã giải nén và tới báo cáo
+  `.md` — agent tự đọc feedback từ đĩa thay vì nhận hàng trăm dòng dán kèm.
+  Bản xuất theo thư mục cũng ghi kèm `<uuid>/revise-prompt.md`.
 
 ## Cách tải và giải nén `.zip`
 
