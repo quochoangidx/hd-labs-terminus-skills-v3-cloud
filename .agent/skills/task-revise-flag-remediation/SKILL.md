@@ -198,6 +198,21 @@ corpus via `cur = old if old < deleted_idx else old - 1` per prior deletion.
 - Re-zip after edits; re-run the platform check — it is the only source of
   truth for the real pass fraction.
 
+### Revision packaging handoff
+
+When the task came from the Revise extension, preserve its exported history:
+
+- work in `workspace/revision/<task_id>/<slug>/`;
+- treat `workspace/revision/<task_id>/revisions/<slug>-source.zip` as immutable;
+- after Oracle/NOP and preflight pass, use `task-zip-submit` to create the next
+  unused `workspace/revision/<task_id>/revisions/<slug>-revN.zip` (`rev1`, then `rev2`,
+  and so on); and
+- copy the exact newest revision to the stable upload path
+  `workspace/submissions/<slug>.zip`.
+
+Never overwrite `source.zip` or an earlier `revN`, and do not put `revN` in the
+platform upload filename.
+
 ## Step 5 — validate offline before spending a platform run
 
 Build a **best-agent emulation**: the oracle with the common agent bug

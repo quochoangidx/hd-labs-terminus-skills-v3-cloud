@@ -208,9 +208,8 @@ if [ -f "$TEST_SH" ]; then
   fi
 fi
 
-# 8. Rubric format (submissions/SUBMISSION-<slug>.md, if present)
-SUB_MD="$(dirname "$TASK_DIR")/../submissions/SUBMISSION-$SLUG.md"
-[ -f "$SUB_MD" ] || SUB_MD="$TASK_DIR/../submissions/SUBMISSION-$SLUG.md"
+# 8. Rubric format (workspace/submissions/SUBMISSION-<slug>.md, if present)
+SUB_MD="$REPO_ROOT/workspace/submissions/SUBMISSION-$SLUG.md"
 if [ -f "$SUB_MD" ]; then
   RUBOUT="$(python3 - "$SUB_MD" <<'PYEOF'
 import re, sys

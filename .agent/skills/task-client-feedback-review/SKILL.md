@@ -149,7 +149,7 @@ The automated scanner cannot certify semantic sufficiency.
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
-submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
+workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready platform packet)
 ```
 
    These files are optional authoring notes and must remain outside the submitted

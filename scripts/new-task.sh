@@ -8,7 +8,7 @@
 #   lang      rust | go | c | cpp | python | ruby | node | java | generic
 #   category/subcategory  one exact Terminus 3 taxonomy pair
 #
-# Output: workspace/<slug>/ with task.toml, instruction.md, environment/,
+# Output: workspace/tasks/<slug>/ with task.toml, instruction.md, environment/,
 # solution/, tests/ pre-filled. Every TODO marker must be resolved before the
 # skeleton probe. Refuses to overwrite an existing folder.
 set -euo pipefail
@@ -53,7 +53,7 @@ RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go && git config --system safe.di
   *) echo "REJECT: unknown lang '$LANG_ID'." >&2; exit 1 ;;
 esac
 
-TASK_DIR="$REPO_ROOT/workspace/$SLUG"
+TASK_DIR="$REPO_ROOT/workspace/tasks/$SLUG"
 [ -e "$TASK_DIR" ] && { echo "REJECT: $TASK_DIR already exists." >&2; exit 1; }
 mkdir -p "$TASK_DIR"/{environment/app,solution,tests}
 

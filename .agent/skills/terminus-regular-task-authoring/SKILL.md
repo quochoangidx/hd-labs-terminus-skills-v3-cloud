@@ -105,12 +105,12 @@ drafts may remain outside the task folder:
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md
-submissions/SUBMISSION-<task-slug>.md
+workspace/submissions/SUBMISSION-<task-slug>.md
 ```
 
 Write the source draft only after the task behavior, oracle, verifier, and
 available difficulty probes are stable. The source draft is the factual record;
-`submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet for
+`workspace/submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet for
 the platform UI (same name/shape as `task-batch` and `task-clone` produce): the
 three explanations PLUS the Metadata answers ("approved canonical base image?"
 Yes/No + exact digest-pinned image; "Task Inspiration from the Task Gallery?"

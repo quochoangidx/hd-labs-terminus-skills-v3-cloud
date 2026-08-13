@@ -95,7 +95,7 @@ Reject weak candidates before building. Do not fill quota with ports or cosmetic
 
 ### 2. Clone and Build the Task
 
-Use `task-clone` to create the task under `workspace/tbrain-<slug>/`.
+Use `task-clone` to create the task under `workspace/tasks/tbrain-<slug>/`.
 
 Build the complete task:
 
@@ -137,7 +137,7 @@ Use `task-zip-submit`.
 
 - Zip the task contents, not the parent directory.
 - Exclude caches, local reports, solve copies, secrets, VCS metadata, and macOS resource forks.
-- Write the archive to `submissions/<slug>.zip`.
+- Write the archive to `workspace/submissions/<slug>.zip`.
 - Inspect the archive listing after creation.
 
 This is an intermediate archive. The final preflight in step 7 must regenerate
@@ -287,7 +287,7 @@ stage.
 Create one file per accepted task:
 
 ```text
-submissions/SUBMISSION-<slug>.md
+workspace/submissions/SUBMISSION-<slug>.md
 ```
 
 Use this exact structure:
@@ -347,8 +347,8 @@ Count a task toward `N` only when all of the following are true:
 - Two valid fresh attempts exist, with an adaptive third when required, and at
   least one trustworthy semantic failure provides a local difficulty signal.
 - The LLM-style audit is clean.
-- `submissions/<slug>.zip` exists and matches the final task state.
-- `submissions/SUBMISSION-<slug>.md` exists and is accurate.
+- `workspace/submissions/<slug>.zip` exists and matches the final task state.
+- `workspace/submissions/SUBMISSION-<slug>.md` exists and is accurate.
 - The final `workspace/reports/<slug>/handover.json` is schema version 2,
   hash-binds every required evidence file, and says `candidate_ready` after a
   successful `scripts/batch-handover.py` run.
