@@ -17,7 +17,7 @@ sản xuất nhiều task, và tránh Codex đọc lại repo quá nhiều lần
 | # | Tên kỹ năng | Slash command gợi ý | Mô tả |
 |---|---|---|---|
 | 1 | **Task Miner** | `/task-miner` | Mine metadata/scoring từ closed issue/PR upstream quota thấp-trung bình, không tạo task |
-| 2 | **Task Clone** | `/task-clone` | Transform mined candidate thành Terminus Regular task trong `workspace/tbrain-<problem-slug>` |
+| 2 | **Task Clone** | `/task-clone` | Transform mined candidate thành Terminus Regular task trong `workspace/tasks/tbrain-<problem-slug>` |
 | 3 | **Terminus Regular Task Authoring** | `/terminus-regular-task-authoring` | Tạo/audit cấu trúc Regular task theo Platform Submission Guide |
 | 4 | **Issue To Regression Test** | `/issue-to-regression-test` | Biến issue/PR thành verifier tests hành vi, có regression và anti-shortcut |
 | 5 | **Terminus Hard Python Verifier** | `/terminus-hard-python-verifier` | Viết verifier/oracle cho Python debugging task đủ khó |
@@ -56,15 +56,21 @@ terminus-bench/
 |-- .codex/skills  -> ../.agent/skills   # symlink (Codex)
 |-- .gemini/skills -> ../.agent/skills   # symlink (Gemini)
 |-- mined-candidates/
-    |   |   `-- index.jsonl        # Registry chống trùng issue/PR/candidate
-`-- workspace/                    # Task, reports, ZIP local; bị .gitignore
-    |-- tbrain-*/
-    |-- reports/
+|   `-- index.jsonl        # Registry chống trùng issue/PR/candidate
+`-- workspace/                    # Task, reports, revision history; bị .gitignore
+    |-- tasks/
     |   `-- tbrain-*/
-    `-- submissions/
+    |-- revision/
+    |   `-- <task_id>/
+    |       `-- revisions/
+    |-- submissions/             # ZIP upload mới nhất
+    |-- reports/
+    `-- local-solve-probes/
 ```
 
-Task clone, Harbor reports và submission ZIP đều để trong `workspace/`. Đây là khu vực local, không đẩy lên git. `.gitignore` đã ignore nguyên thư mục `/workspace/`.
+Task mới nằm trong `workspace/tasks/`, task tải từ Revise nằm trong
+`workspace/revision/`, và ZIP upload nằm trong `workspace/submissions/`.
+Toàn bộ `workspace/` là artifact local và bị `.gitignore`.
 
 `.agent/skills/` là **single source of truth** duy nhất cho toàn bộ skill trong
 repo (mỗi skill là `<skill-name>/SKILL.md`). `.claude/skills`, `.codex/skills`,
@@ -147,7 +153,7 @@ Không nhét tên repo/tool/domain vào slug nếu nó chỉ là nguồn của t
 Folder thực tế được tạo dưới:
 
 ```text
-workspace/tbrain-<problem-slug>/
+workspace/tasks/tbrain-<problem-slug>/
 ```
 
 Ví dụ:
@@ -431,7 +437,7 @@ Ví dụ:
 
 - **Slash command gợi ý**: `/task-clone`
 - **Input**: Ưu tiên `mined_candidate.json`; nếu chưa có thì dùng GitHub issue URL, PR URL, `owner/repo`, hoặc mô tả task muốn clone.
-- **Output**: Folder `workspace/tbrain-<problem-slug>/`.
+- **Output**: Folder `workspace/tasks/tbrain-<problem-slug>/`.
 - **Mục tiêu**:
   - Transform một bug upstream thật thành Terminus Regular task.
   - Không re-mine GitHub nếu mined artifact đã đủ thông tin.
@@ -558,8 +564,10 @@ Từ trong task root:
 find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' \) -exec rm -rf {} +
 
 TASK_NAME="$(basename "$PWD")"
-mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests \
+REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
+ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
+mkdir -p "${REPO_ROOT}/workspace/submissions"
+zip -rX "$ZIP_PATH" instruction.md task.toml environment solution tests \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*.pyc'
 ```
 
@@ -570,8 +578,10 @@ Verify:
 
 ```bash
 TASK_NAME="$(basename "$PWD")"
-unzip -l "../submissions/${TASK_NAME}.zip" | head -40
-unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|reports/|submissions/|workspace/' || true
+REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
+ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
+unzip -l "$ZIP_PATH" | head -40
+unzip -l "$ZIP_PATH" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|reports/|submissions/|workspace/' || true
 ```
 
 ---
@@ -602,7 +612,9 @@ Scanner là review gate, không thay thế manual prompt/rubric review.
 
 ## Lưu ý chung
 
-- Task clone, report và ZIP sinh ra nằm trong `workspace/` và bị `.gitignore`, không đẩy lên git.
+- Task mới nằm trong `workspace/tasks/`, revision nằm trong
+  `workspace/revision/`, report trong `workspace/reports/`, và ZIP upload trong
+  `workspace/submissions/`. Toàn bộ đều bị `.gitignore`.
 - Mỗi skill có file mô tả chi tiết trong `.agent/skills/{tên-kỹ-năng}/SKILL.md`.
 - Chỉ sửa skill trong `.agent/skills/`. `.claude/skills`, `.codex/skills`, và
   `.gemini/skills` là symlink trỏ về đó nên tự cập nhật — không cần sync tay.

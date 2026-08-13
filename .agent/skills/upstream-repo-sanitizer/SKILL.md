@@ -5,7 +5,7 @@ description: Use when staging an upstream repository under environment/repo for 
 
 # Upstream Repo Sanitizer
 
-Use this skill before submitting a task that contains `environment/repo`, usually under `workspace/tbrain-*`.
+Use this skill before submitting a task that contains `environment/repo`, usually under `workspace/tasks/tbrain-*`.
 
 ## Why Size Matters
 
@@ -113,7 +113,7 @@ shipped, so it does not help on the platform. Every `.py` left under
   Makefile rule), FIX the lint in place with an output-preserving change
   (`E402` import move, `E731`/`E701` reformat, `F841` unused var) and re-run
   `stb harbor run --force-build -a oracle`.
-- Run `ruff check workspace/tbrain-<slug>` over the whole task dir before zipping.
+- Run `ruff check workspace/tasks/tbrain-<slug>` over the whole task dir before zipping.
 
 For local-only checks, this is the relevant exclusion shape (do NOT ship it):
 

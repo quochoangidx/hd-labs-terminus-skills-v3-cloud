@@ -3,7 +3,7 @@
  *
  * chrome.storage cannot persist a FileSystemDirectoryHandle (it is not
  * JSON-serializable), but IndexedDB can store it via structured clone.
- * We use it only to remember the folder the user picked for direct writes.
+ * We use it only to remember the workspace root selected for revision exports.
  */
 (function (root) {
   "use strict";

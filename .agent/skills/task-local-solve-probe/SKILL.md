@@ -118,7 +118,7 @@ confidence.
 Use the helper script when possible:
 
 ```bash
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare workspace/tbrain-example
+python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare workspace/tasks/tbrain-example
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py materialize workspace/local-solve-probes/tbrain-example/run_1
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \

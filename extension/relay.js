@@ -8,7 +8,7 @@
 (function () {
   "use strict";
 
-  // The last review payload this tab fetched. The popup reads the task open in
+  // The last task/revise payload this tab fetched. The popup reads the task open in
   // THIS tab from here — no accumulated list, no chrome.storage of captures.
   var lastPayload = null;
   // {n: apiResponsesSniffed, hits: [urlsCarryingTheMarker]} — popup diagnostics.
@@ -33,7 +33,7 @@
   });
 
   // Pick the task matching the UUID shown on the page; fall back to the single
-  // task the review API returned for this page.
+  // task payload returned for this page.
   function pickTask(uuid) {
     if (!lastPayload || !Array.isArray(lastPayload.tasks)) return null;
     var tasks = lastPayload.tasks;
@@ -97,7 +97,7 @@
     var uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     var loose = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
-    // Reviewer page: a copy-to-clipboard span.
+    // Revise/reviewer page: a copy-to-clipboard span.
     var spans = document.querySelectorAll('span[title="Click to copy"]');
     for (var i = 0; i < spans.length; i++) {
       var t = (spans[i].textContent || "").trim();

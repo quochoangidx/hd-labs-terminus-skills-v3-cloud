@@ -1,6 +1,6 @@
 /*
  * Service worker: brokers the submission-zip download during a bundle export.
- * Review payloads are no longer stored here — the popup reads the task open in
+ * Task/revise payloads are no longer stored here — the popup reads the task open in
  * the active tab straight from that tab's content script.
  */
 "use strict";

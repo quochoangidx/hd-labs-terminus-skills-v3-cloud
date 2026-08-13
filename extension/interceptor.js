@@ -1,7 +1,7 @@
 /*
  * MAIN-world content script.
  *
- * The Snorkel SPA fetches the comprehensive review payload itself (with the
+ * The Snorkel SPA fetches the comprehensive task/revise payload itself (with the
  * correct session cookie + x-id-token JWT). Rather than re-authenticate, we
  * transparently observe those responses by patching fetch + XMLHttpRequest,
  * and hand any matching JSON to the ISOLATED-world relay via postMessage.
@@ -9,8 +9,8 @@
 (function () {
   "use strict";
 
-  // The payload we want ships from more than one route: the reviewer queue
-  // (/api/v1/assignment/{id}/review-{type}) and the submitter's own task page
+  // The payload we want ships from more than one route: reviewer/revise queues
+  // and the submitter's own task page
   // both return the same {tasks:[{task_documents:[...]}]} shape under different
   // paths. Rather than chase route names, we sniff any same-origin API response
   // for the marker key — a cheap indexOf on the raw text, no JSON.parse unless

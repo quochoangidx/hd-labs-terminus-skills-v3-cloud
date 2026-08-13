@@ -341,7 +341,7 @@ Do:
 
 Do not:
 
-- scaffold `workspace/tbrain-*`
+- scaffold `workspace/tasks/tbrain-*`
 - write `instruction.md`, Dockerfile, verifier, or oracle patch
 - run large upstream test suites repeatedly
 - inspect more than 15 files unless the candidate is already high value and needs one extra confirmation

@@ -2,16 +2,16 @@
 /*
  * extract-cli.js — offline companion to the extension.
  *
- * Converts a saved review payload into <task_id>.md using the exact same
+ * Converts a saved task/revise payload into <task_id>.md using the exact same
  * generator the extension uses (generate.js).
  *
  * Usage:
  *   node extract-cli.js <input.har|input.json> [outDir]
  *
  * Accepts:
- *   - a raw review API response  ({ "tasks": [ ... ] })
+ *   - a raw Snorkel API response  ({ "tasks": [ ... ] })
  *   - a single task object
- *   - a .har capture (scans every response body, base64 or plain, for review payloads)
+ *   - a .har capture (scans every response body, base64 or plain, for task payloads)
  *
  * Writes one <uuid>.md file per task into outDir (default: current directory).
  */
@@ -41,7 +41,7 @@ function collectFromHar(har) {
       var raw = c.encoding === "base64" ? Buffer.from(c.text, "base64").toString("utf8") : c.text;
       var obj = JSON.parse(raw);
       if (looksLikeTasks(obj)) out.push.apply(out, obj.tasks);
-    } catch (e2) { /* not JSON / not a review payload */ }
+    } catch (e2) { /* not JSON / not a task payload */ }
   });
   return out;
 }
@@ -60,7 +60,7 @@ function main() {
   if (data.log && data.log.entries) tasks = collectFromHar(data);
   else tasks = TBGen.extractTasks(data);
 
-  if (!tasks.length) die("No review tasks found in input.");
+  if (!tasks.length) die("No tasks found in input.");
 
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 

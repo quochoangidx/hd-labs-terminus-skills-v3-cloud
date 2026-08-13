@@ -17,7 +17,38 @@ FAIL rows required.
 
 Zip the contents of the task folder, not the folder itself.
 
-Task folders usually live under `workspace/`. Zip from inside the task folder, not from the repository root. Put submission ZIPs under `workspace/submissions/` so generated artifacts stay ignored.
+New task folders live under `workspace/tasks/`; returned tasks live under
+`workspace/revision/<task_id>/`. Zip from inside the task folder, not from the
+repository root. Put every upload-ready ZIP under `workspace/submissions/`.
+
+### Returned-task revision archives
+
+When the extension exports a task from the platform Revise page, use this
+layout:
+
+```text
+workspace/revision/<task_id>/
+├── <task_id>.md
+├── revise-prompt.md
+├── <slug>/
+└── revisions/
+    ├── <slug>-source.zip
+    ├── <slug>-rev1.zip
+    └── <slug>-rev2.zip
+
+workspace/submissions/
+└── <slug>.zip
+```
+
+- `<slug>-source.zip` is the immutable archive downloaded from the platform.
+  Never modify or overwrite it during remediation.
+- For each completed remediation, find the highest existing `revN` and write
+  the next number, starting at `rev1`. Never overwrite an earlier revision.
+- Copy the exact bytes of the newest `revN` archive to
+  `workspace/submissions/<slug>.zip`. The stable, unversioned name is the upload target;
+  `revN` names are local history only.
+- Do not use ambiguous `v1`/`v2` names: `rev1` means the first revised archive,
+  while `source` unambiguously means the platform input.
 
 The ZIP must contain only the files/folders required by the Platform Submission Guide. Use an allowlist (`instruction.md task.toml environment solution tests`) rather than zipping `.` — a `.` glob silently pulls in files reviewers reject. Do not include `rubric.md` or `SUBMISSION-<slug>.md` (rubrics are entered in the platform UI only; `SUBMISSION-<slug>.md` is the local UI-ready packet — reviewers return the task if either ships in the ZIP), nor `reports/`, `submissions/`, `jobs/`, local notes, caches, downloaded source archives, root `.ruff_cache`, or the outer `workspace/` folder.
 
@@ -84,8 +115,10 @@ From inside the task folder:
 
 ```bash
 TASK_NAME="$(basename "$PWD")"
-mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests \
+REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
+ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
+mkdir -p "${REPO_ROOT}/workspace/submissions"
+zip -rX "$ZIP_PATH" instruction.md task.toml environment solution tests \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
 ```
 
@@ -95,8 +128,10 @@ From inside the task folder:
 
 ```bash
 TASK_NAME="$(basename "$PWD")"
-mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
+REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
+ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
+mkdir -p "${REPO_ROOT}/workspace/submissions"
+zip -rX "$ZIP_PATH" task.toml environment steps \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
 ```
 
@@ -104,8 +139,10 @@ zip -rX "../submissions/${TASK_NAME}.zip" task.toml environment steps \
 
 ```bash
 TASK_NAME="$(basename "$PWD")"
-unzip -l "../submissions/${TASK_NAME}.zip" | head -40
-unzip -l "../submissions/${TASK_NAME}.zip" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|/\.env|\.ruff_cache|\.pytest_cache|CLAUDE\.md|skills\.md|AGENTS\.md|rubric\.md|SUBMISSION[-.]|reports/|submissions/|jobs/|workspace/' || true
+REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
+ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
+unzip -l "$ZIP_PATH" | head -40
+unzip -l "$ZIP_PATH" | grep -E '__MACOSX|\.DS_Store|/\._|__pycache__|\.pyc|/target/|/\.git/|/\.env|\.ruff_cache|\.pytest_cache|CLAUDE\.md|skills\.md|AGENTS\.md|rubric\.md|SUBMISSION[-.]|reports/|submissions/|jobs/|workspace/' || true
 ```
 
 Any hit from that grep is a blocker — re-zip with the allowlist. In particular `rubric.md` and `SUBMISSION-<slug>.md` must not appear (the grep pattern `SUBMISSION[-.]` catches both the unified name and any legacy bare `SUBMISSION.md`).
@@ -165,7 +202,7 @@ Before sending the task to a reviewer, locate:
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
-submissions/SUBMISSION-<task-slug>.md                             (UI-ready platform packet)
+workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready platform packet)
 ```
 
 The UI-ready packet must contain (alongside Metadata and Rubrics — see
@@ -200,7 +237,7 @@ On first upload:
 
 - upload the ZIP through the Terminus 3 submission flow
 - copy the three explanation sections (plus rubric and metadata answers)
-  from the UI-ready `submissions/SUBMISSION-<slug>.md` packet into their
+  from the UI-ready `workspace/submissions/SUBMISSION-<slug>.md` packet into their
   matching platform fields; do not copy headings, rewrite diagnostics, or the
   factual source draft
 - check "Generate Rubric(s)" while "Send to Reviewer" is unchecked

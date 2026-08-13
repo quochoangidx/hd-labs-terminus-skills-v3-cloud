@@ -1,6 +1,6 @@
 ---
 name: task-clone
-description: "Use when transforming a mined candidate into a Terminus 3 task under workspace/tbrain-* folders. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, isolated behavioral verifier design, oracle creation, and Harbor validation. All seven Terminus 3 categories are open; category and subcategory must match the task's domain."
+description: "Use when transforming a mined candidate into a Terminus 3 task under workspace/tasks/tbrain-* folders. Consumes mined_candidate artifacts when available, avoids re-mining GitHub, applies prompt sanitization, repo slimming, isolated behavioral verifier design, oracle creation, and Harbor validation. All seven Terminus 3 categories are open; category and subcategory must match the task's domain."
 ---
 
 # Task Clone
@@ -36,7 +36,7 @@ tbrain-<problem-slug>
 Task folders must be created under the workspace directory:
 
 ```text
-workspace/tbrain-<problem-slug>/
+workspace/tasks/tbrain-<problem-slug>/
 ```
 
 Do not include repo/tool/domain filler in the slug. Prefer the behavior or bug:
@@ -212,7 +212,7 @@ force Python into a special tier.
    `template_detection_<template_name>` and see AGENTS.md §9 for current
    (UNVERIFIED) remediation levers.
 3. Choose the parent commit before the fix for upstream bugfixes, or the artifact's `base_commit` for category-profile tasks.
-4. Create `workspace/tbrain-<problem-slug>` by running
+4. Create `workspace/tasks/tbrain-<problem-slug>` by running
    `scripts/new-task.sh <slug> <lang> <category> <subcategory>`. Do not hand-write
    `task.toml`, `.dockerignore`, or `tests/test.sh`; custom generators must call
    the scaffolder first and then edit task-specific surfaces only.
@@ -238,7 +238,7 @@ force Python into a special tier.
 ## Regular Layout
 
 ```text
-workspace/tbrain-<problem-slug>/
+workspace/tasks/tbrain-<problem-slug>/
 ├── instruction.md
 ├── task.toml
 ├── environment/
@@ -264,7 +264,7 @@ For the current platform submission form, create:
 
 ```text
 workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
-submissions/SUBMISSION-<task-slug>.md                             (the UI-ready platform packet — single canonical name)
+workspace/submissions/SUBMISSION-<task-slug>.md                   (the UI-ready platform packet — single canonical name)
 ```
 
 Packet contents and format: the "platform packet" section near the end of
@@ -980,7 +980,7 @@ available solve probes are stable.
    - Verification: requirement-to-test mapping, why cases discriminate, and
      actual oracle/nop results.
 2. Produce the complete platform packet at
-   `submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
+   `workspace/submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
    `task-batch`) containing, beyond the three explanations:
    - **Metadata**: "Does this task use an approved canonical base image?"
      Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
@@ -993,7 +993,7 @@ available solve probes are stable.
      10–40, block appears once, behavior-not-work-steps, affirmative
      penalties, no test paths, fixture values, oracle outputs, root-cause hints,
      or implementation recipe.
-   - **File zip name**: the matching zip in `submissions/`.
+   - **File zip name**: the matching zip in `workspace/submissions/`.
 3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
    an editorial pass. Do not add claims, remove thresholds, or change technical
    meaning.
@@ -1086,8 +1086,10 @@ Zip task contents, not the containing folder:
 cd tbrain-<problem-slug>
 find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' -o -name '.ruff_cache' -o -name '.pytest_cache' -o -name '.mypy_cache' \) -print
 TASK_NAME="$(basename "$PWD")"
-mkdir -p ../submissions
-zip -rX "../submissions/${TASK_NAME}.zip" instruction.md task.toml environment solution tests \
+REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
+ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
+mkdir -p "${REPO_ROOT}/workspace/submissions"
+zip -rX "$ZIP_PATH" instruction.md task.toml environment solution tests \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc'
 ```
 
