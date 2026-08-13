@@ -445,8 +445,9 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
     )
 
     nonempty_lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+    secure_log_setup = "install -d -m 700 /logs/verifier"
     try:
-        mkdir_index = nonempty_lines.index("mkdir -p /logs/verifier")
+        mkdir_index = nonempty_lines.index(secure_log_setup)
     except ValueError:
         default_reward_ok = False
     else:
@@ -461,7 +462,7 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             (
                 "default reward is initialized before risky verifier work"
                 if default_reward_ok
-                else "echo 0 must immediately follow mkdir -p /logs/verifier"
+                else "install -d -m 700 must create /logs/verifier and echo 0 must immediately follow"
             ),
         )
     )

@@ -39,7 +39,8 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 > `_hide_corpus`/`nobody`-candidate/`_find_exec_base`/build-exit-check
 > helpers, per-case parametrize) pre-wired — fill its TODOs instead of
 > re-deriving the boilerplate. `scripts/preflight.sh <task-dir> --strict
-> --report-json workspace/reports/<slug>/preflight.json` then runs
+> --report-json workspace/reports/<slug>/preflight.json --evidence-dir
+> workspace/reports/<slug>/preflight-logs` then runs
 > every mechanical gate (layout, .dockerignore, Dockerfile, task.toml, leak
 > sweep, zip arcnames, rubric format, docker oracle=1/nop=0, and the
 > oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
@@ -125,6 +126,10 @@ Explain why the engineering problem itself is difficult:
 - identify the interacting subsystems, invariants, state transitions, numerical
   constraints, compatibility paths, or project layers involved
 - describe the natural partial fix and the legitimate behavior it misses
+- identify the origin and realism of any corpus, capture, trace, fixture set,
+  dataset, or other accompanying data; explicitly say when no such data exists
+- name the professional role that would perform this work (for example a
+  systems engineer, maintainer, analyst, operator, or researcher)
 - use semantic local/Harbor solve failures as evidence when available
 - distinguish genuine reasoning difficulty from instruction ambiguity,
   verifier defects, dependency failures, cold builds, or timeouts
@@ -526,6 +531,20 @@ Tests must:
   float-repr gap), then sorted-key / key-ordering is ungraded — drop that
   requirement from the prompt/rubric/format-doc rather than leaving a
   never-checked clause (HOCON 2026-07).
+- Protect the reward channel before any candidate code runs: create
+  `/logs/verifier` with mode `0700`; merely creating it with the default mode is
+  insufficient because a demoted candidate can still read or alter reward/CTRF
+  state through surviving descendants.
+- Execute every untrusted candidate in a fresh process group/session. On timeout
+  and after normal completion, kill and reap the whole group so forked children
+  cannot keep capture pipes open, survive into later cases, or touch verifier
+  state. A direct `subprocess.run(..., capture_output=True, timeout=...)` without
+  descendant cleanup is not acceptable isolation.
+- Treat every promise in `instruction.md` and agent-visible contract documents
+  as graded unless the sufficiency manifest explicitly records it as ungraded.
+  In particular, an output-write failure promise needs a sentinel-preservation
+  test, and a serialized key-order promise needs a raw-order assertion rather
+  than parsed dictionary equality.
 
 Avoid quality-check failures:
 
@@ -562,8 +581,9 @@ Use this shape:
 #!/bin/bash
 set -uo pipefail
 
-mkdir -p /logs/verifier
-python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+install -d -m 700 /logs/verifier
+echo 0 > /logs/verifier/reward.txt
+python3 -I -m pytest -p no:cacheprovider --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
 rc=$?
 if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt

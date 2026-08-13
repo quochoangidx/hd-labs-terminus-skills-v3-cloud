@@ -4,12 +4,13 @@
 # can run, so returns for mechanical defects stop happening.
 #
 # Usage: scripts/preflight.sh <task-dir> [--no-docker] [--strict]
-#        [--report-json <path>] [--emit-zip <path>]
+#        [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]
 #   <task-dir>   folder containing task.toml, instruction.md, environment/,
 #                solution/, tests/
 #   --no-docker  skip the docker build + oracle/nop + noexec-/tmp reruns
 #   --strict     promote every WARN to FAIL (required for batch handover)
 #   --report-json write a machine-readable evidence report
+#   --evidence-dir retain raw build, solve, verifier, CTRF, and reward artifacts
 #   --emit-zip   write the submission zip only after every check passes
 #
 # Exit 0 = no FAIL rows (WARNs allowed). Docker checks need a running daemon.
@@ -19,9 +20,10 @@ TASK_DIR=""
 NO_DOCKER=0
 STRICT=0
 REPORT_JSON=""
+EVIDENCE_DIR=""
 EMIT_ZIP=""
 usage() {
-  echo "usage: preflight.sh <task-dir> [--no-docker] [--strict] [--report-json <path>] [--emit-zip <path>]"
+  echo "usage: preflight.sh <task-dir> [--no-docker] [--strict] [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]"
 }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -29,6 +31,7 @@ while [ $# -gt 0 ]; do
     --no-docker) NO_DOCKER=1 ;;
     --strict) STRICT=1 ;;
     --report-json) shift; REPORT_JSON="${1:?--report-json needs a path}" ;;
+    --evidence-dir) shift; EVIDENCE_DIR="${1:?--evidence-dir needs a path}" ;;
     --emit-zip) shift; EMIT_ZIP="${1:?--emit-zip needs a path}" ;;
     --*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     *)
@@ -42,6 +45,18 @@ done
 TASK_DIR="$(cd "$TASK_DIR" && pwd)" || exit 2
 SLUG="$(basename "$TASK_DIR")"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -n "$EVIDENCE_DIR" ]; then
+  mkdir -p "$EVIDENCE_DIR"
+  EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
+  for evidence_name in \
+    docker-agent-build.log docker-verifier-build.log \
+    oracle-solve.log oracle-verifier.log oracle-ctrf.json oracle-reward.txt \
+    nop-verifier.log nop-ctrf.json nop-reward.txt \
+    oracle-noexec-solve.log oracle-noexec-verifier.log \
+    oracle-noexec-ctrf.json oracle-noexec-reward.txt; do
+    rm -f "$EVIDENCE_DIR/$evidence_name"
+  done
+fi
 REPORT_ROWS="$(mktemp)"
 trap 'rm -f "$REPORT_ROWS"' EXIT
 
@@ -182,6 +197,17 @@ CRLF="$(echo "$PYOUT" | sed -n 's/^CRLF://p')"; COUNT="$(echo "$PYOUT" | sed -n 
 [ "$CRLF" = "none" ] && report PASS "zip:crlf" "clean" || report FAIL "zip:crlf" "CRLF in: $CRLF (breaks git apply)"
 [ -n "$EMIT_ZIP" ] && echo "  zip staged pending all checks: $ZIP_OUT"
 
+# 7b. Reward-channel permission is part of verifier isolation, not cosmetic.
+TEST_SH="$TASK_DIR/tests/test.sh"
+if [ -f "$TEST_SH" ]; then
+  if grep -Eq '^[[:space:]]*install[[:space:]]+-d[[:space:]]+-m[[:space:]]+0?700[[:space:]]+/logs/verifier[[:space:]]*$' "$TEST_SH" \
+    || { grep -q '^mkdir -p /logs/verifier$' "$TEST_SH" && grep -Eq '^[[:space:]]*chmod[[:space:]]+0?700[[:space:]]+/logs/verifier[[:space:]]*$' "$TEST_SH"; }; then
+    report PASS "verifier:reward-dir-mode" "/logs/verifier is created with mode 0700"
+  else
+    report FAIL "verifier:reward-dir-mode" "create /logs/verifier with mode 0700 before reward/CTRF or candidate code"
+  fi
+fi
+
 # 8. Rubric format (submissions/SUBMISSION-<slug>.md, if present)
 SUB_MD="$(dirname "$TASK_DIR")/../submissions/SUBMISSION-$SLUG.md"
 [ -f "$SUB_MD" ] || SUB_MD="$TASK_DIR/../submissions/SUBMISSION-$SLUG.md"
@@ -230,6 +256,24 @@ fi
 # 9. Docker: build both images, solve in the agent image, transfer only declared
 # artifacts, then run the separate verifier image.
 if [ "$NO_DOCKER" -eq 0 ]; then
+  if python3 - <<'PYEOF'
+import subprocess
+import sys
+
+try:
+    result = subprocess.run(
+        ["docker", "info"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=15,
+        check=False,
+    )
+except (OSError, subprocess.TimeoutExpired):
+    sys.exit(1)
+sys.exit(0 if result.returncode == 0 else 1)
+PYEOF
+  then
+    report PASS "docker:daemon" "Docker daemon responded within 15 seconds"
   AGENT_IMG="preflight-agent-$SLUG"
   VERIFIER_IMG="preflight-verifier-$SLUG"
   ARTIFACT_LIST="$(python3 - "$TT" <<'PYEOF'
@@ -245,21 +289,24 @@ task = tomllib.load(open(sys.argv[1], "rb"))
 print(task.get("environment", {}).get("network_mode", "public"))
 PYEOF
 )"
-  if docker build -q -t "$AGENT_IMG" "$TASK_DIR/environment" >/dev/null 2>&1; then
+  AGENT_BUILD_LOG="${EVIDENCE_DIR:-$(mktemp -d)}/docker-agent-build.log"
+  VERIFIER_BUILD_LOG="${EVIDENCE_DIR:-$(mktemp -d)}/docker-verifier-build.log"
+  if docker build -q -t "$AGENT_IMG" "$TASK_DIR/environment" >"$AGENT_BUILD_LOG" 2>&1; then
     report PASS "docker:agent-build" "$AGENT_IMG"
   else
-    report FAIL "docker:agent-build" "agent image build failed (run manually for the log)"
+    report FAIL "docker:agent-build" "agent image build failed; log=$AGENT_BUILD_LOG: $(tail -n 4 "$AGENT_BUILD_LOG" | tr '\n' ' ')"
   fi
-  if docker build -q -t "$VERIFIER_IMG" "$TASK_DIR/tests" >/dev/null 2>&1; then
+  if docker build -q -t "$VERIFIER_IMG" "$TASK_DIR/tests" >"$VERIFIER_BUILD_LOG" 2>&1; then
     report PASS "docker:verifier-build" "$VERIFIER_IMG"
   else
-    report FAIL "docker:verifier-build" "verifier image build failed (run manually for the log)"
+    report FAIL "docker:verifier-build" "verifier image build failed; log=$VERIFIER_BUILD_LOG: $(tail -n 4 "$VERIFIER_BUILD_LOG" | tr '\n' ' ')"
   fi
 
   if docker image inspect "$AGENT_IMG" >/dev/null 2>&1 && docker image inspect "$VERIFIER_IMG" >/dev/null 2>&1; then
-    run_reward() { # run_reward <solve:0|1> <noexec:0|1>
-      DO_SOLVE="$1"
-      USE_NOEXEC="$2"
+    run_reward() { # run_reward <label> <solve:0|1> <noexec:0|1>
+      LABEL="$1"
+      DO_SOLVE="$2"
+      USE_NOEXEC="$3"
       STAGE_DIR="$(mktemp -d)"
       AGENT_ARGS=(--mount "type=bind,src=$TASK_DIR/solution,dst=/solution,readonly")
       # Keep this non-empty: macOS ships Bash 3.2, where expanding an empty
@@ -273,7 +320,8 @@ PYEOF
       AGENT_C="$(docker create "${AGENT_ARGS[@]}" "$AGENT_IMG" sleep infinity)" || { rm -rf "$STAGE_DIR"; return 1; }
       docker start "$AGENT_C" >/dev/null || { docker rm -f "$AGENT_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; }
       if [ "$DO_SOLVE" -eq 1 ]; then
-        docker exec "$AGENT_C" bash /solution/solve.sh >/dev/null 2>&1 || { docker rm -f "$AGENT_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; }
+        SOLVE_LOG="${EVIDENCE_DIR:-$STAGE_DIR}/$LABEL-solve.log"
+        docker exec "$AGENT_C" bash /solution/solve.sh >"$SOLVE_LOG" 2>&1 || { docker rm -f "$AGENT_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; }
       fi
       while IFS= read -r artifact; do
         [ -n "$artifact" ] || continue
@@ -291,7 +339,7 @@ $ARTIFACT_LIST
 EOF
       docker rm -f "$AGENT_C" >/dev/null 2>&1
 
-      VERIFIER_C="$(docker create "${VERIFIER_ARGS[@]}" "$VERIFIER_IMG" bash -lc 'mkdir -p /logs/verifier; cd /tests; bash test.sh >/dev/null 2>&1 || true; cat /logs/verifier/reward.txt')" || { rm -rf "$STAGE_DIR"; return 1; }
+      VERIFIER_C="$(docker create "${VERIFIER_ARGS[@]}" "$VERIFIER_IMG" bash -lc 'install -d -m 700 /logs/verifier; cd /tests; bash test.sh > /logs/verifier/test-output.log 2>&1 || true; cat /logs/verifier/reward.txt')" || { rm -rf "$STAGE_DIR"; return 1; }
       while IFS= read -r artifact; do
         [ -n "$artifact" ] || continue
         case "$artifact" in
@@ -302,17 +350,25 @@ EOF
 $ARTIFACT_LIST
 EOF
       RESULT="$(docker start -a "$VERIFIER_C" 2>/dev/null)"
+      if [ -n "$EVIDENCE_DIR" ]; then
+        docker cp "$VERIFIER_C:/logs/verifier/test-output.log" "$EVIDENCE_DIR/$LABEL-verifier.log" >/dev/null 2>&1 || true
+        docker cp "$VERIFIER_C:/logs/verifier/ctrf.json" "$EVIDENCE_DIR/$LABEL-ctrf.json" >/dev/null 2>&1 || true
+        docker cp "$VERIFIER_C:/logs/verifier/reward.txt" "$EVIDENCE_DIR/$LABEL-reward.txt" >/dev/null 2>&1 || true
+      fi
       docker rm "$VERIFIER_C" >/dev/null 2>&1
       rm -rf "$STAGE_DIR"
       printf '%s' "$RESULT"
     }
 
-    R_ORACLE="$(run_reward 1 0 || echo ERR)"
+    R_ORACLE="$(run_reward oracle 1 0 || echo ERR)"
     [ "$R_ORACLE" = "1" ] && report PASS "docker:oracle" "separate-verifier reward 1" || report FAIL "docker:oracle" "reward '$R_ORACLE' (expected 1)"
-    R_NOP="$(run_reward 0 0 || echo ERR)"
+    R_NOP="$(run_reward nop 0 0 || echo ERR)"
     [ "$R_NOP" = "0" ] && report PASS "docker:nop" "separate-verifier reward 0" || report FAIL "docker:nop" "reward '$R_NOP' (expected 0)"
-    R_NOEXEC="$(run_reward 1 1 || echo ERR)"
+    R_NOEXEC="$(run_reward oracle-noexec 1 1 || echo ERR)"
     [ "$R_NOEXEC" = "1" ] && report PASS "docker:noexec-tmp" "oracle reward 1 under noexec /tmp" || report FAIL "docker:noexec-tmp" "reward '$R_NOEXEC' — executable staged under bare /tmp?"
+  fi
+  else
+    report FAIL "docker:daemon" "Docker daemon did not respond within 15 seconds"
   fi
 else
   report WARN "docker" "skipped (--no-docker)"
@@ -321,12 +377,13 @@ fi
 echo "----"
 if [ -n "$REPORT_JSON" ]; then
   mkdir -p "$(dirname "$REPORT_JSON")"
-  python3 - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" <<'PYEOF'
+  python3 - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" "$EVIDENCE_DIR" <<'PYEOF'
 import hashlib
 import json
 import sys
+from pathlib import Path
 
-slug, strict, fails, rows_path, output_path, zip_path = sys.argv[1:]
+slug, strict, fails, rows_path, output_path, zip_path, evidence_dir = sys.argv[1:]
 checks = []
 with open(rows_path) as rows:
     for line in rows:
@@ -339,7 +396,16 @@ payload = {
     "fail_count": int(fails),
     "artifact_sha256": hashlib.sha256(open(zip_path, "rb").read()).hexdigest(),
     "checks": checks,
+    "evidence_files": {},
 }
+if evidence_dir:
+    for path in sorted(Path(evidence_dir).iterdir()):
+        if path.is_file():
+            payload["evidence_files"][path.name] = {
+                "path": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "size": path.stat().st_size,
+            }
 with open(output_path, "w") as output:
     json.dump(payload, output, indent=2, sort_keys=True)
     output.write("\n")
@@ -355,4 +421,5 @@ if [ -n "$EMIT_ZIP" ]; then
   cp "$ZIP_OUT" "$EMIT_ZIP"
   echo "  zip written: $EMIT_ZIP"
 fi
+[ -n "$EVIDENCE_DIR" ] && echo "  evidence written: $EVIDENCE_DIR"
 echo "RESULT: all checks passed."

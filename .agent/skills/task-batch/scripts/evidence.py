@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Create hash-bound receipts used by the task-batch handover gate."""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+
+def load_handover():
+    repo_root = Path(__file__).resolve().parents[4]
+    path = repo_root / "scripts" / "batch-handover.py"
+    spec = importlib.util.spec_from_file_location("batch_handover", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def style_receipt(args: argparse.Namespace) -> int:
+    handover = load_handover()
+    task_dir = args.task_dir.resolve()
+    submission = args.submission.resolve()
+    transcript = args.transcript.resolve()
+    output = args.output.resolve()
+    if not task_dir.is_dir():
+        raise SystemExit(f"task folder not found: {task_dir}")
+    for path, label in ((submission, "submission"), (transcript, "transcript")):
+        if not path.is_file() or path.stat().st_size == 0:
+            raise SystemExit(f"{label} missing or empty: {path}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        transcript_rel = transcript.relative_to(output.parent)
+    except ValueError as exc:
+        raise SystemExit("transcript must be stored beside or below the report directory") from exc
+    surfaces = [
+        {"path": path, "sha256": digest, "status": "verified"}
+        for path, digest in sorted(handover.style_surface_hashes(task_dir).items())
+    ]
+    payload = {
+        "schema_version": 1,
+        "task_slug": task_dir.name,
+        "status": "pass",
+        "task_snapshot_sha256": handover.tree_hash(task_dir, sanitized=False),
+        "submission_sha256": handover.sha256(submission),
+        "auditor": {
+            "runtime": args.runtime,
+            "model": args.model,
+            "session_id": args.session_id,
+            "transcript": transcript_rel.as_posix(),
+            "transcript_sha256": handover.sha256(transcript),
+        },
+        "surfaces": surfaces,
+        "deleted_as_leak": [],
+    }
+    output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"WROTE: {output} ({len(surfaces)} hash-bound surfaces)")
+    return 0
+
+
+def hash_task(args: argparse.Namespace) -> int:
+    handover = load_handover()
+    print(handover.tree_hash(args.task_dir.resolve(), sanitized=False))
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    hash_parser = sub.add_parser("hash-task")
+    hash_parser.add_argument("task_dir", type=Path)
+    hash_parser.set_defaults(func=hash_task)
+
+    style_parser = sub.add_parser("style-receipt")
+    style_parser.add_argument("task_dir", type=Path)
+    style_parser.add_argument("--submission", type=Path, required=True)
+    style_parser.add_argument("--transcript", type=Path, required=True)
+    style_parser.add_argument("--runtime", required=True)
+    style_parser.add_argument("--model", required=True)
+    style_parser.add_argument("--session-id", required=True)
+    style_parser.add_argument("--output", type=Path, required=True)
+    style_parser.set_defaults(func=style_receipt)
+
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

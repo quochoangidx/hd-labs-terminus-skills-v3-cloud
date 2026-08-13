@@ -25,6 +25,23 @@ from the repo root.)
 
 Use `--json` when another script will consume the result.
 
+For `task-batch`, preserve the manual semantic-review transcript and write a
+hash-bound combined receipt for the exact final ZIP:
+
+```bash
+python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+  submissions/<slug>.zip --json --manual-review-pass \
+  --review-transcript workspace/reports/<slug>/client-review-transcript.md \
+  --review-runtime <actual-runtime> --review-model <actual-model> \
+  --review-session-id <actual-session-id> \
+  --evidence-output workspace/reports/<slug>/client-review.json
+```
+
+Use `--manual-review-pass` only after completing the manual checks below and
+recording their real findings and disposition in the transcript. The batch
+handover rejects a missing, empty, out-of-directory, or hash-mismatched
+transcript.
+
 For a task that was already in the platform revision queue or awaiting review
 before its category closed, pass `--revision-exception`. Never use this flag for
 a net-new task; category availability remains a blocker by default.
@@ -144,7 +161,9 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
    - **Difficulty Explanation:** names intrinsic technical interactions and a
      plausible partial-fix trap; does not use repository size, test count,
      timeout rate, cold builds, instruction ambiguity, or verifier defects as
-     evidence of difficulty.
+     evidence of difficulty. It also names the origin/realism of accompanying
+     data (or explicitly says there is none) and the professional role that
+     would normally perform the work.
    - **Solution Explanation:** matches the oracle and root cause at a high
      level; does not paste the patch, invent extra work, or leak back into
      `instruction.md`, environment docs, or rubrics.
@@ -200,6 +219,11 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
   rename to "binary"/"program"/"the checks" to dodge it
 - canary strings (`CANARY-*`)
 - `/logs/verifier` not prepared before pytest runs in `tests/test.sh`
+- `/logs/verifier` created without mode `0700` before reward/CTRF creation or
+  before candidate execution; existence alone does not isolate the reward channel
+- candidate subprocesses run without a fresh process group/session and without
+  whole-group kill+reap on timeout and teardown. Dropping only the direct child
+  to `nobody` does not stop descendants from holding pipes or surviving cases
 - `environment/data` used as an oversized prompt/spec extension
 - hidden solution walkthroughs or bug hints in environment docs/comments
 - missing `tmux`/`asciinema` in the task image (agent runs fail with
@@ -249,6 +273,10 @@ submissions/SUBMISSION-<task-slug>.md                             (UI-ready plat
   ordering) while `test_outputs.py` compares PARSED values (order-independent,
   often to tolerate a float-repr gap). Drop the ungraded requirement from
   prompt/rubric/format-doc, or switch to a canonical-byte assertion.
+- an output-write failure promise without a discriminating preservation test:
+  pre-create a root-owned sentinel destination that the demoted candidate cannot
+  write, then assert exit 1, non-empty stderr, and byte-identical contents; also
+  cover the no-preexisting-file branch when the contract promises no creation
 - `difficulty` in `task.toml` not matching the measured Terminus 3 tier:
   Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%, averaged across
   both current reference models. A 100% iteration result cannot proceed.

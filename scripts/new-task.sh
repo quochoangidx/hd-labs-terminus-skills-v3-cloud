@@ -160,6 +160,7 @@ cat > "$TASK_DIR/tests/test_outputs.py" <<'EOF'
 keep them wired even after replacing the TODO test bodies."""
 import json
 import os
+import signal
 import shutil
 import subprocess
 import tempfile
@@ -202,6 +203,43 @@ def _candidate_user_kwargs():
     return {}
 
 
+def _kill_process_group(proc):
+    """Kill and reap the candidate plus every descendant it left behind."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+
+
+def _run_candidate(argv, *, input_text=None, cwd=None, timeout=30):
+    """Run untrusted candidate code in its own disposable process group."""
+    proc = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        stdin=subprocess.PIPE if input_text is not None else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+        **_candidate_user_kwargs(),
+    )
+    try:
+        stdout, stderr = proc.communicate(input=input_text, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_process_group(proc)
+        raise
+    finally:
+        # communicate() can return after the direct child exits while a detached
+        # descendant remains alive. The group still belongs to this one run.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait()
+    return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)
+
+
 def _hide_corpus():
     """Unlink the expected-value corpus before any candidate code runs; the
     values live in memory already. Silently no-ops off-platform."""
@@ -241,14 +279,10 @@ def built_binary():
 def test_case(built_binary, case):
     """Per-case parametrized (never one monolithic all-N test — a single
     correlated blind spot would turn the whole suite 0/N)."""
-    r = subprocess.run(
+    r = _run_candidate(
         [built_binary],
-        input=json.dumps(case["input"]),
-        capture_output=True,
-        text=True,
+        input_text=json.dumps(case["input"]),
         timeout=30,
-        check=False,
-        **_candidate_user_kwargs(),
     )
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout) == case["expected"]
