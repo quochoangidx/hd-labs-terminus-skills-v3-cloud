@@ -10,7 +10,7 @@ All Terminal-Bench task images must be:
 | **Cacheable** | Common layers are shared across tasks |
 | **Lazy-pull friendly** | Startup-critical files are accessible without pulling the full image |
 | **Auditable** | Images are digest-pinned, signed, labeled, and free of any secrets |
-| **Complete** | Images contain all required dependencies — tasks run without network access by default (`allow_internet = false`); set `allow_internet = true` only when the task genuinely requires internet |
+| **Complete** | Images contain all required dependencies — tasks must not depend on fetching dependencies at run time. `network_mode = "public"` is the default; use `"no-network"` only when the task should run offline |
 | **Siloed** | The image must not leak task solutions or tests |
 | **Resourced** | Tasks must define CPU, memory, and storage needs in `task.toml` |
 
@@ -83,7 +83,7 @@ Tasks **may** use a base image not on this list if there's a genuine reason — 
 | Base image used | Justification | Outcome |
 |---|---|---|
 | Canonical (from the tables above) | Not required | ✅ Passes |
-| Non-canonical | Present and credible (in `Dockerfile` comment or task `README.md`) | ✅ Passes; surfaced to reviewers for judgment |
+| Non-canonical | Present and credible (as a `Dockerfile` comment) | ✅ Passes; surfaced to reviewers for judgment |
 | Non-canonical | Empty / missing / boilerplate | ❌ Blocked |
 
 Examples of acceptable justifications:
@@ -243,25 +243,26 @@ WORKDIR /app
 
 ## 7. Images Must Contain All Dependencies
 
-By default, tasks must operate correctly without network access during the agent run and verifier step (`allow_internet = false`). The requirements below apply to these offline tasks — the large majority. Tasks that **genuinely** require internet may set `allow_internet = true`; see the **Internet access** section below.
+Images must contain everything the task needs at build time, regardless of `network_mode`. Even with `network_mode = "public"` (the default), the verifier must not fetch dependencies at trial time — network access is for the task's own work, not for installing tooling. The requirements below apply in full to tasks that run offline.
 
-**Requirements (for `allow_internet = false` tasks):**
-- `tmux` and `asciinema` **must** be installed — the agent runtime requires both to start a session. Missing either will cause all agent runs to fail with no verifier output.
+**Requirements:**
+- `tmux` and `asciinema` **must** be installed — the agent runtime requires both to start a session. Missing them breaks tasks that run without network access, since nothing can fetch them at runtime; a task with network access may still obtain them and appear to work. Install them explicitly either way.
 - All package downloads happen at image build time
 - `test.sh` must not use `curl`, `wget`, `pip install`, `npm install`, `cargo fetch`, `mvn dependency:get`, or similar networked operations
 - Python wheels, npm packages, Maven artifacts, Cargo registry state, reference binaries, and fixtures must be preloaded during build
-- `task.toml` sets `allow_internet = false` (the default; see the **Internet access** section for when `true` is appropriate)
-- The Oracle agent must pass with network access disabled
+- For `network_mode = "no-network"` tasks, the Oracle agent must pass with network access disabled
 - Agents must be able to complete the task without any missing assets or dependencies
 
-### Internet access (`allow_internet`)
+### Internet access (`network_mode`)
 
-Both `allow_internet = false` and `allow_internet = true` are allowed — the setting **must accurately match what the task genuinely needs.**
+Both values are allowed, and the setting **must accurately match what the task genuinely needs.**
 
-- **`allow_internet = false` (default, most tasks):** the task must be fully solvable offline with the provided files, docs, dependencies, and environment. All dependencies are baked into the image and `test.sh` must not fetch from the network at runtime (the requirements above).
-- **`allow_internet = true`:** use **only when the task genuinely requires** internet to complete — for example, retrieving current or external information, interacting with web-based resources, or downloading an external model/resource that cannot reasonably be bundled into the task (e.g., pulling a model from HuggingFace). The need should be clear and grounded in the task design.
+- **`network_mode = "public"` — the default.** Use this unless you have a specific reason not to. Most tasks either benefit from network access or are unaffected by it.
+- **`network_mode = "no-network"`** — use **only when the task does not make sense to complete with internet access**, for example when network access would let the agent retrieve the answer directly rather than do the work.
 
-Do not set `allow_internet = true` for convenience, or to make a task appear more complex. An eval checks whether internet is actually required, so tasks marked `true` without a genuine need may be rejected. If the task can be completed offline — even if internet access would be convenient — keep it `false`.
+If you are unsure which applies, use `"public"`.
+
+Independently of this setting, all of your task's own dependencies must still be baked into the image at build time, and `test.sh` must never fetch from the network at trial time. `"public"` exists for the task's work — not as a substitute for a complete image.
 
 ---
 
@@ -427,10 +428,10 @@ memory_mb = 2048
 storage_mb = 10240
 gpus = 0
 gpu_types = []
-allow_internet = false  # default — set true only if the task genuinely requires internet (see Internet access above)
+network_mode = "public"     # default; use "no-network" only if the task should run offline
 ```
 
-**Note — `gpus`, `gpu_types`, and `docker_flags` are optional.** These are valid Harbor resource fields, not requirements. TB2 tasks should not require GPU, so `gpus` and `gpu_types` may be omitted or left blank — a task is equally valid with or without them. `gpu_types` only matters when a task actually requests GPUs (`gpus > 0`); for a typical non-GPU task, `gpu_types = []` adds nothing. The minimal form below is just as acceptable as the full block above:
+**Note — `gpus`, `gpu_types`, and `docker_flags` are optional.** These are valid Harbor resource fields, not requirements. Terminus 3 tasks must not require GPU, so `gpus` and `gpu_types` may be omitted or left blank — a task is equally valid with or without them. `gpu_types` only matters when a task actually requests GPUs (`gpus > 0`); for a typical non-GPU task, `gpu_types = []` adds nothing. The minimal form below is just as acceptable as the full block above:
 
 ```toml
 [environment]
@@ -438,7 +439,7 @@ build_timeout_sec = 600.0
 cpus = 1
 memory_mb = 2048
 storage_mb = 10240
-allow_internet = false  # default — set true only if the task genuinely requires internet (see Internet access above)
+network_mode = "public"     # default; use "no-network" only if the task should run offline
 ```
 
 ---

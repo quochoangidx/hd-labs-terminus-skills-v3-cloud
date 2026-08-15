@@ -1,14 +1,14 @@
-# Terminus 2nd Edition — Frequently Asked Questions
+# Terminus 3 — Frequently Asked Questions
 
-*Last updated: July 27, 2026*
+*Last updated: August 10, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
 #### Quick Navigation
 1. [Getting Started & Onboarding](#1-getting-started--onboarding)
 2. [CLI Setup & API Keys](#2-cli-setup--api-keys)
-3. [Task Structure: Milestones & File Layout](#3-task-structure-milestones--file-layout)
-4. [Difficulty, Language & Codebase Size](#4-difficulty-language--codebase-size)
+3. [Task Structure & File Layout](#3-task-structure--file-layout)
+4. [Difficulty & Language](#4-difficulty--language)
 5. [Testing & Docker Troubleshooting](#5-testing--docker-troubleshooting)
 6. [Submissions & Reviews](#6-submissions--reviews)
 7. [Rubrics & Quality Checks](#7-rubrics--quality-checks)
@@ -21,16 +21,16 @@
 ## 1. Getting Started & Onboarding
 
 **How do I get started on this project?**
-Review the [project website](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal), then check pinned posts in #terminus-2nd-edition-submission and #terminus-2nd-edition-announcements. Once you've reviewed the materials, complete the **Terminus-2nd-Edition-Assessment** on your [Snorkel dashboard](https://experts.snorkel-ai.com/home) under "My Projects." You must score 80% or higher to advance and will receive your results with next steps via Slack DM once ready.
+Review the [project website](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal), then check pinned posts in #terminus-3-submissions and #terminus-3-announcements. Once you've reviewed the materials, complete the **Terminus-3-Prod-Assessment** on your [Snorkel dashboard](https://experts.snorkel-ai.com/home) under "My Projects." You must score 80% or higher to advance and will receive your results with next steps via Slack DM once ready.
 
 **Where do I find the assessment?**
-On your [dashboard](https://experts.snorkel-ai.com/home), look for **Terminus-2nd-Edition-Assessment** under "My Projects" (you may need to scroll or search). Click the Submissions node to begin. If you don't see it, ask in #terminus-2nd-edition-submission.
+On your [dashboard](https://experts.snorkel-ai.com/home), look for **Terminus-3-Prod-Assessment** under "My Projects" (you may need to scroll or search). Click the Submissions node to begin. If you don't see it, ask in #terminus-3-submissions.
 
 **How soon do I need to take the assessment? Are there deadlines?**
 No deadlines — take it whenever you're ready. However, the assessment has a **90-minute time limit** once started, so review the materials first.
 
 **I passed the assessment — what happens next?**
-A team member will contact you with results, typically the next business day (excluding weekends). You'll receive $25 for completing the assessment, plus an additional $25 bonus for scoring 80%+.
+A team member will contact you with results, typically the next business day (excluding weekends).
 
 **Are there training videos?**
 Yes — three videos by fellow Terminus Expert Brady Nguyen: *Understanding Terminus*, *Understanding Submissions*, and *Understanding Revisions*. Available on the [onboarding page](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/onboarding/platform-onboarding).
@@ -42,7 +42,9 @@ The **task gallery** and the **submission portal** are separate sites. The galle
 No — work on and submit multiple tasks in parallel.
 
 **How do I initialize a new task with the CLI?**
-`stb init my-task-name -p "terminus-2nd-edition" -t default`
+`stb init my-task-name -p "Terminus-3-Prod"`
+
+> **Pending:** the template flag (`-t`) is not yet documented for Terminus 3. Download the [task skeleton](/Terminus-3-Prod/default-template.zip) and rename the folder instead.
 
 ---
 
@@ -52,7 +54,7 @@ No — work on and submit multiple tasks in parallel.
 Expected if you haven't been onboarded to the main project yet. Complete and pass the assessment first, then wait for team confirmation. CLI and API keys only work after assignment.
 
 **I hit the maximum key refresh limit (20).**
-Post in #terminus-2nd-edition-submission and ask an admin to reset your key. They can delete the old key so you can regenerate, or top it up manually. You don't need to run the refresh command after an admin resets it.
+Post in #terminus-3-submissions and ask an admin to reset your key. They can delete the old key so you can regenerate, or top it up manually. You don't need to run the refresh command after an admin resets it.
 
 **`stb login` works but `stb keys refresh` fails with "Authentication failed."**
 Known intermittent issue. Try: (1) regenerate a new API key in the browser using the "Copy" button, (2) run `stb login` again, then (3) retry `stb keys refresh`. If it persists, post in Slack and tag the team.
@@ -71,92 +73,67 @@ That install method is retired — the old Harbor wheel URL no longer serves. In
 
 ---
 
-## 3. Task Structure: Milestones & File Layout
+## 3. Task Structure & File Layout
 
-> ⚠️ *This is the most common source of revision requests. Read carefully.*
+**What files does a task require?**
 
-> **Terminology note:** The Harbor framework refers to milestones as **multi-step tasks** ([Harbor docs](https://www.harborframework.com/docs/tasks/multi-step)). We use "milestones" throughout our docs; the two are interchangeable.
-
-**What files does a milestone task require?**
-
-For a task with N milestones, your zip should contain:
-
-| File(s) | What goes in it |
+| File | What goes in it |
 |---|---|
-| `task.toml` | Includes one `[[steps]]` block per milestone with `name = "milestone_N"`, `[steps.agent].timeout_sec`, and `[steps.verifier].timeout_sec`. `number_of_milestones` in `[metadata]` must equal the number of `[[steps]]` blocks. |
-| `environment/Dockerfile` | Standard Dockerfile (or `docker-compose.yaml`) — one shared environment for all milestones |
-| `steps/milestone_1/instruction.md` … `steps/milestone_N/instruction.md` | Per-milestone prompt. Milestone 1's `instruction.md` should include the overall task context the agent needs to get oriented; subsequent milestones can be shorter |
-| `steps/milestone_1/tests/test_m1.py` … `steps/milestone_N/tests/test_mN.py` | One pytest file per milestone (with a `TestMilestoneN` class) that scores only that milestone's completion |
-| `steps/milestone_1/tests/test.sh` … `steps/milestone_N/tests/test.sh` | Per-milestone test runner that produces `/logs/verifier/reward.txt` |
-| `steps/milestone_1/solution/solveN.sh` (one per milestone) | Each milestone's oracle solution, independently scoped to that milestone only |
-| `steps/milestone_1/solution/solve.sh` (one per milestone) | Thin wrapper that runs the milestone's `solveN.sh` |
-| Rubrics (via UI) | One per milestone; each needs ≥1 negative criterion, valued 10–40 pts |
+| `task.toml` | Metadata and manifest, including the `difficulty_explanation` / `solution_explanation` / `verification_explanation` / `relevant_experience` write-ups — see [Task Components](/portal/docs/understanding-tasks/task-components) |
+| `instruction.md` | The goal, kept concise — around 2 short paragraphs or 20 bullets |
+| `environment/Dockerfile` | Agent-facing environment (or `docker-compose.yaml` for multi-container) |
+| `environment/data/` | Bundled inputs |
+| `solution/solve.sh` | Oracle solution; helper scripts allowed alongside it |
+| `tests/Dockerfile` | Verifier image — built and run separately from the agent environment |
+| `tests/test.sh` | Verifier entrypoint |
+| `tests/test_outputs.py` | Python pytest tests |
+| `README.md` | Task documentation — **added by Snorkel at packaging**, not authored by you |
 
-There must be **no** root-level `instruction.md`, `tests/`, `solution/`, or `milestone_x.md` files in a milestone task. See the [Milestones page](/portal/docs/understanding-tasks/milestones) for the full layout and a copy-pasteable `task.toml` example.
+`rubrics.txt` and `README.md` also ship in the task directory, but **Snorkel adds both at packaging** — `rubrics.txt` from the rubric you generate in the platform UI, and `README.md` from the explanation fields in your `task.toml`. You don't author either.
 
-**Where do per-milestone instructions live?**
-In `steps/milestone_N/instruction.md`. The agent sees only the current milestone's instruction when working on it. Milestone 1's instruction should include any overall task context; later milestones can be shorter and describe only the new requirements.
+**Are milestone tasks still supported?**
+No. Milestone / multi-step tasks are not part of Terminus 3. Every task is a single-shot, outcome-verified problem.
 
-**I'm getting errors about missing `milestone_x.md` or `solveN.sh` at the root.**
-The old flat layout (root-level `milestone_x.md`, `solution/solve1.sh`, `tests/test_m1.py`) has been replaced by the per-milestone `steps/` directory layout. If you're seeing checks complaining about the old files, you're likely on an outdated template — re-download the milestone skeleton from the [Task Requirements](/portal/docs/understanding-tasks/task-requirements) page.
+**Where do tests run?**
+In a **separate container**, built from `tests/Dockerfile`. The agent cannot see or reach it. Set `[verifier].environment_mode = "separate"`.
 
-**What should `number_of_milestones` be for a task without milestones?**
-`0`. Setting it to `1` for a non-milestone task is incorrect.
+**How does the verifier see the agent's work?**
+Only through the paths you declare in the top-level `artifacts` array. Nothing else crosses over — and the parent directories for those paths must already exist in the verifier image. Nesting `artifacts` under `[verifier]` silently drops it.
 
-**Do new file structure requirements apply to my older submissions that came back for revision?**
-No — new guidelines apply to new submissions only. If automated checks block a revision with new-only rules, report it in Slack. Workaround: make a trivial change (add a space, capitalize a letter) and resubmit to force a fresh check instead of cached results.
-
-**Do I need `gpus`, `gpu_types`, or `docker_flags` in my `task.toml`?**
-No — they're valid but **optional** Harbor fields. Both the full `[environment]` block (with them) and the minimal block (without) are accepted, and reviewers won't send a task back for omitting or blanking them. TB2 tasks should not require GPU. See [Dockerfile Best Practices §14](/portal/docs/creating-tasks/dockerfile-best-practices).
-
-**Can I set `allow_internet = true`?**
-Yes — both settings are allowed; the setting just has to **match the task**. Use `false` (default) when the task is fully solvable offline, and `true` only when it genuinely requires internet — retrieving current/external information, interacting with web resources, or downloading a resource that can't be bundled (e.g., a HuggingFace model). An eval checks whether internet is actually required, so `true` without a real need may be rejected. See [Dockerfile Best Practices → Internet access](/portal/docs/creating-tasks/dockerfile-best-practices).
+**Do I need to write a README?**
+No. Snorkel adds `README.md` at packaging, assembled from the `difficulty_explanation`, `solution_explanation`, `verification_explanation`, and `relevant_experience` fields in your `task.toml`, along with the task's category and subcategory. Write those fields well and the README takes care of itself. Agents never see it either way.
 
 ---
 
-## 4. Difficulty, Language & Codebase Size
+## 4. Difficulty & Language
 
 ### Difficulty
 
-**What are the difficulty requirements?**
-- **Python tasks**: Must be **HARD**.
-- **Non-Python tasks** (Go, Java, TypeScript, etc.): **MEDIUM** or **HARD**.
-- **TRIVIAL** means the agent pass rate is too high — make the task harder.
+**How is difficulty determined?**
+Empirically. **Accuracy = mean pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5.** Tiers: **Frontier** < 20%, **Advanced** 20–50%, **Core** 50–80%, **Base** 80–100%. Tasks above 80% are not rejected — Base is a wanted tier, but **100% averaged across both models is not accepted**: a task every run solves gives no signal. There is no language-specific difficulty rule. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
-**What qualifies as HARD?**
-A task is HARD when accuracy is **≤ 20%** on either the **best** model OR the **worst** model (across GPT-5.5 and Claude Opus 4.8). See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for the full breakdown of Easy / Medium / Hard thresholds.
+**Why does the in-platform check run fewer trials than the final measurement?**
+Difficulty is measured in two stages. While you iterate, the platform runs **2 trials per model across both models — 4 runs total**. The full **8-run** measurement (4 per model) happens only **after a reviewer accepts your task**, and that is what sets your final tier.
 
-**Why did my difficulty check only run one model?**
-Difficulty checks run **Claude Opus 4.8 first**. If Opus 4.8 already rates your task as **HARD** (≤ 20% accuracy), the GPT-5.5 run is skipped — a HARD result from either model already settles the rating, so the second run can't change it. Results from only one model on a HARD-rated task are **expected behavior, not a bug**, and there's no need to flag it. Tasks that aren't HARD on Opus 4.8 still run against both models.
+**The tier shown while iterating is provisional.** It comes from 4 runs, not 8, so a task can shift tiers between the two. Don't treat the iteration result as final.
 
-**My task keeps coming back as TRIVIAL. What types of tasks pass as HARD?**
-Complex multi-step debugging, nuanced edge cases, larger codebases, and workflows requiring discovery across multiple files. Single-bug or template-based tasks tend to be flagged as too easy.
+**My task passed every run in the platform check. Why can't I submit it?**
+At least one of the 4 iteration runs must fail. A task that every run solves produces no signal about agent capability, so it can't proceed to review. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty.
 
-**My non-Python task (e.g., Go) is being flagged as "Python requires HARD."**
+**My task keeps coming back too easy. What makes a task land in the harder tiers?**
+Requirements the agent must infer rather than read off a checklist, outputs judged on semantics rather than appearance, and several correctness axes that interact. Single-bug or template-based tasks tend to land in Core or Base. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
+
+**My non-Python task (e.g., Go) is being classified as a Python task.**
 All verifier tests are written in Python pytest, but Python test infrastructure alone should not be listed in `task.toml` `languages`. The `languages` field should describe the main task/oracle/agent work. Remove Python from `languages` if it is present only because of `tests/test_outputs.py`.
-
-### Codebase Size
-
-**What is `codebase_size` and how is it determined?**
-Based on file count in `environment/` (excluding Dockerfile and docker-compose). It describes the starting environment, not what the agent generates:
-
-| Value | File count | Notes |
-|---|---|---|
-| `minimal` | 0–19 | Allowed |
-| `small` | 20+ | |
-| `large` | 200+ | |
-
-Values are **case-sensitive** in `task.toml` — use `"small"`, not `"Small"`.
-
-**How do I get to 20+ files for a "small" codebase?**
-Use files from public open-source repos to build a realistic project environment. Files don't all need to be touched by the task, but they shouldn't be blank filler — they should make the project feel real. The team is also working on sourcing repos to simplify this.
 
 ### Timeouts & Concurrency
 
-**What is the agent timeout limit?**
-**1800 seconds** (30 minutes). Agents failing due to timeout contribute to difficulty.
+**What is the agent timeout?**
+`[agent].timeout_sec` has a **minimum of 1800 seconds (30 minutes)** and a ceiling of 18000 seconds (5 hours). Most Terminus 3 tasks sit in the 60–90 minute range.
 
-**Can I run concurrent agent tests (GPT-5.5 and Opus at the same time)?**
+> **Changed from Terminus 2nd Edition,** where 1800 seconds was the *maximum*.
+
+**Can I run concurrent agent tests (GPT-5.6 and Opus at the same time)?**
 It's possible, but **not encouraged** — expect API errors and much faster key exhaustion. Run one model's tests to completion before starting the other. See [Using Your API Key Efficiently](/portal/docs/cli-user-guide#using-your-api-key-efficiently) in the CLI User Guide for tips on stretching your key budget.
 
 ### Category Status
@@ -165,7 +142,7 @@ It's possible, but **not encouraged** — expect API errors and much faster key 
 Yes. **As of Jul 30, 2026, submissions are open across every category** for the final push — the Jul 27 pause has been lifted.
 
 **Which categories are currently blocked?**
-None. All nine categories are open until further notice, including `debugging`, `software-engineering`, and `data-processing`, which had been paused earlier. **New milestone tasks remain blocked** (since Jun 29, 2026) regardless of category. Check the [Task Category Status](/portal/category-status) page for the live list.
+None. All seven Terminus 3 categories — `Science`, `Software`, `ML`, `Operations`, `Security`, `Hardware`, `Media` — are open. Milestone tasks are not part of Terminus 3 at all. Check the [Task Category Status](/portal/category-status) page for the live list.
 
 **Should I still work my revision queue?**
 Yes. Revisions continue as normal, and clearing your Revision Queue is still the most direct path to getting existing submissions to **Accepted**.
@@ -181,30 +158,30 @@ Yes. Revisions continue as normal, and clearing your Revision Queue is still the
 **What’s the difference between a task being “solvable” and the agent “passing a run”?**
 
 - **Passing a run** means a single agent run where **all** unit tests pass.
-- **Solvable** (for the benchmark / CI) means that **across 10 agent runs**, **each** individual unit test passes **at least once** (not necessarily in the same run). A task can have **no** run where every test passes and still be solvable—the model may only satisfy different parts of the task on different runs. **Unsolvable** means at least one test never passes in any of those 10 runs.
+- **Solvable** (for the benchmark / CI) means that **across all agent runs**, **each** individual unit test passes **at least once** (not necessarily in the same run). A task can have **no** run where every test passes and still be solvable—the model may only satisfy different parts of the task on different runs. **Unsolvable** means at least one test never passes in any of those runs.
 
 To replicate this locally with `-k 10`:
 
 ```bash
-stb harbor run -m @openai/gpt-5.5 -p ./task -k 10
-stb harbor run -m @anthropic/claude-opus-4-8 -p ./task -k 10
+stb harbor run -m @openai/gpt-5.6 -p ./task -k 10
+stb harbor run -m @anthropic/claude-opus-5 -p ./task -k 10
 ```
 
 **What are the correct model strings?**
 | Model | String | Common mistakes |
 |---|---|---|
-| GPT | `@openai/gpt-5.5` | `gpt-5-5`, `@openai-tbench/gpt-5-5` |
-| Claude Opus | `@anthropic/claude-opus-4-8` | `claude-opus-4.8` (dot instead of hyphen) |
+| GPT | `@openai/gpt-5.6` | `gpt-5.6` (missing `@openai/`), `gpt-5-6`, `@openai-tbench/gpt-5-6` |
+| Claude Opus | `@anthropic/claude-opus-5` | — |
 
-If you see `INVALID_MODEL_NOT_ALLOWED`, double-check your model string.
+Keep the `@provider/` prefix and use the string exactly as written. If you see `INVALID_MODEL_NOT_ALLOWED`, double-check it against this table.
 
-**502 Bad Gateway or RateLimitError with Opus 4.8, but GPT-5.5 works fine.**
+**502 Bad Gateway or RateLimitError with Opus 5, but GPT-5.6 works fine.**
 Regenerate a fresh API key. If it persists, run with `--debug` and share the output in Slack.
 
 ### Common Build & Test Failures
 
 **Do tests have to be written in Python?**
-Yes. All verifier assertions must be Python pytest tests (`tests/test_outputs.py` for non-milestone tasks, or `test_mN.py` for milestone tasks). `tests/test.sh` is a bash wrapper that runs pytest and writes the reward file; it should not invoke Java, JavaScript, Go, or other language-specific test frameworks directly. For non-Python tasks, use Python pytest tests to call the relevant command, service, or output files.
+Yes. All verifier assertions must be Python pytest tests (`tests/test_outputs.py`). `tests/test.sh` is a bash wrapper that runs pytest and writes the reward file; it should not invoke Java, JavaScript, Go, or other language-specific test frameworks directly. For non-Python tasks, use Python pytest tests to call the relevant command, service, or output files.
 
 **My task passes locally but fails on the platform — `reward.txt` not found.**
 Almost always one of three causes:
@@ -222,7 +199,7 @@ If any command fails before writing `reward.txt`, the script exits. Drop `-e` an
 set -uo pipefail
 mkdir -p /logs/verifier
 
-python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_m1.py -rA && rc=0 || rc=$?
+python -m pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA && rc=0 || rc=$?
 
 if [ $rc -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
@@ -249,11 +226,13 @@ RUN apt-get update \
 Agents couldn't start (often a tmux session failure — see above). Report the task UUID in Slack.
 
 **`stb harbor check` fails with "Claude Code returned an unexpected response" or a Usage Policy error.**
-This is a **provider content refusal**, not a CLI bug and not a verdict on your task's correctness. The model running the quality check (e.g., Claude Code / GPT-5.5) flagged something in your task content as potentially violating the [Usage Policy](https://www.anthropic.com/legal/aup). The surface error is misleading — you may see `Received result: "success", but the operation was treated as a failure`, while the underlying cause is `API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy. Try rephrasing the request in a new session or change your model.` Work through these in order:
+This is a **provider content refusal**, not a CLI bug and not a verdict on your task's correctness. The model running the quality check (Claude Code / Claude Sonnet 4.6) flagged something in your task content as potentially violating the [Usage Policy](https://www.anthropic.com/legal/aup). The surface error is misleading — you may see `Received result: "success", but the operation was treated as a failure`, while the underlying cause is `API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy. Try rephrasing the request in a new session or change your model.` Work through these in order:
 1. **Re-run the check** — refusals can be intermittent; a fresh session sometimes passes.
-2. **Switch the judge model** — re-run with the other model (swap `@openai/gpt-5.5` ↔ `@anthropic/claude-opus-4-8`). A refusal on one model frequently clears on the other.
+2. **Switch the judge model** — re-run with `-m opus` or `-m claude-haiku-4-5`. A refusal on one model frequently clears on another.
 3. **Review your task content** — security/exploit/malware-adjacent framing, harmful instructions, or sensitive-looking data can trip the flag even for legitimate tasks. Where possible, frame the task in clearly legitimate, defensive/educational terms.
-4. **Escalate** — if the task is legitimately security-related (e.g., a CTF or defensive-security task) and keeps refusing on every model, post the task UUID in #terminus-2nd-edition-submission so the team can review.
+4. **Escalate** — if the task is legitimately security-related (e.g., a CTF or defensive-security task) and keeps refusing on every model, post the task UUID in #terminus-3-submissions so the team can review.
+
+This is separate from the **`refusals` trial-analysis flag**, which reports that the *agent under test* aborted on a content policy during a difficulty trial. Same word, unrelated causes — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
 ### Docker Issues
 
@@ -267,7 +246,7 @@ Run `docker network prune` to clean up stale networks.
 Some images may not be accessible on the platform. Post the exact image name and task UUID in Slack.
 
 **Which base image should I use?**
-Prefer one of the **10 canonical digest-pinned images** (Python, Node, Go, Rust, Java, Ruby, GCC, Maven, Debian, Ubuntu) listed in [Dockerfile Best Practices §2](/portal/docs/creating-tasks/dockerfile-best-practices). Non-canonical images are allowed with a brief, credible justification in the Dockerfile or task README; missing/vague justifications are blocked. Tasks whose CI passed before Jun 15, 2026 are grandfathered — reviewers shouldn't flag their base image (pinning is still required).
+Prefer one of the **10 canonical digest-pinned images** (Python, Node, Go, Rust, Java, Ruby, GCC, Maven, Debian, Ubuntu) listed in [Dockerfile Best Practices §2](/portal/docs/creating-tasks/dockerfile-best-practices). Non-canonical images are allowed with a brief, credible justification as a Dockerfile comment; missing/vague justifications are blocked. Tasks whose CI passed before Jun 15, 2026 are grandfathered — reviewers shouldn't flag their base image (pinning is still required).
 
 **Can my tests contain solution logic or hardcoded values?**
 Rigorous verifier logic is fine — running your own binary, parsing its output, golden fixtures/hashes, and spec-derived invariants are all **legitimate**. Two things to avoid: a callable function in `tests/` that maps task inputs to the complete expected artifact (end-to-end solving belongs in `solution/`), and hardcoding values the instruction says the agent must read from a config file. Hardcoded expected *results* (exact numeric/ML targets) are fine and often required. See [Writing Tests → What a Good Verifier Legitimately Does](/portal/docs/creating-tasks/writing-tests).
@@ -300,20 +279,25 @@ You can also drill into a specific submission:
 
 See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#check-submission-status) for the full set of submission commands.
 
-**What is the daily submission limit?**
-Net-new tasks are capped per day by Expert level:
+**What are the submission limits?**
 
-| Expert level | Net-new tasks per day |
-|---|---|
-| New (before 2 accepted tasks) | 2 per day |
-| Veteran (2+ accepted tasks) | 3 per day |
+You are a **new contributor** until your first task is accepted. After that you become a **regular contributor** and the higher limits apply.
 
-Only **net-new** submissions count toward this cap — **revisions do not**. Resets at **midnight UTC** (~7–8 PM EST).
+| Limit | New | Regular |
+|---|---|---|
+| Net-new submissions per day | **2** | **5** |
+| Submissions in "needs revision" | **1** | **1** |
+| Pending submissions | **2** | **10** |
 
-**What is the revision-queue limit?**
-You can have at most **10 submissions in your revision queue at once**. Once you reach 10, you're blocked from submitting any net-new tasks until you make room. To clear a task you don't intend to revise, hit **"Discard"** on it — that rejects the task and removes it from your revision queue.
+Only **net-new** submissions count toward the daily limit — **revisions do not**. Daily limits reset at **midnight UTC** (~7–8 PM EST).
 
-If you're blocked from a net-new submission while under your daily limit, check whether your revision queue is full (10) before reporting a bug.
+**What counts as a pending submission?**
+Anything not yet accepted or rejected: needs revision, pending review, and pending adjudication all count. Reaching the cap blocks new assignments until something clears.
+
+**What happens when I have a submission in "needs revision"?**
+It blocks new assignments — for new and regular contributors alike, the limit is one. Clear it before starting something new: either revise and resubmit, or hit **"Discard"**, which rejects the task and removes it.
+
+If you're blocked from a net-new submission while still under your daily limit, check both of the other two limits before reporting a bug — a submission in needs revision, or a full pending queue, will block you independently of the daily count.
 
 **My submission is auto-rejected by AutoEval even though it passes manual checks.**
 Known intermittent issue. Resubmit. If persistent, post your submission ID and failing build ID in Slack.
@@ -333,7 +317,7 @@ Yes. The skeleton download appears on the claim-success screen and stays availab
 Assessments: ~24 hours (excluding weekends). Task reviews: 1–7 business days.
 
 **My task keeps coming back with blank, incorrect, or mismatched feedback.**
-Known caching issue — reviewers may receive stale or wrong zip files. If the feedback references files, code, or features not in your submission, dispute with screenshots and escalate in #terminus-2nd-edition-submission.
+Known caching issue — reviewers may receive stale or wrong zip files. If the feedback references files, code, or features not in your submission, dispute with screenshots and escalate in #terminus-3-submissions.
 
 **I disagree with the reviewer. What should I do?**
 Use the dispute mechanism on the portal. Reference specific docs or announcements. If the reviewer keeps returning the same incorrect feedback, escalate in Slack by tagging the team.
@@ -349,8 +333,8 @@ They shouldn't be — new rules are for new submissions only. If a reviewer enfo
 
 | Requirement | Severity |
 |---|---|
-| ≥1 negative criterion per milestone rubric | **Hard requirement** — triggers revision if missing |
-| 10–40 points per milestone (max cumulative score) | **Flaggable**, but not a sole reason for revision |
+| ≥1 negative criterion per rubric | **Hard requirement** — triggers revision if missing |
+| 10–40 points (max cumulative score) | **Flaggable**, but not a sole reason for revision |
 
 **Do positive rubric scores need an explicit `+` sign?**
 Yes. Every positive score must be written `+1`/`+2`/`+3`/`+5` — a bare `3` will be sent back for revision (High severity). Negative scores use `-`. See [Rubrics → Strict Formatting Rules](/portal/docs/understanding-tasks/rubrics).
@@ -366,7 +350,7 @@ Known platform bug. Report with the task UUID in Slack.
 ## 8. Compensation & Payment
 
 **What's the pay per task?**
-See the [Rate Schedule](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/reference/rate-schedule). Base rate + bonuses for codebase size, milestones, and non-Python/non-Bash languages.
+See the [Rate Schedule](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/reference/rate-schedule) for current rates and bonuses.
 
 **When do I get paid?**
 Payouts follow a **Friday-to-Thursday** cycle — tasks accepted in that window are paid the following Friday. Example: accepted Monday the 7th → paid around Friday the 17th.
@@ -382,7 +366,7 @@ No. That project was deprecated December 2025. Non-accepted tasks from it will n
 ## 9. Project Scope & Support
 
 **How long will this project last?**
-At least another month from mid-April 2026, with possible extension based on quality and delivery velocity.
+Terminus 3 is running now. Timelines are announced in Slack.
 
 **Are there deadlines?**
 No — work at your own pace.
@@ -391,20 +375,20 @@ No — work at your own pace.
 Periodically, yes. If it looks sparse, check back or ask in Slack.
 
 **Are there office hours?**
-Yes. The current schedule is **pinned at the top of the `#terminus-2nd-edition-announcements` Slack channel under the "Office Hours" section** — that's where you'll find the latest dates, times, and Zoom links. Sessions are held multiple times per week (typically each weekday). See the [Office Hours page](/portal/docs/reference/office-hours) for more details.
+Yes. The current schedule is **pinned at the top of the `#terminus-3-announcements` Slack channel under the "Office Hours" section** — that's where you'll find the latest dates, times, and Zoom links. Sessions are held multiple times per week (typically each weekday). See the [Office Hours page](/portal/docs/reference/office-hours) for more details.
 
 **Where should I ask questions?**
 
 | Channel | Use for |
 |---|---|
-| #terminus-2nd-edition-submission | General questions, tech issues, submission help |
-| #terminus-2nd-edition-announcements | Guideline updates (read-only for most) |
+| #terminus-3-submissions | General questions, tech issues, submission help |
+| #terminus-3-announcements | Guideline updates (read-only for most) |
 
 ---
 
 ## 10. Known Issues & Workarounds
 
-*As of April 16, 2026.*
+*Known issues are reviewed periodically; report anything not listed in Slack.*
 
 ### Platform & Submission
 
@@ -431,4 +415,4 @@ Yes. The current schedule is **pinned at the top of the `#terminus-2nd-edition-a
 | Quality check false-flags `source "$HOME/.local/bin/env"` | Ignore this specific flag |
 | Agent logs unavailable for some reviews | Report with task UUID |
 | Docker network limit from repeated harbor runs | Run `docker network prune` |
-| `stb harbor check` fails: "unexpected response" / Usage Policy refusal | Provider content refusal — re-run, switch judge model (`gpt-5.5` ↔ `claude-opus-4-8`), review content; escalate with UUID if a legitimate task keeps failing |
+| `stb harbor check` fails: "unexpected response" / Usage Policy refusal | Provider content refusal — re-run, switch judge model (`-m opus` or `-m claude-haiku-4-5`), review content; escalate with UUID if a legitimate task keeps failing |

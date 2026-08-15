@@ -1,153 +1,116 @@
 # Difficulty Guidelines
 
-Task difficulty is determined by accuracy when run against frontier AI models. This guide helps you design tasks at the right difficulty level.
+Difficulty is **empirical**, not self-assessed. It is measured by running your task against frontier agents and recording how often they succeed.
 
-## Difficulty Levels
+## The Metric
 
-Difficulty is calculated from accuracy across two evaluation models. The threshold that applies depends on the tier:
+**Accuracy = average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5.**
 
-| Difficulty | Threshold | Description |
-|------------|-----------|-------------|
-| **Hard** | Accuracy ≤ 20% on the **best** model, **OR** accuracy ≤ 20% on the **worst** model | Requires deep expertise, multi-step reasoning, or niche knowledge |
-| **Medium** | 20% < accuracy ≤ 60% on the **worst** model | Moderate complexity, some domain knowledge |
-| **Easy** | 60% < accuracy ≤ 80% on the **worst** model | Straightforward but still non-trivial |
+Accuracy is the mean pass rate across all 8 runs, not a best-model or worst-model figure.
 
-> **Important:** Tasks where the worst model scores **above 80%** will not be accepted — they're too easy to be useful as training signal.
+Difficulty is measured in **two stages**, and they use different run counts:
 
-### Why "best" vs "worst" model?
+| Stage | Runs | What it decides |
+|---|---|---|
+| **In-platform iteration** — while you build | 2 per model × 2 models = **4** | Whether the task can go to review |
+| **Final difficulty** — after a reviewer accepts | 4 per model × 2 models = **8** | The tier recorded for your task |
 
-Both models are normally run against every task (see [Evaluation Process](#evaluation-process) for the one exception). The **worst model** sets the difficulty floor for most tasks: if even the weaker model can solve it most of the time, the task is Easy. The **best model** matters for the hardest tasks: a task where the *strongest* model still only scores ≤ 20% earns Hard difficulty even if the worst model also struggles, because the failure isn't just a weak-model artifact.
+**The iteration gate: at least one of the 4 runs must fail.** If every run passes, the task is trivial — it produces no signal about agent capability — and it cannot proceed to review. Fix that by making the task harder, not by narrowing a threshold.
 
-## Evaluation Process
+The full 8-run measurement only happens **after reviewer acceptance**, so the tier you see while iterating is an early read, not your final one.
 
-Each task is evaluated against:
-- **Claude Opus 4.8** with Claude Code agent
-- **GPT-5.5** with Codex agent
-- **5 runs each** to determine average accuracy
+## Difficulty Tiers
 
-### One-model early exit for Hard tasks
+| Tier | Accuracy | Target share of suite |
+|---|---|---|
+| **Frontier** | < 20% | 20–30% |
+| **Advanced** | 20% – < 50% | 25–35% |
+| **Core** | 50% – < 80% | 30–40% |
+| **Base** | 80% – < 100% | 5–15% |
 
-Difficulty checks run **Claude Opus 4.8 first**. If Opus 4.8 already rates your task as **Hard** (≤ 20% accuracy), the **GPT-5.5 run is skipped** and the task is finalized as Hard.
+Set the resulting tier in `task.toml`:
 
-This doesn't lose any rigor: a task is Hard whenever *either* model scores ≤ 20%, so an Opus-4.8 Hard result already settles the rating — the GPT-5.5 run couldn't change it. The practical effect is that you'll sometimes see difficulty results from **only one model instead of two**. That's expected behavior, not a bug — if GPT-5.5 results are missing on a Hard-rated task, there's no need to flag it. Tasks that aren't Hard on Opus 4.8 still run against both models.
-
-## Designing for Difficulty
-
-### For Hard Tasks (≤ 20% on best or worst model)
-
-Hard tasks require one or more of:
-
-- **Deep domain expertise** — Knowledge LLMs haven't seen much
-- **Complex multi-step reasoning** — 10+ sequential steps
-- **Subtle debugging** — Root cause analysis required
-- **Niche tools/languages** — Less common technologies
-
-**Techniques:**
-- Use bespoke rules buried in common patterns
-- Require understanding of obscure documentation
-- Create debugging tasks where the root cause isn't obvious
-- Use domain-specific knowledge (blockchains, scientific computing)
-
-### For Medium Tasks (20–60% on worst model)
-
-Medium tasks typically involve:
-
-- **Moderate complexity** — 5-10 steps
-- **Some domain knowledge** — Common but not trivial
-- **Clear requirements** — But non-obvious solution
-
-**Techniques:**
-- Combine multiple familiar concepts
-- Add edge cases that require careful handling
-- Include configuration that's easy to miss
-
-### For Easy Tasks (60–80% on worst model)
-
-Easy tasks should still be:
-
-- **Non-trivial** — Not one-liners
-- **Multi-step** — At least 3-5 steps
-- **Testable** — Clear success criteria
-
-**Techniques:**
-- Standard tasks with one or two tricky aspects
-- Well-known problems with specific constraints
-- Setup tasks with multiple requirements
-
-## Common Mistakes
-
-### Making Tasks Too Easy
-
-| Mistake | Impact |
-|---------|--------|
-| Single-step solutions | Agents solve immediately |
-| Obvious debugging | Pattern matching succeeds |
-| Common tutorials | In training data |
-| Simple API usage | Well-documented |
-
-### Making Tasks Unfair
-
-| Mistake | Impact |
-|---------|--------|
-| Impossible requirements | No one can solve |
-| Ambiguous instructions | Luck determines success |
-| Time-dependent | Results vary randomly |
-| External dependencies | Environment issues |
-
-## Testing Your Difficulty
-
-Before submitting, verify difficulty by:
-
-### 1. Run Against Oracle Agent
-
-```bash
-stb harbor run -a oracle -p <task-folder>
+```toml
+[metadata]
+difficulty = "advanced"
 ```
 
-This should PASS. If it doesn't, your task may have issues.
+> **Changed from Terminus 2nd Edition:** tasks with pass rates above 80% are **no longer rejected**. The Base tier exists deliberately and makes up 5–15% of the suite.
+>
+> What is not accepted is **100% accuracy averaged across both models** — a task every run solves provides no signal. 90% is acceptable; 100% is not. This is measured across both models together, not per model: one model going 4/4 is fine as long as the other fails at least once.
 
-### 2. Run Against Real Agents
+The target shares describe the shape of the **whole suite**, not a quota you personally must hit. They tell you where submissions are most valuable: Frontier and Advanced tasks are the scarcest and hardest to author well.
+
+## Designing for a Tier
+
+Difficulty does not come from obscurity or volume of work. It comes from **how much has to be true simultaneously** for the result to be correct.
+
+**Frontier (< 20%)** — the specification itself must be inferred from domain evidence, the output must be a semantically correct native artifact, and several correctness axes interact. Success requires the agent to build a correct model of the domain before it can write anything useful.
+
+**Advanced (20–50%)** — the goal is clear but the path is not. Multiple constraints interact, state must be handled correctly across steps, and a plausible-looking result can still be wrong.
+
+**Core (50–80%)** — a well-specified problem with real depth: multi-step, some domain knowledge, edge cases that punish careless work.
+
+**Base (80–100%)** — genuinely solvable by a competent agent, but still multi-step and non-trivial. Base tasks anchor the low end of the curve.
+
+## Making a Task Harder — and What Doesn't Work
+
+**Works:**
+
+- Require the agent to *infer* the contract from domain evidence rather than stating it.
+- Demand a native, structurally valid artifact rather than something that merely looks right.
+- Add a second correctness axis that interacts with the first (performance under determinism; safety under state consistency).
+- Verify against hidden variations that test whether the agent understood the contract, not whether it passed one example.
+
+**Doesn't work:**
+
+- Piling on unrelated independent requirements — that is length, not difficulty.
+- Ambiguity or under-specification. A task that is hard because it is unclear is a broken task, not a Frontier task.
+- Obscure trivia with no reasoning behind it.
+- Anything that makes runs non-deterministic.
+
+## Measuring Your Task
+
+Run against both models before submitting:
 
 ```bash
-# GPT-5.5
-stb harbor run -m @openai/gpt-5.5 -p <task-folder>
-
-# Claude Opus 4.8
-stb harbor run -m @anthropic/claude-opus-4-8 -p <task-folder>
+stb harbor run -m @openai/gpt-5.6 -p <task-folder> -k 4
+stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 ```
 
-Run at least 2-3 times against each model to gauge pass rate, and remember that the **worst** model's pass rate is what determines Easy/Medium for most tasks.
+`-k 4` mirrors the final measurement, so it gives you the best local read on where your task will land. Fewer runs are fine for a rough signal while you iterate.
 
-### 3. Analyze Failures
+> **The tier you see while iterating is provisional.** In-platform iteration runs 4 trials, not 8, and your final tier comes from the full 8-run measurement after acceptance. A task can shift tiers between the two.
 
-When agents fail:
-- Is it for a **good reason** (task difficulty)?
-- Or a **bad reason** (unclear instructions)?
+Then check *why* agents failed. Failures caused by unclear instructions, environment defects, or flaky tests are **bugs**, not difficulty — fix them and re-measure. Only failures that come from the actual challenge of the task should count toward your tier.
 
-Good failures: Agent misunderstood complexity, missed edge case
-Bad failures: Ambiguous requirements, environment issues
+## Reading the Trial Analysis
 
-## Adjusting Difficulty
+The difficulty check ends with a **trial analysis** section reporting six criteria. Each returns **PASS**, **FAIL**, or **NOT_APPLICABLE** — a criterion is *flagged* when it returns FAIL. `NOT_APPLICABLE` is not a problem; it means there wasn't enough evidence to judge.
 
-### To Make Harder:
+You see this before you submit, and reviewers see the same output. Resolving a flag now is far cheaper than having the task returned for it.
 
-- Add more steps
-- Include hidden requirements
-- Use niche knowledge
-- Create debugging scenarios
-- Add edge cases
+**Two flags mean the task must change:**
 
-### To Make Easier:
+| Flag | What it means | What to do |
+|---|---|---|
+| `task_specification` | Your tests require something `instruction.md` never states — an exact parameter name, file format, return value, or structure the agent had to guess. | Specify it in the instruction, or relax the test. |
+| `reward_hacking` | The agent reached its reward illegitimately — editing tests, writing the reward file directly, or reading `solution/`. | Close the hole. See [Writing Tests](/portal/docs/creating-tasks/writing-tests). |
 
-- Reduce step count
-- Make requirements more explicit
-- Use common technologies
-- Provide more hints in instructions
-- Simplify the environment
+**Four flags need you to look, and often mean the task is measuring the wrong thing:**
+
+| Flag | What it means | What to do |
+|---|---|---|
+| `difficulty_crux` | The agent failed for a reason unrelated to the challenge you described in `[metadata].difficulty_explanation`. | Either the task carries unintended difficulty, or your explanation doesn't describe the real crux. Fix whichever is wrong. |
+| `near_miss` | The agent produced a substantively working solution that missed a quantitative threshold narrowly — 95% against a required 98%, say. | Your threshold is producing the difficulty, not the problem. A task that looks Frontier because of a tight cutoff is not a Frontier task. |
+| `refusals` | The agent aborted on a content or safety policy instead of attempting the task. | Review the framing and content — a refused trial measures nothing. |
+| `low_timeout` | The agent was still making real progress when the timeout hit. | Raise `[agent].timeout_sec`. Difficulty should come from the problem, not from running out of time — see [Task Requirements](/portal/docs/understanding-tasks/task-requirements). |
+
+A flag is not automatically fatal, but it does need an answer. Reviewers send a task back when a flag's reason holds up, so it is worth resolving — or being able to explain — before you submit.
 
 ---
 
 ## Next Steps
 
-- [Start creating your task](/portal/docs/creating-tasks/videos/creating-task)
-- [Review CI checks](/portal/docs/testing-and-validation/ci-checks-reference)
+- [Task Requirements](/portal/docs/understanding-tasks/task-requirements)
+- [What Makes a Good Task](/portal/docs/understanding-tasks/what-makes-a-good-task)

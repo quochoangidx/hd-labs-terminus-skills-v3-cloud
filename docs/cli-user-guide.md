@@ -61,17 +61,17 @@ stb keys show
 
 Here are some tips for using your API key efficiently to avoid exhausting it quickly:
 
-- **Run agents sequentially, not concurrently.** Running GPT-5.5 and Claude Opus 4.8 at the same time burns through your key budget much faster. Finish one model's runs before starting the other.
+- **Run agents sequentially, not concurrently.** Running GPT-5.6 and Claude Opus 5 at the same time burns through your key budget much faster. Finish one model's runs before starting the other.
 
 - **Test your task thoroughly with the oracle agent first.** Run `stb harbor run -a oracle -p <task-folder>` and make sure it passes consistently before spending key budget on real agent runs. If your oracle fails, you'll waste agent runs on a broken task.
 
-- **Start with fewer runs.** You don't need 5 runs per model during early development. Do 1–2 runs per model to get a rough difficulty signal, then do the full set only when you're confident the task is ready.
+- **Start with fewer runs.** You don't need 4 runs per model during early development. Do 1–2 runs per model to get a rough difficulty signal, then do the full set only when you're confident the task is ready.
 
 - **Fix issues between runs.** If the first agent run fails for a "bad reason" (unclear instructions, environment problems, missing dependencies), fix the issue before running again rather than burning more attempts on a known-broken task.
 
 - **Use interactive mode for debugging.** Instead of running full agent attempts to troubleshoot, use `stb harbor tasks start-env -p <task-folder> -i` to test commands manually — this doesn't consume API key budget.
 
-- **Run `stb keys show` periodically** to check your remaining budget before starting a batch of agent runs.
+- **Track your own usage.** Your key carries a $10 budget and expires after 30 days, but the CLI cannot report how much is left — keep a rough count of your agent runs so a batch doesn't exhaust the key mid-way.
 
 ---
 
@@ -106,15 +106,14 @@ You can use either the project name or UUID. If a project has only one template,
 
 ```bash
 # Using project name
-stb init my-task-name -p "Terminus-2nd-Edition" -t default
+stb init my-task-name -p "Terminus-3-Prod" -t default
 
 # Using project UUID
-stb init my-task-name -p bfe79c33-8ab0-4061-9849-08d3207c9927 -t milestone
+stb init my-task-name -p 3f2a9c1e-7b4d-4e88-9a15-c0d6e2f8b731
 ```
 
-For non-milestone templates (e.g. `-t default`), this creates a folder with `instruction.md`, `task.toml`, `environment/Dockerfile`, `solution/solve.sh`, and `tests/test.sh`. See [Task Components](/portal/docs/understanding-tasks/task-components) for details.
+This creates a folder with `instruction.md`, `task.toml`, `environment/Dockerfile`, `solution/solve.sh`, and `tests/test.sh`. See [Task Components](/portal/docs/understanding-tasks/task-components) for details.
 
-> **Note:** The `-t milestone` template uses the multi-step format described in the [Milestones page](/portal/docs/understanding-tasks/milestones) — each milestone is a self-contained subdirectory under `steps/`. If you generate a milestone scaffold and it produces the older root-level `solveN.sh` / `test_mN.py` / `milestone_x.md` layout instead, your `stb` CLI is out of date — upgrade it before proceeding.
 
 ### 2. Develop Your Task
 
@@ -139,11 +138,11 @@ stb harbor run -a oracle -p ./my-task-name
 
 **Test with real agents:**
 ```bash
-# GPT-5.5
-stb harbor run -m @openai/gpt-5.5 -p ./my-task-name
+# GPT-5.6
+stb harbor run -m @openai/gpt-5.6 -p ./my-task-name
 
-# Claude Opus 4.8
-stb harbor run -m @anthropic/claude-opus-4-8 -p ./my-task-name
+# Claude Opus 5
+stb harbor run -m @anthropic/claude-opus-5 -p ./my-task-name
 ```
 
 Run each agent 2-3 times to gauge difficulty. See [Testing Agent Performance](/portal/docs/testing-and-validation/running-real-agents) for guidance.
@@ -420,7 +419,7 @@ If you see `Bad Request: Maximum refresh limit reached` when running `stb keys r
 ### Model Warnings (Safe to Ignore)
 
 ```
-Failed to retrieve model info for '@anthropic/claude-opus-4-8'...
+Failed to retrieve model info for '@anthropic/claude-opus-5'...
 ```
 
 This is a known harmless warning that can be safely ignored. Your testing will work fine.

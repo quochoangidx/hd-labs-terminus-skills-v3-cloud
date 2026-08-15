@@ -1,15 +1,14 @@
 # Quick Start Guide
 
-Get up and running with TerminalBench in just a few minutes. This guide covers everything you need to start creating tasks.
+Get up and running with Terminus 3 in just a few minutes. This guide covers everything you need to start creating tasks.
 
 ## Prerequisites
 
 Before you begin, make sure you have:
 
 - Access to the **[Snorkel Expert Platform](https://experts.snorkel-ai.com/)**
-    - You will use the **Terminus-2nd-Edition** submission node to submit your task
-- Joined the **Slack channel** `#terminus-2nd-edition submission`
-- Joined the **Notification channel** `terminus-2nd-edition-announcements`
+    - You will use the **Terminus-3-Prod** project to submit your task
+- Joined the Slack channels [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W) and [`#terminus-3-announcements`](https://snorkel-team.enterprise.slack.com/archives/C0BLN0YUNQN)
 - Set up the **Snorkel CLI** tool
     - Read the [Snorkel CLI user guide](/portal/docs/cli-user-guide)
     - Using the Snorkel CLI you can:
@@ -157,7 +156,7 @@ Follow the complete [Platform Submission Guide](/portal/docs/submitting-tasks/pl
 
 ---
 
-We have found the following VS Code extensions will improve your experience with TerminalBench: 
+We have found the following VS Code extensions will improve your experience with Terminus 3: 
 
 - **Docker** — For managing containers in VS Code; 
 - **Python** — For highlighting syntax, linting, etc.; 

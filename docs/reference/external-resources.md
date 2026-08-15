@@ -8,7 +8,7 @@ Links to external tools, documentation, and communities.
 
 Primary communication channel for the project.
 
-**Channel:** [#terminus-2nd-edition-submission](https://snorkel-team.enterprise.slack.com/archives/C0AEHEYFVFD)
+**Channel:** [#terminus-3-submissions](https://snorkel-team.enterprise.slack.com/archives/C0AEHEYFVFD)
 
 Use Slack for:
 - Technical questions
@@ -26,7 +26,7 @@ Web interface for Platform workflow submissions.
 
 ## Terminal-Bench
 
-The original benchmark project that TerminalBench is modeled after. Do not copy and submit any tasks or data from this existing benchmark. We want to build an entirely unique dataset.
+The original benchmark project that Terminus 3 is modeled after. Do not copy and submit any tasks or data from this existing benchmark. We want to build an entirely unique dataset.
 
 ### Main Site
 
@@ -105,7 +105,7 @@ For `instruction.md` (markdown) and `task.toml` (TOML) syntax.
 
 ### Project Support
 
-- **Slack:** `#terminus-2nd-edition-submission`
+- **Slack:** `#terminus-3-submissions`
 - **Office Hours:** Check Slack for schedule and Zoom link
 
 ### Payment Support

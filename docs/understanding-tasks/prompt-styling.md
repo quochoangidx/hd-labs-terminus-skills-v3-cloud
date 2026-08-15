@@ -1,6 +1,6 @@
 # Instruction Prompt Styling
 
-The `instruction.md` file is the primary interface between the task and the AI agent. To ensure Terminus Edition 2 reflects real-world usage, we the instructions to be realistic to how users type into a terminal agent, how the everyday person communicates with a claude code and/or cursor.
+The `instruction.md` file is the primary interface between the task and the AI agent. To ensure Terminus 3 reflects real-world usage, we want the instructions to be realistic to how users type into a terminal agent — how an everyday person communicates with Claude Code or Cursor.
 
 _**NOTE:** The guidelines below are purposely vague to prevent the dataset we are building from being repeptitive in how the prompts are written. Lean always on the side of injecting your own voice and remember to change your style up from one task to another!_
 
@@ -12,7 +12,7 @@ Some engineers might be more structured and well formatted in how they prompt mo
 
 We want to give the agent the _what (requirements)_ but not the _how (as that would be essentially giving the agent the answers/hints!)_
 
-The primary challenge in crafting your instructions will be achieving this realistic variance in style while maintaing adherence to the six core principles below.
+The primary challenge in crafting your instructions will be achieving this realistic variance in style while maintaining adherence to the seven core principles below.
 
 
 
@@ -21,11 +21,13 @@ The primary challenge in crafting your instructions will be achieving this reali
 
 ## Requirements
 
-Every `instruction.md` should adhere to these six general principles:
+Every `instruction.md` should adhere to these seven general principles:
 
-### 1. Task Instructions Must be Concise
+### 1. Task Instructions Should be Concise
 
-- Task instructions should be concise and clear. This means outlining the task in as little as one sentence, and as much as three paragraphs. 
+- Keep instructions as short as the task allows. **Around 2 short paragraphs, or a list of up to 20 bullets, is a good guide.** More complex tasks may need more room to be well specified.
+
+- Extra length should come from the problem itself, not from listing steps or restating requirements.
 
 - Tasks should not be long running with many different instructions/requirements to follow.
 
@@ -35,7 +37,7 @@ Every `instruction.md` should adhere to these six general principles:
 
 ### 2. Task Instructions Must be Well Specified
 
-- While task instructions are now required to be concise, they still must be well specified. This means that the goal of a task is clear and obvious to the human/agent. 
+- While task instructions should be concise, they still must be well specified. This means that the goal of a task is clear and obvious to the human/agent. 
 
 - The main criteria to look for here is tasks with a larger number of edge cases and requirements. If a task is primarily hard due to a large number of edge cases/requirements that are not handled well, it should be rejected.
 
@@ -48,7 +50,7 @@ Every `instruction.md` should adhere to these six general principles:
 - Conceptually, we are going for tasks that represent one shot tasks from a user to a terminal agent. If tasks contain significant hints or rubrics in the instruction.md for how to solve the task, it is not representative of the style of task we are looking for. Requirements can be included, but hints or stepwise instructions should not be.
 
 ### 5. Task Instruction Must be Unique
-- The task must be noticeably unique to any task in Terminal Bench 2, Terminal Bench 3, or Snorkel's original Project Terminus (Edition 1). 
+- The task must be noticeably unique to any task in Terminal-Bench 2.1, Terminal-Bench 3.0, or Snorkel's prior Terminus editions. 
 
 - Similarity search evaluation results are provided to help make this determination. Generally, the logic for too similar tasks is:
 
@@ -59,7 +61,12 @@ Every `instruction.md` should adhere to these six general principles:
     2. Is the expected output different in a way that is non trivial
 
 ### 6. Task Instruction Must use Absolute Paths
-- The task instruction.md file should not contain a canary string. This is usually an indicator that you are using an older task skeleton. The canary string gets passed as part of the prompt which we do not want represented in the data.
+
+- Reference absolute paths (`/app/output.json`), never paths relative to an assumed working directory. This is enforced by an automated check.
+
+### 7. Task Instruction Must Not Contain Canary Strings
+
+- The `instruction.md` file must not contain a canary string. This usually indicates an older task skeleton. Canary strings get passed as part of the prompt, and this is a training dataset — they must not appear in any component.
 
 ## Human-Centric vs. Synthetic Styling
 

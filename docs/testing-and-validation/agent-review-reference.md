@@ -18,19 +18,15 @@ Agent Review performs a systematic static analysis of your task, examining all k
 
 Checks that all required files exist.
 
-**Non-milestone tasks:**
-- `environment/Dockerfile`
-- `instruction.md`
-- `task.toml`
-- `solution/solve.sh`
-- `tests/test_outputs.py`
-- `tests/test.sh`
+Checks that all required files exist:
 
-**Milestone tasks:**
+- `task.toml`
+- `instruction.md`
 - `environment/Dockerfile`
-- `task.toml` (with one `[[steps]]` block per milestone)
-- For each milestone `N`: `steps/milestone_N/instruction.md`, `steps/milestone_N/tests/test.sh`, `steps/milestone_N/tests/test_mN.py`, `steps/milestone_N/solution/solve.sh`, `steps/milestone_N/solution/solveN.sh`
-- See [Milestones page](/portal/docs/understanding-tasks/milestones) for details
+- `solution/solve.sh`
+- `tests/Dockerfile` — builds the separate verifier image
+- `tests/test.sh`
+- `tests/test_outputs.py`
 
 For multi-container tasks, also verifies:
 - `environment/docker-compose.yaml`
@@ -45,19 +41,25 @@ Validates your task metadata:
 
 | Field | Requirement |
 |-------|-------------|
-| `version` | Must be "2.0" |
-| `author_name` | Required. Can be "anonymous". |
-| `author_email` | Required. Can be "anonymous". |
-| `difficulty` | Must be: easy, medium, hard, or unknown |
-| `subcategories` | Must be any of _(can be multiple)_: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building". **If no subcategory aligns to your task, leave this BLANK**. |
-| `codebase_size` | Must be `minimal`, `small`, or `large`: rough scale of total files in the environment (not outputs the agent produces). Bands ≈ 0–20, ≈ 20+, ≈ 200+.
-| `number_of_milestones` | Must be: integer. **Must be 0 if no milestones.** For milestone tasks, must equal the number of `[[steps]]` blocks. |
-| `category` | Must be a valid category |
-| `tags` | Array of relevant tags |
-| `[verifier].timeout_sec` | Required for non-milestone tasks. Replaced by per-milestone `[steps.verifier].timeout_sec` for milestone tasks. |
-| `[agent].timeout_sec` | Required for non-milestone tasks. Replaced by per-milestone `[steps.agent].timeout_sec` for milestone tasks. |
-| `[environment]` | CPU, memory, storage limits, plus `workdir` |
-| `[[steps]]` | Required for milestone tasks. One block per milestone, with `name = "milestone_N"`, `[steps.agent].timeout_sec`, and `[steps.verifier].timeout_sec`. |
+| `name` | Task name. Top level or under `[metadata]` — both resolve |
+| `artifacts` | Top-level array of paths the separate verifier reads. Nesting under `[verifier]` silently drops it |
+| `[metadata].category` | Exactly one, from the Task Taxonomy |
+| `[metadata].subcategory` | Exactly one, from the Task Taxonomy |
+| `[metadata].tags` | 3–6 descriptive keywords |
+| `[metadata].languages` | Primary language(s) of the task |
+| `[metadata].difficulty` | Must be: frontier, advanced, core, or base |
+| `[metadata].expert_time_estimate_hours` | Estimated expert time to author the task |
+| `[metadata].author_name` / `.author_email` | Required. Both may be `"anonymous"` |
+| `[metadata].difficulty_explanation` | What makes the task hard |
+| `[metadata].solution_explanation` | How the oracle solves it |
+| `[metadata].verification_explanation` | How the verifier decides the task was solved |
+| `[metadata].relevant_experience` | Author's relevant background |
+| `[verifier].timeout_sec` | Required |
+| `[verifier].environment_mode` | Must be `"separate"` |
+| `[agent].timeout_sec` | Required. Minimum 1800 sec, ceiling 18000 sec |
+| `[environment].build_timeout_sec` | Required |
+| `[environment].cpus` / `.memory_mb` / `.storage_mb` | Resource limits — no GPU |
+| `[environment].network_mode` | `"public"` (default) or `"no-network"` |
 
 ---
 
@@ -140,6 +142,19 @@ Beyond structure, the review evaluates:
 - Variable names are consistent
 - API endpoints match between instruction, solution, and tests
 
+### Trial Analysis
+
+The difficulty check appends a trial analysis section reporting six criteria, each returning **PASS**, **FAIL**, or **NOT_APPLICABLE**:
+
+- `task_specification` — were the instructions sufficient for an agent to succeed?
+- `reward_hacking` — was the reward earned legitimately, or by manipulating the harness?
+- `difficulty_crux` — did the agent fail for the reason the author described?
+- `near_miss` — did a working solution fall just short of a threshold?
+- `refusals` — did the agent abort on a content or safety policy?
+- `low_timeout` — was the agent still making progress when time ran out?
+
+A FAIL on `task_specification` or `reward_hacking` is a definite issue. The other four must be examined rather than waved through — see the [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) for how to handle each, and [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for what to do about a flag on your own task.
+
 ---
 
 ## Quality Control Criteria
@@ -153,7 +168,7 @@ Tests must not check for performance thresholds—these vary by hardware and are
 Testing logic must be exactly the same for both oracle and agent. Conditional behavior based on execution mode is banned.
 
 ### Multi-Container Tagging
-Tasks with `docker-compose.yaml` must set `is_multi_container = true` and `custom_docker_compose = true` in `task.toml`.
+Tasks that run multiple containers must set `is_multi_container = true` under `[metadata]` in `task.toml`. The field is optional — omit it for single-container tasks. The harness detects `environment/docker-compose.yaml` on its own; nothing in `task.toml` points at it.
 
 ### No Web Data Fetching
 Tasks should not fetch data from URLs (except package managers). Pre-download data into `environment/`.

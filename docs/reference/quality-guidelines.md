@@ -1,6 +1,6 @@
 # Quality Guidelines
 
-These quality control guidelines define the quality bar for TBench Edition 2 formatted tasks. All tasks must comply with these standards to pass review.
+These quality control guidelines define the quality bar for Terminus 3 formatted tasks. All tasks must comply with these standards to pass review.
 
 
 
@@ -8,13 +8,13 @@ These quality control guidelines define the quality bar for TBench Edition 2 for
 
 ### **All tasks must align with these essential tenants:**
 
-**Instruction Prompt Styling**: Each task will be equipped with an instruction.md which outlines the task to be completed. These task prompts will describe the problem in 1-2 paragraphs and the requirements in no more than 2 paragraphs of 20 bullets. Prompts should not be LLM generated and should read in a way that is reflective of how users interact with coding agents.
+**Instruction Prompt Styling**: Each task will be equipped with an instruction.md which outlines the task to be completed. These task prompts should describe the problem and its requirements as concisely as the task allows, typically in around 1-2 paragraphs or a list of up to 20 bullets; more complex tasks may need more room. Prompts should not be LLM generated and should read in a way that is reflective of how users interact with coding agents.
 
 **Multi-Step**: Tasks should require chaining multiple commands (5 minimum terminal commands), handling intermediate states, and some reasoning (like error recovery or branching), and avoid being solvable with a single command or a single episode of commands.
 
 **Testable**: Each task must be fully specified and self-contained for the agent to solve without ambiguity and should be accompanied by a sufficient set of tests that can be used to deterministically measure the final state of the environment and determine if the task has been completed correctly.
 
-**Novel**: Avoid ANY variations of existing tasks in TerminalBench Repository; each task should introduce a new task setup, definition, and data used to solve the task. Tasks should also be novel with respect to tasks included in Snorkel’s Terminal Bench Edition 1 dataset. 
+**Novel**: Avoid ANY variations of existing tasks in the Terminal-Bench 2.1 or Terminal-Bench 3.0 repositories, or in Snorkel's prior Terminus editions; each task should introduce a new task setup, definition, and data used to solve the task. Tasks should also be novel with respect to tasks included in Snorkel’s Terminal Bench Edition 1 dataset. 
 
 **No Privileged Ops**: Tasks must not require root-level privileges or unsafe Docker settings like --privileged.
 
@@ -77,13 +77,16 @@ fi
 
 ---
 
-## 3. Tag Docker-Compose and Multi-Container Tasks
+## 3. Tag Multi-Container Tasks
 
-**Rule:** Tasks using `docker-compose.yaml` or multiple containers must be tagged in `task.toml` metadata.
+**Rule:** Tasks that run multiple containers must be tagged under `[metadata]` in `task.toml`.
 
-**Required tags:**
-- `custom_docker_compose = true` — if the task contains a `docker-compose.yaml`
-- `is_multi_container = true` — if the task uses multiple containers
+```toml
+[metadata]
+is_multi_container = true
+```
+
+The field is **optional and only needed when it is true** — omit it for single-container tasks. A `docker-compose.yaml` on its own needs no tag: the harness detects `environment/docker-compose.yaml` and nothing in `task.toml` points at it.
 
 **Why:** This allows tracking and filtering of tasks with these setups.
 
@@ -270,8 +273,7 @@ This structure effectively requires the agent to nearly replicate the oracle’s
 |------|---------|
 | No latency tests | Don't test for performance/timing metrics |
 | Identical testing | Same conditions for oracle and agent |
-| Tag docker-compose | Add `custom_docker_compose = true` to metadata |
-| Tag multi-container | Add `is_multi_container = true` to metadata |
+| Tag multi-container | Add `is_multi_container = true` under `[metadata]`, only when the task is multi-container |
 | No web fetching | Store data locally, don't download at runtime |
 | Reserved directories | Don't create/modify `/tests` or `/solution` |
 | Always write reward | Write `0` on failure, never exit early |

@@ -33,12 +33,12 @@ A qualified coding expert reviews:
 ### 3. Agent Evaluation
 
 Your task is run against:
-- Claude Opus 4.8 with Claude Code (5 runs)
-- GPT-5.5 with Codex agent (5 runs)
+- Claude Opus 5 with Claude Code (4 runs)
+- GPT-5.6 with Codex agent (4 runs)
 
 Pass rate determines final difficulty classification.
 
-> **Seeing only one model's results?** Difficulty checks run Claude Opus 4.8 first. If it already rates the task **Hard** (≤ 20% accuracy), the GPT-5.5 run is skipped — the Hard rating is already settled either way. Results from only one model on a Hard-rated task are expected, not a bug.
+> **This is the full measurement.** While you were iterating, the platform ran 2 trials per model (4 runs). The 8-run measurement here runs only after a reviewer accepts the task, and it sets the final tier — which can differ from what you saw during iteration.
 
 ## Review Outcomes
 
@@ -121,6 +121,6 @@ Remember: Reviewers want to help. Most disagreements are resolved through discus
 
 ## Need Help?
 
-- Slack: `#terminus-2nd-edition-submission`
+- Slack: `#terminus-3-submissions`
 - [FAQ](/portal/docs/reference/faq)
 - [Troubleshooting](/portal/docs/reference/troubleshooting)

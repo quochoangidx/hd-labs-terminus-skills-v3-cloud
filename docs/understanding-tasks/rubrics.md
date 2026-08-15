@@ -1,11 +1,10 @@
 # Understanding Rubrics
 
-The pre-generated synthetic rubrics provided in your workbench are merely a baseline. To meet the Terminal Bench Edition 2 standards, you must refine these drafts into a thorough, diagnostic tool that accurately separates elite engineering from "shotgun" coding.
+The pre-generated synthetic rubrics provided in your workbench are merely a baseline. To meet the Terminus 3 standards, you must refine these drafts into a thorough, diagnostic tool that accurately separates elite engineering from "shotgun" coding.
 
-For further detailed guidelines on Rubrics, visit this guidelines document: **[Go to Rubrics Guidelines](https://docs.google.com/document/d/1HUFv8fUu3zy4aLUC9oBtH6xZgmu44R7zlMRUl22UT1U/edit?tab=t.0#heading=h.2m2fq7otru3u)**
 
 ## How do I include a Rubric with my submission?
-The workflow to create your rubric is done entirely on the Snorkel platform. Within the **Terminus-2nd-Edition** submission UI, you will find two new sections at the bottom of the page.
+The workflow to create your rubric is done entirely on the Snorkel platform. Within the **Terminus-3-Prod** submission UI, you will find two new sections at the bottom of the page.
 
  * **A Checkbox**
     * Checking this checkbox will generate a rubric once you submit for CI checks _(AKA you do not select "Send to Reviewer")_ upon which you can then edit for completeness and accuracy
@@ -34,21 +33,10 @@ To keep rubrics objective and focused on the **process**, avoid these common pit
 
 
 ## 3. Rubric Cumulative Scores
-Your rubric maximum cumulative scores should be between **10-40 points** for non-milestone tasks. **The maxiumum cumulative score is the sum of all positive criteria**. It's essentially the maximum score an agent can get.
-
-### Milestone tasks
-
-For **milestone** tasks, each milestone in the rubric should account for **10–40 points**. That means:
-
-* 1 milestone → 10–40 pts total
-* 2 milestones → 20–80 pts total
-* 3 milestones → 30–120 pts total
-
-The same idea extends to larger milestone counts: total points should fall between **(number of milestones × 10)** and **(number of milestones × 40)**. See also **[Milestones](/portal/docs/understanding-tasks/milestones)**.
-
+Your rubric's maximum cumulative score should be between **10-40 points**. **The maxiumum cumulative score is the sum of all positive criteria**. It's essentially the maximum score an agent can get.
 
 ## 4.  Negative Penalties
-**Minimum requirement:** Your rubric must include **at least three** distinct criteria that assign **negative** rewards (for example, `-1`, `-2`, `-3`, or `-5`). Reviewers and CI expect this mix so scores are not only “all upsides.”
+**Minimum requirement:** Your rubric must include **at least one** criterion that assigns a **negative** reward (for example, `-1`, `-2`, `-3`, or `-5`). Reviewers and CI expect this mix so scores are not only “all upsides.”
 
 Beyond that minimum, include negative penalties wherever appropriate. A mix of positive rewards and negative penalties is essential for “shaping” the score.
 
@@ -71,30 +59,6 @@ Every criterion line in your rubric must follow these syntax rules for CI valida
 4.  **Signed positives:** Positive scores **must include an explicit leading `+`** (e.g., `+3`, not `3`). Unsigned positive scores will be sent back for revision.
 5.  **Forbidden:** **Do not use the number 4.**
 
-### Milestone Rubric Headers
-
-For **milestone tasks**, split your rubric into one block per milestone using the official `# Rubric N` header convention. Each milestone's block begins with a header line and is followed by that milestone's `Agent …, ±N` criterion lines. The CI parser is aligned to this format.
-
-```text
-# Rubric 1
-Agent compiles the project with no warnings, +2
-Agent runs the build command before testing, +1
-Agent skips compilation and tries to run untested code, -2
-...
-
-# Rubric 2
-Agent validates inputs before processing, +2
-Agent fails to handle the empty-list edge case, -1
-...
-
-# Rubric 3
-Agent emits the required JSON schema, +3
-Agent prints debug output to stdout in production mode, -1
-...
-```
-
-For **non-milestone tasks**, use a flat list of `Agent …, ±N` criterion lines. A single `# Rubric 1` header is tolerated, but not required; do not use `# Rubric 2+` unless the task is milestone-based.
-
 ### Importance Hierarchy
 * **Critical (±5):** Safety (no `rm -rf /`), core correctness, avoids leaking secrets.
 * **Major (±3):** Reliability, verification of artifacts, error recovery.
@@ -116,7 +80,7 @@ For **non-milestone tasks**, use a flat list of `Agent …, ±N` criterion lines
 ## Rubric Authoring Summary Checklist
 - [ ] Every line starts with "Agent" and ends with ", [Score]".
 - [ ] Only uses +/- 1, 2, 3, 5 (**No 4s**).
-- [ ] **At least three** criteria assign negative rewards (e.g., `-1`).
+- [ ] **At least one** criterion assigns a negative reward (e.g., `-1`).
 - [ ] Includes significant negative penalties for unsafe/redundant behavior.
 - [ ] Focuses on trace-evidenced actions, not the final pytest result.
 - [ ] Rephrased synthetic checks to be task-specific and non-generic.
