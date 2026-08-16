@@ -15,7 +15,7 @@ Snorkel staff goes through everything you need to know about Project Terminus an
 >[_Download the slides from this video_](https://snorkelai.box.com/s/5vifce6oenvkegxqs83xk2fatddb8pvo)
 
 #### For Returning Experts:
-Snorkel staff covers the changes introduced in Terminus 2nd Edition. Intended for Experts already familiar with Project Terminus from Edition 1.
+Snorkel staff covers the changes introduced in Terminus 2nd Edition. Intended for Experts already familiar with Project Terminus from Edition 1. 
 
 [Watch Returning Expert Onboarding Video](https://www.loom.com/share/c705f782b01d40b4ab14e23930af65bd)
 

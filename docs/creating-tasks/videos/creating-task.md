@@ -10,7 +10,7 @@ To create a new task, you'll start with the task skeleton template and customize
 
 ## Step 1: Download the Task Skeleton
 
-> **Coming soon.** The Terminus 3 task skeleton is being prepared — there is a single skeleton for this edition. This page will link it once available.
+**[Download the task skeleton](/Terminus-3-Prod/default-template.zip)** — there is a single skeleton for this edition. It ships as a complete working task with every field you must fill in marked `REPLACE`.
 ## Step 2: Extract and Rename
 
 1. **Extract the ZIP file** to your desired location

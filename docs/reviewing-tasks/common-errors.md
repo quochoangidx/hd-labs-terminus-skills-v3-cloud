@@ -207,7 +207,7 @@ With `network_mode = "no-network"`, `tests/test.sh` cannot fetch packages from t
 #!/bin/bash
 apt-get update && apt-get install -y curl
 curl -LsSf https://astral.sh/uv/0.9.5/install.sh | sh
-uvx -w pytest==8.4.1 pytest /tests/test_outputs.py -rA
+uvx -w pytest==9.1.1 pytest /tests/test_outputs.py -rA
 
 # Good - test.sh assumes deps already in image
 #!/bin/bash
@@ -224,7 +224,7 @@ And the corresponding `Dockerfile` line that makes this work:
 
 ```dockerfile
 # In tests/Dockerfile
-RUN pip install --no-cache-dir pytest==8.4.1 pytest-json-ctrf==0.3.5
+RUN pip install --no-cache-dir pytest==9.1.1 pytest-json-ctrf==0.5.2
 ```
 
 ### AI-Framework Scaffolding Filenames
@@ -398,6 +398,8 @@ def test_computation():
 ## Difficulty Issues
 
 *Feedback category: `task_difficulty`*
+
+> **A difficulty tier _mismatch_ is not a revision reason.** Final difficulty is measured automatically after acceptance, so don't send a task back because the declared tier doesn't match the run. *Do* flag a **retired tier name** (`hard` / `easy` / `medium`) or a task that is **genuinely too trivial** (below). See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
 
 ### Too Easy
 

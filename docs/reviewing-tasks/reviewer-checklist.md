@@ -4,6 +4,7 @@
 
 | Date | Type | Change |
 |------|------|--------|
+| Aug 13, 2026 | 🔄 Update | Added a **Not revision triggers** note under Task Metadata: the `difficulty` *value* is re-measured after acceptance and is not grounds for revision (only a retired tier name is), and a `task.toml` structure complaint must be confirmed against the actual static-check result before flagging. See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines). |
 | Aug 10, 2026 | 🔄 Update | Difficulty now runs in two stages: **in-platform iteration** uses 2 trials per model (4 runs) and requires **at least one failure** before a task can reach review; **final difficulty** uses 4 trials per model (8 runs) and runs only **after reviewer acceptance**. **100% accuracy averaged across both models** is not accepted — 90% is fine. Also added two High-severity criteria: **known environment defects block acceptance** regardless of whether they caused a visible failure in the difficulty run, and **`difficulty` must use a current tier** (`frontier`/`advanced`/`core`/`base` — the Edition 2 names are retired). |
 | Aug 6, 2026 | 🆕 New | Added a **Trial Analysis** section for the six criteria the difficulty check now reports. `task_specification` and `reward_hacking` are definite issues — a flag on either sends the task back. `difficulty_crux`, `near_miss`, `refusals`, and `low_timeout` must be examined: send back if the flag's reason holds up, otherwise record in the acceptance comments why it doesn't. The multiple-Medium rule does not apply to these four — judge each flag on its own merits. |
 | Aug 5, 2026 | 🔄 Update | `task.toml` structure: the descriptive fields (`author_name`, `author_email`, `category`, `subcategory`, `tags`, `languages`, `difficulty`, `expert_time_estimate_hours`, and the `*_explanation` / `relevant_experience` write-ups) now live under **`[metadata]`**. Top-level copies are no longer counted by the structure check. `artifacts` stays top-level and `name` resolves in either place. `is_multi_container` is also a `[metadata]` field, **optional and only needed when true** — do not flag its absence on a single-container task. |
@@ -98,7 +99,6 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
   </tbody>
 </table>
-
 
 ## Environment
 
@@ -450,6 +450,8 @@ Judge each flag on its own merits. The multiple-Medium rule in [Severity Guidanc
 
 ## Task Metadata
 
+> **Not revision triggers.** The `difficulty` *value* is re-measured automatically after acceptance — don't send a task back to change it (only a **retired tier name** is a valid flag). And a `task.toml` "structure" complaint from Agent Review should be **confirmed against the actual static-check result** before flagging — CI runs the structure check on every submission, and a task only reaches you once CI is passing. See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
+
 <table class="checklist-table">
   <colgroup>
     <col style="width:32%;">
@@ -516,3 +518,4 @@ storage_mb</pre><br>Descriptive fields must sit under <code>[metadata]</code> �
     </tr>
   </tbody>
 </table>
+

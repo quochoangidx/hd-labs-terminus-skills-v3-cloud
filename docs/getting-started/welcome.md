@@ -6,6 +6,7 @@ Recent announcements. **[See the full Changelog →](/portal/changelog)**
 
 | Date         | Type   | Change |
 | ------------ | ------ | ------ |
+| Aug 13, 2026 | 🆕 New | **The Terminus 3 task skeleton is available.** [Download it here](/Terminus-3-Prod/default-template.zip) — a complete working task to rename and replace, with every field you must fill in marked `REPLACE`. ***[See Platform Submission](/portal/docs/submitting-tasks/platform-submission)*** |
 | Jul 31, 2026 | 🆕 New | **Terminus 3 is now live.** Terminus 2nd Edition has concluded. The docs now cover Terminus 3: a new task category taxonomy, four empirical difficulty tiers, and a verifier that runs in a separate container. Milestone tasks are no longer part of the program. ***[Start with What's New](/portal/docs/getting-started/whats-new)*** |
 
 ## What is Terminus 3?
@@ -54,6 +55,7 @@ Each task goes through:
 | Resource | Description |
 |---|---|
 | **[Quick Start Guide](/portal/docs/getting-started/quick-start)** | Get set up |
+| **[Task Skeleton](/Terminus-3-Prod/default-template.zip)** | Starter files — a complete working task to rename and replace |
 | **[What's New in Terminus 3](/portal/docs/getting-started/whats-new)** | Everything that changed |
 | **[What Makes a Good Task](/portal/docs/understanding-tasks/what-makes-a-good-task)** | What a strong task looks like |
 | **[Task Components](/portal/docs/understanding-tasks/task-components)** | Required files and structure |
