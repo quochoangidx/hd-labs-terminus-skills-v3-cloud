@@ -186,7 +186,10 @@ class TaskView:
                 for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                     digest.update(chunk)
             return digest.hexdigest()
-        for name in sorted(self.files()):
+        # Match the canonical task-tree ordering used by the pre-probe gate:
+        # compare path components, not raw path strings.  These differ when a
+        # directory name is also a prefix of a sibling filename.
+        for name in sorted(self.files(), key=lambda value: Path(value).parts):
             digest.update(name.encode("utf-8"))
             digest.update(b"\0")
             digest.update(self.read_bytes(name))
@@ -308,6 +311,7 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
             [
                 ruff,
                 "check",
+                "--no-cache",
                 "--extend-select",
                 "PLW1510",
                 "--output-format",
@@ -356,7 +360,7 @@ def check_instruction_sufficiency_evidence(
     findings: list[Finding],
     task_slug: str,
 ) -> None:
-    """Require the external semantic-sufficiency report for folders and ZIPs."""
+    """Require the external Terminus 3 evidence-inferability report."""
     if view.is_zip:
         bases = [Path.cwd(), *view.path.resolve().parents]
         candidates = [
@@ -365,13 +369,18 @@ def check_instruction_sufficiency_evidence(
         ]
         report = next((path for path in candidates if path.is_file()), candidates[0])
     else:
-        report = view.path.parent / "reports" / task_slug / "instruction-sufficiency.json"
+        candidates = [
+            view.path.parent.parent / "reports" / task_slug / "instruction-sufficiency.json",
+            view.path.parent / "reports" / task_slug / "instruction-sufficiency.json",
+            Path.cwd() / "workspace" / "reports" / task_slug / "instruction-sufficiency.json",
+        ]
+        report = next((path for path in candidates if path.is_file()), candidates[0])
     if not report.is_file():
         add(
             findings,
             "blocker",
             "instruction-sufficiency-evidence",
-            "Missing workspace/reports/<slug>/instruction-sufficiency.json; solver coverage cannot replace the semantic contract audit, including for a packaged ZIP.",
+            "Missing workspace/reports/<slug>/instruction-sufficiency.json; new and revised tasks need the V3 goal/evidence/inferability audit even when solver coverage is complete.",
             str(report),
             "terminus-regular-task-authoring",
         )
@@ -395,7 +404,7 @@ def check_instruction_sufficiency_evidence(
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.write_bytes(view.read_bytes(rel))
                 proc = subprocess.run(
-                    [sys.executable, str(checker), str(task_path), str(report)],
+                    [sys.executable, str(checker), "--require-v3", str(task_path), str(report)],
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -403,7 +412,7 @@ def check_instruction_sufficiency_evidence(
                 )
         else:
             proc = subprocess.run(
-                [sys.executable, str(checker), str(view.path), str(report)],
+                [sys.executable, str(checker), "--require-v3", str(view.path), str(report)],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -414,7 +423,7 @@ def check_instruction_sufficiency_evidence(
             findings,
             "blocker",
             "instruction-sufficiency-evidence",
-            f"Could not validate instruction-sufficiency evidence: {exc}",
+            f"Could not validate V3 evidence-inferability evidence: {exc}",
             str(report),
             "terminus-regular-task-authoring",
         )
@@ -425,8 +434,98 @@ def check_instruction_sufficiency_evidence(
             findings,
             "blocker",
             "instruction-sufficiency-evidence",
-            f"Instruction-sufficiency manifest failed validation: {detail}",
+            f"V3 evidence-inferability manifest failed validation: {detail}",
             str(report),
+            "terminus-regular-task-authoring",
+        )
+
+
+def check_semantic_coverage_evidence(
+    view: TaskView,
+    findings: list[Finding],
+    task_slug: str,
+) -> None:
+    """Require frozen mechanism/mutation coverage for new counted tasks."""
+    if view.is_zip:
+        bases = [Path.cwd(), *view.path.resolve().parents]
+        report_dirs = [base / "workspace" / "reports" / task_slug for base in bases]
+        report_dir = next(
+            (path for path in report_dirs if (path / "semantic-coverage.json").is_file()),
+            report_dirs[0],
+        )
+    else:
+        candidates = [
+            view.path.parent.parent / "reports" / task_slug,
+            view.path.parent / "reports" / task_slug,
+            Path.cwd() / "workspace" / "reports" / task_slug,
+        ]
+        report_dir = next(
+            (path for path in candidates if (path / "semantic-coverage.json").is_file()),
+            candidates[0],
+        )
+    manifest = report_dir / "semantic-coverage.json"
+    verifier = report_dir / "verifier-matrix.json"
+    missing = [str(path) for path in (manifest, verifier) if not path.is_file()]
+    if missing:
+        add(
+            findings,
+            "blocker",
+            "semantic-coverage-evidence",
+            "Missing frozen semantic-coverage/verifier-matrix evidence: " + ", ".join(missing),
+            str(report_dir),
+            "terminus-regular-task-authoring",
+        )
+        return
+    import subprocess
+    import tempfile
+
+    checker = (
+        Path(__file__).resolve().parents[2]
+        / "terminus-regular-task-authoring"
+        / "scripts"
+        / "semantic_coverage_check.py"
+    )
+    try:
+        if view.is_zip:
+            with tempfile.TemporaryDirectory(prefix="semantic_coverage_review_") as tmp:
+                task_path = Path(tmp) / view.name
+                for rel in view.files():
+                    destination = task_path / rel
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(view.read_bytes(rel))
+                proc = subprocess.run(
+                    [sys.executable, str(checker), str(task_path), str(manifest), str(verifier)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+        else:
+            proc = subprocess.run(
+                [sys.executable, str(checker), str(view.path), str(manifest), str(verifier)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+    except Exception as exc:
+        add(
+            findings,
+            "blocker",
+            "semantic-coverage-evidence",
+            f"Could not validate semantic coverage evidence: {exc}",
+            str(manifest),
+            "terminus-regular-task-authoring",
+        )
+        return
+    if proc.returncode != 0:
+        detail = " ".join((proc.stdout + " " + proc.stderr).split())[:700]
+        add(
+            findings,
+            "blocker",
+            "semantic-coverage-evidence",
+            f"Semantic coverage manifest failed validation: {detail}",
+            str(manifest),
             "terminus-regular-task-authoring",
         )
 
@@ -748,6 +847,7 @@ def review(path: Path) -> dict:
         run_ruff(view, findings)
         check_blacklisted_db(view, findings)
         check_instruction_sufficiency_evidence(view, findings, task_slug)
+        check_semantic_coverage_evidence(view, findings, task_slug)
 
         for name in files:
             if re.search(r"(^|/)(\.DS_Store|__MACOSX|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache)(/|$)", name) or name.endswith(".pyc") or "/._" in name or name.startswith("._"):

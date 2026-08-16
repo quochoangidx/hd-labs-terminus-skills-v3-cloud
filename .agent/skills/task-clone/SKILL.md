@@ -87,6 +87,19 @@ candidate:
   gallery_novelty:         # novel | twist-on-existing | duplicate — Terminus 3 submissions require novel; reject twist-on-existing and duplicate
   subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
   objective_type:
+  design_pattern:
+    track:                 # established | derived
+    pattern_ids:           # established P* IDs directly applied
+    parent_pattern_ids:    # derived only
+    derived_pattern_id:    # derived only, candidate-local X-* ID
+    transformation_operators:
+    causal_graph:
+    causal_topology_delta:
+    work_surface_delta:
+    verifier_delta:
+    failure_geometry_delta:
+    non_equivalence_rationale:
+    closest_portfolio_pattern_instance:
   source_url:
   issue_or_pr_id:
   repo:
@@ -112,6 +125,21 @@ candidate:
   difficulty_rationale:
   reasoning_bottlenecks:
   tempting_partial_fixes:
+  semantic_mechanisms:
+  semantic_interactions:
+  public_surfaces:
+  verifier_architecture:  # must pass the mining plan gate before scaffolding
+    schema_version: 1
+    status: pass
+    profile:              # cheap_deterministic | expensive_stateful
+    planned_platform_visible_unit_count:
+    semantic_clusters:
+    public_surface_ids:
+    public_surface_cluster_ids:
+    cross_cluster_scenarios:
+    verifier_shapes:
+    platform_visibility_strategy:
+    nop_discrimination_strategy:
   domain_rationale:
   test_surface:
     primary_api:
@@ -129,15 +157,34 @@ candidate:
     leakage_risk:
   patch_shape_gate:        # pass | fail — fail means no credible high-tier signal
   patch_shape_evidence:
+  v3_shape_screen:         # pass | fail — clear goal, inferable model, interacting axes, semantic deliverable
+  conformance_collapse_screen: # pass | fail | not_applicable
   family_key:              # library + bug_family, for the family ledger
   agent_probe:             # {ran, passed_oneshot} — blind-probe evidence backing the difficulty claim
 ```
 
 If this exists, inspect only touched files, focused upstream tests, and support files needed to stage/build/run the task. Do not rescan large repo history or re-open unrelated issues.
 
+Before scaffolding, validate `design_pattern` against
+`.agent/skills/task-miner/frontier_task_design_patterns.md`. Preserve its track
+through cloning: do not silently convert a rejected derived slot into an
+established slot or relabel an established task as derived. A derived candidate
+must materially change at least two of causal topology, work surface, verifier
+architecture, and expected failure geometry; a repository, language, artifact
+format, or narrative change alone returns to mining as a reskin.
+
 If the artifact is missing `test_surface` details for a secondary implementation
 that tests will cover, fill that gap before writing verifier tests. Do not guess
-constructor signatures from class names.
+constructor signatures from class names. Before scaffolding, require the
+`verifier_architecture` plan and pass:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+  plan <mined-candidate.json>
+```
+
+A failed breadth plan returns to mining. Do not create a task folder and hope
+the final handover will catch it.
 
 For domain-profile artifacts, treat `category`, `subcategory`, `target_behavior`,
 `required_work`, `input_fixtures`, and `output_contract` as the source of truth.
@@ -197,7 +244,9 @@ force Python into a special tier.
 ## Workflow
 
 1. Load the mined artifact or verify the source URL with the smallest needed browse/`gh` pass.
-2. Gate the domain before scaffolding with `task-miner/category_rules.md`.
+2. Read `task-miner/frontier_task_design_patterns.md`, validate the candidate's
+   established/derived track and causal-graph evidence, then gate the domain
+   before scaffolding with `task-miner/category_rules.md`.
    Record exactly one Title Case category/subcategory pair and explain which
    domain evidence makes it necessary. Do not classify by verbs such as
    implement, parse, or repair: a training-loop repair is `ML / Training`, while
@@ -221,19 +270,44 @@ force Python into a special tier.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
 8. Write Terminus 3 `task.toml` with top-level `artifacts`, one exact category/subcategory pair, descriptive fields under `[metadata]`, `environment_mode = "separate"`, `network_mode`, and realistic resources/timeouts.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
-10. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
-11. Write `tests/Dockerfile`, behavioral `tests/test_outputs.py`, and offline `tests/test.sh`; ensure every declared artifact has a landing directory in the verifier image.
-12. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
-13. Run structural checks, CI checks, and optional real-agent trials.
-14. After behavior and validation are stable, write reviewer-facing Difficulty,
-    Solution, and Verification explanations outside the task folder.
+10. Write `tests/Dockerfile`, behavioral `tests/test_outputs.py`, and offline
+    `tests/test.sh`; ensure every declared artifact has a landing directory in
+    the verifier image.
+11. Collect the actual platform-visible test IDs, create
+    `workspace/reports/<slug>/verifier-matrix.json`, and run the verifier
+    architecture gate with `--allow-missing-ctrf`. Stop here if the task has
+    fewer than 50 units/6 clusters under `cheap_deterministic`, or fewer than 20
+    scenarios/4 clusters under `expensive_stateful`. Do not write the Oracle,
+    build Docker images, or run probes for a thin verifier.
+12. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized
+    fix and rebuild if needed.
+13. Validate the exact Docker baseline: NOP fails for the intended reason only;
+    Oracle passes all verifier tests, including under noexec `/tmp`. Bind the
+    Oracle CTRF to `verifier-matrix.json` and rerun the gate without
+    `--allow-missing-ctrf`; its IDs must exactly match the declared behavior and
+    non-behavior units.
+14. Complete V3 evidence inferability, public-surface coverage, the semantic
+    mechanism/interaction map, and executable partial-fix mutation evidence.
+15. Run the folder-level client/manual review and task-visible style audit;
+    clear findings, then freeze the full task/verifier snapshot.
+16. Run counted real-agent trials. Package only after the difficulty gate;
+    then write and separately style-audit reviewer-facing Difficulty, Solution,
+    and Verification explanations outside the task folder.
 
-> ⚠️ The three interaction/scale archetypes in
-> `.agent/skills/task-miner/interaction_shape_recipe.md` are historical and
-> currently closed as reliable Frontier sources (ops restoration and DB migration
-> fell 3/3; long-context was closed by analysis). Use that recipe only for a
-> user-requested Base/Core experiment or the single SUSPECT-dead retest allowance,
-> never as a default batch lane.
+> Terminus 3 explicitly values domain inference, live state, native artifacts,
+> and interacting constraints. The archetypes in
+> `.agent/skills/task-miner/interaction_shape_recipe.md` are open candidate
+> shapes again, but their old Terminus 2 results remain negative priors for the
+> exact canonical restoration/migration recipes that collapsed. Use fresh
+> evidence and varied domain structure. An exploratory skeleton probe may reject
+> an idea cheaply but cannot qualify difficulty; do not assume either
+> Frontier or Base from the archetype name.
+
+The current preferred shapes and the batch 80/20 established/derived policy
+live in `.agent/skills/task-miner/frontier_task_design_patterns.md`. Pattern
+membership is a design receipt, not a difficulty claim. The completed verifier
+must still prove every candidate-specific mechanism and interaction with
+dedicated mutants and frozen probes.
 
 ## Regular Layout
 
@@ -384,7 +458,8 @@ Write like a real engineer describing the requested observable work:
   observable requirement.
 - If tests require a secondary implementation that is not obvious from the
   public behavior, name the relevant module or file path without giving the
-  exact patch. This is allowed instruction sufficiency, not a solution hint.
+  exact patch. This clarifies public scope without disclosing the inferred
+  model or solution.
 
 **Do not narrate the internal mechanism or root cause (the #1 client reject,
 June 2026 trial feedback).** The most common rejection is a prompt that "gives
@@ -702,9 +777,11 @@ Verify CTRF reports each case independently; if parametrization collapses rows,
 generate uniquely named `test_case_001`-style functions. Never use ONE
 monolithic all-N-cases-must-pass function — a single
 universal blind spot then turns that whole test 0/N and the task gets returned.
-Before shipping, drop or disclose (one prose sentence) any case EVERY fresh
-implementation would miss; keep hardness as many independent feature families
-each solver misses a different slice of. Corpus-curation rules: target 50–1000
+Before shipping, audit any case every fresh implementation misses: verify the
+oracle/authority, explicit interface, evidence support, and CTRF resolution.
+Disclose only a non-inferable interface fact; keep a legitimate evidence-based
+inference, add authentic evidence if support is weak, or remove an invalid
+oracle-only assertion. Corpus-curation rules: target 50–1000
 meaningful evaluation units when cheap, or 20–80 complex stateful/interaction
 scenarios; never pad one rule into hundreds of correlated rows. Mix verifier
 shapes when appropriate (scenario, property/metamorphic, mutation/anti-shortcut,
@@ -716,6 +793,22 @@ firing; a hard-only corpus maximizes 0/N exposure). Full remediation decision
 tree when the flag fires anyway:
 `.agent/skills/task-revise-flag-remediation/SKILL.md`
 (design-time rules: `lever_patterns.md` L1 step 6).
+
+**Fail verifier breadth before Oracle work.** Immediately after the verifier
+skeleton is collectable, create `workspace/reports/<slug>/verifier-matrix.json`
+with schema version 1, the profile, every platform-visible unit ID, exact unit
+to cluster mapping, at least two cross-cluster IDs, and verifier shapes. Run:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+  matrix workspace/reports/<slug>/verifier-matrix.json \
+  --task-slug <slug> --allow-missing-ctrf
+```
+
+This first pass may omit `ctrf` because no Oracle exists yet. After Oracle runs,
+add its raw CTRF path/hash and rerun without `--allow-missing-ctrf`. Never call
+a suite “semantic coverage” merely because Oracle passes it; use “smoke suite”
+until verifier architecture and mutation-backed semantic coverage both pass.
 
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
@@ -776,7 +869,7 @@ Anti-shortcut tactics:
   case-insensitive `round`), which accepts any reasonable agent phrasing yet
   still differs from the buggy build's unrelated error. Matching the reference
   solution's exact wording fails functionally-correct agents who phrase the
-  message differently (Task Instruction Sufficiency FAIL). Probe the buggy
+  message differently (`task_specification` / representation overfit). Probe the buggy
   error first to confirm the loose token is absent there, and verify a variant
   wording still passes.
 
@@ -914,21 +1007,42 @@ Before packaging or platform upload:
   de-correlated failures; otherwise the result may be an oracle defect or one
   shared blind spot. For Core/Base candidates, shared misses are a review risk
   rather than an automatic rejection, but every shared miss still needs an
-  authority and instruction-sufficiency audit before packaging.
+  authority/oracle and V3 evidence-inferability audit before packaging.
 - **run the Terminus 3 domain screen.** Apply
   `.agent/skills/task-miner/category_rules.md`, choose exactly one category and
   subcategory, and write `workspace/reports/<slug>/category-screen.json` with a
   domain rationale plus citations to the instruction and verifier evidence.
   Do not use the legacy nine-slug classifier or reshape prose to chase an old
   classifier result.
-- run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
-- create `workspace/reports/<slug>/instruction-sufficiency.json`, cover every
-  static test and semantic cluster, complete two blind contract reviews, and run
-  `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`; any
-  failure blocks the full solve probe and packaging
-- include preservation/non-regression test coverage in the prompt, including modes not directly part of the bug trigger
-- run a verifier API sanity audit for every imported class/function and every
-  constructor used in tests
+- run a V3 symmetry audit: exact artifact paths, public interface/schema,
+  arbitrary constants/strings, and non-inferable operational constraints must
+  be explicit; semantic invariants may instead map to one or more visible
+  evidence sources and may be tested on held-out instances/combinations
+- create `workspace/reports/<slug>/instruction-sufficiency.json` with
+  `schema_version: 3`, map every static test to an explicit-contract row or an
+  inference family, complete two fresh task-visible fairness reviews, and run
+  `sufficiency_manifest_check.py --require-v3`; any failure blocks the full
+  solve probe and packaging
+- create `workspace/reports/<slug>/semantic-coverage.json` following
+  `terminus-regular-task-authoring/references/semantic-coverage-gate.md`; map
+  every promised public surface, record at least three independent mechanisms
+  plus two interactions for Advanced+, and preserve a killed executable mutant
+  per mechanism/interaction. Pass `semantic_coverage_check.py --advanced-plus`
+  before preparing counted probes
+- before counted preparation, run strict Docker preflight to
+  `probe-preflight.json`, folder-level client/manual review to
+  `pre-freeze-review.json`, and task-visible style audit to
+  `task-style-preflight.json`; require `preprobe_check.py` to pass
+- treat fixture multiplication as zero added semantic rank: one keyword across
+  eight units or one numerical branch across fourteen scales remains one
+  mechanism
+- state preservation of a public mode/interface when the user must know it is
+  in scope; hidden variations of the same inferable invariant do not need to be
+  enumerated in the prompt
+- run a verifier API sanity audit for every public entry point promised by the
+  instruction; each must have a platform-visible discriminating test. Tests may
+  not pin undocumented keyword spelling, internal attributes, class identity,
+  or exact error wording when the contract permits semantic equivalents
 - remove implementation hints, issue URLs, PR IDs, commit hashes, upstream test names, and private helper names from `instruction.md`
 - remove hidden walkthroughs, procedural hints, and prompt-bypass instructions
   from environment files, comments, README, configs, scripts, TODOs, `spec.md`,
@@ -979,9 +1093,11 @@ available solve probes are stable.
    - Solution: root cause, high-level oracle strategy, and preserved behavior.
    - Verification: requirement-to-test mapping, why cases discriminate, and
      actual oracle/nop results.
+   - Relevant Experience: concrete domain, toolchain, or repository background
+     that supports the task design, without invented credentials.
 2. Produce the complete platform packet at
    `workspace/submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
-   `task-batch`) containing, beyond the three explanations:
+   `task-batch`) containing, beyond the four explanation fields:
    - **Metadata**: "Does this task use an approved canonical base image?"
      Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
      a Task Inspiration from the Task Gallery?" Yes/No + the Inspiration ID
@@ -1013,6 +1129,10 @@ Use this structure in both files:
 ...
 
 # Verification Explanation
+
+...
+
+# Relevant Experience
 
 ...
 ```

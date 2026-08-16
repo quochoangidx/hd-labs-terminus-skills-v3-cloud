@@ -1,153 +1,180 @@
-# Task Instruction Sufficiency Gate
+# Terminus 3 Evidence-Inferability Gate
 
-Use this gate before any difficulty probe. Hidden inputs, fixture identifiers,
-expected outputs, and oracle implementation may remain hidden. A graded
-contract rule may not.
+This gate implements the Terminus 3 distinction between a **clear goal** and an
+**inferred specification**. Keep the compatibility filename
+`instruction-sufficiency.json`, but use schema version 3 for every new or
+revised task.
 
-## Required artifact
+The task must expose the requested outcome, artifact/interface, and any exact
+convention that cannot be derived. It does not have to state every semantic
+invariant as prose. Domain rules may be reconstructed from agent-visible
+evidence, system state, realistic specifications, or established conventions.
+
+## The three layers
+
+1. **Explicit success contract** — state the goal, artifact paths, public
+   interface or output schema, hard safety/resource constraints, and arbitrary
+   exact values that the agent could not otherwise derive.
+2. **Inferable domain model** — let the agent derive causal relations, protocol
+   semantics, geometry, scientific interpretation, state transitions, and
+   interacting constraints from one or more visible sources.
+3. **Forbidden hidden knowledge** — reject oracle-only policies, unreachable
+   authorities, undocumented exact strings, and arbitrary constants or
+   tie-breaks that neither evidence nor domain convention determines.
+
+Hidden instances, new combinations, and metamorphic variations are encouraged
+when they exercise the same inferable model. A hidden test may not introduce a
+new arbitrary policy or a fact the agent could not possibly obtain.
+
+## Required report
 
 Write `workspace/reports/<slug>/instruction-sufficiency.json` outside the task
-folder and ZIP. The report is local audit evidence, not agent-facing material.
+folder and ZIP. New reports use this shape:
 
 ```json
 {
+  "schema_version": 3,
   "task": "tbrain-example",
   "verdict": "pass",
-  "hidden_case_policy": {
-    "hidden_inputs": true,
-    "hidden_expected_outputs": true,
-    "hidden_contract_rules": false
-  },
   "contract_source_files": [
+    {"path": "instruction.md", "sha256": "<sha256>"},
+    {"path": "environment/evidence/trace.json", "sha256": "<sha256>"}
+  ],
+  "explicit_contract": [
     {
-      "path": "instruction.md",
-      "sha256": "<sha256 of the reviewed instruction.md>"
+      "id": "result_artifact",
+      "requirement": "Write the recovered session summary to /app/result.json using the documented schema.",
+      "test_selectors": ["test_result_schema"],
+      "source_locator": "instruction.md:/app/result.json"
     }
   ],
-  "contract_rows": [
+  "inference_families": [
     {
-      "id": "transport_policy",
-      "asserted_behavior": "Only HTTPS and SCP-style git remotes are accepted.",
-      "test_selectors": ["test_supported_remotes", "test_unsupported_transports"],
-      "source_type": "instruction",
-      "source_locator": "instruction.md:Accept HTTPS remotes and SCP-style git remotes",
-      "reasonable_alternative": "Allow ssh:// because Git documents it as a standard transport.",
-      "visible_contract_rejects_alternative": true
+      "id": "session_protocol",
+      "inferred_model": "Frame boundaries and key evolution are reconstructed from the capture and host trace.",
+      "test_selectors": ["test_session_*"],
+      "evidence_sources": [
+        {"path": "environment/evidence/capture.bin", "locator": "binary session", "role": "observed frames"},
+        {"path": "environment/evidence/host.log", "locator": "startup records", "role": "initial state"}
+      ],
+      "reasoning_chain": "Correlating frame lengths with startup counters determines the transition model.",
+      "competing_interpretation": "Treat every frame as independently keyed.",
+      "evidence_discriminator": "That interpretation contradicts the counter progression shared by both artifacts.",
+      "hidden_generalization": ["new_instances", "new_combinations", "metamorphic_variations"]
     }
   ],
-  "blind_contract_review": {
+  "unobtainable_knowledge": {
+    "oracle_only_policies": [],
+    "unreachable_authorities": [],
+    "undocumented_exact_values": []
+  },
+  "oracle_alignment": {
+    "oracle_is_valid_realization": true,
+    "verifier_accepts_semantic_equivalents": true,
+    "equivalence_notes": "The JSON schema is exact; ordering and implementation strategy are not graded."
+  },
+  "fairness_review": {
     "reviewer_count": 2,
-    "contract_inventory_complete": true,
     "reviewers": [
       {
-        "reviewer_id": "contract-review-1",
+        "reviewer_id": "fairness-review-1",
         "runtime": "codex",
         "model": "<actual model>",
         "session_id": "<actual fresh session id>",
         "fresh_context": true,
-        "source_only": true,
-        "reviewed_source_files": ["instruction.md"],
-        "transcript": "contract-review-1.md",
+        "task_visible_only": true,
+        "reviewed_source_files": ["environment/evidence/capture.bin", "environment/evidence/host.log", "instruction.md"],
+        "transcript": "fairness-review-1.md",
         "transcript_sha256": "<sha256>"
       },
       {
-        "reviewer_id": "contract-review-2",
+        "reviewer_id": "fairness-review-2",
         "runtime": "codex",
         "model": "<actual model>",
         "session_id": "<different fresh session id>",
         "fresh_context": true,
-        "source_only": true,
-        "reviewed_source_files": ["instruction.md"],
-        "transcript": "contract-review-2.md",
+        "task_visible_only": true,
+        "reviewed_source_files": ["environment/evidence/capture.bin", "environment/evidence/host.log", "instruction.md"],
+        "transcript": "fairness-review-2.md",
         "transcript_sha256": "<sha256>"
       }
     ],
     "questions": [
       {
-        "id": "transport_boundary",
-        "contract_ids": ["transport_policy"],
-        "question": "Should ssh:// be accepted or rejected?",
-        "answers_agree": true,
-        "matches_oracle": true,
-        "source_locator": "instruction.md:Accept HTTPS remotes and SCP-style git remotes"
+        "id": "protocol_inferability",
+        "family_ids": ["session_protocol"],
+        "question": "Can a competent domain practitioner derive a defensible frame/key model from the visible evidence?",
+        "inferability_supported": true,
+        "unresolved_goal_ambiguity": false,
+        "unobtainable_knowledge_required": false,
+        "evidence_locators": ["environment/evidence/capture.bin", "environment/evidence/host.log"]
       }
     ]
   }
 }
 ```
 
-Run:
+Run the V3 gate:
 
 ```bash
 python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py \
-  workspace/<slug> workspace/reports/<slug>/instruction-sufficiency.json
+  --require-v3 workspace/tasks/<slug> \
+  workspace/reports/<slug>/instruction-sufficiency.json
 ```
 
-The command must pass before local solve probing, coverage remediation,
-platform-candidate packaging, or submission packaging.
+## Mapping rules
 
-## Contract sources
+- Every static pytest function must map to an explicit-contract row, an
+  inference family, or both.
+- Explicit-contract rows map exact success-surface requirements to
+  `instruction.md`. Do not place root cause or solution steps there.
+- An inference family may cite multiple sources. The reasoning should emerge
+  from their interaction; do not require one sentence that gives away the
+  derived rule.
+- Evidence sources must be inside the task and agent-visible. An authority is
+  acceptable only when it is actually reachable under the configured network
+  mode.
+- Hidden tests may vary values, layouts, sequences, combinations, and timing
+  states while preserving the visible evidence model.
+- Exact schema fields, artifact paths, public symbol names, and arbitrary
+  constants remain explicit unless a realistic visible source defines them.
+- Verifiers should accept semantically equivalent realizations whenever the
+  task does not require a unique representation.
 
-Every semantic test or cluster must resolve to exactly one visible source:
+## Fairness review
 
-- `instruction`: an observable rule stated in `instruction.md`.
-- `environment_reference`: a contract, format, examples, or data file under
-  `environment/` that the agent can read offline.
-- `reachable_authority`: a pinned authority that is actually callable or
-  readable inside the task image without network access.
-- `visible_training_data`: a behavior learnable from the visible labeled
-  archive rather than from an oracle-only labeling rule.
+Give two fresh reviewers only `instruction.md` and the agent-visible
+environment. Ask them to identify the goal, evidence, defensible domain model,
+remaining uncertainty, and any information a correct solution would require
+but could not obtain.
 
-For `visible_training_data`, record `support.training_path`, at least two
-positive examples, at least two contrast examples, and an empty
-`hidden_only_feature_values` list. Increase those counts when the interaction
-has several degrees of freedom. A hidden validation row may be new; a hidden
-feature value, interaction family, threshold, or policy may not.
+For `task-batch`, launch the two reviews concurrently in exactly two distinct
+fresh sessions. Neither reviewer may be the builder, consolidated auditor, or
+a blind solver. Do not provide solution files, verifier tests, rubrics, reports,
+Oracle outputs, or hidden fixtures. The builder may assemble the final manifest
+from their transcripts but may not substitute its own judgment for either
+review.
 
-For `reachable_authority`, record `authority_command` and
-`offline_reachable: true`, then execute that command in the final image. Naming
-an unavailable standard or runtime is not evidence.
+The reviewers do **not** need to reproduce the oracle, choose the same
+implementation, or predict every hidden case. The gate fails only when the
+goal/interface is ambiguous, the evidence cannot support the graded inference,
+or success requires unobtainable knowledge. Reviewer disagreement about a
+legitimate implementation choice is acceptable when the verifier accepts both.
 
-## Reasonable-alternative test
+## Gate ordering
 
-For each row, write the strongest implementation a competent developer could
-justify from the visible files but that the oracle rejects. The visible
-contract must unambiguously reject it. If it does not, fix one of these:
+1. Run a lightweight goal/evidence audit before a skeleton probe.
+2. Use the full V3 report before a full difficulty probe or packaging.
+3. Run oracle/NOP and verifier integrity checks.
+4. Measure difficulty empirically and inspect failure reasons.
 
-1. State the missing observable fact in concise prose.
-2. Add an agent-visible contract/reference artifact.
-3. For ML, add disjoint positive and contrast training examples.
-4. Relax or remove the assertion.
-5. Drop the task if disclosure removes its entire difficulty wall.
+No pass rate can make an ambiguous or impossible task fair. Conversely, a
+solver failure is legitimate difficulty when the goal is clear and the missing
+insight is inferable from the supplied evidence.
 
-Do not use solver success as the source. A solver can guess an undocumented
-rule correctly.
+## Legacy compatibility
 
-## Blind contract review
-
-Run two independent reviews with only `instruction.md` and `environment/`.
-Do not provide tests, solution, oracle outputs, suspected gaps, or desired
-answers. Derive decision questions from every graded boundary, then compare the
-answers after both reviews finish.
-
-The gate fails when reviewers disagree, agree on an answer different from the
-oracle, cannot cite a visible source, or infer a rule only from existing buggy
-code that contradicts the expected policy. Fix the contract and repeat the
-blind review with fresh context.
-
-Record the actual runtime, model, unique session ID, raw transcript, and SHA-256
-for both reviews. Hash every reviewed contract source in
-`contract_source_files`; any later instruction/reference edit invalidates the
-manifest. `contract_inventory_complete: true` is an explicit two-reviewer
-attestation that every normative promise was classified as graded or deliberately
-ungraded, so the audit covers both directions: tests-to-contract and
-contract-to-discriminating-tests.
-
-## Separation from other gates
-
-- Sufficiency asks where an agent is allowed to learn each graded rule.
-- Difficulty asks whether agents implement or infer that visible rule correctly.
-- Coverage asks whether each visible test unit has at least one passer.
-
-Run them in that order. Oracle/NOP success, 0/N difficulty, union coverage, and
-platform sample size never override a sufficiency failure.
+Reports without `schema_version: 3` are accepted only by the checker's default
+compatibility mode so existing work is not destroyed. New batch handover,
+client review, and revised-task validation must call `--require-v3` and migrate
+the report. Do not add more rules to the legacy contract-transcription schema.

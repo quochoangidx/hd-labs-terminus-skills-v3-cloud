@@ -13,6 +13,12 @@ before every zip — it machine-checks the mechanical gates (layout,
 arcnames/CRLF, rubric format, docker oracle=1/nop=0, noexec-/tmp repro). Zero
 FAIL rows required.
 
+For a new `task-batch` candidate, do not create a handoff ZIP before the counted
+difficulty gate. The pre-probe strict run writes receipts and raw Docker evidence
+without `--emit-zip`; only a shortlisted, submission-audited task receives the
+final ZIP. Returned-task remediation may keep its versioned revision archives as
+described below.
+
 ## Zip Rule
 
 Zip the contents of the task folder, not the folder itself.
@@ -54,11 +60,11 @@ The ZIP must contain only the files/folders required by the Platform Submission 
 
 **Make shell scripts executable before zipping.** Reviewers reject a ZIP whose `tests/test.sh` or `solution/solve.sh` is non-executable. Run `chmod +x tests/test.sh solution/solve.sh` first, then verify the stored Unix mode with `unzip -Z <zip> tests/test.sh solution/solve.sh` (expect `-rwxr-xr-x`). `zip -X` preserves the Unix permission mode — it only strips uid/gid and timestamps — so the allowlist command below keeps the exec bit intact.
 
-The platform's `Difficulty Explanation`, `Solution Explanation`, and
-`Verification Explanation` fields are entered separately in the UI. They are
-not ZIP contents.
+The platform's `Difficulty Explanation`, `Solution Explanation`,
+`Verification Explanation`, and `Relevant Experience` fields are entered
+separately in the UI. They are not ZIP contents.
 
-For a Regular task, the ZIP root should contain:
+The Terminus 3 ZIP root should contain:
 
 ```text
 instruction.md
@@ -67,16 +73,6 @@ environment/
 solution/
 tests/
 ```
-
-For a milestone task, the ZIP root should contain:
-
-```text
-task.toml
-environment/
-steps/
-```
-
-Milestone ZIPs must not include root-level `instruction.md`, `solution/`, or `tests/`.
 
 ## Metadata Update
 
@@ -109,7 +105,7 @@ find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' -o -name 'targ
 
 Do not use macOS Finder "Compress" when possible; it can add `__MACOSX` and `._*` files that fail CI.
 
-## Regular ZIP
+## Task ZIP
 
 From inside the task folder:
 
@@ -119,19 +115,6 @@ REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
 ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
 mkdir -p "${REPO_ROOT}/workspace/submissions"
 zip -rX "$ZIP_PATH" instruction.md task.toml environment solution tests \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
-```
-
-## Milestone ZIP
-
-From inside the task folder:
-
-```bash
-TASK_NAME="$(basename "$PWD")"
-REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
-ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
-mkdir -p "${REPO_ROOT}/workspace/submissions"
-zip -rX "$ZIP_PATH" task.toml environment steps \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
 ```
 
@@ -248,15 +231,9 @@ On first upload:
   2, 3, or 5, never use 4, carry an explicit leading `+` on every positive
   score (write `+3`, not `3` — unsigned positives are sent back for revision),
   and focus on trace-evidenced behavior rather than final pytest results
-- for non-milestone tasks, use a flat `Agent ...` list; a single `# Rubric 1`
-  header is tolerated but not required, and `# Rubric 2+` is reserved for
-  milestone tasks
-- for milestone tasks, use `# Rubric 1`, `# Rubric 2`, etc. blocks matching the
-  milestones
-- ensure rubrics have at least three negative criteria overall and a
-  cumulative positive total of 10-40 points (the same 10-40 band applies to
-  non-milestone tasks); milestone rubrics also need at least one negative
-  criterion and 10-40 positive points per milestone
+- use one flat list of `Agent ...` criteria; Terminus 3 has no milestones
+- ensure the rubric has at least one negative criterion and a cumulative
+  positive total of 10-40 points
 - before final reviewer submission, uncheck "Generate Rubric(s)" so the edited
   rubric is not overwritten, then check "Send to Reviewer"
 - after final submission, expect peer review in 1-7 business days; total review

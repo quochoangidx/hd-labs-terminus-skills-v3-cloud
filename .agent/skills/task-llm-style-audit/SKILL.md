@@ -1,6 +1,6 @@
 ---
 name: task-llm-style-audit
-description: Use after authoring or revising a Terminus task, before zipping, or when a reviewer flags LLM-generated writing. Audits every reviewer-visible prose surface (instruction.md, environment docs, code comments, rubric text, submission explanations) for LLM-generation tells, re-authors the risky spots with the anti-llm rewrite rules while preserving technical facts and instruction/test symmetry, and marks each surface verified. Style-only gate; packaging and verifier coverage stay with task-client-feedback-review.
+description: Use before freezing a counted Terminus probe and again after writing submission prose, or when a reviewer flags LLM-generated writing. Audits task-visible prose first, then external rubric/explanations after probes, preserving technical facts and instruction/test symmetry. Style-only gate; packaging and verifier coverage stay with task-client-feedback-review.
 ---
 
 # Task LLM-Style Audit
@@ -12,10 +12,18 @@ trial batch ("prompts should not be LLM generated", quality-guidelines.md), and 
 every section the same shape... write it like a person" and the explanations as
 "still 2-3 LLM sentences each, ask was 4-6 real human ones".
 
-Run this as the LAST authoring step: after oracle/nop pass and after
-`task-client-feedback-review`, immediately before `task-zip-submit`. Content fixes
-made here are prose-only, so no re-validation of the verifier is needed — but if a
-fix deletes or relocates a file (see structural tells), re-run oracle/nop.
+Run two phases. Before counted probes, audit every task-tree prose surface and
+freeze `task-style-preflight.json`; any rewrite then happens before solver
+sessions are spent. After probes, audit only external rubric/submission prose
+and write schema-2 `style-audit.json`. A post-probe task-tree edit invalidates
+the counted snapshot and returns the workflow to pre-freeze validation.
+
+For `task-batch`, do not create a separate style agent. The consolidated
+auditor performs semantic realism, folder/manual review, and this task-tree
+style pass in one pre-freeze session, producing three separate receipts backed
+by one real transcript/provenance record. Reuse that same auditor identity in a
+new post-probe turn for the final submission and ZIP; use a new transcript that
+binds the exact final surfaces.
 
 ## Surface inventory
 
@@ -28,7 +36,7 @@ inventory first, then score each surface:
 | Environment docs | `environment/**/*.md`, specs, READMEs | must read like a real engineering doc (API contract, schema, RFC), never a prompt extension |
 | Environment code comments | `environment/**` source | comments must not point at bugs or narrate the fix; when in doubt, delete the comment |
 | Rubric text | platform textbox draft / `*-rubics.txt` | flat `Agent ...` lines; vary phrasing across criteria |
-| Submission explanations | `workspace/reports/<slug>/submission-explanations*.md` | 4–6 sentences each, three fields must not share one template |
+| Submission explanations | `workspace/reports/<slug>/submission-explanations*.md` | audit all four fields; keep the three technical explanations distinct and Relevant Experience factual |
 | Test/solution comments, Dockerfile comments | `tests/`, `solution/`, `Dockerfile` | reviewer-visible even though agent-invisible; same prose rules |
 | Filenames | whole tree | no AI-scaffolding names: `CLAUDE.md`, `AGENTS.md`, `skills.md`, `.cursor/` |
 
@@ -59,7 +67,7 @@ them; the structure itself is the signal. Each fix below is the confirmed remedy
    ragged.
 6. **Explanations written as 2–3 uniform sentences per field.** The ask is 4–6
    sentences that read like a person explaining their own task: concrete file/value
-   references, one opinion or aside, different rhythm across the three fields, and
+   references, one opinion or aside, different rhythm across the three technical explanations, and
    zero mentions of LLM/AI/model/agent/guidelines (anti-llm rules 16, 18, 20, 21).
 7. **Instruction hand-holds discovery that is already trivial** — naming the exact
    file to edit when it is the only source file (scrabble-clock: "main.go is the
@@ -136,55 +144,35 @@ Every surface must end `verified` before `task-zip-submit`. If a surface cannot 
 made human-sounding without breaking symmetry or fairness, stop and redesign that
 surface via `terminus-regular-task-authoring` instead of shipping a compromise.
 
-For `task-batch`, also write the machine-auditable receipt at
-`workspace/reports/<slug>/style-audit.json`. Bind it to the exact final task and
-submission file; `scripts/batch-handover.py` rejects stale or incomplete receipts.
+For `task-batch`, inventory every UTF-8 reviewer-visible task file before the
+counted snapshot and generate the schema-1 task receipt after the real audit:
 
-```json
-{
-  "schema_version": 1,
-  "task_slug": "tbrain-example",
-  "status": "pass",
-  "task_snapshot_sha256": "<full task tree hash from batch-handover.py>",
-  "submission_sha256": "<sha256 of submissions/SUBMISSION-tbrain-example.md>",
-  "auditor": {
-    "runtime": "codex",
-    "model": "<actual model>",
-    "session_id": "<actual session id>",
-    "transcript": "style-audit-transcript.md",
-    "transcript_sha256": "<sha256>"
-  },
-  "surfaces": [
-    {
-      "path": "instruction.md",
-      "sha256": "<sha256>",
-      "status": "verified"
-    }
-  ],
-  "deleted_as_leak": []
-}
+```bash
+python3 .agent/skills/task-batch/scripts/evidence.py task-style-receipt \
+  workspace/tasks/<slug> \
+  --transcript workspace/reports/<slug>/consolidated-pre-freeze-audit.md \
+  --runtime <actual-runtime> --model <actual-model> \
+  --session-id <actual-session-id> \
+  --output workspace/reports/<slug>/task-style-preflight.json
 ```
 
-Inventory every UTF-8 reviewer-visible task file, including source files whose
-comments are visible. Record actual model/session provenance and preserve the raw
-audit transcript beside the receipt. Any content change after this receipt requires
-a new style audit; do not update hashes without re-reading the changed surfaces.
-
-After the real audit is complete and its transcript is saved, generate the
-surface inventory and hashes mechanically:
+After probes, audit the final external submission and generate schema-2
+`style-audit.json`. It hash-reuses the unchanged pre-freeze task receipt rather
+than pretending the submission auditor reread every task file:
 
 ```bash
 python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
-  workspace/<slug> \
-  --submission submissions/SUBMISSION-<slug>.md \
+  workspace/tasks/<slug> \
+  --submission workspace/submissions/SUBMISSION-<slug>.md \
   --transcript workspace/reports/<slug>/style-audit-transcript.md \
   --runtime <actual-runtime> --model <actual-model> \
   --session-id <actual-session-id> \
   --output workspace/reports/<slug>/style-audit.json
 ```
 
-This command records hashes; it does not perform the audit. Never run it as a
-replacement for reading the surfaces.
+Both commands record hashes; neither performs an audit. Preserve each raw
+transcript beside its receipt. Never update hashes without rereading the changed
+surface.
 
 ## Out of scope (route elsewhere)
 

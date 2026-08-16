@@ -38,7 +38,7 @@ and behavior contract, then build it with `task-clone`.
    removed Terminus 2 fields.
 6. Adapt digest-pinned images and build commands. Bake every dependency into the
    relevant image; never install verifier dependencies at trial time.
-7. Re-run oracle, nop, static checks, instruction sufficiency, and artifact
+7. Re-run oracle, nop, static checks, V3 evidence inferability, and artifact
    transfer checks. A successful source-language task does not prove the migrated
    runtime works.
 8. Package only if the user requested an internal ZIP or a replacement upload.

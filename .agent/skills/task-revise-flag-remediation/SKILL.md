@@ -1,240 +1,176 @@
 ---
 name: task-revise-flag-remediation
-description: Use when a Terminus 3 task is returned with the platform flag "Some tests not passed by any agent run" or when pre-auditing correlated blind spots. Classifies each 0/N test by root cause and applies the matching fix while preserving fairness and the empirically observed tier.
+description: Use when revising a Terminus 3 task after platform trial-analysis flags, reviewer feedback, a 0/N solvability return, or a pre-submission correlated-blind-spot audit. Separates task bugs from legitimate evidence-based difficulty, applies the smallest docs-aligned repair, preserves semantic coverage, and re-measures the empirical tier.
 ---
 
-# Coverage-Flag Remediation — "Some tests not passed by any agent run"
+# Terminus 3 Revision and Flag Remediation
 
-The platform flag `❌ Some tests not passed by any agent run` is **BLOCKING**:
-the task is returned until every verifier test is passed by at least one trial.
-This skill is the remediation decision tree, distilled from historical
-platform rounds across 6 tasks (html5-tree-construction, semver-range-satisfies,
-maven-version-order, collation-sortkey, css-tokenization, cargo-version-req).
+Revise from raw per-trial evidence, not from the job summary alone. Terminus 3
+has four empirical tiers and six trial-analysis criteria; a revision should
+repair validity without turning domain inference into a disclosed checklist.
 
-## The one principle behind every fix
+## Sources of truth
 
-0/N happens only for **CORRELATED** failures — every agent misses the SAME
-feature. De-correlated (independent) failures get covered by the union across
-runs and naturally reach ≥1/N. You cannot *guarantee* every test ≥1/N by
-editing — the flag is stochastic: for a sample of N runs, keeping expected-0/N below 1
-across ~1500 cases requires every case be passed by >~37% of runs, which
-conflicts with a very low pass-rate target. The achievable goal is: **eliminate every correlated /
-deterministic blind spot, then prune the residual low-probability tail for
-margin, then re-run to confirm.**
+Read, in order:
 
-A second principle connects this flag to `instruction_check`: the two fixes
-pull against each other (disclosing a convention to fix coverage often reads
-as a "spec table" to the instruction checker). The move that satisfies both:
-**disclosure lives in the environment as DATA (`/app/examples.json`, a format
-doc, a standard's table), not in instruction.md as prose** — see the
-disclosure ladder in `terminus-regular-task-authoring` (Prompt Rules).
+1. the exact reviewer message and trial-analysis flags;
+2. per-trial trajectories, verifier logs, and per-test CTRF/readback;
+3. `instruction.md` plus the agent-visible environment;
+4. `tests/`, oracle, and the real authority or invariant;
+5. `docs/understanding-tasks/difficulty-guidelines.md` and
+   `docs/testing-and-validation/running-real-agents.md`.
 
-## A local pre-audit is not the platform verdict
+Do not infer a defect from a single summary label. Preserve the original task,
+reports, and probe artifacts before editing.
 
-When this skill is called from `task-batch`, treat a test missed by every local
-run as a risk observation, not proof that the platform sample will miss it.
-Always build the per-case × per-run matrix first:
+## First classification
 
-- difficulty is language-independent;
-- union 100% and clean fairness needs no coverage remediation;
-- shared misses require a validated instruction-sufficiency mapping before any
-  change;
-- common misses caused by infra, oracle, contract, aggregation, or unreachable
-  data follow Steps 0–2 below;
-- concentrated single-lever misses or candidates outside the bounded lane are
-  redesigned/dropped from the qualified pipeline, while their artifacts remain
-  retained for audit rather than being silently deleted.
+Classify each failure before changing prose or tests:
 
-Do not margin-prune a task from a small local sample merely to manufacture
-100% local union. Platform per-trial readback is stronger evidence than the
-three-run pre-audit.
-
-## Step 0 — rule out infrastructure look-alikes FIRST
-
-Two known non-difficulty causes produce this exact flag; check them before
-touching any test:
-
-- **`/app` is not a git repo** (cloned `.git` stripped and no `git init` in the
-  Dockerfile). Agents apply edits via `git apply` and self-check with
-  `git diff`; patches silently fail to land and otherwise-correct agents score
-  0. Fix: `RUN git init -q && git add -A && git commit …` after the final
-  source COPY (see `terminus-regular-task-authoring`, Docker Rules).
-- **Missing `tmux`/`asciinema` in the image** — all runs die at setup
-  (`verifier_did_not_run` N/N) and every test shows 0/N while oracle passes.
-  Fix the Dockerfile, not the tests.
-
-## Step 1 — read the PER-TRIAL data, never the job summary
-
-The LLM job summary names the wrong blind spot often enough to burn you
-(semver: summary blamed the `-0` suffix, actually at 5/10; the real universal
-misses were compound canonicalization conventions). Before writing any fix:
-
-- Pull the per-test / per-trial pass table and b64-decode the actual 0/N case
-  vectors.
-- Cluster the 0/N cases **by feature**, not by test name — correlated blind
-  spots are feature clusters (e.g. 51 of 52 cases = one tokenizer state).
-- For each cluster ask: did ANY trial pass these cases *individually* even
-  while failing the enclosing group test? (This decides parametrize vs prune
-  below.)
-
-## Step 1.5 — ⭐ suspect the ORACLE before you prune
-
-N independent strong agents each reconstruct the authority; when they ALL
-disagree with the oracle on the same cluster, the base rate says the oracle is
-wrong, not the agents. Before any prune/disclose:
-
-- Re-derive every expectation in the cluster by running the REAL authority (a
-  live `node_modules/semver`, the actual jar, the upstream binary) — not the
-  oracle, not the corpus.
-- Differential-fuzz the oracle against that authority over tens of thousands of
-  generated inputs. The corpus is self-consistent with the oracle's bugs *by
-  construction*, so `oracle == corpus` proves nothing; the gate is
-  `oracle == authority`.
-- Pruning first deletes the evidence: the semver-range family's two 0/N
-  clusters (numeric-after-wildcard, build-metadata-on-partial) were BOTH oracle
-  bugs; the prune cleared the flag and a client reviewer returned the sibling
-  task months later.
-
-Only once the oracle is proven conformant is a 0/N cluster evidence of a real
-agent blind spot — then, and only then, proceed to Step 2.
-
-## Step 1.75 — single-lever early exit (DROP, don't remediate)
-
-Before walking the decision tree, check the fair⊥hard fingerprint: agent runs
-are NEAR-PERFECT and miss only the 0/N cluster — i.e. the task's ENTIRE
-difficulty is that one boundary / convention / precedence / output-contract
-fact. Then no remediation path exists: hiding it stays unfair 0/N, disclosing
-or pruning it flips the near-perfect runs to 100% and the task has no signal.
-**DROP or redesign around an orthogonal implementation/reasoning challenge under
-a fully visible contract immediately**
-(arrhenius-clip-fit, calibration-threshold-select, hanabi, provenance-release-
-gate were all late-drop lessons). This mirrors verdict case 4 in
-`task-local-solve-probe` (Submit-readiness); the same fingerprint should
-already have been screened at mining time (`task-miner`, Master collapse law
-screen). Only tasks with a BROAD residual wall beyond the 0/N cluster continue
-to Step 2.
-
-### Preserve the honest Terminus 3 tier
-
-Coverage remediation is a fairness and observability repair, not a difficulty
-hardening tool. Base and Core outcomes are valid. After every disclosure, split,
-data addition, or prune:
-
-- rerun oracle and nop in the separate-verifier flow;
-- re-score the stored solve diffs;
-- update the measured tier rather than retaining an older higher-tier claim;
-- reject the task if removing the shared cluster leaves a 100% sample or reveals
-  that the entire challenge was one hidden convention;
-- apply the same rule to Python and every other implementation language.
-
-## Step 2 — classify each 0/N test and apply the matching fix
-
-| 0/N shape | Fix | Why / proven on |
+| Class | Evidence | Repair direction |
 |---|---|---|
-| **Group-aggregate test sitting ON TOP of per-case parametrized tests** (asserts a whole category in one function, every case also has its own test) | **DELETE the group test.** Structurally 0/N forever — no single run passes an entire hard category — and 100% redundant. Difficulty-neutral. | semver: removed 9 group tests |
-| **Group test is the ONLY coverage of its cases, and the killer cases are NOT universal-miss** (per-trial data shows ≥1 agent passed them individually) | **Split the corpus per-case** (`test_case_001`, `test_case_002`, one test per vector). Coverage becomes per-case → killers covered by whoever got them right. Difficulty-neutral when `test.sh` reward is already all-or-nothing (pytest rc==0 → 1): you change the unit of *coverage*, not the win condition. Caveat: `pytest-json-ctrf` can collapse `@pytest.mark.parametrize` rows into one test with `retries`; generate unique test functions or verify CTRF reports `summary.tests == case_count`. | cargo-version-req: 3 killer P4 cases inside a 2400-case group; renju: parametrized rows collapsed in CTRF until generated test functions were used |
-| **Per-case 0/N on an irreducible obscure feature** (every fresh impl will miss it; no fair way to teach it without gutting difficulty) | **PRUNE those cases from the corpus** (regenerate the `.gz`/json; keep any `corpus_present` minimum-count guard satisfied). | html5: script-data double-escape ×51; css-tokenization: 3 `url(`+ws+quote cases |
-| **0/N caused by an undisclosed convention or reference-class divergence — the cases ARE the lever** (agents implement the version they memorized; the corpus is the real implementation's behavior) | **DISCLOSE, do NOT prune**: pin the exact reference release in the instruction + a few oracle-verified contrast examples (embedded at the operation definitions as contract clarification, not a mapping table). The correlated blind spot becomes a de-correlated residual tail. | maven: 894/8015 identical misses; pinned "maven-artifact 3.9.9" + contrast pair |
-| **0/N because a large NON-derivable standard table is unreachable offline** (entities, Unicode data) | **SHIP the data in-env** (canonical-format file, `COPY` before the image's `git add -A`, point the instruction at the path). Fair and difficulty-neutral — mechanical data can't beat an algorithmic wall. | html5: `entities.json` (2231 entries), `whatwg-parsing.html` |
-| **0/N band in chunked/monotonicity scoring** (corpus replayed in index bands) | Rebuild the oracle, **inject the common agent bug**, run the exact test harness to locate the first breaking line, then **prune just those corpus lines** — re-greens the band without deleting it. A 0/N *subset-isolator* test for an irreducible feature gets DELETED (graded difficulty survives in the general bands). | collation: Tangut-Supplement lines; deleted `test_implicit_weight_subset` |
+| Infrastructure | build, dependency, artifact transfer, setup, refusal, or verifier never ran | repair environment/harness; never count as difficulty |
+| Oracle/verifier defect | authority disagrees, flaky result, representation-specific assertion, test-only implementation | fix oracle/verifier and rerun oracle/NOP |
+| Explicit-contract gap | missing output path, public schema, parameter name, exact string, or arbitrary constant | state the minimal interface fact or relax the assertion |
+| Evidence-inferability gap | goal is clear but visible evidence cannot support the graded model | add authentic evidence, accept equivalents, narrow the claim, or remove the invalid test |
+| Legitimate semantic miss | evidence supports the model but the solver reasons or coordinates state incorrectly | keep the challenge; do not add hints merely to raise pass rate |
+| Replicated single lever | many failed rows map to one keyword, representation choice, numerical branch, or missing entry point | fix fairness/coverage, then reject Advanced+ unless multi-node geometry survives |
+| Solvability/coverage risk | at least one test is 0/N across the platform sample | audit the exact case after the four classes above |
 
-Cross-cutting rules:
+The compatibility report remains
+`workspace/reports/<slug>/instruction-sufficiency.json`, but every revised task
+must migrate it to `schema_version: 3` and pass:
 
-- **NEVER** delete the per-case parametrized suite or collapse the corpus to a
-  few boundary cases to clear the flag — boundary cases are memorizable and
-  the task flips to 100% (fails the iteration gate).
-- Pruning must be **feature-cluster-complete**: a literal predicate can be
-  incomplete when cases reach the blind spot transitively (collation: BMP
-  compat ideographs *decompose to* astral CJK — the prune predicate had to be
-  decomposition-aware). Derive the predicate from the mechanism, not the
-  surface pattern.
-- Pre-audit any NEWLY added vector family for likely-universal-miss shapes
-  before shipping (semver pre-emptively dropped vectors even the oracle
-  originally got wrong).
-- **Soft-representative rule:** after any prune, every feature cluster must
-  still keep ≥1 "soft" case that a majority of runs pass. A hard-cases-only
-  corpus is forbidden — it maximizes 0/N exposure on the next re-run and trips
-  anti-hardcoding minimum-coverage guards. The trimming direction is always
-  pass-table-driven; never "drop the easy cases to keep the hard ones" (easy
-  cases ARE the coverage that keeps the flag from firing).
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py \
+  --require-v3 <task-dir> workspace/reports/<slug>/instruction-sufficiency.json
+```
 
-## Step 3 — margin-prune the ≤2/N tail
+## Six trial-analysis flags
 
-The flag is stochastic across re-runs: a case at 1/N has ~35% chance of
-flipping to 0/N on the next sampled run, 2/N ~11%, 3/N ~2.8%. After fixing the
-clusters, prune observed ≤2/N cases from the last report for margin — but do
-NOT prune the whole ≤2/N tail on the FIRST fix (pkgconf 2026-07-19, AGENTS.md
-§3): that tail can nearly equal the best agent's residual failure budget, and
-sweeping it risks erasing the observed difficulty signal. Prune conservatively, keep softer
-representatives of each cluster, and lean on disclosure first.
-Don't chase ≤3/N unless forced — over-pruning the hardest cases raises the
-best-run ceiling toward 100% and risks the difficulty gate. Per-case counts in
-one report are a noisy sample; this is probabilistic de-risking, not a
-guarantee.
+### `task_specification`
 
-Exception: do not margin-prune the ≤2/N tail when the best agents are already
-near-perfect and those low-pass cases are their only remaining misses. In that
-shape, prune only the true 0/N rows and leave the 1/N or 2/N rows as the
-residual wall; removing them can turn many failed trials into full passes and
-collapse a historical high-tier result to no signal. Proven on
-renju-forbidden-move: after per-case CTRF, three 0/10 rows were pruned while two
-1/10 rows were deliberately retained.
+This flag is blocking when the agent had to guess the success surface or needed
+information it could not obtain. It is not automatically valid merely because a
+semantic rule was absent from `instruction.md`.
 
-Index bookkeeping when pruning repeatedly: report indices map to the current
-corpus via `cur = old if old < deleted_idx else old - 1` per prior deletion.
+1. Identify the exact failing assertion and solver interpretation.
+2. Decide whether it concerns an explicit interface fact or an inferred domain
+   model.
+3. For interface facts, add the smallest natural statement or make the verifier
+   representation-agnostic.
+4. For inferred semantics, build an evidence graph. If the visible sources and
+   domain convention discriminate the competing interpretation, defend the
+   task and record that evidence. If they do not, add realistic evidence,
+   accept both interpretations, narrow the test, or remove it.
+5. Never add a trap list, worked example, root cause, or solution path solely
+   because a solver missed a legitimate inference.
 
-## Step 4 — difficulty-retention guards (run after EVERY edit)
+### `reward_hacking`
 
-- Oracle must still pass **100%** (pruning a subset of a passing set is safe;
-  anything else is a bug).
-- Nop/stub must still fail.
-- Best agent's residual failure count must remain ≫ what you removed (html5:
-  pruned 11, best run still failed ~76 others) — verify no run can flip to
-  100%.
-- Difficulty is *guaranteed* retained without re-probing when the binding
-  constraint is an untouched graded band or an untouched universal algorithmic
-  wall (edits only raise pass rates; if ≤1 run passes that band, the task
-  stays ≤1/N overall).
-- Re-zip after edits; re-run the platform check — it is the only source of
-  truth for the real pass fraction.
+Close access to tests, solution, reward files, or other grading channels. Test
+the candidate from declared artifacts in the separate verifier. A correct but
+easy solution is not reward hacking.
 
-### Revision packaging handoff
+### `difficulty_crux`
 
-When the task came from the Revise extension, preserve its exported history:
+Compare the actual failure with `[metadata].difficulty_explanation`. Fix an
+incidental defect, or rewrite the explanation when the task's legitimate crux
+was described inaccurately. Do not retrofit tests to force the old narrative.
 
-- work in `workspace/revision/<task_id>/<slug>/`;
-- treat `workspace/revision/<task_id>/revisions/<slug>-source.zip` as immutable;
-- after Oracle/NOP and preflight pass, use `task-zip-submit` to create the next
-  unused `workspace/revision/<task_id>/revisions/<slug>-revN.zip` (`rev1`, then `rev2`,
-  and so on); and
-- copy the exact newest revision to the stable upload path
-  `workspace/submissions/<slug>.zip`.
+### `near_miss`
 
-Never overwrite `source.zip` or an earlier `revN`, and do not put `revN` in the
-platform upload filename.
+Inspect the threshold. Replace hardware-sensitive or oracle-near thresholds
+with a meaningful quality floor, a structural invariant, or a broad semantic
+criterion. Difficulty may not come from narrowly missing an arbitrary number.
 
-## Step 5 — validate offline before spending a platform run
+### `refusals`
 
-Build a **best-agent emulation**: the oracle with the common agent bug
-injected (corrupt exactly the feature the report says everyone misses). After
-your fix, the emulation must pass the previously-0/N tests (proves the flag
-will clear) while other known-buggy variants still fail (proves the surviving
-traps hold). This replaces a blind platform re-run for the *flag* question;
-the *difficulty fraction* still needs the platform.
+Separate provider/setup failures from agent policy refusals. Reframe harmful or
+ambiguous wording while preserving legitimate defensive/educational work. A
+refusal provides no difficulty evidence.
 
-For disclosure fixes, the cheap reachability proof: resume the best stored
-probe solver with just the newly disclosed delta facts and confirm it can now
-reach full-pass.
+### `low_timeout`
 
-## Design-time prevention (cheaper than any of the above)
+Raise `[agent].timeout_sec` when the solver was making progress, up to the
+documented ceiling. Reduce cold rebuild cost where possible. Time starvation is
+not difficulty.
 
-- Structure verifiers **per-case parametrized or graded bands** from day one;
-  no monolithic all-N-cases functions, no group-aggregate tests on top of
-  per-case ones (`lever_patterns.md` L1 step 6).
-- Target each quirk family at ~40–80% expected per-run pass rate; a case you
-  predict <~35% of runs will pass is a 0/N candidate — disclose or drop it at
-  design time.
-- Run the **coverage pre-audit** in `task-local-solve-probe`: score the blind
-  probe solvers' diffs per-case against the corpus; any case passed by NO
-  probe run is a correlated-blind-spot candidate before the platform ever
-  sees it.
+## 0/N solvability returns
+
+The platform calls a task solvable when every individual test passes in at
+least one run. A 0/N test is blocking, but the repair depends on its cause.
+
+1. Reconstruct the per-case × per-run matrix from CTRF/readback. Do not rely on
+   aggregate pytest functions or the job summary.
+2. Re-run the exact case against the oracle and the real authority/invariant.
+3. Check environment, artifact transfer, candidate execution, and verifier
+   isolation.
+4. Inspect failed trajectories. Determine whether the shared miss is an
+   explicit-contract gap, an evidence gap, or a legitimate but statistically
+   uncovered inference.
+5. Apply the smallest valid repair below and re-run fresh trials.
+
+### Allowed repairs
+
+- Fix an oracle, fixture, tolerance, artifact, or verifier defect.
+- Split a redundant aggregate into individually reportable semantic units when
+  this changes observability but not the all-or-nothing reward.
+- Add a missing public schema/path/arbitrary convention in concise prose.
+- Add authentic evidence a practitioner would normally possess: a trace,
+  drawing, config, design record, capture, dataset, or reachable standard.
+- Accept semantically equivalent outputs when the task does not require one
+  representation.
+- Remove a test that is redundant, invalid, flaky, over-strict, or requires
+  unobtainable knowledge.
+- Redesign or drop a task whose entire signal is one arbitrary hidden
+  convention.
+
+### Disallowed repairs
+
+- Do not prune easy passing cases or tighten thresholds to manufacture a higher
+  tier.
+- Do not automatically delete every low-pass case from a small local sample.
+- Do not disclose the inferred model, root cause, trap list, or exact fix merely
+  because all sampled solvers missed it.
+- Do not replace semantic verification with source-shape assertions.
+- Do not keep a historical tier after the task changes; re-measure it.
+
+## Revision verification
+
+After any content change:
+
+1. update source hashes and rerun both fresh V3 fairness reviews;
+2. rerun instruction preflight and the V3 evidence-inferability checker;
+3. rebuild agent and verifier images;
+4. rerun oracle (reward 1) and NOP (reward 0);
+5. rerun the affected verifier cases, then the full verifier;
+6. regenerate `semantic-coverage.json`, rerun every affected dedicated mutant,
+   and pass the semantic coverage checker; never retain a mechanism label merely
+   because it still has many fixtures;
+7. rerun the folder-level client/manual review and the task-tree style audit,
+   write fresh `probe-preflight.json`, `pre-freeze-review.json`, and
+   `task-style-preflight.json`, then pass `preprobe_check.py`;
+8. freeze the new snapshot and rerun fresh counted difficulty trials because
+   old probe snapshots are stale;
+9. update `difficulty` and the external submission prose from the newly measured
+   facts, run the submission-only style audit, then regenerate and review the
+   exact final ZIP and submission packet.
+
+Base and Core are valid Terminus 3 outcomes. Under an explicit Advanced+
+campaign, preserve lower-tier evidence but do not count it toward the campaign
+quota.
+
+## Revision report
+
+Return a compact table with:
+
+- platform flag or reviewer claim;
+- raw evidence and affected tests/runs;
+- root-cause class;
+- docs-aligned decision;
+- files changed;
+- oracle/NOP and verifier results;
+- V3 inferability verdict;
+- fresh empirical tier signal;
+- remaining uncertainty or platform-only validation need.

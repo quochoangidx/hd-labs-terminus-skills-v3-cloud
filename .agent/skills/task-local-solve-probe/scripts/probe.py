@@ -26,6 +26,7 @@ EXCLUDE_DIRS = {
 }
 EXCLUDE_PREFIXES = ("rubric",)
 EXCLUDE_SUFFIXES = ("_rubric.md", "_rubric.txt", "-rubric.md", "-rubric.txt", ".zip")
+EXCLUDE_FILES = {"task.toml"}
 VALID_RESULTS = {"pass", "fail"}
 VALID_TYPES = {"semantic", "compile", "setup", "timeout", "unknown"}
 VALID_RUNNERS = {"codex-subagent", "claude-agent"}
@@ -34,6 +35,8 @@ VALID_RUNTIMES = {"codex", "claude-code"}
 
 def should_ignore(path: Path) -> bool:
     name = path.name
+    if name in EXCLUDE_FILES:
+        return True
     if path.is_dir() and name in EXCLUDE_DIRS:
         return True
     if name.startswith(EXCLUDE_PREFIXES):
@@ -51,7 +54,10 @@ def copy_task(src: Path, dst: Path, *, sanitized: bool) -> None:
         base = Path(directory)
         return {name for name in names if should_ignore(base / name)}
 
-    shutil.copytree(src, dst, ignore=ignore)
+    # Keep upstream repository symlinks as symlinks. Dereferencing them changes
+    # the sanitized tree shape and makes an otherwise unchanged baseline fail
+    # the frozen solver-contract hash check.
+    shutil.copytree(src, dst, ignore=ignore, symlinks=True)
 
 
 def utc_now() -> str:
@@ -147,9 +153,58 @@ def load_manifest(probe_dir: Path) -> dict:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"Invalid probe manifest {path}: {exc}") from exc
-    if data.get("schema_version") != 2:
+    if data.get("schema_version") not in {2, 3}:
         raise SystemExit(f"Unsupported probe manifest schema in {path}")
     return data
+
+
+def semantic_node_map(path: Path) -> dict[str, set[str]]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"Invalid semantic coverage manifest {path}: {exc}") from exc
+    mapping: dict[str, set[str]] = {}
+    for key, prefix in (("mechanisms", "M"), ("interactions", "I")):
+        rows = data.get(key)
+        if not isinstance(rows, list):
+            raise SystemExit(f"{path}: {key} must be a list")
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+                raise SystemExit(f"{path}: invalid {key} row")
+            for test_id in row.get("test_ids", []):
+                if isinstance(test_id, str):
+                    mapping.setdefault(test_id, set()).add(f"{prefix}:{row['id']}")
+    return mapping
+
+
+def semantic_failure_geometry(
+    case_sets: list[tuple[set[str], set[str]]],
+    node_map: dict[str, set[str]],
+    total: int,
+    passed: int,
+) -> dict:
+    failure_sets = [
+        frozenset(
+            node
+            for test_id in failed_ids
+            for node in node_map.get(test_id, set())
+        )
+        for _, failed_ids in case_sets
+        if failed_ids
+    ]
+    de_correlated = len(failure_sets) >= 2 and len(set(failure_sets)) >= 2
+    advanced_pass = (
+        total == 3
+        and passed == 1
+        and len(failure_sets) == 2
+        and all(len(nodes) >= 2 for nodes in failure_sets)
+        and de_correlated
+    )
+    return {
+        "failure_sets": failure_sets,
+        "semantic_decorrelated": de_correlated,
+        "advanced_geometry_pass": advanced_pass,
+    }
 
 
 def validate_case_matrix(path: Path) -> dict:
@@ -188,6 +243,98 @@ def prepare(args: argparse.Namespace) -> None:
     out.mkdir(parents=True, exist_ok=True)
     manifest_path = out / "probe-manifest.json"
     contract_hash = tree_hash(task, sanitized=True)
+    task_snapshot = tree_hash(task, sanitized=False)
+    mode = "exploratory" if args.exploratory else "counted"
+    profile = args.profile
+    report_dir = Path(
+        args.report_dir or Path("workspace/reports") / slug
+    ).resolve()
+    coverage_path = Path(
+        args.semantic_coverage
+        or report_dir / "semantic-coverage.json"
+    ).resolve()
+    sufficiency_path = Path(
+        args.sufficiency
+        or report_dir / "instruction-sufficiency.json"
+    ).resolve()
+    verifier_path = Path(
+        args.verifier_matrix
+        or report_dir / "verifier-matrix.json"
+    ).resolve()
+    coverage_hash = None
+    sufficiency_hash = None
+    preprobe_receipts: dict[str, str] = {}
+    if mode == "counted":
+        sufficiency_checker = (
+            Path(__file__).resolve().parents[2]
+            / "terminus-regular-task-authoring"
+            / "scripts"
+            / "sufficiency_manifest_check.py"
+        )
+        sufficiency_result = run(
+            [
+                sys.executable,
+                str(sufficiency_checker),
+                "--require-v3",
+                str(task),
+                str(sufficiency_path),
+            ]
+        )
+        if sufficiency_result.returncode != 0:
+            raise SystemExit(
+                "Counted probes require V3 evidence inferability:\n"
+                + sufficiency_result.stdout
+                + sufficiency_result.stderr
+            )
+        checker = (
+            Path(__file__).resolve().parents[2]
+            / "terminus-regular-task-authoring"
+            / "scripts"
+            / "semantic_coverage_check.py"
+        )
+        command = [sys.executable, str(checker)]
+        if profile == "advanced_frontier_only":
+            command.append("--advanced-plus")
+        command.extend([str(task), str(coverage_path), str(verifier_path)])
+        checked = run(command)
+        if checked.returncode != 0:
+            raise SystemExit(
+                "Counted probes require frozen semantic coverage:\n"
+                + checked.stdout
+                + checked.stderr
+            )
+        coverage_hash = sha256(coverage_path)
+        sufficiency_hash = sha256(sufficiency_path)
+        preprobe_checker = Path(__file__).with_name("preprobe_check.py")
+        preprobe_command = [
+            sys.executable,
+            str(preprobe_checker),
+            str(task),
+            str(report_dir),
+        ]
+        if args.quota_run_override:
+            preprobe_command.extend(
+                ["--quota-run-override", str(Path(args.quota_run_override).resolve())]
+            )
+        preprobe_result = run(preprobe_command)
+        if preprobe_result.returncode != 0:
+            raise SystemExit(
+                "Counted probes require frozen pre-probe technical/review/style/role gates:\n"
+                + preprobe_result.stdout
+                + preprobe_result.stderr
+            )
+        for name in (
+            "probe-preflight.json",
+            "pre-freeze-review.json",
+            "task-style-preflight.json",
+            "agent-session-budget.json",
+        ):
+            preprobe_receipts[name] = sha256(report_dir / name)
+        if args.quota_run_override:
+            override_path = Path(args.quota_run_override).resolve()
+            if override_path.parent != report_dir:
+                raise SystemExit("Quota-run override must stay in the task report directory")
+            preprobe_receipts[override_path.name] = sha256(override_path)
     if manifest_path.exists():
         manifest = load_manifest(out)
         if manifest.get("task_slug") != slug or Path(manifest.get("source_task", "")).resolve() != task:
@@ -197,14 +344,47 @@ def prepare(args: argparse.Namespace) -> None:
                 "The instruction/environment contract changed after probe preparation; "
                 "start a fresh probe directory"
             )
+        if (
+            manifest.get("schema_version") != 3
+            or manifest.get("mode") != mode
+            or manifest.get("profile") != profile
+            or (
+                mode == "counted"
+                and Path(str(manifest.get("report_dir", ""))).resolve() != report_dir
+            )
+        ):
+            raise SystemExit("Probe mode/profile/schema changed; start a fresh probe directory")
+        if manifest.get("task_snapshot_sha256") != task_snapshot:
+            raise SystemExit("Task/verifier snapshot changed; start a fresh probe directory")
+        if mode == "counted" and manifest.get("semantic_coverage_sha256") != coverage_hash:
+            raise SystemExit("Semantic coverage evidence changed; start a fresh probe directory")
+        if mode == "counted" and manifest.get("instruction_sufficiency_sha256") != sufficiency_hash:
+            raise SystemExit("Evidence inferability receipt changed; start a fresh probe directory")
+        if mode == "counted" and manifest.get("verifier_matrix_sha256") != sha256(verifier_path):
+            raise SystemExit("Verifier matrix evidence changed; start a fresh probe directory")
+        if mode == "counted" and manifest.get("preprobe_receipts") != preprobe_receipts:
+            raise SystemExit(
+                "Pre-probe technical/review/style/role evidence changed; start fresh runs"
+            )
     else:
         if any(out.iterdir()):
             raise SystemExit(f"Refusing to initialize a non-empty probe directory: {out}")
         manifest = {
-            "schema_version": 2,
+            "schema_version": 3,
             "task_slug": slug,
             "source_task": str(task),
+            "mode": mode,
+            "profile": profile,
+            "report_dir": str(report_dir) if mode == "counted" else None,
             "solver_contract_sha256": contract_hash,
+            "task_snapshot_sha256": task_snapshot,
+            "semantic_coverage": str(coverage_path) if mode == "counted" else None,
+            "semantic_coverage_sha256": coverage_hash,
+            "instruction_sufficiency": str(sufficiency_path) if mode == "counted" else None,
+            "instruction_sufficiency_sha256": sufficiency_hash,
+            "verifier_matrix": str(verifier_path) if mode == "counted" else None,
+            "verifier_matrix_sha256": sha256(verifier_path) if mode == "counted" else None,
+            "preprobe_receipts": preprobe_receipts if mode == "counted" else {},
             "prepared_at": utc_now(),
         }
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -451,6 +631,11 @@ def record(args: argparse.Namespace) -> None:
 
 def summarize(args: argparse.Namespace) -> None:
     probe_dir = Path(args.probe_dir).resolve()
+    manifest = load_manifest(probe_dir)
+    if manifest.get("schema_version") == 3 and manifest.get("profile") != args.profile:
+        raise SystemExit(
+            "Summary profile differs from probe preparation; prepare fresh runs for that profile"
+        )
     records = []
     for result_path in sorted(probe_dir.glob("run_*/result.json")):
         records.append(json.loads(result_path.read_text(encoding="utf-8")))
@@ -475,6 +660,15 @@ def summarize(args: argparse.Namespace) -> None:
     union_passed = set().union(*(passed_ids for passed_ids, _ in case_sets)) if case_sets else set()
     common_misses = set.intersection(*(failed_ids for _, failed_ids in case_sets)) if case_sets else set()
     union_coverage = len(union_passed) / len(all_cases) if all_cases else 0.0
+    semantic_failure_sets: list[frozenset[str]] = []
+    semantic_decorrelated = False
+    advanced_geometry_pass = False
+    if manifest.get("mode") == "counted" and manifest.get("semantic_coverage"):
+        node_map = semantic_node_map(Path(manifest["semantic_coverage"]).resolve())
+        geometry = semantic_failure_geometry(case_sets, node_map, total, passed)
+        semantic_failure_sets = geometry["failure_sets"]
+        semantic_decorrelated = geometry["semantic_decorrelated"]
+        advanced_geometry_pass = geometry["advanced_geometry_pass"]
 
     if not evidence_complete:
         recommendation = "incomplete_evidence"
@@ -498,6 +692,27 @@ def summarize(args: argparse.Namespace) -> None:
         if accuracy < 0.8
         else "base"
     )
+    if args.profile == "advanced_frontier_only" and manifest.get("mode") != "counted":
+        recommendation = "exploratory_only"
+    elif args.profile == "advanced_frontier_only" and recommendation not in {
+        "incomplete_evidence",
+        "fix_task_first",
+        "needs_adaptive_run",
+    }:
+        if total not in {2, 3}:
+            recommendation = "unsupported_campaign_sample"
+        elif tier_signal in {"base", "core"} or passed == total:
+            recommendation = "rework_or_replace"
+        elif tier_signal == "advanced" and advanced_geometry_pass:
+            recommendation = "advanced_plus_shortlist"
+        elif tier_signal == "advanced":
+            recommendation = "reject_single_lever_geometry"
+        elif union_coverage < 1.0 or common_misses:
+            recommendation = "audit_frontier_geometry"
+        elif not semantic_decorrelated:
+            recommendation = "review_failure_decorrelation"
+        else:
+            recommendation = "advanced_plus_shortlist"
     summary = {
         "probe_dir": os.path.relpath(probe_dir),
         "runs": total,
@@ -509,6 +724,11 @@ def summarize(args: argparse.Namespace) -> None:
         "common_miss_count": len(common_misses),
         "local_accuracy": accuracy,
         "local_tier_signal": tier_signal,
+        "profile": args.profile,
+        "probe_mode": manifest.get("mode", "legacy"),
+        "semantic_failure_sets": [sorted(nodes) for nodes in semantic_failure_sets],
+        "semantic_failures_decorrelated": semantic_decorrelated,
+        "advanced_geometry_pass": advanced_geometry_pass,
         "recommendation": recommendation,
     }
     out = probe_dir / "summary.md"
@@ -523,6 +743,10 @@ def summarize(args: argparse.Namespace) -> None:
         f"- Common misses: {len(common_misses)}\n"
         f"- Local accuracy: {accuracy:.6f}\n"
         f"- Provisional tier signal: `{tier_signal}`\n"
+        f"- Profile: `{args.profile}`\n"
+        f"- Probe mode: `{manifest.get('mode', 'legacy')}`\n"
+        f"- Semantic failures de-correlated: {semantic_decorrelated}\n"
+        f"- Advanced geometry pass: {advanced_geometry_pass}\n"
         f"- Recommendation: `{recommendation}`\n",
         encoding="utf-8",
     )
@@ -537,6 +761,17 @@ def main() -> int:
     p.add_argument("task")
     p.add_argument("--runs", type=int, default=2)
     p.add_argument("--output")
+    p.add_argument("--report-dir")
+    p.add_argument("--exploratory", action="store_true")
+    p.add_argument(
+        "--profile",
+        choices=("general", "advanced_frontier_only"),
+        default="general",
+    )
+    p.add_argument("--semantic-coverage")
+    p.add_argument("--sufficiency")
+    p.add_argument("--verifier-matrix")
+    p.add_argument("--quota-run-override")
     p.set_defaults(func=prepare)
 
     p = sub.add_parser("diff")
@@ -568,6 +803,11 @@ def main() -> int:
 
     p = sub.add_parser("summarize")
     p.add_argument("probe_dir")
+    p.add_argument(
+        "--profile",
+        choices=("general", "advanced_frontier_only"),
+        default="general",
+    )
     p.set_defaults(func=summarize)
 
     args = parser.parse_args()

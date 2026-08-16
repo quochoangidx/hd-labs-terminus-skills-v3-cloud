@@ -9,39 +9,61 @@ Use this skill after a task folder exists and before platform submission,
 especially when estimating how a task may behave under GPT-5.6 and Claude
 Opus 5 before spending platform iteration quota.
 
-This is a cheap prefilter, not a replacement for Harbor. Harbor remains the
-source of truth for oracle/NOP/static checks, Docker behavior, and platform
-confidence.
+This skill has two modes. An exploratory probe is a cheap prefilter and cannot
+qualify a tier. A counted probe can qualify a provisional local difficulty band
+only after the complete verifier and semantic coverage evidence are frozen.
+Strict direct-Docker preflight must already prove basic Oracle/NOP/noexec and
+image validity. Harbor remains the later full integration and
+submission-readiness gate; it is not required merely to decide whether a valid
+candidate belongs on an Advanced+/Frontier shortlist.
 
 ## Core Rules
 
 - Never solve in a chat that has already seen the task's solution, verifier,
   rubric, platform analysis, or intended patch.
-- Refuse a full difficulty probe unless
-  `workspace/reports/<slug>/instruction-sufficiency.json` passes
-  `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`.
-  Skeleton probes require the same contract-source and two-reviewer audit in
-  draft form. A solver guessing a hidden rule correctly is not sufficiency
-  evidence, and no probe result may override a failed gate.
+- Refuse a counted difficulty probe unless
+  `workspace/reports/<slug>/instruction-sufficiency.json` uses
+  `schema_version: 3` and passes
+  `sufficiency_manifest_check.py --require-v3`, and
+  `semantic-coverage.json` passes `semantic_coverage_check.py`. The
+  `advanced_frontier_only` profile additionally requires
+  `semantic_coverage_check.py --advanced-plus`.
+  The latter binds the frozen verifier, public surfaces, mechanisms,
+  interactions, executable mutants, and independent review. A skeleton probe
+  uses `--exploratory`; it may reject an idea but never qualify a tier.
+- Before counted preparation, require `preprobe_check.py` to pass. It validates
+  the current task snapshot against strict Docker Oracle/NOP evidence,
+  pre-freeze client/manual review, and the task-visible style audit. Packaging
+  and submission prose remain post-probe.
 - Do not change the source task while probing.
 - Solve copies must exclude `solution/`, `tests/`, `reports/`, `rubric*`,
   `*_rubric*`, prior run logs, and generated submission zips.
 - Verification copies may include the full task; create them with
   `probe.py materialize` so they contain only the exact solver delta on top of
   the current full task before running verifier commands.
-- Default to 2 sequential fresh-context runs. Add a 3rd ONLY on a 1–1 split,
+- Launch 2 fresh-context solver sessions concurrently on separate solve copies.
+  After both finish, materialize, execute the verifier, collect CTRF, and record
+  the runs sequentially so Docker and verifier resources never contend. Add a
+  3rd ONLY on a 1–1 split,
   when both failures share a case/feature cluster, or when their per-case union
   is incomplete. Use 1 run for a quick smoke probe. Pooling
   to N≥5 is an escalation option for same-engine families where per-engine
   numbers would otherwise be variance (AGENTS.md §7), never the default.
 - Difficulty is language-independent. Python follows the same probe and tier
   rules as every other implementation language.
-- Use parallel agents only when the user explicitly wants that and the
-  orchestration is stable.
+- The initial solver pair is the default safe parallel unit. Do not parallelize
+  their verifier executions, Docker builds, or mutation work. Solver 3 is
+  adaptive and starts only after the first pair has been fully scored.
+- In `task-batch`, solver sessions must be distinct from the builder, both
+  fairness reviewers, and the consolidated auditor. No extra solve/review agent
+  is allowed outside the fixed 6–7-session budget.
 - Select the default blind solver from the active runtime — and PIN it
   mechanically, do not rely on inheritance:
-  - Codex: use `gpt-5.6` with `reasoning_effort: medium`, even if the manager
-    chat is using a higher effort.
+  - Codex: use `gpt-5.6-sol` with `reasoning_effort: medium`. In `task-batch`,
+    candidate design/build also uses `gpt-5.6-sol` medium, fairness reviewers
+    use independent `gpt-5.6-luna` high Codex tasks, and the consolidated
+    auditor uses one independent `gpt-5.6-luna` max Codex task. Follow the
+    batch skill's Luna thread-orchestration reference.
   - Claude Code: use Claude Opus 5 with medium reasoning. Pass `model: opus`
     and the medium reasoning setting EXPLICITLY on every probe Agent call —
     subagents inherit the session model by default, so a session running a
@@ -55,8 +77,11 @@ confidence.
   Harbor LLM agent, a manager-authored surrogate implementation, or a
   handwritten result. The solver must edit its own isolated `solve/` copy.
 - **`task-batch` profile:** keep the same current-model pins. A locally all-pass
-  task is poor use of iteration quota, but a split is a valid Core/Advanced
-  signal and must not be discarded merely because one solver succeeded.
+  task is poor use of iteration quota. In the general lane, a split can be a
+  valid Core/Advanced signal. In `advanced_frontier_only`, a `1/2` split is
+  unresolved: run the adaptive third attempt. Keep `1/3` as provisional
+  Advanced only when the two failing runs have distinct multi-node semantic
+  failure sets; reject replicated single-lever geometry and `2/3` Core.
 - Record `probe_model` in every run log and every verdict written to
   `index.jsonl`. Outside the `task-batch` override, verdict validity under model
   mismatch is ASYMMETRIC: a FAIL
@@ -89,13 +114,20 @@ confidence.
   valid run fails semantically and the task is fair, keep the observed lower-tier
   signal instead of pruning cases to manufacture a higher tier. An all-pass
   local sample still needs redesign or replacement before platform iteration.
+- **Advanced+/Frontier lane:** when the user activates
+  `advanced_frontier_only`, a counted frozen-snapshot blind probe is the
+  selection gate and Harbor is deferred. Accept only mutation-backed `1/3`
+  with valid semantic geometry (provisional Advanced), or zero-solve
+  results that satisfy the full Frontier union/de-correlation requirements.
+  Preserve but reject `2/3`, Base, and Core candidates from that campaign.
 
 ## Workflow
 
 1. Prepare 2 run folders by default under
    `workspace/local-solve-probes/<task-slug>/`; add `run_3` only for a 1–1
    split, shared blind spot, or incomplete union. Override with `--runs 1..5`
-   when needed (N≥5 = same-engine pooling).
+   when needed (N≥5 = same-engine pooling). Counted preparation first runs the
+   shared pre-probe ordering gate; exploratory preparation does not.
 2. For each run, give the solver only `solve/`, which contains the sanitized
    task environment and `instruction.md`.
 3. The solver edits only that run's `solve/` copy and returns one final
@@ -118,7 +150,8 @@ confidence.
 Use the helper script when possible:
 
 ```bash
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare workspace/tasks/tbrain-example
+python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
+  workspace/tasks/tbrain-example --profile general
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py materialize workspace/local-solve-probes/tbrain-example/run_1
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
@@ -136,6 +169,20 @@ python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
 python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
 ```
 
+For the current Advanced+/Frontier campaign, summarize with the campaign
+profile used at preparation after the adaptive run policy is complete:
+
+```bash
+python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
+  workspace/tasks/tbrain-example --profile advanced_frontier_only
+python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize \
+  workspace/local-solve-probes/tbrain-example \
+  --profile advanced_frontier_only
+```
+
+The summarizer derives failure nodes and de-correlation from the frozen semantic
+coverage manifest. There is no manual flag that can promote a result.
+
 `summarize` is diagnostic only. It returns `needs_handover_validation` for a
   promising fully evidenced band; it never emits `candidate_ready`. Only
 `batch-handover.py` may do that after checking the verifier matrix, hashes,
@@ -148,13 +195,12 @@ Do NOT use `probe.py apply` or copy files into `verify/` by hand. Use
 `probe.py materialize`; the handover gate later recomputes the diff and proves
 that `verify/` is the current full task plus that exact solver delta.
 
-## Skeleton mode — probe BEFORE the full build (mandatory gate in task-clone)
+## Exploratory skeleton mode
 
-Run a difficulty probe as soon as a candidate has the minimum probeable
-surface, BEFORE any oracle/verifier/packaging investment. This is the
-mandatory gate in `task-clone` Workflow step 10 and `lever_patterns.md` L1
-step 5; it exists because the old ordering (full build first, probe last)
-burned the whole build cost on candidates with no local difficulty signal.
+Use `probe.py prepare --exploratory` when a cheap early screen is worthwhile.
+This is optional cost control, not a difficulty gate. Never report its pass
+fraction as Advanced/Frontier and never reuse its runs after the full verifier
+or contract changes.
 
 - **Minimum input:** a buildable `environment/` + `instruction.md` + the stub.
   No polished oracle, no hidden suite, no Dockerfile hardening, no packaging.
@@ -163,7 +209,7 @@ burned the whole build cost on candidates with no local difficulty signal.
   6–8 independent behavior clusters. Accept noise; the goal is to kill
   all-pass and single-lever candidates early, not to measure the exact
   difficulty band.
-- **Verdict mapping (2 runs, adaptive 3rd):**
+- **Exploratory disposition (2 runs, adaptive 3rd):**
   - 2/2 pass (or 3/3 after an adaptive run) → redesign or replace before full
     investment; this sample provides no local signal.
   - 0/2 with de-correlated semantic failures and 100% per-case union → proceed
@@ -173,10 +219,8 @@ burned the whole build cost on candidates with no local difficulty signal.
     evidence.
   - Setup/instruction/skeleton failures → fix the skeleton and re-probe; these
     runs measure nothing about difficulty.
-- **Limits:** skeleton mode never replaces the post-build probe or the
-  candidate-readiness verdict below — the rough check command is too noisy to
-  ground a submit decision, and the pass-table pre-audit needs the real
-  corpus. A skeleton 0/2 is a "worth building" signal, not a Frontier label.
+- **Limits:** every outcome remains `exploratory_only`. A skeleton 0/2 is only a
+  "worth completing the verifier" signal.
 
 ## Interpretation
 
@@ -191,10 +235,10 @@ Default probe (2 runs, adaptive 3rd):
 - Any band where failures are setup, missing dependency, unclear instruction,
   or verifier construction: fix the task, not the difficulty label.
 
-Cluster failures by behavior/invariant, not by pytest function name. Green
-geometry spans ≥2 independent clusters (prefer ≥3); use a dominant cluster
-above roughly 50% of all semantic misses as a warning that the apparent breadth
-may still be one lever, not as an automatic pruning rule.
+Map failures to the mechanism/interaction nodes in `semantic-coverage.json`,
+not pytest row count. Green geometry spans multiple independent nodes. A
+dominant node above roughly 50% of all semantic misses warns that apparent
+breadth may still be one lever.
 
 For larger comparable samples, map the pooled accuracy to the current tiers:
 Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%.
@@ -286,15 +330,34 @@ Use these local outcomes:
   Map the pass fraction to a provisional tier and preserve the real geometry.
 - **Zero solves:** require 100% per-case union, zero common misses, and
   de-correlated failures before calling it a Frontier signal. Otherwise audit
-  the oracle, authority, and instruction sufficiency.
+  the oracle, verifier, and V3 evidence inferability. The union requirement
+  mirrors the platform definition of a solvable task: every individual test
+  passes in at least one run. De-correlation is only a conservative local
+  confidence check for a provisional zero-solve Frontier label; the platform
+  does not require failures to be spread across clusters.
 - **Setup, verifier, dependency, refusal, or timeout failures:**
   `fix_task_first`; they never count toward difficulty.
-- **Shared misses:** authority-audit first. Use
-  `task-revise-flag-remediation` only when disclosure, test splitting, or
-  reference data fixes fairness without manufacturing a higher tier.
+- **Shared misses:** audit oracle/verifier validity, explicit interface, and
+  evidence inferability first. Use `task-revise-flag-remediation` to classify
+  the cause; do not assume a shared miss requires disclosure or case removal.
 
 Do not prune passing cases or hide contract facts to change the tier. Base and
 Core are valid Terminus 3 outcomes.
+
+For `advanced_frontier_only`, replace the general verdict mapping above with:
+
+- **`0/2` or `0/3`:** `advanced_plus_shortlist` only if per-case union is 100%,
+  common misses are empty, failures are de-correlated, and the V3 evidence audit passes;
+  provisional Frontier.
+- **`1/2`:** unresolved; run the required adaptive third attempt.
+- **`1/3`:** `advanced_plus_shortlist` only when each failing run crosses at
+  least two semantic nodes and their node sets differ. Otherwise
+  `reject_single_lever_geometry`.
+- **`2/3`, `2/2`, Base, or Core:** `rework_or_replace` for this campaign while
+  preserving the honest lower-tier evidence.
+
+`advanced_plus_shortlist` is a probe-selection status, not the hash-bound
+`candidate_ready` status and not a platform-confirmed tier.
 
 ## Solver prompt shape
 
@@ -319,8 +382,8 @@ Return:
 - actual runtime, model, reasoning effort, and unique session IDs
 - pass count and provisional tier signal
 - semantic versus non-semantic failure distribution
-- per-run case matrix, union coverage, common misses, and failure clusters
-- whether zero-solve failures are de-correlated
+- per-run case matrix, union coverage, common misses, and semantic-node failures
+- automatic failure de-correlation and whether the Advanced geometry gate passed
 - compact crux evidence suitable for
   `[metadata].difficulty_explanation`, without model names or hidden fixtures
 - one status:
@@ -328,8 +391,14 @@ Return:
   - `fix_task_first`
   - `rework_or_replace`
   - `needs_handover_validation`
+  - `audit_frontier_geometry`
+  - `review_failure_decorrelation`
+  - `unsupported_campaign_sample`
+  - `exploratory_only`
+  - `reject_single_lever_geometry`
+  - `advanced_plus_shortlist`
   - `candidate_ready`
 
 Only `batch-handover.py` may emit `candidate_ready` after verifying hashes,
-the isolated solve deltas, CTRF evidence, instruction sufficiency, and trusted
+the isolated solve deltas, CTRF evidence, V3 evidence inferability, and trusted
 verifier reruns.

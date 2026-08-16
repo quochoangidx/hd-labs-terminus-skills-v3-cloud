@@ -133,7 +133,7 @@ fi
 # 5. Leak sweep
 LEAKS="$(grep -rlE 'CANARY-|CLAUDE\.md|AGENTS\.md' "$TASK_DIR/environment" "$TASK_DIR/tests" "$TASK_DIR/instruction.md" 2>/dev/null || true)"
 [ -n "$LEAKS" ] && report FAIL "leak:canary/memory-refs" "$(echo "$LEAKS" | tr '\n' ' ')" || report PASS "leak:canary/memory-refs" "clean"
-STRAYS="$(find "$TASK_DIR/environment" \( -name '*.whl' -o -name 'pyproject.toml' -o -name '.DS_Store' -o -path '*/.git/*' \) 2>/dev/null | head -5)"
+STRAYS="$(find "$TASK_DIR/environment" \( -name '*.whl' -o -name '.DS_Store' -o -path '*/.git/*' \) 2>/dev/null | head -5)"
 [ -n "$STRAYS" ] && report WARN "leak:stray-files" "$(echo "$STRAYS" | tr '\n' ' ')" || report PASS "leak:stray-files" "clean"
 grep -qE 'https?://' "$TASK_DIR/instruction.md" 2>/dev/null \
   && report WARN "instruction:external-url" "instruction must be self-contained; verify each URL is not a doc crutch" \
@@ -249,7 +249,7 @@ PYEOF
   [ "$RERR" = "none" ] && report PASS "rubric:format" "$(echo "$RUBOUT" | sed -n 's/^CRIT://p') criteria, closed-set + sum OK" \
     || report FAIL "rubric:format" "$RERR"
 else
-  report WARN "rubric:format" "no SUBMISSION-$SLUG.md found; rubric unchecked"
+  report PASS "rubric:format" "submission rubric is deferred to the submission-only style and ZIP review gates"
 fi
 
 # 9. Docker: build both images, solve in the agent image, transfer only declared
@@ -348,7 +348,26 @@ EOF
       done <<EOF
 $ARTIFACT_LIST
 EOF
-      RESULT="$(docker start -a "$VERIFIER_C" 2>/dev/null)"
+      RESULT="$(python3 - "$VERIFIER_C" <<'PYEOF'
+import subprocess
+import sys
+
+container = sys.argv[1]
+try:
+    result = subprocess.run(
+        ["docker", "start", "-a", container],
+        capture_output=True,
+        text=True,
+        timeout=900,
+        check=False,
+    )
+except (OSError, subprocess.TimeoutExpired):
+    sys.exit(124)
+sys.stdout.write(result.stdout)
+sys.stderr.write(result.stderr)
+sys.exit(result.returncode)
+PYEOF
+)" || { docker rm -f "$VERIFIER_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; }
       if [ -n "$EVIDENCE_DIR" ]; then
         docker cp "$VERIFIER_C:/logs/verifier/test-output.log" "$EVIDENCE_DIR/$LABEL-verifier.log" >/dev/null 2>&1 || true
         docker cp "$VERIFIER_C:/logs/verifier/ctrf.json" "$EVIDENCE_DIR/$LABEL-ctrf.json" >/dev/null 2>&1 || true
@@ -376,13 +395,30 @@ fi
 echo "----"
 if [ -n "$REPORT_JSON" ]; then
   mkdir -p "$(dirname "$REPORT_JSON")"
-  python3 - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" "$EVIDENCE_DIR" <<'PYEOF'
+  python3 - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" "$EVIDENCE_DIR" "$TASK_DIR" <<'PYEOF'
 import hashlib
 import json
 import sys
 from pathlib import Path
 
-slug, strict, fails, rows_path, output_path, zip_path, evidence_dir = sys.argv[1:]
+slug, strict, fails, rows_path, output_path, zip_path, evidence_dir, task_dir = sys.argv[1:]
+
+
+def tree_hash(root):
+    digest = hashlib.sha256()
+    volatile = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", "reports", "submissions"}
+    root = Path(root)
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root)
+        if any(part in volatile for part in rel.parts):
+            continue
+        if path.is_dir() or path.is_symlink():
+            continue
+        digest.update(rel.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 checks = []
 with open(rows_path) as rows:
     for line in rows:
@@ -393,6 +429,7 @@ payload = {
     "status": "pass" if int(fails) == 0 else "fail",
     "strict": strict == "1",
     "fail_count": int(fails),
+    "task_snapshot_sha256": tree_hash(task_dir),
     "artifact_sha256": hashlib.sha256(open(zip_path, "rb").read()).hexdigest(),
     "checks": checks,
     "evidence_files": {},

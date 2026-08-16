@@ -1,0 +1,85 @@
+{
+  "description": "Terminus task-batch builder and Luna review-role quota guards.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^startup$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.agent/skills/task-batch/scripts/review_role_guard.py\" hook",
+            "timeout": 5,
+            "statusMessage": "Claiming Terminus review lease"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.agent/skills/task-batch/scripts/builder_stage_guard.py\" hook --runtime codex",
+            "timeout": 5,
+            "statusMessage": "Binding Terminus builder lease"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write|MultiEdit|NotebookEdit|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.agent/skills/task-batch/scripts/builder_stage_guard.py\" hook --runtime codex",
+            "timeout": 5,
+            "statusMessage": "Checking Terminus builder stage"
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.agent/skills/task-batch/scripts/review_role_guard.py\" hook",
+            "timeout": 5,
+            "statusMessage": "Checking Terminus review budget"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.agent/skills/task-batch/scripts/builder_stage_guard.py\" hook --runtime codex",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.agent/skills/task-batch/scripts/builder_stage_guard.py\" hook --runtime codex",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.agent/skills/task-batch/scripts/review_role_guard.py\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

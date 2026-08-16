@@ -57,11 +57,18 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 4. Build `environment/Dockerfile` with `tmux`, `asciinema`, pinned package versions, and digest-pinned `FROM`.
 5. Put the starting state under `environment/` (a deliberately buggy state
    only for the bug-repair variant that cleared the category gate).
-6. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
-7. Write digest-pinned `tests/Dockerfile` plus Python `pytest` verifier tests in
+6. Write digest-pinned `tests/Dockerfile` plus Python `pytest` verifier tests in
    `tests/test_outputs.py`; create every artifact landing directory there.
-8. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
-9. Run oracle, CI checks, and real-agent trials before packaging.
+7. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
+8. Collect the platform-visible unit IDs and pass the verifier architecture
+   gate before writing the Oracle. Use 50–1000 units/at least six clusters for
+   cheap deterministic tasks, or 20–80 scenarios/at least four clusters for
+   expensive stateful tasks; require two cross-cluster units and two verifier
+   shapes. A failed gate returns to design.
+9. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
+10. Run Oracle/NOP, bind the Oracle CTRF to the verifier matrix, then run V3
+    inferability, mutation-backed semantic coverage, CI checks, and real-agent
+    trials before packaging.
 
 > ⚠️ All seven Terminus 3 categories are open. Choose exactly one Title Case
 > category/subcategory pair by the domain knowledge the task requires, not merely
@@ -112,7 +119,7 @@ Write the source draft only after the task behavior, oracle, verifier, and
 available difficulty probes are stable. The source draft is the factual record;
 `workspace/submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet for
 the platform UI (same name/shape as `task-batch` and `task-clone` produce): the
-three explanations PLUS the Metadata answers ("approved canonical base image?"
+four explanation fields PLUS the Metadata answers ("approved canonical base image?"
 Yes/No + exact digest-pinned image; "Task Inspiration from the Task Gallery?"
 Yes/No + Inspiration ID), the full paste-ready Rubrics block (format rules:
 AGENTS.md §9 — `Agent`-prefixed single physical lines, closed score set with
@@ -170,6 +177,12 @@ Explain how the verifier distinguishes correct, partial, and broken solutions:
 Do not settle for "all tests pass", list only test function names, expose hidden
 fixture contents unnecessarily, or describe source-code-shape assertions.
 
+### Relevant Experience
+
+State the concrete domain, toolchain, repository, or verifier-design background
+that supports the task. Keep it factual, concise, and free of invented personal
+credentials or policy-directed language.
+
 ### Human-Writing Pass
 
 Apply the human-writing pass only after factual review:
@@ -177,13 +190,13 @@ Apply the human-writing pass only after factual review:
 - start with the task-specific point; remove template openings and conclusions
 - prefer concrete behavior, numbers, paths, and API names over unsupported
   abstractions such as "robustness", "comprehensive coverage", or "confidence"
-- vary sentence and paragraph shape instead of giving all three fields the same
+- vary sentence and paragraph shape instead of giving the three technical explanations the same
   problem/fix/test skeleton
 - remove hedging when the evidence is conclusive
 - do not cite submission guidelines, reviewer criteria, policy dates, or call
   the prose "LLM-like"
 - do not mention LLMs, AI, models, agents, anti-LLM mechanisms, or detection
-  avoidance in the three explanations
+  avoidance in any of the four fields
 - preserve every technical fact, threshold, API name, path, and validation
   result from the source draft
 
@@ -203,16 +216,59 @@ python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_prefli
 It catches the structural triggers (headers, bullets, tables, over-length, hint
 phrases, verifier/test leakage, mapping-chain density) mechanically. A clean run
 is necessary, not sufficient — the content rules below (algorithm narration,
-mechanism leaks, sufficiency of tested values) still need a read.
+mechanism leaks, goal clarity, and evidence inferability) still need a read.
 
-**Mandatory semantic sufficiency gate:** before any difficulty probe, create
-`workspace/reports/<slug>/instruction-sufficiency.json`, run two blind contract
-reviews, and validate it with
-`scripts/sufficiency_manifest_check.py`. Follow
+**Mandatory V3 evidence-inferability gate:** before a full difficulty probe,
+create `workspace/reports/<slug>/instruction-sufficiency.json` with
+`schema_version: 3`, run exactly two fresh task-visible fairness reviews in
+parallel, and validate
+it with `scripts/sufficiency_manifest_check.py --require-v3`. Follow
 [`references/instruction-sufficiency-gate.md`](references/instruction-sufficiency-gate.md)
-exactly. Hidden cases and expected outputs are allowed; hidden contract rules
-are not. Oracle/NOP success, solver pass rates, union coverage, or a larger
-platform sample never override this gate.
+exactly. Keep the goal/interface explicit, allow domain semantics to be inferred
+from one or more visible sources, and forbid only arbitrary or unobtainable
+hidden knowledge. A skeleton probe needs a lightweight goal/evidence audit, not
+the full two-reviewer manifest. Oracle/NOP success, pass rates, or union coverage
+never override a real ambiguity or impossible-information defect.
+
+**Mandatory semantic coverage gate for counted probes:** after the complete
+verifier and oracle are stable, follow
+[`references/semantic-coverage-gate.md`](references/semantic-coverage-gate.md).
+Create `semantic-coverage.json`, enumerate every promised public surface,
+separate fixture rows into independent mechanisms and interactions, execute a
+plausible partial-fix mutant for each node, and run
+`scripts/semantic_coverage_check.py`. Use `--advanced-plus` for an
+Advanced/Frontier shortlist. Freeze that snapshot before creating solve copies.
+Any later instruction, environment, solution, test, metadata, verifier-matrix,
+or mutation change invalidates the probe. Skeleton probes are exploratory only.
+
+**Mandatory verifier architecture gate before Oracle work:** mining first
+declares a profile and planned budget. As soon as the verifier skeleton is
+collectable, create `workspace/reports/<slug>/verifier-matrix.json` and run:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+  matrix workspace/reports/<slug>/verifier-matrix.json \
+  --task-slug <slug> --allow-missing-ctrf
+```
+
+Do not write the Oracle, build Docker images, or run Oracle/NOP for a failed
+matrix. After Oracle runs, add its raw CTRF path/hash and rerun without
+`--allow-missing-ctrf`; exact CTRF IDs must match behavior plus declared
+non-behavior IDs. Oracle=1 and NOP=0 prove executability, not breadth. Call the
+suite a smoke suite until both this gate and semantic coverage pass.
+
+**Mandatory pre-probe ordering gate:** before `probe.py prepare` in counted
+mode, run strict Docker preflight without emitting a ZIP, complete the
+folder-level client/manual review, and audit all task-visible prose. In
+`task-batch`, one auditor independent of the builder performs semantic realism,
+folder/manual, and task-style judgment in a single pre-freeze session; the
+three receipts share its exact transcript provenance. Preserve
+them as `probe-preflight.json`, `pre-freeze-review.json`, and
+`task-style-preflight.json`, create `agent-session-budget.json`, then pass
+`task-local-solve-probe/scripts/preprobe_check.py`. Package only after the
+counted difficulty gate. Audit post-probe submission prose separately; a later
+task-tree edit invalidates the frozen runs. Reuse the same auditor identity for
+the post-probe submission and exact-ZIP review instead of spawning new agents.
 
 **`instruction_check` — pass on the FIRST try. Two DIFFERENT checks share the word
 "instruction" and pull in OPPOSITE directions, so blindly adding or cutting detail
@@ -221,42 +277,39 @@ ping-pongs between them. Identify which one failed, then pull the matching lever
 | Failure | It complains that… | Usual cause | Lever |
 |---|---|---|---|
 | *"reads like a reference manual / design document"* (structural) | too much structure / enumeration | `##`/`###` headers, bullet or numbered rule lists, tables, step-by-step algorithm narration, function-signature / struct-field dumps, "pay attention to…", >~300 words | REMOVE structure → flowing prose; delegate the rule-set to the named standard |
-| *Task Instruction Sufficiency* / `task_specification` (completeness) | a behavior/value the hidden tests assert is not stated | prompt defers everything to a spec URL but a test pins an edge/constant an agent won't infer (e.g. TOML's UTF-8 BOM) | ADD that edge/value in a SENTENCE (never a table); or make the verifier behavioral so it isn't pinned |
+| `task_specification` / V3 inferability | an exact success-surface value is missing, or the graded model cannot be derived from visible evidence | an undocumented output key/arbitrary constant, or a hidden policy with no supporting trace/spec/convention | state only the non-inferable interface fact; otherwise add authentic evidence, relax the assertion, or make the verifier accept semantic equivalents |
 
-**#1 recurring cause of the structural FAIL:** writing `instruction.md` with `## Input` /
-`## Output` / `## Rules` headings and bullet lists — that shape alone trips it every time.
-Use flowing prose: no headers, no bullets, no tables.
+**#1 recurring cause of the structural FAIL:** writing `instruction.md` as a
+reference manual with `## Input` / `## Output` / `## Rules` sections, nested
+lists, tables, and long enumerations. Prefer flowing prose, but a concise flat
+list of at most 20 bullets is valid when it sounds natural and states outcomes
+rather than intermediate steps.
 
-**Sweet spot that passes BOTH** = prose containing only the one-sentence objective + the
-exact I/O contract + "treat <NAMED STANDARD> as the definition of correct behavior" + one
-or two sentences naming any tested edge the standard leaves implicit. Delegate general
-rules to the standard; state only what it does NOT define plus tested constants; keep code
-identifiers out (make the verifier opaque instead).
+**Terminus 3 sweet spot** = a concise goal + exact deliverable/interface + pointers
+to realistic evidence. State arbitrary task-specific decisions that no evidence
+defines. Do not narrate the model the agent is supposed to reconstruct. A named
+standard is useful only when it is genuinely the governing source and reachable
+under the task's network mode.
 
-**Disclosure ladder — when a tested edge/value MUST be stated (sufficiency) but keeps
-tripping the structural check, escalate in this order; never iterate wording sideways
-(the check flip-flops prose↔structure across re-runs):**
+**Non-inferable-value ladder:** use this only for exact schema/interface facts or
+arbitrary conventions that the agent cannot derive. Do not use it to disclose a
+domain inference merely because a blind run missed it.
 
 1. **One flowing-prose sentence inline** (never a table/list/mapping chain — a long run
    of "X is Y, X is Y" mappings reads as a table even in prose). Right default for a
    single edge or constant. Embed examples at the operation definitions so they read as
    contract clarification, not enumeration.
-2. **An in-environment reference DATA file** (`/app/examples.json` with oracle-verified
-   input→output pairs, a format doc, a non-derivable standard table like `entities.json`)
+2. **An authentic in-environment source** (a format schema, trace, drawing,
+   config, protocol capture, labeled archive, or non-derivable standard table)
    plus a one-line declarative pointer in `instruction.md`. instruction_check judges ONLY
-   instruction.md, so this clears it while keeping sufficiency/symmetry. Rules: ship
-   DATA, never the task's goals or a prompt extension (the "environment files must not
-   compensate for a short prompt" rule below still applies — reference data a realistic
-   engineering artifact would contain is fine, relocated prompt prose is not); examples
-   must be disjoint from the hidden corpus and verified against the oracle before
-   writing; `COPY` the file before the image's `git add -A` initial commit; recheck
+   instruction.md, so this can supply evidence without becoming a prompt extension.
+   Rules: ship artifacts a real team would possess, never a synthetic answer key
+   created only to teach the hidden tests; `COPY` the file before the image's
+   `git add -A` initial commit; recheck
    build-context size after adding env files; keep the words
    "verifier"/"test" out of the file (bare-word scanner).
-3. **Keep the flagged items and ship the non-blocking ⚠️** when they are test-pinned
-   literals/values and neither form clears the check — removing them trades a warning
-   for a blocking `behavior_in_tests`/sufficiency failure. If a pinned exact-output
-   token is the irritant, consider relaxing the verifier to observable accept/reject
-   with single-rule-isolating cases instead (then the token can leave both places).
+3. **Relax representation-specific verification** when an exact token/layout is
+   not part of the user outcome. Parse semantically or accept an equivalence class.
 
 **Writing the in-env reference file itself (ladder tier 2 — `FORMAT.md`, `SPEC.md`,
 `examples.json`):**
@@ -278,23 +331,22 @@ tripping the structural check, escalate in this order; never iterate wording sid
   reconcile the doc, the instruction, and the rubric to one story; if the
   verifier can't enforce a property (see the ordering/value-compare rule under
   Verifier Rules), state it in NONE of the three.
-- **Completeness is the whole point:** document EVERY convention the expected output
-  depends on — the sort order of each emitted array, merge/coalesce rules for
-  adjacent or overlapping spans, half-open vs closed boundary semantics, tie-breaks,
-  zero-length handling, null/absent-field shape. An undocumented convention that
-  every solver must guess is a guaranteed universal blind spot (a coldchain-style
-  task went 0/N on exactly this: unmerged overlaps + unspecified array order).
+- **Interface completeness is the point:** document representation choices the
+  consumer must know (schema, required order, units, public names). Domain
+  semantics may remain implicit when the supplied evidence or convention
+  determines them. If multiple representations are equally valid, the verifier
+  must accept the equivalence class instead of forcing the oracle's formatting.
 - Verify every stated fact and example **against the oracle binary before writing
   it down** — never from memory; one confidently-wrong example poisons the task.
 - Style: a realistic engineering artifact a team would keep in the repo — states
   what the system requires, never how to implement it, no trap-pointing ("note the
   tricky…"), no algorithm walkthrough (the env-docs rules below apply in full).
-- Disclosure budget: state every graded contract rule while withholding worked
-  solutions, fixture literals, expected outputs, root cause, and implementation
-  method. If stating a required rule makes the iteration sample 100%, drop or redesign
-  the task; never preserve difficulty by hiding that rule.
+- Disclosure budget: state the goal and non-inferable success surface; preserve
+  domain inference, root-cause discovery, and implementation choice. If a rule
+  is arbitrary and unavailable, disclose it or relax the test. If it is
+  evidence-supported, do not turn a solver miss into a new hint automatically.
 
-Copyable skeleton (no headers/bullets/tables, ≤300 words):
+Copyable prose skeleton (lists are also allowed when natural; ≤300 words):
 
 > The program at `<path>` should `<objective, one sentence>`. It reads `<input>` from
 > `<source>` and writes `<output>` to `<destination>`. Its behavior follows
@@ -305,11 +357,13 @@ Copyable skeleton (no headers/bullets/tables, ≤300 words):
 
 Binary preflight (every box YES before running the check):
 
-- no `##`/`###` headers, no bullet/numbered lists, no tables;
+- no reference-manual heading tree, nested lists, or tables; any flat list has
+  at most 20 items and states requirements rather than solution steps;
 - no step-by-step algorithm, no function signatures / struct-field dumps;
 - no "pay attention" / "note that" / "make sure" hint phrases; no PR/issue/test-name/rubric leakage;
 - ≤ ~300 words of flowing prose;
-- every VALUE/constant/edge the hidden tests assert appears in a sentence (sufficiency);
+- every arbitrary exact value/constant and public schema element appears in the
+  instruction or a realistic visible source; evidence-derived edges need not be enumerated;
 - general rule-sets delegated to the named standard, not transcribed;
 - code identifiers the tests pin are NOT in the prompt (verifier is behavioral instead).
 
@@ -384,23 +438,26 @@ Environment files must not compensate for a short prompt:
   environment docs to dodge length limits. Supporting docs should read like
   realistic engineering artifacts, not prompt extensions.
 
-Before finalizing, run an instruction/test symmetry audit:
+Before finalizing, run a V3 contract/evidence/test audit:
 
-- list every exact string, flag, command, file path, output key, XML/JSON field, and ordering guarantee asserted by tests
-- ensure each asserted behavior appears naturally in `instruction.md`
-- include preservation requirements explicitly, even when they test "unchanged" behavior outside the main bug path
-- if tests cover non-target modes, aliases, legacy modes, fallback paths, or normal layouts, state that those modes must continue working
-- remove tests for behavior that would be unfair to state in the prompt
+- list every exact string, flag, command, file path, output key, schema field,
+  arbitrary constant, and representation guarantee asserted by tests; make
+  these explicit when no realistic evidence defines them
+- map semantic tests to one or more evidence/inference families instead of
+  copying their derived rules into `instruction.md`
+- state public preservation scope explicitly; keep held-out values, layouts,
+  and sequences hidden when they exercise the same inferable invariant
+- remove or relax tests that require oracle-only policy or unobtainable facts
 - keep implementation symbols out of the prompt unless they are public API
 - distinguish two kinds of things a test can pin (docs: prompt-styling.md gives
   the what not the how; `behavior_in_task_description` + `structured_data_schema`
   want asserted behavior and output schemas explicit; prompt-styling section 4
   "Overly Prescriptive Guidelines" calls listing exact function signatures /
   struct layouts BAD):
-  - VALUES the test asserts (numeric thresholds, output keys, JSON/CSV/data
-    schema the agent produces, exact-match constants) MUST be explicit. Omitting
-    a tested cutoff makes agents guess and fail unfairly; this is required
-    sufficiency, not over-spec.
+  - OUTPUT/INTERFACE VALUES (paths, keys, public schema, arbitrary thresholds,
+    exact-match constants) must be explicit unless a realistic visible source
+    defines them. A threshold derived from supplied data/config/domain evidence
+    belongs in an inference family and need not be handed over as the answer.
   - CODE IDENTIFIERS the test pins (function signatures, struct field
     names/types, project layout the agent must produce) are exactly what
     prompt-styling section 4 forbids prescribing. Do NOT resolve a compile-time
@@ -510,6 +567,12 @@ Tests must:
 - Run in the isolated verifier and read only declared artifacts.
 - Test behavior, not source-code strings.
 - Have docstrings on every test.
+- Expose enough individually reportable semantic resolution for the chosen
+  verifier profile: 50–1000 meaningful units across at least six clusters for
+  cheap deterministic tasks, or 20–80 scenarios across at least four clusters
+  for expensive stateful tasks. Include at least two units that combine
+  clusters and at least two verifier shapes. Do not count repeated fixtures as
+  new mechanisms.
 - Cover every explicit and important implicit prompt requirement.
 - Include boundary cases and at least one regression guard.
 - Assert no internal crash/traceback when the task is about recoverable behavior.
@@ -540,11 +603,11 @@ Tests must:
   cannot keep capture pipes open, survive into later cases, or touch verifier
   state. A direct `subprocess.run(..., capture_output=True, timeout=...)` without
   descendant cleanup is not acceptable isolation.
-- Treat every promise in `instruction.md` and agent-visible contract documents
-  as graded unless the sufficiency manifest explicitly records it as ungraded.
-  In particular, an output-write failure promise needs a sentinel-preservation
-  test, and a serialized key-order promise needs a raw-order assertion rather
-  than parsed dictionary equality.
+- Grade every promise in `instruction.md` and agent-visible normative documents.
+  Map derived semantic checks to V3 inference families rather than restating
+  them as prompt promises. An output-write failure promise needs a
+  sentinel-preservation test, and a serialized key-order promise needs a
+  raw-order assertion when order is genuinely part of the consumer contract.
 
 Avoid quality-check failures:
 
@@ -688,5 +751,6 @@ Quality preflight:
 
 If the platform returns the task with `❌ Some tests not passed by any agent
 run` (blocking 0/N coverage flag), do not improvise — follow the decision tree
-in `.agent/skills/task-revise-flag-remediation/SKILL.md` (Step 1.5 first:
-suspect the oracle before pruning; Step 1.75: single-lever fingerprint → DROP).
+in `.agent/skills/task-revise-flag-remediation/SKILL.md`: classify infrastructure,
+oracle/verifier defects, explicit-contract gaps, evidence-inferability gaps,
+and legitimate semantic misses before changing prose or cases.

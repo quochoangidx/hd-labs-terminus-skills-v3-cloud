@@ -121,6 +121,20 @@ tasks are preferred when natural, but the primary implementation languages are
 simply recorded under metadata.languages. Python used only by the verifier does
 not count.
 
+Before prospecting, read
+`.agent/skills/task-miner/frontier_task_design_patterns.md` and assign the
+candidate to exactly one design track:
+
+- `established`: apply one or more catalogued `P*` patterns;
+- `derived`: transform or compose catalogued patterns into a candidate-local
+  experimental pattern.
+
+For a batch, allocate the post-mining build pool and final accepted set with the
+catalog's nearest-whole-task 80/20 rule. Replace a rejected slot from the same
+track. A domain/language/story change is a reskin, not a derived pattern.
+Single-candidate mining may use either track, but it must still record the
+track and pattern evidence.
+
 Prefer work that requires reacting to intermediate state rather than one command
 or a straight-line burst. The “at least five steps” phrase is a complexity
 heuristic, not a count to game.
@@ -162,8 +176,8 @@ Procedure per prospecting round:
    result remains stable.
 4. Anti-memorization + novelty: fame check above; dedupe vs `index.jsonl` and
    the gallery snapshot (`gallery_novelty` must be `novel`).
-5. Output per prospect: repo | archetype | ONE-SENTENCE lever hypothesis |
-   category fit — feed straight into the Master collapse law screen, and log
+5. Output per prospect: repo | archetype | ONE-SENTENCE inference/interaction hypothesis |
+   category fit — feed straight into the V3 evidence-and-interaction screen, and log
    every prospect (rejects included) into `index.jsonl` as exploration-map
    data.
 
@@ -317,7 +331,7 @@ For `pandas-dev/pandas`, prefer:
 
 Avoid pandas candidates that need large datasets, slow IO formats, or compiled-extension changes.
 
-Avoid as Hard tasks:
+Avoid as high-tier candidates:
 
 - documentation-only fixes
 - typo or message-only changes
@@ -359,6 +373,7 @@ mined-candidates/index.jsonl               # candidates already mined/claimed/cl
 mined-candidates/gallery_tasks_snapshot.md # task NAMES already IN the live gallery — do not duplicate
 docs/understanding-tasks/task-taxonomy.md  # authoritative Terminus 3 category/subcategory menu
 .agent/skills/task-miner/lever_patterns.md # SHARED, resource-agnostic pattern specs + claimed-resource ledger — the in-repo home of "learn the pattern, not the resource" (replaces relying on any personal memory)
+.agent/skills/task-miner/frontier_task_design_patterns.md # current frontier-resistant design catalog + established/derived 80/20 policy
 ```
 
 The gallery snapshot is the **novelty gate**: if the gallery already contains the
@@ -403,7 +418,7 @@ durable ceiling or live verdict, fold the evidence and tier into the matching
 ## Hardness Filter
 
 For upstream bugfix mode, apply the repo-specific hard filters below.
-A good Hard candidate should require the agent to understand 5-6 meaningful
+A good high-tier candidate should require the agent to understand 5-6 meaningful
 components, behavior surfaces, or project layers. Components can be source
 modules, public APIs, CLI/config parsing, build/dependency metadata, data/schema
 rules, cache/state management, error handling, compatibility paths, or test
@@ -435,30 +450,65 @@ Reject false-hard candidates:
   trials show repeated failures for semantic reasons
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
-### Master collapse law screen — RUN ON EVERY CANDIDATE, any lane, before scoring
+### Terminus 3 evidence-and-interaction screen — RUN ON EVERY CANDIDATE
 
-⭐ Confirmed over a 15-task blind-probe batch (2026-07-12), lane-agnostic:
-fully specified transcription engines usually collapse. Fair survivors must
-derive difficulty from work the visible contract does not solve for the agent,
-not from a rule it withholds. The two useful signatures are:
+Evaluate the current Terminus 3 shape before applying historical collapse
+priors:
 
-- **(a) an in-image authority differential** — the contract pins an
-  offline-reachable implementation, while matching its broad accreted behavior
-  still requires investigation and differential work;
-- **(b) a counter-intuitive observable outcome under a sufficient contract** —
-  every graded rule is stated, reachable, or supported by visible data, but the
-  correct implementation still requires non-obvious cross-file, state, or
-  interaction reasoning.
+1. **Clear success surface:** the requested outcome, artifact/interface, and
+   arbitrary exact conventions can be stated concisely without revealing the
+   solution.
+2. **Inferable model:** the agent can reconstruct the graded domain model from
+   one or more visible artifacts, current state, realistic specifications, or
+   established conventions. Record the evidence graph, not a prose rule list.
+3. **Interacting correctness:** at least two meaningful axes affect one another
+   (for example state × safety, geometry × manufacturability, or determinism ×
+   performance). Independent checklist items do not qualify.
+4. **Semantic deliverable:** prefer a native artifact or live state whose
+   structure and behavior can be verified, not a cosmetic representation.
+5. **Held-out continuity:** hidden instances/combinations exercise the same
+   inferable model and do not introduce an oracle-only policy.
+6. **Mechanism rank:** identify at least three implementation/domain mechanisms
+   and two genuine pairwise interactions for an Advanced+ target. Repeating one
+   branch across inputs, units, scales, files, or wrappers adds fixtures but no
+   rank. Name a plausible dedicated partial-fix mutant for every node before
+   investing in the full build.
+7. **Verifier architecture budget:** choose `cheap_deterministic` or
+   `expensive_stateful` before cloning. Plan 50–1000 individually visible units
+   across at least six semantic clusters for the cheap profile, or 20–80
+   scenarios across at least four clusters for the stateful profile. Plan at
+   least two cross-cluster scenarios, two verifier shapes, and a discriminating
+   path for every promised public surface. Reject a candidate that reaches the
+   minimum only by duplicating one rule.
 
-Everything straightforward-and-derivable is EASY 3/3, regardless of rule count,
-cascade depth, stated counter-intuitiveness, or optimization shape. Screen every
-candidate by naming the remaining implementation/reasoning challenge after the
-Task Instruction Sufficiency gate passes. If difficulty exists only while a
-contract fact is omitted, reject at mining time; a hidden rule is a fairness
-defect, not a lever. This subsumes the spec-task advice in "Opus-4.8 resistance"
-and the bugfix-side "Fix-shape filter".
+Save the mined artifact and run the plan gate before creating a task folder:
 
-**fair⊥hard single-lever early-DROP (apply here, not after the platform flag):**
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+  plan mined-candidates/<slug>.json
+```
+
+Do not hand a failed plan to `task-clone`. Unit count is coverage resolution,
+not difficulty evidence; the mechanism and interaction gates still apply.
+
+Reject ambiguity, unobtainable knowledge, arbitrary hidden constants/strings,
+and cosmetic domain labels. Do not reject a discoverable hidden requirement
+merely because its final rule is absent from `instruction.md`.
+
+### Conformance/transcription collapse screen — lane-specific
+
+The 2026-07-12 batch remains a strong prior for tasks whose whole job is to
+transcribe a standard or reproduce a library. In this lane, keep candidates
+only when substantial work remains after the public interface is clear: an
+offline authority differential, broad accreted behavior, cross-file/state
+reasoning, or another independently measured implementation challenge.
+
+Do not apply this screen as a universal law to evidence reconstruction,
+scientific interpretation, native artifacts, live systems, or multi-step
+operations. A named algorithm is a risk only when recalling it completes the
+task.
+
+**Conformance single-lever early-DROP:**
 if the candidate's ENTIRE difficulty is one boundary / convention / precedence /
 output-contract fact, there is no fair-and-hard path — hiding it produces an
 unfair 0/N coverage flag, disclosing it collapses the task to EASY. Reject at
@@ -466,24 +516,24 @@ mining; do not wait to learn this from a platform return (arrhenius-clip-fit,
 calibration-threshold-select, hanabi, provenance-release-gate were all
 late-drop lessons). Fingerprints: a self-contained game-replay or
 single-invariant adjudicator; difficulty that lives in an uninferable OUTPUT
-contract rather than semantics; a "wall" that is one code path. The only
-escape: the candidate admits a SECOND lever that is orthogonal, undisclosed,
+contract rather than semantics; a "wall" that is one code path. The only escape
+in this lane is a second implementation/reasoning challenge that is orthogonal
 and broad-footprint (hex-requirement intersection=0) —
 record it explicitly or reject. ⚠️ A claimed orthogonal second lever must be
 VERIFIED genuinely broad before you trust it: DKIM's supposed second wall
 evaporated on the 2026-07-19 platform return (20/20 strong runs passed every
 other DKIM feature; the whole series dropped as single-lever fair⊥hard).
-Record `collapse_law_screen: pass|fail` with
-the named lever in the candidate artifact.
+Record `v3_shape_screen: pass|fail` for every candidate and
+`conformance_collapse_screen: pass|fail|not_applicable` for this lane.
 
 **Screen calibration control group (mandatory per mining round, 2026-07-20):**
 the screen is a one-sentence PREDICTION, and screen-rejected candidates are
 never probed, so its false-negative rate is invisible by construction — a
 too-strict screen silently starves the pipeline while looking like "the design
 working". Each round, advance 1 screen-FAILED candidate (not from a
-§6 CONFIRMED-dead family) into the skeleton probe anyway, marked
-`screen_control: true` in `index.jsonl`. A control that HOLDS (0/2 semantic)
-is a measured false-negative: keep the candidate in the normal pipeline, log
+§6 CONFIRMED-dead family) into an exploratory skeleton probe anyway, marked
+`screen_control: true` in `index.jsonl`. A control that appears to hold is a
+reason to complete its verifier, not a tier verdict: keep the candidate in the normal pipeline, log
 the finding as durable, and loosen the specific screen criterion that killed
 it. Controls that collapse confirm the screen at skeleton cost, not build
 cost.
@@ -685,8 +735,9 @@ Score each axis from 1 to 5:
 
 Reject if:
 
-- the Master collapse law screen fails (no nameable lever, or single-lever
-  fair⊥hard fingerprint with no orthogonal second lever) — see Hardness Filter
+- the V3 evidence-and-interaction screen fails; for a conformance/transcription
+  task, also reject a single-lever fair⊥hard fingerprint with no independent
+  implementation/reasoning challenge
 - `subsystem_interaction < 4` unless prior real-agent evidence shows the task is
   still hard for semantic reasons
 - `deterministic_reproducibility < 4`
@@ -722,6 +773,19 @@ candidate:
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
   gallery_novelty:         # novel | twist-on-existing | duplicate  (Terminus 3: reject both twist-on-existing and duplicate)
   objective_type:          # concise domain/work-surface label
+  design_pattern:
+    track:                 # established | derived
+    pattern_ids:           # established P* IDs directly applied
+    parent_pattern_ids:    # derived only: P* sources transformed/composed
+    derived_pattern_id:    # derived only: candidate-local X-* ID
+    transformation_operators: # derived only: composition/inversion/delayed-feedback/etc.
+    causal_graph:          # candidate-specific nodes and edges, not catalog prose
+    causal_topology_delta: # derived only
+    work_surface_delta:    # derived only
+    verifier_delta:        # derived only
+    failure_geometry_delta: # derived only
+    non_equivalence_rationale: # why this is not a parent reskin
+    closest_portfolio_pattern_instance:
   source_url:
   issue_or_pr_id:
   repo:
@@ -752,6 +816,34 @@ candidate:
   difficulty_rationale:
   reasoning_bottlenecks:
   tempting_partial_fixes:
+  semantic_mechanisms:    # >=3 for an Advanced+ target; no replicated fixtures
+    - id:
+      description:
+      dedicated_mutant:
+  semantic_interactions:  # >=2 for an Advanced+ target
+    - id:
+      mechanism_ids:
+      dedicated_mutant:
+  public_surfaces:        # every promised entry point/artifact to test
+  verifier_architecture:  # fail-fast design receipt; validate before cloning
+    schema_version: 1
+    status: pass
+    profile:              # cheap_deterministic | expensive_stateful
+    planned_platform_visible_unit_count: # 50-1000 cheap | 20-80 stateful
+    semantic_clusters:    # >=6 cheap | >=4 stateful; no fixture aliases
+      - id:
+        description:
+        planned_unit_count:
+    public_surface_ids:
+    public_surface_cluster_ids: # exact mapping for every public surface
+    cross_cluster_scenarios:    # >=2, each joins >=2 clusters
+      - id:
+        cluster_ids:
+        discriminating_scenario:
+    verifier_shapes:      # >=2 unless an authority corpus supplies >=6 clusters
+    authority_corpus_substitute: false
+    platform_visibility_strategy:
+    nop_discrimination_strategy:
   domain_rationale:
   test_surface:
     primary_api:
@@ -770,6 +862,8 @@ candidate:
     leakage_risk:
   patch_shape_gate:        # pass | fail — historical hard-shape calibration
   patch_shape_evidence:
+  v3_shape_screen:         # pass | fail — clear goal, inferable model, interacting axes, semantic deliverable
+  conformance_collapse_screen: # pass | fail | not_applicable
   family_key:              # library + bug_family, checked against the family ledger
   agent_probe:             # model, run count, pass count, trial-analysis flags
   hardness_score:
@@ -784,6 +878,13 @@ candidate:
 ```
 
 Use `rejection_reason: null` only when the candidate is suitable for cloning.
+
+For `design_pattern.track: established`, require at least one valid `P*` ID and
+a candidate-specific causal graph. For `derived`, require at least one valid
+parent ID, one explicit transformation operator, and material deltas on at
+least two of causal topology, work surface, verifier architecture, and expected
+failure geometry. Keep derived patterns candidate-local until they satisfy the
+promotion rule in `frontier_task_design_patterns.md`.
 
 For domain profiles, prefer `base_commit`, `target_behavior`, `required_work`,
 `input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only
@@ -911,7 +1012,9 @@ guessing. For each tested implementation, include:
 - whether the implementation is always present in the pinned repo
 - any raw container or wrapper relationship
 
-If this is unclear, mark the candidate incomplete and do not clone yet.
+If this is unclear, or the verifier architecture plan does not pass
+`verifier_architecture_check.py plan`, mark the candidate incomplete and do not
+clone yet.
 
 Also provide factual input for the later reviewer-facing Difficulty
 Explanation:

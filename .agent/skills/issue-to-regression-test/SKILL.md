@@ -34,7 +34,11 @@ Turn upstream behavior into verifier tests that are:
 
 Do not paste upstream test names or PR details into `instruction.md`.
 
-Every preservation test must map to a prompt sentence. If a test checks an unaffected mode, alias, fallback path, legacy layout, or normal case, add natural language to `instruction.md` such as "Keep `<mode>` behavior unchanged" or drop the test. Quality checks fail when verifier-only preservation requirements are missing from the prompt.
+Every preservation test must map to the explicit public scope or to a V3
+evidence-backed inference family. State that a public mode/interface remains in
+scope when the user must know it; do not enumerate every hidden value, layout,
+or sequence that exercises the same inferable invariant. Remove a test only
+when it introduces a new oracle-only policy or unobtainable fact.
 
 Do not move prompt requirements into environment README/spec files to satisfy
 length or style limits. Environment docs can define realistic schemas,

@@ -25,39 +25,62 @@ from the repo root.)
 
 Use `--json` when another script will consume the result.
 
-For `task-batch`, preserve the manual semantic-review transcript and write a
-hash-bound combined receipt for the exact final ZIP:
+For `task-batch`, run the same scanner/manual review twice at different trust
+boundaries. Before counted probes, review the task folder and save:
 
 ```bash
 python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
-  submissions/<slug>.zip --json --manual-review-pass \
+  workspace/tasks/<slug> --json --manual-review-pass \
+  --review-transcript workspace/reports/<slug>/consolidated-pre-freeze-audit.md \
+  --review-runtime <actual-runtime> --review-model <actual-model> \
+  --review-session-id <actual-session-id> \
+  --evidence-output workspace/reports/<slug>/pre-freeze-review.json
+```
+
+After probes and final packaging, review the exact ZIP and save:
+
+```bash
+python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+  workspace/submissions/<slug>.zip --json --manual-review-pass \
   --review-transcript workspace/reports/<slug>/client-review-transcript.md \
   --review-runtime <actual-runtime> --review-model <actual-model> \
   --review-session-id <actual-session-id> \
   --evidence-output workspace/reports/<slug>/client-review.json
 ```
 
+In `task-batch`, this manual judgment belongs to the one consolidated auditor,
+not a separate client-review agent. Before freeze, that auditor also performs
+semantic realism and the task-tree style audit; all three receipts use the same
+runtime/model/session/transcript provenance. After probes, reuse the same
+auditor identity in a new turn for the exact ZIP, submission prose, and
+handover surfaces. The scanner is deterministic and consumes no additional
+agent session. Its static scan may run alongside the auditor's prose inventory,
+but final Docker/package/handover commands stay sequential.
+
 Use `--manual-review-pass` only after completing the manual checks below and
 recording their real findings and disposition in the transcript. The batch
 handover rejects a missing, empty, out-of-directory, or hash-mismatched
 transcript.
 
-For a task that was already in the platform revision queue or awaiting review
-before its category closed, pass `--revision-exception`. Never use this flag for
-a net-new task; category availability remains a blocker by default.
-
 Also run `scripts/preflight.sh <task-dir>` (repo root) for the mechanical
 subset review_task.py doesn't itself check (.dockerignore contents,
 `# syntax=` line, CRLF/arcnames, rubric closed-set).
 
-For a workspace task, require and validate
-`workspace/reports/<slug>/instruction-sufficiency.json` with
-`terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`. Missing
-or failing evidence is a blocker. For a standalone ZIP, the report is correctly
-absent from the archive; recreate the contract-source matrix manually from the
-ZIP and apply the blind-review procedure in
+For a workspace task, require schema version 3 in
+`workspace/reports/<slug>/instruction-sufficiency.json` and validate it with
+`sufficiency_manifest_check.py --require-v3`. Missing or failing evidence is a blocker. For a standalone ZIP,
+the report is correctly absent from the archive; recreate the goal/evidence/
+inference matrix manually from the ZIP and apply the fairness-review procedure in
 `terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
-The automated scanner cannot certify semantic sufficiency.
+The automated scanner cannot certify semantic inferability.
+
+For a counted-probe or batch task, also require
+`workspace/reports/<slug>/semantic-coverage.json` and validate it against the
+final task plus `verifier-matrix.json` with `semantic_coverage_check.py`
+(`--advanced-plus` for that campaign). Confirm the receipt covers every public
+entry point and that each mechanism/interaction mutant is a plausible partial
+fix with both passing and failing CTRF units. Raw case count or cluster labels
+do not substitute for this review.
 
 2. Read `instruction.md` and any provided/generated rubric manually for prompt
    realism:
@@ -78,18 +101,16 @@ The automated scanner cannot certify semantic sufficiency.
      cases the tests assert are NOT this problem (keep them for symmetry).
    - Two-way instruction/test symmetry (scanner does not catch; read for both
      directions; confirmed 2026-06 ssh-rsa-privatekey-dos hit BOTH at once):
-     - **Not vaguer than the tests (else Task Instruction Sufficiency FAIL).**
-       If a test asserts a specific numeric threshold or exact value, the
-       instruction MUST state that number. "reject a too-large exponent" while
+     - **No unobtainable success-surface value.** If a test asserts an arbitrary
+       numeric threshold or exact interface value that no visible source defines,
+       the instruction must state it. "reject a too-large exponent" while
        the test requires `> 24 bits` made 8/9 agents guess 31/33/64 and fail.
-       Flag any tested cutoff/value that the instruction leaves implicit
-       (`should_fix`). Naming the spec value the test checks is required
-       sufficiency, not over-spec; optionally cite an in-repo precedent.
-       Treat a reasonable implementation that passes every visible statement
-       but fails a test as a blocker even when another solver guessed the hidden
-       rule or every test has at least one passer.
-       The "spec value" here means VALUES (numbers, output keys, data schema,
-       exact-match constants) — docs want these explicit
+       Flag any arbitrary cutoff/value absent from all task-visible evidence.
+       Do not require a derived threshold, causal rule, protocol transition, or
+       domain convention to be handed over when realistic evidence supports the
+       inference. In that case audit the evidence graph and trajectory instead.
+       The non-inferable interface surface means VALUES (output keys, public
+       schema, exact-match constants, arbitrary policy numbers) — docs want these explicit
        (`structured_data_schema`, `behavior_in_task_description`). Distinguish
        these from CODE IDENTIFIERS the test pins (function signatures, struct
        field names/types, project layout). A test that reads `cp.CompressedOffset
@@ -101,7 +122,7 @@ The automated scanner cannot certify semantic sufficiency.
        prompt-styling.md section 4 ("Overly Prescriptive Guidelines") calls
        listing exact signatures/struct layouts BAD, and that is exactly what the
        `instruction_check`/design-document reviewer rejects (flate hit
-       Sufficiency-FAIL when names were omitted, then the design-doc WARN when
+       a compile-time interface gap when names were omitted, then the design-doc WARN when
        the full schema was pasted in — the schema route cannot win). The
        docs-aligned fix is to make the verifier BEHAVIORAL/OPAQUE: pass the new
        value straight back into the consuming API as a black box and assert

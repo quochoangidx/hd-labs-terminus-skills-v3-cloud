@@ -17,15 +17,42 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+AUTHORING_SCRIPTS = (
+    Path(__file__).resolve().parents[1]
+    / ".agent"
+    / "skills"
+    / "terminus-regular-task-authoring"
+    / "scripts"
+)
+sys.path.insert(0, str(AUTHORING_SCRIPTS))
+from verifier_architecture_check import validate_matrix as validate_verifier_architecture  # noqa: E402
+
+SESSION_BUDGET_SCRIPTS = (
+    Path(__file__).resolve().parents[1]
+    / ".agent"
+    / "skills"
+    / "task-batch"
+    / "scripts"
+)
+sys.path.insert(0, str(SESSION_BUDGET_SCRIPTS))
+from session_budget import validate_receipt as validate_session_budget_receipt  # noqa: E402
+from quota_guard import validate as validate_quota_ledger  # noqa: E402
+
 
 EVIDENCE_FILES = {
+    "agent_session_budget": "agent-session-budget.json",
     "category": "category-screen.json",
     "client_review": "client-review.json",
     "design": "design-signature.json",
     "preflight": "preflight.json",
+    "prefreeze_review": "pre-freeze-review.json",
+    "probe_preflight": "probe-preflight.json",
     "probe": "probe-verdict.json",
+    "quota_ledger": "quota-ledger.json",
+    "semantic": "semantic-coverage.json",
     "style": "style-audit.json",
     "sufficiency": "instruction-sufficiency.json",
+    "task_style": "task-style-preflight.json",
     "verifier": "verifier-matrix.json",
 }
 SIGNATURE_AXES = {
@@ -205,6 +232,30 @@ def matrix_from_ctrf(path: Path, run_name: str, errors: list[str]) -> dict:
     }
 
 
+def semantic_probe_geometry(run_results: list[dict]) -> dict:
+    """Derive mechanism-level geometry without weighting replicated fixtures."""
+    solved_runs = sum(1 for item in run_results if item.get("result") == "pass")
+    failed_node_sets = [
+        frozenset(item.get("failure_nodes", set()))
+        for item in run_results
+        if item.get("result") == "fail"
+    ]
+    de_correlated = len(failed_node_sets) >= 2 and len(set(failed_node_sets)) >= 2
+    advanced_pass = (
+        len(run_results) == 3
+        and solved_runs == 1
+        and len(failed_node_sets) == 2
+        and all(len(nodes) >= 2 for nodes in failed_node_sets)
+        and de_correlated
+    )
+    return {
+        "solved_runs": solved_runs,
+        "failed_node_sets": failed_node_sets,
+        "semantic_de_correlated": de_correlated,
+        "advanced_geometry_pass": advanced_pass,
+    }
+
+
 def run_trusted_nop_verifier(run_dir: Path) -> dict:
     """Rerun the verifier with the fixed local NOP agent and derive its outcome."""
     stb = shutil.which("stb")
@@ -350,133 +401,14 @@ def validate_verifier_matrix(
     report_dir: Path,
     errors: list[str],
 ) -> dict:
-    if data.get("status") != "pass":
-        errors.append("verifier-matrix.json: status must be 'pass'")
-    if data.get("task_slug") != slug:
-        errors.append("verifier-matrix.json: task_slug mismatch")
-    profile = data.get("profile")
-    if profile not in {"cheap_deterministic", "expensive_stateful"}:
-        errors.append(
-            "verifier-matrix.json: profile must be cheap_deterministic or expensive_stateful"
-        )
-    unit_ids = data.get("unit_ids")
-    if not isinstance(unit_ids, list) or not unit_ids or not all(nonempty(item) for item in unit_ids):
-        errors.append("verifier-matrix.json: unit_ids must contain non-empty strings")
-        unit_ids = []
-    elif len(set(unit_ids)) != len(unit_ids):
-        errors.append("verifier-matrix.json: unit_ids must be unique")
-    declared_count = data.get("platform_visible_unit_count")
-    if declared_count != len(unit_ids):
-        errors.append("verifier-matrix.json: platform_visible_unit_count mismatch")
-    if profile == "cheap_deterministic" and not 50 <= len(unit_ids) <= 1000:
-        errors.append("verifier-matrix.json: cheap deterministic tasks need 50-1000 units")
-    if profile == "expensive_stateful" and not 20 <= len(unit_ids) <= 80:
-        errors.append("verifier-matrix.json: expensive stateful tasks need 20-80 units")
-
-    unit_clusters = data.get("unit_clusters")
-    if not isinstance(unit_clusters, dict) or set(unit_clusters) != set(unit_ids):
-        errors.append("verifier-matrix.json: unit_clusters must map every unit ID exactly")
-        unit_clusters = {}
-    else:
-        for unit_id, clusters in unit_clusters.items():
-            if (
-                not isinstance(clusters, list)
-                or not clusters
-                or not all(nonempty(cluster) for cluster in clusters)
-                or len(set(clusters)) != len(clusters)
-            ):
-                errors.append(
-                    f"verifier-matrix.json: unit_clusters[{unit_id!r}] must be unique non-empty strings"
-                )
-    cluster_names = {
-        cluster
-        for clusters in unit_clusters.values()
-        if isinstance(clusters, list)
-        for cluster in clusters
-        if nonempty(cluster)
-    }
-    minimum_clusters = 6 if profile == "cheap_deterministic" else 4
-    if len(cluster_names) < minimum_clusters:
-        errors.append(
-            f"verifier-matrix.json: profile requires at least {minimum_clusters} semantic clusters"
-        )
-    if unit_ids and unit_clusters and cluster_names:
-        dominant = max(
-            (
-                sum(cluster in clusters for clusters in unit_clusters.values()) / len(unit_ids),
-                cluster,
-            )
-            for cluster in cluster_names
-        )
-        if dominant[0] > 0.35 and not nonempty(data.get("dominant_cluster_justification")):
-            errors.append(
-                "verifier-matrix.json: a cluster covers >35% of units without justification"
-            )
-
-    cross_cluster = data.get("cross_cluster_unit_ids")
-    if (
-        not isinstance(cross_cluster, list)
-        or len(set(cross_cluster)) < 2
-        or not set(cross_cluster).issubset(set(unit_ids))
-    ):
-        errors.append("verifier-matrix.json: at least two valid cross_cluster_unit_ids are required")
-    else:
-        for unit_id in set(cross_cluster):
-            if len(unit_clusters.get(unit_id, [])) < 2:
-                errors.append(
-                    f"verifier-matrix.json: cross-cluster unit {unit_id!r} has fewer than two clusters"
-                )
-
-    shapes = data.get("verifier_shapes")
-    authority_substitute = data.get("authority_corpus_substitute") is True
-    if not isinstance(shapes, list) or not all(nonempty(shape) for shape in shapes):
-        errors.append("verifier-matrix.json: verifier_shapes must contain non-empty strings")
-    elif len(set(shapes)) < 2 and not (authority_substitute and len(cluster_names) >= 6):
-        errors.append("verifier-matrix.json: at least two verifier shapes are required")
-
-    non_behavior = data.get("non_behavior_test_ids", [])
-    ctrf = data.get("ctrf")
-    if not isinstance(ctrf, dict):
-        errors.append("verifier-matrix.json: ctrf evidence is required")
-    else:
-        ctrf_path_value = ctrf.get("path")
-        if not nonempty(ctrf_path_value):
-            errors.append("verifier-matrix.json: ctrf.path is required")
-        else:
-            ctrf_path = (report_dir / str(ctrf_path_value)).resolve()
-            try:
-                ctrf_path.relative_to(report_dir.resolve())
-            except ValueError:
-                errors.append("verifier-matrix.json: ctrf.path escapes the report directory")
-            else:
-                ctrf_data = load_json(ctrf_path, errors)
-                summary = ctrf_data.get("summary") if isinstance(ctrf_data, dict) else None
-                if (
-                    not isinstance(non_behavior, list)
-                    or not all(nonempty(test_id) for test_id in non_behavior)
-                    or len(set(non_behavior)) != len(non_behavior)
-                ):
-                    errors.append(
-                        "verifier-matrix.json: non_behavior_test_ids must be unique strings"
-                    )
-                    non_behavior = []
-                expected_ctrf_tests = len(unit_ids) + len(non_behavior)
-                if not isinstance(summary, dict) or summary.get("tests") != expected_ctrf_tests:
-                    errors.append(
-                        "verifier-matrix.json: CTRF summary.tests must equal behavior plus "
-                        "declared non-behavior tests"
-                    )
-                if ctrf.get("sha256") != (sha256(ctrf_path) if ctrf_path.is_file() else None):
-                    errors.append("verifier-matrix.json: CTRF sha256 mismatch")
-    return {
-        "unit_ids": set(unit_ids),
-        "non_behavior_test_ids": set(non_behavior)
-        if isinstance(non_behavior, list) and all(nonempty(item) for item in non_behavior)
-        else set(),
-        "unit_clusters": unit_clusters,
-        "cluster_names": cluster_names,
-        "profile": profile,
-    }
+    architecture_errors, derived = validate_verifier_architecture(
+        data,
+        report_dir,
+        expected_slug=slug,
+        require_ctrf=True,
+    )
+    errors.extend(architecture_errors)
+    return derived
 
 
 def validate_category(
@@ -523,11 +455,14 @@ def validate_design(data: dict, slug: str, report_dir: Path, errors: list[str]) 
     else:
         compared_against = data["compared_against"]
     architecture_family = data.get("architecture_family")
+    domain_key = data.get("domain_key")
     batch_id = data.get("batch_id")
     if not nonempty(architecture_family):
         errors.append("design-signature.json: architecture_family is required")
     if not nonempty(batch_id):
         errors.append("design-signature.json: batch_id is required")
+    if not nonempty(domain_key):
+        errors.append("design-signature.json: domain_key is required")
 
     recomputed_max = 0
     for other_slug in compared_against:
@@ -551,15 +486,101 @@ def validate_design(data: dict, slug: str, report_dir: Path, errors: list[str]) 
             errors.append(
                 "design-signature.json: only one task per architecture_family is allowed in a batch"
             )
+        if (
+            nonempty(batch_id)
+            and other.get("batch_id") == batch_id
+            and nonempty(domain_key)
+            and other.get("domain_key") == domain_key
+        ):
+            errors.append("design-signature.json: domain_key must be unique within a batch")
     if compared_against and max_matches != recomputed_max:
         errors.append(
             "design-signature.json: max_pairwise_matches differs from recomputed signatures"
         )
 
 
+def validate_batch_index(
+    data: dict,
+    slug: str,
+    report_dir: Path,
+    design: dict,
+    expected_size: int,
+    errors: list[str],
+    incremental: bool = False,
+) -> None:
+    """Prove a design receipt was compared with the current or complete batch."""
+    status = data.get("status")
+    if incremental:
+        if data.get("schema_version") != 2:
+            errors.append("batch index: incremental mode requires schema_version 2")
+        if status not in {"building", "complete"}:
+            errors.append("batch index: status must be building or complete")
+    elif not (
+        (data.get("schema_version") == 1 and status == "pass")
+        or (data.get("schema_version") == 2 and status == "complete")
+    ):
+        errors.append(
+            "batch index: final mode requires schema-v1 pass or schema-v2 complete"
+        )
+    if data.get("batch_id") != design.get("batch_id"):
+        errors.append("batch index: batch_id differs from design-signature.json")
+    task_slugs = data.get("task_slugs")
+    if (
+        not isinstance(task_slugs, list)
+        or not task_slugs
+        or not all(nonempty(item) for item in task_slugs)
+        or len(set(task_slugs)) != len(task_slugs)
+    ):
+        errors.append("batch index: task_slugs must be unique non-empty strings")
+        return
+    if data.get("expected_count") != expected_size:
+        errors.append("batch index: expected_count does not match --expected-batch-size")
+    if incremental:
+        if len(task_slugs) > expected_size:
+            errors.append("batch index: partial task count exceeds --expected-batch-size")
+        if status == "complete" and len(task_slugs) != expected_size:
+            errors.append("batch index: complete status requires exactly the expected task count")
+    elif len(task_slugs) != expected_size:
+        errors.append("batch index: task count does not match --expected-batch-size")
+    if slug not in task_slugs:
+        errors.append("batch index: current task is absent from task_slugs")
+    expected_peers = set(task_slugs) - {slug}
+    declared_peers = design.get("compared_against")
+    if not isinstance(declared_peers, list) or set(declared_peers) != expected_peers:
+        errors.append("batch index: compared_against must contain every other batch task exactly")
+
+    designs: dict[str, dict] = {}
+    for task_slug in task_slugs:
+        path = report_dir.parent / str(task_slug) / EVIDENCE_FILES["design"]
+        other = load_json(path, errors)
+        designs[str(task_slug)] = other
+        if other.get("task_slug") != task_slug or other.get("batch_id") != data.get("batch_id"):
+            errors.append(f"batch index: invalid design receipt for {task_slug}")
+    domain_keys = [item.get("domain_key") for item in designs.values()]
+    families = [item.get("architecture_family") for item in designs.values()]
+    if not all(nonempty(value) for value in domain_keys) or len(set(domain_keys)) != len(domain_keys):
+        errors.append("batch index: domain_key must be non-empty and unique across the batch")
+    if not all(nonempty(value) for value in families) or len(set(families)) != len(families):
+        errors.append("batch index: architecture_family must be non-empty and unique across the batch")
+    for index, left_slug in enumerate(task_slugs):
+        left = designs[str(left_slug)].get("signature")
+        if not isinstance(left, dict):
+            continue
+        for right_slug in task_slugs[index + 1 :]:
+            right = designs[str(right_slug)].get("signature")
+            if not isinstance(right, dict):
+                continue
+            matches = sum(left.get(axis) == right.get(axis) for axis in SIGNATURE_AXES)
+            if matches > 4:
+                errors.append(
+                    f"batch index: {left_slug} and {right_slug} match on {matches}/6 axes"
+                )
+
+
 def validate_preflight(
     data: dict,
     slug: str,
+    task_dir: Path,
     report_dir: Path,
     errors: list[str],
 ) -> None:
@@ -569,6 +590,8 @@ def validate_preflight(
         errors.append("preflight.json: strict preflight did not pass")
     if data.get("strict") is not True:
         errors.append("preflight.json: strict must be true")
+    if data.get("task_snapshot_sha256") != tree_hash(task_dir, sanitized=False):
+        errors.append("preflight.json: task changed after strict preflight")
     checks = data.get("checks")
     if not isinstance(checks, list) or not checks:
         errors.append("preflight.json: checks must be a non-empty list")
@@ -764,6 +787,7 @@ def validate_submission(
             "Difficulty Explanation",
             "Solution Explanation",
             "Verification Explanation",
+            "Relevant Experience",
             "Metadata",
             "Rubrics",
         )
@@ -818,42 +842,29 @@ def validate_style_audit(
     report_dir: Path,
     errors: list[str],
 ) -> None:
-    if data.get("schema_version") != 1:
-        errors.append("style-audit.json: schema_version must be 1")
+    if data.get("schema_version") != 2:
+        errors.append("style-audit.json: schema_version must be 2")
     if data.get("task_slug") != slug or data.get("status") != "pass":
         errors.append("style-audit.json: task_slug/status mismatch")
     if data.get("task_snapshot_sha256") != tree_hash(task_dir, sanitized=False):
         errors.append("style-audit.json: task changed after style audit")
     if not submission.is_file() or data.get("submission_sha256") != sha256(submission):
         errors.append("style-audit.json: submission file hash mismatch")
-    expected = style_surface_hashes(task_dir)
-    surfaces = data.get("surfaces")
-    if not isinstance(surfaces, list):
-        errors.append("style-audit.json: surfaces must be a list")
-        surfaces = []
-    recorded: dict[str, str] = {}
-    for item in surfaces:
-        if not isinstance(item, dict) or item.get("status") != "verified":
-            errors.append("style-audit.json: every surface must be an object marked verified")
-            continue
-        path = item.get("path")
-        if not nonempty(path) or not nonempty(item.get("sha256")):
-            errors.append("style-audit.json: every surface needs path and sha256")
-            continue
-        recorded[str(path)] = str(item["sha256"])
-    if recorded != expected:
-        missing = sorted(set(expected) - set(recorded))
-        extra = sorted(set(recorded) - set(expected))
-        changed = sorted(path for path in set(expected) & set(recorded) if expected[path] != recorded[path])
-        errors.append(
-            "style-audit.json: surface inventory/hash mismatch"
-            + (f"; missing={missing}" if missing else "")
-            + (f"; extra={extra}" if extra else "")
-            + (f"; changed={changed}" if changed else "")
-        )
+    task_style = report_dir / EVIDENCE_FILES["task_style"]
+    if not task_style.is_file() or data.get("task_style_preflight_sha256") != sha256(task_style):
+        errors.append("style-audit.json: pre-freeze task-style receipt is missing or stale")
+    surface = data.get("submission_surface")
+    if (
+        not isinstance(surface, dict)
+        or surface.get("status") != "verified"
+        or surface.get("sha256") != (sha256(submission) if submission.is_file() else None)
+        or not nonempty(surface.get("path"))
+        or Path(str(surface.get("path"))).resolve() != submission.resolve()
+    ):
+        errors.append("style-audit.json: submission surface receipt mismatch")
     auditor = data.get("auditor")
-    if not isinstance(auditor, dict):
-        errors.append("style-audit.json: auditor evidence is required")
+    if not isinstance(auditor, dict) or auditor.get("status") != "pass":
+        errors.append("style-audit.json: passing auditor evidence is required")
         return
     for field in ("runtime", "model", "session_id", "transcript"):
         if not nonempty(auditor.get(field)):
@@ -878,6 +889,9 @@ def validate_probe_bundle(
     languages: list[str],
     probe_dir: Path,
     verifier: dict,
+    semantic: dict,
+    semantic_path: Path,
+    profile: str,
     required_model: str | None,
     required_effort: str,
     errors: list[str],
@@ -887,8 +901,14 @@ def validate_probe_bundle(
         errors.append(f"probe evidence directory not found: {probe_dir}")
         return {}
     manifest = load_json(probe_dir / "probe-manifest.json", errors)
-    if manifest.get("schema_version") != 2:
-        errors.append("probe-manifest.json: schema_version must be 2")
+    if manifest.get("schema_version") != 3:
+        errors.append("probe-manifest.json: schema_version must be 3")
+    if manifest.get("mode") != "counted":
+        errors.append("probe-manifest.json: final handover requires counted mode")
+    if manifest.get("profile") != profile:
+        errors.append("probe-manifest.json: preparation profile differs from handover profile")
+    if Path(str(manifest.get("report_dir", ""))).resolve() != semantic_path.parent.resolve():
+        errors.append("probe-manifest.json: report_dir mismatch")
     if manifest.get("task_slug") != slug:
         errors.append("probe-manifest.json: task_slug mismatch")
     source_value = manifest.get("source_task")
@@ -907,6 +927,43 @@ def validate_probe_bundle(
 
     expected_units = verifier.get("unit_ids", set())
     current_snapshot = tree_hash(task_dir, sanitized=False)
+    if manifest.get("task_snapshot_sha256") != current_snapshot:
+        errors.append("probe-manifest.json: counted task/verifier snapshot is stale")
+    if not semantic_path.is_file() or manifest.get("semantic_coverage_sha256") != sha256(semantic_path):
+        errors.append("probe-manifest.json: semantic coverage receipt is missing or stale")
+    sufficiency_path = semantic_path.with_name(EVIDENCE_FILES["sufficiency"])
+    sufficiency_manifest_value = manifest.get("instruction_sufficiency")
+    if (
+        not sufficiency_path.is_file()
+        or not nonempty(sufficiency_manifest_value)
+        or Path(str(sufficiency_manifest_value)).resolve() != sufficiency_path.resolve()
+        or manifest.get("instruction_sufficiency_sha256") != sha256(sufficiency_path)
+    ):
+        errors.append("probe-manifest.json: V3 evidence-inferability receipt is missing or stale")
+    verifier_path = semantic_path.with_name(EVIDENCE_FILES["verifier"])
+    verifier_manifest_value = manifest.get("verifier_matrix")
+    if (
+        not verifier_path.is_file()
+        or not nonempty(verifier_manifest_value)
+        or Path(str(verifier_manifest_value)).resolve() != verifier_path.resolve()
+        or manifest.get("verifier_matrix_sha256") != sha256(verifier_path)
+    ):
+        errors.append("probe-manifest.json: verifier matrix receipt is missing or stale")
+    recorded_preprobe = manifest.get("preprobe_receipts")
+    expected_preprobe = {
+        filename: sha256(semantic_path.with_name(filename))
+        for filename in (
+            EVIDENCE_FILES["probe_preflight"],
+            EVIDENCE_FILES["prefreeze_review"],
+            EVIDENCE_FILES["task_style"],
+            EVIDENCE_FILES["agent_session_budget"],
+        )
+        if semantic_path.with_name(filename).is_file()
+    }
+    if recorded_preprobe != expected_preprobe or len(expected_preprobe) != 4:
+        errors.append(
+            "probe-manifest.json: pre-probe technical/review/style/session receipts are stale"
+        )
     current_contract_files = file_hash_map(task_dir, sanitized=True)
     current_full_files = file_hash_map(task_dir, sanitized=False)
     agent_sessions: set[str] = set()
@@ -916,6 +973,18 @@ def validate_probe_bundle(
     run_results: list[dict] = []
     setup_failures = 0
     all_failure_clusters: set[str] = set()
+    all_failure_nodes: set[str] = set()
+    test_nodes: dict[str, set[str]] = {}
+    for key, prefix in (("mechanisms", "M"), ("interactions", "I")):
+        rows = semantic.get(key, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict) or not nonempty(row.get("id")):
+                continue
+            for test_id in row.get("test_ids", []):
+                if nonempty(test_id):
+                    test_nodes.setdefault(str(test_id), set()).add(f"{prefix}:{row['id']}")
 
     for ordinal, result_path in enumerate(result_paths, start=1):
         run_dir = result_path.parent
@@ -1136,7 +1205,13 @@ def validate_probe_bundle(
             for unit_id in failed_ids
             for cluster in verifier.get("unit_clusters", {}).get(unit_id, [])
         }
+        failed_nodes = {
+            node
+            for unit_id in failed_ids
+            for node in test_nodes.get(unit_id, set())
+        }
         all_failure_clusters.update(failed_clusters)
+        all_failure_nodes.update(failed_nodes)
         run_results.append(
             {
                 "run": ordinal,
@@ -1144,12 +1219,16 @@ def validate_probe_bundle(
                 "passed_ids": passed_ids,
                 "failed_ids": failed_ids,
                 "failure_clusters": failed_clusters,
+                "failure_nodes": failed_nodes,
             }
         )
 
-    solved_runs = sum(1 for item in run_results if item["result"] == "pass")
+    geometry = semantic_probe_geometry(run_results)
+    solved_runs = geometry["solved_runs"]
     if result_count and solved_runs == result_count:
         errors.append("probe evidence: all local runs solved; the task has no local difficulty signal")
+    if result_count == 2 and solved_runs == 1:
+        errors.append("probe evidence: a 1/2 split requires the adaptive third run")
 
     union_passed = (
         set().union(*(item["passed_ids"] for item in run_results)) if run_results else set()
@@ -1163,13 +1242,23 @@ def validate_probe_bundle(
         if item["result"] == "fail"
     ]
     de_correlated = len(failed_cluster_sets) >= 2 and len(set(failed_cluster_sets)) >= 2
+    semantic_de_correlated = geometry["semantic_de_correlated"]
+    advanced_geometry_pass = geometry["advanced_geometry_pass"]
     if solved_runs == 0:
         if union_coverage != 1.0:
             errors.append("probe evidence: zero-solve Frontier signal requires 100% per-case union coverage")
         if common_misses:
             errors.append("probe evidence: zero-solve Frontier signal must have no common misses")
-        if not de_correlated:
-            errors.append("probe evidence: zero-solve Frontier failures must be de-correlated")
+        if not semantic_de_correlated:
+            errors.append("probe evidence: zero-solve Frontier semantic failures must be de-correlated")
+    if profile == "advanced_frontier_only":
+        if solved_runs == 1 and result_count == 3 and not advanced_geometry_pass:
+            errors.append(
+                "probe evidence: 1/3 Advanced requires two distinct multi-node failure sets; "
+                "a replicated single lever does not qualify"
+            )
+        if result_count and solved_runs / result_count >= 0.5:
+            errors.append("probe evidence: Core/Base result is outside advanced_frontier_only")
     if len(runtime_values) != 1:
         errors.append("probe evidence: all runs must use one runtime")
     if len(model_values) != 1:
@@ -1183,12 +1272,16 @@ def validate_probe_bundle(
         "probe_model": next(iter(model_values), ""),
         "reasoning_effort": next(iter(effort_values), ""),
         "semantic_runs": result_count,
+        "solver_session_ids": sorted(agent_sessions),
         "solved_runs": solved_runs,
         "setup_failures": setup_failures,
         "union_coverage": union_coverage,
         "common_miss_count": len(common_misses),
         "failure_clusters": sorted(all_failure_clusters),
+        "failure_nodes": sorted(all_failure_nodes),
         "de_correlated": de_correlated,
+        "semantic_de_correlated": semantic_de_correlated,
+        "advanced_geometry_pass": advanced_geometry_pass,
         "local_accuracy": solved_runs / result_count if result_count else None,
         "local_tier_signal": (
             "frontier" if solved_runs / result_count < 0.2
@@ -1199,6 +1292,117 @@ def validate_probe_bundle(
         "task_snapshot_sha256": current_snapshot,
     }
     return derived
+
+
+def validate_final_session_budget(
+    task_dir: Path,
+    report_dir: Path,
+    budget: dict,
+    probe: dict,
+    client_review: dict,
+    style: dict,
+    errors: list[str],
+) -> dict:
+    budget_errors, canonical = validate_session_budget_receipt(task_dir, report_dir)
+    errors.extend(f"agent-session-budget.json: {error}" for error in budget_errors)
+    if budget != canonical:
+        errors.append("agent-session-budget.json: loaded receipt differs from canonical receipt")
+
+    builder = canonical.get("builder", {}) if isinstance(canonical, dict) else {}
+    fairness = canonical.get("fairness_reviewers", []) if isinstance(canonical, dict) else []
+    auditor = canonical.get("consolidated_auditor", {}) if isinstance(canonical, dict) else {}
+    prefreeze_ids = [
+        builder.get("session_id") if isinstance(builder, dict) else None,
+        *(
+            item.get("session_id")
+            for item in fairness
+            if isinstance(item, dict)
+        ),
+        auditor.get("session_id") if isinstance(auditor, dict) else None,
+    ]
+    solver_ids = probe.get("solver_session_ids", []) if isinstance(probe, dict) else []
+    if not isinstance(solver_ids, list) or len(solver_ids) not in {2, 3}:
+        errors.append("agent session budget: exactly two or three blind solver sessions are required")
+        solver_ids = []
+    all_ids = [item for item in (*prefreeze_ids, *solver_ids) if nonempty(item)]
+    if len(all_ids) != len(set(all_ids)):
+        errors.append("agent session budget: every builder/reviewer/auditor/solver role must be distinct")
+
+    expected_auditor = {
+        field: auditor.get(field) if isinstance(auditor, dict) else None
+        for field in ("runtime", "model", "session_id")
+    }
+    final_records = (
+        ("style-audit.json auditor", style.get("auditor") if isinstance(style, dict) else None),
+        (
+            "client-review.json manual_review",
+            client_review.get("manual_review") if isinstance(client_review, dict) else None,
+        ),
+    )
+    for label, record in final_records:
+        actual = {
+            field: record.get(field) if isinstance(record, dict) else None
+            for field in ("runtime", "model", "session_id")
+        }
+        if actual != expected_auditor:
+            errors.append(
+                f"{label}: post-probe review must reuse the consolidated pre-freeze auditor"
+            )
+
+    total = len(all_ids)
+    external = total - 1 if nonempty(builder.get("session_id") if isinstance(builder, dict) else None) else 0
+    if total not in {6, 7}:
+        errors.append(f"agent session budget: accepted task must use 6 or 7 sessions, observed {total}")
+    if external not in {5, 6}:
+        errors.append(
+            f"agent session budget: accepted task must use 5 or 6 external sessions, observed {external}"
+        )
+    return {
+        "builder_sessions": 1 if isinstance(builder, dict) and builder else 0,
+        "fairness_reviewer_sessions": len(fairness) if isinstance(fairness, list) else 0,
+        "consolidated_auditor_sessions": 1 if isinstance(auditor, dict) and auditor else 0,
+        "blind_solver_sessions": len(solver_ids),
+        "total_sessions": total,
+        "external_sessions": external,
+    }
+
+
+def validate_luna_thread_alignment(
+    budget: dict,
+    quota_summary: dict,
+    errors: list[str],
+) -> None:
+    """Bind the Luna task IDs in role receipts to the quota ledger."""
+    fairness = budget.get("fairness_reviewers", []) if isinstance(budget, dict) else []
+    auditor = budget.get("consolidated_auditor", {}) if isinstance(budget, dict) else {}
+    role_sessions = (
+        quota_summary.get("completed_role_session_ids", {})
+        if isinstance(quota_summary, dict)
+        else {}
+    )
+    if not isinstance(role_sessions, dict):
+        errors.append("quota ledger: completed_role_session_ids must be an object")
+        return
+    budget_fairness = {
+        str(item.get("session_id"))
+        for item in fairness
+        if isinstance(item, dict) and nonempty(item.get("session_id"))
+    }
+    ledger_fairness = set(role_sessions.get("fairness_reviewer", []))
+    if ledger_fairness != budget_fairness:
+        errors.append(
+            "quota ledger: Luna fairness thread IDs do not match agent-session-budget.json"
+        )
+    budget_auditor = {
+        str(auditor.get("session_id"))
+        if isinstance(auditor, dict) and nonempty(auditor.get("session_id"))
+        else ""
+    } - {""}
+    ledger_auditor = set(role_sessions.get("consolidated_auditor", []))
+    if ledger_auditor != budget_auditor:
+        errors.append(
+            "quota ledger: Luna auditor thread ID does not match agent-session-budget.json"
+        )
 
 
 def validate_zip(path: Path, errors: list[str]) -> None:
@@ -1249,6 +1453,18 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--required-probe-model")
     parser.add_argument("--required-reasoning-effort", default="medium")
+    parser.add_argument("--batch-index", type=Path)
+    parser.add_argument("--expected-batch-size", type=int)
+    parser.add_argument(
+        "--incremental-batch",
+        action="store_true",
+        help="Allow a schema-v2 building index with 1..N accepted tasks.",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("general", "advanced_frontier_only"),
+        default="general",
+    )
     args = parser.parse_args()
 
     task_dir = args.task_dir.resolve()
@@ -1256,6 +1472,7 @@ def main() -> int:
     probe_dir = args.probe_dir.resolve()
     zip_path = args.zip_path.resolve()
     submission = args.submission.resolve()
+    batch_index_path = args.batch_index.resolve() if args.batch_index else None
     slug = task_dir.name
     output = (args.output or report_dir / "handover.json").resolve()
     errors: list[str] = []
@@ -1288,8 +1505,28 @@ def main() -> int:
         validate_category(evidence["category"], slug, declared, declared_subcategory, errors)
     if evidence["design"]:
         validate_design(evidence["design"], slug, report_dir, errors)
+    if args.profile == "advanced_frontier_only" and (
+        batch_index_path is None or not args.expected_batch_size
+    ):
+        errors.append(
+            "advanced_frontier_only handover requires --batch-index and --expected-batch-size"
+        )
+    if batch_index_path is not None:
+        batch_index = load_json(batch_index_path, errors)
+        if not args.expected_batch_size or args.expected_batch_size < 1:
+            errors.append("--expected-batch-size must be a positive integer with --batch-index")
+        elif evidence["design"]:
+            validate_batch_index(
+                batch_index,
+                slug,
+                report_dir,
+                evidence["design"],
+                args.expected_batch_size,
+                errors,
+                incremental=args.incremental_batch,
+            )
     if evidence["preflight"]:
-        validate_preflight(evidence["preflight"], slug, report_dir, errors)
+        validate_preflight(evidence["preflight"], slug, task_dir, report_dir, errors)
     if evidence["client_review"]:
         validate_client_review(
             evidence["client_review"], slug, zip_path, report_dir, errors
@@ -1309,16 +1546,92 @@ def main() -> int:
         else {}
     )
     probe_error_start = len(errors)
+    preprobe_check = (
+        Path(__file__).resolve().parents[1]
+        / ".agent"
+        / "skills"
+        / "task-local-solve-probe"
+        / "scripts"
+        / "preprobe_check.py"
+    )
+    preprobe_result = subprocess.run(
+        [sys.executable, str(preprobe_check), str(task_dir), str(report_dir)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if preprobe_result.returncode != 0:
+        errors.append(
+            "pre-probe gates: "
+            + (preprobe_result.stdout + preprobe_result.stderr).replace("\n", "; ").strip()
+        )
+    semantic_check = (
+        Path(__file__).resolve().parents[1]
+        / ".agent"
+        / "skills"
+        / "terminus-regular-task-authoring"
+        / "scripts"
+        / "semantic_coverage_check.py"
+    )
+    semantic_command = [
+        sys.executable,
+        str(semantic_check),
+    ]
+    if args.profile == "advanced_frontier_only":
+        semantic_command.append("--advanced-plus")
+    semantic_command.extend(
+        [
+            str(task_dir),
+            str(report_dir / EVIDENCE_FILES["semantic"]),
+            str(report_dir / EVIDENCE_FILES["verifier"]),
+        ]
+    )
+    semantic_result = subprocess.run(
+        semantic_command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if semantic_result.returncode != 0:
+        errors.append(
+            "semantic coverage: "
+            + (semantic_result.stdout + semantic_result.stderr).replace("\n", "; ").strip()
+        )
     probe_derived = validate_probe_bundle(
         slug,
         task_dir,
         languages,
         probe_dir,
         verifier,
+        evidence.get("semantic", {}),
+        report_dir / EVIDENCE_FILES["semantic"],
+        args.profile,
         args.required_probe_model,
         args.required_reasoning_effort,
         errors,
     )
+    session_budget_derived = validate_final_session_budget(
+        task_dir,
+        report_dir,
+        evidence.get("agent_session_budget", {}),
+        probe_derived,
+        evidence.get("client_review", {}),
+        evidence.get("style", {}),
+        errors,
+    )
+    quota_ledger_derived: dict = {}
+    if evidence.get("quota_ledger"):
+        quota_errors, quota_ledger_derived = validate_quota_ledger(
+            evidence["quota_ledger"],
+            report_dir / EVIDENCE_FILES["quota_ledger"],
+            "handover",
+        )
+        errors.extend(f"quota ledger: {error}" for error in quota_errors)
+        validate_luna_thread_alignment(
+            evidence.get("agent_session_budget", {}),
+            quota_ledger_derived,
+            errors,
+        )
     probe_errors = errors[probe_error_start:]
     probe_verdict = {
         "task_slug": slug,
@@ -1351,13 +1664,19 @@ def main() -> int:
         / "sufficiency_manifest_check.py"
     )
     sufficiency = subprocess.run(
-        [sys.executable, str(sufficiency_check), str(task_dir), str(report_dir / EVIDENCE_FILES["sufficiency"])],
+        [
+            sys.executable,
+            str(sufficiency_check),
+            "--require-v3",
+            str(task_dir),
+            str(report_dir / EVIDENCE_FILES["sufficiency"]),
+        ],
         capture_output=True,
         text=True,
         check=False,
     )
     if sufficiency.returncode != 0:
-        errors.append("instruction sufficiency: " + sufficiency.stdout.replace("\n", "; ").strip())
+        errors.append("evidence inferability: " + sufficiency.stdout.replace("\n", "; ").strip())
 
     if not zip_path.is_file():
         errors.append(f"zip not found: {zip_path}")
@@ -1405,7 +1724,16 @@ def main() -> int:
             for key, filename in EVIDENCE_FILES.items()
         },
         "probe_evidence": str(probe_dir),
+        "batch_index": {
+            "path": str(batch_index_path) if batch_index_path else None,
+            "sha256": sha256(batch_index_path)
+            if batch_index_path and batch_index_path.is_file()
+            else None,
+            "incremental": args.incremental_batch,
+        },
         "probe_derived": probe_derived,
+        "session_budget_derived": session_budget_derived,
+        "quota_ledger_derived": quota_ledger_derived,
         "errors": errors,
     }
     output.parent.mkdir(parents=True, exist_ok=True)

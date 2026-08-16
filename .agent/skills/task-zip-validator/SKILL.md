@@ -27,21 +27,21 @@ A single argument: path to a `.zip` file (absolute or relative).
 
 1. **Unzip** to a temp directory
 2. **Structural audit** — check every file against rules
-3. **Instruction sufficiency** — recreate or locate the external contract-source
-   manifest, run two blind contract reviews, and pass
-   `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`
+3. **V3 evidence inferability** — recreate or locate the external schema-v3
+   manifest, run two fresh task-visible fairness reviews, and pass
+   `sufficiency_manifest_check.py --require-v3`
 4. **Auto-fix** — apply fixes for known issues
 5. **Oracle + Nop** — run harbor tests if Docker available
 6. **Report** — summarize findings and fixes
 7. **Re-zip** — if fixes applied, create updated ZIP
 
-The sufficiency manifest is intentionally absent from the ZIP. Look first for
+The compatibility-named V3 evidence manifest is intentionally absent from the ZIP. Look first for
 `workspace/reports/<slug>/instruction-sufficiency.json`. If it is unavailable,
-rebuild it from the extracted instruction/environment/tests using
+rebuild schema version 3 from the extracted instruction/environment/tests using
 `terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
 Do not mark a ZIP ready merely because every test has a passer: coverage and
-solver success cannot certify that the visible contract defines the expected
-behavior.
+solver success cannot certify goal clarity or evidence inferability. Conversely,
+do not require every inferred semantic rule to appear in `instruction.md`.
 
 ### Verifier-integrity review (manual, blocking when violated)
 
@@ -349,18 +349,22 @@ python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_prefli
 | No pitfall/trap emphasis | No "where a naive X goes wrong", "the tricky/subtle parts are", "a few points bear emphasis", "getting it wrong is easy", "worth calling out". Points the solver at the traps (no-hints violation) and makes it easier. For spec/conformance tasks, delegate rule detail to the named standard ("per RFC 9535 / UAX-14, treat it as authoritative") and let the solver find the hard parts. | `grep -inE 'naive\|goes wrong\|bear emphasis\|tricky\|worth calling out\|getting (it\|them) wrong'` |
 | No verifier/test mention | Instruction never references the grader: no "the verifier", "the tests check/lean on", "the verifier expects" | `grep -inE '\bverifier\b\|the tests\b'` |
 
-### 3c. Behavioral completeness (BLOCKING — behavior_in_tests)
+### 3c. V3 contract/evidence completeness (BLOCKING)
 
-Every behavior asserted by `tests/test_outputs.py` MUST be mentioned in `instruction.md`:
+Every behavior asserted by `tests/test_outputs.py` must map either to the
+explicit success surface or to an evidence-backed inference family:
 
-1. Read test_outputs.py, list every distinct asserted behavior
-2. For each behavior, verify instruction.md states it (even implicitly)
-3. Flag any test assertion not covered by instruction
+1. Read `test_outputs.py` and list each distinct asserted behavior.
+2. Require paths, public API/schema, exact consumer-visible strings, and
+   arbitrary constants in `instruction.md` or a realistic visible source.
+3. For semantic rules, verify the schema-v3 report cites sufficient visible
+   evidence; do not require the final derived rule to be copied into the prompt.
+4. Flag oracle-only policy, unobtainable facts, or representation overfit.
 
 Common gaps:
 - Tests assert a specific error message string → instruction must mention it
-- Tests check preservation of behavior X → instruction must say "X should continue to work"
-- Tests check a specific API/method name → instruction must mention it (if it's a public API)
+- Tests check a public non-target mode → instruction should make its preservation scope clear
+- Tests check a specific API/method name → instruction must mention it when it is a required public API
 
 ### 3d. No meta-language (WARNING)
 

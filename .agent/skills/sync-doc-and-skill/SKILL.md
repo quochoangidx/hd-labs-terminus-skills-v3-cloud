@@ -103,6 +103,7 @@ For each key rule area, compare online content with local docs:
 | Sanctioned bases | `creating-tasks/dockerfile-best-practices.md` | `sanctioned` |
 | test.sh canonical form | `creating-tasks/writing-tests.md` | `reward.txt` |
 | Difficulty thresholds | `understanding-tasks/difficulty-guidelines.md` | `accuracy` |
+| Inference vs under-specification | `understanding-tasks/what-makes-a-good-task.md`, `testing-and-validation/running-real-agents.md` | `specification must be inferred`, `hidden requirements`, `could not possibly obtain` |
 | Category taxonomy | `understanding-tasks/task-taxonomy.md` | `subcategory` |
 | Instruction styling | `understanding-tasks/prompt-styling.md` | `canary` |
 | Category/policy live status | `reference/category-status.md` | `Terminus 3`, `subcategory`, `network_mode` |
@@ -184,6 +185,25 @@ After docs are synced, audit the doctrine-coupled set:
 | One-model platform-Hard early exit | scoring mapping | validation | check |
 | Net-new category availability | candidate filter | category gate | check |
 | Internet-enabled source pinning | viability | Docker/verifier review | check |
+| Clear goal vs inferred domain model | evidence graph | prompt/evidence gate | V3 schema check |
+| Held-out generalization vs hidden arbitrary policy | candidate shape | verifier design | review |
+
+### Terminus 3 epistemic consistency check
+
+Do not resolve generic phrases such as "fully specified" or "all tested
+behavior" by forcing every semantic invariant into `instruction.md`. Reconcile
+them with the Terminus 3-specific guidance:
+
+- the goal, artifact/interface, and arbitrary exact conventions must be clear;
+- the domain model may be inferred from agent-visible evidence, system state,
+  realistic specs, or conventions;
+- hidden instances/combinations are valid when they exercise that same model;
+- unobtainable facts and oracle-only policies are invalid.
+
+Flag any skill that requires one visible sentence/source per test, forbids all
+hidden feature values, or requires fairness reviewers to reproduce the exact
+oracle. Those are legacy contract-transcription rules, not the Terminus 3
+fairness model.
 
 For each cell, verify the skill's text matches the current docs. Report discrepancies.
 

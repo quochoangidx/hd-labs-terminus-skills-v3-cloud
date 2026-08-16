@@ -1,7 +1,12 @@
 # Interaction/Scale Shape Recipe — building tasks OUTSIDE the spec-engine mold
 
-> ⚠️ **Historical Terminus 2 verdict (2026-07-19): Archetypes 1 & 2 landed in
-> the old EASY band.**
+> **Current routing:** use `frontier_task_design_patterns.md` as the
+> authoritative catalog and 80/20 established/derived policy. This file keeps
+> detailed historical calibration for three interaction shapes; it does not
+> define a separate batch allocation or override the current catalog.
+
+> **Historical calibration, not a Terminus 3 closure.** The exact canonical
+> examples for Archetypes 1 & 2 landed in the old EASY band:
 > The coupling doctrine below (≥3 causally-coupled causes ⇒ HARD) did NOT hold
 > against fresh blind frontier solvers. **Archetype 1 (multi-service ops
 > restoration)** — a stack with 3 GENUINELY causal-unmasking misconfigs
@@ -10,15 +15,16 @@
 > iteration. **Archetype 2 (order-dependent live DB migration)** — with a real
 > silent double-count/ordering trap — was full-solved by **3/3** solvers who all
 > applied the canonical SQLite table-rebuild recipe, which defuses the trap by
-> construction. Sysadmin restoration is discoverable-by-iteration; DB migration
-> has a canonical recipe. Treat this as a likely Base/Core source rather than a
-> Frontier strategy. Skeleton-probe every interaction shape and report the
-> observed Terminus 3 tier instead of forcing a top-tier result.
+> construction. Those results are negative priors for routine supervisor
+> restoration and canonical SQLite table rebuilds, not for the broader
+> evidence/state/native-artifact shapes Terminus 3 now requests. Require domain
+> inference and interacting semantic axes beyond the canonical recipe. An
+> exploratory skeleton run may reject a weak idea, but only the frozen
+> mutation-backed verifier may produce a tier signal.
 
 
-The master collapse law was validated on minimal spec-engine tasks: anything
-disclosed-and-derivable is EASY, and the fresh hidden-lever space there is
-near-exhausted. This recipe covers the one seam that escapes the law's reach:
+The historical collapse law applies to minimal spec-engine tasks, not all
+evidence-driven Terminus 3 work. This recipe covers tasks
 tasks whose difficulty is **breadth of discovery and interaction inside a
 realistic environment**, not a hidden rule. A solver can't transcribe its way
 through — it must explore, correlate state across components, and sequence
@@ -26,10 +32,10 @@ changes correctly. The category still follows the domain evidence: a service
 implementation is normally `Software / Systems`, while a logistics restoration
 workflow may be `Operations / Logistics`.
 
-Cost warning: these builds are 2–5× a spec-engine build. The skeleton probe
-(task-local-solve-probe, Skeleton mode) is MANDATORY before full investment,
-and probe it extra strictly — an interaction task that 3/3 solvers restore is
-dead exactly like a spec task.
+Cost warning: these builds are 2–5× a spec-engine build. An exploratory
+skeleton probe is optional cost control. It cannot qualify difficulty; finish
+the public-surface audit, semantic mechanism map, executable mutants, Oracle,
+and verifier before a counted probe.
 
 ## Difficulty doctrine (replaces the hidden-lever screen for these shapes)
 
@@ -45,10 +51,11 @@ A candidate holds only when ALL of:
    permissions bit + a wrong socket path + a misordered dependency).
 3. **No runbook in-image.** Comments, logs, and docs must not narrate the
    causal chain (leak-audit like any task); logs may show honest symptoms.
-4. **Skeleton probe evidence**: N≥3 fresh blind solvers in the real image;
-   ≥2 fail SEMANTICALLY (wrong final state), failing in DIFFERENT places.
-   Both failing on the same single cause = single-lever fingerprint → the
-   coupling isn't real → redesign or drop.
+4. **Mutation-backed counted-probe evidence**: dedicated subset-fix mutants
+   prove every cause and interaction is discriminating. Then fresh counted
+   solvers run against the frozen verifier. A provisional `1/3` requires two
+   distinct multi-node failure sets; both failing on one cause is a
+   single-lever fingerprint.
 
 ## Archetype 1 — multi-service restoration
 
@@ -133,10 +140,11 @@ A candidate holds only when ALL of:
 - Run `category_rules.md` before building and record the exact domain pair in
   `category-screen.json`.
 
-## Skeleton probe adaptation
+## Exploratory skeleton adaptation
 
-The probeable skeleton = the broken environment + instruction + a rough
+The exploratory skeleton = the broken environment + instruction + a rough
 end-to-end check script (curl the endpoint, query the db — a subset of the
 final verifier is fine). No oracle needed yet. Score = did the solver reach
 the operational outcome. Everything else in the gate pipeline (N≥3, isolated
-dirs, terse prompt, semantic-failure classification) applies unchanged.
+dirs, terse prompt, semantic-failure classification) applies unchanged. Mark it
+`--exploratory`; it may inform build investment but never a tier or quota.

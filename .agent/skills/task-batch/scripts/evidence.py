@@ -23,6 +23,7 @@ def load_handover():
 
 
 def style_receipt(args: argparse.Namespace) -> int:
+    """Bind a post-probe audit to the external submission prose only."""
     handover = load_handover()
     task_dir = args.task_dir.resolve()
     submission = args.submission.resolve()
@@ -33,6 +34,50 @@ def style_receipt(args: argparse.Namespace) -> int:
     for path, label in ((submission, "submission"), (transcript, "transcript")):
         if not path.is_file() or path.stat().st_size == 0:
             raise SystemExit(f"{label} missing or empty: {path}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    task_style = output.parent / "task-style-preflight.json"
+    if not task_style.is_file():
+        raise SystemExit(f"pre-freeze task style receipt is missing: {task_style}")
+    try:
+        transcript_rel = transcript.relative_to(output.parent)
+    except ValueError as exc:
+        raise SystemExit("transcript must be stored beside or below the report directory") from exc
+    payload = {
+        "schema_version": 2,
+        "task_slug": task_dir.name,
+        "status": "pass",
+        "task_snapshot_sha256": handover.tree_hash(task_dir, sanitized=False),
+        "task_style_preflight_sha256": handover.sha256(task_style),
+        "submission_sha256": handover.sha256(submission),
+        "auditor": {
+            "status": "pass",
+            "runtime": args.runtime,
+            "model": args.model,
+            "session_id": args.session_id,
+            "transcript": transcript_rel.as_posix(),
+            "transcript_sha256": handover.sha256(transcript),
+        },
+        "submission_surface": {
+            "path": str(submission),
+            "sha256": handover.sha256(submission),
+            "status": "verified",
+        },
+    }
+    output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"WROTE: {output} (submission-only audit, task audit reused by hash)")
+    return 0
+
+
+def task_style_receipt(args: argparse.Namespace) -> int:
+    """Bind a real pre-freeze audit to every task-visible prose surface."""
+    handover = load_handover()
+    task_dir = args.task_dir.resolve()
+    transcript = args.transcript.resolve()
+    output = args.output.resolve()
+    if not task_dir.is_dir():
+        raise SystemExit(f"task folder not found: {task_dir}")
+    if not transcript.is_file() or transcript.stat().st_size == 0:
+        raise SystemExit(f"transcript missing or empty: {transcript}")
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
         transcript_rel = transcript.relative_to(output.parent)
@@ -47,8 +92,8 @@ def style_receipt(args: argparse.Namespace) -> int:
         "task_slug": task_dir.name,
         "status": "pass",
         "task_snapshot_sha256": handover.tree_hash(task_dir, sanitized=False),
-        "submission_sha256": handover.sha256(submission),
         "auditor": {
+            "status": "pass",
             "runtime": args.runtime,
             "model": args.model,
             "session_id": args.session_id,
@@ -59,7 +104,7 @@ def style_receipt(args: argparse.Namespace) -> int:
         "deleted_as_leak": [],
     }
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"WROTE: {output} ({len(surfaces)} hash-bound surfaces)")
+    print(f"WROTE: {output} ({len(surfaces)} pre-freeze surfaces)")
     return 0
 
 
@@ -86,6 +131,15 @@ def main() -> int:
     style_parser.add_argument("--session-id", required=True)
     style_parser.add_argument("--output", type=Path, required=True)
     style_parser.set_defaults(func=style_receipt)
+
+    task_style_parser = sub.add_parser("task-style-receipt")
+    task_style_parser.add_argument("task_dir", type=Path)
+    task_style_parser.add_argument("--transcript", type=Path, required=True)
+    task_style_parser.add_argument("--runtime", required=True)
+    task_style_parser.add_argument("--model", required=True)
+    task_style_parser.add_argument("--session-id", required=True)
+    task_style_parser.add_argument("--output", type=Path, required=True)
+    task_style_parser.set_defaults(func=task_style_receipt)
 
     args = parser.parse_args()
     return args.func(args)

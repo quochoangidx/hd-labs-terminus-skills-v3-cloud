@@ -90,36 +90,51 @@ the same shallow reason, merge or redesign.
 Corpus-graded verifiers (case tables, conformance vectors) add three design
 rules on top of the list above:
 
-- **Per-case floor:** any case you predict fewer than ~35% of runs will pass
-  is a statistical 0/N candidate at N=10 — disclose it in one prose sentence
-  or drop it at design time, before the platform flag forces the choice
-  (`lever_patterns.md` L1 step 6; `task-revise-flag-remediation`).
+- **Per-case risk:** a predicted low-pass case is a statistical 0/N risk. Audit
+  the oracle, explicit interface, evidence support, and test resolution before
+  changing it. Do not automatically disclose an evidence-derived rule or drop
+  a valid held-out case from a small local sample.
 - **Soft-representative rule and trimming direction:** every feature cluster
   keeps ≥1 "soft" case a majority of runs pass; never build or trim toward a
   hard-cases-only corpus. When cutting, cut data-driven from the per-case pass
   table — easy cases are the coverage that keeps the 0/N flag from firing.
-- **Soft size cap and broad-wall preference:** ~≤100 curated cases is the
-  right default; prefer many INDEPENDENT quirk families each at ~40–80%
-  per-run pass rate (full-pass ≈ the product across families) over one or two
-  deep boundaries — a single deep boundary is the fair⊥hard single-lever
-  shape that cannot ship (hide = unfair 0/N, disclose = EASY).
+- **Soft size cap and semantic breadth:** ~≤100 curated cases is a useful
+  default for conformance corpora. Prefer independently meaningful families
+  and hidden generalization under one inferable model over hundreds of
+  correlated rows. A single arbitrary hidden convention is invalid; a deep
+  evidence-supported inference is not invalid merely because it is difficult.
 
-## Instruction/Test Symmetry
+Count semantic breadth by implementation decisions, not rows. One keyword
+tested through eight values, or one numeric stability branch tested at fourteen
+scales, remains one mechanism. Before a counted solve probe, write the
+mechanism/interaction map and execute one plausible partial-fix mutant for each
+node as required by
+`terminus-regular-task-authoring/references/semantic-coverage-gate.md`.
 
-Map every prompt requirement to at least one test, and every tested behavior
-back to `instruction.md`.
+## Terminus 3 Contract/Evidence/Test Symmetry
+
+Map every prompt requirement to at least one test. Map each tested behavior
+either to the explicit success surface or to an inference family supported by
+agent-visible evidence. Do not force every derived semantic rule into
+`instruction.md`.
 
 Quality checks often fail when a verifier tests preserved behavior that the
 instruction never mentions. Preservation tests are not exempt.
 
 Before finalizing, audit:
 
-- every CLI flag asserted by tests appears naturally in `instruction.md`
-- every mode/alias/fallback/legacy behavior asserted by tests is mentioned
-- every structured field/XML tag/JSON key/order guarantee asserted by tests is
-  stated in the instruction
+- every public CLI flag, output path, and required schema element appears
+  naturally in `instruction.md` or a realistic visible format source
+- public preservation scope is mentioned, while held-out values/layouts may
+  remain hidden when they follow the same inferable invariant
+- representation-specific ordering is explicit only when the consumer requires
+  it; otherwise parse semantically and accept equivalent outputs
 - every required output file/path is named in the instruction
-- no test asserts behavior that is only implied by upstream history
+- no test depends on an oracle-only policy, unreachable authority, or arbitrary
+  value absent from all visible sources
+- every public entry point promised by the instruction has a discriminating
+  platform-visible test; no test pins undocumented keyword spelling, internal
+  object shape, or exact diagnostic text when equivalent behavior is valid
 
 Example fix:
 
@@ -129,8 +144,9 @@ and `append` import modes working for the same shadowed-layout projects, and
 preserve assertion rewriting for nested package tests.
 ```
 
-If the instruction should stay narrower, remove the extra test instead of
-silently checking hidden behavior.
+If a test exercises a new instance or combination of the same evidence-backed
+model, keep it hidden. If it introduces a new policy, add authentic evidence,
+make the interface fact explicit, relax the assertion, or remove the test.
 
 ## Verifier Integrity
 
@@ -225,6 +241,8 @@ Before accepting the verifier, answer these questions:
 - Does each test have a docstring naming the behavior it validates?
 - Would a source-grep patch or prompt-keyword search lead directly to the fix?
 - Are there at least two independent failure modes for incomplete fixes?
+- Has a dedicated executable mutant for every mechanism and interaction been
+  killed while retaining both passing and failing tests?
 - Are preservation tests explicitly described in `instruction.md`?
 - Are verifier dependencies available before `tests/test.sh` starts?
 - Does `tests/test.sh` avoid runtime setup and network access?
