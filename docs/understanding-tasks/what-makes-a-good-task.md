@@ -28,7 +28,7 @@ hidden, structural, performance, and safety verification
 
 **5. State is part of the problem.** Strong tasks often are not "edit files and run pytest." They involve operating databases under live traffic, stream processors, ERP workflows, model-serving runtimes, or multi-service systems — understanding current state, sequencing operations correctly, recovering from partial progress, and validating the result from a clean process.
 
-**6. Hidden checks probe understanding.** Verify semantic equivalence across variations and metamorphic properties, not just more examples. A solution should not be able to pass by satisfying its author's happy path.
+**6. Hidden checks probe understanding.** Verify semantic equivalence across variations and metamorphic properties, not just more examples. A solution should not be able to pass by satisfying its author's happy path — and exercise every documented behavior on its **hard** instance, not a degenerate one. A rule tested only on the easy case (an ordering rule tested only where timestamps are distinct, say) is not really tested.
 
 ## From TB-Style to Terminus 3-Style
 
@@ -43,9 +43,17 @@ hidden, structural, performance, and safety verification
 
 ## What Still Disqualifies a Task
 
+**A task must reject a wrong solution, not merely accept a right one.** Before you submit, run a deliberately wrong, incomplete, or lazy solution against your own verifier. If it passes, the task is disqualified — the difficulty isn't being enforced. Confirming that the *correct* solution passes proves nothing about whether a *wrong* one fails, and the latter is the only question the verifier exists to answer.
+
 Ambiguity, non-determinism, unstated requirements, and hidden knowledge the agent could not possibly obtain. Difficulty must come from the problem, never from the description.
 
-A task is also disqualified if the agent can shortcut it — reading the tests, finding the answer in the environment, or satisfying the checks without doing the work. See [Writing Tests](/portal/docs/creating-tasks/writing-tests).
+A task is also disqualified if the agent can shortcut it — reaching the answer, or satisfying the checks without doing the work. Both disqualify. Concretely:
+
+- **The answer is reachable.** Held-out inputs staged in the same directory as their expected outputs (the program copies the sibling), a sealed directory the graded process can still read, or the agent's own prior output left at a predictable path to replay.
+- **The checks are hollow.** They assert a proxy a wrong answer also satisfies — a count, a first element, a field's presence but not its value, or an expected result reconstructed from an input the agent controls. They grade a delivered binary without rebuilding it from source (a hardcoded binary passes). Or they grade two artifacts the agent controls both sides of — a simulated and a synthesized build, a library and its consumer — without proving they agree.
+- **A documented behavior is never exercised.** A required command or mode the tests reference but never run can be broken or hardcoded and still pass.
+
+See [Writing Tests](/portal/docs/creating-tasks/writing-tests) for how to close each.
 
 ---
 

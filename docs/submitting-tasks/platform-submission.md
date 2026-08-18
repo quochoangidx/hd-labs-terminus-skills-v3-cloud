@@ -6,7 +6,7 @@ Complete step-by-step guide for creating and submitting tasks through the Snorke
 
 Tasking is performed through the **Terminus-3-Prod** project on the Snorkel Expert Platform. The complete workflow:
 
-1. Download the task skeleton template _(coming soon)_
+1. [Download the task skeleton template](/Terminus-3-Prod/default-template.zip)
 2. Extract and rename the folder
 3. Write your task instructions and configure metadata
 4. Set up the Docker environment
@@ -31,7 +31,17 @@ Before starting, ensure you have:
 
 ## Step 1: Download the Task Skeleton
 
-> **Pending.** The Terminus 3 task skeleton is being prepared. Milestone and UI skeletons no longer apply — milestone tasks are not part of this edition, and the old UI subtype has been replaced by the new taxonomy. This page will link the skeleton once available.
+**[Download the Terminus 3 task skeleton](/Terminus-3-Prod/default-template.zip)**
+
+There is a single skeleton for this edition — the milestone and UI variants no longer apply, since milestone tasks are not part of Terminus 3 and the old UI subtype has been replaced by the taxonomy.
+
+It ships as a **complete working task**, not an empty scaffold: a small summariser with three planted defects, an oracle that fixes them, and a verifier that grades it. Every field you must fill in is marked `REPLACE`. Run it end to end before you change anything — that tells you your local setup works before your own task is in the mix.
+
+Worth reading rather than deleting:
+
+- `tests/test_outputs.py` shows the patterns reviewers expect — golden bytes for the shipped inputs, a **held-out re-run** proving the agent's program produced the artifact rather than hand-writing it, and a determinism check.
+- `tests/test.sh` is the canonical verifier entrypoint: no `set -e`, reward written to `/logs/verifier/reward.txt`, `exit 0` at the end.
+- Both Dockerfiles are digest-pinned to a canonical base image.
 
 ## Step 2: Extract and Rename
 

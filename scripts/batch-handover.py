@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -210,15 +211,18 @@ def run_trusted_nop_verifier(run_dir: Path) -> dict:
     stb = shutil.which("stb")
     if not stb:
         raise RuntimeError("stb executable is unavailable for trusted local NOP verification")
+    bundled_harbor = Path(stb).resolve().with_name("harbor")
+    if bundled_harbor.is_file() and os.access(bundled_harbor, os.X_OK):
+        harbor_command = [str(bundled_harbor), "run"]
+    else:
+        harbor_command = [stb, "harbor", "run"]
     verify = (run_dir / "verify").resolve()
     if not verify.is_dir():
         raise RuntimeError(f"verification task is missing: {verify}")
     with tempfile.TemporaryDirectory(prefix="batch-handover-nop-") as temp:
         jobs_dir = Path(temp) / "jobs"
         command = [
-            stb,
-            "harbor",
-            "run",
+            *harbor_command,
             "--force-build",
             "-a",
             "nop",

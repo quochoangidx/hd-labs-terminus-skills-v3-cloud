@@ -115,6 +115,10 @@ For each key rule area, compare online content with local docs:
 | Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5` |
 | Live category availability | `reference/category-status.md`, `reference/changelog.md` | `seven categories`, `milestones are removed` |
 | Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | `network_mode = "public"`, `digest`, `stable invariants` |
+| Negative verifier control | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `reject a wrong solution`, `delivered binary`, `equivalence` |
+| Oracle correctness | `creating-tasks/writing-oracle-solution.md` | `Correct, Not Just Passing`, `against the spec` |
+| Near-miss interpretation | `understanding-tasks/difficulty-guidelines.md` | `same one or few tests`, `different tests each time` |
+| Reviewer non-triggers | `reviewing-tasks/review-guidelines.md` | `difficulty value`, `instruction length`, `not revision triggers` |
 
 ### Diff format
 
@@ -184,6 +188,10 @@ After docs are synced, audit the doctrine-coupled set:
 | One-model platform-Hard early exit | scoring mapping | validation | check |
 | Net-new category availability | candidate filter | category gate | check |
 | Internet-enabled source pinning | viability | Docker/verifier review | check |
+| Deliberately wrong solution rejected | candidate verifier shape | validation | manual check |
+| Oracle independently checked against spec | authority viability | oracle validation | manual check |
+| Delivered source rebuilt / artifact equivalence | — | verifier architecture | manual check |
+| Difficulty mismatch and instruction length are not standalone revision triggers | — | reviewer guidance | advisory check |
 
 For each cell, verify the skill's text matches the current docs. Report discrepancies.
 
@@ -272,6 +280,11 @@ reward.txt
 set -uo pipefail
 CLAUDE.md
 cursorrules
+reject a wrong solution
+Correct, Not Just Passing
+near_miss
+delivered binary
+equivalence
 ```
 
 If any of these appear in a different context than expected, flag for investigation.

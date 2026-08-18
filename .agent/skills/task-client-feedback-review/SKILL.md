@@ -124,6 +124,15 @@ The automated scanner cannot certify semantic sufficiency.
        build's own `Validate` already rejects, so a test passes on both nop and
        oracle = a dud). The oracle may legitimately do more than the instruction
        promises; the instruction must not promise more than the tests verify.
+     - **Reject a wrong solution, not just accept the oracle.** Run a deliberately
+       wrong/incomplete/lazy candidate. Nop=0 is not enough. Verify that every
+       documented command/mode is invoked on a discriminating case; held-out
+       inputs cannot reach sibling goldens or predictable prior outputs; checks
+       assert actual values rather than counts/first elements/field presence;
+       submitted source is rebuilt when source changes are required; and two
+       agent-controlled artifacts are checked for equivalence with verifier-owned
+       input or a verifier-owned consumer. Independently spot-check the oracle
+       against the visible contract on hard inputs outside the tuned fixtures.
    - Numeric exact-string match on floating/irrational results (scanner does not
      catch; read the verifier; confirmed 2026-06 decimal-pow-precision FAILED +
      0/10 same two tests). If a test asserts `someFloatResult.String() ==
@@ -259,6 +268,12 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   directory as an artifact, bake the compiler into `tests/Dockerfile`, and
   rebuild inside the separate verifier before cases. If the deliverable itself
   is a binary, declaring and testing that binary is valid.
+- a verifier that accepts a deliberately wrong/incomplete solution, exposes a
+  held-out answer beside the input, replays a predictable prior output, checks
+  only a proxy rather than the required value, leaves a documented command/mode
+  uninvoked, or lets the agent control both sides of an unchecked comparison
+- an oracle that passes its tuned suite but disagrees with the visible contract
+  on an independently derived hard/edge case
 - environment reference docs (`CANONICAL_FORM.md`, `FORMAT.md`, `SPEC.md`) that
   use GRADER vocabulary ("grading", "grader", "compares", "checks", "verifier",
   "test", "reward") OR contradict the instruction/rubric (e.g. doc says "key
@@ -277,9 +292,14 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   pre-create a root-owned sentinel destination that the demoted candidate cannot
   write, then assert exit 1, non-empty stderr, and byte-identical contents; also
   cover the no-preexisting-file branch when the contract promises no creation
-- `difficulty` in `task.toml` not matching the measured Terminus 3 tier:
-  Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%, averaged across
-  both current reference models. A 100% iteration result cannot proceed.
+- a retired `difficulty` name (`easy`/`medium`/`hard`). Do not return a task only
+  because its declared current tier differs from observed accuracy; final
+  difficulty is re-measured after acceptance. A 100% iteration result still
+  cannot proceed because it provides no difficulty signal.
+- for `near_miss`, repeated failure of the same one/few tests across runs points
+  first to the check, instruction, or oracle; different missed tests across runs
+  are more credible difficulty. Do not ask the author to make the task harder
+  solely because nearly complete runs count as failures.
 - category chosen by coding activity instead of domain. Use `Software` only when
   software itself is the subject; otherwise choose the domain category and its
   exact subcategory (for example ML training repair is `ML / Training`).

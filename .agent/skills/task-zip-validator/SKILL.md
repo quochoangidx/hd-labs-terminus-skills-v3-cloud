@@ -56,6 +56,14 @@ read it dynamically and reject a candidate that hardcodes the original value.
 Do not flag hardcoded expected results, tolerances, or format constants unless
 they replace values the instruction says come from that file.
 
+Also run a deliberately wrong/incomplete candidate; nop=0 alone is insufficient.
+Reject verifiers that trust a delivered binary without rebuilding required source,
+expose a held-out golden beside the input path, leave prior output at a predictable
+replay path, assert only proxies instead of required values, or independently
+grade two artifacts the candidate controls without checking their equivalence.
+Spot-check oracle outputs against the visible contract on hard inputs outside the
+fixtures used to tune the suite.
+
 ## Step 1 — Unzip and Identify
 
 ```bash
@@ -154,7 +162,7 @@ Media: Music, Design
 |-------|------|----------|
 | `artifacts` | Required top-level array; every verifier input path must be declared | ❌ manual |
 | `network_mode` | `"public"` by default; `"no-network"` only when the task should be offline | ✅ set to public when absent |
-| `difficulty` | Must be `frontier`, `advanced`, `core`, or `base` and match measured accuracy | ❌ manual |
+| `difficulty` | Must use `frontier`, `advanced`, `core`, or `base`; a declared-value mismatch is advisory because final difficulty is re-measured after acceptance | ❌ manual |
 | `environment_mode` | `[verifier].environment_mode` must be `"separate"` | ✅ set to separate |
 | `agent.timeout_sec` | Must be between 1800 and 18000 seconds | ❌ manual |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
@@ -321,7 +329,7 @@ Fast first pass — run the shared mechanical scanner, then audit the content ru
 python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <unzipped-task-dir>
 ```
 
-### 3a. Structure and style (BLOCKING — instruction_check)
+### 3a. Structure and style (review — leakage/prescription can block)
 
 | Check | Rule | Detect |
 |-------|------|--------|
@@ -332,7 +340,7 @@ python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_prefli
 | No canary strings | No `CANARY_STRING`, UUID-like tokens, or marker strings | grep |
 | No emojis | No emoji characters | regex |
 | Narrative paragraphs | Reads like a bug report, not bullet-list spec | manual |
-| Length | 1-3 paragraphs, < 20 "must"/"should" items | count |
+| Length | Prefer 1-3 paragraphs and <20 "must"/"should" items, but these are guidance; never reject solely for length | count/advisory |
 
 ### 3b. No solution leaks (BLOCKING — instruction_check)
 
@@ -398,6 +406,8 @@ For each Python test function in test_outputs.py:
 For each requirement in instruction.md:
 1. Identify the claimed behavior
 2. Verify at least one test covers it
+3. Confirm every documented command/mode is invoked, and the fixture carrying a
+   rule actually stresses that rule rather than a degenerate easy case
 
 Report:
 - Tests with no instruction coverage → **add to instruction or remove test**

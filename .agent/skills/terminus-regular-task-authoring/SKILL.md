@@ -508,6 +508,15 @@ Tests must:
 
 - Be Python pytest tests, even for non-Python tasks.
 - Run in the isolated verifier and read only declared artifacts.
+- Prove the verifier rejects a deliberately wrong, incomplete, or lazy solution;
+  nop failure alone does not exercise plausible shortcuts.
+- Exercise every documented command/mode at least once, and make the fixture
+  carrying a rule hit the hard case that actually distinguishes that rule.
+- Assert the required values, not only proxies such as counts, endpoints, first
+  elements, existence, or field presence.
+- Keep held-out inputs and goldens in separate trees; never pass the candidate a
+  path whose sibling is the answer, and remove predictable prior outputs before
+  the graded run so they cannot be replayed.
 - Test behavior, not source-code strings.
 - Have docstrings on every test.
 - Cover every explicit and important implicit prompt requirement.
@@ -522,6 +531,9 @@ Tests must:
   as an artifact and rebuild it inside the verifier with a toolchain baked into
   `tests/Dockerfile`. When the deliverable itself is a binary, declare and test
   that binary directly. Never assume the agent container remains reachable.
+- When correctness depends on two artifacts the agent controls (for example,
+  simulation vs synthesis or a library plus its editable consumer), grade their
+  equivalence from one source or use a verifier-owned consumer.
 - Keep the verifier and the prompt SYMMETRIC on reject cases and on ordering.
   If `instruction.md` says an invalid input "writes nothing useful to stdout,"
   assert `proc.stdout == b""` for reject cases, not only `returncode != 0`
@@ -621,6 +633,9 @@ packages.
   be load-bearing for the build, that is a signal the snapshot is inconsistent,
   not a reason to keep the refactor.
 - Rebuild or regenerate artifacts when the verifier invokes a built binary.
+- Independently spot-check the oracle against the visible contract on hard/edge
+  inputs outside the fixtures used to tune the tests. Oracle=1 shows the task
+  runs; it does not establish that the reference answer is correct.
 
 ## Final Checks
 
@@ -680,6 +695,8 @@ Quality preflight:
   instructions in environment files, comments, README, configs, scripts, TODOs,
   `spec.md`, or architecture docs
 - oracle passes, nop fails, and failures are behavioral rather than infrastructure
+- a deliberately wrong/incomplete solution fails for the intended semantic
+  reason, and oracle behavior has been spot-checked independently against the spec
 - for any corpus-graded verifier, the per-case pass-table pre-audit has run
   before zipping (see `task-clone` Quality Preflight / `task-local-solve-probe`):
   re-score the stored blind-probe diffs per-case and confirm (1) every case has

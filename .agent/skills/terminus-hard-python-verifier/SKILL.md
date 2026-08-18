@@ -73,6 +73,8 @@ For substantive tasks, include:
 - one normal-behavior preservation test
 - one anti-shortcut test
 - one test proving the failure mode is recoverable, not just hidden
+- one invocation of every documented command/mode, with the rule-carrying
+  fixture exercising a discriminating hard case rather than a degenerate input
 
 For stronger Advanced/Frontier calibration, prefer several focused behavior
 clusters rather than one monolithic test:
@@ -144,6 +146,14 @@ and include a mutation re-run with a changed meaningful value. The original
 hardcoded parameter must no longer pass. This does not prohibit hardcoded
 expected results, tolerances, or format constants that are not claimed config
 values.
+
+Keep held-out inputs and expected outputs in separate trees, and never pass a
+candidate a path whose sibling contains the answer. Remove predictable prior
+outputs before a graded re-run. Rebuild submitted source when source changes are
+the contract; do not grade only a delivered binary on fixed input. Assert actual
+values rather than proxies such as counts, first elements, or field presence. If
+the candidate controls both representations being compared, drive them from one
+source and assert equivalence, or use a verifier-owned consumer.
 
 ## Building stronger Python task signals
 
@@ -228,6 +238,10 @@ Before accepting the verifier, answer these questions:
 - Are preservation tests explicitly described in `instruction.md`?
 - Are verifier dependencies available before `tests/test.sh` starts?
 - Does `tests/test.sh` avoid runtime setup and network access?
+- Does a deliberately wrong, incomplete, or lazy solution fail for the intended
+  semantic reason (not merely nop)?
+- Has the oracle been independently checked against the visible contract on
+  hard/edge inputs outside the fixtures used to tune it?
 
 If any answer is no, repair the task before running real agents.
 

@@ -24,7 +24,7 @@ inventory first, then score each surface:
 
 | Surface | Where | Extra constraint while rewriting |
 |---|---|---|
-| Instruction | `instruction.md` | keep every value/threshold the tests assert (symmetry); 1 sentence–3 paragraphs; no emojis, minimal markdown |
+| Instruction | `instruction.md` | keep every value/threshold the tests assert (symmetry); prefer concise prose, but paragraph/bullet counts are guidance rather than a hard cap; no emojis, minimal markdown |
 | Environment docs | `environment/**/*.md`, specs, READMEs | must read like a real engineering doc (API contract, schema, RFC), never a prompt extension |
 | Environment code comments | `environment/**` source | comments must not point at bugs or narrate the fix; when in doubt, delete the comment |
 | Rubric text | platform textbox draft / `*-rubics.txt` | flat `Agent ...` lines; vary phrasing across criteria |

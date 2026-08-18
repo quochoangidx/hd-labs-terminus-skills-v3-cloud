@@ -68,15 +68,8 @@ solution/
 tests/
 ```
 
-For a milestone task, the ZIP root should contain:
-
-```text
-task.toml
-environment/
-steps/
-```
-
-Milestone ZIPs must not include root-level `instruction.md`, `solution/`, or `tests/`.
+Milestone task layouts are obsolete in Terminus 3 and must not be packaged for
+submission.
 
 ## Metadata Update
 
@@ -119,19 +112,6 @@ REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
 ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
 mkdir -p "${REPO_ROOT}/workspace/submissions"
 zip -rX "$ZIP_PATH" instruction.md task.toml environment solution tests \
-    -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
-```
-
-## Milestone ZIP
-
-From inside the task folder:
-
-```bash
-TASK_NAME="$(basename "$PWD")"
-REPO_ROOT="$(git -C "$PWD" rev-parse --show-toplevel)"
-ZIP_PATH="${REPO_ROOT}/workspace/submissions/${TASK_NAME}.zip"
-mkdir -p "${REPO_ROOT}/workspace/submissions"
-zip -rX "$ZIP_PATH" task.toml environment steps \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*/__pycache__/*' -x '*/target/*' -x '*/.git/*' -x '*/.env' -x '*/.ruff_cache/*' -x '*/.pytest_cache/*' -x '*.pyc' -x 'reports/*' -x 'submissions/*' -x 'jobs/*'
 ```
 
@@ -248,15 +228,10 @@ On first upload:
   2, 3, or 5, never use 4, carry an explicit leading `+` on every positive
   score (write `+3`, not `3` — unsigned positives are sent back for revision),
   and focus on trace-evidenced behavior rather than final pytest results
-- for non-milestone tasks, use a flat `Agent ...` list; a single `# Rubric 1`
-  header is tolerated but not required, and `# Rubric 2+` is reserved for
-  milestone tasks
-- for milestone tasks, use `# Rubric 1`, `# Rubric 2`, etc. blocks matching the
-  milestones
-- ensure rubrics have at least three negative criteria overall and a
-  cumulative positive total of 10-40 points (the same 10-40 band applies to
-  non-milestone tasks); milestone rubrics also need at least one negative
-  criterion and 10-40 positive points per milestone
+- use a flat `Agent ...` list; a single `# Rubric 1` header is tolerated but not
+  required. Terminus 3 has no milestone rubric blocks
+- ensure rubrics have at least one negative criterion and a cumulative positive
+  total of 10-40 points
 - before final reviewer submission, uncheck "Generate Rubric(s)" so the edited
   rubric is not overwritten, then check "Send to Reviewer"
 - after final submission, expect peer review in 1-7 business days; total review

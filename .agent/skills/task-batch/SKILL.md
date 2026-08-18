@@ -117,6 +117,12 @@ Before difficulty probing, verify instruction sufficiency:
 - Every verifier behavior has a visible contractual basis.
 - Reasonable alternative interpretations are unambiguously rejected by visible evidence.
 - The Oracle agrees with the visible contract.
+- Every documented command/mode is actually invoked, and its rule-carrying
+  fixture exercises a discriminating hard case.
+- A deliberately wrong/incomplete solution has been run and rejected; nop=0 is
+  not a substitute for this negative control.
+- The Oracle has been spot-checked against the contract on hard/edge inputs that
+  were not used to tune its fixtures.
 
 Create and validate the repository's instruction-sufficiency manifest when the authoring workflow requires it. Fix insufficiency before any solve probe.
 

@@ -44,7 +44,7 @@ No — work on and submit multiple tasks in parallel.
 **How do I initialize a new task with the CLI?**
 `stb init my-task-name -p "Terminus-3-Prod"`
 
-> **Pending:** the template flag (`-t`) for Terminus 3 will be documented once the task skeleton is available.
+> **Pending:** the template flag (`-t`) is not yet documented for Terminus 3. Download the [task skeleton](/Terminus-3-Prod/default-template.zip) and rename the folder instead.
 
 ---
 

@@ -102,9 +102,13 @@ You see this before you submit, and reviewers see the same output. Resolving a f
 | Flag | What it means | What to do |
 |---|---|---|
 | `difficulty_crux` | The agent failed for a reason unrelated to the challenge you described in `[metadata].difficulty_explanation`. | Either the task carries unintended difficulty, or your explanation doesn't describe the real crux. Fix whichever is wrong. |
-| `near_miss` | The agent produced a substantively working solution that missed a quantitative threshold narrowly — 95% against a required 98%, say. | Your threshold is producing the difficulty, not the problem. A task that looks Frontier because of a tight cutoff is not a Frontier task. |
+| `near_miss` | The agent produced a substantively working solution that fell just short. | Look at **which** tests fail across the runs — see the note below. |
 | `refusals` | The agent aborted on a content or safety policy instead of attempting the task. | Review the framing and content — a refused trial measures nothing. |
 | `low_timeout` | The agent was still making real progress when the timeout hit. | Raise `[agent].timeout_sec`. Difficulty should come from the problem, not from running out of time — see [Task Requirements](/portal/docs/understanding-tasks/task-requirements). |
+
+> **Reading a `near_miss`.** Look at which tests fail across the runs. If the runs keep failing the **same one or few tests**, look at those tests and the instructions — a check that every capable agent fails is usually the source of the error rather than real difficulty. If the runs fail **different tests each time**, the agent is genuinely close but slipping in different places, which is a more acceptable near-miss and closer to real difficulty. In neither case should you raise the difficulty only because near-complete runs count as failures.
+>
+> Keep `near_miss` about difficulty. If the failing check enforces something the instruction never states, that belongs under `task_specification` instead.
 
 A flag is not automatically fatal, but it does need an answer. Reviewers send a task back when a flag's reason holds up, so it is worth resolving — or being able to explain — before you submit.
 

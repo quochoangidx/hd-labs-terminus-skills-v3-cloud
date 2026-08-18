@@ -19,6 +19,10 @@ As a reviewer, you're ensuring quality for the benchmark. Your goal is to:
 
 _If the EC addresses your comments, the task should be ready for acceptance, assuming no new issues appear. In other words, your feedback should be always clear, complete, and actionable._
 
+> **A green run is where a review *starts*, not where it ends.** A passing oracle, a clean-looking setup, or a green automated check is *material for* your review — not the review itself. Accept each point because **you confirmed it holds**, not because the eval passed or the doc says so. When your reason to accept is an assumption (the tests cover the contract, the answer's protected, the difficulty fits, the solution matches the spec), do the thing that confirms or breaks it before you sign off.
+>
+> **Don't repost unverified output as your review.** The Agent Review summary, the quality-check output, and the difficulty trial-analysis are inputs to *help* you review — copying their claims (or an earlier reviewer's notes) back into your review says nothing about whether the task is sound. If you rely on any of it, **verify it first.** Your review should briefly say **what you checked and what convinced you** — "looks solid," a restatement of the design, or "Oracle / NOP / CI pass" is not a review.
+
 ## Review Checklist
 
 ### 1. Read the Task Description
@@ -67,7 +71,7 @@ There is an automated **test-quality** eval on submissions that flags common gap
 
 ### 5. Verify Metadata
 
-- [ ] Difficulty matches expected pass rate
+- [ ] Difficulty uses a **current tier name** (`frontier` / `advanced` / `core` / `base`) — the value itself is re-measured automatically after acceptance, so don't request a revision to change it (see *Don't request changes for these*)
 - [ ] Category is appropriate
 - [ ] Time estimates are realistic
 - [ ] Timeout is sufficient but not excessive
@@ -176,7 +180,15 @@ Issues need fixing before acceptance. Be specific:
 **Extra things you can include**
 - Point the submitter where can they found how to fix the issue or a place where they can see they are mistaken
 
-> Check the New: Rubrics section in the trainig site
+> Check the [Rubrics](/portal/docs/understanding-tasks/rubrics) section in the training site
+
+### Don't request changes for these
+
+These come up often but are **not** valid revision reasons — usually they're unverified Agent Review output copied into a review. Confirm before you send anything back:
+
+- **`task.toml` "is incorrect."** CI runs the structure check on every submission, and a task only reaches you once CI is passing — so the manifest in front of you has already passed it. **Confirm the static check actually fails** before flagging — an Agent Review "toml wrong" is usually a false positive (a common one: flagging fields as "top-level" that are correctly under `[metadata]`).
+- **Difficulty value / tier mismatch** (declared `frontier`, measures `core`, etc.). **Final difficulty is measured automatically _after_ you accept**, so the declared value is not a revision trigger. *Still flag:* a **retired tier name** (`hard` / `easy` / `medium` — must be `frontier` / `advanced` / `core` / `base`), or a task that is **genuinely too trivial** (that's a quality issue, not a label).
+- **Instruction length** ("too many paragraphs / bullets"). The 2-paragraph / 20-bullet figure is **guidance, not a hard cap** — complex tasks may need more room. Don't flag on length; flag only if the instruction **leaks implementation steps or the answer**.
 
 ### Decline
 
