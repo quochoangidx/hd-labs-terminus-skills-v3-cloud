@@ -269,9 +269,11 @@ def built_binary():
     # TODO: build command, e.g.:
     # r = subprocess.run(["go", "build", "-o", out, "./cmd/..."], cwd=APP_DIR,
     #                    capture_output=True, text=True, check=False,
-    #                    env={**os.environ, "GOCACHE": build_dir, "HOME": build_dir})
+    #                    env={**os.environ, "GOCACHE": build_dir, "HOME": build_dir},
+    #                    **_candidate_user_kwargs())
     # assert r.returncode == 0, f"build failed:\n{r.stdout}\n{r.stderr}"
-    # os.chmod / chmod -R a+rX so the demoted candidate user can exec it.
+    # Stage source/output/cache in a candidate-owned scratch tree first; never
+    # let the demoted build write /app, /tests, or /logs/verifier.
     raise NotImplementedError("TODO: implement build")
 
 

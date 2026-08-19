@@ -318,6 +318,52 @@ def transition(args: argparse.Namespace, root: Path) -> int:
     return 0
 
 
+def reconcile_completed(args: argparse.Namespace, root: Path) -> int:
+    """Bind a completed Codex turn when project hooks failed to load.
+
+    This is an explicit, auditable recovery path.  It does not claim that the
+    hook enforced the tool-call cap; the receipt records that limitation.
+    """
+    path = root / f"{args.lease}.json"
+    lease = load(path)
+    if lease.get("status") not in {"awaiting_session", "active"}:
+        raise ValueError("only an awaiting_session or active lease can be reconciled")
+    existing_owner = lease.get("owner", {}).get("session_id")
+    if existing_owner and existing_owner != args.session_id:
+        raise ValueError("observed session does not own the active lease")
+    if args.model != lease.get("model") or args.reasoning_effort != lease.get("reasoning_effort"):
+        raise ValueError("observed model/reasoning routing does not match the lease")
+    started = datetime.fromisoformat(args.started_at)
+    ended = datetime.fromisoformat(args.ended_at)
+    if started.tzinfo is None or ended.tzinfo is None or ended < started:
+        raise ValueError("observed timestamps must be ordered and timezone-aware")
+    if ended > datetime.fromisoformat(lease["deadline_at"]):
+        raise ValueError("completed turn exceeded the lease deadline")
+    evidence = args.evidence.resolve()
+    if not evidence.is_file():
+        raise ValueError("reconciliation evidence is missing")
+    validate_packet(
+        Path(lease["packet_path"]), lease["role"], lease["phase"], lease["task_slug"]
+    )
+    lease.update({
+        "status": "phase_complete",
+        "owner": {"session_id": args.session_id},
+        "bound_turn_id": args.turn_id,
+        "claimed_at": started.isoformat(),
+        "ended_at": ended.isoformat(),
+        "enforcement_mode": "orchestrator_reconciled_after_hook_load_failure",
+        "hook_enforced": False,
+        "tool_call_accounting": "unavailable; transcript and wall-clock reviewed by orchestrator",
+        "reconciliation_evidence": {
+            "path": str(evidence),
+            "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest(),
+        },
+    })
+    save(path, lease)
+    print(json.dumps(lease, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--state-dir", type=Path)
@@ -334,6 +380,15 @@ def main() -> int:
     transition_parser.add_argument("--phase", required=True)
     transition_parser.add_argument("--packet", required=True, type=Path)
     transition_parser.add_argument("--deadline-minutes", type=int)
+    reconcile_parser = commands.add_parser("reconcile-completed")
+    reconcile_parser.add_argument("--lease", required=True)
+    reconcile_parser.add_argument("--session-id", required=True)
+    reconcile_parser.add_argument("--turn-id", required=True)
+    reconcile_parser.add_argument("--started-at", required=True)
+    reconcile_parser.add_argument("--ended-at", required=True)
+    reconcile_parser.add_argument("--model", required=True)
+    reconcile_parser.add_argument("--reasoning-effort", required=True)
+    reconcile_parser.add_argument("--evidence", required=True, type=Path)
     close_parser = commands.add_parser("close")
     close_parser.add_argument("--lease", required=True)
     commands.add_parser("check")
@@ -349,6 +404,8 @@ def main() -> int:
             return open_leases(args, root)
         if args.command == "transition":
             return transition(args, root)
+        if args.command == "reconcile-completed":
+            return reconcile_completed(args, root)
         if args.command == "close":
             path = root / f"{args.lease}.json"
             lease = load(path)
@@ -363,6 +420,9 @@ def main() -> int:
             lease = load(path)
             if lease.get("status") in {"awaiting_session", "active"} and now() > datetime.fromisoformat(lease["deadline_at"]):
                 expired.append(lease["lease_id"])
+                lease["status"] = "expired"
+                lease["ended_at"] = now().isoformat()
+                save(path, lease)
         print(json.dumps({"status": "fail" if expired else "pass", "expired": expired}))
         return 1 if expired else 0
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:

@@ -59,11 +59,46 @@ A derived candidate must record:
 - the same evidence-inferability, verifier-breadth, mutation, and frozen-probe
   gates as established candidates.
 
-Keep a derived pattern experimental after one candidate. Promote it into this
-catalog only after either (a) two structurally different applications in
-different domains produce valid Advanced/Frontier evidence, or (b) one task is
-platform-confirmed Frontier and a fresh independent review finds the pattern
-generalizable. Never promote on an exploratory probe.
+A derived candidate may instantiate one of the registered experimental
+prototypes below or define a candidate-local `X-*` ID. A registered prototype
+is a reusable research hypothesis, not an established pattern: the candidate
+must still record its own transformation, material deltas, causal graph, and
+non-equivalence rationale. It counts toward the derived 20% allocation.
+
+Keep a derived pattern experimental after one candidate. Promote it into the
+established `P*` catalog only after either (a) two structurally different
+applications in different domains produce valid Advanced/Frontier evidence, or
+(b) one task is platform-confirmed Frontier and a fresh independent review
+finds the pattern generalizable. Never promote on an exploratory probe.
+
+## Frontier-stability mining gates
+
+Apply these gates before scaffolding every new Advanced+ candidate. Pattern
+membership alone never clears them.
+
+1. **Typed topology:** record exactly one dominant topology, optionally one
+   orthogonal secondary topology, and at most one amplifier or delivery
+   envelope. The dominant ID must be an applied `P*` ID for an established
+   candidate or its `X-*` ID for a derived candidate. Use only `P4` or `P6` in
+   the amplifier/envelope slot.
+2. **Anti-retrieval:** search the issue wording, distinctive failures, public
+   symbols, release history, and version diffs. Record the queries and public
+   artifacts checked. Reject when one public artifact already implements two
+   or more planned mechanisms or any genuine interaction. An upstream fix may
+   remain a substrate only when the new task's core topology is not that patch.
+3. **Orthogonal natural-fix traps:** name at least two reasonable
+   implementations that are wrong for different semantic reasons. Their
+   semantic nodes, repair surfaces, and planned witness IDs must be distinct;
+   their witness sets must not overlap. Explain why one central helper or
+   recovered mapping cannot repair both.
+4. **Fast semantic loop:** retain a deterministic local edit/measurement loop.
+   Search friction, cold builds, timeout pressure, and inaccessible evidence
+   cannot substitute for the gates above.
+
+The schema-v2 pattern-mix manifest stores these facts under
+`frontier_stability`, including the planned mechanism and interaction IDs that
+retrieval overlap and trap nodes reference. Schema v1 remains readable only for
+historical evidence; never create a new v1 manifest.
 
 ## P1 — `coupled-invariant-reconstruction`
 
@@ -178,22 +213,95 @@ generalizable. Never promote on an exploratory probe.
 - **Reject when:** wall-clock timing, real external services, or random races
   create the apparent difficulty.
 
+## Registered experimental prototypes
+
+These `X-*` prototypes make underrepresented frontier-hard topologies available
+for deliberate trials. They remain `track: derived`; appearing here does not
+make them established or provide difficulty evidence.
+
+## X-cross-layer-feature-completion — `cross-layer-feature-completion`
+
+- **Parents:** `P1` coupled invariants and `P6` holistic delivery.
+- **Transformation:** lift a local invariant repair into a short product outcome
+  whose implementation crosses a real repository dependency graph.
+- **Required shape:** the outcome needs coordinated changes across at least
+  three meaningful layers, such as public API, domain implementation,
+  persistence/configuration, compatibility, or downstream consumption. At
+  least two natural partial implementations must complete different layer
+  subsets and fail on disjoint end-to-end witnesses.
+- **Strong surfaces:** multi-service or multi-package features, protocol or
+  storage evolution, compatibility-sensitive product changes, and compiler or
+  build features with several consumers.
+- **Verifier:** exercise the feature end to end and independently preserve each
+  affected layer's existing contract. Accept alternative dependency-graph
+  implementations that produce equivalent behavior.
+- **Reject when:** the apparent breadth is file count, generated scaffolding,
+  lint/docs work, or one central helper change that mechanically fixes every
+  layer.
+
+## X-dynamic-authority-reconciliation — `dynamic-authority-reconciliation`
+
+- **Parents:** `P3` distributed evidence and `P8` exogenous reconciliation.
+- **Transformation:** make later evidence change which visible source is
+  authoritative, forcing invalidation and reconstruction of previously derived
+  state rather than mere convergence after external events.
+- **Required shape:** at least two visible evidence sources have inferable
+  precedence or provenance; a deterministic later observation supersedes or
+  conflicts with an earlier conclusion; stale downstream decisions must be
+  revoked; and completeness must be rechecked across multiple affected items.
+- **Strong surfaces:** incident response, data lineage, configuration control
+  planes, reconciliation pipelines, scientific evidence revision, and
+  inventory or claims adjudication.
+- **Verifier:** replay a fixed evidence/event schedule, then validate the final
+  authority choice, provenance, absence of stale derived decisions, and
+  completeness. Vary schedules and values under the same visible authority
+  model.
+- **Reject when:** it is only an event handler or retry loop (use `P8`), or when
+  priority between sources is an arbitrary hidden policy.
+
+## X-closed-loop-empirical-convergence — `closed-loop-empirical-convergence`
+
+- **Parents:** `P3` distributed evidence, `P4` secondary observables, and `P5`
+  native semantic artifacts.
+- **Transformation:** turn static inference into a bounded loop in which the
+  solver forms competing hypotheses, chooses informative measurements, updates
+  its model, and converges on a validated artifact.
+- **Required shape:** several plausible hypotheses fit the initial evidence;
+  available experiments have different information value; later choices must
+  depend on observed results; and the budget prevents exhaustive enumeration
+  while still permitting a reliable strategy.
+- **Strong surfaces:** scientific reproduction, ML engineering, performance
+  diagnosis, calibration, numerical modeling, and hardware characterization.
+- **Verifier:** use a deterministic simulator, fixed dataset, or replayable
+  measurement harness; enforce the experiment budget; and grade held-out
+  artifact behavior plus independently observable decisions, never a claimed
+  narrative of the process.
+- **Reject when:** brute force fits inside the budget, one command exposes the
+  optimum, stochastic infrastructure determines success, or a hidden metric
+  supplies the difficulty.
+
 ## Cross-pattern construction rules
 
 Regardless of pattern:
 
-1. Keep the goal, public interfaces, artifact paths, safety constraints, and
+1. Assign one dominant causal topology, optionally one orthogonal secondary
+   topology, and at most one amplifier or delivery envelope. Pattern count is
+   not semantic rank; `P4` is usually an amplifier and `P6` an envelope.
+2. Keep the goal, public interfaces, artifact paths, safety constraints, and
    arbitrary exact conventions explicit.
-2. Let domain semantics and causal relations be inferred only from reachable,
+3. Let domain semantics and causal relations be inferred only from reachable,
    agent-visible evidence.
-3. Hidden tests may vary values, sequences, layouts, combinations, and
+4. Hidden tests may vary values, sequences, layouts, combinations, and
    metamorphic relations under the same model; they may not add policy.
-4. Prefer delayed or cross-layer feedback, but keep a fast deterministic edit
+5. Prefer delayed or cross-layer feedback, but keep a fast deterministic edit
    and verification loop. Slow infrastructure is not difficulty.
-5. Isolate verifier assets and expected outputs. Treat reward-hacking probes as
+6. Isolate verifier assets and expected outputs. Treat reward-hacking probes as
    evaluator QA, not as task difficulty evidence.
-6. Reject a provisional high-tier result when all failures reduce to one shared
+7. Reject a provisional high-tier result when all failures reduce to one shared
    semantic node, even if that node appears in many fixtures.
+8. Treat an exact public patch that clears at least two mechanisms or any
+   genuine interaction as retrieval, not reasoning evidence. Transform the
+   task before building or reject it.
 
 ## Anti-patterns
 

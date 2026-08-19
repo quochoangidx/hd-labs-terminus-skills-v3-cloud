@@ -4,6 +4,7 @@
 
 | Date | Type | Change |
 |------|------|--------|
+| Aug 17, 2026 | 🆕 New | Three Verifier criteria covering the too-loose side: **the verifier rejects a wrong solution** (High) — reachable answers, hollow checks that assert a proxy, and documented behaviors never exercised; **delivered binaries are rebuilt from source** before grading, and artifacts the agent controls both sides of are graded on their equivalence (Medium); and **the oracle is correct, not just passing** (Medium) — tests and oracle are tuned together, so a green oracle does not establish the reference is right. The `near_miss` criterion is rewritten around the **failure pattern across runs**: the same one or few tests failing points at the check or the instructions, different tests each time is genuine difficulty. Do not ask an author to make a task harder solely because near-complete runs count as failures. |
 | Aug 13, 2026 | 🔄 Update | Added a **Not revision triggers** note under Task Metadata: the `difficulty` *value* is re-measured after acceptance and is not grounds for revision (only a retired tier name is), and a `task.toml` structure complaint must be confirmed against the actual static-check result before flagging. See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines). |
 | Aug 10, 2026 | 🔄 Update | Difficulty now runs in two stages: **in-platform iteration** uses 2 trials per model (4 runs) and requires **at least one failure** before a task can reach review; **final difficulty** uses 4 trials per model (8 runs) and runs only **after reviewer acceptance**. **100% accuracy averaged across both models** is not accepted — 90% is fine. Also added two High-severity criteria: **known environment defects block acceptance** regardless of whether they caused a visible failure in the difficulty run, and **`difficulty` must use a current tier** (`frontier`/`advanced`/`core`/`base` — the Edition 2 names are retired). |
 | Aug 6, 2026 | 🆕 New | Added a **Trial Analysis** section for the six criteria the difficulty check now reports. `task_specification` and `reward_hacking` are definite issues — a flag on either sends the task back. `difficulty_crux`, `near_miss`, `refusals`, and `low_timeout` must be examined: send back if the flag's reason holds up, otherwise record in the acceptance comments why it doesn't. The multiple-Medium rule does not apply to these four — judge each flag on its own merits. |
@@ -284,6 +285,21 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>Applies <strong>only</strong> when the instruction says the agent must read a config/input file that can vary. Then the verifier must read those values from the config at runtime rather than re-declaring them as literals, so an agent that ignores the config and hardcodes the parameters cannot pass. <strong>Not a general ban on hardcoded values:</strong> hardcoding the expected <em>result</em> — exact numeric/ML targets (with tolerance), byte-exact outputs, format constants — is fine and often required. Confirm config dependence by mutating the config and re-running.</td>
       <td>Medium</td>
     </tr>
+    <tr>
+      <td>The verifier rejects a wrong solution, not just accepts a right one.</td>
+      <td>A passing oracle only shows the task runs. Satisfy yourself that a deliberately wrong, incomplete, or lazy solution would <strong>fail</strong> — that is the question the verifier exists to answer. Check the three ways this breaks down: the answer is <strong>reachable</strong> (a held-out input staged beside its expected output, a sealed directory the graded process can still read, or prior output left at a predictable path to replay); the checks are <strong>hollow</strong> (asserting a count, a first element, a field's presence but not its value, or an expected result recomputed from an input the agent controls); or a <strong>documented behavior is never exercised</strong> (a command or mode the tests reference but never run). See <a href="/portal/docs/understanding-tasks/what-makes-a-good-task">What Makes a Good Task</a>.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Delivered binaries are rebuilt from source before grading.</td>
+      <td>If the verifier runs an artifact the agent delivered without rebuilding it from the submitted source, and without varying the input, a hardcoded binary that emits the fixed answer passes without implementing anything. Where correctness depends on two artifacts the agent controls both sides of — a simulated and a synthesized build, or a library and its consumer — the verifier must grade their <strong>equivalence</strong> rather than each side alone.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>The oracle is correct, not just passing.</td>
+      <td>Tests and oracle are written together and tuned until the oracle passes, so a green oracle does <strong>not</strong> establish that the reference is right. Where correctness turns on a rule the fixtures don't stress, spot-check the oracle's logic against the spec. A wrong oracle is worse than a broken one: the tests encode its output as the answer key, so a correct agent solution fails and difficulty is measured against a bad truth. See <a href="/portal/docs/creating-tasks/writing-oracle-solution">Writing Oracle Solution</a>.</td>
+      <td>Medium</td>
+    </tr>
   </tbody>
 </table>
 
@@ -331,7 +347,7 @@ Judge each flag on its own merits. The multiple-Medium rule in [Severity Guidanc
     </tr>
     <tr>
       <td>Trial analysis: <code>near_miss</code> examined</td>
-      <td>Flagged when the agent produced a substantively working solution that fell just short — passing every structural check but missing a quantitative threshold by a small margin (95% achieved against 98% required, say). When many trials are near misses, the <strong>threshold</strong> is producing the difficulty rather than the conceptual challenge, and the task looks harder than it is. Send back if the reason holds up; otherwise record why you are accepting it.</td>
+      <td>Flagged when the agent produced a substantively working solution that fell just short. Look at <strong>which</strong> tests fail across the runs. If the runs keep failing the <strong>same one or few tests</strong>, look at those tests and the instructions — a check that every capable agent fails is usually the source of the error rather than real difficulty. If the runs fail <strong>different tests each time</strong>, the agent is genuinely close but slipping in different places, which is a more acceptable near-miss and closer to real difficulty. In neither case should the difficulty be raised only because near-complete runs count as failures, and <strong>do not simply ask the author to make the task harder</strong>.<br><br>Keep this criterion about difficulty: if the failing check enforces something the instruction never states, that belongs under <code>task_specification</code>. Send back if the reason holds up; otherwise record why you are accepting it.</td>
       <td>Medium</td>
     </tr>
     <tr>
@@ -518,4 +534,3 @@ storage_mb</pre><br>Descriptive fields must sit under <code>[metadata]</code> �
     </tr>
   </tbody>
 </table>
-

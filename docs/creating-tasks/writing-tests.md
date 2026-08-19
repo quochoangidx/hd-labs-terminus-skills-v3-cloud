@@ -125,8 +125,22 @@ Tests need to fully cover all aspects of the prompt (instruction.md). This inclu
 - ✅ All explicit requirements from the prompt
 - ✅ Implicitly expected behavior
 - ✅ Critical edge cases
+- ✅ Every documented command/mode is invoked by at least one test
 
 Every requirement in the prompt must map to a test. If it is implied or stated in the prompt but not covered by tests, that is a miss.
+
+**A documented command or mode must be *run*, not just referenced.** If the contract names a subcommand, flag, or behavior mode, a test has to invoke it. A requirement that only appears in the prompt and is never exercised is not covered.
+
+```python
+# BAD: the contract documents a `verify` subcommand, but the suite only ever runs `engrave`,
+# so a solution that hardcodes or breaks `verify` still passes.
+
+# GOOD: exercise every documented command
+def test_verify_subcommand_rejects_tampered_input():
+    """The documented `verify` command must reject a corrupted artifact."""
+    r = run_agent_cli("verify", "/app/tampered.json")
+    assert r.returncode != 0
+```
 
 | instruction.md says... | Test verifies... |
 |-------------------|------------------|
@@ -164,6 +178,20 @@ def test_division_by_zero():
 The prompt never mentions division by zero, but any reasonable person reading "a function that divides two numbers" would expect it to handle that case.
 
 ### 4. Cover Edge Cases
+
+**Make the fixture that carries a rule its hard case.** When one test decides whether a rule is implemented, the input must actually stress that rule — otherwise a solution that skips the rule passes.
+
+```python
+# BAD: an ordering rule (timestamp, then sequence, then file-position) is only tested on a
+# fixture whose events all have DISTINCT timestamps. A timestamp-only implementation passes and
+# never faces the sequence tie the rule exists for.
+
+# GOOD: the ordering fixture contains simultaneous events, so sequence has to break the tie
+def test_ordering_breaks_ties_by_sequence():
+    """Events with equal timestamps must be ordered by sequence, not file position."""
+    out = run_agent_cli("reconcile", "/app/simultaneous_events.json")
+    assert [e["id"] for e in out["ordered"]] == ["a", "b", "c"]
+```
 
 Test the boundaries, not just the happy path:
 
@@ -316,11 +344,13 @@ def test_cli_help():
 
 A rigorous verifier often contains substantial logic — that is expected and fine. The following are **legitimate and encouraged**, not violations:
 
-- **Run the agent's own program.** Build and run the agent's binary/CLI, then grade its output.
+- **Run the agent's own program.** Build and run the agent's binary/CLI, then grade its output. **Build it from the submitted source** — do not grade a binary the agent delivered without rebuilding it (see *Grading a Delivered Binary Without Rebuilding*).
 - **Parse the agent's output** to check semantics (e.g., interpreting the config, policy, or files the agent produced).
 - **Precomputed golden fixtures or hashes** for exact-match or byte-exact tasks (numerical, ML, reporting). Hardcoding the *expected result* is fine and often required.
 - **Spec-derived invariants** — compute an expected property from the task's spec/config and check the output against it (e.g., a floor, budget, or cost ceiling).
 - **Held-out ground truth**, ideally **sealed into memory and unlinked from `tests/` before the agent's program is built or run**, so a rebuilt program cannot read the answer key at grade time.
+  - **Do not hand the candidate a path whose sibling is the answer.** If a held-out input is passed to the agent's program by directory path, its expected output must not live in that same directory (or anywhere reachable from that path) — the program can read the sibling instead of computing. Seal held-out inputs and their goldens in separate trees, and never pass a path inside the fixture tree.
+  - **Do not leave the agent's own prior output at a predictable path before its graded run.** Moving delivered artifacts to a fixed location (e.g. `/app/out.delivered`) and then running the candidate lets the candidate copy them back instead of recomputing.
 - **Perturbation / holdout re-runs** — re-run the agent's program on modified or held-out inputs and assert the output changes. This is the recommended way to prove the solution is *computed*, not hardcoded.
 
 The line to hold is narrow: don't put a **callable end-to-end solver** in `tests/` that maps task inputs to the complete expected artifact (that belongs in `solution/`), and don't hardcode a value the instruction says the agent must read from a config file. Everything above stays fair game.
@@ -372,6 +402,63 @@ def test_output():
 def test_output():
     output = open("/output/log.txt").read()
     assert "complete" in output.lower()
+```
+
+### Checking a Proxy Instead of the Value
+
+Counts, endpoints, sums, existence, first-element, or "the schema declares this field" all let corrupted or fabricated output pass. Assert the actual content.
+
+```python
+# BAD: only the NUMBER of records is checked; the values are reconstructed from the agent's own
+# input trace, so a program that fabricates responses passes.
+def test_beats():
+    assert len(read_beats()) == expected_count
+
+# BAD: the report schema requires total_attested and laws, but no test asserts them, so a
+# report that omits or falsifies them passes.
+
+# GOOD: assert the real values, from a source the agent does not control
+def test_beats_carry_correct_data():
+    """Each DRAM read beat must return the value written to that address."""
+    beats = read_beats()
+    assert [b["data"] for b in beats] == GOLDEN_BEAT_DATA   # sealed golden, not derived from input
+
+def test_report_has_required_fields_with_correct_values():
+    """total_attested/total_matched/name/laws must be present and correct."""
+    rep = json.load(open("/app/output/report.json"))
+    assert rep["total_attested"] == 42 and rep["laws"] == GOLDEN_LAWS
+```
+
+Watch for: checking only the first element of a sequence; validating a field's presence but not its value; recomputing the "expected" answer from an input the agent could truncate or replace.
+
+### Grading a Delivered Binary Without Rebuilding
+
+If the verifier runs a prebuilt artifact the agent delivered, without rebuilding it from the submitted source and without varying the input, a hardcoded binary that emits the fixed answer passes — it never has to implement anything.
+
+```python
+# BAD: run whatever binary the agent delivered, against the same fixed input every time.
+
+# GOOD: rebuild from the submitted source, and vary the input so a hardcoded output can't pass
+def test_decoder_actually_decodes_a_fresh_registry():
+    """A rebuilt decoder must handle a registry it has never seen."""
+    rebuild_from_source("/app/src")                 # not the delivered binary
+    out = run_agent_cli("decode", make_random_registry())
+    assert out == expected_for(that_registry)
+```
+
+This is what **Perturbation / holdout re-runs** is for — use it, and rebuild rather than trusting the delivered binary.
+
+### No Equivalence Between Artifacts the Agent Controls Both Sides Of
+
+When correctness depends on two representations agreeing — a simulated build and a synthesized one, or a library and the consumer that exercises it — and the agent controls both, grade the **equivalence**, not each side alone. Otherwise the agent satisfies each with different code.
+
+```python
+# BAD: simulation and synthesis are separate tool invocations with no cross-check, so functional
+# code is shown to the simulator and a dummy module to the synthesizer, and both pass.
+# BAD: an "API preserved" test runs an agent-built consumer the agent can rewrite alongside the library.
+
+# GOOD: drive both from the same source and assert identical behavior, or run a consumer the
+# verifier owns (not one the agent can edit).
 ```
 
 ### Hardcoded Random Values

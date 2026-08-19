@@ -208,6 +208,23 @@ if [ -f "$TEST_SH" ]; then
   fi
 fi
 
+# 7c. Candidate-controlled build/runtime code must not share the verifier owner.
+STATIC_VERIFIER_CHECK="$REPO_ROOT/.agent/skills/task-client-feedback-review/scripts/verifier_static_checks.py"
+PRIVILEGE_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check privilege 2>&1)"
+PRIVILEGE_RC=$?
+if [ "$PRIVILEGE_RC" -eq 0 ]; then
+  report PASS "verifier:unprivileged-candidate" "candidate-controlled subprocesses are demoted"
+else
+  report FAIL "verifier:unprivileged-candidate" "$PRIVILEGE_OUTPUT"
+fi
+ALIGNMENT_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check alignment 2>&1)"
+ALIGNMENT_RC=$?
+if [ "$ALIGNMENT_RC" -eq 0 ]; then
+  report PASS "verifier:explicit-promise-alignment" "mechanical preservation-promise checks pass"
+else
+  report FAIL "verifier:explicit-promise-alignment" "$ALIGNMENT_OUTPUT"
+fi
+
 # 8. Rubric format (workspace/submissions/SUBMISSION-<slug>.md, if present)
 SUB_MD="$REPO_ROOT/workspace/submissions/SUBMISSION-$SLUG.md"
 if [ -f "$SUB_MD" ]; then
@@ -458,4 +475,4 @@ if [ -n "$EMIT_ZIP" ]; then
   echo "  zip written: $EMIT_ZIP"
 fi
 [ -n "$EVIDENCE_DIR" ] && echo "  evidence written: $EVIDENCE_DIR"
-echo "RESULT: all checks passed."
+echo "RESULT: all mechanical checks passed; semantic/manual review remains required."

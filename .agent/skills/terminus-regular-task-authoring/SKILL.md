@@ -598,6 +598,13 @@ Tests must:
   `/logs/verifier` with mode `0700`; merely creating it with the default mode is
   insufficient because a demoted candidate can still read or alter reward/CTRF
   state through surviving descendants.
+- Run every candidate-controlled build and runtime command as an unprivileged
+  user distinct from the pytest/reward owner. Treat an agent-editable Makefile,
+  package script, compiler wrapper, imported module, and produced binary as
+  untrusted code. Copy source into a candidate-owned scratch directory before
+  building; never grant the candidate write access to `/tests` or
+  `/logs/verifier`. Reward-directory mode `0700` does not protect against a
+  candidate that also runs as root.
 - Execute every untrusted candidate in a fresh process group/session. On timeout
   and after normal completion, kill and reap the whole group so forked children
   cannot keep capture pipes open, survive into later cases, or touch verifier
@@ -608,6 +615,15 @@ Tests must:
   them as prompt promises. An output-write failure promise needs a
   sentinel-preservation test, and a serialized key-order promise needs a
   raw-order assertion when order is genuinely part of the consumer contract.
+- Invoke every documented command and mode in at least one discriminating test.
+  Put the rule's hard instance in that test: a documented path merely named by
+  the suite, or exercised only on a degenerate case where the rule cannot
+  matter, is not covered.
+- Prove that the verifier rejects a deliberately wrong, incomplete, or lazy
+  solution before submission. A green Oracle proves executability, not
+  rejection power. The semantic-coverage mutation campaign is the stronger
+  local form of this portal requirement; keep at least one wrong-solution
+  execution even outside Advanced+ campaigns.
 
 Avoid quality-check failures:
 
@@ -684,6 +700,9 @@ packages.
   be load-bearing for the build, that is a signal the snapshot is inconsistent,
   not a reason to keep the refactor.
 - Rebuild or regenerate artifacts when the verifier invokes a built binary.
+- Be checked independently against the visible specification on hard or edge
+  inputs not used to tune the fixtures. Oracle=1 is necessary but does not prove
+  the reference is correct when the verifier's answer key was derived from it.
 
 ## Final Checks
 

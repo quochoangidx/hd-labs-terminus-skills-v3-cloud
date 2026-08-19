@@ -90,8 +90,9 @@ established_target = N - derived_target
 - Pattern membership never substitutes for semantic rank, novelty, fairness,
   mutation coverage, or empirical difficulty evidence.
 
-Save `workspace/reports/batches/<batch-id>-pattern-mix.json` and validate it
-before scaffolding and again before handover:
+Save a schema-v2
+`workspace/reports/batches/<batch-id>-pattern-mix.json` and validate it before
+scaffolding and again before handover:
 
 ```bash
 python3 .agent/skills/task-batch/scripts/design_pattern_mix_check.py \
@@ -102,41 +103,45 @@ Manifest shape:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "batch_id": "<batch-id>",
-  "expected_count": 3,
+  "expected_count": 1,
   "candidates": [
     {
       "task_slug": "tbrain-example",
       "track": "established",
       "pattern_ids": ["P1", "P4"],
+      "frontier_stability": {
+        "dominant_topology_id": "P1",
+        "secondary_topology_id": null,
+        "amplifier_or_envelope_id": "P4",
+        "planned_mechanism_ids": ["planner-rule", "stats-refresh", "preservation"],
+        "planned_interaction_ids": ["plan-stats", "refresh-preservation"],
+        "retrieval_audit": {
+          "search_queries": ["issue wording", "failure symbol", "release version diff"],
+          "public_artifacts_checked": ["<URLs/commits checked>"],
+          "exact_solution_found": false,
+          "satisfied_mechanism_ids": [],
+          "satisfied_interaction_ids": [],
+          "disposition": "pass"
+        },
+        "orthogonal_traps": [
+          {"id": "trap-a", "semantic_node": "planner-rule", "repair_surface": "planner.rule", "natural_implementation": "<reasonable local fix>", "why_wrong": "<semantic counterexample>", "witness_ids": ["interaction-a"]},
+          {"id": "trap-b", "semantic_node": "stats-refresh", "repair_surface": "stats.refresh", "natural_implementation": "<different reasonable fix>", "why_wrong": "<different counterexample>", "witness_ids": ["interaction-b"]}
+        ],
+        "shared_fix_rationale": "<why one helper or mapping cannot repair both>"
+      },
       "causal_graph": {"nodes": ["planner", "statistics"], "edges": ["planner->statistics"]},
       "non_equivalence_rationale": "<why this is not a prior instance>",
-      "closest_portfolio_pattern_instance": "<slug or none>"
-    },
-    {
-      "task_slug": "tbrain-second-example",
-      "track": "established",
-      "pattern_ids": ["P3", "P5"],
-      "causal_graph": {"nodes": ["trace", "artifact"], "edges": ["trace->artifact"]},
-      "non_equivalence_rationale": "<why this is not a prior instance>",
-      "closest_portfolio_pattern_instance": "<slug or none>"
-    },
-    {
-      "task_slug": "tbrain-experimental",
-      "track": "derived",
-      "parent_pattern_ids": ["P2", "P8"],
-      "derived_pattern_id": "X-exogenous-recovery",
-      "transformation_operators": ["composition", "exogenous perturbation"],
-      "causal_graph": {"nodes": ["replay", "external event"], "edges": ["external event->replay"]},
-      "causal_topology_delta": "<material delta>",
-      "verifier_delta": "<material delta>",
-      "non_equivalence_rationale": "<why parents do not reduce to this shape>",
       "closest_portfolio_pattern_instance": "<slug or none>"
     }
   ]
 }
 ```
+
+A derived entry uses the same `frontier_stability` object, sets
+`dominant_topology_id` to its own `X-*` ID, and may use an applied parent `P*`
+as the secondary or `P4`/`P6` amplifier slot.
 
 ## Required Skills
 
@@ -314,6 +319,11 @@ The candidate must:
 - record its source repository, base commit, task contract, category, language, and novelty evidence.
 - occupy its preassigned `established` or `derived` slot and record the complete
   `design_pattern` receipt required by the frontier pattern catalog.
+- pass the schema-v2 frontier-stability gate: one dominant topology, a recorded
+  anti-retrieval search, and at least two orthogonal natural-but-wrong traps
+  with distinct semantic nodes/repair surfaces and disjoint witnesses. Reject
+  when one public artifact covers two planned mechanisms or any interaction;
+  use an upstream fix only as substrate for a materially new topology.
 
 Save the mined artifact and pass
 `verifier_architecture_check.py plan <candidate.json>` before scaffolding.
@@ -344,7 +354,7 @@ contain 1..N accepted tasks. Each listed task's `compared_against` must equal
 the current list minus itself. At N, set `status: "complete"`. The batch gate
 recomputes domain-key/family uniqueness and every pair's six-axis distance.
 
-Maintain the sibling pattern-mix manifest with the same accepted prefix. Use
+Maintain the schema-v2 sibling pattern-mix manifest with the same accepted prefix. Use
 `design_pattern_mix_check.py --allow-partial` while building and the strict
 default at N. Never exceed either final track allocation in a partial manifest.
 For established entries, record valid `pattern_ids`. For derived entries,
@@ -352,6 +362,8 @@ record parent IDs, an `X-*` ID, transformation operators, and material deltas on
 at least two of causal topology, work surface, verifier architecture, and
 failure geometry. Run `design_pattern_mix_check.py` after mining replacements;
 the final manifest must pass without relabeling slots.
+Never create a new schema-v1 manifest; v1 support exists only so historical
+batch evidence remains readable.
 
 Record every design input and SHA-256 under the builder's `report_inputs` in
 `quota-ledger.json`. Initial design/build requires durable-memory,
@@ -430,6 +442,9 @@ Then complete the semantic coverage gate in
 - map every public surface to platform-visible test IDs;
 - record at least three independent mechanisms and two interactions;
 - kill one plausible partial-fix mutant per mechanism and interaction;
+- retain at least one deliberately wrong/incomplete implementation as the
+  portal-required proof that the verifier rejects a wrong solution; the
+  per-node mutant campaign remains the stronger batch requirement;
 - the builder drafts the manifest and executes its mutants; the consolidated
   auditor independently reviews semantic realism after the draft is complete;
 - save `semantic-coverage.json`, cleanly applicable patches, materialized
@@ -732,7 +747,8 @@ Count a task toward `N` only when all of the following are true:
   unique domain keys and architecture families and was compared on all axes.
 - The partial pattern-mix manifest never exceeds either final track target; the
   final manifest contains the same `N` tasks and passes the nearest-whole-task
-  80/20 allocation. Each derived entry proves a non-reskin transformation.
+  80/20 allocation. Each derived entry proves a non-reskin transformation, and
+  every schema-v2 entry passes anti-retrieval and orthogonal-trap validation.
 - The task folder is complete.
 - The goal is clear and the graded domain model is inferable from visible evidence under schema version 3.
 - The frozen semantic coverage receipt passes, covers every public surface,

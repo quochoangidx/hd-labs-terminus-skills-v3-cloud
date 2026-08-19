@@ -810,6 +810,13 @@ add its raw CTRF path/hash and rerun without `--allow-missing-ctrf`. Never call
 a suite “semantic coverage” merely because Oracle passes it; use “smoke suite”
 until verifier architecture and mutation-backed semantic coverage both pass.
 
+Portal baseline: before submission, run at least one deliberately wrong,
+incomplete, or lazy implementation and confirm the verifier rejects it. Invoke
+every documented command/mode on a discriminating hard case, rebuild delivered
+binaries from submitted source, and independently spot-check the Oracle against
+the visible spec on an edge not used to tune its answer key. The task-batch
+per-node mutant campaign is stronger than this baseline and remains required.
+
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
 Verifier matrix for upstream bugfixes must include:

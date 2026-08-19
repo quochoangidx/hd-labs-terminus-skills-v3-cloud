@@ -604,6 +604,8 @@ def validate_preflight(
         required_checks = {
             "policy:static",
             "verifier:reward-dir-mode",
+            "verifier:unprivileged-candidate",
+            "verifier:explicit-promise-alignment",
             "docker:daemon",
             "docker:agent-build",
             "docker:verifier-build",

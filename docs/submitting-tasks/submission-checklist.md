@@ -90,6 +90,8 @@ stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 
 - [ ] `difficulty` in `task.toml` matches the measured tier
 - [ ] Failures reflect genuine task difficulty — not unclear instructions, environment defects, or flaky tests
+- [ ] **Checked which tests the failing runs miss.** If they keep missing the same one or few tests, the check or the instructions are likely the problem — fix that check, or state the requirement in the instruction. If they miss different tests each time, the difficulty is genuine. Either way, don't leave the difficulty rated higher just because near-complete runs count as failures
+- [ ] **Ran a deliberately wrong or incomplete solution against your own verifier and confirmed it fails**
 
 ---
 

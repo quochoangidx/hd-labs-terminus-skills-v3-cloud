@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+from datetime import timedelta
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
@@ -132,6 +133,28 @@ class ReviewRoleGuardTests(unittest.TestCase):
             guard.save(lease_path, updated)
             with self.assertRaises(ValueError):
                 guard.transition(args, root / "leases")
+
+    def test_completed_turn_can_be_reconciled_without_fabricating_hook_enforcement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lease_path = self.open_reviewers(root)[0]
+            lease = guard.load(lease_path)
+            started = guard.now()
+            ended = started + timedelta(seconds=30)
+            evidence = root / "review.md"
+            evidence.write_text("Verdict: PASS\n", encoding="utf-8")
+            args = argparse.Namespace(
+                lease=lease["lease_id"], session_id="thread-1", turn_id="turn-1",
+                started_at=started.isoformat(), ended_at=ended.isoformat(),
+                model="gpt-5.6-luna", reasoning_effort="high", evidence=evidence,
+            )
+            with redirect_stdout(StringIO()):
+                guard.reconcile_completed(args, root / "leases")
+            updated = guard.load(lease_path)
+            self.assertEqual("phase_complete", updated["status"])
+            self.assertEqual("thread-1", updated["owner"]["session_id"])
+            self.assertFalse(updated["hook_enforced"])
+            self.assertIn("unavailable", updated["tool_call_accounting"])
 
     def test_auditor_session_is_reused_for_post_probe(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

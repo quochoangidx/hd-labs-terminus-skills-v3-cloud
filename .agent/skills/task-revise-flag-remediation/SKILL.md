@@ -80,9 +80,13 @@ was described inaccurately. Do not retrofit tests to force the old narrative.
 
 ### `near_miss`
 
-Inspect the threshold. Replace hardware-sensitive or oracle-near thresholds
-with a meaningful quality floor, a structural invariant, or a broad semantic
-criterion. Difficulty may not come from narrowly missing an arbitrary number.
+Compare the exact failing test IDs across runs. Repeated failure on the same one
+or few tests points first to those checks or their instruction/evidence support;
+different misses across runs are more consistent with genuine difficulty. Keep
+this flag about difficulty: an unstated requirement is `task_specification`.
+Also replace hardware-sensitive or oracle-near thresholds with a meaningful
+quality floor, structural invariant, or broad semantic criterion. Never raise a
+tier merely because near-complete runs count as failures.
 
 ### `refusals`
 

@@ -151,8 +151,10 @@ Do not launch either fairness reviewer until all of these deterministic checks
 have real evidence:
 
 1. `instruction_preflight.py` passes.
-2. `review_task.py <task-folder> --json` has zero blockers. This first scanner
-   run does not use `--manual-review-pass`.
+2. `review_task.py <task-folder> --json --mechanical-only` has zero blockers.
+   This first scanner run does not use `--manual-review-pass`; it intentionally
+   defers only the external fairness/auditor receipts until those independent
+   roles have run. The later folder and ZIP scans use full scope.
 3. Strict `scripts/preflight.sh` passes, proving separate agent/verifier images,
    Oracle/NOP, reward-channel isolation, and noexec behavior.
 4. The verifier's expected values are independently grounded. A second

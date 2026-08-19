@@ -16,6 +16,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from verifier_static_checks import (
+    analyze_candidate_privileges,
+    unit_test_alignment_issue,
+)
+
 
 TEXT_SUFFIXES = {
     "",
@@ -530,7 +535,7 @@ def check_semantic_coverage_evidence(
         )
 
 
-def review(path: Path) -> dict:
+def review(path: Path, *, include_external_evidence: bool = True) -> dict:
     view = TaskView(path)
     findings: list[Finding] = []
     files = view.files()
@@ -760,10 +765,23 @@ def review(path: Path) -> dict:
             for name in files
             if name.startswith("tests/") and name.endswith(".py")
         )
-        runs_demoted_candidate = bool(
-            re.search(r"(?i)(_candidate_user_kwargs|\buser\s*=|[\"']user[\"']\s*:|\bnobody\b)", verifier_python)
-        )
-        if runs_demoted_candidate:
+        candidate_call_count, unsafe_candidate_calls = analyze_candidate_privileges(verifier_python)
+        if unsafe_candidate_calls:
+            locations = ", ".join(
+                f"line {call.line} ({call.function})" for call in unsafe_candidate_calls[:6]
+            )
+            if len(unsafe_candidate_calls) > 6:
+                locations += f", and {len(unsafe_candidate_calls) - 6} more"
+            add(
+                findings,
+                "blocker",
+                "verifier-unprivileged-candidate",
+                "Candidate-controlled build/runtime subprocesses must run as an unprivileged "
+                f"user, not as the pytest/reward owner; unsafe calls: {locations}.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        if candidate_call_count:
             missing_isolation = []
             if "subprocess.Popen" not in verifier_python:
                 missing_isolation.append("Popen")
@@ -794,6 +812,16 @@ def review(path: Path) -> dict:
                 and Path(name).suffix.lower() in {".md", ".txt", ".rst"}
             )
         )
+        if unit_test_alignment_issue(contract_text, verifier_python):
+            add(
+                findings,
+                "blocker",
+                "contract-unit-tests-unverified",
+                "The task promises that existing unit tests keep passing, but the verifier "
+                "does not run `go test`/`make test` or an equivalent verifier-owned preservation suite.",
+                "instruction.md",
+                "terminus-regular-task-authoring",
+            )
         order_promised = bool(
             re.search(r"(?i)(keys?.{0,32}in this order|key order|ordered keys?|sorted keys?)", contract_text)
         )
@@ -846,8 +874,9 @@ def review(path: Path) -> dict:
 
         run_ruff(view, findings)
         check_blacklisted_db(view, findings)
-        check_instruction_sufficiency_evidence(view, findings, task_slug)
-        check_semantic_coverage_evidence(view, findings, task_slug)
+        if include_external_evidence:
+            check_instruction_sufficiency_evidence(view, findings, task_slug)
+            check_semantic_coverage_evidence(view, findings, task_slug)
 
         for name in files:
             if re.search(r"(^|/)(\.DS_Store|__MACOSX|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache)(/|$)", name) or name.endswith(".pyc") or "/._" in name or name.startswith("._"):
@@ -903,6 +932,7 @@ def review(path: Path) -> dict:
             "task": task_slug,
             "path": str(path),
             "artifact_sha256": view.artifact_sha256(),
+            "evidence_scope": "full" if include_external_evidence else "mechanical_only",
             "status": status,
             "counts": {
                 "blocker": sum(f.severity == "blocker" for f in findings),
@@ -952,9 +982,31 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--review-runtime")
     parser.add_argument("--review-model")
     parser.add_argument("--review-session-id")
+    parser.add_argument(
+        "--mechanical-only",
+        action="store_true",
+        help=(
+            "Skip external fairness and semantic-review receipts during the pre-review "
+            "mechanical scan. Full scans remain required after independent review."
+        ),
+    )
     args = parser.parse_args(argv)
 
-    results = [review(Path(p)) for p in args.paths]
+    if args.mechanical_only and any(
+        (
+            args.manual_review_pass,
+            args.review_transcript,
+            args.review_runtime,
+            args.review_model,
+            args.review_session_id,
+        )
+    ):
+        parser.error("--mechanical-only cannot be combined with manual review attestation")
+
+    results = [
+        review(Path(p), include_external_evidence=not args.mechanical_only)
+        for p in args.paths
+    ]
     if args.evidence_output:
         manual_values = (
             args.manual_review_pass,

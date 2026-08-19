@@ -80,3 +80,8 @@ SHA-256 values to `quota-ledger.json` as `role_lease_receipts`.
 one phase-complete pre-freeze auditor lease whose session IDs match the actual
 Codex task turns. `--phase handover` additionally requires that same auditor
 lease to finish `post_probe`.
+
+`review_role_guard.py check` persists an overdue awaiting/active lease as
+`expired` in both runtime state and its receipt. This prevents an abandoned
+cohort from blocking every later batch while preserving the failed lease as
+quota evidence; never delete or hand-edit the stale receipt.

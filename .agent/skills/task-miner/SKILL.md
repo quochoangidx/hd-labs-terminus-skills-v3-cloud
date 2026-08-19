@@ -126,14 +126,23 @@ Before prospecting, read
 candidate to exactly one design track:
 
 - `established`: apply one or more catalogued `P*` patterns;
-- `derived`: transform or compose catalogued patterns into a candidate-local
-  experimental pattern.
+- `derived`: instantiate a registered `X-*` prototype or transform/compose
+  catalogued patterns into a candidate-local experimental pattern. Registered
+  `X-*` prototypes remain derived until the catalog's promotion rule is met.
 
 For a batch, allocate the post-mining build pool and final accepted set with the
 catalog's nearest-whole-task 80/20 rule. Replace a rejected slot from the same
 track. A domain/language/story change is a reskin, not a derived pattern.
 Single-candidate mining may use either track, but it must still record the
 track and pattern evidence.
+
+For every new Advanced+ candidate, also run the catalog's frontier-stability
+gate before cloning. Use a public issue or fixing PR only as substrate: reject
+the candidate when one reachable artifact already implements at least two
+planned mechanisms or any genuine interaction. Record two orthogonal
+natural-but-wrong implementations with distinct semantic nodes, repair
+surfaces, and disjoint witness sets. Do not defer either check until a solve
+probe.
 
 Prefer work that requires reacting to intermediate state rather than one command
 or a straight-line burst. The “at least five steps” phrase is a complexity
@@ -777,7 +786,7 @@ candidate:
     track:                 # established | derived
     pattern_ids:           # established P* IDs directly applied
     parent_pattern_ids:    # derived only: P* sources transformed/composed
-    derived_pattern_id:    # derived only: candidate-local X-* ID
+    derived_pattern_id:    # derived only: registered prototype or candidate-local X-* ID
     transformation_operators: # derived only: composition/inversion/delayed-feedback/etc.
     causal_graph:          # candidate-specific nodes and edges, not catalog prose
     causal_topology_delta: # derived only
@@ -786,6 +795,27 @@ candidate:
     failure_geometry_delta: # derived only
     non_equivalence_rationale: # why this is not a parent reskin
     closest_portfolio_pattern_instance:
+    frontier_stability:   # required for every new Advanced+ candidate
+      dominant_topology_id: # applied P* for established; own X-* for derived
+      secondary_topology_id: # optional orthogonal P* parent/applied pattern
+      amplifier_or_envelope_id: # optional; P4 or P6 only
+      planned_mechanism_ids: # >=3; exact IDs from semantic_mechanisms
+      planned_interaction_ids: # >=2; exact IDs from semantic_interactions
+      retrieval_audit:
+        search_queries:   # issue text, errors/symbols, release/version diff
+        public_artifacts_checked:
+        exact_solution_found: # boolean
+        satisfied_mechanism_ids: # must cover fewer than 2 when exact found
+        satisfied_interaction_ids: # must be empty when exact found
+        disposition:      # pass | reject
+      orthogonal_traps:   # at least 2 with pairwise-disjoint witness_ids
+        - id:
+          semantic_node:
+          repair_surface:
+          natural_implementation:
+          why_wrong:
+          witness_ids:
+      shared_fix_rationale: # why no central helper/mapping repairs every trap
   source_url:
   issue_or_pr_id:
   repo:
@@ -885,6 +915,11 @@ parent ID, one explicit transformation operator, and material deltas on at
 least two of causal topology, work surface, verifier architecture, and expected
 failure geometry. Keep derived patterns candidate-local until they satisfy the
 promotion rule in `frontier_task_design_patterns.md`.
+
+For every new Advanced+ artifact, copy `design_pattern.frontier_stability` into
+the schema-v2 pattern-mix entry and pass `design_pattern_mix_check.py` before
+cloning. Schema v1 is legacy-only. Reject rather than scaffold when retrieval
+overlap or orthogonal-trap independence fails.
 
 For domain profiles, prefer `base_commit`, `target_behavior`, `required_work`,
 `input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only

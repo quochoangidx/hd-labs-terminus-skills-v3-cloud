@@ -25,6 +25,13 @@ from the repo root.)
 
 Use `--json` when another script will consume the result.
 
+For the task-batch mechanical gate that must run before any independent review,
+use `--mechanical-only`. This skips only the external instruction-sufficiency
+and semantic-review receipts that cannot exist yet; it does not skip layout,
+metadata, isolation, privilege, Ruff, leakage, or contract-shape checks. Never
+combine it with `--manual-review-pass`, and always run the normal full scan after
+the fairness and consolidated-auditor evidence exists.
+
 For `task-batch`, run the same scanner/manual review twice at different trust
 boundaries. Before counted probes, review the task folder and save:
 
@@ -145,6 +152,11 @@ do not substitute for this review.
        build's own `Validate` already rejects, so a test passes on both nop and
        oracle = a dud). The oracle may legitimately do more than the instruction
        promises; the instruction must not promise more than the tests verify.
+     - **Documented commands and modes must actually run.** Referencing a
+       subcommand, flag, or mode in a test name, fixture, or comment is not
+       coverage. Invoke it on a case where its defining rule can change the
+       result; an easy/degenerate fixture that cannot discriminate the rule is
+       still a miss.
    - Numeric exact-string match on floating/irrational results (scanner does not
      catch; read the verifier; confirmed 2026-06 decimal-pow-precision FAILED +
      0/10 same two tests). If a test asserts `someFloatResult.String() ==
@@ -242,6 +254,18 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
 - `/logs/verifier` not prepared before pytest runs in `tests/test.sh`
 - `/logs/verifier` created without mode `0700` before reward/CTRF creation or
   before candidate execution; existence alone does not isolate the reward channel
+- candidate-controlled build commands, Makefiles, package scripts, imports, or
+  binaries run as the pytest/reward owner. Demote every untrusted build and
+  runtime process (normally to `nobody:nogroup`) and stage writable inputs and
+  outputs in a candidate-owned scratch directory; protecting `/logs/verifier`
+  with mode `0700` is ineffective when candidate code also runs as root
+- no preserved deliberately wrong/incomplete solution that the verifier kills,
+  or a suite whose assertions only check proxies such as counts, first elements,
+  field presence, or values recomputed from agent-controlled input. Oracle=1 is
+  not evidence that a wrong solution fails
+- delivered binaries graded without rebuilding from submitted source and a
+  varied/held-out input, or two agent-controlled artifacts graded separately
+  without testing their semantic equivalence
 - candidate subprocesses run without a fresh process group/session and without
   whole-group kill+reap on timeout and teardown. Dropping only the direct child
   to `nobody` does not stop descendants from holding pipes or surviving cases
