@@ -577,6 +577,49 @@ def validate_batch_index(
                 )
 
 
+def validate_candidate_ledger(
+    path: Path,
+    task_slugs: list[str],
+    incremental: bool,
+    errors: list[str],
+) -> None:
+    """Validate the adaptive candidate ledger and bind its accepted subset."""
+    data = load_json(path, errors)
+    if not data:
+        return
+    checker = (
+        Path(__file__).resolve().parents[1]
+        / ".agent"
+        / "skills"
+        / "task-batch"
+        / "scripts"
+        / "design_pattern_mix_check.py"
+    )
+    command = [sys.executable, str(checker), str(path)]
+    if incremental:
+        command.append("--allow-partial")
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        errors.append(
+            "candidate ledger: "
+            + (result.stdout + result.stderr).replace("\n", "; ").strip()
+        )
+        return
+
+    if data.get("schema_version") == 3:
+        accepted = data.get("accepted_task_slugs")
+    else:
+        accepted = [
+            entry.get("task_slug")
+            for entry in data.get("candidates", [])
+            if isinstance(entry, dict)
+        ]
+    if not isinstance(accepted, list) or set(accepted) != set(task_slugs):
+        errors.append(
+            "candidate ledger: accepted task slugs must match the batch index"
+        )
+
+
 def validate_preflight(
     data: dict,
     slug: str,
@@ -1527,6 +1570,17 @@ def main() -> int:
                 errors,
                 incremental=args.incremental_batch,
             )
+            task_slugs = batch_index.get("task_slugs")
+            if isinstance(task_slugs, list):
+                candidate_ledger_path = batch_index_path.with_name(
+                    f"{batch_index_path.stem}-pattern-mix.json"
+                )
+                validate_candidate_ledger(
+                    candidate_ledger_path,
+                    task_slugs,
+                    args.incremental_batch,
+                    errors,
+                )
     if evidence["preflight"]:
         validate_preflight(evidence["preflight"], slug, task_dir, report_dir, errors)
     if evidence["client_review"]:

@@ -5,10 +5,12 @@ task-design shapes that are plausible against frontier agents; it does not
 assign a tier. Only frozen, mutation-backed probes and platform trials provide
 difficulty evidence.
 
-## Portfolio allocation
+## Adaptive candidate portfolio
 
-Classify every candidate that passes the mining plan gate into exactly one
-track:
+Start with the domain-native failure mode, work surface, deliverable, and
+failure geometry. Do not select a pattern as a recipe for inventing those
+facts. After that design is coherent, classify every candidate that passes the
+mining plan gate into exactly one track:
 
 - `established`: apply one or more `P*` patterns below without changing the
   pattern's causal topology.
@@ -16,17 +18,19 @@ track:
   established patterns. A different domain, language, narrative, repository,
   or file format alone is a reskin and does not qualify.
 
-For a requested batch of `N`, use the nearest whole-task 80/20 allocation:
+Record every mining-plan-qualified attempt in the schema-v3 candidate ledger,
+including later rejections. The ledger has an explicit candidate budget; it
+does not reserve immutable task slots or require a rejected attempt to be
+replaced by the same track. Use roughly 20–30% derived attempts as a
+non-blocking exploration band when the budget permits. Accept the first task
+that clears every validity, fairness, and empirical difficulty gate regardless
+of track.
 
-```text
-derived_target = floor(0.20 * N + 0.5)
-established_target = N - derived_target
-```
-
-This gives 2 established + 1 derived for a three-task batch and 4 + 1 for a
-five-task batch. A rejected slot must be replaced by a candidate from the same
-track. Enforce the allocation both on the initial post-mining build pool and on
-the final accepted batch.
+Use the rolling five accepted tasks to guide later prospecting: aim for one or
+two derived tasks, no dominant topology above three of five, and no exact role
+stack three times consecutively. These are portfolio routing signals, not
+handover blockers. A qualifying task is never rejected or relabelled merely to
+repair the mix.
 
 ## Established-pattern rules
 
@@ -63,7 +67,7 @@ A derived candidate may instantiate one of the registered experimental
 prototypes below or define a candidate-local `X-*` ID. A registered prototype
 is a reusable research hypothesis, not an established pattern: the candidate
 must still record its own transformation, material deltas, causal graph, and
-non-equivalence rationale. It counts toward the derived 20% allocation.
+non-equivalence rationale. It counts as a derived exploration attempt.
 
 Keep a derived pattern experimental after one candidate. Promote it into the
 established `P*` catalog only after either (a) two structurally different
@@ -71,34 +75,58 @@ applications in different domains produce valid Advanced/Frontier evidence, or
 (b) one task is platform-confirmed Frontier and a fresh independent review
 finds the pattern generalizable. Never promote on an exploratory probe.
 
-## Frontier-stability mining gates
+## Domain-first and frontier-stability mining gates
 
 Apply these gates before scaffolding every new Advanced+ candidate. Pattern
 membership alone never clears them.
 
-1. **Typed topology:** record exactly one dominant topology, optionally one
+1. **Pattern-blind crux:** before assigning a pattern, record the domain-native
+   failure mode, native work surface, native artifact or behavior, and why the
+   challenge remains after incidental schemas, IDs, ordering, and
+   canonicalization are removed. If the crux cannot be stated without catalog
+   vocabulary, redesign or reject it.
+2. **Typed topology:** record exactly one dominant topology, optionally one
    orthogonal secondary topology, and at most one amplifier or delivery
    envelope. The dominant ID must be an applied `P*` ID for an established
    candidate or its `X-*` ID for a derived candidate. Use only `P4` or `P6` in
    the amplifier/envelope slot.
-2. **Anti-retrieval:** search the issue wording, distinctive failures, public
+3. **Anti-retrieval:** search the issue wording, distinctive failures, public
    symbols, release history, and version diffs. Record the queries and public
    artifacts checked. Reject when one public artifact already implements two
    or more planned mechanisms or any genuine interaction. An upstream fix may
    remain a substrate only when the new task's core topology is not that patch.
-3. **Orthogonal natural-fix traps:** name at least two reasonable
+4. **Orthogonal natural-fix traps:** name at least two reasonable
    implementations that are wrong for different semantic reasons. Their
    semantic nodes, repair surfaces, and planned witness IDs must be distinct;
    their witness sets must not overlap. Explain why one central helper or
    recovered mapping cannot repair both.
-4. **Fast semantic loop:** retain a deterministic local edit/measurement loop.
+5. **Convention and assertion symmetry:** enumerate every arbitrary exact
+   convention that the planned Oracle or verifier will use. Each must trace to
+   a public authority, agent-visible evidence, or explicit instruction. Reject
+   undefined fallbacks, object mappings, tie-breaks, IDs, ordering, or
+   serialization rules before building the full verifier.
+6. **Canonical runtime smoke:** prove the source builds in the canonical image
+   and the planned verifier runtime, entrypoint, dependencies, landing paths,
+   and unprivileged candidate execution are viable before Stage B.
+7. **Fast semantic loop:** retain a deterministic local edit/measurement loop.
    Search friction, cold builds, timeout pressure, and inaccessible evidence
    cannot substitute for the gates above.
 
-The schema-v2 pattern-mix manifest stores these facts under
-`frontier_stability`, including the planned mechanism and interaction IDs that
-retrieval overlap and trap nodes reference. Schema v1 remains readable only for
-historical evidence; never create a new v1 manifest.
+The schema-v3 candidate ledger stores the pattern-blind crux, convention audit,
+source-smoke receipt, structural signature, pattern-fit evidence, and
+`frontier_stability` facts. It retains rejected qualified attempts so later
+mining cannot silently reuse their topology. Schemas v1–2 remain readable only
+for historical evidence; never create a new legacy manifest.
+
+When applying common labels, prove their exact fit:
+
+- `P3` needs at least two authentic, independently meaningful evidence sources;
+  splitting one synthetic record into several files is not distributed
+  evidence.
+- `P5` needs a domain-native artifact exercised by at least two independent
+  native consumers or semantic layers.
+- `P6` needs functional correctness to interact with at least two objectively
+  graded delivery axes; extra fields, lint, or documentation do not qualify.
 
 ## P1 — `coupled-invariant-reconstruction`
 
@@ -302,6 +330,11 @@ Regardless of pattern:
 8. Treat an exact public patch that clears at least two mechanisms or any
    genuine interaction as retrieval, not reasoning evidence. Transform the
    task before building or reject it.
+9. Compare every qualified attempt, accepted or rejected, with the immediately
+   preceding attempt on causal topology, work surface, verifier architecture,
+   failure geometry, difficulty source, and artifact type. Require at least two
+   differing axes, and reject a third consecutive use of one dominant topology
+   or exact topology-role stack.
 
 ## Anti-patterns
 

@@ -2,7 +2,7 @@
 
 > **Current routing:** start with `frontier_task_design_patterns.md`. Use this
 > file only for conformance-lane history, resource claims, and legacy lever
-> calibration. It does not replace the current 80/20 established/derived
+> calibration. It does not replace the current adaptive established/derived
 > portfolio policy.
 
 > **⛔ Terminus 3 status.** The classic L1 engines (WHATWG-URL, IDNA,

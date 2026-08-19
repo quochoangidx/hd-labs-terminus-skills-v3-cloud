@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate pattern allocation and schema-v2 frontier-stability evidence."""
+"""Validate legacy fixed mixes and adaptive schema-v3 candidate portfolios."""
 
 from __future__ import annotations
 
@@ -20,6 +20,14 @@ DERIVED_DELTA_FIELDS = (
     "work_surface_delta",
     "verifier_delta",
     "failure_geometry_delta",
+)
+STRUCTURAL_SIGNATURE_FIELDS = (
+    "causal_topology",
+    "work_surface",
+    "verifier_architecture",
+    "failure_geometry",
+    "difficulty_source",
+    "artifact_type",
 )
 
 
@@ -99,7 +107,7 @@ def _validate_frontier_stability(
 ) -> None:
     stability = entry.get("frontier_stability")
     if not isinstance(stability, dict):
-        errors.append(f"{label}: schema v2 requires frontier_stability")
+        errors.append(f"{label}: schema v2+ requires frontier_stability")
         return
 
     if track == "established":
@@ -271,6 +279,284 @@ def _validate_frontier_stability(
         errors.append(f"{label}: frontier_stability.shared_fix_rationale is required")
 
 
+def _validate_schema_v3_candidate(
+    entry: dict[str, Any],
+    label: str,
+    errors: list[str],
+) -> None:
+    if entry.get("classification_timing") != "post_crux":
+        errors.append(f"{label}: classification_timing must equal post_crux")
+
+    crux = entry.get("domain_crux")
+    if not isinstance(crux, dict):
+        errors.append(f"{label}: schema v3 requires domain_crux")
+    else:
+        for field in (
+            "failure_mode",
+            "native_work_surface",
+            "native_artifact_or_behavior",
+            "difficulty_without_incidental_conventions",
+        ):
+            if not _nonempty(crux.get(field)):
+                errors.append(f"{label}: domain_crux.{field} is required")
+
+    audit = entry.get("convention_audit")
+    if not isinstance(audit, dict):
+        errors.append(f"{label}: schema v3 requires convention_audit")
+    else:
+        if audit.get("status") != "pass":
+            errors.append(f"{label}: convention_audit.status must be pass")
+        if audit.get("assertion_to_source_complete") is not True:
+            errors.append(
+                f"{label}: convention_audit.assertion_to_source_complete must be true"
+            )
+        conventions = audit.get("arbitrary_conventions")
+        if not isinstance(conventions, list):
+            errors.append(f"{label}: arbitrary_conventions must be an array")
+        else:
+            seen: set[str] = set()
+            for index, convention in enumerate(conventions):
+                item_label = f"{label}.arbitrary_conventions[{index}]"
+                if not isinstance(convention, dict):
+                    errors.append(f"{item_label}: convention must be an object")
+                    continue
+                convention_id = convention.get("id")
+                if not _nonempty(convention_id):
+                    errors.append(f"{item_label}: id is required")
+                elif convention_id in seen:
+                    errors.append(f"{item_label}: id must be unique")
+                else:
+                    seen.add(str(convention_id))
+                if convention.get("source_type") not in {
+                    "authority",
+                    "visible_evidence",
+                    "explicit_instruction",
+                }:
+                    errors.append(
+                        f"{item_label}: source_type must be authority, "
+                        "visible_evidence, or explicit_instruction"
+                    )
+                if not _nonempty(convention.get("source")):
+                    errors.append(f"{item_label}: source is required")
+
+    smoke = entry.get("source_smoke")
+    if not isinstance(smoke, dict) or smoke.get("status") != "pass":
+        errors.append(f"{label}: source_smoke.status must be pass")
+    else:
+        if not _nonempty(smoke.get("receipt")):
+            errors.append(f"{label}: source_smoke.receipt is required")
+        if not _nonempty(smoke.get("runtime_entrypoint")):
+            errors.append(f"{label}: source_smoke.runtime_entrypoint is required")
+        _string_list(
+            smoke.get("verifier_dependencies"),
+            "source_smoke.verifier_dependencies",
+            label,
+            errors,
+            min_items=1,
+        )
+        if smoke.get("unprivileged_candidate_execution") is not True:
+            errors.append(
+                f"{label}: source_smoke.unprivileged_candidate_execution must be true"
+            )
+
+    signature = entry.get("structural_signature")
+    if not isinstance(signature, dict):
+        errors.append(f"{label}: schema v3 requires structural_signature")
+    else:
+        for field in STRUCTURAL_SIGNATURE_FIELDS:
+            if not _nonempty(signature.get(field)):
+                errors.append(f"{label}: structural_signature.{field} is required")
+
+    fit = entry.get("pattern_fit_evidence")
+    if not isinstance(fit, dict):
+        errors.append(f"{label}: schema v3 requires pattern_fit_evidence")
+        return
+    stability = entry.get("frontier_stability")
+    roles = set()
+    if isinstance(stability, dict):
+        roles = {
+            value
+            for value in (
+                stability.get("dominant_topology_id"),
+                stability.get("secondary_topology_id"),
+                stability.get("amplifier_or_envelope_id"),
+            )
+            if isinstance(value, str)
+        }
+    if "P3" in roles:
+        p3 = fit.get("P3")
+        if not isinstance(p3, dict):
+            errors.append(f"{label}: applied P3 requires pattern_fit_evidence.P3")
+        else:
+            _string_list(
+                p3.get("authentic_evidence_sources"),
+                "pattern_fit_evidence.P3.authentic_evidence_sources",
+                label,
+                errors,
+                min_items=2,
+            )
+            if p3.get("synthetic_partition_only") is not False:
+                errors.append(
+                    f"{label}: P3 synthetic_partition_only must be false"
+                )
+    if "P5" in roles:
+        p5 = fit.get("P5")
+        if not isinstance(p5, dict):
+            errors.append(f"{label}: applied P5 requires pattern_fit_evidence.P5")
+        else:
+            _string_list(
+                p5.get("independent_native_consumers"),
+                "pattern_fit_evidence.P5.independent_native_consumers",
+                label,
+                errors,
+                min_items=2,
+            )
+    if "P6" in roles:
+        p6 = fit.get("P6")
+        if not isinstance(p6, dict):
+            errors.append(f"{label}: applied P6 requires pattern_fit_evidence.P6")
+        else:
+            _string_list(
+                p6.get("interacting_delivery_axes"),
+                "pattern_fit_evidence.P6.interacting_delivery_axes",
+                label,
+                errors,
+                min_items=2,
+            )
+
+
+def _validate_schema_v3_portfolio(
+    manifest: dict[str, Any],
+    candidates: list[Any],
+    expected: int,
+    allow_partial: bool,
+    errors: list[str],
+) -> tuple[list[str], list[str]]:
+    budget = manifest.get("candidate_budget")
+    if not isinstance(budget, int) or isinstance(budget, bool) or budget < expected:
+        errors.append("candidate_budget must be an integer >= expected_count")
+        budget = 0
+    if budget and len(candidates) > budget:
+        errors.append(
+            f"candidate count {len(candidates)} exceeds candidate_budget {budget}"
+        )
+    if not candidates:
+        errors.append("schema v3 requires at least one qualified candidate attempt")
+
+    history = manifest.get("portfolio_history")
+    if not isinstance(history, list):
+        errors.append("portfolio_history must be an array")
+    else:
+        for index, item in enumerate(history):
+            label = f"portfolio_history[{index}]"
+            if not isinstance(item, dict):
+                errors.append(f"{label}: entry must be an object")
+                continue
+            if not _nonempty(item.get("task_slug")):
+                errors.append(f"{label}: task_slug is required")
+            if item.get("track") not in {"established", "derived"}:
+                errors.append(f"{label}: track must be established or derived")
+            if not _nonempty(item.get("dominant_topology_id")):
+                errors.append(f"{label}: dominant_topology_id is required")
+            role_stack = item.get("role_stack")
+            if not isinstance(role_stack, list) or any(
+                not isinstance(value, str) or not value for value in role_stack
+            ):
+                errors.append(f"{label}: role_stack must be an array of non-empty strings")
+
+    accepted = manifest.get("accepted_task_slugs")
+    if not isinstance(accepted, list) or any(
+        not isinstance(item, str) or not item.strip() for item in accepted
+    ):
+        errors.append("accepted_task_slugs must be an array of non-empty strings")
+        accepted = []
+    if len(accepted) != len(set(accepted)):
+        errors.append("accepted_task_slugs must be unique")
+    if allow_partial:
+        if len(accepted) > expected:
+            errors.append("accepted task count exceeds expected_count")
+    elif len(accepted) != expected:
+        errors.append(
+            f"accepted task count {len(accepted)} does not equal expected_count {expected}"
+        )
+
+    candidate_slugs = {
+        entry.get("task_slug")
+        for entry in candidates
+        if isinstance(entry, dict) and isinstance(entry.get("task_slug"), str)
+    }
+    unknown = set(accepted) - candidate_slugs
+    if unknown:
+        errors.append(
+            f"accepted_task_slugs contains candidates absent from the ledger: {sorted(unknown)}"
+        )
+
+    for index, entry in enumerate(candidates):
+        if not isinstance(entry, dict):
+            continue
+        disposition = entry.get("disposition")
+        if disposition not in {"active", "rejected", "accepted"}:
+            errors.append(
+                f"candidates[{index}]: disposition must be active, rejected, or accepted"
+            )
+        slug = entry.get("task_slug")
+        if not allow_partial and disposition == "active":
+            errors.append(f"{slug}: final candidate ledger cannot contain active attempts")
+        if slug in accepted and disposition != "accepted":
+            errors.append(f"{slug}: accepted task must have disposition accepted")
+        if disposition == "accepted" and slug not in accepted:
+            errors.append(f"{slug}: disposition accepted requires accepted_task_slugs membership")
+        if disposition == "rejected" and not _nonempty(entry.get("rejection_reason")):
+            errors.append(f"{slug}: rejected candidate requires rejection_reason")
+
+    dominant_ids: list[str] = []
+    role_stacks: list[tuple[str, ...]] = []
+    signatures: list[dict[str, Any]] = []
+    for entry in candidates:
+        if not isinstance(entry, dict):
+            continue
+        stability = entry.get("frontier_stability")
+        if isinstance(stability, dict):
+            dominant = stability.get("dominant_topology_id")
+            dominant_ids.append(dominant if isinstance(dominant, str) else "")
+            role_stacks.append(
+                tuple(
+                    value
+                    for value in (
+                        stability.get("dominant_topology_id"),
+                        stability.get("secondary_topology_id"),
+                        stability.get("amplifier_or_envelope_id"),
+                    )
+                    if isinstance(value, str)
+                )
+            )
+        signature = entry.get("structural_signature")
+        signatures.append(signature if isinstance(signature, dict) else {})
+
+    for index in range(2, len(dominant_ids)):
+        if dominant_ids[index] and len(set(dominant_ids[index - 2 : index + 1])) == 1:
+            errors.append(
+                f"candidates[{index}]: dominant topology repeats three times consecutively"
+            )
+        if role_stacks[index] and len(set(role_stacks[index - 2 : index + 1])) == 1:
+            errors.append(
+                f"candidates[{index}]: exact pattern-role stack repeats three times consecutively"
+            )
+
+    for index in range(1, len(signatures)):
+        left = signatures[index - 1]
+        right = signatures[index]
+        if not left or not right:
+            continue
+        differences = sum(left.get(field) != right.get(field) for field in STRUCTURAL_SIGNATURE_FIELDS)
+        if differences < 2:
+            errors.append(
+                f"candidates[{index}]: consecutive candidate differs on fewer than 2 structural axes"
+            )
+
+    return accepted, dominant_ids
+
+
 def validate(
     manifest: dict[str, Any],
     catalog: dict[str, str],
@@ -280,8 +566,8 @@ def validate(
 ) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
     schema_version = manifest.get("schema_version")
-    if schema_version not in {1, 2}:
-        errors.append("schema_version must equal 1 (legacy) or 2")
+    if schema_version not in {1, 2, 3}:
+        errors.append("schema_version must equal 1 or 2 (legacy), or 3")
 
     expected = manifest.get("expected_count")
     if not isinstance(expected, int) or isinstance(expected, bool) or expected < 1:
@@ -292,7 +578,7 @@ def validate(
     if not isinstance(candidates, list):
         errors.append("candidates must be an array")
         candidates = []
-    if expected:
+    if expected and schema_version in {1, 2}:
         if allow_partial and not 1 <= len(candidates) <= expected:
             errors.append(
                 f"partial candidate count {len(candidates)} must be between 1 and {expected}"
@@ -375,39 +661,119 @@ def validate(
                     + ", ".join(DERIVED_DELTA_FIELDS)
                 )
 
-        if schema_version == 2:
+        if schema_version in {2, 3}:
             _validate_frontier_stability(entry, label, track, errors)
+        if schema_version == 3:
+            _validate_schema_v3_candidate(entry, label, errors)
 
     derived_target = (expected + 2) // 5 if expected else 0
     established_target = expected - derived_target if expected else 0
-    if allow_partial and counts["derived"] > derived_target:
-        errors.append(
-            f"derived count {counts['derived']} exceeds final target {derived_target}"
+    accepted: list[str] = []
+    advisories: list[str] = []
+    if schema_version in {1, 2}:
+        if allow_partial and counts["derived"] > derived_target:
+            errors.append(
+                f"derived count {counts['derived']} exceeds final target {derived_target}"
+            )
+        elif not allow_partial and counts["derived"] != derived_target:
+            errors.append(
+                f"derived count {counts['derived']} does not match target {derived_target}"
+            )
+        if allow_partial and counts["established"] > established_target:
+            errors.append(
+                f"established count {counts['established']} exceeds final target {established_target}"
+            )
+        elif not allow_partial and counts["established"] != established_target:
+            errors.append(
+                f"established count {counts['established']} does not match target "
+                f"{established_target}"
+            )
+    elif schema_version == 3:
+        accepted, _ = _validate_schema_v3_portfolio(
+            manifest, candidates, expected, allow_partial, errors
         )
-    elif not allow_partial and counts["derived"] != derived_target:
-        errors.append(
-            f"derived count {counts['derived']} does not match target {derived_target}"
+
+    budget = manifest.get("candidate_budget") if schema_version == 3 else expected
+    derived_min = 1 if isinstance(budget, int) and budget >= 3 else 0
+    derived_max = max(derived_min, (3 * budget + 9) // 10) if isinstance(budget, int) else 0
+    mix_in_band = derived_min <= counts["derived"] <= derived_max
+    if schema_version == 3 and len(candidates) >= 3 and not mix_in_band:
+        advisories.append(
+            "derived attempts are outside the non-blocking 20-30% exploration band"
         )
-    if allow_partial and counts["established"] > established_target:
-        errors.append(
-            f"established count {counts['established']} exceeds final target {established_target}"
-        )
-    elif not allow_partial and counts["established"] != established_target:
-        errors.append(
-            f"established count {counts['established']} does not match target "
-            f"{established_target}"
-        )
+
+    if schema_version == 3:
+        by_slug = {
+            entry.get("task_slug"): entry
+            for entry in candidates
+            if isinstance(entry, dict)
+        }
+        rolling: list[dict[str, Any]] = [
+            item
+            for item in manifest.get("portfolio_history", [])
+            if isinstance(item, dict)
+        ]
+        for slug in accepted:
+            entry = by_slug.get(slug, {})
+            stability = entry.get("frontier_stability", {})
+            rolling.append(
+                {
+                    "task_slug": slug,
+                    "track": entry.get("track"),
+                    "dominant_topology_id": stability.get("dominant_topology_id"),
+                    "role_stack": [
+                        value
+                        for value in (
+                            stability.get("dominant_topology_id"),
+                            stability.get("secondary_topology_id"),
+                            stability.get("amplifier_or_envelope_id"),
+                        )
+                        if isinstance(value, str)
+                    ],
+                }
+            )
+        window = rolling[-5:]
+        if len(window) == 5:
+            derived_accepted = sum(item.get("track") == "derived" for item in window)
+            if derived_accepted not in {1, 2}:
+                advisories.append(
+                    "rolling five accepted tasks should contain one or two derived tasks"
+                )
+            dominants = [item.get("dominant_topology_id") for item in window]
+            if any(dominants.count(value) > 3 for value in set(dominants) if value):
+                advisories.append(
+                    "one dominant topology exceeds three of the rolling five accepted tasks"
+                )
+            stacks = [tuple(item.get("role_stack") or []) for item in window]
+            if any(
+                stacks[index]
+                and stacks[index] == stacks[index - 1] == stacks[index - 2]
+                for index in range(2, len(stacks))
+            ):
+                advisories.append(
+                    "an exact role stack occurs three times consecutively in the rolling window"
+                )
 
     summary = {
         "status": "fail" if errors else "pass",
         "schema_version": schema_version,
-        "frontier_stability_required": schema_version == 2,
+        "frontier_stability_required": schema_version in {2, 3},
+        "adaptive_candidate_portfolio": schema_version == 3,
         "partial": allow_partial,
         "expected_count": expected,
-        "established_target": established_target,
-        "derived_target": derived_target,
+        "established_target": established_target if schema_version in {1, 2} else None,
+        "derived_target": derived_target if schema_version in {1, 2} else None,
         "established_count": counts["established"],
         "derived_count": counts["derived"],
+        "candidate_budget": budget,
+        "accepted_task_slugs": accepted,
+        "exploration_band": {
+            "derived_min": derived_min,
+            "derived_max": derived_max,
+            "in_band": mix_in_band,
+            "enforced": False,
+        },
+        "portfolio_advisories": advisories,
         "catalog_pattern_ids": sorted(catalog),
         "registered_experimental_pattern_ids": sorted(experimental_catalog or {}),
         "registered_experimental_used": sorted(registered_experimental_used),
@@ -428,7 +794,7 @@ def main() -> int:
     parser.add_argument(
         "--allow-partial",
         action="store_true",
-        help="Allow a non-empty accepted prefix that does not exceed final track targets.",
+        help="Allow an incomplete accepted prefix; schema v3 still validates every recorded attempt.",
     )
     args = parser.parse_args()
 

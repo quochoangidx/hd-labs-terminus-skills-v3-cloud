@@ -303,7 +303,7 @@ force Python into a special tier.
 > an idea cheaply but cannot qualify difficulty; do not assume either
 > Frontier or Base from the archetype name.
 
-The current preferred shapes and the batch 80/20 established/derived policy
+The current preferred shapes and adaptive established/derived candidate policy
 live in `.agent/skills/task-miner/frontier_task_design_patterns.md`. Pattern
 membership is a design receipt, not a difficulty claim. The completed verifier
 must still prove every candidate-specific mechanism and interaction with

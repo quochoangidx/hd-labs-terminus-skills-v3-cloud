@@ -131,9 +131,13 @@ persistent builder session with `context_mode: "informed"`. Before proposing a
 candidate, make it read hash-recorded inputs for:
 
 - the durable `AGENTS.md` campaign memory;
-- the frontier pattern catalog;
 - the current batch portfolio/design signatures;
 - relevant prior rejection or probe reports when they exist.
+
+It must then record and hash-bind the pattern-blind domain-crux card. Only after
+that checkpoint may it read the frontier pattern catalog to classify the
+design or derive a structural transformation. Record the catalog as a separate
+post-crux context input so the ordering is auditable.
 
 Do not expose these materials to fairness reviewers or blind solvers. Those
 roles remain fresh-context; the consolidated auditor remains independent.
@@ -194,5 +198,6 @@ handover command for the affected receipts only. Do not rerun fairness reviews
 or blind solves when the task snapshot is unchanged.
 
 At `expected_count`, set the batch index to `status: "complete"`, validate the
-exact 80/20 pattern mix, and rerun handover without `--incremental-batch` to
-seal the final batch index.
+schema-v3 adaptive candidate ledger and its accepted subset, and rerun handover
+without `--incremental-batch` to seal the final batch index. Do not enforce an
+exact established/derived output mix.

@@ -121,20 +121,32 @@ tasks are preferred when natural, but the primary implementation languages are
 simply recorded under metadata.languages. Python used only by the verifier does
 not count.
 
-Before prospecting, read
-`.agent/skills/task-miner/frontier_task_design_patterns.md` and assign the
-candidate to exactly one design track:
+Before consulting the pattern catalog, write a pattern-blind domain-crux card:
+
+- the natural domain failure mode;
+- the native work surface and artifact or behavior;
+- why the difficulty remains after incidental schemas, IDs, ordering, and
+  canonicalization are removed;
+- two natural but wrong repairs on distinct surfaces;
+- the direct observable behavior an isolated verifier can discriminate.
+
+Reject or redesign a candidate whose crux exists only after adding synthetic
+evidence sources or author-invented output conventions. Then read
+`.agent/skills/task-miner/frontier_task_design_patterns.md`, derive the causal
+graph and failure geometry, and classify the completed design into exactly one
+track:
 
 - `established`: apply one or more catalogued `P*` patterns;
 - `derived`: instantiate a registered `X-*` prototype or transform/compose
   catalogued patterns into a candidate-local experimental pattern. Registered
   `X-*` prototypes remain derived until the catalog's promotion rule is met.
 
-For a batch, allocate the post-mining build pool and final accepted set with the
-catalog's nearest-whole-task 80/20 rule. Replace a rejected slot from the same
-track. A domain/language/story change is a reskin, not a derived pattern.
-Single-candidate mining may use either track, but it must still record the
-track and pattern evidence.
+For a batch, record every mining-plan-qualified attempt in the schema-v3
+candidate ledger. Use the explicit candidate budget and a non-blocking 20–30%
+derived exploration band when practical; do not preassign immutable slots or
+replace a rejection with the same track. The first candidate that clears every
+quality and empirical difficulty gate may be accepted regardless of track. A
+domain/language/story change is still a reskin, not a derived pattern.
 
 For every new Advanced+ candidate, also run the catalog's frontier-stability
 gate before cloning. Use a public issue or fixing PR only as substrate: reject
@@ -143,6 +155,14 @@ planned mechanisms or any genuine interaction. Record two orthogonal
 natural-but-wrong implementations with distinct semantic nodes, repair
 surfaces, and disjoint witness sets. Do not defer either check until a solve
 probe.
+
+Before Stage B, enumerate every arbitrary exact convention used by the planned
+Oracle or verifier and trace it to a public authority, visible evidence, or an
+explicit instruction. Complete the assertion-to-source audit and canonical
+runtime/entrypoint smoke before expanding the verifier beyond a small set of
+discriminating witnesses. Preserve the structural signature and rejection
+geometry of every qualified attempt so later candidates cannot reuse it
+silently.
 
 Prefer work that requires reacting to intermediate state rather than one command
 or a straight-line burst. The “at least five steps” phrase is a complexity
@@ -382,7 +402,7 @@ mined-candidates/index.jsonl               # candidates already mined/claimed/cl
 mined-candidates/gallery_tasks_snapshot.md # task NAMES already IN the live gallery — do not duplicate
 docs/understanding-tasks/task-taxonomy.md  # authoritative Terminus 3 category/subcategory menu
 .agent/skills/task-miner/lever_patterns.md # SHARED, resource-agnostic pattern specs + claimed-resource ledger — the in-repo home of "learn the pattern, not the resource" (replaces relying on any personal memory)
-.agent/skills/task-miner/frontier_task_design_patterns.md # current frontier-resistant design catalog + established/derived 80/20 policy
+.agent/skills/task-miner/frontier_task_design_patterns.md # current frontier-resistant catalog + adaptive candidate portfolio
 ```
 
 The gallery snapshot is the **novelty gate**: if the gallery already contains the
@@ -782,6 +802,35 @@ candidate:
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
   gallery_novelty:         # novel | twist-on-existing | duplicate  (Terminus 3: reject both twist-on-existing and duplicate)
   objective_type:          # concise domain/work-surface label
+  classification_timing: post_crux
+  disposition:             # active | rejected | accepted
+  rejection_reason:        # required when rejected
+  domain_crux:
+    failure_mode:
+    native_work_surface:
+    native_artifact_or_behavior:
+    difficulty_without_incidental_conventions:
+  convention_audit:
+    status: pass
+    assertion_to_source_complete: true
+    arbitrary_conventions:
+      - id:
+        source_type:       # authority | visible_evidence | explicit_instruction
+        source:
+  source_smoke:
+    status: pass
+    receipt:
+    runtime_entrypoint:
+    verifier_dependencies:
+    unprivileged_candidate_execution: true
+  structural_signature:
+    causal_topology:
+    work_surface:
+    verifier_architecture:
+    failure_geometry:
+    difficulty_source:
+    artifact_type:
+  pattern_fit_evidence:    # include P3/P5/P6 entries only when those labels apply
   design_pattern:
     track:                 # established | derived
     pattern_ids:           # established P* IDs directly applied
@@ -916,10 +965,13 @@ least two of causal topology, work surface, verifier architecture, and expected
 failure geometry. Keep derived patterns candidate-local until they satisfy the
 promotion rule in `frontier_task_design_patterns.md`.
 
-For every new Advanced+ artifact, copy `design_pattern.frontier_stability` into
-the schema-v2 pattern-mix entry and pass `design_pattern_mix_check.py` before
-cloning. Schema v1 is legacy-only. Reject rather than scaffold when retrieval
-overlap or orthogonal-trap independence fails.
+For every new Advanced+ artifact, copy the pattern-blind crux, convention
+audit, source smoke, structural signature, pattern-fit evidence, and
+`design_pattern.frontier_stability` into the schema-v3 candidate ledger and
+pass `design_pattern_mix_check.py --allow-partial` before cloning. Schemas v1–2
+are legacy-only. Reject rather than scaffold when retrieval overlap,
+orthogonal-trap independence, convention symmetry, runtime viability, or
+structural diversity fails.
 
 For domain profiles, prefer `base_commit`, `target_behavior`, `required_work`,
 `input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only

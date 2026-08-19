@@ -70,47 +70,82 @@ When invoked:
 - Keep mining replacements until the quota is met.
 - Treat every invocation as a fresh batch. Do not port, reskin, or reuse an existing task unless the user explicitly requests that separately.
 
-## Design Pattern Portfolio — 80/20
+## Adaptive Candidate Design Portfolio
 
-Read `.agent/skills/task-miner/frontier_task_design_patterns.md` before mining.
-Allocate the batch to two immutable slot types:
+Design each candidate from its domain-native failure mode, work surface, and
+deliverable before consulting the pattern catalog. Extract the causal graph and
+failure geometry, then classify the completed design:
 
-```text
-derived_target = floor(0.20 * N + 0.5)
-established_target = N - derived_target
-```
+- `established` applies one dominant `P*` topology, with at most one orthogonal
+  secondary topology and one P4/P6 amplifier or envelope.
+- `derived` creates an `X-*` topology by transforming or composing established
+  parents across at least two structural axes. Domain, language, repository,
+  narrative, or file-format changes alone remain reskins.
 
-- `established` slots apply one or more current `P*` patterns.
-- `derived` slots create an experimental `X-*` pattern by transforming or
-  composing the `P*` catalog. A domain, language, repository, story, or file
-  format change alone is a reskin and fails the slot.
-- Enforce the allocation on both the candidates that pass the mining plan gate
-  and the final accepted set. If a candidate is rejected later, replace it with
-  the same slot type.
-- Pattern membership never substitutes for semantic rank, novelty, fairness,
-  mutation coverage, or empirical difficulty evidence.
+Do not preassign immutable task slots. Record every mining-plan-qualified
+attempt, including later rejections, against the explicit user candidate
+budget. Use roughly 20–30% derived attempts as a non-blocking exploration band
+when the budget permits. A rejection may be followed by either track, and the
+first task that clears every gate may be accepted regardless of track.
 
-Save a schema-v2
-`workspace/reports/batches/<batch-id>-pattern-mix.json` and validate it before
-scaffolding and again before handover:
+Guide future mining with the rolling five accepted tasks: aim for one or two
+derived tasks, no dominant topology above three of five, and no exact role stack
+three times consecutively. Portfolio drift changes priority; it never blocks
+handover or justifies relabelling a candidate.
+
+Save a schema-v3
+`workspace/reports/batches/<batch-id>-pattern-mix.json`. Validate it with
+`--allow-partial` before scaffolding and without that flag at final handover:
 
 ```bash
 python3 .agent/skills/task-batch/scripts/design_pattern_mix_check.py \
-  workspace/reports/batches/<batch-id>-pattern-mix.json
+  workspace/reports/batches/<batch-id>-pattern-mix.json --allow-partial
 ```
 
 Manifest shape:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "batch_id": "<batch-id>",
   "expected_count": 1,
+  "candidate_budget": 6,
+  "portfolio_history": [],
+  "accepted_task_slugs": [],
   "candidates": [
     {
       "task_slug": "tbrain-example",
+      "classification_timing": "post_crux",
+      "disposition": "active",
       "track": "established",
       "pattern_ids": ["P1", "P4"],
+      "domain_crux": {
+        "failure_mode": "<natural domain failure>",
+        "native_work_surface": "<real work surface>",
+        "native_artifact_or_behavior": "<graded native outcome>",
+        "difficulty_without_incidental_conventions": "<remaining intrinsic challenge>"
+      },
+      "convention_audit": {
+        "status": "pass",
+        "assertion_to_source_complete": true,
+        "arbitrary_conventions": []
+      },
+      "source_smoke": {
+        "status": "pass",
+        "receipt": "<receipt path>",
+        "runtime_entrypoint": "<minimal verifier entrypoint smoke>",
+        "verifier_dependencies": ["<runtime>", "pytest"],
+        "unprivileged_candidate_execution": true
+      },
+      "structural_signature": {
+        "causal_topology": "<topology>",
+        "work_surface": "<surface>",
+        "verifier_architecture": "<architecture>",
+        "failure_geometry": "<geometry>",
+        "difficulty_source": "<source>",
+        "artifact_type": "<artifact>"
+      },
+      "pattern_fit_evidence": {},
       "frontier_stability": {
         "dominant_topology_id": "P1",
         "secondary_topology_id": null,
@@ -139,9 +174,16 @@ Manifest shape:
 }
 ```
 
-A derived entry uses the same `frontier_stability` object, sets
+A derived entry uses the same domain-first evidence and `frontier_stability`
+object, sets
 `dominant_topology_id` to its own `X-*` ID, and may use an applied parent `P*`
 as the secondary or `P4`/`P6` amplifier slot.
+
+Only a candidate that passed taxonomy, novelty, anti-retrieval, domain crux,
+convention symmetry, canonical source/runtime smoke, topology, and verifier-plan
+gates counts toward the candidate budget. Raw ideas and early taxonomy failures
+do not count. Pattern membership never substitutes for semantic rank, fairness,
+mutation coverage, or empirical difficulty evidence.
 
 ## Required Skills
 
@@ -226,12 +268,14 @@ semantic `review`, folder `manual_review`, and task-style `auditor` records the
 same real runtime/model/session/transcript provenance.
 
 The design/build agent is not fresh-context. Keep one persistent informed
-Sol-medium builder session and make it read the durable campaign memory, frontier
-pattern catalog, current batch portfolio, and relevant rejection/probe reports
-before choosing a design. Send fairness/auditor findings back to that same
-builder. Require a finding-by-finding critique receipt (`accept`, `challenge`,
-or `partial`, with evidence and action) before remediation. Never leak this
-builder context into the fresh fairness reviewers or blind solvers.
+Sol-medium builder session. Before choosing a candidate, make it read the
+durable campaign memory, current batch portfolio, and relevant rejection/probe
+reports, then record and hash-bind the pattern-blind domain-crux card. Only
+after that may it read the frontier pattern catalog to classify the design or
+derive a structural transformation. Send fairness/auditor findings back to
+that same builder. Require a finding-by-finding critique receipt (`accept`,
+`challenge`, or `partial`, with evidence and action) before remediation. Never
+leak this builder context into the fresh fairness reviewers or blind solvers.
 
 Run deterministic prompt/scanner/isolation/anti-cheat/artifact-independence
 gates before launching the fairness pair. Allow at most one fairness
@@ -293,7 +337,7 @@ always happen first. Only the final handover in Step 7 increments the counter.
 Handover each finished task immediately using the incremental batch index. A
 later task is screened against every earlier accepted task; on a diversity
 collision, reject the new task. When the index reaches `N`, seal the complete
-batch index and pattern mix mechanically. Do not rerun fairness reviews or
+batch index and adaptive candidate ledger mechanically. Do not rerun fairness reviews or
 blind solves for unchanged task snapshots merely because a peer was added.
 
 ### 1. Mine a Fresh Candidate
@@ -316,14 +360,16 @@ The candidate must:
   across at least six clusters for `cheap_deterministic`, or 20–80 scenarios
   across at least four clusters for `expensive_stateful`, with at least two
   cross-cluster scenarios and coverage of every promised public surface;
-- record its source repository, base commit, task contract, category, language, and novelty evidence.
-- occupy its preassigned `established` or `derived` slot and record the complete
-  `design_pattern` receipt required by the frontier pattern catalog.
-- pass the schema-v2 frontier-stability gate: one dominant topology, a recorded
+- record its source repository, base commit, task contract, category, language, and novelty evidence;
+- define the pattern-blind domain crux and pass the convention/assertion audit
+  before assigning its `established` or `derived` classification;
+- pass the schema-v3 frontier-stability gate: one dominant topology, a recorded
   anti-retrieval search, and at least two orthogonal natural-but-wrong traps
   with distinct semantic nodes/repair surfaces and disjoint witnesses. Reject
   when one public artifact covers two planned mechanisms or any interaction;
-  use an upstream fix only as substrate for a materially new topology.
+  use an upstream fix only as substrate for a materially new topology;
+- pass the canonical-image source/runtime/entrypoint smoke before it is added
+  to the candidate ledger and before Stage B begins.
 
 Save the mined artifact and pass
 `verifier_architecture_check.py plan <candidate.json>` before scaffolding.
@@ -331,10 +377,12 @@ Reject weak or thin candidates before building. Do not fill quota with ports or 
 
 Maintain `workspace/reports/<slug>/design-signature.json` for one batch ID. It
 must include a unique `domain_key`, a unique `architecture_family`, and all six
-structural axes. Compare every new candidate against every already accepted or
-shortlisted task in this invocation; reject a duplicate domain key/family or a
-pair matching on more than four axes. Surface category/language changes do not
-clear this gate.
+structural axes. Compare every qualified attempt against accepted, shortlisted,
+and rejected qualified attempts in this invocation. Consecutive attempts must
+differ on at least two axes; reject duplicate domain keys/families, a pair
+matching more than four axes, a third consecutive dominant topology, or a third
+consecutive exact role stack. Surface category/language changes do not clear
+this gate.
 
 Maintain one shared `workspace/reports/batches/<batch-id>.json`:
 
@@ -354,16 +402,14 @@ contain 1..N accepted tasks. Each listed task's `compared_against` must equal
 the current list minus itself. At N, set `status: "complete"`. The batch gate
 recomputes domain-key/family uniqueness and every pair's six-axis distance.
 
-Maintain the schema-v2 sibling pattern-mix manifest with the same accepted prefix. Use
-`design_pattern_mix_check.py --allow-partial` while building and the strict
-default at N. Never exceed either final track allocation in a partial manifest.
-For established entries, record valid `pattern_ids`. For derived entries,
-record parent IDs, an `X-*` ID, transformation operators, and material deltas on
-at least two of causal topology, work surface, verifier architecture, and
-failure geometry. Run `design_pattern_mix_check.py` after mining replacements;
-the final manifest must pass without relabeling slots.
-Never create a new schema-v1 manifest; v1 support exists only so historical
-batch evidence remains readable.
+Maintain the schema-v3 sibling candidate ledger independently of the accepted
+prefix. Append every mining-plan-qualified attempt and preserve its final
+`active`, `rejected`, or `accepted` disposition. Use
+`design_pattern_mix_check.py --allow-partial` before scaffolding and while the
+batch is building; at N, list exactly the accepted slugs and run the strict
+default. The strict gate validates evidence and the accepted subset, not an
+exact track allocation. A replacement may use either track. Schemas v1–2 remain
+readable only for historical evidence; never create a new legacy manifest.
 
 Record every design input and SHA-256 under the builder's `report_inputs` in
 `quota-ledger.json`. Initial design/build requires durable-memory,
@@ -384,6 +430,13 @@ Scaffold the task and build the agent-visible contract plus verifier skeleton:
 
 Keep the task's domain aligned with its exact category/subcategory pair. Python
 used only by the verifier is not an implementation language.
+
+Before expanding to the full verifier breadth, implement 6–10 discriminating
+witnesses that cover the proposed mechanisms, interactions, and arbitrary
+conventions. Run the assertion-to-source audit against those witnesses. Reject
+or narrow the candidate now if the contract, Oracle model, and observable
+assertions cannot be made symmetric; do not multiply an unresolved convention
+into dozens of fixtures.
 
 Build the verifier skeleton before the Oracle. Collect the exact
 platform-visible IDs and create `workspace/reports/<slug>/verifier-matrix.json`,
@@ -745,10 +798,12 @@ Count a task toward `N` only when all of the following are true:
 - The incremental batch index contains the task and every accepted predecessor;
   the final sealed index contains exactly `N` tasks. Every listed pair has
   unique domain keys and architecture families and was compared on all axes.
-- The partial pattern-mix manifest never exceeds either final track target; the
-  final manifest contains the same `N` tasks and passes the nearest-whole-task
-  80/20 allocation. Each derived entry proves a non-reskin transformation, and
-  every schema-v2 entry passes anti-retrieval and orthogonal-trap validation.
+- The schema-v3 candidate ledger contains every qualified attempt, stays within
+  the explicit candidate budget, preserves rejected dispositions, and lists
+  the same `N` accepted tasks as the final batch index. It passes domain-crux,
+  convention-symmetry, source-smoke, structural-diversity, anti-retrieval, and
+  orthogonal-trap validation without enforcing an exact track allocation. Each
+  derived entry still proves a non-reskin transformation.
 - The task folder is complete.
 - The goal is clear and the graded domain model is inferable from visible evidence under schema version 3.
 - The frozen semantic coverage receipt passes, covers every public surface,
@@ -808,6 +863,8 @@ Report one row per accepted task with:
 - submission file path;
 - final ZIP SHA-256 and handover receipt path.
 
-Also list any discarded candidates and their concise rejection reasons. Distinguish verified results from unavailable external checks.
-Report the established/derived count and the pattern IDs used. For every
-derived task, include its `X-*` ID and one-sentence non-equivalence rationale.
+Also list every qualified discarded candidate and its concise rejection reason;
+distinguish verified results from unavailable external checks. Report the
+candidate-budget usage, established/derived attempt counts, accepted tracks,
+pattern IDs, and any non-blocking rolling-portfolio advisories. For every
+derived attempt, include its `X-*` ID and one-sentence non-equivalence rationale.

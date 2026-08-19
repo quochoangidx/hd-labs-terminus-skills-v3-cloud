@@ -50,6 +50,47 @@ class DesignPatternMixTests(unittest.TestCase):
             "shared_fix_rationale": "authority choice and cache invalidation need separate repairs",
         }
 
+    @classmethod
+    def _schema_v3_candidate(cls, slug: str = "tbrain-one") -> dict:
+        return {
+            "task_slug": slug,
+            "classification_timing": "post_crux",
+            "disposition": "active",
+            "track": "established",
+            "pattern_ids": ["P1"],
+            "domain_crux": {
+                "failure_mode": "durable state becomes stale after replay",
+                "native_work_surface": "journal recovery engine",
+                "native_artifact_or_behavior": "recovered database state",
+                "difficulty_without_incidental_conventions": "ordering and invalidation interact",
+            },
+            "convention_audit": {
+                "status": "pass",
+                "assertion_to_source_complete": True,
+                "arbitrary_conventions": [],
+            },
+            "source_smoke": {
+                "status": "pass",
+                "receipt": "source-smoke.json",
+                "runtime_entrypoint": "python3 -m pytest --version",
+                "verifier_dependencies": ["python3", "pytest"],
+                "unprivileged_candidate_execution": True,
+            },
+            "structural_signature": {
+                "causal_topology": "replay-invalidation",
+                "work_surface": "journal",
+                "verifier_architecture": "fault-injection",
+                "failure_geometry": "stale-derived-state",
+                "difficulty_source": "ordering-invariant",
+                "artifact_type": "database-state",
+            },
+            "pattern_fit_evidence": {},
+            "causal_graph": {"nodes": ["replay", "cache"], "edges": ["replay->cache"]},
+            "non_equivalence_rationale": "new recovery interaction",
+            "closest_portfolio_pattern_instance": "none",
+            "frontier_stability": cls._frontier_stability(),
+        }
+
     def test_catalog_registers_frontier_experimental_prototypes(self) -> None:
         catalog = SCRIPT.parents[2] / "task-miner" / "frontier_task_design_patterns.md"
         self.assertEqual(
@@ -267,6 +308,148 @@ class DesignPatternMixTests(unittest.TestCase):
         }
         errors, _ = mix.validate(manifest, {"P1": "coupled", "P3": "evidence"})
         self.assertTrue(any("exactly match declared topology roles" in error for error in errors))
+
+    def test_schema_v3_accepts_active_candidate_before_acceptance(self) -> None:
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [self._schema_v3_candidate()],
+        }
+        errors, summary = mix.validate(
+            manifest, {"P1": "coupled"}, allow_partial=True
+        )
+        self.assertEqual([], errors)
+        self.assertTrue(summary["adaptive_candidate_portfolio"])
+        self.assertFalse(summary["exploration_band"]["enforced"])
+
+    def test_schema_v3_final_acceptance_does_not_require_exact_mix(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["disposition"] = "accepted"
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": [],
+            "accepted_task_slugs": ["tbrain-one"],
+            "candidates": [candidate],
+        }
+        errors, summary = mix.validate(manifest, {"P1": "coupled"})
+        self.assertEqual([], errors)
+        self.assertEqual(["tbrain-one"], summary["accepted_task_slugs"])
+
+    def test_schema_v3_final_rejects_unresolved_active_attempt(self) -> None:
+        accepted = self._schema_v3_candidate("tbrain-accepted")
+        accepted["disposition"] = "accepted"
+        active = self._schema_v3_candidate("tbrain-active")
+        active["frontier_stability"]["dominant_topology_id"] = "P2"
+        active["pattern_ids"] = ["P2"]
+        active["structural_signature"]["causal_topology"] = "recovery-state-machine"
+        active["structural_signature"]["work_surface"] = "transaction-log"
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": [],
+            "accepted_task_slugs": ["tbrain-accepted"],
+            "candidates": [accepted, active],
+        }
+        errors, _ = mix.validate(manifest, {"P1": "coupled", "P2": "recovery"})
+        self.assertTrue(any("cannot contain active attempts" in error for error in errors))
+
+    def test_schema_v3_rejects_untraceable_convention(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["convention_audit"]["arbitrary_conventions"] = [
+            {"id": "tie-break", "source_type": "oracle", "source": "hidden"}
+        ]
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [candidate],
+        }
+        errors, _ = mix.validate(manifest, {"P1": "coupled"}, allow_partial=True)
+        self.assertTrue(any("source_type" in error for error in errors))
+
+    def test_schema_v3_rejects_third_repeated_topology(self) -> None:
+        candidates = [
+            self._schema_v3_candidate(f"tbrain-{index}") for index in range(3)
+        ]
+        for index, candidate in enumerate(candidates):
+            candidate["structural_signature"]["work_surface"] = f"surface-{index}"
+            candidate["structural_signature"]["artifact_type"] = f"artifact-{index}"
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": candidates,
+        }
+        errors, _ = mix.validate(manifest, {"P1": "coupled"}, allow_partial=True)
+        self.assertTrue(any("repeats three times" in error for error in errors))
+
+    def test_schema_v3_requires_two_structural_differences(self) -> None:
+        first = self._schema_v3_candidate("tbrain-first")
+        second = self._schema_v3_candidate("tbrain-second")
+        second["structural_signature"]["work_surface"] = "another surface"
+        second["frontier_stability"]["dominant_topology_id"] = "P2"
+        second["pattern_ids"] = ["P2"]
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [first, second],
+        }
+        errors, _ = mix.validate(
+            manifest, {"P1": "coupled", "P2": "recovery"}, allow_partial=True
+        )
+        self.assertTrue(any("fewer than 2 structural axes" in error for error in errors))
+
+    def test_schema_v3_requires_specific_p3_fit_evidence(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["pattern_ids"] = ["P3"]
+        candidate["frontier_stability"]["dominant_topology_id"] = "P3"
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [candidate],
+        }
+        errors, _ = mix.validate(manifest, {"P3": "evidence"}, allow_partial=True)
+        self.assertTrue(any("pattern_fit_evidence.P3" in error for error in errors))
+
+    def test_schema_v3_rolling_mix_is_advisory_not_blocking(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["disposition"] = "accepted"
+        history = [
+            {
+                "task_slug": f"tbrain-history-{index}",
+                "track": "established",
+                "dominant_topology_id": "P1",
+                "role_stack": ["P1"],
+            }
+            for index in range(4)
+        ]
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 6,
+            "portfolio_history": history,
+            "accepted_task_slugs": ["tbrain-one"],
+            "candidates": [candidate],
+        }
+        errors, summary = mix.validate(manifest, {"P1": "coupled"})
+        self.assertEqual([], errors)
+        self.assertTrue(summary["portfolio_advisories"])
 
 
 if __name__ == "__main__":

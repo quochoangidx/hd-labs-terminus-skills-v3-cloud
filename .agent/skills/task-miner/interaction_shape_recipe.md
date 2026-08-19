@@ -1,7 +1,7 @@
 # Interaction/Scale Shape Recipe — building tasks OUTSIDE the spec-engine mold
 
 > **Current routing:** use `frontier_task_design_patterns.md` as the
-> authoritative catalog and 80/20 established/derived policy. This file keeps
+> authoritative catalog and adaptive candidate-portfolio policy. This file keeps
 > detailed historical calibration for three interaction shapes; it does not
 > define a separate batch allocation or override the current catalog.
 
