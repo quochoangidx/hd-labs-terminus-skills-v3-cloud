@@ -41,7 +41,7 @@ folder and ZIP. The report is local audit evidence, not agent-facing material.
     "reviewers": [
       {
         "reviewer_id": "contract-review-1",
-        "runtime": "codex",
+        "runtime": "<codex|claude-code>",
         "model": "<actual model>",
         "session_id": "<actual fresh session id>",
         "fresh_context": true,
@@ -52,7 +52,7 @@ folder and ZIP. The report is local audit evidence, not agent-facing material.
       },
       {
         "reviewer_id": "contract-review-2",
-        "runtime": "codex",
+        "runtime": "<codex|claude-code>",
         "model": "<actual model>",
         "session_id": "<different fresh session id>",
         "fresh_context": true,
@@ -79,7 +79,7 @@ folder and ZIP. The report is local audit evidence, not agent-facing material.
 Run:
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py \
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py \
   workspace/<slug> workspace/reports/<slug>/instruction-sufficiency.json
 ```
 

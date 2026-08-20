@@ -350,7 +350,7 @@ fix every finding (structure, length, hint phrases, leakage) before the first
 platform check:
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
 ```
 
 Write like a real engineer describing the requested observable work:
@@ -832,7 +832,7 @@ Recommended smoke command before Harbor:
 
 ```bash
 cd <task-folder>
-python3 -m py_compile tests/test_outputs.py
+<repo-root>/scripts/python3 -m py_compile tests/test_outputs.py
 ```
 
 Then run oracle and nop. A broken verifier must be fixed before any difficulty
@@ -1076,8 +1076,8 @@ tier measurement.
 If Docker is not running, still run static checks:
 
 ```bash
-python3 -m py_compile <python files>
-python3 - <<'PY'
+scripts/python3 -m py_compile <python files>
+scripts/python3 - <<'PY'
 import tomllib
 tomllib.load(open("task.toml", "rb"))
 PY

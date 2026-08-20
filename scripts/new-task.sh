@@ -19,7 +19,7 @@ LANG_ID="${2:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
 CATEGORY="${3:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
 SUBCATEGORY="${4:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
 
-if ! POLICY_RESULT="$(python3 "$REPO_ROOT/scripts/task-policy.py" category "$CATEGORY" "$SUBCATEGORY" 2>&1)"; then
+if ! POLICY_RESULT="$("$REPO_ROOT/scripts/python3" "$REPO_ROOT/scripts/task-policy.py" category "$CATEGORY" "$SUBCATEGORY" 2>&1)"; then
   echo "$POLICY_RESULT" >&2
   exit 1
 fi

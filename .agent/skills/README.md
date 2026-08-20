@@ -14,6 +14,10 @@ validate → package) without further prompting. Tooling: `scripts/new-task.sh <
 <lang> <category> <subcategory>` stamps a hygiene-pre-wired skeleton; `scripts/preflight.sh <task-dir>`
 machine-checks the mechanical gates before every zip.
 
+Run repository Python helpers through `scripts/python3`; it selects Python
+>=3.11 consistently for Claude Code, Codex, and direct shell use. Set
+`TERMINUS_PYTHON` only when an explicit interpreter override is needed.
+
 | Stage | Skill(s) |
 |---|---|
 | 1. Mine candidates (metadata only) | `task-miner` (+ `find-task-prs` for the PR lane); rules-first category gate via `task-miner/category_rules.md` before any build |
@@ -57,7 +61,10 @@ or timeouts.
 
 ## Editing rules for this directory
 
-Skills live ONLY here; `.claude/skills`, `.codex/skills`, `.gemini/skills` are symlinks
-to `.agent/skills` — never fork a copy. Battle-tested lessons get codified into the
+Skills live ONLY here; `.claude/skills`, `.codex/skills`, `.gemini/skills`, and
+`.cline/skills` are symlinks to `.agent/skills` — never fork a copy. Claude-only
+agent launch profiles may live in `.claude/agents/` when Claude's Agent API
+cannot express a required control per call; policy still remains in the shared
+skill. Battle-tested lessons get codified into the
 relevant SKILL.md (dated, with the incident), not left in personal memory; when a rule
 must exist in two files (for example category availability), each copy names its mirror.

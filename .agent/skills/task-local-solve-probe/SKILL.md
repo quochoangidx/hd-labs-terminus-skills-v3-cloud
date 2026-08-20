@@ -40,13 +40,17 @@ confidence.
   orchestration is stable.
 - Select the default blind solver from the active runtime — and PIN it
   mechanically, do not rely on inheritance:
-  - Codex: use `gpt-5.6` with `reasoning_effort: medium`, even if the manager
-    chat is using a higher effort.
-  - Claude Code: use Claude Opus 5 with medium reasoning. Pass `model: opus`
-    and the medium reasoning setting EXPLICITLY on every probe Agent call —
-    subagents inherit the session model by default, so a session running a
-    stronger tier that omits the parameter probes with a solver outside the
-    current platform pool (Opus 5 + GPT-5.6), distorting the tier estimate.
+  - Codex: launch a fresh subagent with an explicit GPT-5.6-family model
+    (`gpt-5.6-sol` when that is the available runtime identifier) and
+    `reasoning_effort: medium`, even if the manager chat uses another effort.
+  - Claude Code: launch the project agent with
+    `subagent_type: terminus-probe` and `model: opus`. The checked-in
+    `.claude/agents/terminus-probe.md` profile pins `effort: medium`; Claude's
+    Agent call has no per-call effort field, so do not invent one or rely on
+    the parent session effort. Run the agent with its `cwd` set to the isolated
+    `run_N/solve/` directory.
+  Both routes must create a fresh solver context and record the actual resolved
+  model. This keeps the platform pool comparison (Opus 5 + GPT-5.6) honest.
   Do not silently substitute a cheaper OR stronger model across runtimes. Use a
   different model or higher reasoning effort only when the user explicitly asks
   for it.
@@ -118,14 +122,15 @@ confidence.
 Use the helper script when possible:
 
 ```bash
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare workspace/tasks/tbrain-example
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py materialize workspace/local-solve-probes/tbrain-example/run_1
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare workspace/tasks/tbrain-example
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py materialize workspace/local-solve-probes/tbrain-example/run_1
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
   workspace/local-solve-probes/tbrain-example/run_1 \
   --result fail --type semantic \
   --notes "missed target-specific manifest section" \
-  --runner codex-subagent --runtime codex --model gpt-5.6 \
+  --runner '<codex-subagent|claude-agent>' \
+  --runtime '<codex|claude-code>' --model '<actual resolved model>' \
   --reasoning-effort medium --agent-session-id '<runtime agent id>' \
   --launch-command '<runtime generated launch provenance>' \
   --agent-transcript /path/to/raw-agent-transcript.md \
@@ -133,7 +138,7 @@ python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
   --verification-ctrf /path/to/verification-ctrf.json \
   --verification-command '<offline verifier command>' \
   --verification-exit-code 1 --reward 0
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
 ```
 
 `summarize` is diagnostic only. It returns `needs_handover_validation` for a

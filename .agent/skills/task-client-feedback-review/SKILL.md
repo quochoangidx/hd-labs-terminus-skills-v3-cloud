@@ -16,7 +16,7 @@ the user explicitly asks for fixes.
 1. Run the bundled scanner:
 
 ```bash
-python .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
+scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
 ```
 
 (The script lives in-repo at
@@ -29,7 +29,7 @@ For `task-batch`, preserve the manual semantic-review transcript and write a
 hash-bound combined receipt for the exact final ZIP:
 
 ```bash
-python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
   submissions/<slug>.zip --json --manual-review-pass \
   --review-transcript workspace/reports/<slug>/client-review-transcript.md \
   --review-runtime <actual-runtime> --review-model <actual-model> \

@@ -326,7 +326,7 @@ The instruction_check LLMaJ reviewer applies "state the problem, not the solutio
 Fast first pass — run the shared mechanical scanner, then audit the content rules manually:
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <unzipped-task-dir>
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <unzipped-task-dir>
 ```
 
 ### 3a. Structure and style (review — leakage/prescription can block)
@@ -430,15 +430,15 @@ Environment docs must read like real engineering documents, not solution walkthr
 ### 4a. Ruff
 
 ```bash
-cd "$TMPDIR" && python3 -m ruff check tests/test_outputs.py
+cd "$TMPDIR" && ruff check tests/test_outputs.py
 ```
 
-**Auto-fix**: `python3 -m ruff check --fix tests/test_outputs.py`
+**Auto-fix**: `ruff check --fix tests/test_outputs.py`
 
 ### 4b. Python syntax
 
 ```bash
-python3 -m py_compile tests/test_outputs.py
+<repo-root>/scripts/python3 -m py_compile tests/test_outputs.py
 ```
 
 ### 4c. TOML syntax

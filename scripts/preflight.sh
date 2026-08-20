@@ -16,16 +16,10 @@
 # Exit 0 = no FAIL rows (WARNs allowed). Docker checks need a running daemon.
 set -uo pipefail
 
-# task-policy.py uses tomllib. Prefer a modern interpreter on authoring hosts
-# where /usr/bin/python3 may still be Python 3.9.
-PYTHON_BIN=""
-for python_candidate in python3.13 python3.12 python3.11 /opt/homebrew/opt/python@3.13/bin/python3.13 python3; do
-  if command -v "$python_candidate" >/dev/null 2>&1; then
-    PYTHON_BIN="$(command -v "$python_candidate")"
-    break
-  fi
-done
-[ -n "$PYTHON_BIN" ] || { echo "python3 runtime not found" >&2; exit 2; }
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# All repository helpers share one version gate. This avoids silently selecting
+# macOS /usr/bin/python3 (3.9) for scripts that require tomllib.
+PYTHON_BIN="$REPO_ROOT/scripts/python3"
 
 TASK_DIR=""
 NO_DOCKER=0
@@ -55,7 +49,6 @@ done
 [ -n "$TASK_DIR" ] || { usage >&2; exit 2; }
 TASK_DIR="$(cd "$TASK_DIR" && pwd)" || exit 2
 SLUG="$(basename "$TASK_DIR")"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [ -n "$EVIDENCE_DIR" ]; then
   mkdir -p "$EVIDENCE_DIR"
   EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"

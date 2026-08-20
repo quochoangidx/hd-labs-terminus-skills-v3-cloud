@@ -43,7 +43,11 @@ Read each relevant `SKILL.md` completely before using that stage:
 
 Use `terminus-regular-task-authoring` and any language-specific authoring skill when required by the selected task.
 
-This file controls the batch policy when it is more specific than a dependent skill. In particular, use the actual fresh subagent model available in the current environment; do not require or claim an unavailable pinned model.
+This file controls the batch policy when it is more specific than a dependent
+skill. Use the runtime-specific launch contract from `task-local-solve-probe`:
+Codex pins a GPT-5.6-family subagent at medium effort; Claude Code uses the
+checked-in `terminus-probe` agent profile, which pins Opus at medium effort.
+Never require or claim a model/profile that the active runtime did not resolve.
 
 ## Truthfulness Rules
 
@@ -177,7 +181,8 @@ Do not advance while a review blocker remains.
 
 Use `task-local-solve-probe` with fresh subagents and isolated solve copies. Do not expose the solution, verifier tests, rubrics, reports, expected outputs, or hidden fixtures.
 
-Use the actual subagent model available in the current environment. Preserve the real diff, verifier result, and failure classification for each attempt.
+Use the runtime-specific pinned profile above and preserve the actual resolved
+model, diff, verifier result, and failure classification for each attempt.
 
 Run two fresh attempts initially. Add a third only after a split, a shared blind
 spot, or incomplete per-case union.
@@ -226,7 +231,7 @@ file. Preserve the raw audit transcript at
 receipt with:
 
 ```bash
-python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
+scripts/python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
   workspace/<slug> \
   --submission submissions/SUBMISSION-<slug>.md \
   --transcript workspace/reports/<slug>/style-audit-transcript.md \
@@ -258,7 +263,7 @@ is not auditable evidence.
 Run the client scanner on that exact final ZIP and save its receipt:
 
 ```bash
-python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
   submissions/<slug>.zip --json \
   --manual-review-pass \
   --review-transcript workspace/reports/<slug>/client-review-transcript.md \
@@ -273,7 +278,7 @@ review. Preserve that manual review as the named non-empty transcript before
 running this command. Then run the final handover gate:
 
 ```bash
-python3 scripts/batch-handover.py workspace/<slug> \
+scripts/python3 scripts/batch-handover.py workspace/<slug> \
   --report-dir workspace/reports/<slug> \
   --probe-dir workspace/local-solve-probes/<slug> \
   --zip submissions/<slug>.zip \

@@ -1,9 +1,6 @@
 ---
 name: anti-llm
 description: Rewrite text to avoid LLM detection. Use when the user wants to make text sound more human-written, bypass AI detection, or de-LLM text.
-user-invocable: true
-disable-model-invocation: false
-argument-hint: [text to rewrite]
 ---
 
 # Anti-LLM: Rewrite Text to Avoid LLM Detection
@@ -13,7 +10,7 @@ You are a rewriting assistant. Your ONLY job: nhận text đầu vào, viết l�
 ## Input
 
 Nhận text từ một trong các nguồn (ưu tiên theo thứ tự):
-1. Text được select trong IDE (ide_selection)
+1. Text selection được IDE đính kèm vào conversation, nếu runtime hỗ trợ
 2. Text truyền qua $ARGUMENTS
 3. Text user paste trực tiếp trong chat
 
@@ -30,7 +27,7 @@ Luôn trả kết quả theo format sau:
 ```
 
 QUAN TRỌNG:
-- CHỈ output text đã rewrite. Không sửa file, không dùng Edit/Write tool.
+- CHỈ output text đã rewrite. Không sửa file và không gọi tool ghi file của runtime.
 - Text output phải copy-paste được ngay, không wrap trong code block trừ khi text gốc là code block.
 - Giữ nguyên 100% technical facts, số liệu, tên file, tên biến — chỉ đổi cách viết.
 - Không thay đổi nghĩa, không thêm thông tin mới, không bỏ thông tin.

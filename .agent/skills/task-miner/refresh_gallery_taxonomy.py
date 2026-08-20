@@ -12,9 +12,15 @@ redeploys (the JS bundle hash and even the anon key can rotate):
   4. Regenerate mined-candidates/gallery_taxonomy.md, stamped with today's date
 
 No third-party deps (urllib only). Run from anywhere:
-    python3 .agent/skills/task-miner/refresh_gallery_taxonomy.py
+    scripts/python3 .agent/skills/task-miner/refresh_gallery_taxonomy.py
 """
-import json, re, sys, os, collections, datetime, urllib.request
+import collections
+import datetime
+import json
+import os
+import re
+import sys
+import urllib.request
 
 SITE = "https://snorkel-ai.github.io/Terminus-EC-Training-stateful"
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -70,21 +76,21 @@ def fetch_all(sb, key, view, select):
         off += 1000
 
 
-def build_markdown(V, I, today):
-    vcat = collections.Counter(r.get("category") for r in V)
-    itype = collections.Counter(r.get("type") for r in I)
+def build_markdown(curated_rows, inspiration_rows, today):
+    vcat = collections.Counter(r.get("category") for r in curated_rows)
+    itype = collections.Counter(r.get("type") for r in inspiration_rows)
     tree = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
-    for r in V:
+    for r in curated_rows:
         tree[r.get("category")][r.get("subcategory")][r.get("subsubcategory")] += 1
     langs = collections.Counter()
-    for r in I:
+    for r in inspiration_rows:
         for x in (r.get("languages") or []):
             langs[x] += 1
     sub5 = collections.Counter()
-    for r in I:
+    for r in inspiration_rows:
         for s in (r.get("subtypes") or []):
             sub5[s] += 1
-    mile = collections.Counter(r.get("is_milestone") for r in I)
+    mile = collections.Counter(r.get("is_milestone") for r in inspiration_rows)
 
     o = []
     a = o.append
@@ -99,8 +105,8 @@ def build_markdown(V, I, today):
     a("  portal JS bundle ships (the exact data the gallery renders). Pages repo and")
     a("  `snorkel-tb-tasks` are private (not readable via the user's GitHub).")
     a(f"- Snapshot date: {today} (auto-refresh).")
-    a(f"- Rows read: `v_tasks_with_priorities` = {len(V)} (curated/priority tasks, 3-level")
-    a(f"  taxonomy); `task_inspiration_v2` = {len(I)} (inspiration pool; is_milestone")
+    a(f"- Rows read: `v_tasks_with_priorities` = {len(curated_rows)} (curated/priority tasks, 3-level")
+    a(f"  taxonomy); `task_inspiration_v2` = {len(inspiration_rows)} (inspiration pool; is_milestone")
     a(f"  true={mile.get(True,0)} / false={mile.get(False,0)}).")
     a("- The difficulty column on `v_tasks_with_priorities` may be all-null; if so,")
     a("  difficulty is NOT a usable gallery field — gate hardness by model pass-rate.\n")
@@ -139,7 +145,7 @@ def build_markdown(V, I, today):
     a("|---|---:|---|---|---:|---|---|---:|")
     top = langs.most_common(30)
     for i in range(0, len(top), 3):
-        cells = [f"{l} | {n}" for l, n in top[i:i + 3]]
+        cells = [f"{lang} | {n}" for lang, n in top[i:i + 3]]
         while len(cells) < 3:
             cells.append(" | ")
         a("| " + " | | ".join(cells) + " |")
@@ -164,11 +170,24 @@ def main():
     print(f"[refresh] discovering live Supabase backend from {SITE} ...")
     sb, key = discover()
     print(f"[refresh] backend={sb}  anon-key={key[:18]}…")
-    V = fetch_all(sb, key, "v_tasks_with_priorities",
-                  "category,subcategory,subsubcategory,difficulty")
-    I = fetch_all(sb, key, "task_inspiration_v2", "type,subtypes,languages,is_milestone")
-    print(f"[refresh] rows: v_tasks_with_priorities={len(V)}  task_inspiration_v2={len(I)}")
-    md = build_markdown(V, I, today)
+    curated_rows = fetch_all(
+        sb,
+        key,
+        "v_tasks_with_priorities",
+        "category,subcategory,subsubcategory,difficulty",
+    )
+    inspiration_rows = fetch_all(
+        sb,
+        key,
+        "task_inspiration_v2",
+        "type,subtypes,languages,is_milestone",
+    )
+    print(
+        "[refresh] rows: "
+        f"v_tasks_with_priorities={len(curated_rows)}  "
+        f"task_inspiration_v2={len(inspiration_rows)}"
+    )
+    md = build_markdown(curated_rows, inspiration_rows, today)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as f:
         f.write(md)

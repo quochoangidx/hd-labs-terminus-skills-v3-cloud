@@ -197,7 +197,7 @@ draft and the task artifacts once more.
 pre-flight and fix every finding before anything else:**
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
 ```
 
 It catches the structural triggers (headers, bullets, tables, over-length, hint

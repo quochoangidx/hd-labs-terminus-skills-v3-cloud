@@ -148,7 +148,7 @@ submission file; `scripts/batch-handover.py` rejects stale or incomplete receipt
   "task_snapshot_sha256": "<full task tree hash from batch-handover.py>",
   "submission_sha256": "<sha256 of submissions/SUBMISSION-tbrain-example.md>",
   "auditor": {
-    "runtime": "codex",
+    "runtime": "<codex|claude-code>",
     "model": "<actual model>",
     "session_id": "<actual session id>",
     "transcript": "style-audit-transcript.md",
@@ -174,7 +174,7 @@ After the real audit is complete and its transcript is saved, generate the
 surface inventory and hashes mechanically:
 
 ```bash
-python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
+scripts/python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
   workspace/<slug> \
   --submission submissions/SUBMISSION-<slug>.md \
   --transcript workspace/reports/<slug>/style-audit-transcript.md \
