@@ -23,7 +23,7 @@ class RoleContextPacketTests(unittest.TestCase):
             (visible / "trace.json").write_text("{}\n", encoding="utf-8")
             result = packet.build_packet(
                 "fairness_reviewer",
-                "initial",
+                "contract_review",
                 "tbrain-example",
                 [("instruction", instruction), ("task_visible_tree", visible)],
             )
@@ -41,7 +41,7 @@ class RoleContextPacketTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "leaks"):
                 packet.build_packet(
                     "fairness_reviewer",
-                    "initial",
+                    "contract_review",
                     "tbrain-example",
                     [("instruction", instruction), ("task_visible_tree", visible)],
                 )

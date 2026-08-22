@@ -149,9 +149,13 @@ quality and empirical difficulty gate may be accepted regardless of track. A
 domain/language/story change is still a reskin, not a derived pattern.
 
 For every new Advanced+ candidate, also run the catalog's frontier-stability
-gate before cloning. Use a public issue or fixing PR only as substrate: reject
-the candidate when one reachable artifact already implements at least two
-planned mechanisms or any genuine interaction. Record two orthogonal
+gate before cloning. Use public libraries, issues, and fixing PRs as substrate
+when appropriate. Record mechanism and interaction overlap honestly, but do not
+reject by overlap count. Reject only when a reachable artifact contains the
+task-specific repair topology, exposes the exact solution, or provides a
+callable solution/oracle that collapses the crux. A public tool that supplies
+generic primitives or one partial interaction is valid when task-local evidence,
+failure geometry, and the remaining causal chain are materially new. Record two orthogonal
 natural-but-wrong implementations with distinct semantic nodes, repair
 surfaces, and disjoint witness sets. Do not defer either check until a solve
 probe.
@@ -854,8 +858,11 @@ candidate:
         search_queries:   # issue text, errors/symbols, release/version diff
         public_artifacts_checked:
         exact_solution_found: # boolean
-        satisfied_mechanism_ids: # must cover fewer than 2 when exact found
-        satisfied_interaction_ids: # must be empty when exact found
+        overlap_classification: # none | substrate_primitives | partial_topology | task_topology | exact_solution
+        callable_solution_available: # boolean
+        satisfied_mechanism_ids: # honest overlap; may contain 2+ for substrate primitives
+        satisfied_interaction_ids: # honest overlap; partial interactions do not automatically reject
+        non_collapse_rationale: # required for substrate_primitives or partial_topology
         disposition:      # pass | reject
       orthogonal_traps:   # at least 2 with pairwise-disjoint witness_ids
         - id:

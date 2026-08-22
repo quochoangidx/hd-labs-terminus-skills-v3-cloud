@@ -92,9 +92,12 @@ membership alone never clears them.
    the amplifier/envelope slot.
 3. **Anti-retrieval:** search the issue wording, distinctive failures, public
    symbols, release history, and version diffs. Record the queries and public
-   artifacts checked. Reject when one public artifact already implements two
-   or more planned mechanisms or any genuine interaction. An upstream fix may
-   remain a substrate only when the new task's core topology is not that patch.
+   artifacts checked. Classify overlap as `none`, `substrate_primitives`,
+   `partial_topology`, `task_topology`, or `exact_solution`. Do not reject by
+   counting shared primitives or isolated interactions. Reject when a reachable
+   artifact contains the task-specific repair topology, exposes the exact
+   solution, or acts as a callable oracle. An upstream fix may remain a substrate
+   when the task-local evidence, failure geometry, and core topology are materially new.
 4. **Orthogonal natural-fix traps:** name at least two reasonable
    implementations that are wrong for different semantic reasons. Their
    semantic nodes, repair surfaces, and planned witness IDs must be distinct;

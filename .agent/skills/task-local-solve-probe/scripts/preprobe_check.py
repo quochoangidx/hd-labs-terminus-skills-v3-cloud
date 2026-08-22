@@ -317,7 +317,10 @@ def validate_quota_override(path: Path | None, task_dir: Path, report_dir: Path)
 
 
 def validate(
-    task_dir: Path, report_dir: Path, quota_override: Path | None = None
+    task_dir: Path,
+    report_dir: Path,
+    quota_override: Path | None = None,
+    handover_revalidation: bool = False,
 ) -> list[str]:
     errors: list[str] = []
     task_dir = task_dir.resolve()
@@ -333,6 +336,12 @@ def validate(
     quota_data = load_json(quota_path, errors)
     if quota_data:
         quota_errors, _ = validate_quota_ledger(quota_data, quota_path, "pre-solver")
+        if handover_revalidation:
+            quota_errors = [
+                error
+                for error in quota_errors
+                if error != "pre-solver ledger already contains blind-solver turns"
+            ]
         if validate_quota_override(quota_override, task_dir, report_dir):
             allowed = (
                 "pre-solver reserve is too small:",
@@ -348,8 +357,14 @@ def main() -> int:
     parser.add_argument("task_dir", type=Path)
     parser.add_argument("report_dir", type=Path)
     parser.add_argument("--quota-run-override", type=Path)
+    parser.add_argument("--handover-revalidation", action="store_true")
     args = parser.parse_args()
-    errors = validate(args.task_dir, args.report_dir, args.quota_run_override)
+    errors = validate(
+        args.task_dir,
+        args.report_dir,
+        args.quota_run_override,
+        args.handover_revalidation,
+    )
     if errors:
         for error in errors:
             print("FAIL:", error)

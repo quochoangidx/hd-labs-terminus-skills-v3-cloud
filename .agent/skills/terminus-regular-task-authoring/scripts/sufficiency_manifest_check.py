@@ -215,13 +215,15 @@ def validate_legacy(task_dir: Path, report_path: Path) -> list[str]:
         fail(errors, "blind_contract_review must be an object")
         return errors
     reviewer_count = review.get("reviewer_count")
-    if not isinstance(reviewer_count, int) or isinstance(reviewer_count, bool) or reviewer_count < 2:
-        fail(errors, "blind_contract_review.reviewer_count must be >= 2")
+    single_reviewer = review.get("review_policy") == "single_reviewer_two_pass_v1"
+    minimum_reviewers = 1 if single_reviewer else 2
+    if not isinstance(reviewer_count, int) or isinstance(reviewer_count, bool) or reviewer_count < minimum_reviewers:
+        fail(errors, f"blind_contract_review.reviewer_count must be >= {minimum_reviewers}")
     if review.get("contract_inventory_complete") is not True:
         fail(errors, "blind_contract_review.contract_inventory_complete must be true")
     reviewers = review.get("reviewers")
-    if not isinstance(reviewers, list) or len(reviewers) < 2:
-        fail(errors, "blind_contract_review.reviewers must contain at least two evidence records")
+    if not isinstance(reviewers, list) or len(reviewers) < minimum_reviewers:
+        fail(errors, f"blind_contract_review.reviewers must contain at least {minimum_reviewers} evidence record(s)")
         reviewers = []
     if isinstance(reviewer_count, int) and not isinstance(reviewer_count, bool):
         if reviewer_count != len(reviewers):
@@ -496,11 +498,13 @@ def validate_v3(task_dir: Path, report_path: Path) -> list[str]:
         return errors
     reviewer_count = review.get("reviewer_count")
     reviewers = review.get("reviewers")
-    if not isinstance(reviewers, list) or len(reviewers) < 2:
-        fail(errors, "fairness_review.reviewers must contain at least two evidence records")
+    single_reviewer = review.get("review_policy") == "single_reviewer_two_pass_v1"
+    minimum_reviewers = 1 if single_reviewer else 2
+    if not isinstance(reviewers, list) or len(reviewers) < minimum_reviewers:
+        fail(errors, f"fairness_review.reviewers must contain at least {minimum_reviewers} evidence record(s)")
         reviewers = []
-    if reviewer_count != len(reviewers) or len(reviewers) < 2:
-        fail(errors, "fairness_review.reviewer_count must equal len(reviewers) and be >= 2")
+    if reviewer_count != len(reviewers) or len(reviewers) < minimum_reviewers:
+        fail(errors, f"fairness_review.reviewer_count must equal len(reviewers) and be >= {minimum_reviewers}")
     reviewer_ids: set[str] = set()
     reviewer_sessions: set[str] = set()
     report_dir = report_path.resolve().parent
@@ -529,6 +533,12 @@ def validate_v3(task_dir: Path, report_path: Path) -> list[str]:
             fail(errors, f"{label}.task_visible_only must be true")
         if reviewer.get("reviewed_source_files") != expected_sources:
             fail(errors, f"{label}.reviewed_source_files must equal the hash-bound visible source list")
+        if single_reviewer:
+            passes = reviewer.get("review_passes")
+            if not isinstance(passes, list) or {
+                item.get("phase") for item in passes if isinstance(item, dict)
+            } != {"contract_review", "final_review"}:
+                fail(errors, f"{label}.review_passes must contain contract_review and final_review")
         transcript_value = reviewer.get("transcript")
         if nonempty_string(transcript_value):
             transcript = (report_dir / str(transcript_value)).resolve()

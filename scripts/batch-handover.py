@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -140,7 +141,8 @@ def tree_hash(root: Path, *, sanitized: bool) -> str:
             continue
         name = path.name
         if sanitized and (
-            name.startswith("rubric")
+            name == "task.toml"
+            or name.startswith("rubric")
             or name.endswith(RUBRIC_SUFFIXES)
             or name.endswith(".zip")
         ):
@@ -164,7 +166,8 @@ def file_hash_map(root: Path, *, sanitized: bool) -> dict[str, str]:
             continue
         name = path.name
         if sanitized and (
-            name.startswith("rubric")
+            name == "task.toml"
+            or name.startswith("rubric")
             or name.endswith(RUBRIC_SUFFIXES)
             or name.endswith(".zip")
         ):
@@ -258,12 +261,19 @@ def semantic_probe_geometry(run_results: list[dict]) -> dict:
 
 def run_trusted_nop_verifier(run_dir: Path) -> dict:
     """Rerun the verifier with the fixed local NOP agent and derive its outcome."""
-    stb = shutil.which("stb")
-    if not stb:
-        raise RuntimeError("stb executable is unavailable for trusted local NOP verification")
     verify = (run_dir / "verify").resolve()
     if not verify.is_dir():
         raise RuntimeError(f"verification task is missing: {verify}")
+    try:
+        task_config = tomllib.loads((verify / "task.toml").read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise RuntimeError(f"trusted NOP task.toml is unreadable: {exc}") from exc
+    network_mode = task_config.get("environment", {}).get("network_mode")
+    if network_mode == "no-network":
+        return run_direct_docker_nop_verifier(run_dir, verify)
+    stb = shutil.which("stb")
+    if not stb:
+        raise RuntimeError("stb executable is unavailable for trusted local NOP verification")
     with tempfile.TemporaryDirectory(prefix="batch-handover-nop-") as temp:
         jobs_dir = Path(temp) / "jobs"
         command = [
@@ -346,6 +356,109 @@ def run_trusted_nop_verifier(run_dir: Path) -> dict:
             "command_exit_code": proc.returncode,
             "reward": float(reward),
             "result": "pass" if float(reward) == 1.0 else "fail",
+            "task_snapshot_sha256": tree_hash(verify, sanitized=False),
+            "ctrf": kept_ctrf.name,
+            "ctrf_sha256": sha256(kept_ctrf),
+        }
+        (run_dir / "handover-verification.json").write_text(
+            json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return {"matrix": matrix, **receipt}
+
+
+def run_direct_docker_nop_verifier(run_dir: Path, verify: Path) -> dict:
+    """Verify a no-network task directly when Harbor's Docker provider rejects it."""
+    docker = shutil.which("docker")
+    if not docker:
+        raise RuntimeError("docker executable is unavailable for trusted no-network NOP verification")
+    with tempfile.TemporaryDirectory(prefix="batch-handover-direct-nop-") as temp:
+        logs_dir = Path(temp) / "logs"
+        logs_dir.mkdir()
+        os.chmod(logs_dir, 0o777)
+        build_command = [docker, "build", "-q", str(verify / "tests")]
+        build = subprocess.run(
+            build_command,
+            cwd=run_dir,
+            capture_output=True,
+            text=True,
+            timeout=900,
+            check=False,
+        )
+        if build.returncode != 0:
+            (run_dir / "handover-verifier.log").write_text(
+                build.stdout + build.stderr,
+                encoding="utf-8",
+            )
+            raise RuntimeError(
+                f"trusted direct-Docker verifier build exited {build.returncode}; "
+                f"see {run_dir / 'handover-verifier.log'}"
+            )
+        image = next(
+            (line.strip() for line in reversed(build.stdout.splitlines()) if line.strip()),
+            "",
+        )
+        if not image:
+            raise RuntimeError("trusted direct-Docker verifier build returned no image id")
+        command = [
+            docker,
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev",
+            "--tmpfs",
+            "/var/tmp:rw,nosuid,nodev",
+            "-v",
+            f"{verify / 'environment' / 'app'}:/app:ro",
+            "-v",
+            f"{logs_dir}:/logs/verifier",
+            image,
+            "bash",
+            "/tests/test.sh",
+        ]
+        try:
+            proc = subprocess.run(
+                command,
+                cwd=run_dir,
+                capture_output=True,
+                text=True,
+                timeout=900,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("trusted direct-Docker NOP rerun exceeded 900 seconds") from exc
+        (run_dir / "handover-verifier.log").write_text(
+            build.stdout + build.stderr + proc.stdout + proc.stderr,
+            encoding="utf-8",
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"trusted direct-Docker NOP rerun exited {proc.returncode}; "
+                f"see {run_dir / 'handover-verifier.log'}"
+            )
+        reward_path = logs_dir / "reward.txt"
+        ctrf_path = logs_dir / "ctrf.json"
+        try:
+            reward = float(reward_path.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("trusted direct-Docker NOP produced no numeric reward") from exc
+        ctrf_errors: list[str] = []
+        matrix = matrix_from_ctrf(ctrf_path, run_dir.name, ctrf_errors)
+        if ctrf_errors or not matrix:
+            raise RuntimeError(
+                "trusted direct-Docker NOP CTRF is invalid: " + "; ".join(ctrf_errors)
+            )
+        kept_ctrf = run_dir / "handover-verification-ctrf.json"
+        shutil.copy2(ctrf_path, kept_ctrf)
+        receipt = {
+            "schema_version": 1,
+            "build_command": build_command,
+            "command": command,
+            "command_exit_code": proc.returncode,
+            "reward": reward,
+            "result": "pass" if reward == 1.0 else "fail",
             "task_snapshot_sha256": tree_hash(verify, sanitized=False),
             "ctrf": kept_ctrf.name,
             "ctrf_sha256": sha256(kept_ctrf),
@@ -1356,6 +1469,7 @@ def validate_final_session_budget(
     builder = canonical.get("builder", {}) if isinstance(canonical, dict) else {}
     fairness = canonical.get("fairness_reviewers", []) if isinstance(canonical, dict) else []
     auditor = canonical.get("consolidated_auditor", {}) if isinstance(canonical, dict) else {}
+    single_reviewer = canonical.get("role_policy") == "single_reviewer_two_pass_v1"
     prefreeze_ids = [
         builder.get("session_id") if isinstance(builder, dict) else None,
         *(
@@ -1371,10 +1485,13 @@ def validate_final_session_budget(
         solver_ids = []
     all_ids = [item for item in (*prefreeze_ids, *solver_ids) if nonempty(item)]
     if len(all_ids) != len(set(all_ids)):
-        errors.append("agent session budget: every builder/reviewer/auditor/solver role must be distinct")
+        errors.append("agent session budget: every builder/reviewer/optional-auditor/solver role must be distinct")
 
+    final_reviewer = auditor if isinstance(auditor, dict) and auditor else (
+        fairness[0] if single_reviewer and isinstance(fairness, list) and fairness else {}
+    )
     expected_auditor = {
-        field: auditor.get(field) if isinstance(auditor, dict) else None
+        field: final_reviewer.get(field) if isinstance(final_reviewer, dict) else None
         for field in ("runtime", "model", "session_id")
     }
     final_records = (
@@ -1384,24 +1501,30 @@ def validate_final_session_budget(
             client_review.get("manual_review") if isinstance(client_review, dict) else None,
         ),
     )
-    for label, record in final_records:
-        actual = {
-            field: record.get(field) if isinstance(record, dict) else None
-            for field in ("runtime", "model", "session_id")
-        }
-        if actual != expected_auditor:
-            errors.append(
-                f"{label}: post-probe review must reuse the consolidated pre-freeze auditor"
-            )
+    if not single_reviewer or auditor:
+        for label, record in final_records:
+            actual = {
+                field: record.get(field) if isinstance(record, dict) else None
+                for field in ("runtime", "model", "session_id")
+            }
+            if actual != expected_auditor:
+                errors.append(
+                    f"{label}: post-probe review must reuse the consolidated pre-freeze auditor"
+                )
 
     total = len(all_ids)
     external = total - 1 if nonempty(builder.get("session_id") if isinstance(builder, dict) else None) else 0
-    if total not in {6, 7}:
-        errors.append(f"agent session budget: accepted task must use 6 or 7 sessions, observed {total}")
-    if external not in {5, 6}:
-        errors.append(
-            f"agent session budget: accepted task must use 5 or 6 external sessions, observed {external}"
-        )
+    if single_reviewer:
+        expected_total = 1 + 1 + (1 if auditor else 0) + len(solver_ids)
+        if total != expected_total:
+            errors.append(f"agent session budget: single-reviewer policy expected {expected_total} sessions, observed {total}")
+    else:
+        if total not in {6, 7}:
+            errors.append(f"agent session budget: accepted task must use 6 or 7 sessions, observed {total}")
+        if external not in {5, 6}:
+            errors.append(
+                f"agent session budget: accepted task must use 5 or 6 external sessions, observed {external}"
+            )
     return {
         "builder_sessions": 1 if isinstance(builder, dict) and builder else 0,
         "fairness_reviewer_sessions": len(fairness) if isinstance(fairness, list) else 0,
@@ -1436,7 +1559,7 @@ def validate_luna_thread_alignment(
     ledger_fairness = set(role_sessions.get("fairness_reviewer", []))
     if ledger_fairness != budget_fairness:
         errors.append(
-            "quota ledger: Luna fairness thread IDs do not match agent-session-budget.json"
+            "quota ledger: reviewer session IDs do not match agent-session-budget.json"
         )
     budget_auditor = {
         str(auditor.get("session_id"))
@@ -1446,7 +1569,7 @@ def validate_luna_thread_alignment(
     ledger_auditor = set(role_sessions.get("consolidated_auditor", []))
     if ledger_auditor != budget_auditor:
         errors.append(
-            "quota ledger: Luna auditor thread ID does not match agent-session-budget.json"
+            "quota ledger: optional auditor session ID does not match agent-session-budget.json"
         )
 
 
@@ -1611,7 +1734,13 @@ def main() -> int:
         / "preprobe_check.py"
     )
     preprobe_result = subprocess.run(
-        [sys.executable, str(preprobe_check), str(task_dir), str(report_dir)],
+        [
+            sys.executable,
+            str(preprobe_check),
+            str(task_dir),
+            str(report_dir),
+            "--handover-revalidation",
+        ],
         capture_output=True,
         text=True,
         check=False,

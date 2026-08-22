@@ -29,12 +29,20 @@ This profile adds a stricter selection stage to the general submit-ready path:
 - `N` still counts only final `candidate_ready` tasks whose ZIP, preflight,
   review, and handover gates pass. `advanced_plus_shortlist` is an intermediate
   state and never increments the delivery quota.
-- Use a **counted frozen-snapshot** blind probe as the selection gate. Before
-  preparing it, finish the verifier/oracle, public-surface audit, V3 evidence
-  audit, mutation-backed semantic coverage receipt, and exact-Docker
-  Oracle/NOP/noexec pre-probe receipt. Full Harbor checks, final ZIP review, and
-  submission hardening remain after shortlist selection. An exploratory skeleton probe can
+- Use a hash-bound counted blind probe as the selection gate. Before launching
+  it, finish the verifier/oracle, public-surface audit, V3 evidence audit,
+  mutation-backed semantic coverage receipt, and exact-Docker
+  Oracle/NOP/noexec pre-probe receipt. A separate counted-freeze stage is
+  optional: `probe.py prepare` may run as the first mechanical action of the
+  blind-solver stage. Full Harbor checks, final ZIP review, and submission
+  hardening remain after shortlist selection. An exploratory skeleton probe can
   reject an idea cheaply but can never qualify it or increment `N`.
+- Optimize the path to that gate: review the task-visible contract while the
+  verifier still contains only 6–10 discriminating witnesses, then expand the
+  corpus. Do not spend the full mutation campaign or any local Harbor run on a
+  contract that has not cleared the reviewer's contract pass. Harbor remains strictly
+  post-shortlist unless the user explicitly requires an earlier integration
+  check rather than merely requiring Harbor before final delivery.
 - Start with two fresh runs. A `1/2` split is unresolved and MUST receive the
   adaptive third run. Keep `1/3` as provisional Advanced only when both failing
   runs cross at least two semantic nodes and their failed-node sets differ; a
@@ -156,8 +164,11 @@ Manifest shape:
           "search_queries": ["issue wording", "failure symbol", "release version diff"],
           "public_artifacts_checked": ["<URLs/commits checked>"],
           "exact_solution_found": false,
+          "overlap_classification": "none",
+          "callable_solution_available": false,
           "satisfied_mechanism_ids": [],
           "satisfied_interaction_ids": [],
+          "non_collapse_rationale": "<required for substrate_primitives or partial_topology>",
           "disposition": "pass"
         },
         "orthogonal_traps": [
@@ -201,16 +212,17 @@ Read each relevant `SKILL.md` completely before using that stage:
 This file controls the batch policy when it is more specific than a dependent
 skill. Read
 [`references/quota-efficient-workflow.md`](references/quota-efficient-workflow.md)
-before launching any role. Pin candidate design and builder work to
-`gpt-5.6-sol` medium, fairness reviewers to `gpt-5.6-luna` high, the
-consolidated auditor to `gpt-5.6-luna` max, and counted blind solvers to
-`gpt-5.6-sol` medium.
-Run the Luna roles as independent Codex tasks by following
-[`references/luna-thread-orchestration.md`](references/luna-thread-orchestration.md);
-do not request Luna through the collaboration-subagent runtime. A
-`task-batch N` invocation authorizes these visible reviewer/auditor tasks.
-Record the actual model and fail closed when a requested profile is unavailable;
-never silently substitute Terra or claim an unavailable pin.
+and
+[`references/single-reviewer-workflow.md`](references/single-reviewer-workflow.md)
+before launching any role. Pin candidate design, Codex review, and blind solves
+to `gpt-5.6-sol` medium collaboration subagents. On Claude, route the single
+reviewer to Opus 5 medium. Reuse one fresh reviewer session for the required
+contract and final review turns. Luna-high reviewer threads and a Luna-max
+consolidated auditor are optional opt-in escalations; create them only when the
+user explicitly requests them and then follow
+[`references/luna-thread-orchestration.md`](references/luna-thread-orchestration.md).
+Record the actual model and fail closed when an explicitly requested profile is
+unavailable; never silently substitute Terra or claim an unavailable pin.
 Before launching a builder, also follow
 [`references/builder-quota-hooks.md`](references/builder-quota-hooks.md).
 Validate both repository-local agent hook configurations, create the
@@ -219,14 +231,11 @@ builder subagent type. Stage A ends after mining plus canonical-image source
 smoke. Transition to scaffolding only before a new counted follow-up. Poll the
 lease during waits and interrupt at its deadline; hooks cannot interrupt an
 in-flight model request by themselves.
-Before creating Luna fairness/auditor tasks, follow
+Before creating an optional Luna reviewer/auditor task, follow
 [`references/review-role-quota-hooks.md`](references/review-role-quota-hooks.md).
-Create a hash-bound role packet, open exactly two reviewer leases or one
-auditor lease, then create only that cohort until every session is claimed.
-Poll role deadlines during waits. Reviewer/auditor tasks are read-only; one
-re-review/re-audit cycle is the maximum, and the same auditor task must be
-transitioned to `post_probe`. Bind the three final lease receipts into the
-quota ledger before pre-solver and handover validation.
+Create a hash-bound role packet and open only the explicitly requested lease.
+Poll role deadlines during waits. Optional Luna tasks are read-only and permit
+at most one follow-up. Bind only the leases actually used into the quota ledger.
 
 ## Truthfulness Rules
 
@@ -244,43 +253,48 @@ quota ledger before pre-solver and handover validation.
   agent/reviewer transcripts, runtime/model/session provenance, and SHA-256
   digests. Any task or submission change invalidates dependent receipts.
 
-## Fixed Agent Budget, Turn Budget, and Role Separation
+## Agent Budget, Turn Budget, and Role Separation
 
-An accepted task uses exactly **6–7 role sessions**, but the quota guard counts
-every model turn, including follow-ups, failures, interruptions, usage-limit
-stops, and reuses of an existing role identity. The per-candidate cap is 12
-external model turns. A role-session count alone is not quota evidence.
+The default accepted task uses **4–5 role sessions**: one builder, one reviewer,
+and two or three blind solvers. The single reviewer uses two model turns in the
+same fresh-context session. Optional Luna reviewer/auditor tasks add sessions
+and turns only when explicitly requested. The quota guard counts every model
+turn, including follow-ups, failures, interruptions, usage-limit stops, and
+reuses of an existing role identity. A role-session count alone is not quota
+evidence.
 
 | Role | Sessions | Scope |
 |---|---:|---|
 | Builder | 1 | deep mining, authoring, Oracle, verifier, semantic-manifest draft, and all pre-freeze fixes |
-| Fairness reviewers | 2 | independent V3 task-visible review only |
-| Consolidated auditor | 1 | semantic realism, client/manual folder review, and task-tree style audit; reused post-probe |
+| Reviewer | 1 | fresh task-visible contract review, then final review in the same session |
+| Consolidated auditor | 0–1 | optional independent semantic/folder/style escalation |
 | Blind solvers | 2–3 | two initial fresh solves plus one adaptive solve only when triggered |
 
-The builder never performs fairness review or a blind solve. The builder and
-blind solvers use Sol collaboration subagents. The two fairness reviewers use
-separate Luna-high Codex tasks and receive only `instruction.md` and the
-agent-visible environment and evidence; run them concurrently in distinct
-fresh tasks. One independent Luna-max Codex task performs the three pre-freeze
-auditor judgments. Keep three separate receipts, but give their
-semantic `review`, folder `manual_review`, and task-style `auditor` records the
-same real runtime/model/session/transcript provenance.
+The builder never performs independent review or a blind solve. The builder and
+blind solvers use collaboration subagents. The default reviewer is one
+Sol-medium Codex subagent or Opus-5-medium Claude subagent. It receives only
+`instruction.md` plus the agent-visible environment/evidence and performs
+exactly `contract_review` and `final_review` turns in the same session. A
+Luna-high reviewer thread and Luna-max consolidated auditor are optional
+explicit escalations, not acceptance requirements.
 
 The design/build agent is not fresh-context. Keep one persistent informed
 Sol-medium builder session. Before choosing a candidate, make it read the
 durable campaign memory, current batch portfolio, and relevant rejection/probe
 reports, then record and hash-bind the pattern-blind domain-crux card. Only
 after that may it read the frontier pattern catalog to classify the design or
-derive a structural transformation. Send fairness/auditor findings back to
+derive a structural transformation. Send every reviewer/auditor report back to
 that same builder. Require a finding-by-finding critique receipt (`accept`,
-`challenge`, or `partial`, with evidence and action) before remediation. Never
-leak this builder context into the fresh fairness reviewers or blind solvers.
+`challenge`, or `partial`, with evidence and action), plus an independent
+orchestrator adjudication, before remediation. Never leak this builder context
+into the fresh reviewer or blind solvers.
 
-Run deterministic prompt/scanner/isolation/anti-cheat/artifact-independence
-gates before launching the fairness pair. Allow at most one fairness
-remediation cycle and one auditor remediation cycle; reject the candidate if
-the same gate still fails. Before blind solvers, run `quota_guard.py --phase
+Run the contract-stage prompt/scanner/source-smoke/assertion-symmetry gates
+before launching the reviewer's contract pass. Full strict Docker, artifact-independence,
+anti-cheat, mutation, and Harbor work belongs later, after the task-visible
+contract is stable. Allow at most one reviewer remediation cycle and, when an
+auditor was explicitly used, one auditor remediation cycle; reject the
+candidate if the same gate still fails. Before blind solvers, run `quota_guard.py --phase
 pre-solver` to verify role routing, completed review gates, lease provenance,
 and remediation caps. There is no fixed per-candidate model-turn cap or
 pre-solver turn reserve; honor only explicit user batch-wide budgets and the
@@ -289,22 +303,21 @@ role-specific deadline/tool limits.
 Launch the first two blind solvers concurrently on separate solve copies. Wait
 for both to finish, then materialize, execute the verifier, collect CTRF, and
 record each run sequentially. Add solver 3 only for `1/2`, a shared blind spot,
-or incomplete union. Reuse the consolidated auditor thread in a new post-probe turn
-for submission prose, exact final ZIP review, and metadata/handover surfaces;
-the final transcript must bind the final artifacts, while runtime/model/session
-identity stays the same.
+or incomplete union. Use the reviewer's second turn for the stable final task
+review. Submission prose, exact final ZIP review, and metadata/handover are
+mechanical/orchestrator work unless the user opted into an auditor or separate
+style review.
 
 Do not create separate specialist agents for static scanning, prose inventory,
 mutation execution, packaging, or handover. The orchestrator runs deterministic
 tools and the fixed roles supply the required judgments. A candidate rejected
 at mining or the smoke gate should consume zero or one builder session, never a
-full review/solve cohort. Excluding the builder, an accepted task therefore
-uses exactly 5–6 external sessions; a two-task accepted batch uses 12–14 role
-sessions.
+full review/solve cohort. Excluding optional Luna escalation, an accepted task
+therefore uses exactly 4–5 total sessions and 3–4 sessions outside the builder.
 
 Safe concurrency: different-domain idea cards/builders in separate worktrees,
-each fairness pair, each initial solver pair, and static scanning alongside
-prose inventory. Different Luna cohorts require separate worktrees and lease
+each initial solver pair, and static scanning alongside prose inventory.
+Different optional Luna cohorts require separate worktrees and lease
 directories; do not let unclaimed review leases compete for `SessionStart`. Run
 Docker builds for one task, Oracle/NOP/noexec, shared-image mutation runs,
 solver verifier executions, final packaging, and handover sequentially.
@@ -322,8 +335,8 @@ Before mining:
 3. Confirm the local Terminus/Harbor tooling needed for Oracle and NOP runs is available.
 4. Confirm repository mining access is available.
 5. Inspect existing workspace and submission slugs so the batch cannot overwrite or duplicate them.
-6. Confirm the Codex task tools and Luna-high/Luna-max profiles required by
-   `references/luna-thread-orchestration.md`; resolve the current project ID.
+6. Confirm collaboration-subagent routing for the default reviewer and blind
+   solvers. Confirm Luna task tooling only when the user opted into Luna.
 
 Stop early only for a real external blocker that prevents all useful progress. Otherwise continue autonomously.
 
@@ -331,7 +344,9 @@ Stop early only for a real external blocker that prevents all useful progress. O
 
 Maintain an accepted-task counter. Repeat the following workflow until the counter equals `N`.
 
-Both profiles execute `1 → 2 → 3 → 4 → 5 → 6 → 7`. The Advanced+ profile
+Both profiles execute `1 → 2 → 3 → 4 → 5 → 6 → 7`. Within Step 2, preserve
+the cost-first order `contract witnesses → contract review → full verifier → final review`.
+The Advanced+ profile
 uses Step 5 as a selection gate, but the technical validity checks in Step 3
 always happen first. Only the final handover in Step 7 increments the counter.
 Handover each finished task immediately using the incremental batch index. A
@@ -365,9 +380,12 @@ The candidate must:
   before assigning its `established` or `derived` classification;
 - pass the schema-v3 frontier-stability gate: one dominant topology, a recorded
   anti-retrieval search, and at least two orthogonal natural-but-wrong traps
-  with distinct semantic nodes/repair surfaces and disjoint witnesses. Reject
-  when one public artifact covers two planned mechanisms or any interaction;
-  use an upstream fix only as substrate for a materially new topology;
+  with distinct semantic nodes/repair surfaces and disjoint witnesses. Classify
+  public overlap as `none`, `substrate_primitives`, `partial_topology`,
+  `task_topology`, or `exact_solution`. Primitive count alone never rejects a
+  candidate. Reject only `task_topology`, `exact_solution`, or a reachable
+  callable solution/oracle; use an upstream fix only as substrate for a
+  materially new topology;
 - pass the canonical-image source/runtime/entrypoint smoke before it is added
   to the candidate ledger and before Stage B begins.
 
@@ -438,6 +456,17 @@ or narrow the candidate now if the contract, Oracle model, and observable
 assertions cannot be made symmetric; do not multiply an unresolved convention
 into dozens of fixtures.
 
+At this contract checkpoint, run instruction preflight, the mechanical folder
+scanner, canonical source smoke, static privilege/isolation-plan checks, and a
+field-by-field schema/type audit for every public JSON/native-artifact surface.
+The schema audit must state array/scalar/nullability and exact representation
+for every verifier-read field; naming a field without its type is not enough.
+Then launch the single reviewer's `contract_review` turn on the hash-bound
+task-visible packet. The builder and orchestrator independently adjudicate each
+finding before generating the full corpus. A contract-review PASS remains valid
+only while the task-visible goal, evidence, schemas, and interfaces remain
+unchanged.
+
 Build the verifier skeleton before the Oracle. Collect the exact
 platform-visible IDs and create `workspace/reports/<slug>/verifier-matrix.json`,
 then run:
@@ -452,20 +481,21 @@ If this fails, redesign the verifier or drop the candidate immediately. Do not
 write the Oracle, build Docker images, run Oracle/NOP, or spend a solve probe on
 it. Unit multiplication cannot repair missing mechanisms or interactions.
 
-After the breadth gate passes, the same builder finishes `solution/` and runs a
-cheap Oracle/NOP smoke cycle before any fairness review, mutation campaign, or
-consolidated audit. Reject broken/thin candidates here. Add the raw
+After the contract-review checkpoint and breadth gate pass, the same builder finishes
+`solution/` and runs a cheap targeted Oracle/NOP smoke cycle before the full
+mutation campaign or consolidated audit. Reject broken/thin candidates here.
+Add the raw
 Oracle CTRF path and SHA-256 to `verifier-matrix.json`, then rerun the same
 command without `--allow-missing-ctrf`. The CTRF IDs must exactly equal the
 declared behavior plus non-behavior IDs.
 
-Before launching fairness reviewers, run the five mechanical gates in
-`references/quota-efficient-workflow.md`: instruction preflight, client
-scanner without manual attestation, strict isolated-verifier preflight,
-artifact-independence evidence, and the anti-cheat threat-model check. Record
-their evidence hashes in `workspace/reports/<slug>/quota-ledger.json` and pass
-`quota_guard.py --phase pre-review`. Mechanical failures return to the builder
-and consume no reviewer turn.
+Before the final review or preparing a counted probe, run
+the five full mechanical gates in `references/quota-efficient-workflow.md`:
+instruction preflight, client scanner without manual attestation, strict
+isolated-verifier preflight, artifact-independence evidence, and the anti-cheat
+threat-model check. Record their evidence hashes in
+`workspace/reports/<slug>/quota-ledger.json`. Mechanical failures return to the
+builder and consume no reviewer or solver turn.
 
 Before a full difficulty probe, verify Terminus 3 goal/evidence/inferability:
 
@@ -478,10 +508,10 @@ Before a full difficulty probe, verify Terminus 3 goal/evidence/inferability:
 - Every important instruction requirement has a matching verifier check, and
   the verifier accepts semantic equivalents when representation is not part of
   the goal.
-- Two fresh task-visible Luna Codex tasks, launched in parallel and isolated
-  from the builder, find the goal clear, the graded inference
-  supportable, and no required fact unobtainable. They need not reproduce the
-  oracle implementation.
+- One fresh task-visible reviewer session, isolated from the builder, finds the
+  goal clear, the graded inference supportable, and no required fact
+  unobtainable. It need not reproduce the oracle implementation. The same
+  session later performs `final_review` against the stable snapshot.
 
 Create `workspace/reports/<slug>/instruction-sufficiency.json` with
 `schema_version: 3` and pass `sufficiency_manifest_check.py --require-v3`.
@@ -498,12 +528,22 @@ Then complete the semantic coverage gate in
 - retain at least one deliberately wrong/incomplete implementation as the
   portal-required proof that the verifier rejects a wrong solution; the
   per-node mutant campaign remains the stronger batch requirement;
-- the builder drafts the manifest and executes its mutants; the consolidated
-  auditor independently reviews semantic realism after the draft is complete;
+- the builder drafts the manifest and executes its mutants; the reviewer's
+  `final_review` independently checks semantic realism after the draft is
+  complete; an additional consolidated auditor is optional;
 - save `semantic-coverage.json`, cleanly applicable patches, materialized
   mutant hashes, verifier logs/commands/CTRF, and an independent review
   transcript;
 - pass `semantic_coverage_check.py --advanced-plus`.
+
+Build mutation evidence in two phases. First, run each candidate mutant only
+against its small targeted witness set until the intended behavior is killed
+and at least one unrelated witness survives. Do not launch strict preflight,
+Harbor, or the complete matrix while any targeted witness is red. Once the
+task, Oracle, and every mutant anchor are stable, run each accepted mutant and
+the wrong/incomplete solution against the full verifier exactly once for that
+snapshot. Preserve rejected/no-op/compile attempts as evidence, but do not
+re-run the whole matrix merely to debug them.
 
 Skeleton probes are exploratory only. They need a lightweight goal/evidence
 audit and must be prepared with `--exploratory`; their results cannot qualify a
@@ -511,8 +551,9 @@ task or be reused after the full verifier is built.
 
 ### 3. Run the Pre-Probe Validity Gates
 
-Reuse the strict preflight already completed before fairness, without emitting
-a submission ZIP. This proves the exact
+Run strict preflight only after contract-review remediation is closed, the complete
+Oracle is green on targeted witnesses, and all mutant anchors are stable. Do
+not emit a submission ZIP. This proves the exact
 Docker verifier completes within its 900-second hard timeout, Oracle earns
 `1.0`, NOP earns `0.0`, and the Oracle still passes under noexec `/tmp`:
 
@@ -522,11 +563,11 @@ scripts/preflight.sh workspace/tasks/<slug> --strict \
   --evidence-dir workspace/reports/<slug>/probe-preflight-logs
 ```
 
-Use one Luna-max consolidated-auditor task transcript for the semantic review, client/manual
-folder review, and task-tree style audit. Run the client scanner and independent
-manual review on the task folder before
-freezing it. Clear blockers and should-fix findings now, before spending blind
-solve sessions:
+Reuse the single reviewer session for its `final_review` turn covering semantic
+realism, client/manual folder review, and task-tree style. The builder and
+orchestrator adjudicate every finding. An additional consolidated auditor is
+optional. Run the client scanner and independent manual review on the task
+folder before spending blind-solve sessions:
 
 ```bash
 python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
@@ -549,8 +590,8 @@ python3 .agent/skills/task-batch/scripts/evidence.py task-style-receipt \
   --output workspace/reports/<slug>/task-style-preflight.json
 ```
 
-Create the fixed-role receipt from those three audit surfaces and the two
-fairness reviews:
+Create the role receipt from the builder, the single two-pass reviewer, and any
+optional auditor:
 
 ```bash
 python3 .agent/skills/task-batch/scripts/session_budget.py create \
@@ -559,7 +600,7 @@ python3 .agent/skills/task-batch/scripts/session_budget.py create \
   --builder-session-id <actual-builder-session-id>
 ```
 
-Append every builder, reviewer, auditor, failed, interrupted, and follow-up
+Append every builder, reviewer, optional auditor, failed, interrupted, and follow-up
 turn to `quota-ledger.json`, then require the solver reserve:
 
 ```bash
@@ -576,20 +617,17 @@ python3 .agent/skills/task-local-solve-probe/scripts/preprobe_check.py \
 
 Any fix invalidates the affected sufficiency, semantic, preflight, review,
 style, or session-budget receipt. Regenerate them before continuing.
-For a fairness/auditor remediation, send the report to the existing builder
-session and save its finding dispositions before applying edits. A new
-fresh-context builder is not an allowed remediation path.
+For reviewer/auditor remediation, send the report to the existing builder
+session, save its finding dispositions, and save the orchestrator adjudication
+before applying edits. A new fresh-context builder is not an allowed
+remediation path.
 
-### 4. Freeze the Counted Snapshot
+### 4. Optional Explicit Counted-Freeze Checkpoint
 
-Prepare counted solve copies only after Step 3 passes. `probe.py prepare`
-revalidates and hash-binds the pre-probe technical, client-review, task-style,
-V3 sufficiency, semantic-coverage, and verifier receipts:
-
-```bash
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
-  workspace/tasks/<slug> --profile advanced_frontier_only
-```
+Do not pause for a separate counted-freeze stage when Step 3 already proves the
+exact snapshot. Proceed directly to blind solving and run `probe.py prepare` as
+the first mechanical action there. A user may request an explicit checkpoint
+for inspection, but it creates no additional model role or quality claim.
 
 Do not create an intermediate ZIP. Packaging before the difficulty gate adds
 no evidence and produces an archive that later style/submission work replaces.
@@ -601,6 +639,13 @@ solve copies. Counted preparation must validate and hash-bind both the V3
 evidence-inferability receipt and the frozen semantic coverage/verifier
 receipts. Do not expose the solution, verifier tests, rubrics, reports,
 expected outputs, or hidden fixtures.
+
+Unless Step 4 was explicitly requested, begin this stage directly with:
+
+```bash
+python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
+  workspace/tasks/<slug> --profile advanced_frontier_only
+```
 
 Use the actual subagent model available in the current environment. Preserve the real diff, verifier result, and failure classification for each attempt.
 
@@ -635,7 +680,7 @@ metadata, return to Step 3 and prepare fresh counted runs.
 For a provably mechanical task-visible edit only (whitespace, Unicode,
 punctuation, or an allowlisted lexical substitution with unchanged V3 mapping),
 follow the editorial-rebind rule in the quota workflow reference: rerun
-deterministic checks and hashes, but do not recall the fairness pair. Any
+  deterministic checks and hashes, but do not recall the reviewer. Any
 requirement/evidence/interface change is semantic and invalidates the affected
 review.
 
@@ -646,10 +691,16 @@ Harbor/Terminus checks that do not require an API key, then create the final
 submission file described below from the frozen task and observed probe
 evidence.
 
-The task-visible prose was already audited before the counted snapshot. Reuse
-the same consolidated auditor Codex task with `send_message_to_thread` in a
-new turn and use
-`task-llm-style-audit` now only on external post-probe surfaces:
+Do not run Harbor during mining, scaffold, fairness remediation, mutant
+debugging, or pre-shortlist reviewer remediation. A requirement that Harbor pass
+before delivery does not authorize moving it earlier. The only exception is an
+explicit user request for an early Harbor integration diagnosis; record that
+exception and do not treat it as difficulty evidence.
+
+The task-visible prose was already reviewed before the counted snapshot. Use
+`task-llm-style-audit` on external post-probe surfaces. This is orchestrator
+work by default; if an optional auditor was explicitly launched, it may review
+these surfaces in its permitted follow-up:
 
 - rubric text;
 - submission explanations;
@@ -674,8 +725,9 @@ python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
 ```
 
 The receipt reuses `task-style-preflight.json` by hash and covers only the
-external submission surface. Do not create it unless the named auditor actually
-reviewed that final submission.
+external submission surface. Bind it to the actual reviewer when one reviewed
+the final submission; otherwise bind it to the orchestrator's deterministic
+style-audit receipt without inventing an auditor identity.
 
 ### 7. Seal the Final Snapshot
 
@@ -706,9 +758,10 @@ python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
   --evidence-output workspace/reports/<slug>/client-review.json
 ```
 
-Use the same consolidated-auditor runtime/model/session identity for this final
-ZIP review and for `style-audit.json`. The post-probe transcripts are new and
-must cover the exact final submission and ZIP; do not reuse the old transcript
+When an optional consolidated auditor is used, reuse its runtime/model/session
+identity for this final ZIP review and `style-audit.json`. Otherwise preserve
+the orchestrator's real manual-review/style provenance. Post-probe transcripts
+must cover the exact final submission and ZIP; do not reuse an old transcript
 hash as a substitute for reviewing changed surfaces.
 
 Complete the manual portions required by `task-client-feedback-review`; the
@@ -823,15 +876,19 @@ Count a task toward `N` only when all of the following are true:
 - The final ZIP passes client-feedback review with no blocker.
 - Two valid fresh attempts exist, with an adaptive third when required, and at
   least one trustworthy semantic failure provides a local difficulty signal.
-- The role receipt and final probe evidence prove exactly one builder, two
-  fairness reviewers, one reusable consolidated auditor, and two or three
-  blind solvers: 6–7 total sessions and 5–6 external sessions per accepted task.
+- The role receipt and final probe evidence prove exactly one builder, one
+  fresh reviewer session with exactly two review turns, and two or three blind
+  solvers: 4–5 default sessions. Any optional Luna reviewer/auditor session is
+  separately recorded but is not required.
+- The quota ledger hash-binds builder critiques and independent orchestrator
+  adjudications for both `contract_review` and `final_review`.
 - The quota ledger counts every actual model turn, enforces Sol-medium for
-  design/building, Luna-high Codex tasks for fairness review, a Luna-max Codex
-  task for consolidated audit, and Sol-medium subagents for blind solving,
-  stays within 12
-  turns, respects both one-cycle remediation caps, and passed the pre-solver
-  reserve and handover checks.
+  design/building, Sol-medium Codex or Opus-5-medium Claude for the default
+  reviewer, and Sol-medium subagents for blind solving. Optional Luna-high/max
+  tasks must match their explicit opt-in. The ledger stays within the user's
+  batch-wide limits, respects remediation caps, and passes pre-solver and
+  handover checks. Do not resurrect a fixed per-candidate turn cap or synthetic
+  pre-solver reserve.
 - Any provisional Advanced `1/3` has distinct multi-node failure geometry; any
   replicated single-lever split is rejected.
 - The pre-freeze task-tree style audit and post-probe submission-only style

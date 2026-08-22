@@ -10,14 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 POLICIES = {
-    ("fairness_reviewer", "initial"): {
+    ("fairness_reviewer", "contract_review"): {
         "required": {"instruction", "task_visible_tree"},
         "allowed": {"instruction", "task_visible_tree", "evidence_manifest"},
         "max_bytes": 8_000_000,
         "max_files": 2_000,
     },
-    ("fairness_reviewer", "re_review"): {
-        "required": {"instruction", "task_visible_tree", "remediation_summary"},
+    ("fairness_reviewer", "final_review"): {
+        "required": {"instruction", "task_visible_tree", "evidence_manifest"},
         "allowed": {"instruction", "task_visible_tree", "evidence_manifest", "remediation_summary"},
         "max_bytes": 8_000_000,
         "max_files": 2_000,

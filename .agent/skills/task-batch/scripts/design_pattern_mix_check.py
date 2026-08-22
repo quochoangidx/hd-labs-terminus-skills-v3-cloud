@@ -29,6 +29,13 @@ STRUCTURAL_SIGNATURE_FIELDS = (
     "difficulty_source",
     "artifact_type",
 )
+RETRIEVAL_OVERLAP_CLASSIFICATIONS = {
+    "none",
+    "substrate_primitives",
+    "partial_topology",
+    "task_topology",
+    "exact_solution",
+}
 
 
 def _nonempty(value: Any) -> bool:
@@ -209,13 +216,53 @@ def _validate_frontier_stability(
         exact_found = retrieval.get("exact_solution_found")
         if not isinstance(exact_found, bool):
             errors.append(f"{label}: retrieval_audit.exact_solution_found must be boolean")
-        elif not exact_found and (mechanisms or interactions):
+
+        overlap_classification = retrieval.get("overlap_classification")
+        if overlap_classification is None:
+            # Read historical schema-v2/v3 receipts without forcing a rewrite.
+            overlap_classification = "exact_solution" if exact_found else "none"
+        elif overlap_classification not in RETRIEVAL_OVERLAP_CLASSIFICATIONS:
             errors.append(
-                f"{label}: retrieval overlap cannot be recorded when exact_solution_found is false"
+                f"{label}: retrieval_audit.overlap_classification must be one of "
+                f"{sorted(RETRIEVAL_OVERLAP_CLASSIFICATIONS)}"
             )
-        elif exact_found and (len(set(mechanisms)) >= 2 or interactions):
+
+        callable_solution = retrieval.get("callable_solution_available", False)
+        if not isinstance(callable_solution, bool):
             errors.append(
-                f"{label}: public artifact covers >=2 mechanisms or a genuine interaction"
+                f"{label}: retrieval_audit.callable_solution_available must be boolean"
+            )
+
+        if overlap_classification == "none" and (mechanisms or interactions):
+            errors.append(
+                f"{label}: retrieval overlap IDs require a non-none overlap_classification"
+            )
+        if overlap_classification in {"substrate_primitives", "partial_topology"}:
+            if not (mechanisms or interactions):
+                errors.append(
+                    f"{label}: {overlap_classification} must name the overlapping "
+                    "mechanisms or interactions"
+                )
+            if not _nonempty(retrieval.get("non_collapse_rationale")):
+                errors.append(
+                    f"{label}: retrieval_audit.non_collapse_rationale is required "
+                    f"for {overlap_classification}"
+                )
+        if exact_found and overlap_classification != "exact_solution":
+            errors.append(
+                f"{label}: exact_solution_found=true requires overlap_classification=exact_solution"
+            )
+        if overlap_classification == "exact_solution" and not exact_found:
+            errors.append(
+                f"{label}: overlap_classification=exact_solution requires exact_solution_found=true"
+            )
+        if overlap_classification in {"task_topology", "exact_solution"}:
+            errors.append(
+                f"{label}: reachable public artifact contains the task-specific repair topology"
+            )
+        if callable_solution is True:
+            errors.append(
+                f"{label}: reachable public artifact provides a callable solution/oracle"
             )
         if retrieval.get("disposition") != "pass":
             errors.append(f"{label}: retrieval_audit.disposition must be pass")

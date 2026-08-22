@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lifecycle lease guard for Luna fairness-reviewer and auditor tasks."""
+"""Lifecycle lease guard for optional Luna reviewer and auditor tasks."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ from typing import Any
 
 MODEL = "gpt-5.6-luna"
 ROLE_POLICY = {
-    "fairness_reviewer": {"effort": "high", "minutes": 12, "tool_limit": 12, "count": 2},
+    "fairness_reviewer": {"effort": "high", "minutes": 12, "tool_limit": 12, "count": 1},
     "consolidated_auditor": {"effort": "max", "minutes": 18, "tool_limit": 20, "count": 1},
 }
 PHASES = {
-    "fairness_reviewer": {"initial", "re_review"},
+    "fairness_reviewer": {"contract_review", "final_review"},
     "consolidated_auditor": {"pre_freeze", "re_audit", "post_probe"},
 }
 MUTATING_TOOLS = {"apply_patch", "Edit", "Write", "MultiEdit", "NotebookEdit"}
@@ -220,7 +220,7 @@ def hook(root: Path) -> int:
     elif event_name == "Stop":
         try:
             validate_packet(Path(lease["packet_path"]), lease["role"], lease["phase"], lease["task_slug"])
-            lease["status"] = "complete" if lease["phase"] == "post_probe" else "phase_complete"
+            lease["status"] = "complete" if lease["phase"] in {"final_review", "post_probe"} else "phase_complete"
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             lease["status"] = "invalid_snapshot"
             lease["snapshot_error"] = str(exc)
@@ -286,13 +286,13 @@ def transition(args: argparse.Namespace, root: Path) -> int:
         raise ValueError("lease must finish its current phase before transition")
     role = lease["role"]
     allowed = {
-        ("fairness_reviewer", "initial"): {"re_review"},
+        ("fairness_reviewer", "contract_review"): {"final_review"},
         ("consolidated_auditor", "pre_freeze"): {"re_audit", "post_probe"},
         ("consolidated_auditor", "re_audit"): {"post_probe"},
     }.get((role, lease["phase"]), set())
     if args.phase not in allowed:
         raise ValueError(f"invalid transition {lease['phase']} -> {args.phase}")
-    if args.phase in {"re_review", "re_audit"}:
+    if args.phase in {"final_review", "re_audit"}:
         if lease.get("remediation_cycles", 0) >= 1:
             raise ValueError("role remediation cycle already consumed")
         lease["remediation_cycles"] = 1

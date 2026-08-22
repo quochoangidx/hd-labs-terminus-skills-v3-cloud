@@ -25,6 +25,8 @@ class DesignPatternMixTests(unittest.TestCase):
                 "search_queries": ["issue wording", "error symbol", "version diff"],
                 "public_artifacts_checked": ["https://example.invalid/change"],
                 "exact_solution_found": False,
+                "overlap_classification": "none",
+                "callable_solution_available": False,
                 "satisfied_mechanism_ids": [],
                 "satisfied_interaction_ids": [],
                 "disposition": "pass",
@@ -206,6 +208,7 @@ class DesignPatternMixTests(unittest.TestCase):
         stability["retrieval_audit"].update(
             {
                 "exact_solution_found": True,
+                "overlap_classification": "exact_solution",
                 "satisfied_mechanism_ids": ["authority", "invalidation"],
             }
         )
@@ -225,7 +228,89 @@ class DesignPatternMixTests(unittest.TestCase):
             ],
         }
         errors, _ = mix.validate(manifest, {"P1": "pattern"})
-        self.assertTrue(any("public artifact covers" in error for error in errors))
+        self.assertTrue(any("task-specific repair topology" in error for error in errors))
+
+    def test_schema_v3_accepts_multi_mechanism_substrate_overlap(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["frontier_stability"]["retrieval_audit"].update(
+            {
+                "overlap_classification": "substrate_primitives",
+                "satisfied_mechanism_ids": ["authority", "invalidation"],
+                "non_collapse_rationale": (
+                    "The public library exposes parsing primitives but not the "
+                    "candidate's replay-to-invalidation repair topology."
+                ),
+            }
+        )
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 1,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [candidate],
+        }
+        errors, _ = mix.validate(manifest, {"P1": "pattern"}, allow_partial=True)
+        self.assertEqual([], errors)
+
+    def test_schema_v3_accepts_partial_topology_interaction_overlap(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["frontier_stability"]["retrieval_audit"].update(
+            {
+                "overlap_classification": "partial_topology",
+                "satisfied_interaction_ids": ["authority-invalidation"],
+                "non_collapse_rationale": (
+                    "The public implementation contains one generic interaction but "
+                    "not the task-local evidence chain or complete repair topology."
+                ),
+            }
+        )
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 1,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [candidate],
+        }
+        errors, _ = mix.validate(manifest, {"P1": "pattern"}, allow_partial=True)
+        self.assertEqual([], errors)
+
+    def test_schema_v3_rejects_task_topology_even_without_exact_patch(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["frontier_stability"]["retrieval_audit"].update(
+            {
+                "overlap_classification": "task_topology",
+                "satisfied_mechanism_ids": ["authority", "invalidation"],
+                "satisfied_interaction_ids": ["authority-invalidation"],
+            }
+        )
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 1,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [candidate],
+        }
+        errors, _ = mix.validate(manifest, {"P1": "pattern"}, allow_partial=True)
+        self.assertTrue(any("task-specific repair topology" in error for error in errors))
+
+    def test_schema_v3_rejects_callable_public_oracle(self) -> None:
+        candidate = self._schema_v3_candidate()
+        candidate["frontier_stability"]["retrieval_audit"].update(
+            {"callable_solution_available": True}
+        )
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "candidate_budget": 1,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [candidate],
+        }
+        errors, _ = mix.validate(manifest, {"P1": "pattern"}, allow_partial=True)
+        self.assertTrue(any("callable solution/oracle" in error for error in errors))
 
     def test_schema_v2_rejects_overlapping_trap_witnesses(self) -> None:
         stability = self._frontier_stability()

@@ -124,6 +124,22 @@ def test_v3_allows_multi_source_style_inference_and_hidden_variations(tmp_path: 
     assert CHECKER.validate_v3(task, report_path) == []
 
 
+def test_v3_accepts_single_reviewer_two_pass_policy(tmp_path: Path) -> None:
+    task, report_path, report = build_v3_fixture(tmp_path)
+    reviewer = report["fairness_review"]["reviewers"][0]
+    reviewer["review_passes"] = [
+        {"phase": "contract_review"},
+        {"phase": "final_review"},
+    ]
+    report["fairness_review"].update({
+        "review_policy": "single_reviewer_two_pass_v1",
+        "reviewer_count": 1,
+        "reviewers": [reviewer],
+    })
+    report_path.write_text(json.dumps(report))
+    assert CHECKER.validate_v3(task, report_path) == []
+
+
 def test_v3_rejects_oracle_only_policy(tmp_path: Path) -> None:
     task, report_path, report = build_v3_fixture(tmp_path)
     report["unobtainable_knowledge"]["oracle_only_policies"] = ["secret tie-break"]

@@ -1,13 +1,13 @@
 # Luna Review-Thread Orchestration
 
-Use this workflow for the two fairness reviewers and the consolidated auditor.
-They are independent Codex tasks, not collaboration subagents. The builder and
-blind solvers remain `gpt-5.6-sol` collaboration subagents.
+Use this workflow only for an explicitly opted-in Luna reviewer or consolidated
+auditor. The default reviewer is a single collaboration subagent described in
+`single-reviewer-workflow.md`.
 
 ## Authorization and availability
 
-Invoking `task-batch N` authorizes the visible role tasks required by this
-workflow. They appear in the Codex sidebar. Before spending a builder turn:
+Do not create a visible Luna task merely because `task-batch N` was invoked.
+The user must explicitly opt in. Before spending that optional turn:
 
 1. Confirm that `list_projects`, `create_thread`, `wait_threads`, `read_thread`,
    and `send_message_to_thread` are available.
@@ -20,7 +20,7 @@ model, use the parent task as a reviewer, or claim that changing
 
 ## Snapshot and prompt isolation
 
-Create a hash-bound fairness packet containing only `instruction.md` plus the
+Create a hash-bound reviewer packet containing only `instruction.md` plus the
 agent-visible environment/evidence. Exclude `solution/`, `tests/`, rubrics,
 reports, intended mechanisms, builder notes, and prior probe results. Give each
 fairness task only the packet path, its SHA-256, the review contract, and the
@@ -39,14 +39,14 @@ not edit task files, commit, push, or create a PR.
 
 ## Launch and collection
 
-Launch the fairness pair asynchronously with separate `create_thread` calls:
+Launch one optional reviewer task:
 
 - model `gpt-5.6-luna`, thinking `high`;
-- titles `<slug> fairness 1` and `<slug> fairness 2`;
-- distinct thread IDs and the same hash-bound fairness packet.
+- title `<slug> optional Luna reviewer`;
+- reuse its thread ID for `contract_review` and `final_review`.
 
-Wait on both in one bounded `wait_threads` call and carry each returned cursor
-forward. Use `read_thread` only to capture the completed turn and transcript.
+Use a bounded `wait_threads` call and carry the returned cursor forward. Use
+`read_thread` only to capture the completed turn and transcript.
 Do not wake on commentary or repeatedly reread unchanged state. If a task asks
 for information, provide only an operational clarification already present in
 its packet; never reveal builder or verifier-only context.
@@ -57,9 +57,8 @@ thread after probes with `send_message_to_thread`; omit model changes or set the
 same Luna/max profile explicitly. The follow-up is a new counted turn but the
 auditor session identity remains the original thread ID.
 
-For one permitted remediation cycle, send the revised hash-bound packet to the
-same reviewer or auditor threads. Do not create replacement identities. Reject
-the candidate if the same gate fails again.
+Send the final hash-bound packet to the same reviewer thread for its second and
+last turn. Do not create a replacement identity or a third reviewer turn.
 
 ## Provenance
 
