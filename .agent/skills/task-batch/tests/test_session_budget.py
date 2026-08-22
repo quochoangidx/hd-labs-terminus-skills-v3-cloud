@@ -74,6 +74,36 @@ class SessionBudgetTests(unittest.TestCase):
             _, errors = session_budget.build_receipt(task_dir, report_dir, builder)
             self.assertTrue(any("runtime must be codex-thread" in error for error in errors))
 
+    def test_accepts_one_sol_reviewer_and_no_auditor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            task_dir, report_dir, builder = self.fixture(Path(tmp))
+            reviewer = {
+                "reviewer_id": "reviewer-one",
+                "runtime": "codex-collaboration",
+                "model": "gpt-5.6-sol",
+                "session_id": "reviewer-one-session",
+                "fresh_context": True,
+                "task_visible_only": True,
+            }
+            final_review = {
+                **{key: reviewer[key] for key in ("runtime", "model", "session_id")},
+                "transcript": "final-review.md",
+                "transcript_sha256": "b" * 64,
+            }
+            payloads = {
+                "instruction-sufficiency.json": {"fairness_review": {"reviewers": [reviewer]}},
+                "semantic-coverage.json": {"review": final_review},
+                "pre-freeze-review.json": {"manual_review": final_review},
+                "task-style-preflight.json": {"auditor": final_review},
+            }
+            for name, payload in payloads.items():
+                (report_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+            receipt, errors = session_budget.build_receipt(task_dir, report_dir, builder)
+            self.assertEqual([], errors)
+            self.assertEqual(3, receipt["schema_version"])
+            self.assertEqual("single_reviewer_two_pass_v1", receipt["role_policy"])
+            self.assertEqual({}, receipt["consolidated_auditor"])
+
 
 if __name__ == "__main__":
     unittest.main()

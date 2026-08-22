@@ -13,6 +13,7 @@ from typing import Any
 BUILDER_MODEL = "gpt-5.6-sol"
 REVIEW_MODEL = "gpt-5.6-luna"
 SOLVER_MODEL = "gpt-5.6-sol"
+SINGLE_REVIEWER_POLICY = "single_reviewer_two_pass_v1"
 ROLE_PROFILES = {
     "builder": (BUILDER_MODEL, "medium"),
     "fairness_reviewer": (REVIEW_MODEL, "high"),
@@ -39,7 +40,12 @@ GATES = {
     "artifact_independence",
     "anti_cheat",
 }
-BUILDER_PURPOSES = {"design_build", "fairness_remediation", "auditor_remediation"}
+BUILDER_PURPOSES = {
+    "design_build",
+    "fairness_remediation",
+    "reviewer_remediation",
+    "auditor_remediation",
+}
 REPORT_KINDS = {
     "durable_memory",
     "pattern_catalog",
@@ -152,6 +158,43 @@ def validate_critique_receipt(
             errors.append(f"{finding_label}.evidence and action are required")
 
 
+def validate_review_adjudications(
+    ledger_path: Path, records: object, errors: list[str]
+) -> None:
+    if not isinstance(records, list) or len(records) != 2:
+        errors.append("review_adjudications must contain contract_review and final_review")
+        return
+    phases: set[str] = set()
+    for index, record in enumerate(records):
+        label = f"review_adjudications[{index}]"
+        if not isinstance(record, dict):
+            errors.append(f"{label} must be an object")
+            continue
+        phase = record.get("phase")
+        if phase not in {"contract_review", "final_review"} or phase in phases:
+            errors.append(f"{label}.phase is invalid or duplicated")
+        else:
+            phases.add(str(phase))
+        for field in ("builder_critique", "orchestrator_adjudication"):
+            evidence = record.get(field)
+            if not isinstance(evidence, dict) or not nonempty(evidence.get("path")):
+                errors.append(f"{label}.{field}.path is required")
+                continue
+            candidate = Path(str(evidence["path"]))
+            path = candidate.resolve() if candidate.is_absolute() else (ledger_path.parent / candidate).resolve()
+            try:
+                path.relative_to(ledger_path.parent.resolve())
+            except ValueError:
+                errors.append(f"{label}.{field} must stay in the task report directory")
+                continue
+            if not path.is_file() or path.stat().st_size == 0:
+                errors.append(f"{label}.{field} is missing or empty")
+            elif evidence.get("sha256") != hashlib.sha256(path.read_bytes()).hexdigest():
+                errors.append(f"{label}.{field} sha256 is stale")
+    if phases != {"contract_review", "final_review"}:
+        errors.append("review_adjudications phases are incomplete")
+
+
 def validate_role_lease_receipts(
     ledger_path: Path,
     records: object,
@@ -159,6 +202,9 @@ def validate_role_lease_receipts(
     task_slug: object,
     completed_sessions: dict[str, set[str]],
     errors: list[str],
+    *,
+    single_reviewer: bool = False,
+    luna_sessions: dict[str, set[str]] | None = None,
 ) -> dict[str, list[str]]:
     sessions = {"fairness_reviewer": [], "consolidated_auditor": []}
     if not isinstance(records, list):
@@ -201,10 +247,16 @@ def validate_role_lease_receipts(
         role: [lease for lease in leases if lease.get("role") == role]
         for role in sessions
     }
-    if len(role_groups["fairness_reviewer"]) != 2:
-        errors.append("role leases require exactly two fairness reviewers")
-    if len(role_groups["consolidated_auditor"]) != 1:
-        errors.append("role leases require exactly one consolidated auditor")
+    if single_reviewer:
+        expected = luna_sessions or {role: set() for role in sessions}
+        for role, group in role_groups.items():
+            if len(group) != len(expected.get(role, set())):
+                errors.append(f"role leases do not match opted-in Luna {role} sessions")
+    else:
+        if len(role_groups["fairness_reviewer"]) != 2:
+            errors.append("role leases require exactly two fairness reviewers")
+        if len(role_groups["consolidated_auditor"]) != 1:
+            errors.append("role leases require exactly one consolidated auditor")
     for role, group in role_groups.items():
         expected_model, expected_effort = ROLE_PROFILES[role]
         for lease in group:
@@ -221,18 +273,22 @@ def validate_role_lease_receipts(
             if lease.get("remediation_cycles") not in {0, 1}:
                 errors.append(f"{label}: remediation cycle cap exceeded")
 
+    expected_sessions = luna_sessions if single_reviewer else completed_sessions
     reviewer_sessions = set(sessions["fairness_reviewer"])
-    if reviewer_sessions != completed_sessions["fairness_reviewer"]:
+    if reviewer_sessions != expected_sessions["fairness_reviewer"]:
         errors.append("fairness lease sessions do not match completed reviewer task sessions")
     auditor_sessions = set(sessions["consolidated_auditor"])
-    if auditor_sessions != completed_sessions["consolidated_auditor"]:
+    if auditor_sessions != expected_sessions["consolidated_auditor"]:
         errors.append("auditor lease session does not match completed auditor task session")
 
     for lease in role_groups["fairness_reviewer"]:
-        if lease.get("status") != "complete" or lease.get("phase") not in {"initial", "re_review"}:
+        allowed_phases = {"contract_review", "final_review"} if single_reviewer else {"initial", "re_review"}
+        if lease.get("status") != "complete" or lease.get("phase") not in allowed_phases:
             errors.append(f"role lease {lease.get('lease_id')}: reviewer lease is not complete")
     for lease in role_groups["consolidated_auditor"]:
-        if phase == "pre-solver":
+        if single_reviewer and lease.get("status") not in {"complete", "phase_complete"}:
+            errors.append(f"role lease {lease.get('lease_id')}: optional auditor lease is incomplete")
+        elif phase == "pre-solver":
             if lease.get("status") != "phase_complete" or lease.get("phase") not in {"pre_freeze", "re_audit"}:
                 errors.append(f"role lease {lease.get('lease_id')}: auditor pre-solver phase is invalid")
         elif phase == "handover" and (
@@ -244,8 +300,10 @@ def validate_role_lease_receipts(
 
 def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
-    if data.get("schema_version") != 2:
-        errors.append("schema_version must equal 2")
+    single_reviewer = data.get("role_policy") == SINGLE_REVIEWER_POLICY
+    expected_schema = 3 if single_reviewer else 2
+    if data.get("schema_version") != expected_schema:
+        errors.append(f"schema_version must equal {expected_schema}")
     if not nonempty(data.get("task_slug")):
         errors.append("task_slug is required")
     turns = data.get("turns")
@@ -256,6 +314,8 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
     role_counts = {role: 0 for role in ROLES}
     completed_role_counts = {role: 0 for role in ROLES}
     completed_role_session_ids = {role: set() for role in ROLES}
+    completed_review_phases: dict[str, set[str]] = {}
+    luna_sessions = {"fairness_reviewer": set(), "consolidated_auditor": set()}
     for index, turn in enumerate(turns):
         label = f"turns[{index}]"
         if not isinstance(turn, dict):
@@ -277,15 +337,28 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
             if nonempty(turn.get("session_id")):
                 completed_role_session_ids[str(role)].add(str(turn["session_id"]))
         expected_model, expected_effort = ROLE_PROFILES[str(role)]
-        if turn.get("model") != expected_model:
-            errors.append(f"{label}.model must be {expected_model} for role {role}")
-        if turn.get("reasoning_effort") != expected_effort:
-            errors.append(
-                f"{label}.reasoning_effort must be {expected_effort} for role {role}"
-            )
+        if single_reviewer and role == "fairness_reviewer":
+            model = str(turn.get("model", ""))
+            default_codex = model == SOLVER_MODEL and turn.get("reasoning_effort") == "medium"
+            default_claude = (model == "opus-5" or model.startswith("claude-opus-5")) and turn.get("reasoning_effort") == "medium"
+            optional_luna = model == REVIEW_MODEL and turn.get("reasoning_effort") == "high"
+            if not (default_codex or default_claude or optional_luna):
+                errors.append(f"{label}: reviewer must use Sol medium, Opus 5 medium, or opted-in Luna high")
+            expected_surface = "codex_thread" if optional_luna else "collaboration_subagent"
+            if optional_luna and status == "complete" and nonempty(turn.get("session_id")):
+                luna_sessions["fairness_reviewer"].add(str(turn["session_id"]))
+        else:
+            if turn.get("model") != expected_model:
+                errors.append(f"{label}.model must be {expected_model} for role {role}")
+            if turn.get("reasoning_effort") != expected_effort:
+                errors.append(
+                    f"{label}.reasoning_effort must be {expected_effort} for role {role}"
+                )
+            expected_surface = ROLE_SURFACES[str(role)]
+            if single_reviewer and role == "consolidated_auditor" and status == "complete" and nonempty(turn.get("session_id")):
+                luna_sessions["consolidated_auditor"].add(str(turn["session_id"]))
         if status not in STATUSES:
             errors.append(f"{label}.status is invalid; failed/interrupted turns still count")
-        expected_surface = ROLE_SURFACES[str(role)]
         if turn.get("execution_surface") != expected_surface:
             errors.append(
                 f"{label}.execution_surface must be {expected_surface} for role {role}"
@@ -338,7 +411,9 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
                     errors.append(f"{label}: design/build report inputs missing {missing}")
             else:
                 feedback_kind = (
-                    "reviewer_feedback" if purpose == "fairness_remediation" else "auditor_feedback"
+                    "reviewer_feedback"
+                    if purpose in {"fairness_remediation", "reviewer_remediation"}
+                    else "auditor_feedback"
                 )
                 if feedback_kind not in kinds:
                     errors.append(f"{label}: remediation is missing {feedback_kind}")
@@ -347,12 +422,19 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
             errors.append(f"{label}.context_mode must be fresh for role {role}")
         elif role == "consolidated_auditor" and context_mode != "independent":
             errors.append(f"{label}.context_mode must be independent for the auditor")
+        if single_reviewer and role == "fairness_reviewer" and status == "complete":
+            review_phase = turn.get("review_phase")
+            if review_phase not in {"contract_review", "final_review"}:
+                errors.append(f"{label}.review_phase is required for the single reviewer")
+            elif nonempty(turn.get("session_id")):
+                completed_review_phases.setdefault(str(turn["session_id"]), set()).add(str(review_phase))
 
     remediations = data.get("remediations")
     if not isinstance(remediations, dict):
         errors.append("remediations must be an object")
         remediations = {}
-    for gate in ("fairness", "auditor"):
+    remediation_gates = ("reviewer", "auditor") if single_reviewer else ("fairness", "auditor")
+    for gate in remediation_gates:
         count = remediations.get(gate)
         if not isinstance(count, int) or isinstance(count, bool) or count < 0:
             errors.append(f"remediations.{gate} must be a non-negative integer")
@@ -371,14 +453,23 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
     ):
         errors.append("review/audit turns were recorded before the mechanical pre-review gate")
     if phase == "pre-solver":
-        if completed_role_counts["fairness_reviewer"] < 2:
-            errors.append("pre-solver requires at least two completed fairness-reviewer turns")
-        if completed_role_counts["consolidated_auditor"] < 1:
-            errors.append("pre-solver requires a completed consolidated-auditor turn")
+        if single_reviewer:
+            if len(completed_role_session_ids["fairness_reviewer"]) != 1:
+                errors.append("pre-solver requires exactly one completed reviewer session")
+            elif set(next(iter(completed_review_phases.values()), set())) != {"contract_review", "final_review"}:
+                errors.append("pre-solver requires contract_review and final_review in the same reviewer session")
+            validate_review_adjudications(path, data.get("review_adjudications"), errors)
+        else:
+            if completed_role_counts["fairness_reviewer"] < 2:
+                errors.append("pre-solver requires at least two completed fairness-reviewer turns")
+            if completed_role_counts["consolidated_auditor"] < 1:
+                errors.append("pre-solver requires a completed consolidated-auditor turn")
         if role_counts["blind_solver"]:
             errors.append("pre-solver ledger already contains blind-solver turns")
     if phase == "handover" and completed_role_counts["blind_solver"] not in {2, 3}:
         errors.append("handover requires exactly two or three completed blind-solver turns")
+    if phase == "handover" and single_reviewer:
+        validate_review_adjudications(path, data.get("review_adjudications"), errors)
 
     role_lease_sessions = {"fairness_reviewer": [], "consolidated_auditor": []}
     if phase in {"pre-solver", "handover"}:
@@ -389,11 +480,14 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
             data.get("task_slug"),
             completed_role_session_ids,
             errors,
+            single_reviewer=single_reviewer,
+            luna_sessions=luna_sessions,
         )
 
     summary = {
         "status": "fail" if errors else "pass",
         "phase": phase,
+        "role_policy": data.get("role_policy", "legacy_luna_v1"),
         "turn_count": len(turns),
         "role_turn_counts": role_counts,
         "completed_role_turn_counts": completed_role_counts,

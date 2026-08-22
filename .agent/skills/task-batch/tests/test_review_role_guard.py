@@ -27,17 +27,17 @@ packet_module = load_module("role_context_packet")
 
 
 class ReviewRoleGuardTests(unittest.TestCase):
-    def fairness_packet(self, root: Path, phase: str = "initial") -> Path:
+    def fairness_packet(self, root: Path, phase: str = "contract_review") -> Path:
         instruction = root / f"instruction-{phase}.md"
         instruction.write_text("Produce artifact.json\n", encoding="utf-8")
         visible = root / "visible"
         visible.mkdir(exist_ok=True)
         (visible / "evidence.json").write_text("{}\n", encoding="utf-8")
         inputs = [("instruction", instruction), ("task_visible_tree", visible)]
-        if phase == "re_review":
-            summary = root / "remediation.md"
-            summary.write_text("Changed wording only.\n", encoding="utf-8")
-            inputs.append(("remediation_summary", summary))
+        if phase == "final_review":
+            evidence = root / "evidence-manifest.json"
+            evidence.write_text("{}\n", encoding="utf-8")
+            inputs.append(("evidence_manifest", evidence))
         data = packet_module.build_packet("fairness_reviewer", phase, "tbrain-example", inputs)
         path = root / f"fairness-{phase}.json"
         path.write_text(json.dumps(data), encoding="utf-8")
@@ -46,8 +46,8 @@ class ReviewRoleGuardTests(unittest.TestCase):
     def open_reviewers(self, root: Path) -> list[Path]:
         packet = self.fairness_packet(root)
         args = argparse.Namespace(
-            role="fairness_reviewer", phase="initial", task="tbrain-example",
-            packet=packet, count=2, deadline_minutes=5,
+            role="fairness_reviewer", phase="contract_review", task="tbrain-example",
+            packet=packet, count=1, deadline_minutes=5,
         )
         with redirect_stdout(StringIO()):
             guard.open_leases(args, root / "leases")
@@ -81,17 +81,16 @@ class ReviewRoleGuardTests(unittest.TestCase):
             code = guard.hook(root / "leases")
         return code, output.getvalue()
 
-    def test_two_sessions_claim_distinct_reviewer_leases(self) -> None:
+    def test_one_session_claims_the_optional_reviewer_lease(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             paths = self.open_reviewers(root)
-            for session in ("thread-1", "thread-2"):
-                code, _ = self.hook(root, {
-                    "hook_event_name": "SessionStart", "model": "gpt-5.6-luna", "session_id": session,
-                })
-                self.assertEqual(0, code)
+            code, _ = self.hook(root, {
+                "hook_event_name": "SessionStart", "model": "gpt-5.6-luna", "session_id": "thread-1",
+            })
+            self.assertEqual(0, code)
             owners = {guard.load(path)["owner"]["session_id"] for path in paths}
-            self.assertEqual({"thread-1", "thread-2"}, owners)
+            self.assertEqual({"thread-1"}, owners)
 
     def test_reviewer_is_read_only_and_context_isolated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -113,7 +112,7 @@ class ReviewRoleGuardTests(unittest.TestCase):
             self.assertEqual(2, code)
             self.assertIn("forbidden", output)
 
-    def test_re_review_requires_transition_and_is_single_cycle(self) -> None:
+    def test_final_review_requires_transition_and_is_single_cycle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             paths = self.open_reviewers(root)
@@ -121,9 +120,9 @@ class ReviewRoleGuardTests(unittest.TestCase):
             lease = guard.load(lease_path)
             lease["status"] = "phase_complete"
             guard.save(lease_path, lease)
-            re_review = self.fairness_packet(root, "re_review")
+            re_review = self.fairness_packet(root, "final_review")
             args = argparse.Namespace(
-                lease=lease["lease_id"], phase="re_review", packet=re_review, deadline_minutes=5,
+                lease=lease["lease_id"], phase="final_review", packet=re_review, deadline_minutes=5,
             )
             with redirect_stdout(StringIO()):
                 guard.transition(args, root / "leases")

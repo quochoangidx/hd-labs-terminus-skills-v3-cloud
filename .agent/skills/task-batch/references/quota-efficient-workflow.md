@@ -6,19 +6,17 @@ it never weakens fairness, verifier isolation, or empirical difficulty.
 ## Model routing
 
 - Candidate design and builder: `gpt-5.6-sol`, `reasoning_effort: medium`.
-- Fairness reviewers and consolidated auditor: `gpt-5.6-luna`,
-  with `reasoning_effort: high` for fairness reviewers and
-  `reasoning_effort: max` for the consolidated auditor. Run these roles as
-  independent Codex tasks, not collaboration subagents; follow
-  `luna-thread-orchestration.md`.
+- Default reviewer: one fresh collaboration subagent reused for two turns. Use
+  `gpt-5.6-sol` medium in Codex or Opus 5 medium in Claude.
+- Luna reviewer (`gpt-5.6-luna` high) and consolidated auditor
+  (`gpt-5.6-luna` max) are optional Codex-task escalations. Create them only
+  after explicit user opt-in and follow `luna-thread-orchestration.md`.
 - Counted blind solvers: `gpt-5.6-sol`, `reasoning_effort: medium`.
-- Do not spend Sol turns on prose review, receipt review, or audit. Deterministic
-  scanning, materialization, verifier execution, packaging, and handover do not
-  need a model turn.
-- Check Sol in the collaboration-subagent runtime and Luna in the Codex task
-  runtime separately. If either execution surface cannot expose its requested
-  profile, stop that role as unavailable. Do not silently substitute Terra or
-  another model.
+- Deterministic scanning, materialization, verifier execution, packaging, and
+  handover do not need a model turn.
+- Check the execution surface for each role actually requested. If it cannot
+  expose the requested profile, stop that role as unavailable. Do not silently
+  substitute Terra or another model.
 - Record the actual model on every turn. A follow-up to an existing session is
   a new model turn even though the role identity did not change.
 
@@ -42,12 +40,26 @@ interrupts the exact builder after its deadline. Close the lease immediately
 on rejection; never continue the same turn with a replacement candidate.
 Record every infrastructure repair. The third attempt rejects the candidate.
 
-Fairness reviewers and the auditor use the separate Codex-only procedure in
-[`review-role-quota-hooks.md`](review-role-quota-hooks.md). Open the exact Luna
-cohort leases before creating its tasks, poll their deadlines, and bind their
-final receipts into `quota-ledger.json`. Do not run two unclaimed Luna cohorts
-inside one worktree; separate worktrees and lease directories are required for
-safe cross-task concurrency.
+Use this cost-first stage order inside the builder session:
+
+1. Mine and source-smoke.
+2. Scaffold the task-visible contract and 6–10 discriminating witnesses.
+3. Run contract-stage mechanical checks and reviewer pass 1.
+4. Resolve review findings once, then expand the full verifier and Oracle.
+5. Stabilize each mutant with targeted witnesses.
+6. Run one full strict/mutation evidence pass for the stable snapshot.
+7. Reuse the reviewer for pass 2; launch an auditor only after explicit opt-in.
+8. Run counted blind probes; run Harbor only for shortlisted candidates.
+
+Do not invert steps 3 and 6. Fairness changes after a full corpus exists are a
+predictable source of stale CTRF, mutation, and Docker evidence.
+
+The default reviewer follows
+[`single-reviewer-workflow.md`](single-reviewer-workflow.md). Optional Luna
+roles use the separate Codex-only procedure in
+[`review-role-quota-hooks.md`](review-role-quota-hooks.md). Open leases only for
+roles explicitly requested, poll their deadlines, and bind only their actual
+receipts into `quota-ledger.json`.
 
 ## Model-turn accounting
 
@@ -57,10 +69,9 @@ turn cap or a synthetic pre-solver turn reserve. Cost boundaries come from the
 user's explicit batch-wide candidate/session budget plus the role-specific
 stage deadlines, tool-call limits, and remediation caps.
 
-- At most one fairness remediation cycle: one builder repair followed by one
-  re-review by the existing fairness pair.
-- At most one consolidated-auditor remediation cycle: one builder repair and
-  one re-audit by the existing auditor.
+- At most one reviewer remediation cycle after either required review pass.
+- At most one consolidated-auditor remediation cycle when an optional auditor
+  was actually launched.
 - If the same gate still fails, reject the candidate. Do not keep asking the
   same reviewers to reconsider slightly different drafts.
 - Deterministic metadata, hash, receipt, packaging, and verifier work belongs
@@ -80,11 +91,20 @@ Minimal shape:
 {
   "schema_version": 2,
   "task_slug": "tbrain-example",
-  "remediations": {"fairness": 0, "auditor": 0},
-  "role_lease_receipts": [
-    {"path": "role-leases/tbrain-example-fairness_reviewer-1.json", "sha256": "<sha256>"},
-    {"path": "role-leases/tbrain-example-fairness_reviewer-2.json", "sha256": "<sha256>"},
-    {"path": "role-leases/tbrain-example-consolidated_auditor-1.json", "sha256": "<sha256>"}
+  "role_policy": "single_reviewer_two_pass_v1",
+  "remediations": {"reviewer": 0, "auditor": 0},
+  "role_lease_receipts": [],
+  "review_adjudications": [
+    {
+      "phase": "contract_review",
+      "builder_critique": {"path": "builder-critique-contract.json", "sha256": "<sha256>"},
+      "orchestrator_adjudication": {"path": "orchestrator-adjudication-contract.json", "sha256": "<sha256>"}
+    },
+    {
+      "phase": "final_review",
+      "builder_critique": {"path": "builder-critique-final.json", "sha256": "<sha256>"},
+      "orchestrator_adjudication": {"path": "orchestrator-adjudication-final.json", "sha256": "<sha256>"}
+    }
   ],
   "mechanical_gates": {
     "instruction_preflight": {"status": "pass", "evidence": "instruction-preflight.log", "sha256": "<sha256>"},
@@ -117,8 +137,9 @@ Every agent invocation and every `followup_task` appends a turn before the
 next invocation starts. Never rewrite or delete an earlier turn to make the
 budget pass.
 
-Every Luna reviewer/auditor `create_thread` or `send_message_to_thread` also
-appends a turn before launch. Set `execution_surface: "codex_thread"`,
+Every optional Luna reviewer/auditor `create_thread` or
+`send_message_to_thread` also appends a turn before launch. Set
+`execution_surface: "codex_thread"`,
 `runtime: "codex-thread"`, `session_id` and `thread_id` to the actual thread
 ID, and `host_id` to the returned host ID. The builder and blind solvers use
 `execution_surface: "collaboration_subagent"`. A client-generated pending ID
@@ -139,39 +160,63 @@ that checkpoint may it read the frontier pattern catalog to classify the
 design or derive a structural transformation. Record the catalog as a separate
 post-crux context input so the ordering is auditable.
 
-Do not expose these materials to fairness reviewers or blind solvers. Those
-roles remain fresh-context; the consolidated auditor remains independent.
+Do not expose these materials to the reviewer or blind solvers. Those roles
+remain fresh-context; an optional consolidated auditor remains independent.
 
-Send fairness/auditor reports back to the same builder session for remediation.
+Send reviewer/auditor reports back to the same builder session for remediation.
 Before editing, require a JSON critique receipt with one row per finding:
 `finding_id`, `disposition` (`accept`, `challenge`, or `partial`), concrete
 `evidence`, and intended `action`. A challenge must cite task/report evidence;
 it is not permission to ignore a gate. The orchestrator resolves any disputed
-blocking finding before allowing the task to freeze.
+blocking finding before allowing the task to proceed. Save a separate
+orchestrator adjudication after each of the two required reviewer turns.
 
-## Mechanical gates before reviewers
+## Contract-stage gates before reviewer pass 1
 
-Do not launch either fairness reviewer until all of these deterministic checks
+Do not launch the reviewer until these cheap deterministic checks
 have real evidence:
 
 1. `instruction_preflight.py` passes.
 2. `review_task.py <task-folder> --json --mechanical-only` has zero blockers.
    This first scanner run does not use `--manual-review-pass`; it intentionally
-   defers only the external fairness/auditor receipts until those independent
+   defers only the external reviewer/auditor receipts until those independent
    roles have run. The later folder and ZIP scans use full scope.
-3. Strict `scripts/preflight.sh` passes, proving separate agent/verifier images,
-   Oracle/NOP, reward-channel isolation, and noexec behavior.
-4. The verifier's expected values are independently grounded. A second
+3. The canonical source smoke passes, and static checks confirm the planned
+   candidate demotion, verifier separation, private scratch, and process-group
+   cleanup. Full Docker proof is intentionally deferred until the contract is
+   stable.
+4. The targeted witnesses' expected values are independently grounded. A second
    implementation, upstream capture/reference, hand-derived fixture, or
    metamorphic invariant must support every artifact field; circular
    self-consistency is not evidence.
-5. The anti-cheat threat model is exercised: candidate code cannot read tests,
-   solution, expected outputs, reward files, or verifier-only dependencies;
-   only declared artifacts cross into the verifier.
+5. A schema/type manifest covers every verifier-read public field, including
+   array versus scalar shape, nullability, encoding, timestamp precision, and
+   canonical ordering where observable.
 
-Record these five checks under `mechanical_gates` in the quota ledger. Each
-entry contains `status: "pass"`, an evidence path, and its SHA-256. The quota
-guard rejects missing, empty, external, or stale evidence.
+After reviewer pass 1 closes and the complete implementation is stable, run the full
+strict preflight, artifact-independence, and anti-cheat gates before the
+reviewer pass 2 and counted probe. Record both the early contract-stage
+checks and the later full gates under `mechanical_gates` in the quota ledger.
+Each entry contains `status: "pass"`, an evidence path, and its SHA-256.
+
+## Full-run discipline
+
+- Debug Oracle behavior with the smallest targeted witness that reproduces the
+  issue. Do not run Oracle/NOP/noexec across the complete matrix until targeted
+  Oracle and NOP behavior are green.
+- Debug a mutant against its targeted kill and one unrelated retained-pass
+  witness. Promote it to the full campaign only after its anchor and geometry
+  are correct.
+- For a stable snapshot, run strict Oracle/NOP/noexec once and each accepted
+  mutant/wrong solution once. A semantic edit stales that evidence and permits
+  one regenerated set; infrastructure retries must reuse the same task hash and
+  be recorded separately.
+- Harbor is post-shortlist. Never run repeated Harbor Oracle/NOP pairs while a
+  candidate is still undergoing reviewer, mutation, or auditor remediation.
+- Remediation packets are delta-first: critique, changed task-visible files,
+  affected witnesses, and an index of prior evidence hashes. Do not copy raw
+  CTRF/log bodies or vendored source trees into model context unless the role
+  needs those exact bytes.
 
 ## Editorial changes after review
 

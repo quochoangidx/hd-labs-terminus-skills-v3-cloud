@@ -124,6 +124,48 @@ class QuotaGuardTests(unittest.TestCase):
                 summary["completed_role_session_ids"]["fairness_reviewer"],
             )
 
+    def test_single_sol_reviewer_two_passes_without_auditor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path, data = self.ledger(root)
+            adjudications = []
+            for phase in ("contract_review", "final_review"):
+                row = {"phase": phase}
+                for field in ("builder_critique", "orchestrator_adjudication"):
+                    evidence = root / f"{phase}-{field}.json"
+                    evidence.write_text("{}\n", encoding="utf-8")
+                    row[field] = {
+                        "path": evidence.name,
+                        "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest(),
+                    }
+                adjudications.append(row)
+            data.update({
+                "schema_version": 3,
+                "role_policy": "single_reviewer_two_pass_v1",
+                "remediations": {"reviewer": 0, "auditor": 0},
+                "role_lease_receipts": [],
+                "review_adjudications": adjudications,
+            })
+            builder = data["turns"][0]
+            reviewer = {
+                "role": "fairness_reviewer",
+                "model": "gpt-5.6-sol",
+                "reasoning_effort": "medium",
+                "status": "complete",
+                "execution_surface": "collaboration_subagent",
+                "session_id": "reviewer-one",
+                "context_mode": "fresh",
+            }
+            data["turns"] = [
+                builder,
+                {**reviewer, "turn_id": "review-contract", "review_phase": "contract_review"},
+                {**reviewer, "turn_id": "review-final", "review_phase": "final_review"},
+            ]
+            errors, summary = quota_guard.validate(data, path, "pre-solver")
+            self.assertEqual([], errors)
+            self.assertEqual(["reviewer-one"], summary["completed_role_session_ids"]["fairness_reviewer"])
+            self.assertEqual([], summary["completed_role_session_ids"]["consolidated_auditor"])
+
     def test_failed_followups_are_recorded_without_blocking_on_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path, data = self.ledger(Path(tmp))
