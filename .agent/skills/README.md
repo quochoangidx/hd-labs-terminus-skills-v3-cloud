@@ -21,7 +21,7 @@ machine-checks the mechanical gates before every zip.
 | 2. Build and prove semantic coverage | `task-clone` (+ `upstream-repo-sanitizer` for repo staging; `issue-to-regression-test`, `terminus-hard-python-verifier` for verifiers; `terminus-regular-task-authoring` for V3 inferability, semantic coverage, layout, and prompt rules; `terminus-rust-task-authoring` for Rust) |
 | 3. Prove pre-freeze validity | Strict exact-Docker Oracle/NOP/noexec preflight, folder-level `task-client-feedback-review`, task-tree phase of `task-llm-style-audit`, then the shared pre-probe receipt gate |
 | 4. Freeze and probe | Hash-bind the completed Step 2/3 receipts, then run counted `task-local-solve-probe`; exploratory runs never qualify a tier |
-| 5. Harden, audit, and package | `task-harbor-runner` for full integration checks; submission-only `task-llm-style-audit`; exact-ZIP `task-client-feedback-review`, `task-zip-validator`, and `task-zip-submit` |
+| 5. Harden, audit, and package | `task-harbor-runner` for full integration checks; `terminus-rubric-authoring` for contract-witness coverage and a hash-bound rubric receipt; submission-only `task-llm-style-audit`; exact-ZIP `task-client-feedback-review`, `task-zip-validator`, and `task-zip-submit` |
 | 6. Remediate a platform return | `task-revise-flag-remediation` (all six trial-analysis flags, reviewer feedback, and 0/N solvability), `terminus-regular-task-authoring` V3 evidence-inferability gate |
 | 7. Migrate an existing task to another runtime | `task-language-port` (explicit request only; internal/replacement use, never a separate reskinned submission) |
 | 8. Maintenance | `sync-doc-and-skill` (portal-doc drift), `anti-llm` (editorial pass) |
@@ -51,7 +51,8 @@ Handoff between stages is the **mined-candidate artifact** (`mined-candidates/<s
 
 Top-level `artifacts`, `[verifier].environment_mode = "separate"`, a digest-pinned
 `tests/Dockerfile` with all verifier dependencies and artifact landing directories,
-`network_mode = "public"` by default, agent timeout 1800–18000 seconds, no GPU,
+`[environment].network_mode = "public"` plus explicit `[agent]` and `[verifier]`
+network modes, agent timeout 1800–18000 seconds, no GPU,
 roughly 2 CPU / 8 GB / 10 GB, oracle passes and nop fails for the intended reason,
 no tests/solution/answer keys reachable from `environment/`, and difficulty is
 claimed only from model-run evidence — never from ambiguity, build time, repo size,

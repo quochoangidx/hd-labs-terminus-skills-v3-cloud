@@ -268,7 +268,7 @@ force Python into a special tier.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
-8. Write Terminus 3 `task.toml` with top-level `artifacts`, one exact category/subcategory pair, descriptive fields under `[metadata]`, `environment_mode = "separate"`, `network_mode`, and realistic resources/timeouts.
+8. Write Terminus 3 `task.toml` with top-level `artifacts`, one exact category/subcategory pair, descriptive fields under `[metadata]`, `environment_mode = "separate"`, explicit per-phase `network_mode`, and realistic resources/timeouts.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
 10. Write `tests/Dockerfile`, behavioral `tests/test_outputs.py`, and offline
     `tests/test.sh`; ensure every declared artifact has a landing directory in
@@ -372,12 +372,14 @@ relevant_experience = "<author background>"
 [verifier]
 timeout_sec = 1800
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = 5400      # minimum 1800, ceiling 18000
+network_mode = "no-network"
 
 [environment]
-network_mode = "public" # use "no-network" only when internet defeats the task
+network_mode = "public" # required on every task; build/harness phase stays public
 build_timeout_sec = 1800
 cpus = 2
 memory_mb = 8192
@@ -607,8 +609,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
-- bake every dependency at build time; use `network_mode = "public"` by default
-  and `"no-network"` only when internet access would defeat the task
+- bake every dependency at build time; keep `[environment].network_mode =
+  "public"`, and explicitly set `[agent]`/`[verifier]` to `"no-network"` unless
+  that phase genuinely needs internet access
 - avoid heredocs and opaque generated source in the Dockerfile; store source as
   files and `COPY` it
 - use one clean apt transaction per stage with `--no-install-recommends` and
@@ -848,6 +851,10 @@ Verifier matrix for domain-profile tasks must include:
 - semantic output parsing or artifact inspection
 - anti-shortcut variation in names, ordering, values, or fixture layout
 - category-specific contract checks such as schema, build artifact, service health, security exploit failure, numeric tolerance, metric threshold, or game-state transition
+- a tolerance witness using exactly the error band promised by the instruction
+  whenever numeric tolerance is part of the contract
+- an objective/tie-break witness that distinguishes the specified optimum from
+  a merely feasible or differently optimized answer whenever applicable
 
 Every test function needs a docstring. Every asserted behavior must be supported
 by `instruction.md`, an agent-visible environment reference, or domain evidence
@@ -865,6 +872,11 @@ Anti-shortcut tactics:
 
 - use temporary directories and generated project names
 - vary filenames, ordering, or input values across tests
+- keep goldens and held-out fixtures inside the separate verifier image, never
+  derive truth from `/app` or another agent-writable tree
+- declare exact output paths as top-level artifacts and let the harness transfer
+  them; do not manually copy agent-controlled directories where symlinks can
+  expose verifier fixtures
 - include one unseen variant not present in the upstream PR
 - avoid exact source-code assertions
 - parse outputs semantically rather than matching full files
@@ -937,13 +949,12 @@ if [ "$rc" -eq 0 ]; then
 else
     echo 0 > /logs/verifier/reward.txt
 fi
-
-exit 0
 ```
 
 Do not use `set -e`; a failed pytest must still reach the reward block. The
-trailing `exit 0` is deliberate because Harbor grades from `reward.txt`. If the
-published Terminus 3 skeleton differs, the skeleton wins and must be flagged.
+script must end on the reward block's `fi`, with no trailing `exit`: pytest's
+status is captured and never propagated, while a failed reward write must remain
+an infrastructure error. If the published skeleton differs, the skeleton wins.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
 `pytest`, `pytest-json-ctrf`, and verifier-only dependencies in

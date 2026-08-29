@@ -24,8 +24,9 @@ or oracle here; return a compact artifact for task-clone.
 > - Difficulty is frontier, advanced, core, or base; it is language-independent.
 > - Milestones and the old cross-cutting subcategories list are gone.
 > - The verifier is separate and sees only top-level declared artifacts.
-> - network_mode = "public" is the default; use "no-network" only when internet
->   access would defeat the task.
+> - Network policy is per phase: `[environment].network_mode` is always
+>   `"public"`; `[agent]` and `[verifier]` must each declare `"public"` or
+>   `"no-network"` according to the task.
 > - Agent timeout is 1800–18000 seconds; most tasks should need 60–90 minutes.
 > - Historical HARD/MEDIUM/EASY labels later in this file are retained only as
 >   empirical evidence about idea shapes, never as current metadata.
@@ -78,7 +79,8 @@ A candidate must support:
   directory
 - no GPU requirement; roughly 2 CPU, 8 GB memory, and 10 GB storage
 - all dependencies baked into images at build time
-- network_mode = "public" unless offline execution is important to the task
+- `[environment].network_mode = "public"`, plus explicit agent/verifier network
+  modes; normally both are `"no-network"` unless the task genuinely needs access
 - an honest 1800–18000 second agent budget and a fast repeatable edit/test loop
 - no canary strings and no AI-generated instruction prose
 
@@ -802,7 +804,8 @@ candidate:
   target_difficulty:       # frontier | advanced | core | base
   artifacts:               # absolute final paths received by verifier
   verifier_landing_dirs:   # parent dirs tests/Dockerfile must create
-  network_mode:            # public | no-network
+  agent_network_mode:      # public | no-network
+  verifier_network_mode:   # public | no-network; normally no-network
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
   gallery_novelty:         # novel | twist-on-existing | duplicate  (Terminus 3: reject both twist-on-existing and duplicate)
   objective_type:          # concise domain/work-surface label

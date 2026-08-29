@@ -51,7 +51,6 @@ CANONICAL_REWARD_FOOTER = [
     "else",
     "    echo 0 > /logs/verifier/reward.txt",
     "fi",
-    "exit 0",
 ]
 FROM_RE = re.compile(
     r"^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+([A-Za-z0-9_.-]+))?\s*(?:#.*)?$",
@@ -293,14 +292,23 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             f"timeout_sec={agent_timeout!r}; expected 1800-18000",
         )
     )
-    network_mode = manifest.get("environment", {}).get("network_mode")
+    environment_network_mode = manifest.get("environment", {}).get("network_mode")
     checks.append(
         result(
-            "task.toml:network-mode",
-            network_mode in {"public", "no-network"},
-            f"network_mode={network_mode!r}",
+            "task.toml:environment-network-mode",
+            environment_network_mode == "public",
+            f"network_mode={environment_network_mode!r}; expected 'public'",
         )
     )
+    for phase in ("agent", "verifier"):
+        phase_network_mode = manifest.get(phase, {}).get("network_mode")
+        checks.append(
+            result(
+                f"task.toml:{phase}-network-mode",
+                phase_network_mode in {"public", "no-network"},
+                f"network_mode={phase_network_mode!r}; expected 'public' or 'no-network'",
+            )
+        )
 
     languages = metadata.get("languages")
     language_ok = (

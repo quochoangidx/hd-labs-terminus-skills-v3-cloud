@@ -39,6 +39,14 @@ sys.path.insert(0, str(SESSION_BUDGET_SCRIPTS))
 from session_budget import validate_receipt as validate_session_budget_receipt  # noqa: E402
 from quota_guard import validate as validate_quota_ledger  # noqa: E402
 
+RUBRIC_CHECKER = (
+    Path(__file__).resolve().parents[1]
+    / ".agent"
+    / "skills"
+    / "terminus-rubric-authoring"
+    / "scripts"
+    / "check_rubric.py"
+)
 
 EVIDENCE_FILES = {
     "agent_session_budget": "agent-session-budget.json",
@@ -50,6 +58,7 @@ EVIDENCE_FILES = {
     "probe_preflight": "probe-preflight.json",
     "probe": "probe-verdict.json",
     "quota_ledger": "quota-ledger.json",
+    "rubric": "rubric-check.json",
     "semantic": "semantic-coverage.json",
     "style": "style-audit.json",
     "sufficiency": "instruction-sufficiency.json",
@@ -268,8 +277,8 @@ def run_trusted_nop_verifier(run_dir: Path) -> dict:
         task_config = tomllib.loads((verify / "task.toml").read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise RuntimeError(f"trusted NOP task.toml is unreadable: {exc}") from exc
-    network_mode = task_config.get("environment", {}).get("network_mode")
-    if network_mode == "no-network":
+    verifier_network_mode = task_config.get("verifier", {}).get("network_mode")
+    if verifier_network_mode == "no-network":
         return run_direct_docker_nop_verifier(run_dir, verify)
     stb = shutil.which("stb")
     if not stb:
@@ -990,6 +999,105 @@ def validate_submission(
     )
     if any(marker in authored_text for marker in scaffold_markers):
         errors.append("submission/task snapshot: unresolved scaffold marker remains")
+
+
+def validate_rubric_check(
+    data: dict,
+    submission: Path,
+    report_dir: Path,
+    style_data: dict,
+    errors: list[str],
+) -> None:
+    label = "rubric-check.json"
+    if data.get("schema_version") != 1 or data.get("status") != "pass":
+        errors.append(f"{label}: schema_version/status mismatch")
+
+    current = None
+    results = data.get("results")
+    if not isinstance(results, list) or not results:
+        errors.append(f"{label}: non-empty results are required")
+    else:
+        for result in results:
+            if not isinstance(result, dict) or not nonempty(result.get("path")):
+                continue
+            try:
+                result_path = Path(str(result["path"])).resolve()
+            except (OSError, RuntimeError):
+                continue
+            if (
+                not result_path.is_file()
+                or result.get("sha256") != sha256(result_path)
+                or result.get("status") != "pass"
+            ):
+                errors.append(f"{label}: portfolio packet result is failing or stale")
+            if result_path == submission.resolve():
+                current = result
+        if current is None:
+            errors.append(f"{label}: exact current submission is absent from results")
+        elif (
+            current.get("status") != "pass"
+            or current.get("errors") != []
+            or not submission.is_file()
+            or current.get("sha256") != sha256(submission)
+        ):
+            errors.append(f"{label}: current submission result is failing or stale")
+
+    warnings = list(data.get("portfolio_warnings") or [])
+    if isinstance(current, dict):
+        warnings.extend(current.get("warnings") or [])
+    if warnings:
+        auditor = style_data.get("auditor") if isinstance(style_data, dict) else None
+        transcript_value = auditor.get("transcript") if isinstance(auditor, dict) else None
+        transcript_text = ""
+        if nonempty(transcript_value):
+            transcript_path = (report_dir / str(transcript_value)).resolve()
+            try:
+                transcript_path.relative_to(report_dir.resolve())
+                transcript_text = transcript_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError, ValueError):
+                transcript_text = ""
+        missing_warnings = [warning for warning in warnings if warning not in transcript_text]
+        if missing_warnings:
+            errors.append(
+                f"{label}: rubric warnings lack exact adjudications in style audit transcript"
+            )
+
+    coverage = data.get("coverage_matrix")
+    expected_matrix = (report_dir / "rubric-coverage.md").resolve()
+    if not isinstance(coverage, dict) or coverage.get("status") != "pass":
+        errors.append(f"{label}: passing coverage_matrix evidence is required")
+        return
+    if not nonempty(coverage.get("path")):
+        errors.append(f"{label}: coverage_matrix.path is required")
+        return
+    try:
+        coverage_path = Path(str(coverage["path"])).resolve()
+    except (OSError, RuntimeError) as exc:
+        errors.append(f"{label}: invalid coverage matrix path: {exc}")
+        return
+    if coverage_path != expected_matrix:
+        errors.append(f"{label}: coverage matrix must be {expected_matrix}")
+    if (
+        not coverage_path.is_file()
+        or coverage_path.stat().st_size == 0
+        or coverage.get("sha256") != sha256(coverage_path)
+    ):
+        errors.append(f"{label}: coverage matrix is missing, empty, or stale")
+    if submission.is_file() and coverage_path.is_file():
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(RUBRIC_CHECKER),
+                str(submission),
+                "--coverage-matrix",
+                str(coverage_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0:
+            errors.append(f"{label}: independent rubric checker failed")
 
 
 def validate_style_audit(
@@ -1717,6 +1825,14 @@ def main() -> int:
             task_dir,
             submission,
             report_dir,
+            errors,
+        )
+    if evidence["rubric"]:
+        validate_rubric_check(
+            evidence["rubric"],
+            submission,
+            report_dir,
+            evidence["style"],
             errors,
         )
     verifier = (

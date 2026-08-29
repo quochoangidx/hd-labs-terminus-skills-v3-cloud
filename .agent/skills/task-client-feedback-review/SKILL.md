@@ -295,10 +295,17 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   verifier behavior
 - submission explanations that materially contradict the task, oracle, or
   verifier, including unrun oracle/nop claims
-- `tests/test.sh` using `set -e`, omitting `--ctrf`, or returning a non-zero
-  script status. The current Terminus 3 form captures pytest's status, writes
-  reward 1/0, then ends with `exit 0`; if the published skeleton differs, the
-  skeleton wins.
+- `tests/test.sh` using `set -e`, omitting `--ctrf`, or adding a trailing
+  `exit`. The current Terminus 3 form captures pytest's status, writes reward
+  1/0, and ends on the reward block's `fi`; this preserves an infrastructure
+  error when the reward write itself fails.
+- missing or invalid per-phase network policy: `[environment].network_mode`
+  must be `"public"`, while `[agent]` and `[verifier]` must each explicitly
+  declare `"public"` or `"no-network"`.
+- verifier truth derived from agent-writable paths, manual copying of
+  agent-controlled trees that can follow symlinks into verifier fixtures,
+  instruction/test numeric-tolerance drift, or an optimization/tie-break
+  contract with no discriminating witness.
 - when the instruction requires source changes, a verifier that checks only a
   prebuilt binary does not enforce the source contract. Declare the project
   directory as an artifact, bake the compiler into `tests/Dockerfile`, and

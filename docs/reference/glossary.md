@@ -175,7 +175,7 @@ A marker used to keep benchmark data out of training corpora. Terminus 3 is a tr
 
 ### network_mode
 
-The `task.toml` setting declaring whether a task has network access. `"public"` is the default; `"no-network"` is used only when a task does not make sense to complete with internet access.
+The `task.toml` setting declaring network access, set **per phase**. `[environment].network_mode` must be `"public"` on every task — the image build and harness install need the network. `[agent].network_mode` and `[verifier].network_mode` are `"public"` or `"no-network"` as the task requires; an offline task keeps the environment public and closes the agent.
 
 ### Terminal-Bench 3.0
 

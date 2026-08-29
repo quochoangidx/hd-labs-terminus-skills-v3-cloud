@@ -293,12 +293,12 @@ shape. Never omit the rule itself.
 ## This probe is OVER-GENEROUS — make it fair, and know its limit
 
 The blind solver may have host tools and network access that differ from the
-task environment. Match the task's `network_mode` and expose only the declared
+task environment. Match `[agent].network_mode` and expose only the declared
 environment tools; otherwise a probe pass may be falsely easy because the
 solver reached an authority unavailable in the real task.
 
 - Prefer a **fair probe**: give the solver a build command that runs inside the
-  task image. Use `--network none` only for `network_mode = "no-network"`
+  task image. Use `--network none` when `[agent].network_mode = "no-network"`
   (`docker run --rm -i --network none -v <repo>:/w:ro -w /w <task base image> bash -lc '<build && run>'`)
   and state "the environment is fully offline; this command is the only way to
   build/run; do not install or fetch anything." This denies references not in the
@@ -371,7 +371,7 @@ checks available inside the copied environment. Stop when you have a candidate
 artifact. This is a one-shot attempt; you will not receive verifier feedback.
 ```
 
-Match the task's `network_mode`. Do not include prior analysis, expected
+Match the task's `[agent].network_mode`. Do not include prior analysis, expected
 failure modes, oracle hints, or verifier case names.
 
 ## Reporting

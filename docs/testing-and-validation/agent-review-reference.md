@@ -59,7 +59,9 @@ Validates your task metadata:
 | `[agent].timeout_sec` | Required. Minimum 1800 sec, ceiling 18000 sec |
 | `[environment].build_timeout_sec` | Required |
 | `[environment].cpus` / `.memory_mb` / `.storage_mb` | Resource limits — no GPU |
-| `[environment].network_mode` | `"public"` (default) or `"no-network"` |
+| `[environment].network_mode` | Must be `"public"` — required on every task |
+| `[agent].network_mode` | Required. `"public"` or `"no-network"` |
+| `[verifier].network_mode` | Required. `"public"` or `"no-network"` |
 
 ---
 

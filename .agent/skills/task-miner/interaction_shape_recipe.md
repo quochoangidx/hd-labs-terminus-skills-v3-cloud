@@ -117,8 +117,9 @@ A candidate holds only when ALL of:
 
 ## Determinism rules (flakiness kills these tasks in review)
 
-- Bake every dependency into the images. Keep `network_mode = "public"` by
-  default; use `"no-network"` only when internet access would defeat the task.
+- Bake every dependency into the images. Keep `[environment].network_mode =
+  "public"`; explicitly choose `[agent]` and `[verifier]` network modes, normally
+  `"no-network"` unless that phase genuinely needs internet access.
 - No wall-clock dependence: pin timestamps/timezones; timed-job checks run
   the job binary directly or advance a fake clock — never sleep-and-hope.
 - No race-prone asserts: poll-with-timeout helpers for service readiness

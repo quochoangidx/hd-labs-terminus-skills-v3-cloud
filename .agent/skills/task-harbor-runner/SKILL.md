@@ -94,12 +94,12 @@ Examples:
   build-required ones in place (see `upstream-repo-sanitizer`).
 - If `test.sh` reward handling is rejected, use the current canonical ending:
   run pytest, immediately capture `rc=$?`, write
-  `/logs/verifier/reward.txt`, and finish with `exit 0`. Harbor grades the
-  reward file, not the script exit status.
+  `/logs/verifier/reward.txt`, and end on the reward block's `fi`. Do not add a
+  trailing `exit`; a failed reward write must surface as infrastructure error.
 - If build output names a missing package, add it to Dockerfile build-time or verifier dependency installation. Do not move dependency setup into `tests/test.sh` or bundle dependency wheels under `tests/`.
 - If LLMaJ says tests assert behavior not in instructions, update `instruction.md` or remove the test requirement.
-- If review flags a missing trailing `exit 0`, add it; the Terminus 3 test
-  runner requires it.
+- If review asks for a trailing `exit 0`, treat that as stale guidance: the
+  published Terminus 3 skeleton ends on `fi` with no trailing exit.
 - If review flags hidden instructions in environment docs, remove procedural hints from README/spec/config/comments/scripts and keep all task goals in `instruction.md`.
 
 - **Platform "Oracle failed" while local harbor+docker are GREEN ⇒ suspect
@@ -167,8 +167,10 @@ Dockerfile:
   re-zip. Mandatory check whenever the base image is not a tb-canonical one.
 - missing `asciinema` can fail agent runtime.
 - Runtime dependency installation in the verifier is invalid. Install every
-  verifier dependency in `tests/Dockerfile`; `network_mode` does not permit
-  fetching verifier tooling at trial time.
+  verifier dependency in `tests/Dockerfile`; even a public
+  `[verifier].network_mode` is not licence to fetch verifier tooling at trial
+  time. `[environment].network_mode` must remain public for image build/harness
+  setup, independently of agent/verifier policy.
 - `COPY tests/` or `COPY solution/` is a hard failure.
 
 Oracle:

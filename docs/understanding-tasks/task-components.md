@@ -111,9 +111,11 @@ relevant_experience = "The background that qualified you to author this task."
 [verifier]
 timeout_sec = 1800
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = 7200
+network_mode = "no-network"
 
 [environment]
 network_mode = "public"
@@ -140,7 +142,9 @@ storage_mb = 10240
 | `[metadata].verification_explanation` | How the verifier decides the task was solved |
 | `[metadata].relevant_experience` | The background that qualified you to author this task |
 | `[metadata].is_multi_container` | Optional. Set to `true` only when the task runs multiple containers; omit it otherwise |
-| `[environment].network_mode` | `"public"` (default) or `"no-network"`. Use `"no-network"` only when the task does not make sense to complete with internet access |
+| `[environment].network_mode` | **Must be `"public"`.** Required on every task — the image build and harness install need the network |
+| `[agent].network_mode` | **Required.** `"public"` or `"no-network"`. Use `"no-network"` to make the agent solve the task offline — an omitted phase silently inherits the baseline |
+| `[verifier].network_mode` | **Required.** `"public"` or `"no-network"`. Normally `"no-network"` — verifier dependencies belong in `tests/Dockerfile` |
 | `[verifier].timeout_sec` | Maximum verifier runtime |
 | `[verifier].environment_mode` | Always `"separate"` |
 | `[agent].timeout_sec` | Maximum agent runtime. **Minimum 1800** (30 min); ceiling 18000 (5 h). Most tasks sit around 3600–5400 |

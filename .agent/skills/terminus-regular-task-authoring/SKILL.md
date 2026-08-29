@@ -88,8 +88,9 @@ For new submissions:
   language-independent.
 - Put `artifacts` at top level and every descriptive field under `[metadata]`.
 - Set `[verifier].environment_mode = "separate"`.
-- Use `[environment].network_mode = "public"` by default and `"no-network"`
-  only when internet access would defeat the task.
+- Declare all three network policies. `[environment].network_mode` must be
+  `"public"`; `[agent].network_mode` and `[verifier].network_mode` must each be
+  `"public"` or `"no-network"` and match what that phase genuinely needs.
 - Set `[agent].timeout_sec` between 1800 and 18000 seconds.
 - Do not emit removed Terminus 2 fields: `version = "2.0"`, `codebase_size`,
   `number_of_milestones`, `subcategories`, `allow_internet`,
@@ -624,6 +625,15 @@ Tests must:
   rejection power. The semantic-coverage mutation campaign is the stronger
   local form of this portal requirement; keep at least one wrong-solution
   execution even outside Advanced+ campaigns.
+- Bake goldens and held-out fixtures into the separate verifier image. Never
+  derive expected truth from `/app`, a mutable corpus, or another agent-writable
+  tree, and do not manually copy whole agent directories where symlinks can
+  expose verifier-owned fixtures. Declare exact artifact paths and let the
+  harness transfer them.
+- Match assertion specificity to the written contract. Exact comparison is
+  correct for byte-exact/pinned output and wrong for undocumented formatting.
+  Enforce any stated numeric tolerance exactly, and add a discriminating case
+  for every specified optimization objective or tie-break.
 
 Avoid quality-check failures:
 
@@ -669,13 +679,12 @@ if [ "$rc" -eq 0 ]; then
 else
     echo 0 > /logs/verifier/reward.txt
 fi
-
-exit 0
 ```
 
 Do not use `set -e`; pytest failure must reach the reward block. The trailing
-`exit 0` is deliberate because Harbor grades from `reward.txt`, not the script
-status. If the published Terminus 3 skeleton differs, the skeleton wins.
+`exit 0` is forbidden: end on the reward block's `fi` so pytest failure still
+writes reward 0, while a failed reward write surfaces as infrastructure error.
+If the published Terminus 3 skeleton differs, the skeleton wins.
 
 Do not run runtime setup, `apt-get`, `npm install`, or network downloads in
 `tests/test.sh`. Bake verifier dependencies into the Docker image; `test.sh`

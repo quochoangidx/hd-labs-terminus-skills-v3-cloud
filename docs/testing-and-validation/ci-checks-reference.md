@@ -74,10 +74,16 @@ stb harbor check <task-folder>
 
 ## Internet Access
 
-`network_mode = "public"` is the default. Use `"no-network"` only when the task does not make sense to complete with internet access:
+`[environment].network_mode` must be `"public"` on every task — the build and harness install need it. Set `[agent]` and `[verifier]` to `"public"` or `"no-network"` as the task requires:
 
 ```toml
-network_mode = "public"       # or "no-network"
+network_mode = "public"       # required
+
+[agent]
+network_mode = "no-network"   # or "public"
+
+[verifier]
+network_mode = "no-network"   # or "public"
 ```
 
 Regardless of the setting, verifier tooling must be baked into `tests/Dockerfile` — `test.sh` may never fetch at trial time.

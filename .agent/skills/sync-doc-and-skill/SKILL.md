@@ -109,13 +109,13 @@ For each key rule area, compare online content with local docs:
 | Category/policy live status | `reference/category-status.md` | `Terminus 3`, `subcategory`, `network_mode` |
 | Rubric format | `understanding-tasks/rubrics.md` | `rubric` |
 | tmux/asciinema | `creating-tasks/dockerfile-best-practices.md` | `tmux` |
-| Network mode | `understanding-tasks/task-requirements.md` | `network_mode` |
+| Per-phase network mode | `understanding-tasks/task-requirements.md` | `[environment]`, `[agent]`, `[verifier]`, `network_mode` |
 | Docker-compose flags | `reviewing-tasks/reviewer-checklist.md` | `docker_compose` |
 | Verifier integrity | `creating-tasks/writing-tests.md`, `reviewing-tasks/reviewer-checklist.md` | `complete expected artifact`, `dynamically`, `config` |
 | CLI installation and credentials | `getting-started/quick-start.md`, `testing-and-validation/running-real-agents.md` | `snorkelai-stb`, `stb login`, `keys refresh` |
 | Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5` |
 | Live category availability | `reference/category-status.md`, `reference/changelog.md` | `seven categories`, `milestones are removed` |
-| Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | `network_mode = "public"`, `digest`, `stable invariants` |
+| Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | per-phase `network_mode`, `digest`, `stable invariants` |
 
 ### Diff format
 

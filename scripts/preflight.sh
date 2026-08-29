@@ -115,8 +115,18 @@ if [ -f "$TT" ]; then
     && report PASS "toml:expert-hours" "present" || report FAIL "toml:expert-hours" "required"
   grep -q '^environment_mode = "separate"' "$TT" \
     && report PASS "toml:separate-verifier" "enabled" || report FAIL "toml:separate-verifier" "required"
-  grep -q '^network_mode = \("public"\|"no-network"\)' "$TT" \
-    && report PASS "toml:network-mode" "valid" || report FAIL "toml:network-mode" "use public or no-network"
+  if python3 - "$TT" <<'PYEOF'
+import sys, tomllib
+task = tomllib.load(open(sys.argv[1], "rb"))
+assert task.get("environment", {}).get("network_mode") == "public"
+assert task.get("agent", {}).get("network_mode") in {"public", "no-network"}
+assert task.get("verifier", {}).get("network_mode") in {"public", "no-network"}
+PYEOF
+  then
+    report PASS "toml:network-mode" "environment public; agent/verifier explicitly valid"
+  else
+    report FAIL "toml:network-mode" "environment must be public; agent/verifier must each declare public or no-network"
+  fi
   OBSOLETE="$(grep -nE '^(version|codebase_size|number_of_milestones|subcategories|allow_internet|expert_time_estimate_min|junior_time_estimate_min)[[:space:]]*=' "$TT" || true)"
   [ -z "$OBSOLETE" ] && report PASS "toml:no-terminus2" "obsolete fields absent" \
     || report FAIL "toml:no-terminus2" "$OBSOLETE"
@@ -299,10 +309,10 @@ for path in task.get("artifacts", []):
     print(path)
 PYEOF
 )"
-  NETWORK_MODE="$(python3 - "$TT" <<'PYEOF'
+  read -r AGENT_NETWORK_MODE VERIFIER_NETWORK_MODE <<<"$(python3 - "$TT" <<'PYEOF'
 import sys, tomllib
 task = tomllib.load(open(sys.argv[1], "rb"))
-print(task.get("environment", {}).get("network_mode", "public"))
+print(task.get("agent", {}).get("network_mode", "no-network"), task.get("verifier", {}).get("network_mode", "no-network"))
 PYEOF
 )"
   AGENT_BUILD_LOG="${EVIDENCE_DIR:-$(mktemp -d)}/docker-agent-build.log"
@@ -328,7 +338,8 @@ PYEOF
       # Keep this non-empty: macOS ships Bash 3.2, where expanding an empty
       # array under `set -u` raises "unbound variable".
       VERIFIER_ARGS=(--label "terminus.preflight=$SLUG")
-      [ "$NETWORK_MODE" = "no-network" ] && AGENT_ARGS+=(--network none)
+      [ "$AGENT_NETWORK_MODE" = "no-network" ] && AGENT_ARGS+=(--network none)
+      [ "$VERIFIER_NETWORK_MODE" = "no-network" ] && VERIFIER_ARGS+=(--network none)
       if [ "$USE_NOEXEC" -eq 1 ]; then
         AGENT_ARGS+=(--tmpfs /tmp:noexec,nosuid,size=256m)
         VERIFIER_ARGS+=(--tmpfs /tmp:noexec,nosuid,size=256m)

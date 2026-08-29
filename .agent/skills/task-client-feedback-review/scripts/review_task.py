@@ -668,9 +668,16 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
         verifier = task.get("verifier", {}) if isinstance(task, dict) else {}
         if not isinstance(verifier, dict) or verifier.get("environment_mode") != "separate":
             add(findings, "blocker", "verifier-mode", "[verifier].environment_mode must be 'separate'.", "task.toml", "terminus-regular-task-authoring")
-        network_mode = environment.get("network_mode") if isinstance(environment, dict) else None
-        if network_mode not in {"public", "no-network"}:
-            add(findings, "blocker", "network-mode", "[environment].network_mode must be 'public' or 'no-network'.", "task.toml", "terminus-regular-task-authoring")
+        environment_network_mode = environment.get("network_mode") if isinstance(environment, dict) else None
+        if environment_network_mode != "public":
+            add(findings, "blocker", "environment-network-mode", "[environment].network_mode must be 'public' on every Terminus 3 task.", "task.toml", "terminus-regular-task-authoring")
+        agent = task.get("agent", {}) if isinstance(task, dict) else {}
+        agent_network_mode = agent.get("network_mode") if isinstance(agent, dict) else None
+        if agent_network_mode not in {"public", "no-network"}:
+            add(findings, "blocker", "agent-network-mode", "[agent].network_mode must explicitly be 'public' or 'no-network'.", "task.toml", "terminus-regular-task-authoring")
+        verifier_network_mode = verifier.get("network_mode") if isinstance(verifier, dict) else None
+        if verifier_network_mode not in {"public", "no-network"}:
+            add(findings, "blocker", "verifier-network-mode", "[verifier].network_mode must explicitly be 'public' or 'no-network'.", "task.toml", "terminus-regular-task-authoring")
 
         if "pyproject.toml" in file_set:
             add(findings, "blocker", "root-pyproject", "Root-level pyproject.toml should not be submitted.", "pyproject.toml", "task-zip-submit")
@@ -717,8 +724,9 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
                 add(findings, "blocker", "test-sh-set-e", "tests/test.sh must not use set -e; pytest failures must reach the reward block.", "tests/test.sh", "terminus-regular-task-authoring")
             if "--ctrf /logs/verifier/ctrf.json" not in test_sh:
                 add(findings, "blocker", "test-sh-ctrf", "pytest must write /logs/verifier/ctrf.json with --ctrf.", "tests/test.sh", "terminus-regular-task-authoring")
-            if not re.search(r"(?m)^\s*exit\s+0\s*$", test_sh) or not test_sh.rstrip().endswith("exit 0"):
-                add(findings, "blocker", "test-sh-exit", "Terminus 3 tests/test.sh must end with exit 0 after writing reward.txt.", "tests/test.sh", "terminus-regular-task-authoring")
+            nonempty_test_lines = [line.strip() for line in test_sh.splitlines() if line.strip()]
+            if not nonempty_test_lines or nonempty_test_lines[-1] != "fi":
+                add(findings, "blocker", "test-sh-ending", "Terminus 3 tests/test.sh must end on the reward block's fi, with no trailing command that can mask a failed reward write.", "tests/test.sh", "terminus-regular-task-authoring")
 
         dockerfile = view.read_text("environment/Dockerfile")
         if dockerfile:

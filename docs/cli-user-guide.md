@@ -2,6 +2,8 @@
 
 The `stb` command-line tool provides an end-to-end interface for creating, testing, submitting, and reviewing Terminal-Bench tasks.
 
+> **Looking for a specific command?** Jump to the [Command Reference](#command-reference) for every `stb` command on one screen, grouped by workflow. The sections below walk through each one in context.
+
 ## Installation
 
 ### Prerequisites
@@ -102,7 +104,7 @@ This shows your projects with names, IDs, and assignment status for each role (S
 stb init my-task-name -p PROJECT_ID -t TEMPLATE_NAME
 ```
 
-You can use either the project name or UUID. If a project has only one template, `-t` is optional.
+You can use either the project name or UUID. If a project has only one template, `-t` is optional — Terminus 3 has one, so you can leave it off.
 
 ```bash
 # Using project name
@@ -146,6 +148,13 @@ stb harbor run -m @anthropic/claude-opus-5 -p ./my-task-name
 ```
 
 Run each agent 2-3 times to gauge difficulty. See [Testing Agent Performance](/portal/docs/testing-and-validation/running-real-agents) for guidance.
+
+**Run the automated checks:**
+```bash
+stb harbor check ./my-task-name
+```
+
+Run this until clean before submitting — it catches the same structural and dependency issues CI will. See [CI Checks Reference](/portal/docs/testing-and-validation/ci-checks-reference).
 
 ### 4. Submit
 >_⚠️ Before submitting: The rubric must be set up via the platform UI. The CLI does not include a rubric step. Navigate to the Experts platform, open your task, and complete the rubric configuration._
@@ -272,6 +281,15 @@ stb reviews view REVIEW_ID
 
 Test and evaluate using the guidelines in [Review Guidelines](/portal/docs/reviewing-tasks/review-guidelines) and [Reviewer Training](/portal/docs/reviewing-tasks/reviewer-training).
 
+**Fetch the full task record as JSON:**
+```bash
+stb reviews fetch-task REVIEW_ID -o task.json
+```
+
+Writes the structured record behind the review — evaluation history with timestamps, agent stats, per-run test grids, quality-judge output, and the generated rubric. Useful when you need the history rather than the current state: how earlier runs behaved, which tests failed on which run, and what the automated checks actually reported.
+
+> **The CLI complements the review UI — it doesn't replace it.** Some context is only available in the UI, and validating a `near_miss` or an instruction-sufficiency finding usually means opening the detailed failed-run artifacts (`test-stdout.txt` and friends) as well. Use whichever view answers the question in front of you.
+
 ### 4. Make Decision
 
 **Accept:**
@@ -386,6 +404,81 @@ stb claude
 ```
 
 This launches Claude Code with pre-configured AI credentials from the platform.
+
+---
+
+## Command Reference
+
+Every `stb` command, grouped by workflow. The sections above cover each one in context — this is the lookup table.
+
+`REVIEW_ID`, `SUBMISSION_ID`, and `PROJECT_ID` are placeholders. Review and adjudication commands only work if you hold that role on the project.
+
+### Setup and account
+
+| Command | What it does |
+|---|---|
+| `stb --version` | Print the installed version |
+| `stb --help` | List commands; add to any subcommand for its flags |
+| `stb login` | Authenticate to the platform |
+| `stb keys refresh` | Get a new AI credential for agent runs |
+| `stb keys show` | Show the current credential |
+| `stb projects list` | List projects you're assigned to, with your role and status |
+
+### Authoring and local testing
+
+| Command | What it does |
+|---|---|
+| `stb init NAME -p PROJECT_ID` | Create a new task folder from the Terminus 3 skeleton; `-t` is optional |
+| `stb harbor tasks start-env -p ./NAME -i` | Open the task container interactively |
+| `stb harbor run -a oracle -p ./NAME` | Run the oracle agent — must pass |
+| `stb harbor run -m MODEL -p ./NAME -k 4` | Run a real agent; `-k` sets trials per model |
+| `stb harbor check ./NAME` | Run the automated checks locally before submitting |
+
+### Submissions (authors)
+
+| Command | What it does |
+|---|---|
+| `stb submissions create ./NAME -p PROJECT_ID --time MINUTES` | Submit a task |
+| `stb submissions list -p PROJECT_ID` | List your submissions and their states |
+| `stb submissions view SUBMISSION_ID` | Open the submission in the browser |
+| `stb submissions download SUBMISSION_ID` | Download the submitted files |
+| `stb submissions feedback SUBMISSION_ID` | Show the latest reviewer / automated feedback |
+| `stb submissions update ./NAME --time MINUTES` | Push a revision |
+
+### Reviews (reviewers)
+
+| Command | What it does |
+|---|---|
+| `stb reviews get -p PROJECT_ID` | Fetch your current review, or claim a new assignment |
+| `stb reviews list -p PROJECT_ID` | List your review assignments |
+| `stb reviews download REVIEW_ID` | Download and extract the submission |
+| `stb reviews view REVIEW_ID` | Open the review in the browser |
+| `stb reviews feedback REVIEW_ID` | Show feedback on the review |
+| `stb reviews fetch-task REVIEW_ID -o task.json` | Write the full task record to JSON — eval history, agent stats, per-run test grids, quality-judge output, generated rubric |
+| `stb reviews accept REVIEW_ID --time MINUTES` | Accept; `-n` adds optional notes |
+| `stb reviews revise REVIEW_ID --notes "..." --time MINUTES` | Request a revision; notes required |
+| `stb reviews skip REVIEW_ID --reason REASON --rationale "..."` | Skip the assignment |
+
+### Adjudications (adjudicators)
+
+Same verbs as reviews, against adjudication assignments:
+
+| Command | What it does |
+|---|---|
+| `stb adjudications get -p PROJECT_ID` | Fetch or claim an adjudication |
+| `stb adjudications list -p PROJECT_ID` | List your assignments |
+| `stb adjudications download ADJUDICATION_ID` | Download the submission |
+| `stb adjudications view ADJUDICATION_ID` | Open in the browser |
+| `stb adjudications feedback ADJUDICATION_ID` | Show prior review feedback |
+| `stb adjudications accept ADJUDICATION_ID --time MINUTES` | Accept |
+| `stb adjudications revise ADJUDICATION_ID --notes "..." --time MINUTES` | Request a revision |
+| `stb adjudications skip ADJUDICATION_ID --reason REASON --rationale "..."` | Skip |
+
+### Integration
+
+| Command | What it does |
+|---|---|
+| `stb claude` | Launch Claude Code with platform AI credentials |
 
 ---
 

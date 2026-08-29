@@ -104,7 +104,7 @@ On the task viewer:
 
 | Issue | What to Look For |
 |-------|------------------|
-| Brittle tests | Exact string matching |
+| Brittle tests | Matching at the wrong specificity — pinning a format the instruction never stated. Exact matching is *required* when the instruction pins the output; see [Writing Tests](/portal/docs/creating-tasks/writing-tests) |
 | Missing coverage | Requirements without tests |
 | Order dependency | Tests that must run in sequence |
 | Implementation testing | Parsing source code |
@@ -172,7 +172,7 @@ Issues need fixing before acceptance. Be specific:
 - How to fix it
 
 **Good feedback:**
-> The test `test_output_format` on line 45 uses exact string matching. Please change to check for required fields instead, allowing for formatting variations.
+> The test `test_output_format` on line 45 asserts an exact string, but `instruction.md` never specifies the output wording. Please check the required fields instead, so the test grades what the instruction actually states.
 
 **Bad feedback:**
 > Tests need work.

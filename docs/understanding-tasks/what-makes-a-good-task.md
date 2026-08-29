@@ -49,9 +49,10 @@ Ambiguity, non-determinism, unstated requirements, and hidden knowledge the agen
 
 A task is also disqualified if the agent can shortcut it — reaching the answer, or satisfying the checks without doing the work. Both disqualify. Concretely:
 
-- **The answer is reachable.** Held-out inputs staged in the same directory as their expected outputs (the program copies the sibling), a sealed directory the graded process can still read, or the agent's own prior output left at a predictable path to replay.
-- **The checks are hollow.** They assert a proxy a wrong answer also satisfies — a count, a first element, a field's presence but not its value, or an expected result reconstructed from an input the agent controls. They grade a delivered binary without rebuilding it from source (a hardcoded binary passes). Or they grade two artifacts the agent controls both sides of — a simulated and a synthesized build, a library and its consumer — without proving they agree.
+- **The answer is reachable.** Held-out inputs staged in the same directory as their expected outputs (the program copies the sibling), a sealed directory the graded process can still read, or the agent's own prior output left at a predictable path to replay. Ground truth derived from agent-writable paths (`/app`, a mutable corpus, agent-delivered trees) counts too — the agent can edit the truth, not just read it.
+- **The checks are hollow.** They assert a proxy a wrong answer also satisfies — a count, a first element, a field's presence but not its value, or an expected result reconstructed from an input the agent controls. They grade a delivered binary without rebuilding it from source (a hardcoded binary passes). Or they grade two artifacts the agent controls both sides of — a simulated and a synthesized build, a library and its consumer — without proving they agree. Staging copies that follow symlinks into protected fixtures, or grading the wrong optimization objective / tie-break when the spec defines one, are the same class of failure.
 - **A documented behavior is never exercised.** A required command or mode the tests reference but never run can be broken or hardcoded and still pass.
+- **The contract drifts.** Instructions state one numeric tolerance; tests enforce a tighter one. Or the spec names an objective the verifier never distinguishes from a weaker feasible plan.
 
 See [Writing Tests](/portal/docs/creating-tasks/writing-tests) for how to close each.
 

@@ -326,3 +326,89 @@ def test_submission_accepts_all_four_explanation_fields(tmp_path: Path) -> None:
     MODULE.validate_submission(submission, task, errors)
 
     assert errors == []
+
+
+def test_rubric_check_accepts_hash_bound_submission_and_matrix(tmp_path: Path) -> None:
+    report = tmp_path / "report"
+    report.mkdir()
+    submission = tmp_path / "SUBMISSION-task.md"
+    submission.write_text(
+        _submission_packet(include_experience=True).replace(
+            "Agent preserves replay behavior, +5",
+            "Agent preserves replay behavior, +5\n"
+            "Agent reports precise recovery state, +5\n"
+            "Agent corrupts accepted state, -3",
+        ),
+        encoding="utf-8",
+    )
+    matrix = report / "rubric-coverage.md"
+    matrix.write_text(
+        "| contract_id | source | observable_requirement | witness_ids | "
+        "discrimination | coverage | criterion_id |\n"
+        "|---|---|---|---|---|---|---|\n"
+        "| recovery | instruction.md | precise recovery | redirect_irq | "
+        "rejects stale state | covered | R2 |\n",
+        encoding="utf-8",
+    )
+    receipt = {
+        "schema_version": 1,
+        "status": "pass",
+        "results": [
+            {
+                "path": str(submission.resolve()),
+                "sha256": MODULE.sha256(submission),
+                "status": "pass",
+                "errors": [],
+            }
+        ],
+        "coverage_matrix": {
+            "path": str(matrix.resolve()),
+            "sha256": MODULE.sha256(matrix),
+            "status": "pass",
+            "errors": [],
+        },
+    }
+    errors: list[str] = []
+
+    MODULE.validate_rubric_check(receipt, submission, report, {}, errors)
+
+    assert errors == []
+
+
+def test_rubric_check_rejects_stale_submission_hash(tmp_path: Path) -> None:
+    report = tmp_path / "report"
+    report.mkdir()
+    submission = tmp_path / "SUBMISSION-task.md"
+    submission.write_text(_submission_packet(include_experience=True), encoding="utf-8")
+    matrix = report / "rubric-coverage.md"
+    matrix.write_text(
+        "| contract_id | source | observable_requirement | witness_ids | "
+        "discrimination | coverage | criterion_id |\n"
+        "|---|---|---|---|---|---|---|\n"
+        "| recovery | instruction.md | precise recovery | redirect_irq | "
+        "rejects stale state | covered | R2 |\n",
+        encoding="utf-8",
+    )
+    receipt = {
+        "schema_version": 1,
+        "status": "pass",
+        "results": [
+            {
+                "path": str(submission.resolve()),
+                "sha256": "0" * 64,
+                "status": "pass",
+                "errors": [],
+            }
+        ],
+        "coverage_matrix": {
+            "path": str(matrix.resolve()),
+            "sha256": MODULE.sha256(matrix),
+            "status": "pass",
+            "errors": [],
+        },
+    }
+    errors: list[str] = []
+
+    MODULE.validate_rubric_check(receipt, submission, report, {}, errors)
+
+    assert any("current submission result" in error for error in errors)

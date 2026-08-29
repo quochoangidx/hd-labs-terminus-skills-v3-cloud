@@ -56,6 +56,18 @@ read it dynamically and reject a candidate that hardcodes the original value.
 Do not flag hardcoded expected results, tolerances, or format constants unless
 they replace values the instruction says come from that file.
 
+Reject verifier truth loaded or derived from `/app`, a mutable corpus, or any
+other agent-writable tree. Goldens and held-out fixtures belong in the separate
+verifier image. Do not manually stage whole agent-controlled directories:
+symlinks can turn protected fixture contents into apparent candidate output;
+declare exact top-level artifacts and let the harness transfer them instead.
+
+Assert at the specificity of the instruction: exact comparison is required for
+byte-exact or otherwise pinned output, but exact undocumented wording is invalid.
+When the instruction states a numeric tolerance, enforce that same band. When it
+defines an optimization objective or tie-break, include a case that rejects a
+merely feasible or differently optimized answer and spot-check the Oracle there.
+
 ## Step 1 — Unzip and Identify
 
 ```bash
@@ -111,12 +123,14 @@ relevant_experience = "..."
 [verifier]
 timeout_sec = N
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = N                # 1800-18000
+network_mode = "no-network"
 
 [environment]
-network_mode = "public"        # default; "no-network" only when needed
+network_mode = "public"        # required on every task
 build_timeout_sec = N
 cpus = N
 memory_mb = N
@@ -153,7 +167,7 @@ Media: Music, Design
 | Check | Rule | Auto-fix |
 |-------|------|----------|
 | `artifacts` | Required top-level array; every verifier input path must be declared | ❌ manual |
-| `network_mode` | `"public"` by default; `"no-network"` only when the task should be offline | ✅ set to public when absent |
+| per-phase `network_mode` | `[environment]` must be `"public"`; `[agent]` and `[verifier]` must each declare `"public"` or `"no-network"` | ✅ set environment public; add agent/verifier only when task intent is unambiguous |
 | `difficulty` | Must be `frontier`, `advanced`, `core`, or `base` and match measured accuracy | ❌ manual |
 | `environment_mode` | `[verifier].environment_mode` must be `"separate"` | ✅ set to separate |
 | `agent.timeout_sec` | Must be between 1800 and 18000 seconds | ❌ manual |
@@ -242,13 +256,12 @@ if [ "$rc" -eq 0 ]; then
 else
     echo 0 > /logs/verifier/reward.txt
 fi
-
-exit 0
 ```
 
-The current portal explicitly requires no `set -e`, requires a trailing
-`exit 0`, and grades from `reward.txt`. If the published Terminus 3 skeleton
-differs, the skeleton wins and the discrepancy must be reported.
+The current portal explicitly requires no `set -e` and no trailing `exit`.
+End on `fi`: pytest's status is captured, while a failed reward write remains
+visible as an infrastructure error. If the published Terminus 3 skeleton differs,
+the skeleton wins and the discrepancy must be reported.
 
 ### 2e. Dependency wheels and root pyproject
 
@@ -464,7 +477,7 @@ Print summary table:
 | task.toml structure      | ✅     | -          |
 | artifacts top-level      | ✅     | -          |
 | verifier separate mode   | ✅     | YES        |
-| network_mode             | ✅     | -          |
+| per-phase network_mode   | ✅     | -          |
 | category/subcategory     | ✅     | -          |
 | docker-compose flags     | N/A    | -          |
 | Dockerfile digest pin    | ✅     | -          |

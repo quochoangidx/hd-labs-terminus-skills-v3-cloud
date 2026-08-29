@@ -4,6 +4,9 @@
 
 | Date | Type | Change |
 |------|------|--------|
+| Aug 24, 2026 | 🔄 Update | Reconciled with the blocking static check: **all three phases must declare `network_mode`** — an omitted phase silently inherits the baseline rather than defaulting, and is a finding. `"allowlist"` is not a supported value anywhere, `allowed_hosts` is rejected with it, and a top-level `network_mode` is ignored by Harbor. |
+| Aug 24, 2026 | 🔄 Update | **`network_mode` is now set per phase.** `[environment].network_mode` must be `"public"` on **every** task — the image build and agent-harness install need the network, and closing it there fails the task before the agent runs. **Do not flag a public environment as a defect.** `[agent].network_mode` and `[verifier].network_mode` are new fields, author's choice of `"public"` or `"no-network"`; an offline task keeps the environment public and sets `[agent]` to `"no-network"`. The oracle and verifier internet-use criteria now reference `[agent]` and `[verifier]` specifically. Enforced by a blocking static check. |
+| Aug 19, 2026 | 🆕 New | **Named verifier exploit patterns from delivery review.** Extends the Aug 17 too-loose-verifier guidance with four anti-patterns in [Writing Tests](/portal/docs/creating-tasks/writing-tests): ground truth from agent-writable paths, symlink/copy staging leaks, instruction–verifier tolerance drift, and untested optimization objectives or tie-breaks, plus a short note on not loading agent code before fixed assertions. Ground-truth and symlink patterns are folded into the existing **High** reject-wrong-solution criterion; tolerance drift and untested objectives get new **Medium** rows. [Submission Checklist](/portal/docs/submitting-tasks/submission-checklist) self-checks added. |
 | Aug 17, 2026 | 🆕 New | Three Verifier criteria covering the too-loose side: **the verifier rejects a wrong solution** (High) — reachable answers, hollow checks that assert a proxy, and documented behaviors never exercised; **delivered binaries are rebuilt from source** before grading, and artifacts the agent controls both sides of are graded on their equivalence (Medium); and **the oracle is correct, not just passing** (Medium) — tests and oracle are tuned together, so a green oracle does not establish the reference is right. The `near_miss` criterion is rewritten around the **failure pattern across runs**: the same one or few tests failing points at the check or the instructions, different tests each time is genuine difficulty. Do not ask an author to make a task harder solely because near-complete runs count as failures. |
 | Aug 13, 2026 | 🔄 Update | Added a **Not revision triggers** note under Task Metadata: the `difficulty` *value* is re-measured after acceptance and is not grounds for revision (only a retired tier name is), and a `task.toml` structure complaint must be confirmed against the actual static-check result before flagging. See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines). |
 | Aug 10, 2026 | 🔄 Update | Difficulty now runs in two stages: **in-platform iteration** uses 2 trials per model (4 runs) and requires **at least one failure** before a task can reach review; **final difficulty** uses 4 trials per model (8 runs) and runs only **after reviewer acceptance**. **100% accuracy averaged across both models** is not accepted — 90% is fine. Also added two High-severity criteria: **known environment defects block acceptance** regardless of whether they caused a visible failure in the difficulty run, and **`difficulty` must use a current tier** (`frontier`/`advanced`/`core`/`base` — the Edition 2 names are retired). |
@@ -123,8 +126,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td><code>network_mode</code> accurately matches the task's actual needs.</td>
-      <td>The <code>network_mode</code> setting must reflect what the task genuinely requires. <code>"public"</code> is the default and applies to most tasks. <code>"no-network"</code> is correct only when the task does not make sense to complete with internet access — for example when network access would let the agent retrieve the answer directly rather than do the work. Do not flag <code>"public"</code> as a defect on its own.</td>
+      <td><code>network_mode</code> is set per phase and matches the task's actual needs.</td>
+      <td><code>[environment].network_mode</code> must be <code>"public"</code> on every task — the image build and harness install need the network, and closing it there fails the task before the agent runs. Do <strong>not</strong> flag a public environment as a defect; flag an environment that is <em>not</em> public. All three phases must <strong>declare</strong> <code>network_mode</code> — an omitted phase silently inherits the baseline rather than defaulting, and is a blocking static-check finding. The <em>value</em> on <code>[agent]</code> and <code>[verifier]</code> is the author's choice of <code>"public"</code> or <code>"no-network"</code> and must reflect what the task genuinely requires. <code>"allowlist"</code> is not a supported value anywhere — an offline task keeps the environment public and sets <code>[agent]</code> to <code>"no-network"</code>.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -217,8 +220,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Oracle's internet use matches the <code>network_mode</code> setting</td>
-      <td>When <code>network_mode = "no-network"</code>, the oracle solution must not have any actions that require accessing the internet, including downloading packages — any dependencies required for the solution must be installed in the environment. When <code>network_mode = "public"</code>, the oracle may access the internet where the task genuinely requires it.</td>
+      <td>Oracle's internet use matches <code>[agent].network_mode</code></td>
+      <td>When <code>[agent].network_mode = "no-network"</code>, the oracle solution must not have any actions that require accessing the internet, including downloading packages — any dependencies required for the solution must be installed in the environment. When <code>network_mode = "public"</code>, the oracle may access the internet where the task genuinely requires it.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -256,8 +259,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Verifier files' internet use matches the <code>network_mode</code> setting</td>
-      <td>When <code>network_mode = "no-network"</code>, <code>test.sh</code> and other verifier files must not rely on any content from the internet, and all verifier dependencies must be baked into the Dockerfile (not downloaded at runtime). When <code>network_mode = "public"</code>, verifier network use is allowed only where the task genuinely requires it, and grading must still be deterministic (see the determinism criterion above).</td>
+      <td>Verifier files' internet use matches <code>[verifier].network_mode</code></td>
+      <td>When <code>[verifier].network_mode = "no-network"</code>, <code>test.sh</code> and other verifier files must not rely on any content from the internet, and all verifier dependencies must be baked into the Dockerfile (not downloaded at runtime). When <code>network_mode = "public"</code>, verifier network use is allowed only where the task genuinely requires it, and grading must still be deterministic (see the determinism criterion above).</td>
       <td>High</td>
     </tr>
     <tr>
@@ -287,7 +290,7 @@ Each criterion is marked with a different severity level (high, medium, or low).
     </tr>
     <tr>
       <td>The verifier rejects a wrong solution, not just accepts a right one.</td>
-      <td>A passing oracle only shows the task runs. Satisfy yourself that a deliberately wrong, incomplete, or lazy solution would <strong>fail</strong> — that is the question the verifier exists to answer. Check the three ways this breaks down: the answer is <strong>reachable</strong> (a held-out input staged beside its expected output, a sealed directory the graded process can still read, or prior output left at a predictable path to replay); the checks are <strong>hollow</strong> (asserting a count, a first element, a field's presence but not its value, or an expected result recomputed from an input the agent controls); or a <strong>documented behavior is never exercised</strong> (a command or mode the tests reference but never run). See <a href="/portal/docs/understanding-tasks/what-makes-a-good-task">What Makes a Good Task</a>.</td>
+      <td>A passing oracle only shows the task runs. Satisfy yourself that a deliberately wrong, incomplete, or lazy solution would <strong>fail</strong> — that is the question the verifier exists to answer. Check the ways this breaks down: the answer is <strong>reachable</strong> (held-out input beside its expected output, ground truth derived from agent-writable paths, a sealed directory the graded process can still read, or prior output left at a predictable path to replay); the checks are <strong>hollow</strong> (asserting a count, a first element, a field's presence but not its value, an expected result recomputed from an input the agent controls, or staging agent trees by hand so symlinks expose verifier goldens); or a <strong>documented behavior is never exercised</strong> (a command or mode the tests reference but never run). Goldens belong in the <strong>verifier image</strong> (<code>[verifier].environment_mode = "separate"</code>, fixtures baked into <code>tests/Dockerfile</code>) — not in paths the agent can edit or symlink to. See <a href="/portal/docs/understanding-tasks/what-makes-a-good-task">What Makes a Good Task</a> and <a href="/portal/docs/creating-tasks/writing-tests">Writing Tests</a>.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -298,6 +301,16 @@ Each criterion is marked with a different severity level (high, medium, or low).
     <tr>
       <td>The oracle is correct, not just passing.</td>
       <td>Tests and oracle are written together and tuned until the oracle passes, so a green oracle does <strong>not</strong> establish that the reference is right. Where correctness turns on a rule the fixtures don't stress, spot-check the oracle's logic against the spec. A wrong oracle is worse than a broken one: the tests encode its output as the answer key, so a correct agent solution fails and difficulty is measured against a bad truth. See <a href="/portal/docs/creating-tasks/writing-oracle-solution">Writing Oracle Solution</a>.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Instruction tolerances match verifier tolerances.</td>
+      <td>When <code>instruction.md</code> states a numeric error band, tests must enforce that band — not a tighter precision the agent was never told about. Send back when a conforming implementation that meets the written spec would fail the verifier. See <a href="/portal/docs/creating-tasks/writing-tests">Writing Tests → Instruction Tolerance Must Match Verifier Tolerance</a>.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>The tested objective matches the specified one.</td>
+      <td>When the spec defines an optimization objective, ordering rule, or tie-break, tests must reject feasible plans that optimize the wrong quantity or ignore the tie-break — not just check that <em>some</em> valid output exists. Spot-check the oracle on a case where two feasible answers differ on the primary objective or tie-break. See <a href="/portal/docs/creating-tasks/writing-tests">Writing Tests → Optimization Objectives and Tie-Breaks Must Be Tested</a>.</td>
       <td>Medium</td>
     </tr>
   </tbody>
@@ -505,7 +518,11 @@ environment_mode = "separate"
 [agent]
 timeout_sec   (minimum 1800)
 [environment]
-network_mode  ("public" default | "no-network")
+network_mode  (MUST be "public")
+[agent]
+network_mode  ("public" | "no-network")
+[verifier]
+network_mode  ("public" | "no-network")
 build_timeout_sec
 cpus
 memory_mb

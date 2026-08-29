@@ -36,12 +36,17 @@ Run through this before every submission.
 - [ ] Tests are deterministic — no network, no wall-clock dependence, no unseeded randomness
 - [ ] Tests check semantics, not appearance
 - [ ] Verification covers every correctness axis the task claims to care about
+- [ ] Goldens and held-out fixtures are baked into the verifier image (`tests/Dockerfile`), not read from agent-writable paths (`/app`, mutable corpus, agent-delivered trees)
+- [ ] Agent outputs are declared as top-level `artifacts` in `task.toml` — don't stage agent directories yourself
+- [ ] Any numeric tolerance stated in `instruction.md` matches what the tests enforce
+- [ ] When the spec defines an optimization objective or tie-break, tests reject a feasible plan that optimizes the wrong quantity
 
 ## Configuration
 
 - [ ] `[agent].timeout_sec` is at least **1800** (30 min) and reflects the time the task actually needs
 - [ ] `[verifier].timeout_sec` and `[environment].build_timeout_sec` set
-- [ ] `network_mode` is `"public"` unless the task specifically needs to run offline
+- [ ] `[environment].network_mode = "public"` — required on every task
+- [ ] `[agent].network_mode` and `[verifier].network_mode` are **both present** — an omitted phase is a blocking finding, not a default; an offline task uses `"no-network"` on both
 - [ ] No GPU required; runs within ~2 CPU cores, ~8 GB memory, ~10 GB storage
 - [ ] Descriptive fields are under `[metadata]`, not at the top level
 - [ ] 3–6 `tags`; `languages` and `expert_time_estimate_hours` set

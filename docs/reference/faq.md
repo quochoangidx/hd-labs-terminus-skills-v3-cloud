@@ -44,7 +44,9 @@ No — work on and submit multiple tasks in parallel.
 **How do I initialize a new task with the CLI?**
 `stb init my-task-name -p "Terminus-3-Prod"`
 
-> **Pending:** the template flag (`-t`) is not yet documented for Terminus 3. Download the [task skeleton](/Terminus-3-Prod/default-template.zip) and rename the folder instead.
+This downloads the Terminus 3 task skeleton into `my-task-name/`. Terminus 3 has a single template, so the template flag (`-t`) is optional — `stb init my-task-name -p "Terminus-3-Prod" -t default` does the same thing.
+
+You can also download the [task skeleton](/Terminus-3-Prod/default-template.zip) directly and rename the folder.
 
 ---
 
@@ -277,7 +279,7 @@ You can also drill into a specific submission:
 | `REJECTED` | Task rejected | No |
 | `SKIPPED` | Task skipped | No |
 
-See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#check-submission-status) for the full set of submission commands.
+See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#5-check-submission-status) for the full set of submission commands.
 
 **What are the submission limits?**
 

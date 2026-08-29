@@ -78,9 +78,11 @@ relevant_experience = "TODO: summarize the relevant authoring experience."
 [verifier]
 timeout_sec = 1800
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = 5400
+network_mode = "no-network"
 
 [environment]
 network_mode = "public"

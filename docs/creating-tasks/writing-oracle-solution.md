@@ -85,11 +85,16 @@ A wrong oracle is worse than a broken one: because the tests encode its output a
 
 Verify the oracle against the **spec**, not against its own tests. Independently work out the expected result on a few hard or edge inputs your fixtures don't already cover, and confirm the oracle produces it.
 
+**Cover the full strategy space and objective.** If the spec allows more than one valid approach — direct screening vs pooling, multiple tie-break rules, crash recovery paths — the oracle must implement the one the tests grade, not a narrow heuristic that happens to pass the shipped fixtures. When the task is an optimization or ordering problem, manually compare the oracle's output against a second feasible plan on inputs where the primary objective or tie-break actually bites.
+
 ```bash
 # The oracle passes its own suite — but does it match the SPEC on the cases the fixtures skip?
 # e.g. the spec requires submission order to be preserved under preemption. Construct a case where
 # a later request could overtake an older preempted victim, compute the correct order by hand from
 # the spec, and confirm the oracle produces it — not just that pytest is green.
+#
+# e.g. the spec says "minimize peak batch size, then batch count". Hand-compute a case where two
+# feasible plans tie on peak size but differ on count — confirm the oracle picks the better tie-break.
 ```
 
 ## Advanced Patterns

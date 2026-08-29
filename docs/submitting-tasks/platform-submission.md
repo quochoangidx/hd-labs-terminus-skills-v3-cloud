@@ -78,9 +78,11 @@ relevant_experience = "The background that qualified you to author this task."
 [verifier]
 timeout_sec = 1800
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = 7200
+network_mode = "no-network"
 
 [environment]
 network_mode = "public"
@@ -92,7 +94,7 @@ storage_mb = 10240
 
 > Descriptive fields go under `[metadata]` — top-level copies are no longer counted by the structure check. `artifacts` stays top-level, and `name` resolves in either place.
 >
-> `network_mode = "public"` is the default. Use `"no-network"` only when the task does not make sense to complete with internet access. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
+> **`[environment].network_mode` must be `"public"`** on every task — the build and harness install need the network. Choose `"public"` or `"no-network"` on `[agent]` and `[verifier]` for what the task itself needs; an offline task keeps the environment public and sets `[agent]` to `"no-network"`. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
 
 ## Step 4: Configure Docker Environment
 

@@ -34,7 +34,8 @@ and behavior contract, then build it with `task-clone`.
 4. Update `[metadata].languages` using lowercase language names. Keep the exact
    Terminus 3 category/subcategory pair unless the domain itself changes.
 5. Keep the Terminus 3 contract: top-level `artifacts`, separate verifier,
-   `tests/Dockerfile`, `network_mode`, 1800–18000 second agent timeout, and no
+   `tests/Dockerfile`, public environment network plus explicit agent/verifier
+   network modes, 1800–18000 second agent timeout, and no
    removed Terminus 2 fields.
 6. Adapt digest-pinned images and build commands. Bake every dependency into the
    relevant image; never install verifier dependencies at trial time.

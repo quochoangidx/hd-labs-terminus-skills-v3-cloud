@@ -161,6 +161,17 @@ hardcoded parameter must no longer pass. This does not prohibit hardcoded
 expected results, tolerances, or format constants that are not claimed config
 values.
 
+Keep goldens and held-out fixtures in the separate verifier image; never derive
+expected truth from `/app`, mutable corpora, or agent-delivered trees. Declare
+specific top-level artifacts and let the harness transfer them instead of
+copying agent-controlled directories where symlinks can expose verifier data.
+
+Use exact matching when the instruction pins an exact format or byte artifact,
+and semantic matching when it does not. A stated numeric tolerance must equal
+the verifier tolerance. For optimization/order tasks, include a case where a
+merely feasible answer or the wrong tie-break loses, and independently
+spot-check the Oracle against a second feasible plan.
+
 ## Building stronger Python task signals
 
 Prefer bugs involving interactions:
@@ -283,7 +294,6 @@ if [ "$rc" -eq 0 ]; then
 else
     echo 0 > /logs/verifier/reward.txt
 fi
-exit 0
 ```
 
 The final reward block must end the script. The current `check_test_sh` gate
@@ -292,8 +302,9 @@ defensive form above, where `rc=$?` is captured immediately after pytest and
 used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
 commands between pytest and the capture/conditional, or rewrite it as
 `pytest && echo 1`.
-End with `exit 0`. Harbor reads `/logs/verifier/reward.txt` for pass/fail; the
-script's exit code is not the reward signal.
+End on the reward block's `fi`, with no trailing `exit`. Pytest's status is
+captured rather than propagated, while a failed reward write must surface as an
+infrastructure error.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
 `pytest`, `pytest-json-ctrf`, and other verifier-only packages in the separate

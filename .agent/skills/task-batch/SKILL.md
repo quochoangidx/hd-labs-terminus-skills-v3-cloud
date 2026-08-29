@@ -204,10 +204,11 @@ Read each relevant `SKILL.md` completely before using that stage:
 2. `task-clone`
 3. `terminus-regular-task-authoring` and any required language-specific skill
 4. `task-client-feedback-review`
-5. `task-llm-style-audit`
-6. `task-local-solve-probe`
-7. `task-harbor-runner`
-8. `task-zip-submit`
+5. `terminus-rubric-authoring`
+6. `task-llm-style-audit`
+7. `task-local-solve-probe`
+8. `task-harbor-runner`
+9. `task-zip-submit`
 
 This file controls the batch policy when it is more specific than a dependent
 skill. Read
@@ -364,7 +365,8 @@ The candidate must:
 - use a domain-appropriate implementation language;
 - be brand-new and gallery-novel;
 - fit one exact Terminus 3 category/subcategory pair;
-- have a fair goal and enough evidence under its declared `network_mode` to
+- have a fair goal and enough evidence under its declared
+  `[agent].network_mode` to
   infer the graded model; the verifier itself remains deterministic and
   self-contained;
 - have enough independent behavioral depth to plausibly resist a strong agent;
@@ -697,10 +699,38 @@ before delivery does not authorize moving it earlier. The only exception is an
 explicit user request for an early Harbor integration diagnosis; record that
 exception and do not treat it as difficulty evidence.
 
-The task-visible prose was already reviewed before the counted snapshot. Use
-`task-llm-style-audit` on external post-probe surfaces. This is orchestrator
-work by default; if an optional auditor was explicitly launched, it may review
-these surfaces in its permitted follow-up:
+Before drafting rubric prose, use `terminus-rubric-authoring` to build
+`workspace/reports/<slug>/rubric-coverage.md` from the exact frozen task,
+agent-visible contract, and verifier cases. Every requested output, public
+field, preservation promise, supported mode, and important interaction must map
+to a discriminating witness and a rubric criterion. A `partial` or `uncovered`
+row blocks this stage: repair the task/verifier, return to Step 3, and rerun all
+snapshot-bound evidence and counted probes affected by the semantic change.
+Never narrow the rubric to conceal the gap.
+
+Draft task-specific criteria from that matrix; there is no default count of
+positive or negative lines. Then check the current packet together with the
+accepted packets in the active batch portfolio and save a hash-bound receipt:
+
+```bash
+python3 .agent/skills/terminus-rubric-authoring/scripts/check_rubric.py \
+  workspace/submissions/SUBMISSION-<slug>.md \
+  <accepted-portfolio-submission-files...> \
+  --coverage-matrix workspace/reports/<slug>/rubric-coverage.md \
+  --output workspace/reports/<slug>/rubric-check.json
+```
+
+The current packet must pass. Portfolio topology and catch-all warnings require
+an explicit adjudication in `style-audit-transcript.md`; include the exact
+warning text beside the keep/rewrite decision. Rewrite only when the warning
+reflects templating rather than the task's evidence. The handover gate
+hash-checks both the current submission and coverage matrix from this receipt
+and rejects warnings absent from that transcript.
+
+The task-visible prose was already reviewed before the counted snapshot. After
+the rubric check, use `task-llm-style-audit` on external post-probe surfaces.
+This is orchestrator work by default; if an optional auditor was explicitly
+launched, it may review these surfaces in its permitted follow-up:
 
 - rubric text;
 - submission explanations;
@@ -825,10 +855,7 @@ State the concrete domain, toolchain, or repository experience that supports the
 
 # Rubrics
 
-Agent completes `<observable behavior>`, +5
-Agent completes `<observable behavior>`, +5
-Agent preserves `<observable behavior>`, +3
-Agent breaks `<observable behavior>`, -3
+`<task-specific criteria derived from rubric-coverage.md; one physical line each>`
 ```
 
 Rubrics must:
@@ -840,6 +867,9 @@ Rubrics must:
 - avoid hidden fixture values, test names, solution details, and private failure evidence;
 - cover the task's main independent behavior clusters;
 - remain consistent with the instruction and verifier.
+- use no fixed positive/negative count or repeated score topology;
+- pass `terminus-rubric-authoring/scripts/check_rubric.py` against the current
+  packet and active portfolio, with a complete contract-witness matrix.
 
 Run the style audit on the completed submission file.
 
@@ -893,6 +923,9 @@ Count a task toward `N` only when all of the following are true:
   replicated single-lever split is rejected.
 - The pre-freeze task-tree style audit and post-probe submission-only style
   audit are both clean and hash-bound to their exact surfaces.
+- `rubric-coverage.md` has no partial or uncovered contract rows, and
+  `rubric-check.json` passes while hash-binding both that matrix and the exact
+  current submission packet. Portfolio warnings have a recorded adjudication.
 - `workspace/submissions/<slug>.zip` exists and matches the final task state.
 - `workspace/submissions/SUBMISSION-<slug>.md` exists and is accurate.
 - The final `workspace/reports/<slug>/handover.json` is schema version 2,
