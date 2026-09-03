@@ -530,6 +530,10 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 `environment/Dockerfile` must:
 
 - use `FROM ...@sha256:<digest>` on every stage
+- keep every Dockerfile cloud-builder compatible: `COPY --chown=` uses numeric
+  IDs (for example `0:0` or `1000:1000`), and an external-image
+  `COPY --from=` uses `image@sha256:<digest>` with no tag. `FROM
+  image:tag@sha256:<digest>` and `COPY --from=<stage-name>` remain valid.
 - use a **canonical Terminal-Bench base image** for the final runtime stage when
   one matches the task's language (exact digest-pinned refs):
   - Python: `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`
@@ -822,6 +826,14 @@ per-node mutant campaign is stronger than this baseline and remains required.
 
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
+For Hardware / CAD tasks, follow
+`docs/creating-tasks/cad-task-guidelines.md`: measure every stated dimension on
+the built solid with a method that can see it; sampling brackets must be finer
+than the stated tolerance; verify through/repeated/exact-count features; and
+test pose/construction-order freedom. A parametric promise requires changing a
+fresh driving value, recomputing, checking for errors, and measuring the changed
+geometry. Reading the parameter back is not behavioral coverage.
+
 Verifier matrix for upstream bugfixes must include:
 
 - direct upstream regression
@@ -980,8 +992,8 @@ mistakes each cost a full rebuild this session — avoid them up front:
   table reads to the platform reviewer as a "design specification that prescribes
   implementation" — the `instruction_check` warning and the #1 client reject.
   Instead say "the result must match what `git check-ignore` reports / matches
-  `numpy.quantile(method=...)`" and let the tests be the source of truth. This
-  ALSO satisfies instruction/test symmetry (the named reference defines
+  `numpy.quantile(method=...)`" and let that named reference be the authority.
+  This ALSO satisfies instruction/test symmetry (the named reference defines
   correctness) without listing internals. Keep only YOUR I/O format + the
   observable contract; drop the mechanics. AND write the whole instruction as
   flowing prose (1-3 paragraphs) — NOT as `Input`/`Output`/`Build` sections:
@@ -999,8 +1011,10 @@ mistakes each cost a full rebuild this session — avoid them up front:
 - **Pin verifier deps with a hash-locked `requirements.lock` + `pip install
   --require-hashes --no-deps`, for EVERY language's task** (not just Python ones).
   Inline `pip install pytest==x pytest-json-ctrf==y` trips the static-check
-  lockfile warning even in a Go/C++/Rust task. Copy a `requirements.lock` into
-  `environment/` and install from it. (Reusing an existing task's lock is fine.)
+  lockfile warning even in a Go/C++/Rust task. Put `requirements.lock` in the
+  `tests/` build context, copy it from `tests/Dockerfile`, and install it in the
+  verifier image. Never put verifier-only dependencies in `environment/`.
+  (Reusing an existing task's lock is fine.)
 - **Don't make blank/empty input a fixture VALUE if the program skips blank
   lines, and avoid positional-alignment verifiers.** A program that ignores blank
   lines emits no output line for an empty input, which both contradicts an
@@ -1014,7 +1028,8 @@ Before packaging or platform upload:
 
 - **run `scripts/preflight.sh <task-dir>` (repo root) — zero FAIL rows
   required.** It machine-checks layout, .dockerignore entries, Dockerfile
-  hygiene (syntax line, canonical digest-pinned base, bind-mounts),
+  hygiene (syntax line, cloud-compatible `COPY --chown`/`COPY --from`,
+  canonical digest-pinned base, bind-mounts),
   task.toml fields, leak sweep, zip arcnames/CRLF, rubric format, docker
   oracle=1.0/nop=0.0, and the oracle-under-`--tmpfs /tmp:noexec` repro.
   (New tasks should have been stamped by `scripts/new-task.sh`, which

@@ -37,11 +37,19 @@ and behavior contract, then build it with `task-clone`.
    `tests/Dockerfile`, public environment network plus explicit agent/verifier
    network modes, 1800–18000 second agent timeout, and no
    removed Terminus 2 fields.
-6. Adapt digest-pinned images and build commands. Bake every dependency into the
-   relevant image; never install verifier dependencies at trial time.
+6. Adapt digest-pinned images and build commands. In every Dockerfile,
+   `COPY --chown=` must use numeric IDs and external-image `COPY --from=` refs
+   must be digest-only (`image@sha256:<digest>`, without a tag); stage aliases
+   remain valid. Bake agent dependencies into `environment/Dockerfile` and
+   verifier-only dependencies into `tests/Dockerfile`; never install verifier
+   dependencies at trial time.
 7. Re-run oracle, nop, static checks, V3 evidence inferability, and artifact
    transfer checks. A successful source-language task does not prove the migrated
    runtime works.
+   For a Hardware / CAD port, rerun the geometry-specific checks from
+   `docs/creating-tasks/cad-task-guidelines.md`, including fresh-value
+   parametric recompute when that behavior is promised; a new frontend or
+   kernel can change what is measurable and how topology survives recompute.
 8. Package only if the user requested an internal ZIP or a replacement upload.
 
 Do not create multiple sibling ports, mandatory narrative reskins, or a

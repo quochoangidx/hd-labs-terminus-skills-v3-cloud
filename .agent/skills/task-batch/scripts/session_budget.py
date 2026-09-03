@@ -27,17 +27,16 @@ LEGACY_POLICY = {
     "accepted_external_sessions_min": 5,
     "accepted_external_sessions_max": 6,
 }
-SINGLE_REVIEWER_POLICY_NAME = "single_reviewer_two_pass_v1"
+LEGACY_FIXED_FIVE_POLICY_NAME = "fixed_five_roles_v2"
+SINGLE_REVIEWER_POLICY_NAME = "fixed_roles_unbounded_v3"
 SINGLE_REVIEWER_POLICY = {
     "builder_sessions": 1,
     "reviewer_sessions": 1,
-    "reviewer_turns": 2,
-    "consolidated_auditor_sessions_min": 0,
-    "consolidated_auditor_sessions_max": 1,
-    "initial_blind_solver_sessions": 2,
-    "max_adaptive_blind_solver_sessions": 1,
-    "accepted_total_sessions_min": 4,
-    "accepted_total_sessions_max": 5,
+    "required_review_phases": ["contract_review", "final_review"],
+    "consolidated_auditor_sessions": 1,
+    "required_valid_blind_solver_results": 2,
+    "failed_attempt_limit": None,
+    "remediation_limit": None,
 }
 IDENTITY_FIELDS = ("runtime", "model", "session_id")
 SOL_MODEL = "gpt-5.6-sol"
@@ -107,6 +106,28 @@ def is_default_reviewer(role: dict[str, str]) -> bool:
     return model == SOL_MODEL or model == "opus-5" or model.startswith("claude-opus-5")
 
 
+def validate_runtime_model(role: dict[str, str], label: str, errors: list[str]) -> None:
+    runtime = role.get("runtime", "").lower()
+    model = role.get("model", "")
+    if "claude" in runtime:
+        if not (model in {"opus", "opus-5"} or model.startswith("claude-opus-5")):
+            errors.append(f"{label}.model must be Opus 5 for Claude")
+    elif "codex" in runtime:
+        if model != SOL_MODEL:
+            errors.append(f"{label}.model must be {SOL_MODEL} for Codex")
+    else:
+        errors.append(f"{label}.runtime must identify Codex or Claude")
+
+
+def runtime_family(role: dict[str, str]) -> str:
+    runtime = role.get("runtime", "").lower()
+    if "claude" in runtime:
+        return "claude"
+    if "codex" in runtime:
+        return "codex"
+    return ""
+
+
 def derive_roles(report_dir: Path, errors: list[str]) -> tuple[list[dict[str, str]], dict[str, str], str]:
     sufficiency = load_json(report_dir / "instruction-sufficiency.json", errors)
     semantic = load_json(report_dir / "semantic-coverage.json", errors)
@@ -115,10 +136,9 @@ def derive_roles(report_dir: Path, errors: list[str]) -> tuple[list[dict[str, st
 
     fairness = sufficiency.get("fairness_review", {})
     reviewers = fairness.get("reviewers") if isinstance(fairness, dict) else None
-    if not isinstance(reviewers, list) or len(reviewers) not in {1, 2}:
-        errors.append("instruction-sufficiency.json: one default reviewer or two legacy reviewers are required")
+    if not isinstance(reviewers, list) or len(reviewers) != 1:
+        errors.append("instruction-sufficiency.json: exactly one fairness reviewer is required")
         reviewers = []
-    single_reviewer = len(reviewers) == 1
     fairness_roles: list[dict[str, str]] = []
     for index, reviewer in enumerate(reviewers):
         role = identity(reviewer, f"fairness reviewer {index + 1}", errors)
@@ -129,17 +149,7 @@ def derive_roles(report_dir: Path, errors: list[str]) -> tuple[list[dict[str, st
                 errors.append(f"fairness reviewer {index + 1}: fresh_context must be true")
             if reviewer.get("task_visible_only") is not True:
                 errors.append(f"fairness reviewer {index + 1}: task_visible_only must be true")
-        if single_reviewer:
-            if not is_default_reviewer(role):
-                errors.append(f"fairness reviewer {index + 1}.model must be gpt-5.6-sol or Opus 5")
-        else:
-            validate_role_route(
-                role,
-                f"fairness reviewer {index + 1}",
-                LUNA_MODEL,
-                errors,
-                expected_runtime=LUNA_RUNTIME,
-            )
+        validate_runtime_model(role, f"fairness reviewer {index + 1}", errors)
         fairness_roles.append(role)
 
     audit_records = (
@@ -154,28 +164,12 @@ def derive_roles(report_dir: Path, errors: list[str]) -> tuple[list[dict[str, st
             "pre-freeze semantic, folder, and task-style receipts must share one exact "
             "auditor identity and transcript provenance"
         )
-    if single_reviewer:
-        reviewer_identity = {field: fairness_roles[0].get(field) for field in IDENTITY_FIELDS} if fairness_roles else {}
-        audit_identity_only = {field: consolidated.get(field) for field in IDENTITY_FIELDS}
-        if audit_identity_only == reviewer_identity:
-            consolidated = {}
-        else:
-            validate_role_route(
-                consolidated,
-                "optional consolidated auditor",
-                LUNA_MODEL,
-                errors,
-                expected_runtime=LUNA_RUNTIME,
-            )
-        return fairness_roles, consolidated, SINGLE_REVIEWER_POLICY_NAME
-    validate_role_route(
-        consolidated,
-        "consolidated auditor",
-        LUNA_MODEL,
-        errors,
-        expected_runtime=LUNA_RUNTIME,
-    )
-    return fairness_roles, consolidated, "legacy_luna_v1"
+    validate_runtime_model(consolidated, "consolidated auditor", errors)
+    reviewer_identity = {field: fairness_roles[0].get(field) for field in IDENTITY_FIELDS} if fairness_roles else {}
+    audit_identity_only = {field: consolidated.get(field) for field in IDENTITY_FIELDS}
+    if audit_identity_only == reviewer_identity:
+        errors.append("consolidated auditor must be distinct from the fairness reviewer")
+    return fairness_roles, consolidated, SINGLE_REVIEWER_POLICY_NAME
 
 
 def source_hashes(report_dir: Path, errors: list[str]) -> dict[str, str]:
@@ -198,16 +192,23 @@ def build_receipt(
     if report_dir.name != task_dir.name:
         errors.append("report directory name must match task slug")
     builder_role = identity(builder, "builder", errors)
-    validate_role_route(builder_role, "builder", SOL_MODEL, errors)
+    validate_runtime_model(builder_role, "builder", errors)
     fairness, auditor, role_policy = derive_roles(report_dir, errors)
     role_sessions = [
         builder_role.get("session_id", ""),
         *(item.get("session_id", "") for item in fairness),
-        auditor.get("session_id", "") if auditor else "",
+        auditor.get("session_id", ""),
     ]
     nonempty_sessions = [item for item in role_sessions if item]
     if len(nonempty_sessions) != len(set(nonempty_sessions)):
-        errors.append("builder, reviewer, and optional auditor must be distinct sessions")
+        errors.append("builder, reviewer, and auditor must be distinct sessions")
+    families = {
+        runtime_family(role)
+        for role in (builder_role, *fairness, auditor)
+        if role
+    }
+    if len(families) != 1 or "" in families:
+        errors.append("builder, reviewer, and auditor must use the same active runtime")
     policy = SINGLE_REVIEWER_POLICY if role_policy == SINGLE_REVIEWER_POLICY_NAME else LEGACY_POLICY
     payload = {
         "schema_version": 3 if role_policy == SINGLE_REVIEWER_POLICY_NAME else 2,
@@ -232,14 +233,22 @@ def validate_receipt(task_dir: Path, report_dir: Path) -> tuple[list[str], dict]
     if not receipt:
         return errors, {}
     role_policy = receipt.get("role_policy", "legacy_luna_v1")
-    expected_schema = 3 if role_policy == SINGLE_REVIEWER_POLICY_NAME else 2
+    current_policy = role_policy == SINGLE_REVIEWER_POLICY_NAME
+    historical_single_reviewer = role_policy == LEGACY_FIXED_FIVE_POLICY_NAME
+    expected_schema = 3 if current_policy or historical_single_reviewer else 2
     if receipt.get("schema_version") != expected_schema:
         errors.append(f"agent-session-budget.json: schema_version must be {expected_schema}")
     if receipt.get("task_slug") != task_dir.name or receipt.get("status") != "pass":
         errors.append("agent-session-budget.json: task_slug/status mismatch")
-    expected_policy = SINGLE_REVIEWER_POLICY if role_policy == SINGLE_REVIEWER_POLICY_NAME else LEGACY_POLICY
+    expected_policy = (
+        SINGLE_REVIEWER_POLICY
+        if current_policy
+        else receipt.get("policy")
+        if historical_single_reviewer
+        else LEGACY_POLICY
+    )
     if receipt.get("policy") != expected_policy:
-        errors.append("agent-session-budget.json: fixed session policy mismatch")
+        errors.append("agent-session-budget.json: role policy mismatch")
 
     builder = identity(receipt.get("builder"), "agent-session-budget.json builder", errors)
     expected, derive_errors = build_receipt(task_dir, report_dir, builder)
@@ -276,7 +285,7 @@ def check(args: argparse.Namespace) -> int:
         for error in errors:
             print("FAIL:", error)
         return 1
-    print(f"PASS: {args.task_dir.name} pre-freeze role budget is valid")
+    print(f"PASS: {args.task_dir.name} pre-freeze role receipt is valid")
     return 0
 
 

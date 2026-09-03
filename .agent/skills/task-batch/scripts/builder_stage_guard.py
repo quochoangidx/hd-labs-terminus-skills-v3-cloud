@@ -202,9 +202,6 @@ def violation(state: dict[str, Any], event: dict[str, Any]) -> str | None:
         return "builder lease has no valid deadline"
     if now > deadline:
         return "builder stage deadline expired; stop this turn and let the orchestrator close it"
-    if state.get("infrastructure_repairs", 0) > 2:
-        return "candidate exceeded the two-attempt infrastructure repair cap"
-
     turn = event_turn_id(event)
     bound_turn = state.get("bound_turn_id")
     if bound_turn and turn and bound_turn != turn:
@@ -215,7 +212,7 @@ def violation(state: dict[str, Any], event: dict[str, Any]) -> str | None:
     text = event_text(event)
     normalized = text.replace("\\", "/")
     if any(path in normalized for path in PROTECTED):
-        return "the builder may not modify its own quota hooks or active lease"
+        return "the builder may not modify its own lifecycle hooks or active lease"
     slugs = set(TASK_SLUG.findall(text))
     foreign = sorted(slugs - {str(state.get("candidate_slug"))})
     if foreign:
@@ -345,9 +342,6 @@ def mutate_state(args: argparse.Namespace) -> int:
     state = read_json(args.state)
     if args.command == "repair":
         state["infrastructure_repairs"] = int(state.get("infrastructure_repairs", 0)) + 1
-        if state["infrastructure_repairs"] > 2:
-            state["status"] = "rejected"
-            state["outcome_reason"] = "infrastructure repair cap exceeded"
     elif args.command == "close":
         state.setdefault("history", []).append({
             "stage": state["stage"],

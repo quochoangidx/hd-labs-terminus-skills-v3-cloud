@@ -1,17 +1,15 @@
-# Quota-Efficient Batch Workflow
+# Unbounded-Attempt Batch Workflow
 
 Use this policy for every `task-batch` run. It supplements the quality gates;
 it never weakens fairness, verifier isolation, or empirical difficulty.
 
 ## Model routing
 
-- Candidate design and builder: `gpt-5.6-sol`, `reasoning_effort: medium`.
-- Default reviewer: one fresh collaboration subagent reused for two turns. Use
-  `gpt-5.6-sol` medium in Codex or Opus 5 medium in Claude.
-- Luna reviewer (`gpt-5.6-luna` high) and consolidated auditor
-  (`gpt-5.6-luna` max) are optional Codex-task escalations. Create them only
-  after explicit user opt-in and follow `luna-thread-orchestration.md`.
-- Counted blind solvers: `gpt-5.6-sol`, `reasoning_effort: medium`.
+- Codex: use `gpt-5.6-sol`, medium, for builder, fairness reviewer, both blind
+  solvers, and consolidated auditor.
+- Claude Code: use Opus 5, medium, for every role.
+- The reviewer is one fresh collaboration subagent reused for two turns. The
+  auditor is one distinct required independent subagent.
 - Deterministic scanning, materialization, verifier execution, packaging, and
   handover do not need a model turn.
 - Check the execution surface for each role actually requested. If it cannot
@@ -21,7 +19,7 @@ it never weakens fairness, verifier isolation, or empirical difficulty.
   a new model turn even though the role identity did not change.
 
 The exact provider credit balance is not observable from repository scripts.
-The turn ledger is therefore a fail-closed planning floor, not a claim about
+The turn ledger is an immutable execution audit, not a quota or a claim about
 the provider's remaining credits.
 
 ## Builder compute envelope
@@ -38,42 +36,38 @@ stages also use separate bounded turns.
 The orchestrator checks the lease at most every 60 seconds while waiting and
 interrupts the exact builder after its deadline. Close the lease immediately
 on rejection; never continue the same turn with a replacement candidate.
-Record every infrastructure repair. The third attempt rejects the candidate.
+Record every infrastructure repair. Retry without an internal attempt cap;
+reject only when the source or environment is fundamentally unusable or the
+workflow cannot make evidence-based progress.
 
 Use this cost-first stage order inside the builder session:
 
 1. Mine and source-smoke.
-2. Scaffold the task-visible contract and 6–10 discriminating witnesses.
-3. Run contract-stage mechanical checks and reviewer pass 1.
-4. Resolve review findings once, then expand the full verifier and Oracle.
-5. Stabilize each mutant with targeted witnesses.
-6. Run one full strict/mutation evidence pass for the stable snapshot.
-7. Reuse the reviewer for pass 2; launch an auditor only after explicit opt-in.
+2. Build the complete task-visible contract, verifier, and Oracle.
+3. Stabilize each mutant with targeted witnesses.
+4. Run complete strict Oracle/NOP/noexec and mechanical quality gates.
+5. Run reviewer pass 1 and resolve/recheck findings until green.
+6. Reuse the reviewer for pass 2 and resolve/recheck findings until green.
+7. Run the mandatory auditor; resolve/recheck findings until green or
+   fundamentally blocked.
 8. Run counted blind probes; run Harbor only for shortlisted candidates.
 
-Do not invert steps 3 and 6. Fairness changes after a full corpus exists are a
-predictable source of stale CTRF, mutation, and Docker evidence.
+Do not launch reviewers or solvers against incomplete Oracle/NOP or quality
+evidence. Any task change stales and regenerates the affected receipts.
 
-The default reviewer follows
-[`single-reviewer-workflow.md`](single-reviewer-workflow.md). Optional Luna
-roles use the separate Codex-only procedure in
-[`review-role-quota-hooks.md`](review-role-quota-hooks.md). Open leases only for
-roles explicitly requested, poll their deadlines, and bind only their actual
-receipts into `quota-ledger.json`.
+The reviewer and mandatory auditor follow
+[`single-reviewer-workflow.md`](single-reviewer-workflow.md). Bind their actual
+runtime, model, session, and transcript receipts into `quota-ledger.json`.
 
 ## Model-turn accounting
 
 Record every external model turn, including failed, interrupted,
-usage-limited, and superseded turns, but do not impose a fixed per-candidate
-turn cap or a synthetic pre-solver turn reserve. Cost boundaries come from the
-user's explicit batch-wide candidate/session budget plus the role-specific
-stage deadlines, tool-call limits, and remediation caps.
-
-- At most one reviewer remediation cycle after either required review pass.
-- At most one consolidated-auditor remediation cycle when an optional auditor
-  was actually launched.
-- If the same gate still fails, reject the candidate. Do not keep asking the
-  same reviewers to reconsider slightly different drafts.
+usage-limited, and superseded turns. Do not impose a per-candidate, batch-wide,
+turn, session, remediation, retry, or candidate-attempt cap. Continue with the
+same builder/reviewer/auditor identities until each required gate passes or an
+evidence-backed fundamental blocker is established. Invalid solver attempts
+are recorded and replaced; only two valid solver results enter difficulty
+classification.
 - Deterministic metadata, hash, receipt, packaging, and verifier work belongs
   to the orchestrator. Never invoke a model merely to close or rebind a
   receipt.
@@ -89,9 +83,9 @@ Minimal shape:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "task_slug": "tbrain-example",
-  "role_policy": "single_reviewer_two_pass_v1",
+  "role_policy": "fixed_roles_unbounded_v3",
   "remediations": {"reviewer": 0, "auditor": 0},
   "role_lease_receipts": [],
   "review_adjudications": [
@@ -135,20 +129,15 @@ Minimal shape:
 
 Every agent invocation and every `followup_task` appends a turn before the
 next invocation starts. Never rewrite or delete an earlier turn to make the
-budget pass.
+audit pass.
 
-Every optional Luna reviewer/auditor `create_thread` or
-`send_message_to_thread` also appends a turn before launch. Set
-`execution_surface: "codex_thread"`,
-`runtime: "codex-thread"`, `session_id` and `thread_id` to the actual thread
-ID, and `host_id` to the returned host ID. The builder and blind solvers use
-`execution_surface: "collaboration_subagent"`. A client-generated pending ID
-does not satisfy thread provenance.
+Every role uses `execution_surface: "collaboration_subagent"`. Append every
+invocation or follow-up before launch and record its actual runtime/model.
 
 ## Builder context and feedback critique
 
-The Sol-medium design/build agent is deliberately **not fresh-context**. Use one
-persistent builder session with `context_mode: "informed"`. Before proposing a
+The builder is deliberately **not fresh-context**. Use one persistent runtime-
+specific session with `context_mode: "informed"`. Before proposing a
 candidate, make it read hash-recorded inputs for:
 
 - the durable `AGENTS.md` campaign memory;
@@ -161,7 +150,7 @@ design or derive a structural transformation. Record the catalog as a separate
 post-crux context input so the ordering is auditable.
 
 Do not expose these materials to the reviewer or blind solvers. Those roles
-remain fresh-context; an optional consolidated auditor remains independent.
+remain fresh-context; the mandatory consolidated auditor remains independent.
 
 Send reviewer/auditor reports back to the same builder session for remediation.
 Before editing, require a JSON critique receipt with one row per finding:

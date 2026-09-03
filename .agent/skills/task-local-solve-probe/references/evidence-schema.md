@@ -9,7 +9,8 @@ Receipts are generated from raw artifacts; do not hand-author a passing result.
 
 - `task_slug` and the absolute `source_task`;
 - `mode`: `exploratory` or `counted`;
-- `profile`: `general` or `advanced_frontier_only`;
+- `profile`: `general`, historical `advanced_frontier_only`, or current
+  `core_advanced_frontier`;
 - the sanitized solver-contract hash and complete task snapshot hash;
 - for counted probes, paths and SHA-256 values for
   `instruction-sufficiency.json`, `semantic-coverage.json`, and
@@ -49,16 +50,15 @@ verifier against every materialized solve.
 ## Semantic interpretation
 
 Every verifier behavior ID is mapped by `semantic-coverage.json` to at least
-one mechanism or interaction. Probe geometry is computed from those nodes,
-not from fixture count:
-
-- a two-run split requires the adaptive third run;
-- campaign `1/3` is provisional Advanced only when both failures span at
-  least two nodes and the node sets differ;
-- zero-solve Frontier additionally requires complete per-case union, no common
-  miss, and de-correlated semantic-node failures;
-- setup, compile, dependency, timeout, refusal, stale snapshot, or incomplete
-  evidence is never a difficulty signal.
+one mechanism or interaction. The active counted bundle contains exactly two
+valid blind-solver results. Infrastructure/setup/timeout failures are preserved
+in an archived invalid bundle and replaced with a fresh pair; they impose no
+attempt quota and never enter the pass fraction. Under
+`core_advanced_frontier`, `0/2` or `1/2` solved qualifies after all quality
+gates pass; `2/2` triggers one fair strengthening cycle and fresh two-run
+re-probe, then rejection if still all-pass. Geometry, union, and common misses
+remain diagnostics. Setup, compile, dependency, timeout, refusal, stale
+snapshot, or incomplete evidence is never a difficulty signal.
 
 The diagnostic summary cannot emit `candidate_ready`. Only
 `scripts/batch-handover.py` can do so after validating the raw probe bundle and

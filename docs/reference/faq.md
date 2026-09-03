@@ -1,6 +1,6 @@
 # Terminus 3 — Frequently Asked Questions
 
-*Last updated: August 10, 2026*
+*Last updated: September 2, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
@@ -246,6 +246,9 @@ Run `docker network prune` to clean up stale networks.
 
 **My Dockerfile references a base image that seems unavailable.**
 Some images may not be accessible on the platform. Post the exact image name and task UUID in Slack.
+
+**Preflight failed on `COPY --chown=` or `COPY --from=`.**
+The cloud image builder rejects two patterns that work on local Docker. `COPY --chown=` must use numeric IDs (`0:0`, `1000:1000`), not names such as `root` or `appuser`. `COPY --from=` **image** refs must drop the tag and keep the digest (`golang@sha256:<digest>`), not `golang:1.24-bookworm@sha256:<digest>`. Stage names (`COPY --from=builder`) and `FROM image:tag@sha256:<digest>` are unchanged. The preflight names the exact line. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 
 **Which base image should I use?**
 Prefer one of the **10 canonical digest-pinned images** (Python, Node, Go, Rust, Java, Ruby, GCC, Maven, Debian, Ubuntu) listed in [Dockerfile Best Practices §2](/portal/docs/creating-tasks/dockerfile-best-practices). Non-canonical images are allowed with a brief, credible justification as a Dockerfile comment; missing/vague justifications are blocked. Tasks whose CI passed before Jun 15, 2026 are grandfathered — reviewers shouldn't flag their base image (pinning is still required).

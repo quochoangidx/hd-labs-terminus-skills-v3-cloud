@@ -19,9 +19,9 @@ Run through this before every submission.
 
 - [ ] `task.toml` — all required fields present
 - [ ] `instruction.md`
-- [ ] `environment/Dockerfile` — builds successfully; dependencies pinned; every `FROM` digest-pinned
+- [ ] `environment/Dockerfile` — builds successfully; dependencies pinned; every `FROM` digest-pinned; `COPY --chown=` uses numeric IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`)
 - [ ] `solution/solve.sh` — deterministic, human-written
-- [ ] `tests/Dockerfile` — verifier image with dependencies baked in
+- [ ] `tests/Dockerfile` — verifier image with dependencies baked in; same `COPY --chown=` / `COPY --from=` rules as the environment Dockerfile
 - [ ] `tests/test.sh` — verifier entrypoint
 - [ ] `tests/test_outputs.py` — Python pytest tests with docstrings
 

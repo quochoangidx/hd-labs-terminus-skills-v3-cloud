@@ -101,6 +101,35 @@ REMOVED_METADATA_FIELDS = {
 }
 
 
+def cloud_builder_copy_issues(dockerfile: str) -> list[str]:
+    """Find COPY options that the Terminus cloud image builder rejects."""
+    aliases = {
+        match.group(1).lower()
+        for match in re.finditer(
+            r"(?im)^\s*FROM\s+(?:--platform=\S+\s+)?\S+\s+AS\s+(\S+)",
+            dockerfile,
+        )
+    }
+    issues: list[str] = []
+    for line_number, line in enumerate(dockerfile.splitlines(), start=1):
+        if not re.match(r"(?i)^\s*COPY\b", line):
+            continue
+        chown = re.search(r"(?i)(?:^|\s)--chown=([^\s]+)", line)
+        if chown and not re.fullmatch(r"[0-9]+(?::[0-9]+)?", chown.group(1)):
+            issues.append(f"line {line_number}: --chown={chown.group(1)} must use numeric IDs")
+        source = re.search(r"(?i)(?:^|\s)--from=([^\s]+)", line)
+        if not source:
+            continue
+        image = source.group(1)
+        if image.lower() in aliases or image.isdigit():
+            continue
+        digest = re.search(r"@sha256:[0-9a-f]{64}$", image, re.IGNORECASE)
+        image_name = image[: digest.start()] if digest else image
+        if digest is None or ":" in image_name.rsplit("/", 1)[-1]:
+            issues.append(f"line {line_number}: --from={image} must be a digest-only image ref")
+    return issues
+
+
 @dataclass
 class Finding:
     severity: str
@@ -567,6 +596,19 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
         for item in sorted(roots):
             if item not in allowed_roots:
                 add(findings, "should_fix", "zip-allowlist", f"Unexpected root entry: {item}", item, "task-zip-submit")
+
+        for name in files:
+            if Path(name).name != "Dockerfile":
+                continue
+            for issue in cloud_builder_copy_issues(view.read_text(name)):
+                add(
+                    findings,
+                    "blocker",
+                    "dockerfile-modal-syntax",
+                    issue,
+                    name,
+                    "terminus-regular-task-authoring",
+                )
 
         explanation_files = [
             name for name in files

@@ -9,7 +9,8 @@ Use this skill when creating or validating a submission ZIP.
 
 **Mandatory pre-zip gate:** run `scripts/preflight.sh <task-dir>` (repo root)
 before every zip — it machine-checks the mechanical gates (layout,
-.dockerignore entries, Dockerfile hygiene, task.toml, leak sweep, zip
+.dockerignore entries, Dockerfile hygiene including cloud-compatible
+`COPY --chown`/`COPY --from`, task.toml, leak sweep, zip
 arcnames/CRLF, rubric format, docker oracle=1/nop=0, noexec-/tmp repro). Zero
 FAIL rows required.
 
@@ -170,9 +171,15 @@ Before upload, fail the package if any of these are present:
 - rubrics reference tests, verifier logic, `test.sh`, `test_outputs.py`,
   `/tests/`, hidden tests, CI, reward files, or pytest results
 - `tests/test.sh` writes `/logs/verifier` only after an early exit guard
+- any Dockerfile uses named IDs in `COPY --chown=` or a non-digest-only
+  external image ref in `COPY --from=`
+- a Hardware / CAD task has not passed the geometry-specific review in
+  `docs/creating-tasks/cad-task-guidelines.md`, including built-solid dimension
+  coverage and fresh-value recompute for any parametric promise
 
-Verifier dependencies must be installed by `environment/Dockerfile`; `tests/`
-should contain verifier scripts and fixtures, not dependency wheels.
+Verifier dependencies must be installed with exact pins by `tests/Dockerfile`;
+`tests/` should contain verifier scripts and fixtures, not dependency wheels.
+Agent/runtime dependencies belong in `environment/Dockerfile`.
 
 Before upload, inspect environment README/spec/config/comment-heavy files for
 hidden solution walkthroughs or prompt-bypass instructions. Supporting docs

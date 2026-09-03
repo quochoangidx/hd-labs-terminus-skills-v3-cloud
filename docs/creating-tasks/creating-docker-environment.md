@@ -42,6 +42,7 @@ Before moving on to task-specific setup, make sure your environment satisfies th
 - `environment/Dockerfile` exists and builds.
 - The final runtime image includes `tmux` and `asciinema`.
 - Every `FROM` image, and every pulled compose `image:`, includes `@sha256:<digest>`.
+- `COPY --chown=` uses numeric IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`). See [Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 - The final runtime base image is sanctioned or explicitly exempt.
 - Language dependencies are exact-pinned or locked.
 - Apt installs use `--no-install-recommends` and clean `/var/lib/apt/lists/*` in the same layer.

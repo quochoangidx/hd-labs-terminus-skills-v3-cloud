@@ -46,6 +46,13 @@ def test_two_identical_multi_node_failures_are_not_advanced() -> None:
     assert result["advanced_geometry_pass"] is False
 
 
+def test_core_plus_accepts_zero_or_one_solve_without_geometry_gate() -> None:
+    assert MODULE.validate_core_plus_outcome(2, 0) == []
+    assert MODULE.validate_core_plus_outcome(2, 1) == []
+    assert MODULE.validate_core_plus_outcome(2, 2)
+    assert MODULE.validate_core_plus_outcome(3, 1)
+
+
 def _write_design(report_root: Path, slug: str, domain: str, family: str, suffix: str) -> dict:
     signature = {
         "work_surface": f"work-{suffix}",
@@ -182,6 +189,45 @@ def _session_budget() -> dict:
     }
 
 
+def _unbounded_role_budget() -> dict:
+    return {
+        "role_policy": "fixed_roles_unbounded_v3",
+        "builder": {"runtime": "codex", "model": "gpt-5.6-sol", "session_id": "builder"},
+        "fairness_reviewers": [
+            {"runtime": "codex", "model": "gpt-5.6-sol", "session_id": "reviewer"}
+        ],
+        "consolidated_auditor": {
+            "runtime": "codex",
+            "model": "gpt-5.6-sol",
+            "session_id": "auditor",
+        },
+    }
+
+
+def test_final_session_budget_accepts_unbounded_role_policy(monkeypatch, tmp_path: Path) -> None:
+    budget = _unbounded_role_budget()
+    monkeypatch.setattr(
+        MODULE,
+        "validate_session_budget_receipt",
+        lambda task, report: ([], budget),
+    )
+    auditor = budget["consolidated_auditor"]
+    errors: list[str] = []
+
+    derived = MODULE.validate_final_session_budget(
+        tmp_path / "task",
+        tmp_path / "report",
+        budget,
+        {"solver_session_ids": ["solver-1", "solver-2"], "probe_runtime": "codex"},
+        {"manual_review": auditor},
+        {"auditor": auditor},
+        errors,
+    )
+
+    assert errors == []
+    assert derived["total_sessions"] == 5
+
+
 def test_final_session_budget_accepts_six_role_sessions(monkeypatch, tmp_path: Path) -> None:
     budget = _session_budget()
     monkeypatch.setattr(
@@ -207,7 +253,7 @@ def test_final_session_budget_accepts_six_role_sessions(monkeypatch, tmp_path: P
     assert derived["external_sessions"] == 5
 
 
-def test_final_session_budget_accepts_adaptive_seventh_session(monkeypatch, tmp_path: Path) -> None:
+def test_final_session_budget_rejects_third_solver(monkeypatch, tmp_path: Path) -> None:
     budget = _session_budget()
     monkeypatch.setattr(
         MODULE,
@@ -227,9 +273,8 @@ def test_final_session_budget_accepts_adaptive_seventh_session(monkeypatch, tmp_
         errors,
     )
 
-    assert errors == []
-    assert derived["total_sessions"] == 7
-    assert derived["external_sessions"] == 6
+    assert any("exactly two blind solver" in error for error in errors)
+    assert derived["blind_solver_sessions"] == 0
 
 
 def test_final_session_budget_rejects_new_zip_reviewer(monkeypatch, tmp_path: Path) -> None:
@@ -255,9 +300,9 @@ def test_final_session_budget_rejects_new_zip_reviewer(monkeypatch, tmp_path: Pa
     assert any("reuse the consolidated" in error for error in errors)
 
 
-def test_luna_thread_alignment_accepts_matching_role_receipts() -> None:
+def test_role_session_alignment_accepts_matching_receipts() -> None:
     errors: list[str] = []
-    MODULE.validate_luna_thread_alignment(
+    MODULE.validate_role_session_alignment(
         _session_budget(),
         {
             "completed_role_session_ids": {
@@ -270,9 +315,9 @@ def test_luna_thread_alignment_accepts_matching_role_receipts() -> None:
     assert errors == []
 
 
-def test_luna_thread_alignment_rejects_unbound_thread_ids() -> None:
+def test_role_session_alignment_rejects_unbound_ids() -> None:
     errors: list[str] = []
-    MODULE.validate_luna_thread_alignment(
+    MODULE.validate_role_session_alignment(
         _session_budget(),
         {
             "completed_role_session_ids": {

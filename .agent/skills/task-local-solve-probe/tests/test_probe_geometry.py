@@ -42,3 +42,31 @@ def test_fixture_replication_cannot_create_multi_node_geometry() -> None:
     )
     assert result["advanced_geometry_pass"] is False
     assert result["semantic_decorrelated"] is False
+
+
+def test_core_plus_accepts_zero_or_one_of_two_without_geometry_gate() -> None:
+    for passed in (0, 1):
+        assert MODULE.core_plus_recommendation(
+            total=2,
+            passed=passed,
+            evidence_complete=True,
+            failures={"semantic": 2 - passed},
+            mode="counted",
+        ) == "core_plus_shortlist"
+
+
+def test_core_plus_rejects_all_pass_and_third_run() -> None:
+    assert MODULE.core_plus_recommendation(
+        total=2,
+        passed=2,
+        evidence_complete=True,
+        failures={},
+        mode="counted",
+    ) == "rework_or_replace"
+    assert MODULE.core_plus_recommendation(
+        total=3,
+        passed=1,
+        evidence_complete=True,
+        failures={"semantic": 2},
+        mode="counted",
+    ) == "unsupported_campaign_sample"

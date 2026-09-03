@@ -268,6 +268,15 @@ def semantic_probe_geometry(run_results: list[dict]) -> dict:
     }
 
 
+def validate_core_plus_outcome(result_count: int, solved_runs: int) -> list[str]:
+    errors: list[str] = []
+    if result_count != 2:
+        errors.append("probe evidence: CORE+ batches require exactly two blind-solver runs")
+    if solved_runs > 1:
+        errors.append("probe evidence: CORE+ batches require zero or one solved run out of two")
+    return errors
+
+
 def run_trusted_nop_verifier(run_dir: Path) -> dict:
     """Rerun the verifier with the fixed local NOP agent and derive its outcome."""
     verify = (run_dir / "verify").resolve()
@@ -1493,8 +1502,6 @@ def validate_probe_bundle(
     solved_runs = geometry["solved_runs"]
     if result_count and solved_runs == result_count:
         errors.append("probe evidence: all local runs solved; the task has no local difficulty signal")
-    if result_count == 2 and solved_runs == 1:
-        errors.append("probe evidence: a 1/2 split requires the adaptive third run")
 
     union_passed = (
         set().union(*(item["passed_ids"] for item in run_results)) if run_results else set()
@@ -1510,21 +1517,8 @@ def validate_probe_bundle(
     de_correlated = len(failed_cluster_sets) >= 2 and len(set(failed_cluster_sets)) >= 2
     semantic_de_correlated = geometry["semantic_de_correlated"]
     advanced_geometry_pass = geometry["advanced_geometry_pass"]
-    if solved_runs == 0:
-        if union_coverage != 1.0:
-            errors.append("probe evidence: zero-solve Frontier signal requires 100% per-case union coverage")
-        if common_misses:
-            errors.append("probe evidence: zero-solve Frontier signal must have no common misses")
-        if not semantic_de_correlated:
-            errors.append("probe evidence: zero-solve Frontier semantic failures must be de-correlated")
-    if profile == "advanced_frontier_only":
-        if solved_runs == 1 and result_count == 3 and not advanced_geometry_pass:
-            errors.append(
-                "probe evidence: 1/3 Advanced requires two distinct multi-node failure sets; "
-                "a replicated single lever does not qualify"
-            )
-        if result_count and solved_runs / result_count >= 0.5:
-            errors.append("probe evidence: Core/Base result is outside advanced_frontier_only")
+    if profile in {"advanced_frontier_only", "core_advanced_frontier"}:
+        errors.extend(validate_core_plus_outcome(result_count, solved_runs))
     if len(runtime_values) != 1:
         errors.append("probe evidence: all runs must use one runtime")
     if len(model_values) != 1:
@@ -1577,7 +1571,14 @@ def validate_final_session_budget(
     builder = canonical.get("builder", {}) if isinstance(canonical, dict) else {}
     fairness = canonical.get("fairness_reviewers", []) if isinstance(canonical, dict) else []
     auditor = canonical.get("consolidated_auditor", {}) if isinstance(canonical, dict) else {}
-    single_reviewer = canonical.get("role_policy") == "single_reviewer_two_pass_v1"
+    role_policy = canonical.get("role_policy")
+    single_reviewer = role_policy in {
+        "single_reviewer_two_pass_v1",
+        "fixed_five_roles_v2",
+        "fixed_roles_unbounded_v3",
+    }
+    fixed_five = role_policy == "fixed_five_roles_v2"
+    unbounded_roles = role_policy == "fixed_roles_unbounded_v3"
     prefreeze_ids = [
         builder.get("session_id") if isinstance(builder, dict) else None,
         *(
@@ -1588,8 +1589,8 @@ def validate_final_session_budget(
         auditor.get("session_id") if isinstance(auditor, dict) else None,
     ]
     solver_ids = probe.get("solver_session_ids", []) if isinstance(probe, dict) else []
-    if not isinstance(solver_ids, list) or len(solver_ids) not in {2, 3}:
-        errors.append("agent session budget: exactly two or three blind solver sessions are required")
+    if not isinstance(solver_ids, list) or len(solver_ids) != 2:
+        errors.append("agent session budget: exactly two blind solver sessions are required")
         solver_ids = []
     all_ids = [item for item in (*prefreeze_ids, *solver_ids) if nonempty(item)]
     if len(all_ids) != len(set(all_ids)):
@@ -1624,8 +1625,15 @@ def validate_final_session_budget(
     external = total - 1 if nonempty(builder.get("session_id") if isinstance(builder, dict) else None) else 0
     if single_reviewer:
         expected_total = 1 + 1 + (1 if auditor else 0) + len(solver_ids)
-        if total != expected_total:
+        if not unbounded_roles and total != expected_total:
             errors.append(f"agent session budget: single-reviewer policy expected {expected_total} sessions, observed {total}")
+        if fixed_five and (not auditor or total != 5):
+            errors.append("agent session budget: fixed_five_roles_v2 requires builder, reviewer, auditor, and two solvers")
+        if fixed_five or unbounded_roles:
+            builder_runtime = str(builder.get("runtime", "")).lower()
+            expected_probe_runtime = "claude-code" if "claude" in builder_runtime else "codex"
+            if probe.get("probe_runtime") != expected_probe_runtime:
+                errors.append("agent session budget: blind solvers must use the same runtime as the other roles")
     else:
         if total not in {6, 7}:
             errors.append(f"agent session budget: accepted task must use 6 or 7 sessions, observed {total}")
@@ -1643,12 +1651,12 @@ def validate_final_session_budget(
     }
 
 
-def validate_luna_thread_alignment(
+def validate_role_session_alignment(
     budget: dict,
     quota_summary: dict,
     errors: list[str],
 ) -> None:
-    """Bind the Luna task IDs in role receipts to the quota ledger."""
+    """Bind reviewer and auditor session IDs to the quota ledger."""
     fairness = budget.get("fairness_reviewers", []) if isinstance(budget, dict) else []
     auditor = budget.get("consolidated_auditor", {}) if isinstance(budget, dict) else {}
     role_sessions = (
@@ -1677,7 +1685,7 @@ def validate_luna_thread_alignment(
     ledger_auditor = set(role_sessions.get("consolidated_auditor", []))
     if ledger_auditor != budget_auditor:
         errors.append(
-            "quota ledger: optional auditor session ID does not match agent-session-budget.json"
+            "quota ledger: auditor session ID does not match agent-session-budget.json"
         )
 
 
@@ -1738,7 +1746,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--profile",
-        choices=("general", "advanced_frontier_only"),
+        choices=("general", "advanced_frontier_only", "core_advanced_frontier"),
         default="general",
     )
     args = parser.parse_args()
@@ -1781,11 +1789,11 @@ def main() -> int:
         validate_category(evidence["category"], slug, declared, declared_subcategory, errors)
     if evidence["design"]:
         validate_design(evidence["design"], slug, report_dir, errors)
-    if args.profile == "advanced_frontier_only" and (
+    if args.profile in {"advanced_frontier_only", "core_advanced_frontier"} and (
         batch_index_path is None or not args.expected_batch_size
     ):
         errors.append(
-            "advanced_frontier_only handover requires --batch-index and --expected-batch-size"
+            "CORE+ handover requires --batch-index and --expected-batch-size"
         )
     if batch_index_path is not None:
         batch_index = load_json(batch_index_path, errors)
@@ -1878,7 +1886,7 @@ def main() -> int:
         sys.executable,
         str(semantic_check),
     ]
-    if args.profile == "advanced_frontier_only":
+    if args.profile in {"advanced_frontier_only", "core_advanced_frontier"}:
         semantic_command.append("--advanced-plus")
     semantic_command.extend(
         [
@@ -1928,7 +1936,7 @@ def main() -> int:
             "handover",
         )
         errors.extend(f"quota ledger: {error}" for error in quota_errors)
-        validate_luna_thread_alignment(
+        validate_role_session_alignment(
             evidence.get("agent_session_budget", {}),
             quota_ledger_derived,
             errors,

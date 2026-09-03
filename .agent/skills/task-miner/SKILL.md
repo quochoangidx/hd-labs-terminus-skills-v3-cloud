@@ -84,6 +84,16 @@ A candidate must support:
 - an honest 1800–18000 second agent budget and a fast repeatable edit/test loop
 - no canary strings and no AI-generated instruction prose
 
+For Hardware / CAD candidates, record a geometry-verification plan before
+promotion and apply `docs/creating-tasks/cad-task-guidelines.md`. Name which
+stated dimensions/features use direct B-Rep measurement,
+invariants, symmetric difference, sufficiently fine sampling, or functional
+verification; confirm the chosen engine exposes those operations. If the task
+promises a parametric model, the plan must change a fresh, unseen driving value,
+recompute without errors, and measure the resulting solid. Reject candidates
+whose intended verifier only reads stored parameters, checks coarse point
+occupancy, uses a volume floor, or relies on one global bounding box.
+
 ## Operating Modes
 
 ### Upstream Bugfix Mode
@@ -144,8 +154,8 @@ track:
   `X-*` prototypes remain derived until the catalog's promotion rule is met.
 
 For a batch, record every mining-plan-qualified attempt in the schema-v3
-candidate ledger. Use the explicit candidate budget and a non-blocking 20–30%
-derived exploration band when practical; do not preassign immutable slots or
+candidate ledger. There is no candidate budget or maximum attempt count. Use a
+non-blocking 20–30% derived exploration advisory when practical; do not preassign immutable slots or
 replace a rejection with the same track. The first candidate that clears every
 quality and empirical difficulty gate may be accepted regardless of track. A
 domain/language/story change is still a reskin, not a derived pattern.
@@ -226,9 +236,9 @@ lane or when prospecting is impossible. Do not let this list pull
 every batch back to Python parser/validator libs. Apply the archetype-first
 selection rule above and the patch-shape gate before using any of them.
 
-Prioritize low-to-medium quota sources for upstream bugfix mode:
+Prioritize low-to-medium effort sources for upstream bugfix mode:
 
-| Repo | Quota burn | Best task domains |
+| Repo | Expected effort | Best task domains |
 |---|---:|---|
 | `pypa/pip` | low-medium | resolver behavior, wheel/cache handling, requirement parsing, install/report edge cases |
 | `pypa/setuptools` | low-medium | editable installs, package discovery, metadata/config parsing, build hooks |
@@ -240,7 +250,7 @@ Prioritize low-to-medium quota sources for upstream bugfix mode:
 | `pytest-dev/pytest` | low but cooldown after Medium results | fixture lifecycle, collection, reporting, assertion rewriting |
 | `pandas-dev/pandas` | medium-high, selective | indexing/groupby/merge/datetime/parser edge cases with tiny datasets |
 
-Heavy repos are allowed only with explicit opt-in and strict limits:
+Heavy repos are allowed only with explicit opt-in and strict viability checks:
 
 - `numpy/numpy`
 - `tokio-rs/tokio`
@@ -260,9 +270,8 @@ pipelines. The Source Queue is not a domain-diversity limit.
 
 Use this mode for TypeScript, go-ethereum, PyTorch, Ray, NumPy, Tokio, or any repo with large builds/tests.
 
-Hard limits:
+Viability constraints:
 
-- mine at most 1 heavy candidate per session
 - inspect at most 5 files before deciding whether to continue
 - inspect at most 2 commits around the fix
 - do not run full test/build suites
@@ -448,7 +457,7 @@ Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 entries in `index.jsonl` remain a local execution/dedupe log, but do not create
 or maintain a parallel `family_difficulty` memory. When a family obtains a
 durable ceiling or live verdict, fold the evidence and tier into the matching
-`AGENTS.md` section; later mining checks that verdict before spending quota.
+`AGENTS.md` section; later mining checks that verdict before spending effort.
 
 ## Hardness Filter
 

@@ -19,10 +19,10 @@ mining plan gate into exactly one track:
   or file format alone is a reskin and does not qualify.
 
 Record every mining-plan-qualified attempt in the schema-v3 candidate ledger,
-including later rejections. The ledger has an explicit candidate budget; it
-does not reserve immutable task slots or require a rejected attempt to be
-replaced by the same track. Use roughly 20–30% derived attempts as a
-non-blocking exploration band when the budget permits. Accept the first task
+including later rejections. The ledger is unbounded provenance; it has no
+candidate budget, does not reserve immutable task slots, and does not require a
+rejected attempt to be replaced by the same track. Use roughly 20–30% derived
+attempts as a non-blocking exploration advisory. Accept the first task
 that clears every validity, fairness, and empirical difficulty gate regardless
 of track.
 

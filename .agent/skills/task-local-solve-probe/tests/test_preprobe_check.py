@@ -9,8 +9,8 @@ SPEC = importlib.util.spec_from_file_location("preprobe_check", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
-import quota_guard
-import session_budget
+import quota_guard  # noqa: E402
+import session_budget  # noqa: E402
 
 
 def write_json(path: Path, value: object) -> None:
@@ -89,9 +89,9 @@ def build_valid_receipts(tmp_path: Path) -> tuple[Path, Path]:
             "scanner_sha256": MODULE.sha256(scanner),
             "manual_review": {
                 "status": "pass",
-                "runtime": "codex-thread",
-                "model": "gpt-5.6-luna",
-                "session_id": "review-session",
+                "runtime": "codex-collaboration",
+                "model": "gpt-5.6-sol",
+                "session_id": "auditor-session",
                 "transcript": review_transcript.name,
                 "transcript_sha256": MODULE.sha256(review_transcript),
             },
@@ -119,9 +119,9 @@ def build_valid_receipts(tmp_path: Path) -> tuple[Path, Path]:
             "task_snapshot_sha256": MODULE.tree_hash(task),
             "auditor": {
                 "status": "pass",
-                "runtime": "codex-thread",
-                "model": "gpt-5.6-luna",
-                "session_id": "review-session",
+                "runtime": "codex-collaboration",
+                "model": "gpt-5.6-sol",
+                "session_id": "auditor-session",
                 "transcript": review_transcript.name,
                 "transcript_sha256": MODULE.sha256(review_transcript),
             },
@@ -129,14 +129,14 @@ def build_valid_receipts(tmp_path: Path) -> tuple[Path, Path]:
         },
     )
     fairness_reviewers = []
-    for index in range(2):
+    for index in range(1):
         transcript = report / f"fairness-{index + 1}.md"
         transcript.write_text("Goal and evidence are independently sufficient.\n", encoding="utf-8")
         fairness_reviewers.append(
             {
                 "reviewer_id": f"fairness-{index + 1}",
-                "runtime": "codex-thread",
-                "model": "gpt-5.6-luna",
+                "runtime": "codex-collaboration",
+                "model": "gpt-5.6-sol",
                 "session_id": f"fairness-session-{index + 1}",
                 "fresh_context": True,
                 "task_visible_only": True,
@@ -146,16 +146,16 @@ def build_valid_receipts(tmp_path: Path) -> tuple[Path, Path]:
         )
     write_json(
         report / "instruction-sufficiency.json",
-        {"fairness_review": {"reviewer_count": 2, "reviewers": fairness_reviewers}},
+        {"fairness_review": {"reviewer_count": 1, "reviewers": fairness_reviewers}},
     )
     write_json(
         report / "semantic-coverage.json",
         {
             "review": {
                 "status": "pass",
-                "runtime": "codex-thread",
-                "model": "gpt-5.6-luna",
-                "session_id": "review-session",
+                "runtime": "codex-collaboration",
+                "model": "gpt-5.6-sol",
+                "session_id": "auditor-session",
                 "transcript": review_transcript.name,
                 "transcript_sha256": MODULE.sha256(review_transcript),
             }
@@ -183,49 +183,34 @@ def build_valid_receipts(tmp_path: Path) -> tuple[Path, Path]:
         }
     for kind in ("durable_memory", "pattern_catalog", "batch_portfolio"):
         (report / f"{kind}.md").write_text(f"{kind}\n", encoding="utf-8")
-    role_lease_dir = report / "role-leases"
-    role_lease_dir.mkdir()
-    role_lease_receipts = []
-    for lease_id, role, effort, session_id, status, phase in (
-        ("fairness-1", "fairness_reviewer", "high", "fairness-session-1", "complete", "initial"),
-        ("fairness-2", "fairness_reviewer", "high", "fairness-session-2", "complete", "initial"),
-        ("auditor-1", "consolidated_auditor", "max", "review-session", "phase_complete", "pre_freeze"),
-    ):
-        lease_path = role_lease_dir / f"{lease_id}.json"
-        write_json(
-            lease_path,
-            {
-                "schema_version": 1,
-                "lease_id": lease_id,
-                "task_slug": task.name,
-                "role": role,
-                "model": quota_guard.REVIEW_MODEL,
-                "reasoning_effort": effort,
-                "owner": {"session_id": session_id},
-                "status": status,
-                "phase": phase,
-                "remediation_cycles": 0,
-            },
-        )
-        role_lease_receipts.append(
-            {
-                "path": str(lease_path.relative_to(report)),
-                "sha256": MODULE.sha256(lease_path),
+    review_adjudications = []
+    for phase in ("contract_review", "final_review"):
+        row = {"phase": phase}
+        for field in ("builder_critique", "orchestrator_adjudication"):
+            evidence_path = report / f"{phase}-{field}.json"
+            evidence_path.write_text("{}\n", encoding="utf-8")
+            row[field] = {
+                "path": evidence_path.name,
+                "sha256": MODULE.sha256(evidence_path),
             }
-        )
+        review_adjudications.append(row)
     write_json(
         report / "quota-ledger.json",
         {
-            "schema_version": 2,
+            "schema_version": 3,
+            "role_policy": "fixed_roles_unbounded_v3",
             "task_slug": task.name,
             "mechanical_gates": mechanical_gates,
-            "remediations": {"fairness": 0, "auditor": 0},
-            "role_lease_receipts": role_lease_receipts,
+            "remediations": {"reviewer": 0, "auditor": 0},
+            "role_lease_receipts": [],
+            "review_adjudications": review_adjudications,
             "turns": [
                 {
                     "turn_id": "builder-1",
                     "role": "builder",
                     "model": quota_guard.BUILDER_MODEL,
+                    "runtime": "codex-collaboration",
+                    "session_id": "builder-session",
                     "reasoning_effort": "medium",
                     "status": "complete",
                     "execution_surface": "collaboration_subagent",
@@ -241,42 +226,38 @@ def build_valid_receipts(tmp_path: Path) -> tuple[Path, Path]:
                     ],
                 },
                 {
-                    "turn_id": "fairness-1",
+                    "turn_id": "review-contract",
                     "role": "fairness_reviewer",
-                    "model": quota_guard.REVIEW_MODEL,
-                    "reasoning_effort": "high",
+                    "model": quota_guard.BUILDER_MODEL,
+                    "reasoning_effort": "medium",
                     "status": "complete",
-                    "execution_surface": "codex_thread",
-                    "runtime": "codex-thread",
+                    "execution_surface": "collaboration_subagent",
+                    "runtime": "codex-collaboration",
                     "session_id": "fairness-session-1",
-                    "thread_id": "fairness-session-1",
-                    "host_id": "local",
                     "context_mode": "fresh",
+                    "review_phase": "contract_review",
                 },
                 {
-                    "turn_id": "fairness-2",
+                    "turn_id": "review-final",
                     "role": "fairness_reviewer",
-                    "model": quota_guard.REVIEW_MODEL,
-                    "reasoning_effort": "high",
+                    "model": quota_guard.BUILDER_MODEL,
+                    "reasoning_effort": "medium",
                     "status": "complete",
-                    "execution_surface": "codex_thread",
-                    "runtime": "codex-thread",
-                    "session_id": "fairness-session-2",
-                    "thread_id": "fairness-session-2",
-                    "host_id": "local",
+                    "execution_surface": "collaboration_subagent",
+                    "runtime": "codex-collaboration",
+                    "session_id": "fairness-session-1",
                     "context_mode": "fresh",
+                    "review_phase": "final_review",
                 },
                 {
                     "turn_id": "auditor-1",
                     "role": "consolidated_auditor",
-                    "model": quota_guard.REVIEW_MODEL,
-                    "reasoning_effort": "max",
+                    "model": quota_guard.BUILDER_MODEL,
+                    "reasoning_effort": "medium",
                     "status": "complete",
-                    "execution_surface": "codex_thread",
-                    "runtime": "codex-thread",
-                    "session_id": "review-session",
-                    "thread_id": "review-session",
-                    "host_id": "local",
+                    "execution_surface": "collaboration_subagent",
+                    "runtime": "codex-collaboration",
+                    "session_id": "auditor-session",
                     "context_mode": "independent",
                 },
             ],
@@ -289,6 +270,51 @@ def test_valid_preprobe_receipts_pass(tmp_path: Path) -> None:
     task, report = build_valid_receipts(tmp_path)
 
     assert MODULE.validate(task, report) == []
+
+
+def test_current_role_policy_does_not_cap_remediation_count(tmp_path: Path) -> None:
+    task, report = build_valid_receipts(tmp_path)
+    ledger_path = report / "quota-ledger.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["remediations"] = {"reviewer": 12, "auditor": 7}
+    builder = ledger["turns"][0]
+    for index in range(8):
+        ledger["turns"].append(
+            {
+                **builder,
+                "turn_id": f"failed-builder-{index}",
+                "session_id": f"failed-builder-session-{index}",
+                "status": "failed",
+            }
+        )
+    write_json(ledger_path, ledger)
+
+    assert MODULE.validate(task, report) == []
+
+
+def test_current_role_policy_keeps_failed_and_prior_solver_attempts(tmp_path: Path) -> None:
+    _, report = build_valid_receipts(tmp_path)
+    ledger_path = report / "quota-ledger.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    for index in range(7):
+        ledger["turns"].append(
+            {
+                "turn_id": f"solver-attempt-{index}",
+                "role": "blind_solver",
+                "model": quota_guard.BUILDER_MODEL,
+                "runtime": "codex-collaboration",
+                "session_id": f"solver-session-{index}",
+                "reasoning_effort": "medium",
+                "status": "complete" if index < 4 else "failed",
+                "execution_surface": "collaboration_subagent",
+                "context_mode": "fresh",
+            }
+        )
+
+    errors, summary = quota_guard.validate(ledger, ledger_path, "handover")
+
+    assert errors == []
+    assert summary["turn_count"] == 11
 
 
 def test_task_edit_invalidates_all_snapshot_receipts(tmp_path: Path) -> None:

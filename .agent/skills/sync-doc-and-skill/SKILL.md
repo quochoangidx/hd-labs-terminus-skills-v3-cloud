@@ -116,6 +116,8 @@ For each key rule area, compare online content with local docs:
 | Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5` |
 | Live category availability | `reference/category-status.md`, `reference/changelog.md` | `seven categories`, `milestones are removed` |
 | Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | per-phase `network_mode`, `digest`, `stable invariants` |
+| Cloud image-builder syntax | `creating-tasks/dockerfile-best-practices.md`, `testing-and-validation/ci-checks-reference.md` | `check_modal_dockerfile_compat`, `COPY --chown`, `COPY --from` |
+| Hardware/CAD geometry verification | `creating-tasks/cad-task-guidelines.md` | `direct measurement`, `sampling`, `recompute`, `built geometry` |
 
 ### Diff format
 
@@ -187,6 +189,8 @@ After docs are synced, audit the doctrine-coupled set:
 | Internet-enabled source pinning | viability | Docker/verifier review | check |
 | Clear goal vs inferred domain model | evidence graph | prompt/evidence gate | V3 schema check |
 | Held-out generalization vs hidden arbitrary policy | candidate shape | verifier design | review |
+| Cloud-compatible COPY syntax | — | Docker Rules | blocking check |
+| CAD geometry and parametric recompute | candidate feasibility | verifier design | CAD review |
 
 ### Terminus 3 epistemic consistency check
 
@@ -292,6 +296,11 @@ reward.txt
 set -uo pipefail
 CLAUDE.md
 cursorrules
+check_modal_dockerfile_compat
+COPY --chown
+COPY --from
+CAD Task Guidelines
+recompute
 ```
 
 If any of these appear in a different context than expected, flag for investigation.

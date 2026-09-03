@@ -314,6 +314,14 @@ not run `pip install` from `tests/test.sh`.
 
 Keep project runtime dependencies separate from verifier-only packages.
 
+For Hardware / CAD tasks, use the geometry-specific gate in
+`docs/creating-tasks/cad-task-guidelines.md`. Measure every stated dimension on
+the built solid with an observable method, keep any sampling grain finer than
+the claimed tolerance, verify through/repeated/exact-count features, and test
+the Oracle geometry rather than its constants. A parametric requirement needs a
+fresh parameter mutation followed by recompute, error checking, and measurement
+of the changed solid; parameter readback alone must fail review.
+
 ## Oracle Pattern
 
 For large repos:

@@ -50,6 +50,13 @@ stb harbor check <task-folder>
 
 **Dockerfile hygiene** — additional non-fatal warnings flag common issues. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
 
+**Cloud image builder syntax** — blocking preflight (`check_modal_dockerfile_compat`) on every Dockerfile in the submission. Local Docker often accepts these; the cloud builder does not:
+
+- `COPY --chown=` must use numeric user/group IDs (`0:0`, `1000:1000`), not names such as `root` or `appuser`.
+- `COPY --from=` **image** refs must be digest-only (`golang@sha256:<digest>`), not `image:tag@sha256:<digest>`. Stage names (`COPY --from=builder`) are fine. `FROM image:tag@sha256:<digest>` is unchanged.
+
+The check reports the exact line and the replacement. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+
 **No host bind mounts in compose** — multi-container environments must not use host bind mounts as volume sources. Containers that need to share state must do so another way.
 
 ---

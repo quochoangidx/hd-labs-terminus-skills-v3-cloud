@@ -4,6 +4,8 @@ The `tests/test_outputs.py` file contains pytest tests that verify task completi
 
 All verifier tests must be written in Python and run with pytest, regardless of the task's implementation language. For non-Python tasks, write Python tests that exercise the CLI, service, files, or processes under test. `tests/test.sh` is a bash entry point, but it should invoke the Python pytest suite rather than delegating to another language-specific test framework.
 
+> **Writing a Hardware/CAD task?** Geometry has failure modes this page does not cover — see [CAD Task Guidelines](/portal/docs/creating-tasks/cad-task-guidelines) in addition to everything here.
+
 ## How Verification Works
 
 In Terminus 3 the verifier runs in a **separate container** the agent cannot see or reach:

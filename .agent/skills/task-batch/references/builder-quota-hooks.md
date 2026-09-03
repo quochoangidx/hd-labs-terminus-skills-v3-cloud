@@ -1,4 +1,4 @@
-# Builder Quota Hooks
+# Builder Lifecycle Hooks
 
 The builder budget has two enforcement layers. Repository-local lifecycle hooks
 block invalid mutations inside Codex and Claude. The task-batch orchestrator
@@ -7,12 +7,14 @@ calling tools; hooks cannot preempt an in-flight model request.
 
 ## Agent-specific setup
 
-Codex loads `.codex/config.toml` and `.codex/hooks.json` from a trusted project.
-After either file changes, open `/hooks`, review the exact definitions, and
-trust them. Claude Code loads `.claude/settings.json`. Validate both setups:
+Bootstrap both runtimes before mining. The command is idempotent: it installs
+the shared `.agents/skills`, `.codex/skills`, and `.claude/skills` links,
+records project trust in the Codex and Claude user configs, validates the
+committed hook files, and runs no-lease smoke checks:
 
 ```bash
-python3 .agent/skills/task-batch/scripts/setup_agent_hooks.py --self-test
+python3 .agent/skills/task-batch/scripts/setup_agent_hooks.py \
+  --install --trust --self-test
 ```
 
 Both configurations call the same policy engine, but pass a different
@@ -75,8 +77,9 @@ python3 .agent/skills/task-batch/scripts/builder_stage_guard.py close \
   --outcome rejected --reason 'canonical source smoke failed'
 ```
 
-Each infrastructure repair must be recorded with `repair`. The third call
-automatically rejects the candidate.
+Each infrastructure repair must be recorded with `repair`. Repairs have no
+internal count limit; close the candidate only when the source/environment is
+fundamentally unusable or repeated evidence shows no meaningful progress.
 
 ## Stage B and later turns
 

@@ -16,15 +16,49 @@ All Terminal-Bench task images must be:
 
 ## CI Enforcement Summary
 
-Three Dockerfile checks block by default:
+Four Dockerfile checks block by default:
 
 | Check | Requirement |
 |---|---|
 | `check_pinned_images` | Every `FROM` image must be digest-pinned with `@sha256:<digest>` |
 | `check_sanctioned_base_images` | The final runtime base image must be sanctioned or explicitly exempt |
 | `check_build_context_size` | `environment/` must be at most 100 MiB total, with no file over 50 MiB |
+| `check_modal_dockerfile_compat` | `COPY --chown=` uses numeric user/group IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`) |
 
 The remaining Dockerfile checks warn by default, but warning checks can still emit structural errors when required files such as `environment/` or `environment/Dockerfile` are missing.
+
+---
+
+## Cloud Image Builder Syntax
+
+Local Docker accepts two patterns that the Terminus 3 cloud image builder **rejects**. Preflight scans every Dockerfile in the submission (`environment/Dockerfile`, `tests/Dockerfile`, and any others) and fails immediately with the line to change — you do not wait for a long eval to crash.
+
+These rules do **not** change `FROM` pins. `FROM image:tag@sha256:<digest>` is still required. Stage names such as `COPY --from=builder` are still fine. `RUN chown` is unchanged.
+
+**1. `COPY --chown=` must use numeric IDs.** Named users (`root`, `appuser`) are not resolved.
+
+```dockerfile
+# Bad
+COPY --chown=root:root script.sh /app/script.sh
+COPY --chown=appuser:appuser src/ /app/src/
+
+# Good
+COPY --chown=0:0 script.sh /app/script.sh
+COPY --chown=1000:1000 src/ /app/src/
+```
+
+**2. `COPY --from=` image refs must be digest-only.** If the source is an image (not a build stage), drop the `:tag` and keep `@sha256:<digest>`.
+
+```dockerfile
+# Bad — tag and digest together
+COPY --from=golang:1.24-bookworm@sha256:<digest> /usr/local/go /usr/local/go
+
+# Good — digest only
+COPY --from=golang@sha256:<digest> /usr/local/go /usr/local/go
+
+# Good — stage name (not an image ref)
+COPY --from=builder /build/target/release/my-tool /usr/local/bin/my-tool
+```
 
 ---
 
@@ -239,6 +273,8 @@ COPY --from=builder /build/target/release/my-tool /usr/local/bin/my-tool
 WORKDIR /app
 ```
 
+When `COPY --from=` points at an **image** rather than a stage name, use a digest-only ref — not `image:tag@sha256:…`. See [Cloud Image Builder Syntax](#cloud-image-builder-syntax).
+
 ---
 
 ## 7. Images Must Contain All Dependencies
@@ -353,9 +389,9 @@ Only change permissions for files that actually need it. Do not recursively rewr
 RUN chmod -R 755 /app
 RUN chown -R appuser:appuser /app
 
-# Good
+# Good — COPY --chown= must be numeric IDs (named users fail cloud builds)
 COPY --chmod=0755 run.sh /usr/local/bin/run-task
-COPY --chown=appuser:appuser src/ /app/src/
+COPY --chown=1000:1000 src/ /app/src/
 ```
 
 ---

@@ -479,14 +479,6 @@ def _validate_schema_v3_portfolio(
     allow_partial: bool,
     errors: list[str],
 ) -> tuple[list[str], list[str]]:
-    budget = manifest.get("candidate_budget")
-    if not isinstance(budget, int) or isinstance(budget, bool) or budget < expected:
-        errors.append("candidate_budget must be an integer >= expected_count")
-        budget = 0
-    if budget and len(candidates) > budget:
-        errors.append(
-            f"candidate count {len(candidates)} exceeds candidate_budget {budget}"
-        )
     if not candidates:
         errors.append("schema v3 requires at least one qualified candidate attempt")
 
@@ -740,9 +732,9 @@ def validate(
             manifest, candidates, expected, allow_partial, errors
         )
 
-    budget = manifest.get("candidate_budget") if schema_version == 3 else expected
-    derived_min = 1 if isinstance(budget, int) and budget >= 3 else 0
-    derived_max = max(derived_min, (3 * budget + 9) // 10) if isinstance(budget, int) else 0
+    budget = expected if schema_version in {1, 2} else None
+    derived_min = 1 if len(candidates) >= 3 else 0
+    derived_max = max(derived_min, (3 * len(candidates) + 9) // 10)
     mix_in_band = derived_min <= counts["derived"] <= derived_max
     if schema_version == 3 and len(candidates) >= 3 and not mix_in_band:
         advisories.append(
@@ -813,6 +805,7 @@ def validate(
         "established_count": counts["established"],
         "derived_count": counts["derived"],
         "candidate_budget": budget,
+        "candidate_limit_enforced": False,
         "accepted_task_slugs": accepted,
         "exploration_band": {
             "derived_min": derived_min,

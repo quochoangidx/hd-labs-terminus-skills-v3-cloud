@@ -7,6 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "builder_stage_guard.py"
@@ -103,6 +104,19 @@ class BuilderStageGuardTests(unittest.TestCase):
             file.write_text("fn main() { panic!() }\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "changed"):
                 guard.validate_smoke_receipt(receipt, "tbrain-one")
+
+    def test_infrastructure_repairs_are_recorded_without_a_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.state(Path(tmp))
+            with redirect_stdout(StringIO()):
+                for _ in range(10):
+                    code = guard.mutate_state(
+                        SimpleNamespace(command="repair", state=path)
+                    )
+            state = guard.read_json(path)
+            self.assertEqual(0, code)
+            self.assertEqual("active", state["status"])
+            self.assertEqual(10, state["infrastructure_repairs"])
 
 
 if __name__ == "__main__":

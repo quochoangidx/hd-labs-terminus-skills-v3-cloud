@@ -184,7 +184,9 @@ Check `environment/Dockerfile`:
 
 | Check | Rule | Auto-fix |
 |-------|------|----------|
-| Digest pin | `FROM image@sha256:<64hex>` required, NOT `FROM image:tag` | ❌ manual (need to pull digest) |
+| Digest pin | Every external `FROM` must end in `@sha256:<64hex>`; canonical `FROM image:tag@sha256:<digest>` is valid and expected, while a plain floating `FROM image:tag` is not | ❌ manual (need to pull digest) |
+| Numeric `COPY --chown` | Every Dockerfile must use numeric IDs such as `--chown=0:0` or `--chown=1000:1000`; named users fail the cloud builder | ✅ replace when the intended UID/GID is known |
+| Digest-only image `COPY --from` | External image refs must be `image@sha256:<digest>`, never `image:tag@sha256:<digest>`; stage aliases remain valid | ❌ manual |
 | Canonical final-stage base | Final stage must use a **canonical Terminal-Bench base image** (digest-pinned) when one matches the task's language, OR a non-canonical base with a brief credible justification in the `Dockerfile`/`README.md`. Canonical refs: Python `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`, Node `…/node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383`, Go `…/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac`, Rust `…/rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36`, Java `…/eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14`, GCC `…/gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c`, Ruby `…/ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df`, Maven `…/maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e`, Debian `…/debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d`, Ubuntu `…/ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932`. Builder stages may use any task-appropriate toolchain image. | ❌ manual |
 | **tmux + asciinema REQUIRED** | MUST be in apt-get install. Missing either = ALL agent runs fail with zero output. | ✅ add to apt-get |
 | No COPY tests | NO `COPY tests/` or `COPY solution/` | ✅ remove line |
@@ -203,6 +205,14 @@ builds the isolated verifier, must be digest-pinned, must bake in
 must `COPY . /tests/`, and must create the parent directory for every declared
 artifact path. Do not put dependency wheels under `tests/`, and do not install
 packages in `tests/test.sh`.
+
+For Hardware / CAD submissions, additionally apply
+`docs/creating-tasks/cad-task-guidelines.md`: every stated dimension must be
+measured on built geometry; sampling spacing must be finer than the tolerance;
+through/repeated/exact-count features must be covered; the Oracle solid must be
+independently measured; free pose/construction choices must pass; and any
+parametric requirement must be exercised by changing a fresh value,
+recomputing, and measuring the changed part.
 
 ### 2c. .dockerignore (WARNING → auto-fix)
 
@@ -482,8 +492,10 @@ Print summary table:
 | docker-compose flags     | N/A    | -          |
 | Dockerfile digest pin    | ✅     | -          |
 | Canonical base image     | ✅     | -          |
+| Cloud COPY syntax        | ✅     | -          |
 | tmux + asciinema         | ✅     | -          |
 | tests/Dockerfile         | ✅     | -          |
+| CAD geometry review      | ✅/N/A | -          |
 | artifact landing dirs    | ✅     | -          |
 | test.sh canonical form   | ✅     | YES        |
 | .dockerignore            | ✅     | YES        |
@@ -534,17 +546,18 @@ Top recurring CI failures from empirical data:
 1. **verifier isolation** — missing `tests/Dockerfile`, `environment_mode = "separate"`, top-level artifacts, or artifact landing directories
 2. **verifier deps** — missing pinned pytest/pytest-json-ctrf in `tests/Dockerfile` or runtime installation in test.sh
 3. **FROM not digest-pinned** — missing `@sha256:` suffix
-4. **check_sanctioned_base_images** — final stage uses a non-canonical base with no (or vague) justification; or uses a different digest/registry than the canonical entry for that language (e.g. bare `golang@sha256:…` instead of the canonical `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d…`)
-5. **ruff errors** — unused imports, ambiguous variable names
-6. **secret files** — .pem/.key/.crt in environment/
-7. **missing .dockerignore** — or incomplete exclusions
-8. **instruction_check** — headers, solution hints, prescriptive language
-9. **reward section** — test.sh doesn't use canonical `$?` pattern
-10. **blacklisted databases** — MSSQL/Oracle/DB2 references in repo files
-11. **AI scaffolding files** — CLAUDE.md, .cursorrules in environment/
-12. **build context size** — environment/ exceeds 100MiB or single file >50MiB
-13. **root pyproject.toml** — remove from submission ZIP
-14. **Terminus 2 metadata** — stale difficulty/category/network/milestone fields remain
+4. **check_modal_dockerfile_compat** — named `COPY --chown=` IDs or an external-image `COPY --from=` ref that is not digest-only
+5. **check_sanctioned_base_images** — final stage uses a non-canonical base with no (or vague) justification; or uses a different digest/registry than the canonical entry for that language (e.g. bare `golang@sha256:…` instead of the canonical `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d…`)
+6. **ruff errors** — unused imports, ambiguous variable names
+7. **secret files** — .pem/.key/.crt in environment/
+8. **missing .dockerignore** — or incomplete exclusions
+9. **instruction_check** — headers, solution hints, prescriptive language
+10. **reward section** — test.sh doesn't use canonical `$?` pattern
+11. **blacklisted databases** — MSSQL/Oracle/DB2 references in repo files
+12. **AI scaffolding files** — CLAUDE.md, .cursorrules in environment/
+13. **build context size** — environment/ exceeds 100MiB or single file >50MiB
+14. **root pyproject.toml** — remove from submission ZIP
+15. **Terminus 2 metadata** — stale difficulty/category/network/milestone fields remain
 
 ## Go-specific Checks
 

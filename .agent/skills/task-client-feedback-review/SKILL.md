@@ -263,6 +263,11 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   or a suite whose assertions only check proxies such as counts, first elements,
   field presence, or values recomputed from agent-controlled input. Oracle=1 is
   not evidence that a wrong solution fails
+- for Hardware / CAD, stated dimensions or through/repeated features without a
+  geometry-capable measurement; sampling coarser than the claimed tolerance;
+  trusting Oracle source constants instead of measuring its built solid; or a
+  parametric promise checked only by reading a stored value rather than changing
+  a fresh driver, recomputing, and measuring the result
 - delivered binaries graded without rebuilding from submitted source and a
   varied/held-out input, or two agent-controlled artifacts graded separately
   without testing their semantic equivalence
@@ -273,6 +278,9 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
 - hidden solution walkthroughs or bug hints in environment docs/comments
 - missing `tmux`/`asciinema` in the task image (agent runs fail with
   `Failed to start tmux session` / `verifier_did_not_run`)
+- any Dockerfile using a named `COPY --chown=` value or an external-image
+  `COPY --from=` ref other than digest-only `image@sha256:<digest>`; the cloud
+  builder blocks these even when local Docker accepts them
 - `tests/` or `solution/` copied into the Docker image
 - `privileged: true`, `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities, or
   `/var/run/docker.sock` mounts in docker-compose

@@ -480,6 +480,11 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
 `environment/Dockerfile` must:
 
 - Use `FROM ...@sha256:<digest>` on every stage.
+- Keep every Dockerfile compatible with the cloud image builder:
+  `COPY --chown=` must use numeric IDs (such as `0:0` or `1000:1000`), and
+  external-image `COPY --from=` refs must be digest-only
+  (`image@sha256:<digest>`, never `image:tag@sha256:<digest>`). Stage aliases
+  remain valid, and `FROM image:tag@sha256:<digest>` remains required.
 - Use a **canonical Terminal-Bench base image** for the final runtime stage when
   one matches the task's language (all under `public.ecr.aws/docker/library/`,
   exact digest required): `python:3.13-slim-bookworm@sha256:01f4…24fb`,
@@ -568,6 +573,18 @@ Tests must:
 - Run in the isolated verifier and read only declared artifacts.
 - Test behavior, not source-code strings.
 - Have docstrings on every test.
+
+### Hardware / CAD verifier rules
+
+Apply `docs/creating-tasks/cad-task-guidelines.md` in addition to the general
+rules. Every dimension and repeated/through feature stated in the instruction
+needs a geometry check that can actually observe it. Prefer direct B-Rep
+measurement, invariants, symmetric difference, or functional checks; a sampling
+bracket is only a measurement when its spacing is finer than the tolerance.
+Measure the Oracle's built solid rather than trusting source constants, and
+prove free pose/construction choices do not fail. When parametric behavior is
+required, set a fresh driving value, recompute, assert no errors, and measure
+the changed solid; reading a stored parameter back is insufficient.
 - Expose enough individually reportable semantic resolution for the chosen
   verifier profile: 50–1000 meaningful units across at least six clusters for
   cheap deterministic tasks, or 20–80 scenarios across at least four clusters
@@ -748,7 +765,8 @@ Quality preflight:
 - reviewer-facing submission explanations in `task.toml` contain no unsupported
   claims or agent/AI meta language
 - `tests/Dockerfile` is digest-pinned, installs all verifier dependencies,
-  copies `/tests`, and creates artifact landing directories
+  copies `/tests`, creates artifact landing directories, and all Dockerfiles use
+  numeric `COPY --chown=` IDs plus digest-only external-image `COPY --from=` refs
 - no root-level `pyproject.toml`
 - final runtime base image is canonical for the task's language (or non-canonical with a credible justification)
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP

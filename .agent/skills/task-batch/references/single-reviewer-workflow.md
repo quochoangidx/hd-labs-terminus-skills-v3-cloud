@@ -9,8 +9,9 @@ This is the default review geometry for new `task-batch` runs.
 - In Claude, use Opus 5 with medium reasoning.
 - Do not expose `tests/`, `solution/`, hidden fixtures, campaign memory, builder
   reports, or intended mechanisms.
-- Reuse the same reviewer session for exactly two review turns:
-  `contract_review` and `final_review`.
+- Reuse the same reviewer session for the two required review phases:
+  `contract_review` and `final_review`. Corrective rechecks remain in that
+  session and have no turn or remediation cap.
 
 The first turn reviews the task-visible goal, schemas, evidence, arbitrary
 conventions, preservation promises, and 6--10 grounded witnesses. The second
@@ -28,27 +29,24 @@ After each reviewer turn:
    every finding before work continues.
 3. A correct small finding is repaired and revalidated. Do not reject a
    candidate merely because the second review found a bounded repair.
-4. Reject only for an unresolved repeated blocker, a required large redesign,
-   a second disallowed semantic invalidation, or insufficient remaining batch
-   budget.
+4. Continue correction and recheck without an internal attempt limit. Reject
+   only for an intrinsic fairness defect, unreachable authority, fundamental
+   redesign, or an evidence-backed inability to make further progress.
 
-There is no third reviewer turn. A repair after `final_review` is checked with
-targeted deterministic evidence and the affected full gates; it does not buy a
-new reviewer opinion.
+A repair after `final_review` is checked with targeted deterministic evidence,
+the affected full gates, and a recheck by the same reviewer when semantic
+judgment is involved. Do not launch a second reviewer identity merely to obtain
+a different opinion.
 
-## Optional Luna thread and optional auditor
+## Mandatory auditor
 
-Luna is an opt-in escalation, not the default path. Create a Codex task only
-when the user explicitly requests one:
-
-- reviewer escalation: `gpt-5.6-luna`, high reasoning;
-- consolidated auditor: `gpt-5.6-luna`, max reasoning.
-
-Follow `luna-thread-orchestration.md` and `review-role-quota-hooks.md` for any
-opted-in Luna task. Record it in the ledger, but do not require a Luna receipt
-when no Luna role was requested. The consolidated auditor is always optional;
-mechanical folder, style, isolation, semantic-coverage, and ZIP checks remain
-mandatory and are run by the orchestrator when no auditor is used.
+After final-review remediation and the complete mechanical Oracle/NOP/quality
+gates pass, launch exactly one distinct independent auditor. Use
+`gpt-5.6-sol` medium in Codex or Opus 5 medium in Claude. The auditor may inspect
+the task, verifier, Oracle, semantic coverage, isolation evidence, and folder
+quality, but not campaign memory or the builder's intended answer. Audit
+findings return to the same builder and the same auditor rechecks them until
+green or fundamentally blocked; there is no remediation-count limit.
 
 ## Direct-to-solver transition
 

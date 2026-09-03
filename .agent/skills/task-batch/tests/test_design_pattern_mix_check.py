@@ -398,7 +398,7 @@ class DesignPatternMixTests(unittest.TestCase):
         manifest = {
             "schema_version": 3,
             "expected_count": 1,
-            "candidate_budget": 6,
+            "candidate_budget": 0,
             "portfolio_history": [],
             "accepted_task_slugs": [],
             "candidates": [self._schema_v3_candidate()],
@@ -408,6 +408,8 @@ class DesignPatternMixTests(unittest.TestCase):
         )
         self.assertEqual([], errors)
         self.assertTrue(summary["adaptive_candidate_portfolio"])
+        self.assertFalse(summary["candidate_limit_enforced"])
+        self.assertIsNone(summary["candidate_budget"])
         self.assertFalse(summary["exploration_band"]["enforced"])
 
     def test_schema_v3_final_acceptance_does_not_require_exact_mix(self) -> None:

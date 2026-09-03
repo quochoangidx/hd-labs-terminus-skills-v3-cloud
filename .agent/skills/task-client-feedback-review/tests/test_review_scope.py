@@ -44,3 +44,37 @@ def test_full_scope_runs_external_evidence(monkeypatch, tmp_path: Path) -> None:
 
     assert result["evidence_scope"] == "full"
     assert calls == ["sufficiency", "semantic"]
+
+
+def test_cloud_builder_copy_syntax() -> None:
+    digest = "a" * 64
+    bad = (
+        "FROM --platform=linux/amd64 image@sha256:" + digest + " AS builder\n"
+        "COPY --chown=root:root src/ /app/\n"
+        "COPY --from=golang:1.24@sha256:" + digest + " /usr/local/go /usr/local/go\n"
+    )
+    assert len(MODULE.cloud_builder_copy_issues(bad)) == 2
+
+    good = (
+        "FROM image@sha256:" + digest + " AS builder\n"
+        "COPY --chown=1000:1000 src/ /app/\n"
+        "COPY --from=builder /app/tool /usr/local/bin/tool\n"
+        "COPY --from=golang@sha256:" + digest + " /usr/local/go /usr/local/go\n"
+    )
+    assert MODULE.cloud_builder_copy_issues(good) == []
+
+
+def test_review_scans_nested_dockerfiles(tmp_path: Path) -> None:
+    nested = tmp_path / "environment" / "repo" / "tools"
+    nested.mkdir(parents=True)
+    (nested / "Dockerfile").write_text(
+        "FROM scratch\nCOPY --chown=appuser:appuser . /app\n"
+    )
+
+    result = MODULE.review(tmp_path, include_external_evidence=False)
+
+    assert any(
+        finding["check"] == "dockerfile-modal-syntax"
+        and finding["path"] == "environment/repo/tools/Dockerfile"
+        for finding in result["findings"]
+    )

@@ -62,6 +62,11 @@ Examples:
 - If Docker says it cannot connect to the daemon, ask the user to start Docker Desktop or enable the Docker socket.
 - If CI says `environment/` is too large, reduce the build context before changing tests.
 - If CI says `FROM` lacks a digest, pin the base image digest.
+- If CI reports `check_modal_dockerfile_compat`, edit the exact Dockerfile line
+  it names. Replace named `COPY --chown=user:group` values with the intended
+  numeric IDs, and write external-image `COPY --from=` as
+  `image@sha256:<digest>` with no tag. Do not alter valid
+  `FROM image:tag@sha256:<digest>`, `COPY --from=<stage-name>`, or `RUN chown`.
 - If CI says the final runtime base is non-canonical (`check_sanctioned_base_images`),
   switch the final stage to the **canonical Terminal-Bench base image** for the
   task's language, using the EXACT digest-pinned ref (registry + tag + digest all

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate model routing, turn accounting, remediation caps, and role leases."""
+"""Validate model routing, role evidence, review ordering, and role leases."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ BUILDER_MODEL = "gpt-5.6-sol"
 REVIEW_MODEL = "gpt-5.6-luna"
 SOLVER_MODEL = "gpt-5.6-sol"
 SINGLE_REVIEWER_POLICY = "single_reviewer_two_pass_v1"
+FIXED_FIVE_POLICY = "fixed_five_roles_v2"
+UNBOUNDED_ROLE_POLICY = "fixed_roles_unbounded_v3"
 ROLE_PROFILES = {
     "builder": (BUILDER_MODEL, "medium"),
     "fairness_reviewer": (REVIEW_MODEL, "high"),
@@ -58,6 +60,16 @@ REPORT_KINDS = {
 
 def nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def valid_runtime_model(runtime: object, model: object) -> bool:
+    runtime_name = str(runtime or "").lower()
+    model_name = str(model or "")
+    if "claude" in runtime_name:
+        return model_name in {"opus", "opus-5"} or model_name.startswith("claude-opus-5")
+    if "codex" in runtime_name:
+        return model_name == BUILDER_MODEL
+    return False
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -300,7 +312,14 @@ def validate_role_lease_receipts(
 
 def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
-    single_reviewer = data.get("role_policy") == SINGLE_REVIEWER_POLICY
+    fixed_five = data.get("role_policy") == FIXED_FIVE_POLICY
+    unbounded_roles = data.get("role_policy") == UNBOUNDED_ROLE_POLICY
+    current_roles = fixed_five or unbounded_roles
+    single_reviewer = data.get("role_policy") in {
+        SINGLE_REVIEWER_POLICY,
+        FIXED_FIVE_POLICY,
+        UNBOUNDED_ROLE_POLICY,
+    }
     expected_schema = 3 if single_reviewer else 2
     if data.get("schema_version") != expected_schema:
         errors.append(f"schema_version must equal {expected_schema}")
@@ -316,6 +335,7 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
     completed_role_session_ids = {role: set() for role in ROLES}
     completed_review_phases: dict[str, set[str]] = {}
     luna_sessions = {"fairness_reviewer": set(), "consolidated_auditor": set()}
+    runtime_families: set[str] = set()
     for index, turn in enumerate(turns):
         label = f"turns[{index}]"
         if not isinstance(turn, dict):
@@ -337,7 +357,17 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
             if nonempty(turn.get("session_id")):
                 completed_role_session_ids[str(role)].add(str(turn["session_id"]))
         expected_model, expected_effort = ROLE_PROFILES[str(role)]
-        if single_reviewer and role == "fairness_reviewer":
+        if current_roles:
+            runtime_name = str(turn.get("runtime", "")).lower()
+            runtime_families.add("claude" if "claude" in runtime_name else "codex" if "codex" in runtime_name else "")
+            if not valid_runtime_model(turn.get("runtime"), turn.get("model")):
+                errors.append(
+                    f"{label}: every role must use gpt-5.6-sol medium on Codex or Opus 5 medium on Claude"
+                )
+            if turn.get("reasoning_effort") != "medium":
+                errors.append(f"{label}.reasoning_effort must be medium")
+            expected_surface = "collaboration_subagent"
+        elif single_reviewer and role == "fairness_reviewer":
             model = str(turn.get("model", ""))
             default_codex = model == SOLVER_MODEL and turn.get("reasoning_effort") == "medium"
             default_claude = (model == "opus-5" or model.startswith("claude-opus-5")) and turn.get("reasoning_effort") == "medium"
@@ -430,6 +460,8 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
                 completed_review_phases.setdefault(str(turn["session_id"]), set()).add(str(review_phase))
 
     remediations = data.get("remediations")
+    if current_roles and (len(runtime_families) != 1 or "" in runtime_families):
+        errors.append(f"{data.get('role_policy')} requires every role to use one active runtime")
     if not isinstance(remediations, dict):
         errors.append("remediations must be an object")
         remediations = {}
@@ -438,8 +470,10 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
         count = remediations.get(gate)
         if not isinstance(count, int) or isinstance(count, bool) or count < 0:
             errors.append(f"remediations.{gate} must be a non-negative integer")
-        elif count > 1:
-            errors.append(f"remediations.{gate} exceeds the one-cycle cap")
+        elif not unbounded_roles:
+            cap = 2 if fixed_five and gate == "reviewer" else 1
+            if count > cap:
+                errors.append(f"remediations.{gate} exceeds the {cap}-cycle cap")
 
     gates = data.get("mechanical_gates")
     if not isinstance(gates, dict):
@@ -454,11 +488,15 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
         errors.append("review/audit turns were recorded before the mechanical pre-review gate")
     if phase == "pre-solver":
         if single_reviewer:
+            if current_roles and len(completed_role_session_ids["builder"]) != 1:
+                errors.append("pre-solver requires exactly one completed builder session")
             if len(completed_role_session_ids["fairness_reviewer"]) != 1:
                 errors.append("pre-solver requires exactly one completed reviewer session")
             elif set(next(iter(completed_review_phases.values()), set())) != {"contract_review", "final_review"}:
                 errors.append("pre-solver requires contract_review and final_review in the same reviewer session")
             validate_review_adjudications(path, data.get("review_adjudications"), errors)
+            if current_roles and len(completed_role_session_ids["consolidated_auditor"]) != 1:
+                errors.append("pre-solver requires exactly one completed consolidated-auditor session")
         else:
             if completed_role_counts["fairness_reviewer"] < 2:
                 errors.append("pre-solver requires at least two completed fairness-reviewer turns")
@@ -466,8 +504,13 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
                 errors.append("pre-solver requires a completed consolidated-auditor turn")
         if role_counts["blind_solver"]:
             errors.append("pre-solver ledger already contains blind-solver turns")
-    if phase == "handover" and completed_role_counts["blind_solver"] not in {2, 3}:
-        errors.append("handover requires exactly two or three completed blind-solver turns")
+    if phase == "handover" and (
+        completed_role_counts["blind_solver"] < 2
+        if unbounded_roles
+        else completed_role_counts["blind_solver"] != 2
+    ):
+        requirement = "at least two" if unbounded_roles else "exactly two"
+        errors.append(f"handover requires {requirement} completed blind-solver turns")
     if phase == "handover" and single_reviewer:
         validate_review_adjudications(path, data.get("review_adjudications"), errors)
 

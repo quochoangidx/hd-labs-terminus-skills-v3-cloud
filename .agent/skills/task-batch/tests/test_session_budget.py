@@ -20,21 +20,18 @@ class SessionBudgetTests(unittest.TestCase):
         report_dir = root / "reports" / task_dir.name
         task_dir.mkdir()
         report_dir.mkdir(parents=True)
-        fairness = [
-            {
-                "reviewer_id": f"reviewer-{index}",
-                "runtime": "codex-thread",
-                "model": "gpt-5.6-luna",
-                "session_id": f"thread-fairness-{index}",
-                "fresh_context": True,
-                "task_visible_only": True,
-            }
-            for index in (1, 2)
-        ]
+        fairness = [{
+            "reviewer_id": "reviewer-1",
+            "runtime": "codex-collaboration",
+            "model": "gpt-5.6-sol",
+            "session_id": "reviewer-session",
+            "fresh_context": True,
+            "task_visible_only": True,
+        }]
         auditor = {
-            "runtime": "codex-thread",
-            "model": "gpt-5.6-luna",
-            "session_id": "thread-auditor",
+            "runtime": "codex-collaboration",
+            "model": "gpt-5.6-sol",
+            "session_id": "auditor-session",
             "transcript": "consolidated-audit.md",
             "transcript_sha256": "a" * 64,
         }
@@ -53,28 +50,30 @@ class SessionBudgetTests(unittest.TestCase):
         }
         return task_dir, report_dir, builder
 
-    def test_accepts_luna_codex_tasks(self) -> None:
+    def test_accepts_unbounded_role_policy_for_codex(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             task_dir, report_dir, builder = self.fixture(Path(tmp))
             receipt, errors = session_budget.build_receipt(task_dir, report_dir, builder)
             self.assertEqual([], errors)
-            self.assertEqual(2, receipt["schema_version"])
-            self.assertEqual("codex-thread", receipt["consolidated_auditor"]["runtime"])
+            self.assertEqual(3, receipt["schema_version"])
+            self.assertEqual("fixed_roles_unbounded_v3", receipt["role_policy"])
+            self.assertIsNone(receipt["policy"]["remediation_limit"])
+            self.assertEqual("codex-collaboration", receipt["consolidated_auditor"]["runtime"])
 
-    def test_rejects_luna_role_claimed_as_subagent(self) -> None:
+    def test_rejects_wrong_codex_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             task_dir, report_dir, builder = self.fixture(Path(tmp))
             sufficiency = json.loads(
                 (report_dir / "instruction-sufficiency.json").read_text(encoding="utf-8")
             )
-            sufficiency["fairness_review"]["reviewers"][0]["runtime"] = "codex-subagent"
+            sufficiency["fairness_review"]["reviewers"][0]["model"] = "gpt-5.6-luna"
             (report_dir / "instruction-sufficiency.json").write_text(
                 json.dumps(sufficiency), encoding="utf-8"
             )
             _, errors = session_budget.build_receipt(task_dir, report_dir, builder)
-            self.assertTrue(any("runtime must be codex-thread" in error for error in errors))
+            self.assertTrue(any("gpt-5.6-sol" in error for error in errors))
 
-    def test_accepts_one_sol_reviewer_and_no_auditor(self) -> None:
+    def test_rejects_reviewer_reused_as_auditor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             task_dir, report_dir, builder = self.fixture(Path(tmp))
             reviewer = {
@@ -99,10 +98,30 @@ class SessionBudgetTests(unittest.TestCase):
             for name, payload in payloads.items():
                 (report_dir / name).write_text(json.dumps(payload), encoding="utf-8")
             receipt, errors = session_budget.build_receipt(task_dir, report_dir, builder)
+            self.assertTrue(any("auditor must be distinct" in error for error in errors))
+
+    def test_accepts_opus_five_for_all_claude_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            task_dir, report_dir, builder = self.fixture(Path(tmp))
+            for name, key in (
+                ("instruction-sufficiency.json", "fairness_review"),
+                ("semantic-coverage.json", "review"),
+                ("pre-freeze-review.json", "manual_review"),
+                ("task-style-preflight.json", "auditor"),
+            ):
+                path = report_dir / name
+                data = json.loads(path.read_text(encoding="utf-8"))
+                records = data[key].get("reviewers") if key == "fairness_review" else [data[key]]
+                for record in records:
+                    record["runtime"] = "claude-agent"
+                    record["model"] = "opus-5"
+                path.write_text(json.dumps(data), encoding="utf-8")
+            builder.update({"runtime": "claude-agent", "model": "opus-5"})
+
+            receipt, errors = session_budget.build_receipt(task_dir, report_dir, builder)
+
             self.assertEqual([], errors)
-            self.assertEqual(3, receipt["schema_version"])
-            self.assertEqual("single_reviewer_two_pass_v1", receipt["role_policy"])
-            self.assertEqual({}, receipt["consolidated_auditor"])
+            self.assertEqual("fixed_roles_unbounded_v3", receipt["role_policy"])
 
 
 if __name__ == "__main__":

@@ -287,7 +287,7 @@ unfair-hard, never real difficulty.
      interactions. Kill a dedicated plausible partial-fix mutant for each node
      and pass `semantic_coverage_check.py --advanced-plus`.
    - Prepare fresh counted solve copies only after the complete task/verifier
-     snapshot is frozen. Start with two BLIND solvers and add the adaptive third.
+     snapshot is frozen. Run exactly two BLIND solvers; do not add a third.
    - Do NOT let a solver paste the spec source (blows up context, distorts the probe).
    - A `1/3` result qualifies only when both failing runs cross at least two
      semantic nodes and their node sets differ. One replicated lever is not

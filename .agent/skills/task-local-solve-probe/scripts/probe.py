@@ -293,7 +293,7 @@ def prepare(args: argparse.Namespace) -> None:
             / "semantic_coverage_check.py"
         )
         command = [sys.executable, str(checker)]
-        if profile == "advanced_frontier_only":
+        if profile in {"advanced_frontier_only", "core_advanced_frontier"}:
             command.append("--advanced-plus")
         command.extend([str(task), str(coverage_path), str(verifier_path)])
         checked = run(command)
@@ -629,6 +629,22 @@ def record(args: argparse.Namespace) -> None:
     print(result_path)
 
 
+def core_plus_recommendation(
+    *, total: int, passed: int, evidence_complete: bool, failures: dict[str, int], mode: str
+) -> str:
+    if not evidence_complete:
+        return "incomplete_evidence"
+    if any(kind != "semantic" for kind in failures):
+        return "fix_task_first"
+    if mode != "counted":
+        return "exploratory_only"
+    if total != 2:
+        return "unsupported_campaign_sample"
+    if passed == 2:
+        return "rework_or_replace"
+    return "core_plus_shortlist"
+
+
 def summarize(args: argparse.Namespace) -> None:
     probe_dir = Path(args.probe_dir).resolve()
     manifest = load_manifest(probe_dir)
@@ -676,8 +692,6 @@ def summarize(args: argparse.Namespace) -> None:
         recommendation = "fix_task_first"
     elif passed == total:
         recommendation = "rework_or_replace"
-    elif total == 2 and passed == 1:
-        recommendation = "needs_adaptive_run"
     else:
         # Only batch-handover.py can combine this evidence with the verifier
         # matrix and issue candidate_ready.
@@ -692,27 +706,14 @@ def summarize(args: argparse.Namespace) -> None:
         if accuracy < 0.8
         else "base"
     )
-    if args.profile == "advanced_frontier_only" and manifest.get("mode") != "counted":
-        recommendation = "exploratory_only"
-    elif args.profile == "advanced_frontier_only" and recommendation not in {
-        "incomplete_evidence",
-        "fix_task_first",
-        "needs_adaptive_run",
-    }:
-        if total not in {2, 3}:
-            recommendation = "unsupported_campaign_sample"
-        elif tier_signal in {"base", "core"} or passed == total:
-            recommendation = "rework_or_replace"
-        elif tier_signal == "advanced" and advanced_geometry_pass:
-            recommendation = "advanced_plus_shortlist"
-        elif tier_signal == "advanced":
-            recommendation = "reject_single_lever_geometry"
-        elif union_coverage < 1.0 or common_misses:
-            recommendation = "audit_frontier_geometry"
-        elif not semantic_decorrelated:
-            recommendation = "review_failure_decorrelation"
-        else:
-            recommendation = "advanced_plus_shortlist"
+    if args.profile in {"advanced_frontier_only", "core_advanced_frontier"}:
+        recommendation = core_plus_recommendation(
+            total=total,
+            passed=passed,
+            evidence_complete=evidence_complete,
+            failures=failures,
+            mode=str(manifest.get("mode", "legacy")),
+        )
     summary = {
         "probe_dir": os.path.relpath(probe_dir),
         "runs": total,
@@ -765,7 +766,7 @@ def main() -> int:
     p.add_argument("--exploratory", action="store_true")
     p.add_argument(
         "--profile",
-        choices=("general", "advanced_frontier_only"),
+        choices=("general", "advanced_frontier_only", "core_advanced_frontier"),
         default="general",
     )
     p.add_argument("--semantic-coverage")
@@ -805,7 +806,7 @@ def main() -> int:
     p.add_argument("probe_dir")
     p.add_argument(
         "--profile",
-        choices=("general", "advanced_frontier_only"),
+        choices=("general", "advanced_frontier_only", "core_advanced_frontier"),
         default="general",
     )
     p.set_defaults(func=summarize)
@@ -813,6 +814,12 @@ def main() -> int:
     args = parser.parse_args()
     if getattr(args, "runs", 1) < 1 or getattr(args, "runs", 1) > 5:
         raise SystemExit("--runs must be between 1 and 5")
+    if (
+        args.cmd == "prepare"
+        and args.profile in {"advanced_frontier_only", "core_advanced_frontier"}
+        and args.runs != 2
+    ):
+        raise SystemExit("CORE+ batch probes require exactly two blind-solver runs")
     args.func(args)
     return 0
 

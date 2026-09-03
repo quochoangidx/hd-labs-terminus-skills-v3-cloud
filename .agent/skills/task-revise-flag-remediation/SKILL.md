@@ -20,6 +20,9 @@ Read, in order:
 5. `docs/understanding-tasks/difficulty-guidelines.md` and
    `docs/testing-and-validation/running-real-agents.md`.
 
+For Hardware / CAD, also read
+`docs/creating-tasks/cad-task-guidelines.md` before classifying a geometry miss.
+
 Do not infer a defect from a single summary label. Preserve the original task,
 reports, and probe artifacts before editing.
 
@@ -87,6 +90,13 @@ this flag about difficulty: an unstated requirement is `task_specification`.
 Also replace hardware-sensitive or oracle-near thresholds with a meaningful
 quality floor, structural invariant, or broad semantic criterion. Never raise a
 tier merely because near-complete runs count as failures.
+
+For CAD misses, first verify that the check can observe the claimed feature:
+coarse point probes only bound an edge, volume floors are proxies, and reading
+a stored parameter does not prove recompute behavior. Measure the Oracle's built
+solid, calibrate sampling grain against tolerance, test free pose/construction
+choices, and drive a fresh parameter value through recompute before treating a
+shared failure as solver difficulty.
 
 ### `refusals`
 

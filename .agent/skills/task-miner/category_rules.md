@@ -17,6 +17,12 @@ code does not automatically make a task `Software`.
 Values are case-sensitive. Every task has exactly one category and one
 subcategory.
 
+For `Hardware / CAD`, also apply
+`docs/creating-tasks/cad-task-guidelines.md` before accepting the category
+screen: the selected engine and verifier plan must be able to measure every
+stated geometric requirement, and parametric behavior must be exercised through
+a fresh-value recompute rather than parameter readback.
+
 ## Decision rule
 
 Ask: **What body of domain knowledge determines whether the submitted artifact

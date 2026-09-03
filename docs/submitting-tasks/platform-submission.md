@@ -103,7 +103,9 @@ Edit the `environment/Dockerfile` to set up your task environment:
 - Install `tmux` and `asciinema` — **required by the agent runtime**. Leaving them out breaks any task running without network access, since nothing can fetch them at runtime. Install them explicitly regardless of `network_mode`.
 - Add any dependencies required by your task
 - Pin all package versions for reproducibility
-- Digest-pin every `FROM` image with `@sha256:<digest>`
+- Digest-pin every `FROM` image with `@sha256:<digest>` (`FROM image:tag@sha256:<digest>` is still the pin form)
+- `COPY --chown=` uses numeric IDs (`0:0` or `1000:1000`), not named users such as `root` or `appuser`
+- `COPY --from=` image refs are digest-only (`golang@sha256:<digest>`) — drop the `:tag`. Stage names (`COPY --from=builder`) are fine
 - For the final runtime stage, use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices) when one matches your task's language. Non-canonical images are allowed with a brief written justification as a `Dockerfile` comment; missing justifications are blocked.
 - Keep `environment/` at or below 100 MiB total and no file over 50 MiB
 - Add `.dockerignore` for non-trivial environments

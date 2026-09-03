@@ -316,6 +316,28 @@ services:
     image: my-task-base:1.0
 ```
 
+### Named `--chown` and tag+digest `COPY --from=`
+
+The cloud image builder rejects two patterns that work on local Docker. Preflight fails immediately with the line to change. Applies to every Dockerfile in the submission.
+
+```dockerfile
+# Bad - named user on COPY --chown
+COPY --chown=root:root script.sh /app/script.sh
+
+# Good - numeric IDs
+COPY --chown=0:0 script.sh /app/script.sh
+```
+
+```dockerfile
+# Bad - tag and digest on COPY --from= image ref
+COPY --from=golang:1.24-bookworm@sha256:<digest> /usr/local/go /usr/local/go
+
+# Good - digest only (stage names such as COPY --from=builder are fine)
+COPY --from=golang@sha256:<digest> /usr/local/go /usr/local/go
+```
+
+`FROM image:tag@sha256:<digest>` and `RUN chown` are unchanged. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+
 ### Reserved Directory Conflicts
 
 Harbor reserves `/logs/verifier/`, `/logs/artifacts/`, `/oracle/`, and `/tests/` for its own use. Creating, modifying, or chowning these paths in the `Dockerfile` will conflict with the runtime mount and cause verifier failures.
@@ -457,6 +479,8 @@ Signs a task might be problematic:
 | Solution | Echo answers | Derive answers |
 | Solution | Random without seed | Add seeds |
 | Environment | Missing `tmux` / `asciinema` | Pre-install in Dockerfile |
+| Environment | `COPY --chown=root:root` (named user) | Numeric IDs (`--chown=0:0`) |
+| Environment | `COPY --from=image:tag@sha256:…` | Digest only (`COPY --from=image@sha256:…`) |
 | Environment | Runtime network installs in `test.sh` | Bake deps into image |
 | Environment | AI-scaffolding filenames (`CLAUDE.md`, `skills.md`, etc.) | Remove from environment |
 | Environment | `solution/` or `tests/` copied in Dockerfile | Use Harbor's runtime mounts |
