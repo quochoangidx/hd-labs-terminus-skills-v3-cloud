@@ -307,13 +307,25 @@ Independently of these settings, all of your task's own dependencies must still 
 
 Solution files, hidden tests, and privileged assets must never be accessible to the agent.
 
-**Requirements:**
+**Requirements (agent environment):**
 - Do not copy `solution/` into the runtime image
 - Do not copy hidden tests into agent-visible locations
 - Do not store expected outputs in writable agent paths
 - Do not let the verifier derive ground truth from files the agent can modify
 - Place reference binaries or fixtures in controlled verifier-only locations
 - Public fixtures used by the task may be copied into the image; hidden verifier assets must stay isolated
+
+**The verifier image needs its own pass.** Terminus tasks must run the verifier in **separate** mode so goldens baked into `tests/Dockerfile` never exist in the **agent** container.
+
+Harbor resolves verifier mode from the *combination* of keys, not from one required spelling:
+
+- `[verifier].environment_mode = "separate"`, **or** a `[verifier.environment]` table, resolves to **separate**.
+- With **neither**, Harbor defaults to **shared** — the verifier runs in the agent environment.
+- `environment_mode = "shared"` together with a `[verifier.environment]` table is **invalid**.
+
+**Terminus-specific (not Harbor):** CI requires the explicit `[verifier].environment_mode = "separate"` key, and `artifacts` must be a **top-level** key. The implicit Harbor form (`[verifier.environment]` with no `environment_mode`) is valid separate mode in Harbor; Terminus rejects it. Omitting both would be Harbor's **shared** default; Terminus rejects that too. Set the explicit key so accepted tasks always run separate. See [CI Checks Reference](/portal/docs/testing-and-validation/ci-checks-reference).
+
+**Separate mode protects the verifier from the agent environment, not from code that the verifier itself executes.** If a test rebuilds and runs agent-supplied code inside the verifier, do not assume verifier-only assets are inaccessible to that process. Goldens, held-out fixtures, and `test_outputs.py` itself live in that container. Drop to an unprivileged uid **before** that exec, confirm that uid cannot read verifier-only assets or `/logs/verifier` (including `reward.txt`), and probe it in a test. A single `USER` for the whole verify phase cannot express this split: the verifier must read the goldens while the agent's program must not. Do not prescribe a `COPY` mode or a chmod octal — cloud `COPY --chown=` uses numeric IDs and builder-assigned modes; build the boundary in the image and the runner.
 
 ---
 

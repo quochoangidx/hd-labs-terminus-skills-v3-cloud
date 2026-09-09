@@ -118,6 +118,10 @@ For each key rule area, compare online content with local docs:
 | Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | per-phase `network_mode`, `digest`, `stable invariants` |
 | Cloud image-builder syntax | `creating-tasks/dockerfile-best-practices.md`, `testing-and-validation/ci-checks-reference.md` | `check_modal_dockerfile_compat`, `COPY --chown`, `COPY --from` |
 | Hardware/CAD geometry verification | `creating-tasks/cad-task-guidelines.md` | `direct measurement`, `sampling`, `recompute`, `built geometry` |
+| Quality panel blocking review | `testing-and-validation/quality-panel-judge-guide.md`, `testing-and-validation/quality-panel-examples.md` | `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, `Minor`, `Unsure` |
+| Isolating named-rule fixtures | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `rule alone`, `only enforcement`, `mixed held-out` |
+| Verifier-executed candidate boundary | `creating-tasks/dockerfile-best-practices.md`, `creating-tasks/writing-tests.md` | `no-new-privs`, `drop`, `colocation`, `agent code` |
+| Interpreter permission cleanup | `creating-tasks/writing-tests.md`, `testing-and-validation/ci-checks-reference.md` | `verifier_interpreter_permissions`, `Path.resolve`, `/bin/bash`, `/usr/bin/bash` |
 
 ### Diff format
 
@@ -152,6 +156,7 @@ After docs are synced, audit the doctrine-coupled set:
 .agent/skills/task-zip-validator/SKILL.md
 .agent/skills/task-zip-submit/SKILL.md
 .agent/skills/task-client-feedback-review/SKILL.md
+.agent/skills/task-quality-panel-judgement/SKILL.md (+ axis prompts and packet builder)
 .agent/skills/task-language-port/SKILL.md
 .agent/skills/terminus-regular-task-authoring/SKILL.md
 .agent/skills/task-harbor-runner/SKILL.md
@@ -191,6 +196,10 @@ After docs are synced, audit the doctrine-coupled set:
 | Held-out generalization vs hidden arbitrary policy | candidate shape | verifier design | review |
 | Cloud-compatible COPY syntax | — | Docker Rules | blocking check |
 | CAD geometry and parametric recompute | candidate feasibility | verifier design | CAD review |
+| Quality panel four-axis gate | candidate return risk | pre-submit review | blocking review |
+| Named-rule isolating fixture | plan feasibility | verifier matrix | blocking review |
+| In-verifier candidate read boundary | architecture viability | privilege/fixture design | blocking review |
+| Bash permission alias cleanup | — | verifier cleanup | platform-preflight check |
 
 ### Terminus 3 epistemic consistency check
 
@@ -301,6 +310,14 @@ COPY --chown
 COPY --from
 CAD Task Guidelines
 recompute
+coherent_contract
+correct_reference_solution
+protected_ground_truth
+sound_verifier
+verifier_interpreter_permissions
+no-new-privs
+/bin/bash
+/usr/bin/bash
 ```
 
 If any of these appear in a different context than expected, flag for investigation.

@@ -134,6 +134,46 @@ def unit_test_alignment_issue(contract_text: str, verifier_source: str) -> bool:
     )
 
 
+def setpriv_missing_no_new_privs(source: str) -> bool:
+    """Flag a setpriv-based boundary that omits the no-new-privileges guard."""
+    return bool(re.search(r"(?i)\bsetpriv\b", source)) and "--no-new-privs" not in source
+
+
+def test_identity_leak(source: str) -> bool:
+    """Flag the known pytest-node-name channel into candidate-visible state."""
+    return bool(re.search(r"\brequest\s*\.\s*node\s*\.\s*name\b", source))
+
+
+def interpreter_permission_alias_issue(source: str) -> bool | None:
+    """Detect the platform's unsafe dual Bash-path permission-restore shape.
+
+    None means the source could not be parsed; platform preflight treats that as
+    an incomplete-scan warning rather than proving the pattern safe or unsafe.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+
+    literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    if not {"/bin/bash", "/usr/bin/bash"}.issubset(literals):
+        return False
+
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    chmod_calls = [node for node in calls if _call_name(node) in {"os.chmod", "Path.chmod"} or _call_name(node).endswith(".chmod")]
+    has_mode_capture = any(
+        _call_name(node) in {"os.stat", "stat.S_IMODE"}
+        or _call_name(node).endswith(".stat")
+        for node in calls
+    ) or any(isinstance(node, ast.Attribute) and node.attr == "st_mode" for node in ast.walk(tree))
+    has_resolve = any(_call_name(node).endswith(".resolve") for node in calls)
+    return len(chmod_calls) >= 2 and has_mode_capture and not has_resolve
+
+
 def _task_sources(task_dir: Path) -> tuple[str, str]:
     verifier = "\n".join(
         path.read_text(encoding="utf-8", errors="replace")
@@ -156,21 +196,45 @@ def _task_sources(task_dir: Path) -> tuple[str, str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("task_dir", type=Path)
-    parser.add_argument("--check", choices=("privilege", "alignment", "all"), default="all")
+    parser.add_argument(
+        "--check",
+        choices=("privilege", "alignment", "identity", "interpreter", "all"),
+        default="all",
+    )
     args = parser.parse_args()
 
     verifier, contract = _task_sources(args.task_dir)
     candidate_count, unsafe = analyze_candidate_privileges(verifier)
     alignment_issue = unit_test_alignment_issue(contract, verifier)
+    setpriv_issue = setpriv_missing_no_new_privs(verifier)
+    identity_issue = test_identity_leak(verifier)
+    interpreter_issues = []
+    interpreter_parse_warnings = []
+    for path in sorted((args.task_dir / "tests").rglob("*.py")):
+        result = interpreter_permission_alias_issue(
+            path.read_text(encoding="utf-8", errors="replace")
+        )
+        if result is True:
+            interpreter_issues.append(str(path.relative_to(args.task_dir)))
+        elif result is None:
+            interpreter_parse_warnings.append(str(path.relative_to(args.task_dir)))
     payload = {
         "candidate_execution_count": candidate_count,
         "unsafe_candidate_calls": [asdict(item) for item in unsafe],
+        "setpriv_missing_no_new_privs": setpriv_issue,
+        "test_identity_leak": identity_issue,
+        "interpreter_permission_alias_issues": interpreter_issues,
+        "interpreter_parse_warnings": interpreter_parse_warnings,
         "unit_test_alignment_issue": alignment_issue,
     }
     print(json.dumps(payload, sort_keys=True))
-    if args.check in {"privilege", "all"} and unsafe:
+    if args.check in {"privilege", "all"} and (unsafe or setpriv_issue):
         return 1
     if args.check in {"alignment", "all"} and alignment_issue:
+        return 1
+    if args.check in {"identity", "all"} and identity_issue:
+        return 1
+    if args.check in {"interpreter", "all"} and interpreter_issues:
         return 1
     return 0
 

@@ -67,6 +67,18 @@ Examples:
   numeric IDs, and write external-image `COPY --from=` as
   `image@sha256:<digest>` with no tag. Do not alter valid
   `FROM image:tag@sha256:<digest>`, `COPY --from=<stage-name>`, or `RUN chown`.
+- If platform preflight reports `verifier_interpreter_permissions`, inspect
+  every Python file under `tests/`. Resolve and deduplicate permission targets
+  before saving modes or chmod; `/bin/bash` and `/usr/bin/bash` may resolve to
+  the same file on merged-`/usr` images. Restore each original mode once in a
+  `finally` path, attempt every restoration, then run a complete Oracle and
+  confirm reward/log collection. This check is not in `stb harbor check`.
+- If the quality panel returns `Minor`, `Major`, or `Unsure`, treat the task as
+  not cleared. Review the cited axis (`coherent_contract`,
+  `correct_reference_solution`, `protected_ground_truth`, or
+  `sound_verifier`), repair a demonstrated task defect, and request human or
+  repeat judgment for an evidence-backed false positive or unstable `Unsure`.
+  Only `None` on all four axes auto-accepts.
 - If CI says the final runtime base is non-canonical (`check_sanctioned_base_images`),
   switch the final stage to the **canonical Terminal-Bench base image** for the
   task's language, using the EXACT digest-pinned ref (registry + tag + digest all

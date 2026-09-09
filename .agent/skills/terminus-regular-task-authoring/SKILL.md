@@ -623,6 +623,12 @@ the changed solid; reading a stored parameter back is insufficient.
   building; never grant the candidate write access to `/tests` or
   `/logs/verifier`. Reward-directory mode `0700` does not protect against a
   candidate that also runs as root.
+- If privilege is dropped with `setpriv`, include `--no-new-privs` (or use an
+  equivalent nosuid boundary). A UID/GID change alone can be undone by a
+  candidate-supplied setuid executable. Keep every golden and hidden fixture
+  outside directory trees passed to the candidate process and verify that the
+  demoted process cannot read them or `/logs/verifier`; write protection does
+  not prevent adjacent-directory reads.
 - Execute every untrusted candidate in a fresh process group/session. On timeout
   and after normal completion, kill and reap the whole group so forked children
   cannot keep capture pipes open, survive into later cases, or touch verifier
@@ -642,6 +648,10 @@ the changed solid; reading a stored parameter back is insufficient.
   rejection power. The semantic-coverage mutation campaign is the stronger
   local form of this portal requirement; keep at least one wrong-solution
   execution even outside Advanced+ campaigns.
+- For every domain rule explicitly named by the contract, include an isolating
+  fixture whose expected result changes when that rule alone is inverted. One
+  coarse mutant that violates several rules is insufficient, and held-out data
+  must not be the only enforcement of any stated rule.
 - Bake goldens and held-out fixtures into the separate verifier image. Never
   derive expected truth from `/app`, a mutable corpus, or another agent-writable
   tree, and do not manually copy whole agent directories where symlinks can
@@ -651,6 +661,21 @@ the changed solid; reading a stored parameter back is insufficient.
   correct for byte-exact/pinned output and wrong for undocumented formatting.
   Enforce any stated numeric tolerance exactly, and add a discriminating case
   for every specified optimization objective or tie-break.
+- If verifier Python temporarily changes interpreter permissions, resolve every
+  target with `Path.resolve()`, deduplicate before recording original modes,
+  wrap changes and test work in `try/finally`, and restore each target once
+  while attempting all restorations. In particular, `/bin/bash` and
+  `/usr/bin/bash` may be the same executable. Confirm the complete Oracle run
+  still finishes reward and log collection; platform preflight
+  `verifier_interpreter_permissions` is blocking and is not in `stb harbor check`.
+
+Before submission, review the exact task against all four quality-panel axes:
+`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
+and `sound_verifier`. `Minor`, `Major`, and `Unsure` all block or require human
+routing; only `None` on every axis auto-accepts. Exact grading conventions need
+a citable candidate-visible authority, but this does not require inferred
+domain mechanisms to be restated when distributed visible evidence supports
+them under the Terminus 3 epistemic contract.
 
 Avoid quality-check failures:
 

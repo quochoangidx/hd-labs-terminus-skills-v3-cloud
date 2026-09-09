@@ -32,8 +32,11 @@ A single argument: path to a `.zip` file (absolute or relative).
    `sufficiency_manifest_check.py --require-v3`
 4. **Auto-fix** — apply fixes for known issues
 5. **Oracle + Nop** — run harbor tests if Docker available
-6. **Report** — summarize findings and fixes
-7. **Re-zip** — if fixes applied, create updated ZIP
+6. **Quality panel audit** — review `coherent_contract`,
+   `correct_reference_solution`, `protected_ground_truth`, and
+   `sound_verifier`; only `None` on every axis clears this gate
+7. **Report** — summarize findings and fixes
+8. **Re-zip** — if fixes applied, create updated ZIP
 
 The compatibility-named V3 evidence manifest is intentionally absent from the ZIP. Look first for
 `workspace/reports/<slug>/instruction-sufficiency.json`. If it is unavailable,
@@ -61,6 +64,21 @@ other agent-writable tree. Goldens and held-out fixtures belong in the separate
 verifier image. Do not manually stage whole agent-controlled directories:
 symlinks can turn protected fixture contents into apparent candidate output;
 declare exact top-level artifacts and let the harness transfer them instead.
+If the verifier executes agent-supplied code, drop privileges before exec with
+`--no-new-privs` or equivalent and confirm that process cannot read goldens,
+hidden fixtures, or `/logs/verifier`. Do not place expected answers in a parent
+tree of an input path passed to that process; demotion stops writes, not reads.
+
+For each domain rule explicitly named by the contract, require an isolating
+fixture whose expected result changes when that rule alone is inverted. A
+coarse multi-rule wrong solution or mixed held-out corpus is insufficient, and
+held-out data cannot be the sole enforcement of a stated rule.
+
+Scan every Python file under `tests/` for temporary interpreter permission
+changes. Resolve and deduplicate targets before recording modes; specifically,
+`/bin/bash` and `/usr/bin/bash` may resolve to one executable. Restore each
+saved mode once from `finally`, then verify complete Oracle reward/log
+collection. This blocking platform preflight is not run by `stb harbor check`.
 
 Assert at the specificity of the instruction: exact comparison is required for
 byte-exact or otherwise pinned output, but exact undocumented wording is invalid.

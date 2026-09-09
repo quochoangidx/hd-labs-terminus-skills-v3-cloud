@@ -159,7 +159,11 @@ The paths declared in a task's top-level `artifacts` array. These are the only f
 
 ### Separate verifier
 
-The Terminus 3 grading model: the verifier runs in its own container, built from `tests/Dockerfile`, which the agent cannot see or reach. Set with `[verifier].environment_mode = "separate"`.
+The Terminus 3 grading model: the verifier runs in its own container, built from `tests/Dockerfile`, which the agent cannot see or reach. Terminus requires the explicit `[verifier].environment_mode = "separate"` key. Harbor also treats a `[verifier.environment]` table as separate and defaults to **shared** if neither is set; Terminus CI rejects both the implicit-only form and that shared default.
+
+### Quality panel
+
+An automated four-axis review of a submitted task (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`) being wired in as a blocking check before a human reviewer. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ### Difficulty tiers
 

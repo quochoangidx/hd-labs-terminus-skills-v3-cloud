@@ -1,6 +1,6 @@
 # Terminus 3 — Frequently Asked Questions
 
-*Last updated: September 2, 2026*
+*Last updated: September 4, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
@@ -97,7 +97,7 @@ That install method is retired — the old Harbor wheel URL no longer serves. In
 No. Milestone / multi-step tasks are not part of Terminus 3. Every task is a single-shot, outcome-verified problem.
 
 **Where do tests run?**
-In a **separate container**, built from `tests/Dockerfile`. The agent cannot see or reach it. Set `[verifier].environment_mode = "separate"`.
+In a **separate container**, built from `tests/Dockerfile`. The agent cannot see or reach it. Terminus requires the explicit `[verifier].environment_mode = "separate"` key (Harbor would also treat a `[verifier.environment]` table as separate, and defaults to shared if neither is set — Terminus CI rejects both).
 
 **How does the verifier see the agent's work?**
 Only through the paths you declare in the top-level `artifacts` array. Nothing else crosses over — and the parent directories for those paths must already exist in the verifier image. Nesting `artifacts` under `[verifier]` silently drops it.
@@ -250,6 +250,9 @@ Some images may not be accessible on the platform. Post the exact image name and
 **Preflight failed on `COPY --chown=` or `COPY --from=`.**
 The cloud image builder rejects two patterns that work on local Docker. `COPY --chown=` must use numeric IDs (`0:0`, `1000:1000`), not names such as `root` or `appuser`. `COPY --from=` **image** refs must drop the tag and keep the digest (`golang@sha256:<digest>`), not `golang:1.24-bookworm@sha256:<digest>`. Stage names (`COPY --from=builder`) and `FROM image:tag@sha256:<digest>` are unchanged. The preflight names the exact line. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 
+**Preflight failed on `verifier_interpreter_permissions`, or Oracle log collection failed with Bash `Permission denied`.**
+On images where `/bin` is `/usr/bin`, `/bin/bash` and `/usr/bin/bash` are the same file. Saving a mode and disabling each path in turn can record `000` for the second path; restoring both leaves Bash non-executable. Harbor then fails to collect verifier logs (`DownloadVerifierDirError`) even if pytest wrote a reward. Resolve every path with `Path.resolve()`, deduplicate, restore each original mode once — do not hardcode `0755`. The platform check scans every `tests/**/*.py` before Oracle and is **not** in `stb harbor check`. An unreadable or unparseable file is a warning that the scan is incomplete for that file, not a pass. See [Writing Tests → Preserve Interpreter Permissions](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions).
+
 **Which base image should I use?**
 Prefer one of the **10 canonical digest-pinned images** (Python, Node, Go, Rust, Java, Ruby, GCC, Maven, Debian, Ubuntu) listed in [Dockerfile Best Practices §2](/portal/docs/creating-tasks/dockerfile-best-practices). Non-canonical images are allowed with a brief, credible justification as a Dockerfile comment; missing/vague justifications are blocked. Tasks whose CI passed before Jun 15, 2026 are grandfathered — reviewers shouldn't flag their base image (pinning is still required).
 
@@ -283,6 +286,9 @@ You can also drill into a specific submission:
 | `SKIPPED` | Task skipped | No |
 
 See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#5-check-submission-status) for the full set of submission commands.
+
+**What is the quality panel judge?**
+An automated four-axis review that runs (or is being wired in to run) before a human reviewer: contract disclosure, reference-solution correctness, whether ground truth is reachable, and whether the verifier can be passed without solving the task. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. Walk the checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) before you submit. If you think a finding is wrong, contest it with the cited passage the same way you would a human note — see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
 
 **What are the submission limits?**
 
@@ -349,6 +355,9 @@ Check "Generate Rubric(s)" and submit _without_ checking "Send to Reviewer". Gen
 
 **My rubrics disappear or appear empty after a revision cycle.**
 Known platform bug. Report with the task UUID in Slack.
+
+**How is the quality panel different from LLMaJ or Agent Review?**
+LLMaJ and Agent Review are separate helpers (Agent Review does not block). The quality panel is a four-axis review being wired in as a **blocking** check before a human reviewer. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ---
 
@@ -421,3 +430,4 @@ Yes. The current schedule is **pinned at the top of the `#terminus-3-announcemen
 | Agent logs unavailable for some reviews | Report with task UUID |
 | Docker network limit from repeated harbor runs | Run `docker network prune` |
 | `stb harbor check` fails: "unexpected response" / Usage Policy refusal | Provider content refusal — re-run, switch judge model (`-m opus` or `-m claude-haiku-4-5`), review content; escalate with UUID if a legitimate task keeps failing |
+| Platform preflight `verifier_interpreter_permissions`, or Oracle `DownloadVerifierDirError` / Bash `Permission denied` | Dual `/bin/bash` and `/usr/bin/bash` restore without `Path.resolve()` dedup; not in `stb harbor check`. See [Writing Tests](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions) |

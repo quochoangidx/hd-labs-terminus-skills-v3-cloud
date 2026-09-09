@@ -165,6 +165,22 @@ Keep goldens and held-out fixtures in the separate verifier image; never derive
 expected truth from `/app`, mutable corpora, or agent-delivered trees. Declare
 specific top-level artifacts and let the harness transfer them instead of
 copying agent-controlled directories where symlinks can expose verifier data.
+If tests rebuild or execute agent-supplied code, demote before exec with
+`--no-new-privs` or equivalent, keep goldens outside every input tree readable
+by that process, and probe that it cannot read protected fixtures or
+`/logs/verifier`. Separate mode alone does not create that in-verifier boundary.
+
+Every domain rule explicitly named by the contract needs an isolating fixture
+whose result changes when only that rule is inverted. A single multi-rule mutant
+or mixed held-out corpus does not establish this, and held-out inputs must not
+be the sole enforcement of a stated rule.
+
+When Python verifier code changes interpreter modes, resolve and deduplicate
+targets before recording modes and chmod; `/bin/bash` and `/usr/bin/bash` may
+resolve to the same file. Restore each saved mode once from `finally`, attempt
+all restorations, and confirm Oracle reward/log collection completes. The
+platform-only `verifier_interpreter_permissions` preflight blocks the unsafe
+dual-path pattern.
 
 Use exact matching when the instruction pins an exact format or byte artifact,
 and semantic matching when it does not. A stated numeric tolerance must equal

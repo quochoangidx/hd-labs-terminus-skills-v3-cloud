@@ -823,6 +823,17 @@ every documented command/mode on a discriminating hard case, rebuild delivered
 binaries from submitted source, and independently spot-check the Oracle against
 the visible spec on an edge not used to tune its answer key. The task-batch
 per-node mutant campaign is stronger than this baseline and remains required.
+For every domain rule explicitly named by the contract, keep an isolating
+fixture whose expected result changes when that rule alone is inverted; a
+coarse wrong solution or mixed held-out corpus is not enough, and held-out data
+must not be the only enforcement of a stated rule.
+
+Before packaging, walk the portal quality panel's four axes:
+`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
+and `sound_verifier`. Only `None` on every axis clears the panel; `Minor`,
+`Major`, and `Unsure` all block or route the task back. Preserve Terminus 3
+inference: exact grading conventions need a citable visible authority, while a
+domain mechanism may still be reconstructed from distributed visible evidence.
 
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
 
@@ -886,12 +897,20 @@ Anti-shortcut tactics:
 - vary filenames, ordering, or input values across tests
 - keep goldens and held-out fixtures inside the separate verifier image, never
   derive truth from `/app` or another agent-writable tree
+- when the verifier rebuilds or executes agent-supplied code, drop privileges
+  before that exec, use `--no-new-privs` or equivalent containment, and ensure
+  the process cannot read goldens, hidden fixtures, or `/logs/verifier`; never
+  colocate an expected answer with an input-tree path passed to that process
 - declare exact output paths as top-level artifacts and let the harness transfer
   them; do not manually copy agent-controlled directories where symlinks can
   expose verifier fixtures
 - include one unseen variant not present in the upstream PR
 - avoid exact source-code assertions
 - parse outputs semantically rather than matching full files
+- if verifier Python changes interpreter permissions, resolve and deduplicate
+  `/bin/bash` and `/usr/bin/bash` targets before saving modes, restore once in a
+  `finally` path, and verify full Oracle log/reward collection; the platform-only
+  `verifier_interpreter_permissions` preflight blocks the unsafe dual-path pattern
 - never require an EXACT error-message string the instruction does not disclose.
   If discrimination needs distinguishing the fix's rejection from the buggy
   build's rejection (both error), prefer a pass/fail behavioral test (an input

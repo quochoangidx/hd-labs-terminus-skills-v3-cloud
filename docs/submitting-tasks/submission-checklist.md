@@ -37,9 +37,11 @@ Run through this before every submission.
 - [ ] Tests check semantics, not appearance
 - [ ] Verification covers every correctness axis the task claims to care about
 - [ ] Goldens and held-out fixtures are baked into the verifier image (`tests/Dockerfile`), not read from agent-writable paths (`/app`, mutable corpus, agent-delivered trees)
+- [ ] If tests rebuild and run the agent's program, drop uid before that exec and probe that it cannot read goldens or `/logs/verifier` — separate mode does not hide those files from that process
 - [ ] Agent outputs are declared as top-level `artifacts` in `task.toml` — don't stage agent directories yourself
 - [ ] Any numeric tolerance stated in `instruction.md` matches what the tests enforce
 - [ ] When the spec defines an optimization objective or tie-break, tests reject a feasible plan that optimizes the wrong quantity
+- [ ] Walked the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) pre-submit checklist — every grading rule has a citable sentence, goldens are not colocated with paths passed to the agent's program, and a documented requirement has a test that would fail if it were removed
 
 ## Configuration
 
@@ -96,7 +98,7 @@ stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 - [ ] `difficulty` in `task.toml` matches the measured tier
 - [ ] Failures reflect genuine task difficulty — not unclear instructions, environment defects, or flaky tests
 - [ ] **Checked which tests the failing runs miss.** If they keep missing the same one or few tests, the check or the instructions are likely the problem — fix that check, or state the requirement in the instruction. If they miss different tests each time, the difficulty is genuine. Either way, don't leave the difficulty rated higher just because near-complete runs count as failures
-- [ ] **Ran a deliberately wrong or incomplete solution against your own verifier and confirmed it fails**
+- [ ] **Ran a deliberately wrong or incomplete solution against your own verifier and confirmed it fails.** One mutant that breaks several rules at once (including the shipped buggy code) is not enough — for each **named** domain rule, a case should exist that would fail if **that rule alone** were wrong. Held-out must not be the only enforcement of any stated rule.
 
 ---
 

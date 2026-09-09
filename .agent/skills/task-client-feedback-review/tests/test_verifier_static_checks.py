@@ -70,3 +70,38 @@ def test_flags_unverified_unit_test_promise() -> None:
         contract,
         'subprocess.run(["go", "test", "./..."])',
     )
+
+
+def test_flags_setpriv_without_no_new_privs() -> None:
+    unsafe = 'DROP = ["setpriv", "--reuid=12000", "--regid=12000"]'
+    safe = unsafe[:-1] + ', "--no-new-privs"]'
+    assert MODULE.setpriv_missing_no_new_privs(unsafe)
+    assert not MODULE.setpriv_missing_no_new_privs(safe)
+
+
+def test_flags_pytest_node_name_identity_channel() -> None:
+    assert MODULE.test_identity_leak("path = root / request.node.name")
+    assert not MODULE.test_identity_leak("path = root / uuid.uuid4().hex")
+
+
+def test_flags_dual_bash_permission_restore_without_resolution() -> None:
+    unsafe = '''
+import os
+
+paths = ["/bin/bash", "/usr/bin/bash"]
+modes = {path: os.stat(path).st_mode for path in paths}
+for path in paths:
+    os.chmod(path, 0)
+for path in paths:
+    os.chmod(path, modes[path])
+'''
+    safe = unsafe.replace(
+        'paths = ["/bin/bash", "/usr/bin/bash"]',
+        'paths = list({Path(path).resolve() for path in ["/bin/bash", "/usr/bin/bash"]})',
+    )
+    assert MODULE.interpreter_permission_alias_issue(unsafe) is True
+    assert MODULE.interpreter_permission_alias_issue(safe) is False
+
+
+def test_interpreter_permission_parse_failure_is_incomplete_warning() -> None:
+    assert MODULE.interpreter_permission_alias_issue("def broken(:") is None

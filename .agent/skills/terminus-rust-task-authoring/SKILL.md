@@ -46,6 +46,11 @@ file conflicts with those skills, the canonical skills win.
   APIs. Avoid source-string checks and private implementation assertions.
 - Run deterministic focused commands rather than the entire upstream suite.
   Every subprocess should have a practical timeout and useful captured output.
+- When verifier Python rebuilds or executes Rust code, demote before exec and
+  include `--no-new-privs` or equivalent containment. Keep goldens outside all
+  directory trees passed to that process and probe that it cannot read them or
+  `/logs/verifier`; separate mode alone does not hide verifier files from code
+  executed inside the verifier.
 - Preserve instruction/test symmetry for feature flags, workspace layouts,
   target-specific behavior, generated artifacts, and compatibility paths.
 - Keep end-to-end expected-artifact generation in `solution/`, not `tests/`.

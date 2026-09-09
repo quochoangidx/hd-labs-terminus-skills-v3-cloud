@@ -14,6 +14,14 @@ before every zip — it machine-checks the mechanical gates (layout,
 arcnames/CRLF, rubric format, docker oracle=1/nop=0, noexec-/tmp repro). Zero
 FAIL rows required.
 
+**Mandatory judgment gate:** the exact snapshot must also clear the quality
+panel's `coherent_contract`, `correct_reference_solution`,
+`protected_ground_truth`, and `sound_verifier` axes. Only `None` on every axis
+auto-accepts; `Minor`, `Major`, and `Unsure` are blocking/return outcomes. The
+local preflight now catches known `request.node.name`, incomplete `setpriv`, and
+dual `/bin/bash` + `/usr/bin/bash` permission-restore shapes, but it does not
+replace the semantic four-axis review.
+
 For a new `task-batch` candidate, do not create a handoff ZIP before the counted
 difficulty gate. The pre-probe strict run writes receipts and raw Docker evidence
 without `--emit-zip`; only a shortlisted, submission-audited task receives the

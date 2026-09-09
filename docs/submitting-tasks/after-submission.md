@@ -20,6 +20,7 @@ Immediately after submission, your task goes through:
 - CI checks (syntax, structure, dependencies)
 - LLMaJ checks (quality, completeness)
 - Oracle agent run
+- **Quality panel judge** (being wired in as a blocking check) — four axes on contract, reference solution, protected ground truth, and verifier soundness. `Minor`, `Major`, and `Unsure` come back to you with a cited reason; only `None` on every axis auto-accepts. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ### 2. Peer Review
 

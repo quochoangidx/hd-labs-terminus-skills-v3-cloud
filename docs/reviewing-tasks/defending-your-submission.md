@@ -2,6 +2,10 @@
 
 How to respond to review feedback and appeal decisions.
 
+## Quality panel findings
+
+A quality-panel `Major` or `Minor` cites a specific contract passage, code location, or test. If that citation does not say what the finding claims, or the named input is not actually contract-valid, contest it the same way you would a human reviewer's note. Both severities **block**. `Unsure` blocks routing to a human, not as a confirmed defect in your task. Details, including when to ask for a re-judge, are in the [Quality Panel Judge Guide → FAQ](/portal/docs/testing-and-validation/quality-panel-judge-guide#faq).
+
 ## Responding to Feedback
 
 ### Read Carefully

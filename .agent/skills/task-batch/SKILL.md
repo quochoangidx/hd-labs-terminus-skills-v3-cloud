@@ -348,6 +348,22 @@ Stop early only for a real external blocker that prevents all useful progress. O
 
 Maintain an accepted-task counter. Repeat the following workflow until the counter equals `N`.
 
+Candidate retirement is a loop transition, not batch completion. Preserve its
+evidence and disposition, leave the accepted count unchanged, then immediately
+return to mining a structurally fresh replacement within the user's requested
+category/subcategory and language. If taxonomy review moves a candidate outside
+that requested pair, do not count it or silently broaden the batch scope.
+A progress report, a Base ZIP, or a long unsuccessful build is not a stopping
+condition. Stop short of N only for a user stop or a concrete external blocker
+that prevents all useful in-scope progress; record the blocker and resume point.
+This applies equally to Claude and Codex.
+
+Treat prior batch reports as evidence, not new policy. In particular, a reported
+2/2 on one snapshot does not establish the tier of a later unprobed snapshot,
+nor prove an entire domain impossible. Do not replace V3 inferability with a
+requirement that all ground truth be impossible to self-check. Carry forward
+the specific failed design hypothesis, not a blanket domain ban.
+
 The fixed candidate lifecycle is:
 
 `mine candidate → build task → run complete quality/Oracle/NOP gates → contract_review → repair/recheck until pass → final_review → repair/recheck until pass → mandatory auditor → repair/recheck until pass → two valid blind-solver results → accept 0–1/2, or fairly strengthen once and re-probe after 2/2 → final ZIP/handover`.
@@ -547,6 +563,9 @@ Before a full difficulty probe, verify Terminus 3 goal/evidence/inferability:
 - Every important instruction requirement has a matching verifier check, and
   the verifier accepts semantic equivalents when representation is not part of
   the goal.
+- Every domain rule explicitly named by the contract has an isolating fixture
+  whose expected result changes when that rule alone is inverted; held-out data
+  is never the sole enforcement of a stated rule.
 - One fresh task-visible reviewer session, isolated from the builder, finds the
   goal clear, the graded inference supportable, and no required fact
   unobtainable. It need not reproduce the oracle implementation. The same
@@ -554,6 +573,14 @@ Before a full difficulty probe, verify Terminus 3 goal/evidence/inferability:
 
 Create `workspace/reports/<slug>/instruction-sufficiency.json` with
 `schema_version: 3` and pass `sufficiency_manifest_check.py --require-v3`.
+
+Also record a quality-panel-shaped pass over `coherent_contract`,
+`correct_reference_solution`, `protected_ground_truth`, and `sound_verifier`.
+Only `None` on all four axes clears the gate; `Minor`, `Major`, and `Unsure`
+return to the persistent builder/reviewer loop. If tests execute agent code in
+the verifier, require privilege demotion plus `--no-new-privs` or equivalent,
+read isolation from goldens and `/logs/verifier`, and neutral input paths. Scan
+Python verifier cleanup for the merged-`/usr` Bash-mode alias bug before probe.
 
 Then complete the semantic coverage gate in
 `terminus-regular-task-authoring/references/semantic-coverage-gate.md`:
@@ -942,6 +969,8 @@ Count a task toward `N` only when all of the following are true:
 - NOP reward is `0.0`.
 - Applicable local Harbor checks pass without requiring an API key.
 - The final ZIP passes client-feedback review with no blocker.
+- The exact snapshot clears all four quality-panel axes with `None`; no
+  `Minor`, `Major`, or `Unsure` remains.
 - Exactly two valid fresh attempts exist and zero or one solved the task. At
   least one trustworthy semantic failure provides a local difficulty signal.
 - The role receipt and final probe evidence prove one persistent builder, one

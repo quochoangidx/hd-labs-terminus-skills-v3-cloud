@@ -6,6 +6,8 @@ All verifier tests must be written in Python and run with pytest, regardless of 
 
 > **Writing a Hardware/CAD task?** Geometry has failure modes this page does not cover — see [CAD Task Guidelines](/portal/docs/creating-tasks/cad-task-guidelines) in addition to everything here.
 
+> **Quality panel.** Before you submit, walk the four-axis checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`). A `Major` or `Minor` on that review blocks the same way a failing CI check would.
+
 ## How Verification Works
 
 In Terminus 3 the verifier runs in a **separate container** the agent cannot see or reach:
@@ -133,6 +135,15 @@ Every requirement in the prompt must map to a test. If it is implied or stated i
 
 **A documented command or mode must be *run*, not just referenced.** If the contract names a subcommand, flag, or behavior mode, a test has to invoke it. A requirement that only appears in the prompt and is never exercised is not covered.
 
+**Each named domain rule needs an isolating case.** A single wrong solution that violates several rules at once — including the shipped buggy environment — only proves the verifier is not a no-op. For every rule the instruction names, there must be a fixture whose expected outcome would change if **that rule alone** were inverted. Do not require a full second implementation per rule; the fixture just has to make that rule bite.
+
+**Held-out data must not be the only pin.** Held-out cases exist to check generalization to unseen inputs. They must not be the **only** place a stated rule is enforced. If the visible suite would still pass when that rule is wrong, the rule is not tested — even when `instruction.md` names it and a mixed held-out set happens to fail.
+
+**Hidden test inputs are fine; hidden requirements are not.** A held-out fixture may introduce a new input, but the instruction and that input must contain everything needed to determine the correct output. A hidden corpus must not be the only source of an unstated mapping, threshold, label, or other fact that decides which behavior passes.
+
+- **Fine:** a hidden test uses a new input (for example a new CSV), and the documented algorithm or rule lets the submitted program compute the answer from that input.
+- **Unfair:** passing depends on a mapping, threshold, label, convention, or ground-truth fact absent from both the instructions and the input the program receives. Example: a hidden test for whether code `X17` maps to category `premium` when that mapping exists only in the hidden corpus.
+
 ```python
 # BAD: the contract documents a `verify` subcommand, but the suite only ever runs `engrave`,
 # so a solution that hardcodes or breaks `verify` still passes.
@@ -181,7 +192,7 @@ The prompt never mentions division by zero, but any reasonable person reading "a
 
 ### 4. Cover Edge Cases
 
-**Make the fixture that carries a rule its hard case.** When one test decides whether a rule is implemented, the input must actually stress that rule — otherwise a solution that skips the rule passes.
+**Make the fixture that carries a rule its hard case.** When one test decides whether a rule is implemented, the input must actually stress that rule — otherwise a solution that skips the rule passes. The same applies across the suite: a rule that only fails when bundled with other violations, or that is enforced only inside a mixed held-out set, is not really tested.
 
 ```python
 # BAD: an ordering rule (timestamp, then sequence, then file-position) is only tested on a
@@ -272,6 +283,21 @@ Three things about this script are deliberate:
 
 > **This shape matches the published [task skeleton](/Terminus-3-Prod/default-template.zip).** If you find a difference, the skeleton wins — and please flag it.
 
+### Preserve Interpreter Permissions
+
+If your verifier temporarily changes interpreter permissions, its cleanup must leave those interpreters usable. Harbor still needs to collect verifier logs and rewards after the tests finish.
+
+On images where `/bin` resolves to `/usr/bin`, `/bin/bash` and `/usr/bin/bash` name the same executable. Saving a mode and disabling execution for each path in turn can save `000` for the second path. Restoring those entries in order then leaves Bash non-executable, even when the tests wrote a reward successfully.
+
+Handle the targets before changing any permissions:
+
+1. Resolve every path unconditionally with `Path.resolve()`. Checking only `path.is_symlink()` misses symlinks in parent directories such as `/bin`.
+2. Deduplicate the resolved targets, then record every target's original permission mode before making any changes.
+3. Put both the permission changes and the test work inside a `try`/`finally` scope so cleanup runs if setup or execution fails.
+4. Restore each target's saved mode once. Attempt all restorations even if one fails, and report any restoration error. Do not replace the saved modes with a hardcoded `0755`.
+
+Repair the verifier source and run the complete Oracle evaluation in the target image, confirming that reward and log collection finish. The [platform preflight](/portal/docs/testing-and-validation/ci-checks-reference#verifier-interpreter-permissions-platform-preflight) `verifier_interpreter_permissions` flags this known pattern but does not repair submitted packages.
+
 ## Common Patterns
 
 ### Testing File Output
@@ -348,7 +374,7 @@ A rigorous verifier often contains substantial logic — that is expected and fi
 - **Parse the agent's output** to check semantics (e.g., interpreting the config, policy, or files the agent produced).
 - **Precomputed golden fixtures or hashes** for exact-match or byte-exact tasks (numerical, ML, reporting). Hardcoding the *expected result* is fine and often required — this is the same rule as *Matching at the Wrong Specificity*, seen from the other side: when the instruction pins the output exactly, an exact comparison is what verifies it.
 - **Spec-derived invariants** — compute an expected property from the task's spec/config and check the output against it (e.g., a floor, budget, or cost ceiling).
-- **Held-out ground truth**, ideally **sealed into memory and unlinked from `tests/` before the agent's program is built or run**, so a rebuilt program cannot read the answer key at grade time.
+- **Held-out ground truth**, baked into the **verifier image** (`tests/Dockerfile`). Separate mode keeps goldens out of the **agent** container. It does **not** hide them from **agent code the verifier executes** (rebuild-from-source, then run the agent's program). Drop to an unprivileged uid **before** exec'ing that program and probe that it cannot read the goldens. Sealing a key into memory and unlinking it can be an extra step — it is not a substitute for that boundary, and it is not a substitute for separate mode (which Terminus requires via the explicit `[verifier].environment_mode = "separate"` key).
   - **Do not hand the candidate a path whose sibling is the answer.** If a held-out input is passed to the agent's program by directory path, its expected output must not live in that same directory (or anywhere reachable from that path) — the program can read the sibling instead of computing. Seal held-out inputs and their goldens in separate trees, and never pass a path inside the fixture tree.
   - **Do not leave the agent's own prior output at a predictable path before its graded run.** Moving delivered artifacts to a fixed location (e.g. `/app/out.delivered`) and then running the candidate lets the candidate copy them back instead of recomputing.
 - **Perturbation / holdout re-runs** — re-run the agent's program on modified or held-out inputs and assert the output changes. This is the recommended way to prove the solution is *computed*, not hardcoded.
@@ -502,7 +528,7 @@ Manually copying or re-owning agent-controlled trees before grading is a smell. 
 shutil.copytree("/app/submission", "/tmp/staging")
 ```
 
-**GOOD:** Put the verifier in its own container. Set `[verifier].environment_mode = "separate"` in `task.toml`. Keep goldens and held-out fixtures in the verifier image — baked into `tests/Dockerfile`. They never exist in the agent's container, so there's nothing to hide. Declare explicit artifact paths in top-level `artifacts`; let the harness copy those into the verifier — don't stage agent directories yourself.
+**GOOD:** Put the verifier in its own container. Terminus requires the explicit `[verifier].environment_mode = "separate"` key in `task.toml` (Harbor also treats a `[verifier.environment]` table as separate; with neither it defaults to shared — Terminus CI rejects both the implicit-only form and that shared default). Keep goldens and held-out fixtures in the verifier image — baked into `tests/Dockerfile`. They never exist in the **agent's** container. They **do** exist in the verifier, and if you rebuild and run the agent's program there, that process can read them unless you drop uid before the exec and confirm it cannot. Declare explicit artifact paths in top-level `artifacts`; let the harness copy those into the verifier — don't stage agent directories yourself.
 
 ### Instruction Tolerance Must Match Verifier Tolerance
 

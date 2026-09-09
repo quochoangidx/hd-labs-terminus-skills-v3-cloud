@@ -18,6 +18,9 @@ from typing import Iterable
 
 from verifier_static_checks import (
     analyze_candidate_privileges,
+    interpreter_permission_alias_issue,
+    setpriv_missing_no_new_privs,
+    test_identity_leak,
     unit_test_alignment_issue,
 )
 
@@ -816,6 +819,36 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
             if name.startswith("tests/") and name.endswith(".py")
         )
         candidate_call_count, unsafe_candidate_calls = analyze_candidate_privileges(verifier_python)
+        if setpriv_missing_no_new_privs(verifier_python):
+            add(
+                findings,
+                "blocker",
+                "verifier-no-new-privs",
+                "setpriv-based candidate execution must include --no-new-privs or equivalent containment.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        if test_identity_leak(verifier_python):
+            add(
+                findings,
+                "blocker",
+                "verifier-test-identity-leak",
+                "Do not derive candidate-visible paths, arguments, or environment values from request.node.name.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        for name in files:
+            if not name.startswith("tests/") or not name.endswith(".py"):
+                continue
+            if interpreter_permission_alias_issue(view.read_text(name)) is True:
+                add(
+                    findings,
+                    "blocker",
+                    "verifier-interpreter-permissions",
+                    "Resolve and deduplicate /bin/bash and /usr/bin/bash before saving or changing modes; restore each target once.",
+                    name,
+                    "terminus-regular-task-authoring",
+                )
         if unsafe_candidate_calls:
             locations = ", ".join(
                 f"line {call.line} ({call.function})" for call in unsafe_candidate_calls[:6]

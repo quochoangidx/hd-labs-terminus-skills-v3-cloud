@@ -2,7 +2,7 @@
 
 Automated checks run against every submission. Errors block acceptance; warnings should be fixed unless a reviewer approves an exception.
 
-Run them locally before submitting:
+Run the local CLI checks before submitting:
 
 ```bash
 stb harbor check <task-folder>
@@ -10,13 +10,15 @@ stb harbor check <task-folder>
 
 > **Check list evolving.** Terminus 3 uses the Terminal-Bench 3.0 check suite. The list below covers the checks that apply to Terminus 3 submissions; individual checks may be added or adjusted as the edition progresses.
 
+The **quality panel** is a separate four-axis LLM review being wired in as a blocking check before a human reviewer. It is not one of the `stb harbor check` items below. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+
 ---
 
 ## Manifest & Metadata
 
 **Required fields present** — `task.toml` must contain every required field. See [Task Components](/portal/docs/understanding-tasks/task-components).
 
-**Verifier configured for separate mode** — `[verifier].environment_mode` must be `"separate"`, and `artifacts` must be a **top-level** key.
+**Verifier configured for separate mode** — Terminus requires the explicit `[verifier].environment_mode = "separate"` key, and `artifacts` must be a **top-level** key. Harbor itself also resolves to separate when a `[verifier.environment]` table is present (even without `environment_mode`), and defaults to **shared** when neither is set; `environment_mode = "shared"` plus `[verifier.environment]` is invalid in Harbor. Terminus CI does **not** accept the implicit Harbor form or the shared default — that restriction is Terminus-specific, not Harbor. Without the check, Harbor would grade in the agent environment.
 
 > ⚠️ **Silent failure:** nesting `artifacts` under `[verifier]` does not error — the value is silently dropped and your verifier receives nothing. Keep it top-level.
 
@@ -77,6 +79,16 @@ The check reports the exact line and the replacement. See [Dockerfile Requiremen
 
 **test.sh sanity** — the verifier entrypoint is checked for structural problems, including system-wide or global side effects.
 
+### Verifier Interpreter Permissions (Platform Preflight)
+
+**Blocking platform check.** `verifier_interpreter_permissions` runs in platform submission preflight, before Oracle. It inspects every Python file under `tests/`. `stb harbor check` does not run this deterministic check.
+
+The check flags a known cleanup bug: a verifier saves and changes permissions for both `/bin/bash` and `/usr/bin/bash`, then restores the saved modes in the same order. On images where `/bin` resolves to `/usr/bin`, both paths refer to one executable. The second saved mode can already be `000`, so cleanup leaves Bash non-executable and verifier-log collection fails with `Permission denied`.
+
+A match is a blocking **ERROR** with the verifier filename, line and repair guidance. Resolve and deduplicate the targets before saving or changing their modes, then restore each original mode once. See [Writing Tests → Preserve Interpreter Permissions](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions).
+
+The matcher is only that dual-path restoration pattern (both Bash paths in a list or tuple, saved and restored in order, no `Path.resolve()` deduplication). Other permission changes are not a finding. The check does not repair your files. A source file that cannot be read or parsed produces an incomplete-check **warning** for that file; the rest of the scan continues. After repairing the verifier, validate a complete Oracle run, including reward and log collection.
+
 ---
 
 ## Internet Access
@@ -101,7 +113,8 @@ Regardless of the setting, verifier tooling must be baked into `tests/Dockerfile
 
 1. **Errors first** — these block acceptance.
 2. **Then warnings** — fix unless a reviewer has approved an exception.
-3. **Re-run** `stb harbor check` until clean, then measure difficulty.
+3. **Re-run** `stb harbor check` until clean. Platform-only preflights such as `verifier_interpreter_permissions` are not in that CLI — fix those from the platform report, then re-submit.
+4. **Then** measure difficulty.
 
 ---
 

@@ -224,7 +224,14 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
    agent-visible files, or claims contradicted by the oracle/verifier are
    `blocker`.
 
-4. Classify findings:
+4. Run a quality-panel-shaped review across `coherent_contract`,
+   `correct_reference_solution`, `protected_ground_truth`, and
+   `sound_verifier`. Only `None` on every axis clears this gate; `Minor`,
+   `Major`, and `Unsure` are all blocking/return outcomes. Require citations
+   for exact grading conventions without collapsing Terminus 3 evidence-based
+   inference into one prose sentence per semantic rule.
+
+5. Classify findings:
    - `blocker`: likely reject or high-severity client feedback issue.
    - `should_fix`: not always fatal, but fix before a new submission.
    - `polish`: useful prompt/rubric quality improvement.
@@ -259,6 +266,16 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   runtime process (normally to `nobody:nogroup`) and stage writable inputs and
   outputs in a candidate-owned scratch directory; protecting `/logs/verifier`
   with mode `0700` is ineffective when candidate code also runs as root
+- a UID/GID drop that can regain privilege because `setpriv` omits
+  `--no-new-privs` (or equivalent containment), or an agent-supplied process
+  that can read a golden/hidden fixture colocated with an input path it receives
+- a named domain rule with no isolating case whose expected result changes when
+  that rule alone is inverted, or a stated rule enforced only by mixed held-out
+  data. One coarse wrong solution that violates several rules is insufficient
+- Python verifier cleanup that saves/restores both `/bin/bash` and
+  `/usr/bin/bash` without resolving and deduplicating targets first. The
+  platform-only `verifier_interpreter_permissions` preflight blocks this because
+  merged-`/usr` images can be left without executable Bash
 - no preserved deliberately wrong/incomplete solution that the verifier kills,
   or a suite whose assertions only check proxies such as counts, first elements,
   field presence, or values recomputed from agent-controlled input. Oracle=1 is

@@ -152,6 +152,14 @@ least one run. A 0/N test is blocking, but the repair depends on its cause.
 
 ## Revision verification
 
+When the input is a four-axis quality-panel report, collect and adjudicate every
+axis before editing. Deduplicate overlapping findings into one dependency-ordered
+repair batch, apply that batch once, and run deterministic validation after all
+edits. Do not alternate between fixing one axis and respawning its reviewer. Run
+one fresh four-axis clearance panel only after the revised snapshot is complete;
+if it remains blocking, report the remainder instead of automatically starting a
+third repair-review cycle.
+
 After any content change:
 
 1. update source hashes and rerun both fresh V3 fairness reviews;
@@ -165,9 +173,13 @@ After any content change:
 7. rerun the folder-level client/manual review and the task-tree style audit,
    write fresh `probe-preflight.json`, `pre-freeze-review.json`, and
    `task-style-preflight.json`, then pass `preprobe_check.py`;
-8. freeze the new snapshot and rerun fresh counted difficulty trials because
+8. repeat the four-axis quality-panel review on the exact snapshot; only
+   `None` on `coherent_contract`, `correct_reference_solution`,
+   `protected_ground_truth`, and `sound_verifier` clears it, while `Minor`,
+   `Major`, and `Unsure` remain blocking/return outcomes;
+9. freeze the new snapshot and rerun fresh counted difficulty trials because
    old probe snapshots are stale;
-9. update `difficulty` and the external submission prose from the newly measured
+10. update `difficulty` and the external submission prose from the newly measured
    facts, run the submission-only style audit, then regenerate and review the
    exact final ZIP and submission packet.
 

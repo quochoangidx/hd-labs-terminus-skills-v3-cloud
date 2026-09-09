@@ -234,6 +234,20 @@ if [ "$ALIGNMENT_RC" -eq 0 ]; then
 else
   report FAIL "verifier:explicit-promise-alignment" "$ALIGNMENT_OUTPUT"
 fi
+IDENTITY_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check identity 2>&1)"
+IDENTITY_RC=$?
+if [ "$IDENTITY_RC" -eq 0 ]; then
+  report PASS "verifier:test-identity" "no request.node.name leak detected"
+else
+  report FAIL "verifier:test-identity" "$IDENTITY_OUTPUT"
+fi
+INTERPRETER_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check interpreter 2>&1)"
+INTERPRETER_RC=$?
+if [ "$INTERPRETER_RC" -eq 0 ]; then
+  report PASS "verifier:interpreter-permissions" "no unsafe dual Bash-path restore pattern detected"
+else
+  report FAIL "verifier:interpreter-permissions" "$INTERPRETER_OUTPUT"
+fi
 
 # 8. Rubric format (workspace/submissions/SUBMISSION-<slug>.md, if present)
 SUB_MD="$REPO_ROOT/workspace/submissions/SUBMISSION-$SLUG.md"

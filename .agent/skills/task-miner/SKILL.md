@@ -50,6 +50,35 @@ is Hardware / CAD.
 
 ## Difficulty and Signal
 
+### Current CORE+ selection takes precedence over historical Hard heuristics
+
+For `core_advanced_frontier`, the historical Hard/Opus-4.8 sections below are
+ranking evidence, not additional rejection gates. Repo stars, patch LOC,
+exported-symbol count, file/component count, a local self-check loop, or absence
+of non-self-verifiable ground truth do not independently disqualify a candidate.
+Keep novelty, taxonomy, inferability, runtime, verifier, mutation, and current
+batch structural gates intact. Difficulty is decided by valid frozen probes,
+not by a prediction that every candidate must resist Frontier solvers.
+
+When mining stalls, distinguish an unavailable source/tool from an exhausted
+search hypothesis. Record concrete queries, inspected sources, and rejection
+reasons; vary the failure mode and work surface within the user's exact domain
+and language. For Systems, possible search directions include cancellation and
+resource ownership, shutdown/drain behavior, retry/idempotency, configuration
+reload, or build/release dependency interactions. These are query directions,
+not preapproved tasks or a finite candidate queue. Inspect real source evidence
+before claiming any candidate. Use available read-only GitHub/web access when
+`gh` is unavailable; never fabricate search results. No fixed candidate quota
+or arbitrary source-inspection count ends the search.
+
+Before building, assess `difficulty_without_incidental_conventions` with all
+arbitrary output conventions already disclosed. Identify the remaining causal
+inference or implementation challenge. Examples may teach schemas and real
+semantics; a self-check loop is allowed. Do not remove necessary evidence to
+manufacture difficulty, and do not demand a prose rule for an inference already
+supported by visible evidence. If only transcription remains, lower priority
+and prospect another design rather than inflate the fixture count.
+
 Difficulty is average pass@1 across both current reference models:
 
 - frontier: below 20%
@@ -188,11 +217,10 @@ heuristic, not a count to game.
 
 The skill must PROSPECT for repos, not consume a fixed list. Two principles:
 
-- **Fame is memorization-poison.** Frontier solvers know famous repos
-  (pip/django/pandas/urllib3…) cold — behavior, quirks, and bug history — so
-  levers mined there collapse first. The sweet spot is **mature-but-obscure**:
-  real users, ≥2 years of history, roughly 100–5,000 stars; reject
-  "everyone-knows-it" repos (rule of thumb >20k stars) as difficulty sources.
+- **Fame is a retrieval-risk hint, not a rejection threshold.** Search mature
+  niche repos as well as well-known projects. Inspect whether a reachable
+  artifact solves the task-specific crux; stars and project age do not establish
+  that. The 100–5,000-star query below is an optional discovery filter.
 - **Prospect by archetype/lever signal, not by name.** Decide the target lever
   and category first (surface-artifacts table), then search for repos matching
   that signal. `gh` is not geoblocked from VN.
@@ -272,8 +300,8 @@ Use this mode for TypeScript, go-ethereum, PyTorch, Ray, NumPy, Tokio, or any re
 
 Viability constraints:
 
-- inspect at most 5 files before deciding whether to continue
-- inspect at most 2 commits around the fix
+- inspect the focused source and history needed to decide viability; do not
+  impose a file or commit quota
 - do not run full test/build suites
 - require a focused staging plan before cloning
 - require expected verifier runtime under 60 seconds
@@ -402,8 +430,7 @@ Do not:
 - scaffold `workspace/tasks/tbrain-*`
 - write `instruction.md`, Dockerfile, verifier, or oracle patch
 - run large upstream test suites repeatedly
-- inspect more than 15 files unless the candidate is already high value and needs one extra confirmation
-- inspect more than 3 commits around the fix
+- continue broad inspection without a candidate-specific question
 - enumerate unrelated test suites or full repository trees
 
 Stop mining when a deterministic reproducer, localized touched files, and sufficient candidate score are found.
@@ -421,8 +448,8 @@ docs/understanding-tasks/task-taxonomy.md  # authoritative Terminus 3 category/s
 ```
 
 The gallery snapshot is the **novelty gate**: if the gallery already contains the
-same problem/archetype+domain as your candidate, REJECT as a duplicate unless the
-candidate adds a clearly distinct twist, and record `closest_gallery_task`. Refresh
+same setup, definition, and data as your candidate, REJECT as a duplicate;
+a twist or reskin is not independent novelty. Record `closest_gallery_task`. Refresh
 the snapshot from a public fork of `snorkel-tb-tasks` when it is stale (see the file
 header). If the team has a shared registry path or URL, check that too before
 claiming a candidate.
@@ -524,6 +551,12 @@ priors:
    least two cross-cluster scenarios, two verifier shapes, and a discriminating
    path for every promised public surface. Reject a candidate that reaches the
    minimum only by duplicating one rule.
+8. **Rule-isolation feasibility:** every domain rule that will be explicitly
+   named in the contract can receive a fixture whose expected result changes
+   when that rule alone is inverted. A mixed held-out corpus cannot be the only
+   enforcement of a stated rule. Also confirm any verifier-executed candidate
+   process can be deprived of read access to goldens and `/logs/verifier`, not
+   merely moved out of the agent container by separate mode.
 
 Save the mined artifact and run the plan gate before creating a task folder:
 
@@ -582,9 +615,11 @@ the finding as durable, and loosen the specific screen criterion that killed
 it. Controls that collapse confirm the screen at skeleton cost, not build
 cost.
 
-### Mechanical patch-shape gate — RUN FIRST, pass/fail, before any scoring (CANONICAL fix-shape test)
+### Historical Hard patch-shape heuristic — not a CORE+ eligibility gate
 
-This is the single canonical fix-shape test — the former "Fix-shape filter" and
+The historical calibration below describes Hard-target selection, not current
+CORE+ acceptance. A short patch can require substantial diagnosis; evaluate
+the actual crux before lowering its priority. This was the former "Fix-shape filter" and
 "Pre-mine fix-shape probe" sections are folded in here. The principle kept
 getting ignored when stated loosely: 17 candidates
 shipped and 14 rated <=EASY (June 2026 batch B). So gate it MECHANICALLY. Open
@@ -1163,9 +1198,11 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 
 Keep source URLs, commit hashes, upstream test names, verifier language, and
 solution hints out of `instruction.md`.
-Do not rely on environment README/spec files to carry extra prompt goals or
-solution guidance; if the behavior cannot fit fairly in `instruction.md`, reject
-or narrow the candidate.
+Keep the goal, artifact paths, public interface, and arbitrary exact conventions
+explicit in `instruction.md`. Environment README/spec files and other visible
+evidence may support domain inference under V3; they must not leak the solution
+or introduce an unrelated hidden goal. The entire domain model need not fit in
+the instruction prose.
 
 ## Verifier Patterns
 
