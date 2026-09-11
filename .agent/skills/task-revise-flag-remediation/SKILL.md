@@ -152,6 +152,17 @@ least one run. A 0/N test is blocking, but the repair depends on its cause.
 
 ## Revision verification
 
+For quality-panel-driven repairs, read
+[root-cause remediation](../task-quality-panel-judgement/references/root-cause-remediation.md)
+before choosing edits. Compare repair, narrowing, removal, justified expansion,
+and retirement/redesign per confirmed root cause; the smallest textual patch
+is not necessarily the smallest total repair. Use prior attempts and concrete
+closure evidence to abandon non-converging strategies, not model verdict counts.
+Drop separable low-value surface coherently when authorized; never delete a
+failing test while retaining its promise. If only the core can be removed, stop
+and propose task retirement/redesign unless that decision is already authorized.
+Preserve artifacts; this is not authorization for destructive deletion.
+
 When the input is a four-axis quality-panel report, collect and adjudicate every
 axis before editing. Deduplicate overlapping findings into one dependency-ordered
 repair batch, apply that batch once, and run deterministic validation after all
@@ -161,6 +172,12 @@ if it remains blocking, report the remainder instead of automatically starting a
 third repair-review cycle.
 
 After any content change:
+
+Apply this verification sequence to a retained task heading for handover, not a
+retired design. A confirmed redesign/retirement stop ends expensive probes and
+packaging. For panel-only remediation, do not duplicate the single clearance
+panel in step 8; additional fairness/difficulty runs require the applicable
+handover scope or explicit request.
 
 1. update source hashes and rerun both fresh V3 fairness reviews;
 2. rerun instruction preflight and the V3 evidence-inferability checker;
@@ -195,6 +212,9 @@ Return a compact table with:
 - raw evidence and affected tests/runs;
 - root-cause class;
 - docs-aligned decision;
+- selected repair/narrow/remove/expand/retire option and why alternatives lose;
+- prior failed strategies and the evidence-based stop/switch condition;
+- retained core, removed obligations, necessary additions and recoverable snapshot;
 - files changed;
 - oracle/NOP and verifier results;
 - V3 inferability verdict;

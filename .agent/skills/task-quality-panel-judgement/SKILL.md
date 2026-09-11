@@ -220,10 +220,16 @@ and full verifier validation as appropriate. Do not respawn an axis reviewer to
 check each individual edit.
 
 Repair the invariant at its shared authority boundary. Avoid case-specific
-conditions that only satisfy the reported reproducer. Prefer removing or
-narrowing an unnecessary promise; when preserving it, centralize validation or
-state transition logic so all sibling paths share the fix. Add only the minimum
-discriminating witnesses needed to prove independent branches and interactions.
+conditions that only satisfy the reported reproducer. Use the repair-option
+comparison in `references/root-cause-remediation.md`: repair, narrow, remove,
+expand only when justified, or retire/redesign. No fixed shrink-first or
+add-first order applies. Compare retained task value with coupling, regression
+risk and validation cost; inspect prior attempts and stop non-converging symptom
+patches. Removing a separable non-core feature must remove its obligations
+coherently, not merely its failing tests. Core removal or replacement requires
+appropriate user scope. Preserve retired artifacts; do not package or probe a
+retired task as if repaired. Add only discriminating witnesses needed for the
+retained independent branches and interactions.
 
 Any edit creates a new snapshot and invalidates the discovery verdict. After the
 batch passes deterministic validation, run exactly one fresh four-axis clearance
