@@ -114,13 +114,13 @@ No. Snorkel adds `README.md` at packaging, assembled from the `difficulty_explan
 **How is difficulty determined?**
 Empirically. **Accuracy = mean pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5.** Tiers: **Frontier** < 20%, **Advanced** 20–50%, **Core** 50–80%, **Base** 80–100%. Tasks above 80% are not rejected — Base is a wanted tier, but **100% averaged across both models is not accepted**: a task every run solves gives no signal. There is no language-specific difficulty rule. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
-**Why does the in-platform check run fewer trials than the final measurement?**
-Difficulty is measured in two stages. While you iterate, the platform runs **2 trials per model across both models — 4 runs total**. The full **8-run** measurement (4 per model) happens only **after a reviewer accepts your task**, and that is what sets your final tier.
+**When is difficulty measured, and is it final?**
+Once. After your task passes the [quality panel](/portal/docs/testing-and-validation/quality-panel-judge-guide) and before it reaches a reviewer, the platform runs **4 trials per model across both models — 8 runs total**. That measurement sets your tier, and it is the one a reviewer sees. Nothing re-runs after acceptance.
 
-**The tier shown while iterating is provisional.** It comes from 4 runs, not 8, so a task can shift tiers between the two. Don't treat the iteration result as final.
+Your local `-k 4` runs are an estimate, not the measurement — different seeds and different days move results.
 
-**My task passed every run in the platform check. Why can't I submit it?**
-At least one of the 4 iteration runs must fail. A task that every run solves produces no signal about agent capability, so it can't proceed to review. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty.
+**My task passed every run in the platform check. Why can't it proceed?**
+At least one of the 8 runs must fail. A task that every run solves produces no signal about agent capability, so it can't proceed to review. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty.
 
 **My task keeps coming back too easy. What makes a task land in the harder tiers?**
 Requirements the agent must infer rather than read off a checklist, outputs judged on semantics rather than appearance, and several correctness axes that interact. Single-bug or template-based tasks tend to land in Core or Base. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
@@ -288,7 +288,7 @@ You can also drill into a specific submission:
 See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#5-check-submission-status) for the full set of submission commands.
 
 **What is the quality panel judge?**
-An automated four-axis review that runs (or is being wired in to run) before a human reviewer: contract disclosure, reference-solution correctness, whether ground truth is reachable, and whether the verifier can be passed without solving the task. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. Walk the checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) before you submit. If you think a finding is wrong, contest it with the cited passage the same way you would a human note — see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
+An automated four-axis review that runs before a human reviewer, and must pass before difficulty is measured: contract disclosure, reference-solution correctness, whether ground truth is reachable, and whether the verifier can be passed without solving the task. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. Walk the checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) before you submit. If you think a finding is wrong, contest it with the cited passage the same way you would a human note — see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
 
 **What are the submission limits?**
 
@@ -357,7 +357,7 @@ Check "Generate Rubric(s)" and submit _without_ checking "Send to Reviewer". Gen
 Known platform bug. Report with the task UUID in Slack.
 
 **How is the quality panel different from LLMaJ or Agent Review?**
-LLMaJ and Agent Review are separate helpers (Agent Review does not block). The quality panel is a four-axis review being wired in as a **blocking** check before a human reviewer. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+LLMaJ and Agent Review are separate helpers (Agent Review does not block). The quality panel is a four-axis review that **blocks** before a human reviewer, and gates the difficulty measurement. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ---
 

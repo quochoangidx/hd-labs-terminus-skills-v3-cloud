@@ -370,14 +370,14 @@ def test_cli_help():
 
 A rigorous verifier often contains substantial logic — that is expected and fine. The following are **legitimate and encouraged**, not violations:
 
-- **Run the agent's own program.** Build and run the agent's binary/CLI, then grade its output. **Build it from the submitted source** — do not grade a binary the agent delivered without rebuilding it (see *Grading a Delivered Binary Without Rebuilding*).
+- **Run the agent's own program.** Build and run the agent's binary/CLI, then grade its output. **Build it from the submitted source** — do not grade a binary the agent delivered without rebuilding it. If the contract separately requires a delivered binary, package, report, or file, validate that artifact too and confirm it corresponds to the submitted source; a separate rebuild does not prove the required artifact is correct (see *Grading a Delivered Binary Without Rebuilding*).
 - **Parse the agent's output** to check semantics (e.g., interpreting the config, policy, or files the agent produced).
 - **Precomputed golden fixtures or hashes** for exact-match or byte-exact tasks (numerical, ML, reporting). Hardcoding the *expected result* is fine and often required — this is the same rule as *Matching at the Wrong Specificity*, seen from the other side: when the instruction pins the output exactly, an exact comparison is what verifies it.
 - **Spec-derived invariants** — compute an expected property from the task's spec/config and check the output against it (e.g., a floor, budget, or cost ceiling).
 - **Held-out ground truth**, baked into the **verifier image** (`tests/Dockerfile`). Separate mode keeps goldens out of the **agent** container. It does **not** hide them from **agent code the verifier executes** (rebuild-from-source, then run the agent's program). Drop to an unprivileged uid **before** exec'ing that program and probe that it cannot read the goldens. Sealing a key into memory and unlinking it can be an extra step — it is not a substitute for that boundary, and it is not a substitute for separate mode (which Terminus requires via the explicit `[verifier].environment_mode = "separate"` key).
   - **Do not hand the candidate a path whose sibling is the answer.** If a held-out input is passed to the agent's program by directory path, its expected output must not live in that same directory (or anywhere reachable from that path) — the program can read the sibling instead of computing. Seal held-out inputs and their goldens in separate trees, and never pass a path inside the fixture tree.
   - **Do not leave the agent's own prior output at a predictable path before its graded run.** Moving delivered artifacts to a fixed location (e.g. `/app/out.delivered`) and then running the candidate lets the candidate copy them back instead of recomputing.
-- **Perturbation / holdout re-runs** — re-run the agent's program on modified or held-out inputs and assert the output changes. This is the recommended way to prove the solution is *computed*, not hardcoded.
+- **Perturbation / holdout re-runs** — re-run the agent's program on meaningfully varied or held-out inputs and assert the output changes. Vary the sizes, values, ordering, paths, formats, or business conditions the stated domain makes relevant; this does not require combinatorial coverage of behavior the contract never promises. This is the recommended way to prove the solution is *computed*, not hardcoded.
 
 The line to hold is narrow: don't put a **callable end-to-end solver** in `tests/` that maps task inputs to the complete expected artifact (that belongs in `solution/`), and don't hardcode a value the instruction says the agent must read from a config file. Everything above stays fair game.
 
@@ -421,6 +421,8 @@ assert model.features == cfg["features"]
 **Assert at the specificity the instruction states.** If the instruction pins an exact output — a format, a filename, a byte-exact artifact — then `==` or a byte comparison is *required*, and a looser check fails to verify what the task asked for. If the instruction is silent on format, assert semantics only and never `==`, because you would be grading formatting the task never specified.
 
 The word that decides it is **undocumented**: a check is brittle when it pins something the instruction never stated, not because it uses `==`.
+
+The required path and filename are part of that contract. A correct implementation must not fail because `instruction.md` names `/app/report.json` while the verifier reads `/app/output/report.json`, or because the verifier expects a different filename. Check both directions: every path the verifier grades is disclosed, and every required output path in the instruction is the artifact the verifier actually reads.
 
 ```python
 # BAD: the instruction never specifies the log wording, so `==` grades undocumented formatting
@@ -486,6 +488,8 @@ def test_decoder_actually_decodes_a_fresh_registry():
 ```
 
 This is what **Perturbation / holdout re-runs** is for — use it, and rebuild rather than trusting the delivered binary.
+
+Rebuilding is not permission to ignore the deliverable. If the instruction requires the agent to leave a binary, package, report, or other built artifact, the verifier must validate that required artifact as well as the clean rebuild and confirm they correspond. Testing only a separately rebuilt copy allows a stale, fabricated, or independently prepared deliverable to pass.
 
 ### No Equivalence Between Artifacts the Agent Controls Both Sides Of
 
@@ -559,6 +563,12 @@ assert plan.batch_count <= ALT_PLAN.batch_count if plan.peak_size == ALT_PLAN.pe
 ```
 
 Spot-check the oracle on such a case too — a reference that hardcodes one heuristic may encode the wrong objective into the tests.
+
+### Stated Lifecycle and Resilience Behavior Must Be Tested
+
+If the instruction promises restart or crash recovery, idempotency, invalid-input handling, concurrency, existing-output behavior, or reset semantics, exercise that behavior directly. A happy-path run cannot establish a lifecycle promise.
+
+Choose cases that isolate the stated guarantee: interrupt before and after the durability boundary, invoke twice, start from an existing output, submit malformed input, overlap operations, or reuse state across cycles as the contract requires. Do not add lifecycle requirements to a task whose contract does not claim them.
 
 ### Agent Code Must Not Redefine What Gets Graded
 

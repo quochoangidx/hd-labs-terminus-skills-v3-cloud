@@ -7,6 +7,11 @@ description: Use when creating, reviewing, or repairing a Terminus 3 task, espec
 
 Use this skill when the user asks to create or audit a Terminus 3 task.
 
+When building, revising, or preparing submission review, read
+[panel input hygiene](references/panel-input-hygiene.md): 800 lines is a soft
+task-file readability warning, not a platform limit. Reduce repeated content
+without weakening contract evidence or discriminating verifier coverage.
+
 ## Required Layout
 
 Tasks must contain:

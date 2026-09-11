@@ -447,7 +447,7 @@ def test_computation():
 
 *Feedback category: `task_difficulty`*
 
-> **A difficulty tier _mismatch_ is not a revision reason.** Final difficulty is measured automatically after acceptance, so don't send a task back because the declared tier doesn't match the run. *Do* flag a **retired tier name** (`hard` / `easy` / `medium`) or a task that is **genuinely too trivial** (below). See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
+> **A difficulty tier _mismatch_ is not a revision reason.** The measured tier is already final when the task reaches you and is what gets recorded; the declared value is the author's estimate. Don't send a task back over it, and don't spend review time on it. *Do* flag a **retired tier name** (`hard` / `easy` / `medium`) or a task that is **genuinely too trivial** (below). See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
 
 ### Too Easy
 

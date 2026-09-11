@@ -5,6 +5,11 @@ description: "Use when transforming a mined candidate into a Terminus 3 task und
 
 # Task Clone
 
+Before freezing a built task, read
+[panel input hygiene](../terminus-regular-task-authoring/references/panel-input-hygiene.md).
+Assess large task files and aggregate review input, using 800 lines only as a
+soft warning; preserve necessary source, evidence, and verifier discrimination.
+
 Use this skill when the user wants to turn a mined candidate into a Terminus 3 task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category and subcategory unless either is invalid or the task's domain clearly belongs elsewhere.
 
 > **Terminus 3 operational baseline (2026-07-31).** Every task uses one of the

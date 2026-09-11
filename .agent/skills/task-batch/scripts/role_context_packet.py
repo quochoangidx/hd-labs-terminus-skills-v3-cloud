@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create hash-bound, role-specific context packets for Luna review tasks."""
+"""Create hash-bound, role-specific context packets for review tasks."""
 
 from __future__ import annotations
 
@@ -125,8 +125,8 @@ def build_packet(
         "role": role,
         "phase": phase,
         "task_slug": task_slug,
-        "model": "gpt-5.6-luna",
-        "reasoning_effort": "high" if role == "fairness_reviewer" else "max",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "medium",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_bytes": total_bytes,
         "total_files": total_files,

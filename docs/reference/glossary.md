@@ -163,7 +163,7 @@ The Terminus 3 grading model: the verifier runs in its own container, built from
 
 ### Quality panel
 
-An automated four-axis review of a submitted task (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`) being wired in as a blocking check before a human reviewer. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+An automated four-axis review of a submitted task (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`) that blocks before a human reviewer and gates the difficulty measurement. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ### Difficulty tiers
 
@@ -171,7 +171,7 @@ The four empirical tiers — **Frontier** (<20%), **Advanced** (20–50%), **Cor
 
 ### Accuracy
 
-Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier. In-platform iteration uses a shorter 4-run check (2 per model).
+Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier. Measured once, after the quality panel passes and before review; nothing re-runs after acceptance.
 
 ### Canary string
 

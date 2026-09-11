@@ -1,6 +1,6 @@
 # Quality Panel Judge Guide
 
-This page explains the **quality panel judge**: an automated review that reads a Terminus 3 task you have built (`instruction.md`, `task.toml`, `environment/`, `solution/`, `tests/`) and checks it along four axes before it reaches a human reviewer. It is being wired in as a **blocking check** in the Terminus submission pipeline — a `Minor` or `Major` (or `Unsure`) does not get silently accepted; it comes back to you with a specific reason, the same way a failing CI check would.
+This page explains the **quality panel judge**: an automated review that reads a Terminus 3 task you have built (`instruction.md`, `task.toml`, `environment/`, `solution/`, `tests/`) and checks it along four axes before it reaches a human reviewer. It is a **blocking check** in the Terminus submission pipeline, and the difficulty measurement runs only once it passes — a `Minor` or `Major` (or `Unsure`) does not get silently accepted; it comes back to you with a specific reason, the same way a failing CI check would.
 
 This guide is for **EC Submitters** (task authors). It is the checklist and the how-it-works. Numbered worked cases live only in the [Quality Panel Appendix](/portal/docs/testing-and-validation/quality-panel-examples) — they are synthetic composites, not excerpts from submitted tasks.
 

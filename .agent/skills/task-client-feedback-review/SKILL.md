@@ -13,6 +13,12 @@ the user explicitly asks for fixes.
 
 ## Review Order
 
+For submission readability, read
+[panel input hygiene](../terminus-regular-task-authoring/references/panel-input-hygiene.md).
+Report task files over 800 lines and packet-size risks as advisory diagnostics,
+not correctness findings. Do not auto-split files or prune cases in review-only
+mode; actual incomplete mandatory inspection is a separate clearance issue.
+
 1. Run the bundled scanner:
 
 ```bash

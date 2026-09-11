@@ -25,7 +25,7 @@ PANEL_DOCS = (
     "quality-panel-judge-guide.md",
     "quality-panel-examples.md",
 )
-PACKET_SCHEMA_VERSION = 2
+PACKET_SCHEMA_VERSION = 3
 
 
 def ignored(path: Path) -> bool:
@@ -92,7 +92,7 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def build_packets(task: Path, output: Path) -> Path:
+def build_packets(task: Path, output: Path, contract_files: tuple[str, ...] = ()) -> Path:
     task = task.resolve()
     output = output.resolve()
     if not task.is_dir():
@@ -103,13 +103,31 @@ def build_packets(task: Path, output: Path) -> Path:
     if missing:
         raise ValueError(f"task is missing required surfaces: {', '.join(missing)}")
 
+    # Explicitly selected candidate-visible authorities, never inferred from
+    # solution/test imports. Preserve their original paths for citations.
+    selected = sorted(set(contract_files))
+    for relative in selected:
+        path = Path(relative)
+        source = task / path
+        if (path.is_absolute() or ".." in path.parts or not path.parts
+                or path.parts[0] != "environment"
+                or not source.is_file()
+                or not source.resolve().is_relative_to(task / "environment")):
+            raise ValueError(f"contract file must be an existing file inside environment: {relative}")
+
     docs_root = repo_root() / "docs" / "testing-and-validation"
     missing_docs = [name for name in PANEL_DOCS if not (docs_root / name).is_file()]
     if missing_docs:
         raise ValueError(f"quality-panel docs are missing: {', '.join(missing_docs)}")
 
     snapshot = sha256_tree(task)
-    final_root = output / snapshot
+    recipe = {
+        "schema_version": PACKET_SCHEMA_VERSION,
+        "contract_files": selected,
+        "panel_docs": {name: sha256_file(docs_root / name) for name in PANEL_DOCS},
+    }
+    recipe_hash = hashlib.sha256(json.dumps(recipe, sort_keys=True).encode()).hexdigest()
+    final_root = output / snapshot / recipe_hash
     root_manifest = final_root / "packet-manifest.json"
     if root_manifest.is_file():
         data = json.loads(root_manifest.read_text())
@@ -130,6 +148,9 @@ def build_packets(task: Path, output: Path) -> Path:
             packet.mkdir()
             for surface in surfaces:
                 copy_surface(task / surface, packet / surface)
+            if axis in {"correct_reference_solution", "sound_verifier"}:
+                for relative in selected:
+                    copy_surface(task / relative, packet / relative)
 
             docs_target = packet / "_panel_docs"
             docs_target.mkdir()
@@ -142,6 +163,9 @@ def build_packets(task: Path, output: Path) -> Path:
                 "axis": axis,
                 "snapshot_sha256": snapshot,
                 "included_surfaces": list(surfaces),
+                "contract_files": selected if axis in {
+                    "correct_reference_solution", "sound_verifier"
+                } else [],
                 "files": file_manifest(packet),
             }
             (packet / "packet-manifest.json").write_text(
@@ -154,12 +178,12 @@ def build_packets(task: Path, output: Path) -> Path:
             "task_slug": task.name,
             "snapshot_sha256": snapshot,
             "axis_packets": axis_paths,
+            "recipe": recipe,
         }
         (staging / "packet-manifest.json").write_text(
             json.dumps(root_data, indent=2, sort_keys=True) + "\n"
         )
-        if final_root.exists():
-            shutil.rmtree(final_root)
+        final_root.parent.mkdir(parents=True, exist_ok=True)
         staging.rename(final_root)
     finally:
         shutil.rmtree(staging_parent, ignore_errors=True)
@@ -171,13 +195,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("task_dir", type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--contract-file", action="append", default=[],
+                        help="Task-relative candidate-visible authority under environment; repeat for dependencies")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        manifest = build_packets(args.task_dir, args.output)
+        manifest = build_packets(args.task_dir, args.output, tuple(args.contract_file))
     except (OSError, ValueError, json.JSONDecodeError) as error:
         raise SystemExit(f"error: {error}") from error
     print(manifest)

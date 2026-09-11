@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lifecycle lease guard for optional Luna reviewer and auditor tasks."""
+"""Lifecycle lease guard for reviewer and auditor tasks."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-MODEL = "gpt-5.6-luna"
+MODEL = "gpt-5.6-sol"
 ROLE_POLICY = {
-    "fairness_reviewer": {"effort": "high", "minutes": 12, "tool_limit": 12, "count": 1},
-    "consolidated_auditor": {"effort": "max", "minutes": 18, "tool_limit": 20, "count": 1},
+    "fairness_reviewer": {"effort": "medium", "minutes": 12, "tool_limit": 12, "count": 1},
+    "consolidated_auditor": {"effort": "medium", "minutes": 18, "tool_limit": 20, "count": 1},
 }
 PHASES = {
     "fairness_reviewer": {"contract_review", "final_review"},
@@ -246,7 +246,7 @@ def open_leases(args: argparse.Namespace, root: Path) -> int:
         ]
         if active:
             raise ValueError(
-                "another unclaimed or active Luna cohort exists in this worktree; "
+                "another unclaimed or active review cohort exists in this worktree; "
                 "finish it or use a separate worktree and lease directory"
             )
         for slot in range(1, args.count + 1):

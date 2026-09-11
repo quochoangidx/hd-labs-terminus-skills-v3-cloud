@@ -6,6 +6,8 @@ Recent announcements. **[See the full Changelog →](/portal/changelog)**
 
 | Date         | Type   | Change |
 | ------------ | ------ | ------ |
+| Sep 10, 2026 | 🔄 Update | **Verifier/reference review is stricter.** One failed Medium now sends a task to revision. Core shortcut, config, artifact/source, oracle, tolerance, and objective checks are High; reviewers also check output-path agreement, meaningful input variation, and stated lifecycle behavior. Missing `.dockerignore` is Low; canaries stay with static checks. ***[See Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist)*** |
+| Sep 9, 2026 | 🔄 Update | **Difficulty is now measured once — 8 runs, before review.** No more 4-run iteration check, and nothing re-runs after acceptance. Once the quality panel passes, the platform runs 4 trials per model (8 total) and that tier is final. At least one run must fail for the task to proceed. ***[See Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines)*** |
 | Sep 7, 2026 | 🆕 New | **Platform preflight `verifier_interpreter_permissions`.** Saving and restoring both `/bin/bash` and `/usr/bin/bash` without `Path.resolve()` deduplication can leave Bash non-executable; Harbor then cannot collect verifier logs. Blocking on platform submit, before Oracle; not in `stb harbor check`. ***[See Writing Tests](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions)*** |
 | Sep 4, 2026 | 🆕 New | **Quality Panel Judge Guide.** Four-axis automated review (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`) being wired in as a blocking check before a human reviewer. **`Minor` and `Major` both block**, as does `Unsure`. Checklists on the main page; numbered synthetic cases in a separate appendix. ***[See Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide)*** |
 | Sep 3, 2026 | 🔄 Update | **Isolating cases and grade-time keys.** A named domain rule is not tested if the only discriminating fixture is mixed held-out data, or if one coarse mutant (the shipped buggy code) is the only wrong solution you ran. Held-out must not be the sole enforcement of any stated rule. Hidden test inputs are fine; hidden requirements are not. Separate mode protects the verifier from the agent environment, not from code the verifier itself executes. Harbor defaults to **shared** if neither `environment_mode = "separate"` nor a `[verifier.environment]` table is set; Terminus CI requires the explicit key. See [Writing Tests](/portal/docs/creating-tasks/writing-tests) and [Dockerfile §8](/portal/docs/creating-tasks/dockerfile-best-practices#8-separate-agent-visible-runtime-from-verifier-only-assets). |
@@ -54,9 +56,9 @@ See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelin
 Each task goes through:
 
 1. **Automated CI checks** — structure, manifest, dependencies, verifier isolation
-2. **LLM-as-Judge (LLMaJ)** — quality evaluation
-3. **Peer review** — human expert verification
-4. **Agent evaluation** — run against Claude Opus 5 and GPT-5.6, 4 trials each after acceptance
+2. **LLM-as-Judge (LLMaJ)** and the **quality panel** — quality evaluation; the panel blocks
+3. **Agent evaluation** — run against Claude Opus 5 and GPT-5.6, 4 trials each, once the panel passes; sets the final tier
+4. **Peer review** — human expert verification, with the difficulty measurement in hand
 
 ## Quick Links
 

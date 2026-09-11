@@ -44,8 +44,12 @@ The instructions for every task should adhere to these six general principles:
 ### 2. Review Tests
 
 - [ ] Every requirement has a corresponding test
+- [ ] Required output paths/names match between the instruction and verifier
 - [ ] Tests have informative docstrings
 - [ ] Tests verify behavior, not implementation
+- [ ] Tests vary the stated input domain enough to reject hardcoded shortcuts
+- [ ] Any stated lifecycle/resilience behavior is exercised
+- [ ] Required delivered artifacts are validated, not inferred correct from a separate rebuild
 - [ ] No brittle string matching
 - [ ] No hardcoded thresholds (or thresholds are reasonable)
 
@@ -68,17 +72,22 @@ There is an automated **test-quality** eval on submissions that flags common gap
 - [ ] Solution demonstrates the process (not just outputs answer)
 - [ ] Commands are deterministic
 - [ ] Works in the provided environment
+- [ ] Oracle is correct, not just passing
+
+**Correct, not just passing.** The oracle passing the tests is **necessary but not sufficient**. In practice the tests and the oracle are written together and tuned until the oracle passes, so a passing oracle mainly shows that the task runs, not that the reference is correct. A wrong oracle is worse than a broken one: the tests encode its output as the answer key, so a *correct* agent solution fails verification, and difficulty is measured against a bad truth.
+
+Spot-check the oracle against the **spec**, not against its own tests — independently work out the expected result on a few hard or edge inputs the fixtures don't already cover. Send the task back if the oracle omits a documented requirement, encodes an unsupported assumption, or rejects another contract-compliant implementation. See [Writing Oracle Solution → Correct, Not Just Passing](/portal/docs/creating-tasks/writing-oracle-solution#4-correct-not-just-passing) and the matching High row on the [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist#verifiers).
 
 ### 5. Verify Metadata
 
-- [ ] Difficulty uses a **current tier name** (`frontier` / `advanced` / `core` / `base`) — the value itself is re-measured automatically after acceptance, so don't request a revision to change it (see *Don't request changes for these*)
+- [ ] Difficulty uses a **current tier name** (`frontier` / `advanced` / `core` / `base`). A retired name (`hard` / `easy` / `medium`) is a finding. Declared vs measured mismatch is not — see *Don't request changes for these*.
 - [ ] Category is appropriate
 - [ ] Time estimates are realistic
 - [ ] Timeout is sufficient but not excessive
 
 ### 6. Watch Agent Runs
 
-**Solvable vs. passing a run:** *Passing a run* means all unit tests pass in a single run. *Solvable* (for the task) means that **across 10 runs**, each individual test passes at least once—so a task can have no full pass in any run and still be solvable if the agent only ever “partially” succeeds.
+**Solvable vs. passing a run:** *Passing a run* means all unit tests pass in a single run. *Solvable* (for the task) means that **across the 8 runs**, each individual test passes at least once—so a task can have no full pass in any run and still be solvable if the agent only ever “partially” succeeds.
 
 On the task viewer:
 - Watch the terminal recording
@@ -114,6 +123,7 @@ On the task viewer:
 | Issue | What to Look For |
 |-------|------------------|
 | Hardcoded answers | `echo "42" > result.txt` |
+| Passes tests but wrong vs spec | Oracle omits a documented rule, encodes an unsupported assumption, or would reject another contract-compliant implementation |
 | Non-deterministic | Uses random without seed |
 | Incomplete | Missing steps |
 | Over-complex | Unnecessarily convoluted |
@@ -187,13 +197,13 @@ Issues need fixing before acceptance. Be specific:
 These come up often but are **not** valid revision reasons — usually they're unverified Agent Review output copied into a review. Confirm before you send anything back:
 
 - **`task.toml` "is incorrect."** CI runs the structure check on every submission, and a task only reaches you once CI is passing — so the manifest in front of you has already passed it. **Confirm the static check actually fails** before flagging — an Agent Review "toml wrong" is usually a false positive (a common one: flagging fields as "top-level" that are correctly under `[metadata]`).
-- **Difficulty value / tier mismatch** (declared `frontier`, measures `core`, etc.). **Final difficulty is measured automatically _after_ you accept**, so the declared value is not a revision trigger. *Still flag:* a **retired tier name** (`hard` / `easy` / `medium` — must be `frontier` / `advanced` / `core` / `base`), or a task that is **genuinely too trivial** (that's a quality issue, not a label).
+- **Difficulty value / tier mismatch** (declared `frontier`, measures `core`, etc.). **The measured tier is already final when the task reaches you**, and it is what gets recorded — the declared value is the author's estimate, and a mismatch is not a revision trigger or worth your time. *Still flag:* a **retired tier name** (`hard` / `easy` / `medium` — must be `frontier` / `advanced` / `core` / `base`), or a task that is **genuinely too trivial** (that's a quality issue, not a label).
 - **Instruction length** ("too many paragraphs / bullets"). The 2-paragraph / 20-bullet figure is **guidance, not a hard cap** — complex tasks may need more room. Don't flag on length; flag only if the instruction **leaks implementation steps or the answer**.
 
 ### Decline
 
 Fundamental issues that can't be easily fixed:
-- Too easy (100% accuracy averaged across both models provides no signal; 90% is acceptable, 100% is not)
+- Too easy (100% accuracy averaged across both models provides no signal; 90% is acceptable, 100% is not). You see all 8 runs, so this is directly checkable — though a task at 100% should not have reached you
 - Essentially duplicate of existing task
 - Core concept is flawed
 

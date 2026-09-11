@@ -8,16 +8,17 @@ Difficulty is **empirical**, not self-assessed. It is measured by running your t
 
 Accuracy is the mean pass rate across all 8 runs, not a best-model or worst-model figure.
 
-Difficulty is measured in **two stages**, and they use different run counts:
+Difficulty is measured **once**, in a single 8-run stage, and the result is final:
 
-| Stage | Runs | What it decides |
-|---|---|---|
-| **In-platform iteration** — while you build | 2 per model × 2 models = **4** | Whether the task can go to review |
-| **Final difficulty** — after a reviewer accepts | 4 per model × 2 models = **8** | The tier recorded for your task |
+| | |
+|---|---|
+| **When** | After your task passes the [quality panel](/portal/docs/testing-and-validation/quality-panel-judge-guide), before it reaches a reviewer |
+| **Runs** | 4 per model × 2 models = **8** |
+| **What it decides** | The tier recorded for your task, and whether it can proceed to review |
 
-**The iteration gate: at least one of the 4 runs must fail.** If every run passes, the task is trivial — it produces no signal about agent capability — and it cannot proceed to review. Fix that by making the task harder, not by narrowing a threshold.
+**At least one of the 8 runs must fail.** A task every run solves produces no signal about agent capability, and it cannot proceed to review. Fix that by making the task harder, not by narrowing a threshold. This is the 100%-accuracy rule below, stated as a gate.
 
-The full 8-run measurement only happens **after reviewer acceptance**, so the tier you see while iterating is an early read, not your final one.
+There is no separate iteration measurement, and nothing runs after acceptance — the tier a reviewer sees is the one your task keeps.
 
 ## Difficulty Tiers
 
@@ -78,9 +79,9 @@ stb harbor run -m @openai/gpt-5.6 -p <task-folder> -k 4
 stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 ```
 
-`-k 4` mirrors the final measurement, so it gives you the best local read on where your task will land. Fewer runs are fine for a rough signal while you iterate.
+`-k 4` mirrors the platform's measurement, so it gives you the best local read on where your task will land. Fewer runs are fine for a rough signal while you iterate.
 
-> **The tier you see while iterating is provisional.** In-platform iteration runs 4 trials, not 8, and your final tier comes from the full 8-run measurement after acceptance. A task can shift tiers between the two.
+> **Your local runs are an estimate, not the measurement.** Different seeds and different days move results. The platform's 8-run measurement sets the tier, and it is the only one — there is no shorter platform check that can differ from it.
 
 Then check *why* agents failed. Failures caused by unclear instructions, environment defects, or flaky tests are **bugs**, not difficulty — fix them and re-measure. Only failures that come from the actual challenge of the task should count toward your tier.
 

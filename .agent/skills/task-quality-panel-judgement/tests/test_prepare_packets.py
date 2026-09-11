@@ -32,7 +32,7 @@ def test_builds_axis_specific_packets(tmp_path: Path) -> None:
     root = root_manifest.parent
     manifest = json.loads(root_manifest.read_text())
 
-    assert manifest["snapshot_sha256"] == root.name
+    assert manifest["snapshot_sha256"] == root.parent.name
     coherent = root / "coherent_contract"
     reference = root / "correct_reference_solution"
     protected = root / "protected_ground_truth"
@@ -74,7 +74,7 @@ def test_snapshot_is_stable_and_changes_with_task(tmp_path: Path) -> None:
     (task / "instruction.md").write_text("Implement revised behavior.\n")
     third = PACKETS.build_packets(task, output)
     assert third != first
-    assert third.parent.name != first.parent.name
+    assert third.parent.parent.name != first.parent.parent.name
 
 
 def test_rejects_output_inside_task(tmp_path: Path) -> None:
@@ -91,3 +91,52 @@ def test_rejects_escaping_symlink(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="symlink escapes"):
         PACKETS.build_packets(task, tmp_path / "packets")
+
+
+def test_explicit_contract_closure_preserves_isolation_and_old_packets(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    doc = task / "environment" / "contract.md"
+    doc.write_text("Use the declared schema.\n")
+    output = tmp_path / "packets"
+    before = PACKETS.build_packets(task, output)
+    after = PACKETS.build_packets(task, output, ("environment/contract.md",))
+    assert before != after
+    assert before.exists()
+    for axis in ("correct_reference_solution", "sound_verifier"):
+        packet = after.parent / axis
+        assert (packet / "environment/contract.md").read_text() == doc.read_text()
+        assert not (packet / "environment/environment.txt").exists()
+        manifest = json.loads((packet / "packet-manifest.json").read_text())
+        assert "environment/contract.md" in manifest["files"]
+    assert not (after.parent / "correct_reference_solution/tests").exists()
+    assert not (after.parent / "sound_verifier/solution").exists()
+
+
+@pytest.mark.parametrize("relative", ["tests/tests.txt", "solution/solution.txt",
+                                       "environment/../solution/solution.txt", "/etc/passwd",
+                                       "environment/missing.md", "environment"])
+def test_rejects_unsafe_contract_selection(tmp_path: Path, relative: str) -> None:
+    task = make_task(tmp_path)
+    with pytest.raises(ValueError, match="contract file"):
+        PACKETS.build_packets(task, tmp_path / "packets", (relative,))
+
+
+def test_contract_symlink_cannot_import_solution(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    (task / "environment/contract.md").symlink_to("../solution/solution.txt")
+    with pytest.raises(ValueError, match="contract file"):
+        PACKETS.build_packets(task, tmp_path / "packets", ("environment/contract.md",))
+
+
+def test_doc_change_gets_new_recipe(tmp_path: Path, monkeypatch) -> None:
+    task = make_task(tmp_path)
+    docs = tmp_path / "mirror/docs/testing-and-validation"
+    docs.mkdir(parents=True)
+    for name in PACKETS.PANEL_DOCS:
+        (docs / name).write_text("guide v1\n")
+    monkeypatch.setattr(PACKETS, "repo_root", lambda: tmp_path / "mirror")
+    before = PACKETS.build_packets(task, tmp_path / "packets")
+    (docs / PACKETS.PANEL_DOCS[0]).write_text("guide v2\n")
+    after = PACKETS.build_packets(task, tmp_path / "packets")
+    assert before != after
+    assert before.exists()
