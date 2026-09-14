@@ -283,8 +283,8 @@ unfair-hard, never real difficulty.
    per-case against the corpus — any case no probe run passes needs the V3
    revision classification before disclosure or removal.
 7. **Freeze semantic coverage, then probe difficulty and fairness:**
-   - Map every public surface, at least three mechanisms, and at least two
-     interactions. Kill a dedicated plausible partial-fix mutant for each node
+   - Map every public surface and the natural causal mechanisms/interactions.
+     Never add a node to meet a count. Kill a dedicated plausible partial-fix mutant for each retained node
      and pass `semantic_coverage_check.py --advanced-plus`.
    - Prepare fresh counted solve copies only after the complete task/verifier
      snapshot is frozen. Run exactly two BLIND solvers; do not add a third.

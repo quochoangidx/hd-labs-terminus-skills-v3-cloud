@@ -253,6 +253,23 @@ class DesignPatternMixTests(unittest.TestCase):
         errors, _ = mix.validate(manifest, {"P1": "pattern"}, allow_partial=True)
         self.assertEqual([], errors)
 
+    def test_schema_v3_accepts_compact_causal_core(self) -> None:
+        candidate = self._schema_v3_candidate()
+        stability = candidate["frontier_stability"]
+        stability["planned_mechanism_ids"] = ["authority", "invalidation"]
+        stability["planned_interaction_ids"] = ["authority-invalidation"]
+        stability["orthogonal_traps"] = [stability["orthogonal_traps"][0]]
+        stability.pop("shared_fix_rationale")
+        manifest = {
+            "schema_version": 3,
+            "expected_count": 1,
+            "portfolio_history": [],
+            "accepted_task_slugs": [],
+            "candidates": [candidate],
+        }
+        errors, _ = mix.validate(manifest, {"P1": "pattern"}, allow_partial=True)
+        self.assertEqual([], errors)
+
     def test_schema_v3_accepts_partial_topology_interaction_overlap(self) -> None:
         candidate = self._schema_v3_candidate()
         candidate["frontier_stability"]["retrieval_audit"].update(

@@ -41,21 +41,20 @@ and verifier before a counted probe.
 
 A candidate holds only when ALL of:
 
-1. **≥3 coupled causes.** The broken/target state has at least three
-   interacting misconfigurations or constraints, where fixing any subset <3
-   leaves the end-to-end behavior still failing — and the coupling is
-   CAUSAL (fix A unmasks B; B's symptom points away from C), not three
-   independent bugs side by side. Independent bugs = a checklist = EASY.
+1. **A compact causal chain.** The broken/target state has interacting
+   misconfigurations or constraints where a plausible partial repair still
+   leaves the end-to-end behavior failing. The coupling must be causal (fix A
+   unmasks B), not independent bugs collected to increase breadth.
 2. **Symptom ≠ site.** The observable failure surfaces in a different
-   component than at least two of the causes (app 502s, but the causes are a
-   permissions bit + a wrong socket path + a misordered dependency).
+   component from the causal repair surface (for example an app 502 caused by
+   a permissions or dependency-state interaction).
 3. **No runbook in-image.** Comments, logs, and docs must not narrate the
    causal chain (leak-audit like any task); logs may show honest symptoms.
-4. **Mutation-backed counted-probe evidence**: dedicated subset-fix mutants
-   prove every cause and interaction is discriminating. Then fresh counted
-   solvers run against the frozen verifier. A provisional `1/3` requires two
-   distinct multi-node failure sets; both failing on one cause is a
-   single-lever fingerprint.
+4. **Mutation-backed counted-probe evidence**: in `campaign_ready`, dedicated
+   subset-fix mutants prove every retained cause and interaction is
+   discriminating. Then fresh counted solvers run against the frozen verifier.
+   Repeated misses on one cause are a diagnostic fingerprint, not a reason to
+   add unrelated causes. `panel_ready` stops before this difficulty evidence.
 
 ## Archetype 1 — multi-service restoration
 
@@ -63,10 +62,11 @@ A candidate holds only when ALL of:
   haproxy) fronting an app process managed by a supervisor (runit/supervisord
   — not systemd; containers), a database (sqlite/postgres), cron-style timed
   jobs, log rotation. Everything pinned and offline.
-- **Broken state**: ≥3 coupled misconfigs across DIFFERENT layers (unit/file
-  perms + socket path mismatch + proxy header/timeout + db migration
-  half-applied). Verify the coupling: scripted single-fix and pair-fix
-  emulations must still fail the verifier; only the full set passes.
+- **Broken state**: a compact chain of coupled misconfigurations across the
+  layers naturally required by the incident (for example unit/file perms,
+  socket routing, proxy behavior, or migration state). Do not add a layer to
+  reach a count. Verify the claimed coupling: a natural partial repair must
+  still fail the end-to-end outcome while the complete causal repair passes.
 - **Instruction framing:** state the operational outcome and its evidence.
   Choose `Software / Systems` when the system itself is the domain; choose an
   `Operations` subcategory only when correctness depends on business or
@@ -145,7 +145,8 @@ A candidate holds only when ALL of:
 
 The exploratory skeleton = the broken environment + instruction + a rough
 end-to-end check script (curl the endpoint, query the db — a subset of the
-final verifier is fine). No oracle needed yet. Score = did the solver reach
-the operational outcome. Everything else in the gate pipeline (N≥3, isolated
-dirs, terse prompt, semantic-failure classification) applies unchanged. Mark it
-`--exploratory`; it may inform build investment but never a tier or quota.
+final verifier is fine). No oracle is needed yet. Score only whether the solver
+reaches the operational outcome. Use isolated directories, a terse prompt, and
+semantic-failure classification; the active execution profile determines the
+solver count. Mark it `--exploratory`; it may inform build investment but never
+a tier or quota.

@@ -40,16 +40,18 @@ Record every infrastructure repair. Retry without an internal attempt cap;
 reject only when the source or environment is fundamentally unusable or the
 workflow cannot make evidence-based progress.
 
-Use this cost-first stage order inside the builder session:
+Use this cost-first stage order inside the builder session for
+`campaign_ready`. `panel_ready` follows `execution-profiles.md` instead:
 
 1. Mine and source-smoke.
 2. Build the complete task-visible contract, verifier, and Oracle.
 3. Stabilize each mutant with targeted witnesses.
 4. Run complete strict Oracle/NOP/noexec and mechanical quality gates.
-5. Run reviewer pass 1 and resolve/recheck findings until green.
-6. Reuse the reviewer for pass 2 and resolve/recheck findings until green.
-7. Run the mandatory auditor; resolve/recheck findings until green or
-   fundamentally blocked.
+5. Run reviewer pass 1 and resolve/recheck findings while the bounded scope
+   remains coherent; otherwise stop for rescope.
+6. Reuse the reviewer for pass 2 under the same stop condition.
+7. Run the mandatory auditor; resolve/recheck findings or stop when repair
+   would inflate scope or require fundamental redesign.
 8. Run counted blind probes; run Harbor only for shortlisted candidates.
 
 Do not launch reviewers or solvers against incomplete Oracle/NOP or quality

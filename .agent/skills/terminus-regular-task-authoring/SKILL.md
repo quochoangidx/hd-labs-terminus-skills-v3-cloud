@@ -66,14 +66,19 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
    `tests/test_outputs.py`; create every artifact landing directory there.
 7. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
 8. Collect the platform-visible unit IDs and pass the verifier architecture
-   gate before writing the Oracle. Use 50–1000 units/at least six clusters for
-   cheap deterministic tasks, or 20–80 scenarios/at least four clusters for
-   expensive stateful tasks; require two cross-cluster units and two verifier
-   shapes. A failed gate returns to design.
+   integrity gate before writing the Oracle. Use
+   [bounded task design](references/bounded-task-design.md) from design through
+   repair: cover retained obligations, not numerical test/cluster/shape quotas.
+   A failed integrity gate returns to design; passing is not semantic proof.
 9. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
-10. Run Oracle/NOP, bind the Oracle CTRF to the verifier matrix, then run V3
-    inferability, mutation-backed semantic coverage, CI checks, and real-agent
-    trials before packaging.
+10. Run Oracle/NOP and bind the Oracle CTRF to the verifier matrix. Then follow
+    the selected execution profile: `campaign_ready` adds V3 inferability,
+    mutation-backed semantic coverage and real-agent trials; explicit
+    `panel_ready` follows `task-batch/references/execution-profiles.md` and does
+    not fabricate or waive those campaign receipts. For `panel_ready`, pass the
+    quality-panel precheck in `--design-only` mode before scaffolding and in
+    snapshot-bound `--full` mode after strict Docker closure but before spawning
+    panel reviewers.
 
 > ⚠️ All seven Terminus 3 categories are open. Choose exactly one Title Case
 > category/subcategory pair by the domain knowledge the task requires, not merely
@@ -590,12 +595,10 @@ Measure the Oracle's built solid rather than trusting source constants, and
 prove free pose/construction choices do not fail. When parametric behavior is
 required, set a fresh driving value, recompute, assert no errors, and measure
 the changed solid; reading a stored parameter back is insufficient.
-- Expose enough individually reportable semantic resolution for the chosen
-  verifier profile: 50–1000 meaningful units across at least six clusters for
-  cheap deterministic tasks, or 20–80 scenarios across at least four clusters
-  for expensive stateful tasks. Include at least two units that combine
-  clusters and at least two verifier shapes. Do not count repeated fixtures as
-  new mechanisms.
+- Expose individually reportable witnesses for retained obligations and real
+  interactions. Choose verifier shapes for discrimination, not a numerical
+  quota. Repeated fixtures are not new mechanisms. Preserve inferability and
+  mutation-backed semantic coverage when the selected profile requires them.
 - Cover every explicit and important implicit prompt requirement.
 - Include boundary cases and at least one regression guard.
 - Assert no internal crash/traceback when the task is about recoverable behavior.

@@ -191,6 +191,21 @@ def test_valid_advanced_manifest_passes(tmp_path: Path) -> None:
     assert MODULE.validate(task, manifest, verifier, True) == []
 
 
+def test_advanced_manifest_accepts_compact_causal_core(tmp_path: Path) -> None:
+    task, manifest_path, verifier, manifest = fixture(tmp_path)
+    second = manifest["mechanisms"][1]
+    removed_mechanism = manifest["mechanisms"].pop()
+    second["test_ids"].extend(removed_mechanism["test_ids"])
+    kept_interaction = manifest["interactions"][0]
+    removed_interaction = manifest["interactions"].pop()
+    kept_interaction["test_ids"].extend(removed_interaction["test_ids"])
+    manifest["mutants"] = [
+        row for row in manifest["mutants"] if row["id"] not in {"u_m3", "u_i2"}
+    ]
+    write_json(manifest_path, manifest)
+    assert MODULE.validate(task, manifest_path, verifier, True) == []
+
+
 def test_replicated_mechanism_rows_are_rejected(tmp_path: Path) -> None:
     task, manifest_path, verifier, manifest = fixture(tmp_path)
     manifest["mechanisms"][1]["test_ids"] = ["t_m1"]

@@ -45,6 +45,27 @@ Its editing steps apply only when repairs were requested.
 
 The portal-mirrored docs are authoritative when they conflict with this skill.
 
+## Run deterministic precheck before reviewers
+
+Before preparing packets, read
+[`references/panel-precheck.md`](references/panel-precheck.md). Require the
+builder to create the snapshot-bound obligation manifest and run
+`scripts/panel_precheck.py --full`. During candidate selection, use its
+`--design-only` mode to reject disconnected/composite causal cores before
+scaffolding.
+
+The full precheck must pass before any reviewer is spawned. It binds retained
+contract obligations to authority, implementation sites, verifier witnesses,
+strict Oracle/NOP/noexec evidence, minimal natural wrong paths, and a harness
+bypass check. Fix deterministic blockers without spending panel sessions. Do
+not expose the manifest or precheck result to fresh reviewers; they must judge
+the task surfaces independently.
+
+`mechanically_ready` is not an axis verdict. The script cannot prove semantic
+coherence, reference correctness, completeness against an omitted branch, or
+acceptance of every alternate valid implementation. Never convert its output
+to `None` or skip the semantic panel because the precheck passes.
+
 ## Freeze isolated review packets
 
 In orchestrator mode, read
@@ -237,6 +258,11 @@ panel with eight new reviewers (two per axis) on the new snapshot. This is 16
 reviewer responses across discovery and clearance, not 16 on one snapshot.
 If clearance is still blocking, stop and report the
 remaining defect; do not automatically enter a third repair-review cycle.
+Set the disposition to `rescope_required` when continuing would preserve the
+same obligation set. Another authorized attempt must first revise the bounded
+scope ledger by moving non-core obligations to supplied support or explicit
+non-goals; it is not another clearance round. Do not label iterative panel
+rounds as final or increment a task revision for validation/repackaging alone.
 Classify remaining clearance findings as a discovery miss, repair-introduced
 regression, or unresolved evidence, using before/after receipts where available;
 use unknown when the evidence cannot distinguish them. Do not infer that a newly

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail fast on thin Terminus verifier plans and finalized matrices."""
+"""Validate verifier inventory integrity; counts are not semantic coverage proof."""
 
 from __future__ import annotations
 
@@ -10,10 +10,7 @@ import sys
 from pathlib import Path
 
 
-PROFILES = {
-    "cheap_deterministic": {"min_units": 50, "max_units": 1000, "min_clusters": 6},
-    "expensive_stateful": {"min_units": 20, "max_units": 80, "min_clusters": 4},
-}
+PROFILES = {"cheap_deterministic": {}, "expensive_stateful": {}}
 
 
 def nonempty(value: object) -> bool:
@@ -67,11 +64,8 @@ def validate_unit_budget(
     if not isinstance(count, int) or isinstance(count, bool):
         errors.append(f"{label}.platform_visible_unit_count must be an integer")
         return limits
-    if limits and not limits["min_units"] <= count <= limits["max_units"]:
-        errors.append(
-            f"{label}: {profile} requires {limits['min_units']}-{limits['max_units']} "
-            f"platform-visible units, got {count}"
-        )
+    if count < 1:
+        errors.append(f"{label}.platform_visible_unit_count must be positive")
     return limits
 
 
@@ -91,7 +85,7 @@ def validate_plan(data: dict) -> list[str]:
         errors.append("verifier_architecture.status must be pass")
     profile = plan.get("profile")
     planned_count = plan.get("planned_platform_visible_unit_count")
-    limits = validate_unit_budget(profile, planned_count, "verifier_architecture", errors)
+    validate_unit_budget(profile, planned_count, "verifier_architecture", errors)
 
     clusters = plan.get("semantic_clusters")
     cluster_ids: set[str] = set()
@@ -116,11 +110,8 @@ def validate_plan(data: dict) -> list[str]:
             errors.append(f"{label}.planned_unit_count must be a positive integer")
         else:
             planned_memberships += planned_units
-    if limits and len(cluster_ids) < limits["min_clusters"]:
-        errors.append(
-            "verifier_architecture: "
-            f"{profile} requires at least {limits['min_clusters']} semantic clusters"
-        )
+    if not cluster_ids:
+        errors.append("verifier_architecture: at least one semantic cluster is required")
     if isinstance(planned_count, int) and planned_memberships < planned_count:
         errors.append(
             "verifier_architecture: semantic cluster memberships cannot cover the planned unit count"
@@ -166,8 +157,8 @@ def validate_plan(data: dict) -> list[str]:
                 )
 
     cross_rows = plan.get("cross_cluster_scenarios")
-    if not isinstance(cross_rows, list) or len(cross_rows) < 2:
-        errors.append("verifier_architecture.cross_cluster_scenarios requires at least two rows")
+    if not isinstance(cross_rows, list):
+        errors.append("verifier_architecture.cross_cluster_scenarios must be a list")
         cross_rows = []
     cross_ids: set[str] = set()
     for index, row in enumerate(cross_rows):
@@ -186,10 +177,7 @@ def validate_plan(data: dict) -> list[str]:
         if not nonempty(row.get("discriminating_scenario")):
             errors.append(f"{label}.discriminating_scenario is required")
 
-    shapes = string_list(plan.get("verifier_shapes"), "verifier_architecture.verifier_shapes", errors)
-    authority_substitute = plan.get("authority_corpus_substitute") is True
-    if len(set(shapes)) < 2 and not (authority_substitute and len(cluster_ids) >= 6):
-        errors.append("verifier_architecture requires at least two verifier shapes")
+    string_list(plan.get("verifier_shapes"), "verifier_architecture.verifier_shapes", errors)
     if not nonempty(plan.get("platform_visibility_strategy")):
         errors.append("verifier_architecture.platform_visibility_strategy is required")
     if not nonempty(plan.get("nop_discrimination_strategy")):
@@ -237,9 +225,9 @@ def validate_matrix(
     profile = data.get("profile")
     unit_ids = string_list(data.get("unit_ids"), "verifier-matrix.json: unit_ids", errors)
     declared_count = data.get("platform_visible_unit_count")
-    if declared_count != len(unit_ids):
+    if not isinstance(declared_count, int) or isinstance(declared_count, bool) or declared_count != len(unit_ids):
         errors.append("verifier-matrix.json: platform_visible_unit_count mismatch")
-    limits = validate_unit_budget(profile, len(unit_ids), "verifier-matrix.json", errors)
+    validate_unit_budget(profile, len(unit_ids), "verifier-matrix.json", errors)
 
     unit_clusters = data.get("unit_clusters")
     if not isinstance(unit_clusters, dict) or set(unit_clusters) != set(unit_ids):
@@ -255,23 +243,12 @@ def validate_matrix(
         for cluster in clusters
         if nonempty(cluster)
     }
-    if limits and len(cluster_names) < limits["min_clusters"]:
-        errors.append(
-            f"verifier-matrix.json: {profile} requires at least {limits['min_clusters']} semantic clusters"
-        )
-    if unit_ids and unit_clusters and cluster_names:
-        dominant_ratio = max(
-            sum(cluster in clusters for clusters in unit_clusters.values()) / len(unit_ids)
-            for cluster in cluster_names
-        )
-        if dominant_ratio > 0.35 and not nonempty(data.get("dominant_cluster_justification")):
-            errors.append("verifier-matrix.json: a cluster covers >35% of units without justification")
 
     cross_cluster = string_list(
         data.get("cross_cluster_unit_ids"),
         "verifier-matrix.json: cross_cluster_unit_ids",
         errors,
-        minimum=2,
+        minimum=0,
     )
     if not set(cross_cluster) <= set(unit_ids):
         errors.append("verifier-matrix.json: cross_cluster_unit_ids contains unknown units")
@@ -281,10 +258,7 @@ def validate_matrix(
                 f"verifier-matrix.json: cross-cluster unit {unit_id!r} has fewer than two clusters"
             )
 
-    shapes = string_list(data.get("verifier_shapes"), "verifier-matrix.json: verifier_shapes", errors)
-    authority_substitute = data.get("authority_corpus_substitute") is True
-    if len(set(shapes)) < 2 and not (authority_substitute and len(cluster_names) >= 6):
-        errors.append("verifier-matrix.json: at least two verifier shapes are required")
+    string_list(data.get("verifier_shapes"), "verifier-matrix.json: verifier_shapes", errors)
 
     non_behavior = string_list(
         data.get("non_behavior_test_ids", []),
@@ -336,6 +310,11 @@ def validate_matrix(
         "unit_clusters": unit_clusters,
         "cluster_names": cluster_names,
         "profile": profile,
+        "diagnostics": {
+            "unit_count": len(unit_ids),
+            "cluster_count": len(cluster_names),
+            "cross_cluster_unit_count": len(cross_cluster),
+        },
     }
 
 
@@ -355,19 +334,23 @@ def main() -> int:
     data = load_object(path.resolve(), load_errors)
     if args.mode == "plan":
         errors = load_errors + validate_plan(data)
+        plan = data.get("candidate", data).get("verifier_architecture", {}) if not errors else {}
+        diagnostics = {"planned_unit_count": plan.get("planned_platform_visible_unit_count")}
     else:
-        matrix_errors, _ = validate_matrix(
+        matrix_errors, derived = validate_matrix(
             data,
             path.resolve().parent,
             expected_slug=args.task_slug,
             require_ctrf=not args.allow_missing_ctrf,
         )
         errors = load_errors + matrix_errors
+        diagnostics = derived["diagnostics"]
     if errors:
         for error in errors:
             print("FAIL:", error)
         return 1
-    print(f"PASS: {path.name} verifier architecture meets the declared profile")
+    print(f"PASS: {path.name} verifier inventory integrity; semantic coverage requires its separate gate")
+    print("DIAGNOSTIC (not a quota):", json.dumps(diagnostics, sort_keys=True))
     return 0
 
 

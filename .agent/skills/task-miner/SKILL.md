@@ -517,8 +517,8 @@ Reject false-hard candidates:
 - single validation branch fixes
 - `<= 10` meaningful LOC in one obvious file unless prior agent trials show low pass rate
 - one-condition fixes such as "if stop flag then do X" when all verifier cases exercise the same branch
-- candidates with fewer than 4 meaningful components unless prior frontier-agent
-  trials show repeated failures for semantic reasons
+- candidates padded with components, modes or validation domains that do not
+  deepen the primary causal challenge
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
 ### Terminus 3 evidence-and-interaction screen — RUN ON EVERY CANDIDATE
@@ -539,18 +539,23 @@ priors:
    structure and behavior can be verified, not a cosmetic representation.
 5. **Held-out continuity:** hidden instances/combinations exercise the same
    inferable model and do not introduce an oracle-only policy.
-6. **Mechanism rank:** identify at least three implementation/domain mechanisms
-   and two genuine pairwise interactions for an Advanced+ target. Repeating one
-   branch across inputs, units, scales, files, or wrappers adds fixtures but no
-   rank. Name a plausible dedicated partial-fix mutant for every node before
-   investing in the full build.
-7. **Verifier architecture budget:** choose `cheap_deterministic` or
-   `expensive_stateful` before cloning. Plan 50–1000 individually visible units
-   across at least six semantic clusters for the cheap profile, or 20–80
-   scenarios across at least four clusters for the stateful profile. Plan at
-   least two cross-cluster scenarios, two verifier shapes, and a discriminating
-   path for every promised public surface. Reject a candidate that reaches the
-   minimum only by duplicating one rule.
+6. **Causal density:** identify the natural mechanisms participating in at
+   least one result-changing interaction and one plausible natural-but-wrong
+   path. Repeating one branch across inputs, units, scales, files, wrappers or
+   independent components adds no depth. Mechanism/interaction counts are
+   diagnostics, never permission to expand scope. If the causal core is thin,
+   reject or redesign it before the full build.
+   Every proposed core obligation must lead to the same primary outcome and
+   participate in a pre-output domain interaction. Reject a bundle when
+   removing one obligation leaves a standalone task or when claimed subsystems
+   meet only in an aggregate report. For `panel_ready`, encode this in the
+   panel-precheck manifest and pass `--design-only` before scaffolding.
+7. **Bounded verifier architecture:** apply
+   [bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md).
+   Choose `cheap_deterministic` or `expensive_stateful` for runtime planning,
+   with discriminating witnesses for every promised public surface and genuine
+   interaction. Unit/cluster/shape counts are diagnostics, not quotas. Do not
+   add unrelated mechanisms to rescue a candidate lacking natural depth.
 8. **Rule-isolation feasibility:** every domain rule that will be explicitly
    named in the contract can receive a fixture whose expected result changes
    when that rule alone is inverted. A mixed held-out corpus cannot be the only
@@ -899,8 +904,8 @@ candidate:
       dominant_topology_id: # applied P* for established; own X-* for derived
       secondary_topology_id: # optional orthogonal P* parent/applied pattern
       amplifier_or_envelope_id: # optional; P4 or P6 only
-      planned_mechanism_ids: # >=3; exact IDs from semantic_mechanisms
-      planned_interaction_ids: # >=2; exact IDs from semantic_interactions
+      planned_mechanism_ids: # natural core IDs; counts are diagnostic
+      planned_interaction_ids: # result-changing core interactions
       retrieval_audit:
         search_queries:   # issue text, errors/symbols, release/version diff
         public_artifacts_checked:
@@ -911,14 +916,14 @@ candidate:
         satisfied_interaction_ids: # honest overlap; partial interactions do not automatically reject
         non_collapse_rationale: # required for substrate_primitives or partial_topology
         disposition:      # pass | reject
-      orthogonal_traps:   # at least 2 with pairwise-disjoint witness_ids
+      orthogonal_traps:   # at least one natural-but-wrong path; more only when native
         - id:
           semantic_node:
           repair_surface:
           natural_implementation:
           why_wrong:
           witness_ids:
-      shared_fix_rationale: # why no central helper/mapping repairs every trap
+      shared_fix_rationale: # required only when multiple traps claim independence
   source_url:
   issue_or_pr_id:
   repo:
@@ -949,11 +954,11 @@ candidate:
   difficulty_rationale:
   reasoning_bottlenecks:
   tempting_partial_fixes:
-  semantic_mechanisms:    # >=3 for an Advanced+ target; no replicated fixtures
+  semantic_mechanisms:    # natural causal core only; no replicated fixtures
     - id:
       description:
       dedicated_mutant:
-  semantic_interactions:  # >=2 for an Advanced+ target
+  semantic_interactions:  # at least one result-changing interaction
     - id:
       mechanism_ids:
       dedicated_mutant:
@@ -962,18 +967,18 @@ candidate:
     schema_version: 1
     status: pass
     profile:              # cheap_deterministic | expensive_stateful
-    planned_platform_visible_unit_count: # 50-1000 cheap | 20-80 stateful
-    semantic_clusters:    # >=6 cheap | >=4 stateful; no fixture aliases
+    planned_platform_visible_unit_count: # positive estimate derived from retained obligations, no quota
+    semantic_clusters:    # obligation-derived; no fixture aliases or quota
       - id:
         description:
         planned_unit_count:
     public_surface_ids:
     public_surface_cluster_ids: # exact mapping for every public surface
-    cross_cluster_scenarios:    # >=2, each joins >=2 clusters
+    cross_cluster_scenarios:    # only genuine interactions, possibly one
       - id:
         cluster_ids:
         discriminating_scenario:
-    verifier_shapes:      # >=2 unless an authority corpus supplies >=6 clusters
+    verifier_shapes:      # one or more shapes chosen for discrimination
     authority_corpus_substitute: false
     platform_visibility_strategy:
     nop_discrimination_strategy:
@@ -1125,8 +1130,8 @@ Downgrade or reject candidates when:
 - a strong agent can locate the fix by grepping one or two obvious symbols from the prompt
 - the four-run iteration sample is 4/4 solved; redesign because it provides no
   signal. Results above 80% but below 100% are valid Base-tier evidence.
-- fewer than 4 meaningful components/surfaces/layers are required to understand
-  and solve the task
+- difficulty comes mainly from unrelated components, exhaustive validation, or
+  interface breadth rather than the causal core
 
 **Pre-mine fix-shape probe (apply before targeting Frontier/Advanced):**
 read the actual fixing diff and ask, "if I describe only the observable symptom

@@ -173,12 +173,14 @@ def validate(task_dir: Path, manifest_path: Path, verifier_path: Path, advanced:
     known_tests = architecture.get("unit_ids", set())
 
     mechanisms = manifest.get("mechanisms")
-    minimum_mechanisms = 3 if advanced else 2
+    # An interaction fundamentally needs two mechanisms. Higher arbitrary
+    # counts are not evidence of difficulty and encourage scope padding.
+    minimum_mechanisms = 2
     if not isinstance(mechanisms, list) or len(mechanisms) < minimum_mechanisms:
         errors.append(f"semantic-coverage.json: requires at least {minimum_mechanisms} mechanisms")
         mechanisms = []
     interactions = manifest.get("interactions")
-    minimum_interactions = 2 if advanced else 1
+    minimum_interactions = 1
     if not isinstance(interactions, list) or len(interactions) < minimum_interactions:
         errors.append(f"semantic-coverage.json: requires at least {minimum_interactions} interactions")
         interactions = []

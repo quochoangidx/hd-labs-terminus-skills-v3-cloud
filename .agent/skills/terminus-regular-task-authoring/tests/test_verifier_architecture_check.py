@@ -90,9 +90,8 @@ def test_mining_plan_accepts_complete_stateful_budget() -> None:
     assert MODULE.validate_plan(plan()) == []
 
 
-def test_mining_plan_rejects_nine_units() -> None:
-    errors = MODULE.validate_plan(plan(unit_count=9))
-    assert any("requires 20-80" in error and "got 9" in error for error in errors)
+def test_mining_plan_accepts_nine_units_without_padding() -> None:
+    assert MODULE.validate_plan(plan(unit_count=9)) == []
 
 
 def test_final_matrix_accepts_twenty_visible_units(tmp_path: Path) -> None:
@@ -107,7 +106,7 @@ def test_final_matrix_accepts_twenty_visible_units(tmp_path: Path) -> None:
     assert len(derived["unit_ids"]) == 20
 
 
-def test_final_matrix_rejects_fourteen_visible_units(tmp_path: Path) -> None:
+def test_final_matrix_accepts_fourteen_visible_units(tmp_path: Path) -> None:
     data, _ = matrix(tmp_path, unit_count=14)
     errors, _ = MODULE.validate_matrix(
         data,
@@ -115,7 +114,47 @@ def test_final_matrix_rejects_fourteen_visible_units(tmp_path: Path) -> None:
         expected_slug="tbrain-example",
         require_ctrf=True,
     )
-    assert any("requires 20-80" in error and "got 14" in error for error in errors)
+    assert errors == []
+
+
+def test_compact_single_cluster_and_shape_are_not_blockers(tmp_path: Path) -> None:
+    data, _ = matrix(tmp_path, unit_count=1)
+    data["cross_cluster_unit_ids"] = []
+    data["verifier_shapes"] = ["scenario"]
+    errors, derived = MODULE.validate_matrix(data, tmp_path)
+    assert errors == []
+    assert derived["diagnostics"] == {
+        "unit_count": 1, "cluster_count": 1, "cross_cluster_unit_count": 0,
+    }
+
+
+def test_compact_plan_preserves_surface_mapping() -> None:
+    data = plan(1)
+    arch = data["candidate"]["verifier_architecture"]
+    arch["semantic_clusters"] = [{"id": "C1", "description": "Outcome", "planned_unit_count": 1}]
+    arch["public_surface_cluster_ids"] = {"cli": ["C1"], "report": ["C1"]}
+    arch["cross_cluster_scenarios"] = []
+    arch["verifier_shapes"] = ["scenario"]
+    assert MODULE.validate_plan(data) == []
+    arch["public_surface_cluster_ids"].pop("report")
+    assert MODULE.validate_plan(data)
+
+
+def test_invalid_inventory_still_blocks(tmp_path: Path) -> None:
+    data, _ = matrix(tmp_path, unit_count=1)
+    data["unit_ids"].append(data["unit_ids"][0])
+    errors, _ = MODULE.validate_matrix(data, tmp_path)
+    assert any("duplicates" in error for error in errors)
+
+
+def test_cross_cluster_claim_requires_actual_memberships(tmp_path: Path) -> None:
+    data, _ = matrix(tmp_path, unit_count=1)
+    errors, _ = MODULE.validate_matrix(data, tmp_path)
+    assert any("fewer than two clusters" in error for error in errors)
+
+
+def test_zero_unit_plan_is_invalid() -> None:
+    assert MODULE.validate_plan(plan(0))
 
 
 def test_ctrf_ids_must_match_declared_platform_units(tmp_path: Path) -> None:

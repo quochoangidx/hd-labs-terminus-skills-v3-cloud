@@ -52,6 +52,11 @@ group.
 
 ## Choose the repair boundary
 
+Apply [bounded task design](../../terminus-regular-task-authoring/references/bounded-task-design.md)
+to the existing scope ledger: no new promises by default, and every necessary
+addition must identify the retained obligation it closes. Report before/after
+obligations and witness coverage, not merely test counts or changed lines.
+
 For size-driven simplification, apply
 [panel input hygiene](../../terminus-regular-task-authoring/references/panel-input-hygiene.md).
 The 800-line warning alone never creates a repair group; retain necessary
@@ -98,6 +103,10 @@ batch. If it is not, report the decision needed instead of expanding scope.
 There is no universal N-attempt or line-count cutoff; obey explicit user budgets
 and the existing discovery/batch/single-clearance limit. A blocking clearance
 does not authorize another repair cycle; recommend the next disposition and stop.
+Use `rescope_required` when the same public obligation set would otherwise enter
+another panel round. A rescope must change the core, support or non-goal
+boundary; another witness batch under the same contract is continued
+remediation, not rescoping.
 
 For an authorized feature removal, preserve a recoverable snapshot outside the
 upload, enumerate dependencies, and update instruction, schemas, environment,

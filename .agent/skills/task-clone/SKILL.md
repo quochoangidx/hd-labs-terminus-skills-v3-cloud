@@ -273,6 +273,15 @@ force Python into a special tier.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
+   First apply
+   [bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md):
+   classify every planned obligation as core, supplied support, or non-goal.
+   Do not expose generic parser/schema/serialization hardening as solver work
+   unless it is the task's primary domain outcome.
+   For a `panel_ready` build, materialize this ledger as the quality-panel
+   precheck manifest and pass `panel_precheck.py --design-only` before expanding
+   the scaffold. Do not proceed when core obligations are disconnected,
+   separable standalone deliverables, or joined only by output serialization.
 8. Write Terminus 3 `task.toml` with top-level `artifacts`, one exact category/subcategory pair, descriptive fields under `[metadata]`, `environment_mode = "separate"`, explicit per-phase `network_mode`, and realistic resources/timeouts.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
 10. Write `tests/Dockerfile`, behavioral `tests/test_outputs.py`, and offline
@@ -280,10 +289,10 @@ force Python into a special tier.
     the verifier image.
 11. Collect the actual platform-visible test IDs, create
     `workspace/reports/<slug>/verifier-matrix.json`, and run the verifier
-    architecture gate with `--allow-missing-ctrf`. Stop here if the task has
-    fewer than 50 units/6 clusters under `cheap_deterministic`, or fewer than 20
-    scenarios/4 clusters under `expensive_stateful`. Do not write the Oracle,
-    build Docker images, or run probes for a thin verifier.
+    architecture integrity gate with `--allow-missing-ctrf`. Counts are
+    diagnostics. Stop when a promised surface lacks a discriminating witness or
+    the task reaches apparent depth only through unrelated breadth; do not write
+    the Oracle, build Docker images, or run probes until the scope is coherent.
 12. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized
     fix and rebuild if needed.
 13. Validate the exact Docker baseline: NOP fails for the intended reason only;
@@ -793,9 +802,10 @@ Before shipping, audit any case every fresh implementation misses: verify the
 oracle/authority, explicit interface, evidence support, and CTRF resolution.
 Disclose only a non-inferable interface fact; keep a legitimate evidence-based
 inference, add authentic evidence if support is weak, or remove an invalid
-oracle-only assertion. Corpus-curation rules: target 50–1000
-meaningful evaluation units when cheap, or 20–80 complex stateful/interaction
-scenarios; never pad one rule into hundreds of correlated rows. Mix verifier
+oracle-only assertion. Apply
+[bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md).
+Derive corpus size from retained obligations and discriminating witnesses,
+without numerical unit/cluster quotas. Never pad correlated rows. Mix verifier
 shapes when appropriate (scenario, property/metamorphic, mutation/anti-shortcut,
 final-state, tolerance/differential); every feature cluster keeps ≥1
 "soft" case a majority of runs pass; and the trimming direction is always
@@ -809,7 +819,8 @@ tree when the flag fires anyway:
 **Fail verifier breadth before Oracle work.** Immediately after the verifier
 skeleton is collectable, create `workspace/reports/<slug>/verifier-matrix.json`
 with schema version 1, the profile, every platform-visible unit ID, exact unit
-to cluster mapping, at least two cross-cluster IDs, and verifier shapes. Run:
+to cluster mapping, IDs of actual cross-cluster witnesses, and appropriate
+verifier shapes (no minimum count beyond a non-empty inventory). Run:
 
 ```bash
 python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
@@ -1080,10 +1091,10 @@ Before packaging or platform upload:
   inference family, complete two fresh task-visible fairness reviews, and run
   `sufficiency_manifest_check.py --require-v3`; any failure blocks the full
   solve probe and packaging
-- create `workspace/reports/<slug>/semantic-coverage.json` following
+- In `campaign_ready`, create `workspace/reports/<slug>/semantic-coverage.json` following
   `terminus-regular-task-authoring/references/semantic-coverage-gate.md`; map
-  every promised public surface, record at least three independent mechanisms
-  plus two interactions for Advanced+, and preserve a killed executable mutant
+  every promised public surface, record the natural causal mechanisms and
+  interactions without a count quota, and preserve a killed executable mutant
   per mechanism/interaction. Pass `semantic_coverage_check.py --advanced-plus`
   before preparing counted probes
 - before counted preparation, run strict Docker preflight to

@@ -23,8 +23,9 @@ Record:
 
 - every public entry point, artifact, or observable surface promised by the
   instruction;
-- at least three independent semantic mechanisms;
-- at least two interactions joining different mechanisms;
+- the natural semantic mechanisms needed by the causal core (at least two when
+  an interaction is claimed);
+- at least one genuine result-changing interaction;
 - the platform-visible verifier unit IDs that discriminate each surface,
   mechanism, and interaction;
 - one executable partial-fix mutant for every mechanism and interaction;
@@ -42,18 +43,19 @@ blind solver.
 `verifier-matrix.json` uses schema version 1 and declares:
 
 - `profile`: `cheap_deterministic` or `expensive_stateful`;
-- 50–1000 platform-visible units across at least six semantic clusters for the
-  cheap profile, or 20–80 scenarios across at least four clusters for the
-  stateful profile;
-- an exact unit-to-cluster map, at least two cross-cluster unit IDs, and at
-  least two verifier shapes (unless an authority corpus with six or more
-  clusters is the declared substitute);
+- a non-empty platform-visible behavior inventory derived from retained obligations;
+- an exact unit-to-cluster map, actual cross-cluster unit IDs (possibly empty),
+  and one or more appropriate verifier shapes;
 - non-behavior IDs separately from semantic units;
 - the raw Oracle CTRF path/hash, whose IDs exactly equal the declared behavior
   plus non-behavior IDs.
 
-These are minimum resolution requirements, not a target to pad toward. Multiple
-values exercising one branch increase fixture count but not semantic rank.
+Mechanism/interaction/unit/cluster/shape counts beyond that structural minimum
+are diagnostics, not difficulty gates; historical profile
+budgets and dominant-cluster ratios do not block acceptance. Passing inventory
+validation does not replace this semantic gate. Multiple values exercising one
+branch increase fixture count but not semantic rank. Apply
+[bounded task design](bounded-task-design.md) rather than adding unrelated scope.
 
 A mechanism is one implementation decision or domain invariant. Repeating one
 decision across values, units, files, scales, or API wrappers does not create

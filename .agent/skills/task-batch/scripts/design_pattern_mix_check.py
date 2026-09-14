@@ -156,14 +156,14 @@ def _validate_frontier_stability(
         "frontier_stability.planned_mechanism_ids",
         label,
         errors,
-        min_items=3,
+        min_items=2,
     )
     planned_interactions = _string_list(
         stability.get("planned_interaction_ids"),
         "frontier_stability.planned_interaction_ids",
         label,
         errors,
-        min_items=2,
+        min_items=1,
     )
     if len(planned_mechanisms) != len(set(planned_mechanisms)):
         errors.append(f"{label}: planned_mechanism_ids must be unique")
@@ -268,8 +268,8 @@ def _validate_frontier_stability(
             errors.append(f"{label}: retrieval_audit.disposition must be pass")
 
     traps = stability.get("orthogonal_traps")
-    if not isinstance(traps, list) or len(traps) < 2:
-        errors.append(f"{label}: frontier_stability requires at least 2 orthogonal_traps")
+    if not isinstance(traps, list) or not traps:
+        errors.append(f"{label}: frontier_stability requires a natural-but-wrong path")
     else:
         seen_ids: set[str] = set()
         seen_nodes: set[str] = set()
@@ -322,8 +322,12 @@ def _validate_frontier_stability(
                 )
             seen_witnesses.update(witnesses)
 
-    if not _nonempty(stability.get("shared_fix_rationale")):
-        errors.append(f"{label}: frontier_stability.shared_fix_rationale is required")
+    if isinstance(traps, list) and len(traps) > 1 and not _nonempty(
+        stability.get("shared_fix_rationale")
+    ):
+        errors.append(
+            f"{label}: shared_fix_rationale is required when multiple traps claim independence"
+        )
 
 
 def _validate_schema_v3_candidate(

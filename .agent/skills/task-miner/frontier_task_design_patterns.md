@@ -39,8 +39,8 @@ An established candidate must record:
 - `track: established`;
 - one or more pattern IDs from this catalog;
 - a candidate-specific causal graph;
-- at least three semantic mechanisms and two genuine interactions for an
-  Advanced+ target;
+- natural semantic mechanisms participating in at least one genuine
+  result-changing interaction, without padding the task to meet a count;
 - a dedicated plausible partial-fix mutant for every mechanism and interaction;
 - why the candidate is not a previously shipped instance of the same pattern.
 
@@ -153,8 +153,8 @@ When applying common labels, prove their exact fit:
   points; idempotent replay; an ordering interaction; preserved normal flow.
 - **Strong surfaces:** journals, migrations, checkpoint/resume, deployment
   rollout, queues, workflow engines, package transactions, and replicated state.
-- **Verifier:** deterministic fault injection and final-state validation across
-  20–80 stateful scenarios; no sleeps or flaky races.
+- **Verifier:** deterministic fault injection and final-state validation of
+  retained lifecycle obligations; no scenario quota, sleeps or flaky races.
 - **Reject when:** a canonical recipe such as a routine SQLite table rebuild
   neutralizes every trap by construction.
 
