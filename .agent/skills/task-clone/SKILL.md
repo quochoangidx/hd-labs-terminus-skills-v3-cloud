@@ -5,6 +5,11 @@ description: "Use when transforming a mined candidate into a Terminus 3 task und
 
 # Task Clone
 
+Before freezing a built task, read
+[panel input hygiene](../terminus-regular-task-authoring/references/panel-input-hygiene.md).
+Assess large task files and aggregate review input, using 800 lines only as a
+soft warning; preserve necessary source, evidence, and verifier discrimination.
+
 Use this skill when the user wants to turn a mined candidate into a Terminus 3 task. Candidates may be upstream bugfixes or explicit category-profile tasks. Preserve the artifact's category and subcategory unless either is invalid or the task's domain clearly belongs elsewhere.
 
 > **Terminus 3 operational baseline (2026-07-31).** Every task uses one of the
@@ -87,6 +92,19 @@ candidate:
   gallery_novelty:         # novel | twist-on-existing | duplicate — Terminus 3 submissions require novel; reject twist-on-existing and duplicate
   subtype_profile:         # per-subtype details (tool/mock_plan/db_engine/…) when a subtype is set
   objective_type:
+  design_pattern:
+    track:                 # established | derived
+    pattern_ids:           # established P* IDs directly applied
+    parent_pattern_ids:    # derived only
+    derived_pattern_id:    # derived only, candidate-local X-* ID
+    transformation_operators:
+    causal_graph:
+    causal_topology_delta:
+    work_surface_delta:
+    verifier_delta:
+    failure_geometry_delta:
+    non_equivalence_rationale:
+    closest_portfolio_pattern_instance:
   source_url:
   issue_or_pr_id:
   repo:
@@ -112,6 +130,21 @@ candidate:
   difficulty_rationale:
   reasoning_bottlenecks:
   tempting_partial_fixes:
+  semantic_mechanisms:
+  semantic_interactions:
+  public_surfaces:
+  verifier_architecture:  # must pass the mining plan gate before scaffolding
+    schema_version: 1
+    status: pass
+    profile:              # cheap_deterministic | expensive_stateful
+    planned_platform_visible_unit_count:
+    semantic_clusters:
+    public_surface_ids:
+    public_surface_cluster_ids:
+    cross_cluster_scenarios:
+    verifier_shapes:
+    platform_visibility_strategy:
+    nop_discrimination_strategy:
   domain_rationale:
   test_surface:
     primary_api:
@@ -129,15 +162,34 @@ candidate:
     leakage_risk:
   patch_shape_gate:        # pass | fail — fail means no credible high-tier signal
   patch_shape_evidence:
+  v3_shape_screen:         # pass | fail — clear goal, inferable model, interacting axes, semantic deliverable
+  conformance_collapse_screen: # pass | fail | not_applicable
   family_key:              # library + bug_family, for the family ledger
   agent_probe:             # {ran, passed_oneshot} — blind-probe evidence backing the difficulty claim
 ```
 
 If this exists, inspect only touched files, focused upstream tests, and support files needed to stage/build/run the task. Do not rescan large repo history or re-open unrelated issues.
 
+Before scaffolding, validate `design_pattern` against
+`.agent/skills/task-miner/frontier_task_design_patterns.md`. Preserve its track
+through cloning: do not silently convert a rejected derived slot into an
+established slot or relabel an established task as derived. A derived candidate
+must materially change at least two of causal topology, work surface, verifier
+architecture, and expected failure geometry; a repository, language, artifact
+format, or narrative change alone returns to mining as a reskin.
+
 If the artifact is missing `test_surface` details for a secondary implementation
 that tests will cover, fill that gap before writing verifier tests. Do not guess
-constructor signatures from class names.
+constructor signatures from class names. Before scaffolding, require the
+`verifier_architecture` plan and pass:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+  plan <mined-candidate.json>
+```
+
+A failed breadth plan returns to mining. Do not create a task folder and hope
+the final handover will catch it.
 
 For domain-profile artifacts, treat `category`, `subcategory`, `target_behavior`,
 `required_work`, `input_fixtures`, and `output_contract` as the source of truth.
@@ -197,7 +249,9 @@ force Python into a special tier.
 ## Workflow
 
 1. Load the mined artifact or verify the source URL with the smallest needed browse/`gh` pass.
-2. Gate the domain before scaffolding with `task-miner/category_rules.md`.
+2. Read `task-miner/frontier_task_design_patterns.md`, validate the candidate's
+   established/derived track and causal-graph evidence, then gate the domain
+   before scaffolding with `task-miner/category_rules.md`.
    Record exactly one Title Case category/subcategory pair and explain which
    domain evidence makes it necessary. Do not classify by verbs such as
    implement, parse, or repair: a training-loop repair is `ML / Training`, while
@@ -219,21 +273,55 @@ force Python into a special tier.
 5. Stage the repo or focused subset under `environment/repo`, not by runtime network fetch.
 6. Slim the repo to task-relevant modules, support utilities, fixtures, and minimal build config.
 7. Write sanitized `instruction.md` from observable behavior only, then run the real-user prompt test before building the verifier.
-8. Write Terminus 3 `task.toml` with top-level `artifacts`, one exact category/subcategory pair, descriptive fields under `[metadata]`, `environment_mode = "separate"`, `network_mode`, and realistic resources/timeouts.
+   First apply
+   [bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md):
+   classify every planned obligation as core, supplied support, or non-goal.
+   Do not expose generic parser/schema/serialization hardening as solver work
+   unless it is the task's primary domain outcome.
+   For a `panel_ready` build, materialize this ledger as the quality-panel
+   precheck manifest and pass `panel_precheck.py --design-only` before expanding
+   the scaffold. Do not proceed when core obligations are disconnected,
+   separable standalone deliverables, or joined only by output serialization.
+8. Write Terminus 3 `task.toml` with top-level `artifacts`, one exact category/subcategory pair, descriptive fields under `[metadata]`, `environment_mode = "separate"`, explicit per-phase `network_mode`, and realistic resources/timeouts.
 9. Write `environment/Dockerfile` with digest-pinned `FROM`, `tmux`, `asciinema`, `bash`, useful search/edit tools, and required pinned deps.
-10. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized fix and rebuild if needed.
-11. Write `tests/Dockerfile`, behavioral `tests/test_outputs.py`, and offline `tests/test.sh`; ensure every declared artifact has a landing directory in the verifier image.
-12. Validate baseline: nop fails for the intended reason only; oracle passes all verifier tests.
-13. Run structural checks, CI checks, and optional real-agent trials.
-14. After behavior and validation are stable, write reviewer-facing Difficulty,
-    Solution, and Verification explanations outside the task folder.
+10. Write `tests/Dockerfile`, behavioral `tests/test_outputs.py`, and offline
+    `tests/test.sh`; ensure every declared artifact has a landing directory in
+    the verifier image.
+11. Collect the actual platform-visible test IDs, create
+    `workspace/reports/<slug>/verifier-matrix.json`, and run the verifier
+    architecture integrity gate with `--allow-missing-ctrf`. Counts are
+    diagnostics. Stop when a promised surface lacks a discriminating witness or
+    the task reaches apparent depth only through unrelated breadth; do not write
+    the Oracle, build Docker images, or run probes until the scope is coherent.
+12. Write `solution/fix.patch` and `solution/solve.sh` that apply a generalized
+    fix and rebuild if needed.
+13. Validate the exact Docker baseline: NOP fails for the intended reason only;
+    Oracle passes all verifier tests, including under noexec `/tmp`. Bind the
+    Oracle CTRF to `verifier-matrix.json` and rerun the gate without
+    `--allow-missing-ctrf`; its IDs must exactly match the declared behavior and
+    non-behavior units.
+14. Complete V3 evidence inferability, public-surface coverage, the semantic
+    mechanism/interaction map, and executable partial-fix mutation evidence.
+15. Run the folder-level client/manual review and task-visible style audit;
+    clear findings, then freeze the full task/verifier snapshot.
+16. Run counted real-agent trials. Package only after the difficulty gate;
+    then write and separately style-audit reviewer-facing Difficulty, Solution,
+    and Verification explanations outside the task folder.
 
-> ⚠️ The three interaction/scale archetypes in
-> `.agent/skills/task-miner/interaction_shape_recipe.md` are historical and
-> currently closed as reliable Frontier sources (ops restoration and DB migration
-> fell 3/3; long-context was closed by analysis). Use that recipe only for a
-> user-requested Base/Core experiment or the single SUSPECT-dead retest allowance,
-> never as a default batch lane.
+> Terminus 3 explicitly values domain inference, live state, native artifacts,
+> and interacting constraints. The archetypes in
+> `.agent/skills/task-miner/interaction_shape_recipe.md` are open candidate
+> shapes again, but their old Terminus 2 results remain negative priors for the
+> exact canonical restoration/migration recipes that collapsed. Use fresh
+> evidence and varied domain structure. An exploratory skeleton probe may reject
+> an idea cheaply but cannot qualify difficulty; do not assume either
+> Frontier or Base from the archetype name.
+
+The current preferred shapes and adaptive established/derived candidate policy
+live in `.agent/skills/task-miner/frontier_task_design_patterns.md`. Pattern
+membership is a design receipt, not a difficulty claim. The completed verifier
+must still prove every candidate-specific mechanism and interaction with
+dedicated mutants and frozen probes.
 
 ## Regular Layout
 
@@ -298,12 +386,14 @@ relevant_experience = "<author background>"
 [verifier]
 timeout_sec = 1800
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = 5400      # minimum 1800, ceiling 18000
+network_mode = "no-network"
 
 [environment]
-network_mode = "public" # use "no-network" only when internet defeats the task
+network_mode = "public" # required on every task; build/harness phase stays public
 build_timeout_sec = 1800
 cpus = 2
 memory_mb = 8192
@@ -388,7 +478,8 @@ Write like a real engineer describing the requested observable work:
   observable requirement.
 - If tests require a secondary implementation that is not obvious from the
   public behavior, name the relevant module or file path without giving the
-  exact patch. This is allowed instruction sufficiency, not a solution hint.
+  exact patch. This clarifies public scope without disclosing the inferred
+  model or solution.
 
 **Do not narrate the internal mechanism or root cause (the #1 client reject,
 June 2026 trial feedback).** The most common rejection is a prompt that "gives
@@ -457,6 +548,10 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 `environment/Dockerfile` must:
 
 - use `FROM ...@sha256:<digest>` on every stage
+- keep every Dockerfile cloud-builder compatible: `COPY --chown=` uses numeric
+  IDs (for example `0:0` or `1000:1000`), and an external-image
+  `COPY --from=` uses `image@sha256:<digest>` with no tag. `FROM
+  image:tag@sha256:<digest>` and `COPY --from=<stage-name>` remain valid.
 - use a **canonical Terminal-Bench base image** for the final runtime stage when
   one matches the task's language (exact digest-pinned refs):
   - Python: `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`
@@ -536,8 +631,9 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 - pin Python/package dependencies exactly
 - avoid `COPY tests/` and `COPY solution/`
 - avoid creating `/tests`, `/oracle`, `/solution`, or `/logs/verifier`
-- bake every dependency at build time; use `network_mode = "public"` by default
-  and `"no-network"` only when internet access would defeat the task
+- bake every dependency at build time; keep `[environment].network_mode =
+  "public"`, and explicitly set `[agent]`/`[verifier]` to `"no-network"` unless
+  that phase genuinely needs internet access
 - avoid heredocs and opaque generated source in the Dockerfile; store source as
   files and `COPY` it
 - use one clean apt transaction per stage with `--no-install-recommends` and
@@ -720,11 +816,14 @@ Verify CTRF reports each case independently; if parametrization collapses rows,
 generate uniquely named `test_case_001`-style functions. Never use ONE
 monolithic all-N-cases-must-pass function — a single
 universal blind spot then turns that whole test 0/N and the task gets returned.
-Before shipping, drop or disclose (one prose sentence) any case EVERY fresh
-implementation would miss; keep hardness as many independent feature families
-each solver misses a different slice of. Corpus-curation rules: target 50–1000
-meaningful evaluation units when cheap, or 20–80 complex stateful/interaction
-scenarios; never pad one rule into hundreds of correlated rows. Mix verifier
+Before shipping, audit any case every fresh implementation misses: verify the
+oracle/authority, explicit interface, evidence support, and CTRF resolution.
+Disclose only a non-inferable interface fact; keep a legitimate evidence-based
+inference, add authentic evidence if support is weak, or remove an invalid
+oracle-only assertion. Apply
+[bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md).
+Derive corpus size from retained obligations and discriminating witnesses,
+without numerical unit/cluster quotas. Never pad correlated rows. Mix verifier
 shapes when appropriate (scenario, property/metamorphic, mutation/anti-shortcut,
 final-state, tolerance/differential); every feature cluster keeps ≥1
 "soft" case a majority of runs pass; and the trimming direction is always
@@ -735,7 +834,50 @@ tree when the flag fires anyway:
 `.agent/skills/task-revise-flag-remediation/SKILL.md`
 (design-time rules: `lever_patterns.md` L1 step 6).
 
+**Fail verifier breadth before Oracle work.** Immediately after the verifier
+skeleton is collectable, create `workspace/reports/<slug>/verifier-matrix.json`
+with schema version 1, the profile, every platform-visible unit ID, exact unit
+to cluster mapping, IDs of actual cross-cluster witnesses, and appropriate
+verifier shapes (no minimum count beyond a non-empty inventory). Run:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+  matrix workspace/reports/<slug>/verifier-matrix.json \
+  --task-slug <slug> --allow-missing-ctrf
+```
+
+This first pass may omit `ctrf` because no Oracle exists yet. After Oracle runs,
+add its raw CTRF path/hash and rerun without `--allow-missing-ctrf`. Never call
+a suite “semantic coverage” merely because Oracle passes it; use “smoke suite”
+until verifier architecture and mutation-backed semantic coverage both pass.
+
+Portal baseline: before submission, run at least one deliberately wrong,
+incomplete, or lazy implementation and confirm the verifier rejects it. Invoke
+every documented command/mode on a discriminating hard case, rebuild delivered
+binaries from submitted source, and independently spot-check the Oracle against
+the visible spec on an edge not used to tune its answer key. The task-batch
+per-node mutant campaign is stronger than this baseline and remains required.
+For every domain rule explicitly named by the contract, keep an isolating
+fixture whose expected result changes when that rule alone is inverted; a
+coarse wrong solution or mixed held-out corpus is not enough, and held-out data
+must not be the only enforcement of a stated rule.
+
+Before packaging, walk the portal quality panel's four axes:
+`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
+and `sound_verifier`. Only `None` on every axis clears the panel; `Minor`,
+`Major`, and `Unsure` all block or route the task back. Preserve Terminus 3
+inference: exact grading conventions need a citable visible authority, while a
+domain mechanism may still be reconstructed from distributed visible evidence.
+
 Use real parsers for JSON/XML/CSV. Assert behavior, not source shape.
+
+For Hardware / CAD tasks, follow
+`docs/creating-tasks/cad-task-guidelines.md`: measure every stated dimension on
+the built solid with a method that can see it; sampling brackets must be finer
+than the stated tolerance; verify through/repeated/exact-count features; and
+test pose/construction-order freedom. A parametric promise requires changing a
+fresh driving value, recomputing, checking for errors, and measuring the changed
+geometry. Reading the parameter back is not behavioral coverage.
 
 Verifier matrix for upstream bugfixes must include:
 
@@ -766,6 +908,10 @@ Verifier matrix for domain-profile tasks must include:
 - semantic output parsing or artifact inspection
 - anti-shortcut variation in names, ordering, values, or fixture layout
 - category-specific contract checks such as schema, build artifact, service health, security exploit failure, numeric tolerance, metric threshold, or game-state transition
+- a tolerance witness using exactly the error band promised by the instruction
+  whenever numeric tolerance is part of the contract
+- an objective/tie-break witness that distinguishes the specified optimum from
+  a merely feasible or differently optimized answer whenever applicable
 
 Every test function needs a docstring. Every asserted behavior must be supported
 by `instruction.md`, an agent-visible environment reference, or domain evidence
@@ -783,9 +929,22 @@ Anti-shortcut tactics:
 
 - use temporary directories and generated project names
 - vary filenames, ordering, or input values across tests
+- keep goldens and held-out fixtures inside the separate verifier image, never
+  derive truth from `/app` or another agent-writable tree
+- when the verifier rebuilds or executes agent-supplied code, drop privileges
+  before that exec, use `--no-new-privs` or equivalent containment, and ensure
+  the process cannot read goldens, hidden fixtures, or `/logs/verifier`; never
+  colocate an expected answer with an input-tree path passed to that process
+- declare exact output paths as top-level artifacts and let the harness transfer
+  them; do not manually copy agent-controlled directories where symlinks can
+  expose verifier fixtures
 - include one unseen variant not present in the upstream PR
 - avoid exact source-code assertions
 - parse outputs semantically rather than matching full files
+- if verifier Python changes interpreter permissions, resolve and deduplicate
+  `/bin/bash` and `/usr/bin/bash` targets before saving modes, restore once in a
+  `finally` path, and verify full Oracle log/reward collection; the platform-only
+  `verifier_interpreter_permissions` preflight blocks the unsafe dual-path pattern
 - never require an EXACT error-message string the instruction does not disclose.
   If discrimination needs distinguishing the fix's rejection from the buggy
   build's rejection (both error), prefer a pass/fail behavioral test (an input
@@ -794,7 +953,7 @@ Anti-shortcut tactics:
   case-insensitive `round`), which accepts any reasonable agent phrasing yet
   still differs from the buggy build's unrelated error. Matching the reference
   solution's exact wording fails functionally-correct agents who phrase the
-  message differently (Task Instruction Sufficiency FAIL). Probe the buggy
+  message differently (`task_specification` / representation overfit). Probe the buggy
   error first to confirm the loose token is absent there, and verify a variant
   wording still passes.
 
@@ -855,13 +1014,12 @@ if [ "$rc" -eq 0 ]; then
 else
     echo 0 > /logs/verifier/reward.txt
 fi
-
-exit 0
 ```
 
 Do not use `set -e`; a failed pytest must still reach the reward block. The
-trailing `exit 0` is deliberate because Harbor grades from `reward.txt`. If the
-published Terminus 3 skeleton differs, the skeleton wins and must be flagged.
+script must end on the reward block's `fi`, with no trailing `exit`: pytest's
+status is captured and never propagated, while a failed reward write must remain
+an infrastructure error. If the published skeleton differs, the skeleton wins.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
 `pytest`, `pytest-json-ctrf`, and verifier-only dependencies in
@@ -887,8 +1045,8 @@ mistakes each cost a full rebuild this session — avoid them up front:
   table reads to the platform reviewer as a "design specification that prescribes
   implementation" — the `instruction_check` warning and the #1 client reject.
   Instead say "the result must match what `git check-ignore` reports / matches
-  `numpy.quantile(method=...)`" and let the tests be the source of truth. This
-  ALSO satisfies instruction/test symmetry (the named reference defines
+  `numpy.quantile(method=...)`" and let that named reference be the authority.
+  This ALSO satisfies instruction/test symmetry (the named reference defines
   correctness) without listing internals. Keep only YOUR I/O format + the
   observable contract; drop the mechanics. AND write the whole instruction as
   flowing prose (usually 1-3 paragraphs, not a hard cap) — NOT as
@@ -907,8 +1065,10 @@ mistakes each cost a full rebuild this session — avoid them up front:
 - **Pin verifier deps with a hash-locked `requirements.lock` + `pip install
   --require-hashes --no-deps`, for EVERY language's task** (not just Python ones).
   Inline `pip install pytest==x pytest-json-ctrf==y` trips the static-check
-  lockfile warning even in a Go/C++/Rust task. Copy a `requirements.lock` into
-  `environment/` and install from it. (Reusing an existing task's lock is fine.)
+  lockfile warning even in a Go/C++/Rust task. Put `requirements.lock` in the
+  `tests/` build context, copy it from `tests/Dockerfile`, and install it in the
+  verifier image. Never put verifier-only dependencies in `environment/`.
+  (Reusing an existing task's lock is fine.)
 - **Don't make blank/empty input a fixture VALUE if the program skips blank
   lines, and avoid positional-alignment verifiers.** A program that ignores blank
   lines emits no output line for an empty input, which both contradicts an
@@ -922,7 +1082,8 @@ Before packaging or platform upload:
 
 - **run `scripts/preflight.sh <task-dir>` (repo root) — zero FAIL rows
   required.** It machine-checks layout, .dockerignore entries, Dockerfile
-  hygiene (syntax line, canonical digest-pinned base, bind-mounts),
+  hygiene (syntax line, cloud-compatible `COPY --chown`/`COPY --from`,
+  canonical digest-pinned base, bind-mounts),
   task.toml fields, leak sweep, zip arcnames/CRLF, rubric format, docker
   oracle=1.0/nop=0.0, and the oracle-under-`--tmpfs /tmp:noexec` repro.
   (New tasks should have been stamped by `scripts/new-task.sh`, which
@@ -933,21 +1094,42 @@ Before packaging or platform upload:
   de-correlated failures; otherwise the result may be an oracle defect or one
   shared blind spot. For Core/Base candidates, shared misses are a review risk
   rather than an automatic rejection, but every shared miss still needs an
-  authority and instruction-sufficiency audit before packaging.
+  authority/oracle and V3 evidence-inferability audit before packaging.
 - **run the Terminus 3 domain screen.** Apply
   `.agent/skills/task-miner/category_rules.md`, choose exactly one category and
   subcategory, and write `workspace/reports/<slug>/category-screen.json` with a
   domain rationale plus citations to the instruction and verifier evidence.
   Do not use the legacy nine-slug classifier or reshape prose to chase an old
   classifier result.
-- run an instruction/test symmetry audit: every exact string, CLI flag, output key, XML/JSON field, ordering guarantee, and file path asserted by tests must be stated in `instruction.md`
-- create `workspace/reports/<slug>/instruction-sufficiency.json`, cover every
-  static test and semantic cluster, complete two blind contract reviews, and run
-  `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`; any
-  failure blocks the full solve probe and packaging
-- include preservation/non-regression test coverage in the prompt, including modes not directly part of the bug trigger
-- run a verifier API sanity audit for every imported class/function and every
-  constructor used in tests
+- run a V3 symmetry audit: exact artifact paths, public interface/schema,
+  arbitrary constants/strings, and non-inferable operational constraints must
+  be explicit; semantic invariants may instead map to one or more visible
+  evidence sources and may be tested on held-out instances/combinations
+- create `workspace/reports/<slug>/instruction-sufficiency.json` with
+  `schema_version: 3`, map every static test to an explicit-contract row or an
+  inference family, complete two fresh task-visible fairness reviews, and run
+  `sufficiency_manifest_check.py --require-v3`; any failure blocks the full
+  solve probe and packaging
+- In `campaign_ready`, create `workspace/reports/<slug>/semantic-coverage.json` following
+  `terminus-regular-task-authoring/references/semantic-coverage-gate.md`; map
+  every promised public surface, record the natural causal mechanisms and
+  interactions without a count quota, and preserve a killed executable mutant
+  per mechanism/interaction. Pass `semantic_coverage_check.py --advanced-plus`
+  before preparing counted probes
+- before counted preparation, run strict Docker preflight to
+  `probe-preflight.json`, folder-level client/manual review to
+  `pre-freeze-review.json`, and task-visible style audit to
+  `task-style-preflight.json`; require `preprobe_check.py` to pass
+- treat fixture multiplication as zero added semantic rank: one keyword across
+  eight units or one numerical branch across fourteen scales remains one
+  mechanism
+- state preservation of a public mode/interface when the user must know it is
+  in scope; hidden variations of the same inferable invariant do not need to be
+  enumerated in the prompt
+- run a verifier API sanity audit for every public entry point promised by the
+  instruction; each must have a platform-visible discriminating test. Tests may
+  not pin undocumented keyword spelling, internal attributes, class identity,
+  or exact error wording when the contract permits semantic equivalents
 - remove implementation hints, issue URLs, PR IDs, commit hashes, upstream test names, and private helper names from `instruction.md`
 - remove hidden walkthroughs, procedural hints, and prompt-bypass instructions
   from environment files, comments, README, configs, scripts, TODOs, `spec.md`,
@@ -998,9 +1180,11 @@ available solve probes are stable.
    - Solution: root cause, high-level oracle strategy, and preserved behavior.
    - Verification: requirement-to-test mapping, why cases discriminate, and
      actual oracle/nop results.
+   - Relevant Experience: concrete domain, toolchain, or repository background
+     that supports the task design, without invented credentials.
 2. Produce the complete platform packet at
    `workspace/submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
-   `task-batch`) containing, beyond the three explanations:
+   `task-batch`) containing, beyond the four explanation fields:
    - **Metadata**: "Does this task use an approved canonical base image?"
      Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
      a Task Inspiration from the Task Gallery?" Yes/No + the Inspiration ID
@@ -1032,6 +1216,10 @@ Use this structure in both files:
 ...
 
 # Verification Explanation
+
+...
+
+# Relevant Experience
 
 ...
 ```

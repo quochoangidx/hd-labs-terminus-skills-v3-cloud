@@ -24,8 +24,9 @@ or oracle here; return a compact artifact for task-clone.
 > - Difficulty is frontier, advanced, core, or base; it is language-independent.
 > - Milestones and the old cross-cutting subcategories list are gone.
 > - The verifier is separate and sees only top-level declared artifacts.
-> - network_mode = "public" is the default; use "no-network" only when internet
->   access would defeat the task.
+> - Network policy is per phase: `[environment].network_mode` is always
+>   `"public"`; `[agent]` and `[verifier]` must each declare `"public"` or
+>   `"no-network"` according to the task.
 > - Agent timeout is 1800–18000 seconds; most tasks should need 60–90 minutes.
 > - Historical HARD/MEDIUM/EASY labels later in this file are retained only as
 >   empirical evidence about idea shapes, never as current metadata.
@@ -48,6 +49,35 @@ ML / Training; spectra-to-structure work is Science / Chemistry; a CAD artifact
 is Hardware / CAD.
 
 ## Difficulty and Signal
+
+### Current CORE+ selection takes precedence over historical Hard heuristics
+
+For `core_advanced_frontier`, the historical Hard/Opus-4.8 sections below are
+ranking evidence, not additional rejection gates. Repo stars, patch LOC,
+exported-symbol count, file/component count, a local self-check loop, or absence
+of non-self-verifiable ground truth do not independently disqualify a candidate.
+Keep novelty, taxonomy, inferability, runtime, verifier, mutation, and current
+batch structural gates intact. Difficulty is decided by valid frozen probes,
+not by a prediction that every candidate must resist Frontier solvers.
+
+When mining stalls, distinguish an unavailable source/tool from an exhausted
+search hypothesis. Record concrete queries, inspected sources, and rejection
+reasons; vary the failure mode and work surface within the user's exact domain
+and language. For Systems, possible search directions include cancellation and
+resource ownership, shutdown/drain behavior, retry/idempotency, configuration
+reload, or build/release dependency interactions. These are query directions,
+not preapproved tasks or a finite candidate queue. Inspect real source evidence
+before claiming any candidate. Use available read-only GitHub/web access when
+`gh` is unavailable; never fabricate search results. No fixed candidate quota
+or arbitrary source-inspection count ends the search.
+
+Before building, assess `difficulty_without_incidental_conventions` with all
+arbitrary output conventions already disclosed. Identify the remaining causal
+inference or implementation challenge. Examples may teach schemas and real
+semantics; a self-check loop is allowed. Do not remove necessary evidence to
+manufacture difficulty, and do not demand a prose rule for an inference already
+supported by visible evidence. If only transcription remains, lower priority
+and prospect another design rather than inflate the fixture count.
 
 Difficulty is average pass@1 across both current reference models:
 
@@ -78,9 +108,20 @@ A candidate must support:
   directory
 - no GPU requirement; roughly 2 CPU, 8 GB memory, and 10 GB storage
 - all dependencies baked into images at build time
-- network_mode = "public" unless offline execution is important to the task
+- `[environment].network_mode = "public"`, plus explicit agent/verifier network
+  modes; normally both are `"no-network"` unless the task genuinely needs access
 - an honest 1800–18000 second agent budget and a fast repeatable edit/test loop
 - no canary strings and no AI-generated instruction prose
+
+For Hardware / CAD candidates, record a geometry-verification plan before
+promotion and apply `docs/creating-tasks/cad-task-guidelines.md`. Name which
+stated dimensions/features use direct B-Rep measurement,
+invariants, symmetric difference, sufficiently fine sampling, or functional
+verification; confirm the chosen engine exposes those operations. If the task
+promises a parametric model, the plan must change a fresh, unseen driving value,
+recompute without errors, and measure the resulting solid. Reject candidates
+whose intended verifier only reads stored parameters, checks coarse point
+occupancy, uses a volume floor, or relies on one global bounding box.
 
 ## Operating Modes
 
@@ -121,6 +162,53 @@ tasks are preferred when natural, but the primary implementation languages are
 simply recorded under metadata.languages. Python used only by the verifier does
 not count.
 
+Before consulting the pattern catalog, write a pattern-blind domain-crux card:
+
+- the natural domain failure mode;
+- the native work surface and artifact or behavior;
+- why the difficulty remains after incidental schemas, IDs, ordering, and
+  canonicalization are removed;
+- two natural but wrong repairs on distinct surfaces;
+- the direct observable behavior an isolated verifier can discriminate.
+
+Reject or redesign a candidate whose crux exists only after adding synthetic
+evidence sources or author-invented output conventions. Then read
+`.agent/skills/task-miner/frontier_task_design_patterns.md`, derive the causal
+graph and failure geometry, and classify the completed design into exactly one
+track:
+
+- `established`: apply one or more catalogued `P*` patterns;
+- `derived`: instantiate a registered `X-*` prototype or transform/compose
+  catalogued patterns into a candidate-local experimental pattern. Registered
+  `X-*` prototypes remain derived until the catalog's promotion rule is met.
+
+For a batch, record every mining-plan-qualified attempt in the schema-v3
+candidate ledger. There is no candidate budget or maximum attempt count. Use a
+non-blocking 20–30% derived exploration advisory when practical; do not preassign immutable slots or
+replace a rejection with the same track. The first candidate that clears every
+quality and empirical difficulty gate may be accepted regardless of track. A
+domain/language/story change is still a reskin, not a derived pattern.
+
+For every new Advanced+ candidate, also run the catalog's frontier-stability
+gate before cloning. Use public libraries, issues, and fixing PRs as substrate
+when appropriate. Record mechanism and interaction overlap honestly, but do not
+reject by overlap count. Reject only when a reachable artifact contains the
+task-specific repair topology, exposes the exact solution, or provides a
+callable solution/oracle that collapses the crux. A public tool that supplies
+generic primitives or one partial interaction is valid when task-local evidence,
+failure geometry, and the remaining causal chain are materially new. Record two orthogonal
+natural-but-wrong implementations with distinct semantic nodes, repair
+surfaces, and disjoint witness sets. Do not defer either check until a solve
+probe.
+
+Before Stage B, enumerate every arbitrary exact convention used by the planned
+Oracle or verifier and trace it to a public authority, visible evidence, or an
+explicit instruction. Complete the assertion-to-source audit and canonical
+runtime/entrypoint smoke before expanding the verifier beyond a small set of
+discriminating witnesses. Preserve the structural signature and rejection
+geometry of every qualified attempt so later candidates cannot reuse it
+silently.
+
 Prefer work that requires reacting to intermediate state rather than one command
 or a straight-line burst. The “at least five steps” phrase is a complexity
 heuristic, not a count to game.
@@ -129,11 +217,10 @@ heuristic, not a count to game.
 
 The skill must PROSPECT for repos, not consume a fixed list. Two principles:
 
-- **Fame is memorization-poison.** Frontier solvers know famous repos
-  (pip/django/pandas/urllib3…) cold — behavior, quirks, and bug history — so
-  levers mined there collapse first. The sweet spot is **mature-but-obscure**:
-  real users, ≥2 years of history, roughly 100–5,000 stars; reject
-  "everyone-knows-it" repos (rule of thumb >20k stars) as difficulty sources.
+- **Fame is a retrieval-risk hint, not a rejection threshold.** Search mature
+  niche repos as well as well-known projects. Inspect whether a reachable
+  artifact solves the task-specific crux; stars and project age do not establish
+  that. The 100–5,000-star query below is an optional discovery filter.
 - **Prospect by archetype/lever signal, not by name.** Decide the target lever
   and category first (surface-artifacts table), then search for repos matching
   that signal. `gh` is not geoblocked from VN.
@@ -162,8 +249,8 @@ Procedure per prospecting round:
    result remains stable.
 4. Anti-memorization + novelty: fame check above; dedupe vs `index.jsonl` and
    the gallery snapshot (`gallery_novelty` must be `novel`).
-5. Output per prospect: repo | archetype | ONE-SENTENCE lever hypothesis |
-   category fit — feed straight into the Master collapse law screen, and log
+5. Output per prospect: repo | archetype | ONE-SENTENCE inference/interaction hypothesis |
+   category fit — feed straight into the V3 evidence-and-interaction screen, and log
    every prospect (rejects included) into `index.jsonl` as exploration-map
    data.
 
@@ -177,9 +264,9 @@ lane or when prospecting is impossible. Do not let this list pull
 every batch back to Python parser/validator libs. Apply the archetype-first
 selection rule above and the patch-shape gate before using any of them.
 
-Prioritize low-to-medium quota sources for upstream bugfix mode:
+Prioritize low-to-medium effort sources for upstream bugfix mode:
 
-| Repo | Quota burn | Best task domains |
+| Repo | Expected effort | Best task domains |
 |---|---:|---|
 | `pypa/pip` | low-medium | resolver behavior, wheel/cache handling, requirement parsing, install/report edge cases |
 | `pypa/setuptools` | low-medium | editable installs, package discovery, metadata/config parsing, build hooks |
@@ -191,7 +278,7 @@ Prioritize low-to-medium quota sources for upstream bugfix mode:
 | `pytest-dev/pytest` | low but cooldown after Medium results | fixture lifecycle, collection, reporting, assertion rewriting |
 | `pandas-dev/pandas` | medium-high, selective | indexing/groupby/merge/datetime/parser edge cases with tiny datasets |
 
-Heavy repos are allowed only with explicit opt-in and strict limits:
+Heavy repos are allowed only with explicit opt-in and strict viability checks:
 
 - `numpy/numpy`
 - `tokio-rs/tokio`
@@ -211,11 +298,10 @@ pipelines. The Source Queue is not a domain-diversity limit.
 
 Use this mode for TypeScript, go-ethereum, PyTorch, Ray, NumPy, Tokio, or any repo with large builds/tests.
 
-Hard limits:
+Viability constraints:
 
-- mine at most 1 heavy candidate per session
-- inspect at most 5 files before deciding whether to continue
-- inspect at most 2 commits around the fix
+- inspect the focused source and history needed to decide viability; do not
+  impose a file or commit quota
 - do not run full test/build suites
 - require a focused staging plan before cloning
 - require expected verifier runtime under 60 seconds
@@ -317,7 +403,7 @@ For `pandas-dev/pandas`, prefer:
 
 Avoid pandas candidates that need large datasets, slow IO formats, or compiled-extension changes.
 
-Avoid as Hard tasks:
+Avoid as high-tier candidates:
 
 - documentation-only fixes
 - typo or message-only changes
@@ -344,8 +430,7 @@ Do not:
 - scaffold `workspace/tasks/tbrain-*`
 - write `instruction.md`, Dockerfile, verifier, or oracle patch
 - run large upstream test suites repeatedly
-- inspect more than 15 files unless the candidate is already high value and needs one extra confirmation
-- inspect more than 3 commits around the fix
+- continue broad inspection without a candidate-specific question
 - enumerate unrelated test suites or full repository trees
 
 Stop mining when a deterministic reproducer, localized touched files, and sufficient candidate score are found.
@@ -359,11 +444,12 @@ mined-candidates/index.jsonl               # candidates already mined/claimed/cl
 mined-candidates/gallery_tasks_snapshot.md # task NAMES already IN the live gallery — do not duplicate
 docs/understanding-tasks/task-taxonomy.md  # authoritative Terminus 3 category/subcategory menu
 .agent/skills/task-miner/lever_patterns.md # SHARED, resource-agnostic pattern specs + claimed-resource ledger — the in-repo home of "learn the pattern, not the resource" (replaces relying on any personal memory)
+.agent/skills/task-miner/frontier_task_design_patterns.md # current frontier-resistant catalog + adaptive candidate portfolio
 ```
 
 The gallery snapshot is the **novelty gate**: if the gallery already contains the
-same problem/archetype+domain as your candidate, REJECT as a duplicate unless the
-candidate adds a clearly distinct twist, and record `closest_gallery_task`. Refresh
+same setup, definition, and data as your candidate, REJECT as a duplicate;
+a twist or reskin is not independent novelty. Record `closest_gallery_task`. Refresh
 the snapshot from a public fork of `snorkel-tb-tasks` when it is stale (see the file
 header). If the team has a shared registry path or URL, check that too before
 claiming a candidate.
@@ -398,12 +484,12 @@ Valid statuses: `mined`, `claimed`, `cloned`, `submitted`, `rejected`.
 entries in `index.jsonl` remain a local execution/dedupe log, but do not create
 or maintain a parallel `family_difficulty` memory. When a family obtains a
 durable ceiling or live verdict, fold the evidence and tier into the matching
-`AGENTS.md` section; later mining checks that verdict before spending quota.
+`AGENTS.md` section; later mining checks that verdict before spending effort.
 
 ## Hardness Filter
 
 For upstream bugfix mode, apply the repo-specific hard filters below.
-A good Hard candidate should require the agent to understand 5-6 meaningful
+A good high-tier candidate should require the agent to understand 5-6 meaningful
 components, behavior surfaces, or project layers. Components can be source
 modules, public APIs, CLI/config parsing, build/dependency metadata, data/schema
 rules, cache/state management, error handling, compatibility paths, or test
@@ -431,34 +517,80 @@ Reject false-hard candidates:
 - single validation branch fixes
 - `<= 10` meaningful LOC in one obvious file unless prior agent trials show low pass rate
 - one-condition fixes such as "if stop flag then do X" when all verifier cases exercise the same branch
-- candidates with fewer than 4 meaningful components unless prior frontier-agent
-  trials show repeated failures for semantic reasons
+- candidates padded with components, modes or validation domains that do not
+  deepen the primary causal challenge
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
 
-### Master collapse law screen — RUN ON EVERY CANDIDATE, any lane, before scoring
+### Terminus 3 evidence-and-interaction screen — RUN ON EVERY CANDIDATE
 
-⭐ Confirmed over a 15-task blind-probe batch (2026-07-12), lane-agnostic:
-fully specified transcription engines usually collapse. Fair survivors must
-derive difficulty from work the visible contract does not solve for the agent,
-not from a rule it withholds. The two useful signatures are:
+Evaluate the current Terminus 3 shape before applying historical collapse
+priors:
 
-- **(a) an in-image authority differential** — the contract pins an
-  offline-reachable implementation, while matching its broad accreted behavior
-  still requires investigation and differential work;
-- **(b) a counter-intuitive observable outcome under a sufficient contract** —
-  every graded rule is stated, reachable, or supported by visible data, but the
-  correct implementation still requires non-obvious cross-file, state, or
-  interaction reasoning.
+1. **Clear success surface:** the requested outcome, artifact/interface, and
+   arbitrary exact conventions can be stated concisely without revealing the
+   solution.
+2. **Inferable model:** the agent can reconstruct the graded domain model from
+   one or more visible artifacts, current state, realistic specifications, or
+   established conventions. Record the evidence graph, not a prose rule list.
+3. **Interacting correctness:** at least two meaningful axes affect one another
+   (for example state × safety, geometry × manufacturability, or determinism ×
+   performance). Independent checklist items do not qualify.
+4. **Semantic deliverable:** prefer a native artifact or live state whose
+   structure and behavior can be verified, not a cosmetic representation.
+5. **Held-out continuity:** hidden instances/combinations exercise the same
+   inferable model and do not introduce an oracle-only policy.
+6. **Causal density:** identify the natural mechanisms participating in at
+   least one result-changing interaction and one plausible natural-but-wrong
+   path. Repeating one branch across inputs, units, scales, files, wrappers or
+   independent components adds no depth. Mechanism/interaction counts are
+   diagnostics, never permission to expand scope. If the causal core is thin,
+   reject or redesign it before the full build.
+   Every proposed core obligation must lead to the same primary outcome and
+   participate in a pre-output domain interaction. Reject a bundle when
+   removing one obligation leaves a standalone task or when claimed subsystems
+   meet only in an aggregate report. For `panel_ready`, encode this in the
+   panel-precheck manifest and pass `--design-only` before scaffolding.
+7. **Bounded verifier architecture:** apply
+   [bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md).
+   Choose `cheap_deterministic` or `expensive_stateful` for runtime planning,
+   with discriminating witnesses for every promised public surface and genuine
+   interaction. Unit/cluster/shape counts are diagnostics, not quotas. Do not
+   add unrelated mechanisms to rescue a candidate lacking natural depth.
+8. **Rule-isolation feasibility:** every domain rule that will be explicitly
+   named in the contract can receive a fixture whose expected result changes
+   when that rule alone is inverted. A mixed held-out corpus cannot be the only
+   enforcement of a stated rule. Also confirm any verifier-executed candidate
+   process can be deprived of read access to goldens and `/logs/verifier`, not
+   merely moved out of the agent container by separate mode.
 
-Everything straightforward-and-derivable is EASY 3/3, regardless of rule count,
-cascade depth, stated counter-intuitiveness, or optimization shape. Screen every
-candidate by naming the remaining implementation/reasoning challenge after the
-Task Instruction Sufficiency gate passes. If difficulty exists only while a
-contract fact is omitted, reject at mining time; a hidden rule is a fairness
-defect, not a lever. This subsumes the spec-task advice in "Opus-4.8 resistance"
-and the bugfix-side "Fix-shape filter".
+Save the mined artifact and run the plan gate before creating a task folder:
 
-**fair⊥hard single-lever early-DROP (apply here, not after the platform flag):**
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+  plan mined-candidates/<slug>.json
+```
+
+Do not hand a failed plan to `task-clone`. Unit count is coverage resolution,
+not difficulty evidence; the mechanism and interaction gates still apply.
+
+Reject ambiguity, unobtainable knowledge, arbitrary hidden constants/strings,
+and cosmetic domain labels. Do not reject a discoverable hidden requirement
+merely because its final rule is absent from `instruction.md`.
+
+### Conformance/transcription collapse screen — lane-specific
+
+The 2026-07-12 batch remains a strong prior for tasks whose whole job is to
+transcribe a standard or reproduce a library. In this lane, keep candidates
+only when substantial work remains after the public interface is clear: an
+offline authority differential, broad accreted behavior, cross-file/state
+reasoning, or another independently measured implementation challenge.
+
+Do not apply this screen as a universal law to evidence reconstruction,
+scientific interpretation, native artifacts, live systems, or multi-step
+operations. A named algorithm is a risk only when recalling it completes the
+task.
+
+**Conformance single-lever early-DROP:**
 if the candidate's ENTIRE difficulty is one boundary / convention / precedence /
 output-contract fact, there is no fair-and-hard path — hiding it produces an
 unfair 0/N coverage flag, disclosing it collapses the task to EASY. Reject at
@@ -466,31 +598,33 @@ mining; do not wait to learn this from a platform return (arrhenius-clip-fit,
 calibration-threshold-select, hanabi, provenance-release-gate were all
 late-drop lessons). Fingerprints: a self-contained game-replay or
 single-invariant adjudicator; difficulty that lives in an uninferable OUTPUT
-contract rather than semantics; a "wall" that is one code path. The only
-escape: the candidate admits a SECOND lever that is orthogonal, undisclosed,
+contract rather than semantics; a "wall" that is one code path. The only escape
+in this lane is a second implementation/reasoning challenge that is orthogonal
 and broad-footprint (hex-requirement intersection=0) —
 record it explicitly or reject. ⚠️ A claimed orthogonal second lever must be
 VERIFIED genuinely broad before you trust it: DKIM's supposed second wall
 evaporated on the 2026-07-19 platform return (20/20 strong runs passed every
 other DKIM feature; the whole series dropped as single-lever fair⊥hard).
-Record `collapse_law_screen: pass|fail` with
-the named lever in the candidate artifact.
+Record `v3_shape_screen: pass|fail` for every candidate and
+`conformance_collapse_screen: pass|fail|not_applicable` for this lane.
 
 **Screen calibration control group (mandatory per mining round, 2026-07-20):**
 the screen is a one-sentence PREDICTION, and screen-rejected candidates are
 never probed, so its false-negative rate is invisible by construction — a
 too-strict screen silently starves the pipeline while looking like "the design
 working". Each round, advance 1 screen-FAILED candidate (not from a
-§6 CONFIRMED-dead family) into the skeleton probe anyway, marked
-`screen_control: true` in `index.jsonl`. A control that HOLDS (0/2 semantic)
-is a measured false-negative: keep the candidate in the normal pipeline, log
+§6 CONFIRMED-dead family) into an exploratory skeleton probe anyway, marked
+`screen_control: true` in `index.jsonl`. A control that appears to hold is a
+reason to complete its verifier, not a tier verdict: keep the candidate in the normal pipeline, log
 the finding as durable, and loosen the specific screen criterion that killed
 it. Controls that collapse confirm the screen at skeleton cost, not build
 cost.
 
-### Mechanical patch-shape gate — RUN FIRST, pass/fail, before any scoring (CANONICAL fix-shape test)
+### Historical Hard patch-shape heuristic — not a CORE+ eligibility gate
 
-This is the single canonical fix-shape test — the former "Fix-shape filter" and
+The historical calibration below describes Hard-target selection, not current
+CORE+ acceptance. A short patch can require substantial diagnosis; evaluate
+the actual crux before lowering its priority. This was the former "Fix-shape filter" and
 "Pre-mine fix-shape probe" sections are folded in here. The principle kept
 getting ignored when stated loosely: 17 candidates
 shipped and 14 rated <=EASY (June 2026 batch B). So gate it MECHANICALLY. Open
@@ -685,8 +819,9 @@ Score each axis from 1 to 5:
 
 Reject if:
 
-- the Master collapse law screen fails (no nameable lever, or single-lever
-  fair⊥hard fingerprint with no orthogonal second lever) — see Hardness Filter
+- the V3 evidence-and-interaction screen fails; for a conformance/transcription
+  task, also reject a single-lever fair⊥hard fingerprint with no independent
+  implementation/reasoning challenge
 - `subsystem_interaction < 4` unless prior real-agent evidence shows the task is
   still hard for semantic reasons
 - `deterministic_reproducibility < 4`
@@ -718,10 +853,77 @@ candidate:
   target_difficulty:       # frontier | advanced | core | base
   artifacts:               # absolute final paths received by verifier
   verifier_landing_dirs:   # parent dirs tests/Dockerfile must create
-  network_mode:            # public | no-network
+  agent_network_mode:      # public | no-network
+  verifier_network_mode:   # public | no-network; normally no-network
   closest_gallery_task:    # nearest existing gallery task name (from gallery_tasks_snapshot.md)
   gallery_novelty:         # novel | twist-on-existing | duplicate  (Terminus 3: reject both twist-on-existing and duplicate)
   objective_type:          # concise domain/work-surface label
+  classification_timing: post_crux
+  disposition:             # active | rejected | accepted
+  rejection_reason:        # required when rejected
+  domain_crux:
+    failure_mode:
+    native_work_surface:
+    native_artifact_or_behavior:
+    difficulty_without_incidental_conventions:
+  convention_audit:
+    status: pass
+    assertion_to_source_complete: true
+    arbitrary_conventions:
+      - id:
+        source_type:       # authority | visible_evidence | explicit_instruction
+        source:
+  source_smoke:
+    status: pass
+    receipt:
+    runtime_entrypoint:
+    verifier_dependencies:
+    unprivileged_candidate_execution: true
+  structural_signature:
+    causal_topology:
+    work_surface:
+    verifier_architecture:
+    failure_geometry:
+    difficulty_source:
+    artifact_type:
+  pattern_fit_evidence:    # include P3/P5/P6 entries only when those labels apply
+  design_pattern:
+    track:                 # established | derived
+    pattern_ids:           # established P* IDs directly applied
+    parent_pattern_ids:    # derived only: P* sources transformed/composed
+    derived_pattern_id:    # derived only: registered prototype or candidate-local X-* ID
+    transformation_operators: # derived only: composition/inversion/delayed-feedback/etc.
+    causal_graph:          # candidate-specific nodes and edges, not catalog prose
+    causal_topology_delta: # derived only
+    work_surface_delta:    # derived only
+    verifier_delta:        # derived only
+    failure_geometry_delta: # derived only
+    non_equivalence_rationale: # why this is not a parent reskin
+    closest_portfolio_pattern_instance:
+    frontier_stability:   # required for every new Advanced+ candidate
+      dominant_topology_id: # applied P* for established; own X-* for derived
+      secondary_topology_id: # optional orthogonal P* parent/applied pattern
+      amplifier_or_envelope_id: # optional; P4 or P6 only
+      planned_mechanism_ids: # natural core IDs; counts are diagnostic
+      planned_interaction_ids: # result-changing core interactions
+      retrieval_audit:
+        search_queries:   # issue text, errors/symbols, release/version diff
+        public_artifacts_checked:
+        exact_solution_found: # boolean
+        overlap_classification: # none | substrate_primitives | partial_topology | task_topology | exact_solution
+        callable_solution_available: # boolean
+        satisfied_mechanism_ids: # honest overlap; may contain 2+ for substrate primitives
+        satisfied_interaction_ids: # honest overlap; partial interactions do not automatically reject
+        non_collapse_rationale: # required for substrate_primitives or partial_topology
+        disposition:      # pass | reject
+      orthogonal_traps:   # at least one natural-but-wrong path; more only when native
+        - id:
+          semantic_node:
+          repair_surface:
+          natural_implementation:
+          why_wrong:
+          witness_ids:
+      shared_fix_rationale: # required only when multiple traps claim independence
   source_url:
   issue_or_pr_id:
   repo:
@@ -752,6 +954,34 @@ candidate:
   difficulty_rationale:
   reasoning_bottlenecks:
   tempting_partial_fixes:
+  semantic_mechanisms:    # natural causal core only; no replicated fixtures
+    - id:
+      description:
+      dedicated_mutant:
+  semantic_interactions:  # at least one result-changing interaction
+    - id:
+      mechanism_ids:
+      dedicated_mutant:
+  public_surfaces:        # every promised entry point/artifact to test
+  verifier_architecture:  # fail-fast design receipt; validate before cloning
+    schema_version: 1
+    status: pass
+    profile:              # cheap_deterministic | expensive_stateful
+    planned_platform_visible_unit_count: # positive estimate derived from retained obligations, no quota
+    semantic_clusters:    # obligation-derived; no fixture aliases or quota
+      - id:
+        description:
+        planned_unit_count:
+    public_surface_ids:
+    public_surface_cluster_ids: # exact mapping for every public surface
+    cross_cluster_scenarios:    # only genuine interactions, possibly one
+      - id:
+        cluster_ids:
+        discriminating_scenario:
+    verifier_shapes:      # one or more shapes chosen for discrimination
+    authority_corpus_substitute: false
+    platform_visibility_strategy:
+    nop_discrimination_strategy:
   domain_rationale:
   test_surface:
     primary_api:
@@ -770,6 +1000,8 @@ candidate:
     leakage_risk:
   patch_shape_gate:        # pass | fail — historical hard-shape calibration
   patch_shape_evidence:
+  v3_shape_screen:         # pass | fail — clear goal, inferable model, interacting axes, semantic deliverable
+  conformance_collapse_screen: # pass | fail | not_applicable
   family_key:              # library + bug_family, checked against the family ledger
   agent_probe:             # model, run count, pass count, trial-analysis flags
   hardness_score:
@@ -784,6 +1016,21 @@ candidate:
 ```
 
 Use `rejection_reason: null` only when the candidate is suitable for cloning.
+
+For `design_pattern.track: established`, require at least one valid `P*` ID and
+a candidate-specific causal graph. For `derived`, require at least one valid
+parent ID, one explicit transformation operator, and material deltas on at
+least two of causal topology, work surface, verifier architecture, and expected
+failure geometry. Keep derived patterns candidate-local until they satisfy the
+promotion rule in `frontier_task_design_patterns.md`.
+
+For every new Advanced+ artifact, copy the pattern-blind crux, convention
+audit, source smoke, structural signature, pattern-fit evidence, and
+`design_pattern.frontier_stability` into the schema-v3 candidate ledger and
+pass `design_pattern_mix_check.py --allow-partial` before cloning. Schemas v1–2
+are legacy-only. Reject rather than scaffold when retrieval overlap,
+orthogonal-trap independence, convention symmetry, runtime viability, or
+structural diversity fails.
 
 For domain profiles, prefer `base_commit`, `target_behavior`, `required_work`,
 `input_fixtures`, and `output_contract` over bugfix-only fields. Leave bugfix-only
@@ -883,8 +1130,8 @@ Downgrade or reject candidates when:
 - a strong agent can locate the fix by grepping one or two obvious symbols from the prompt
 - the four-run iteration sample is 4/4 solved; redesign because it provides no
   signal. Results above 80% but below 100% are valid Base-tier evidence.
-- fewer than 4 meaningful components/surfaces/layers are required to understand
-  and solve the task
+- difficulty comes mainly from unrelated components, exhaustive validation, or
+  interface breadth rather than the causal core
 
 **Pre-mine fix-shape probe (apply before targeting Frontier/Advanced):**
 read the actual fixing diff and ask, "if I describe only the observable symptom
@@ -911,7 +1158,9 @@ guessing. For each tested implementation, include:
 - whether the implementation is always present in the pinned repo
 - any raw container or wrapper relationship
 
-If this is unclear, mark the candidate incomplete and do not clone yet.
+If this is unclear, or the verifier architecture plan does not pass
+`verifier_architecture_check.py plan`, mark the candidate incomplete and do not
+clone yet.
 
 Also provide factual input for the later reviewer-facing Difficulty
 Explanation:
@@ -954,9 +1203,11 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 
 Keep source URLs, commit hashes, upstream test names, verifier language, and
 solution hints out of `instruction.md`.
-Do not rely on environment README/spec files to carry extra prompt goals or
-solution guidance; if the behavior cannot fit fairly in `instruction.md`, reject
-or narrow the candidate.
+Keep the goal, artifact paths, public interface, and arbitrary exact conventions
+explicit in `instruction.md`. Environment README/spec files and other visible
+evidence may support domain inference under V3; they must not leak the solution
+or introduce an unrelated hidden goal. The entire domain model need not fit in
+the instruction prose.
 
 ## Verifier Patterns
 

@@ -153,7 +153,10 @@ If the container won't build:
 | "command not found" | Missing dependency | Add to environment/Dockerfile |
 | "file not found" | Wrong path | Use absolute paths |
 | "permission denied" | File permissions | Check chmod in environment/Dockerfile |
+| `DownloadVerifierDirError` mentioning `Permission denied` for Bash during verifier-log collection | Verifier cleanup may have left Bash non-executable | Inspect permission changes in the verifier. If both Bash paths resolve to the same executable, [deduplicate targets before saving or changing modes](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions) and restore each original mode once. |
 | Tests timeout | Solution too slow | Optimize or increase timeout |
+
+After repairing a verifier cleanup failure, re-run the complete Oracle evaluation in the target image and confirm that both reward and log collection finish.
 
 ### Common Debugging Scenarios
 

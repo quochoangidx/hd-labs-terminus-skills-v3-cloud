@@ -1,388 +1,107 @@
 ---
 name: task-batch
-description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new Terminus 3 tasks ready for platform iteration. Run task-miner, task-clone, separate-verifier Oracle/NOP validation, task-zip-submit, task-client-feedback-review, adaptive task-local-solve-probe runs, and task-llm-style-audit. Do not use for ports, returned-task remediation, or ordinary single-task work."
+description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new Terminus 3 tasks. Defaults to full campaign-ready; supports explicit panel-ready without fairness, auditor, or difficulty probes. Do not use for ports or returned-task remediation."
 ---
 
-# Task Batch
-
-Create a fresh autonomous batch of submit-ready Terminus Regular tasks.
-
-## Invocation
-
-Accept either form:
-
-```text
-task-batch N
-/task-batch N
-```
-
-Treat `N` as the required delivery quota. It must be a positive integer.
-
-When invoked:
-
-- Do not ask the user to choose repositories, languages, categories, candidates, or fixes.
-- Make all normal task-building decisions autonomously.
-- Deliver exactly `N` accepted tasks.
-- Use any suitable implementation language, including Python when it fits.
-- Build a useful Terminus 3 difficulty mix. Preserve valid Base/Core candidates;
-  do not force every task toward Frontier.
-- Keep mining replacements until the quota is met.
-- Treat every invocation as a fresh batch. Do not port, reskin, or reuse an existing task unless the user explicitly requests that separately.
-
-## Required Skills
-
-Read each relevant `SKILL.md` completely before using that stage:
-
-1. `task-miner`
-2. `task-clone`
-3. `task-harbor-runner`
-4. `task-zip-submit`
-5. `task-client-feedback-review`
-6. `task-local-solve-probe`
-7. `task-llm-style-audit`
-
-Use `terminus-regular-task-authoring` and any language-specific authoring skill when required by the selected task.
-
-This file controls the batch policy when it is more specific than a dependent
-skill. Use the runtime-specific launch contract from `task-local-solve-probe`:
-Codex pins a GPT-5.6-family subagent at medium effort; Claude Code uses the
-checked-in `terminus-probe` agent profile, which pins Opus at medium effort.
-Never require or claim a model/profile that the active runtime did not resolve.
-
-## Truthfulness Rules
-
-- Never claim that a command, validation, review, or probe ran without its real output and exit status.
-- Never invent a subagent, model name, transcript, run ID, score, diff, or test result.
-- Record the actual model reported by each probe environment when available.
-- Treat setup, Docker, tool, dependency, timeout, and compilation failures as infrastructure failures, not evidence of task difficulty.
-- Do not mark a task submit-ready while a required local check is blocked.
-- Harbor API-key-dependent LLM-agent runs are not required. Local Docker build, Oracle, NOP, and non-API Harbor checks are required.
-- If external infrastructure is unavailable, continue every safe independent step, preserve the artifacts, and report the exact blocker. Never fabricate completion to satisfy the quota.
-- Treat `scripts/batch-handover.py` as the only authority allowed to emit
-  `candidate_ready`. A prose checklist, a successful ZIP command, or copied
-  terminal output cannot increment the accepted-task counter.
-- Evidence is immutable and snapshot-bound. Preserve raw logs, CTRF, diffs,
-  agent/reviewer transcripts, runtime/model/session provenance, and SHA-256
-  digests. Any task or submission change invalidates dependent receipts.
-
-## Preflight
-
-Before mining:
-
-1. Confirm the workspace and output directories.
-2. Confirm Docker is reachable.
-3. Confirm the local Terminus/Harbor tooling needed for Oracle and NOP runs is available.
-4. Confirm repository mining access is available.
-5. Inspect existing workspace and submission slugs so the batch cannot overwrite or duplicate them.
-
-Stop early only for a real external blocker that prevents all useful progress. Otherwise continue autonomously.
-
-## Batch Loop
-
-Maintain an accepted-task counter. Repeat the following workflow until the counter equals `N`.
-
-### 1. Mine a Fresh Candidate
-
-Use `task-miner`.
-
-The candidate must:
-
-- use a domain-appropriate implementation language;
-- be brand-new and gallery-novel;
-- fit one exact Terminus 3 category/subcategory pair;
-- have a fair, visible, offline-solvable contract;
-- have enough independent behavioral depth to plausibly resist a strong agent;
-- avoid saturated task families, known collapse patterns, hidden graded rules, and unreachable authorities;
-- record its source repository, base commit, task contract, category, language, and novelty evidence.
-
-Reject weak candidates before building. Do not fill quota with ports or cosmetic variants.
-
-### 2. Clone and Build the Task
-
-Use `task-clone` to create the task under `workspace/tasks/tbrain-<slug>/`.
-
-Build the complete task:
-
-- `instruction.md`
-- `task.toml`
-- `environment/`
-- `solution/`
-- `tests/`
-- any required local references or fixtures
-
-Keep the task's domain aligned with its exact category/subcategory pair. Python
-used only by the verifier is not an implementation language.
-
-Before difficulty probing, verify instruction sufficiency:
-
-- Every graded behavior is stated in the instruction, demonstrated by an agent-visible example, supported by visible training data, or derivable from an offline-reachable authority.
-- No hidden test depends on an unstated rule, convention, tie-break, constant, or output format.
-- Every important instruction requirement has a matching verifier check.
-- Every verifier behavior has a visible contractual basis.
-- Reasonable alternative interpretations are unambiguously rejected by visible evidence.
-- The Oracle agrees with the visible contract.
-- Every documented command/mode is actually invoked, and its rule-carrying
-  fixture exercises a discriminating hard case.
-- A deliberately wrong/incomplete solution has been run and rejected; nop=0 is
-  not a substitute for this negative control.
-- The Oracle has been spot-checked against the contract on hard/edge inputs that
-  were not used to tune its fixtures.
-
-Create and validate the repository's instruction-sufficiency manifest when the authoring workflow requires it. Fix insufficiency before any solve probe.
-
-Run and pass:
-
-1. Whole-task Ruff validation with `--extend-select PLW1510`; every
-   `subprocess.run(...)` must include explicit `check=True` or `check=False`.
-2. Docker image build.
-3. Oracle validation with reward `1.0`.
-4. NOP validation with reward `0.0`.
-5. Applicable local Harbor/Terminus checks that do not require an API key.
-
-Use `task-harbor-runner` for Harbor execution and triage. Fix task defects and rerun the affected checks. Drop the candidate if the contract, authority, or environment cannot be made fair and reliable without collapsing the task.
-
-### 3. Package the Task
-
-Use `task-zip-submit`.
-
-- Zip the task contents, not the parent directory.
-- Exclude caches, local reports, solve copies, secrets, VCS metadata, and macOS resource forks.
-- Write the archive to `workspace/submissions/<slug>.zip`.
-- Inspect the archive listing after creation.
-
-This is an intermediate archive. The final preflight in step 7 must regenerate
-the archive and bind its digest to the final task snapshot.
-
-### 4. Review the ZIP and Fix It
-
-Use `task-client-feedback-review` on the packaged ZIP.
-
-The user has explicitly authorized fixes for this batch. Apply all blockers and relevant should-fix findings, with special attention to:
-
-- instruction insufficiency or instruction/test asymmetry;
-- offline authority reachability;
-- prompt, rubric, solution, expected-output, or fixture leakage;
-- Docker and dependency placement;
-- canonical base image and metadata accuracy;
-- verifier robustness and behavioral coverage;
-- archive layout and submission hygiene.
-
-After any task change:
-
-1. Rerun Docker build.
-2. Rerun Oracle and NOP.
-3. Rerun applicable local Harbor checks.
-4. Recreate the ZIP.
-5. Review the new ZIP again.
-
-Do not advance while a review blocker remains.
-
-### 5. Run the Local Solve Probe
-
-Use `task-local-solve-probe` with fresh subagents and isolated solve copies. Do not expose the solution, verifier tests, rubrics, reports, expected outputs, or hidden fixtures.
-
-Use the runtime-specific pinned profile above and preserve the actual resolved
-model, diff, verifier result, and failure classification for each attempt.
-
-Run two fresh attempts initially. Add a third only after a split, a shared blind
-spot, or incomplete per-case union.
-
-- A semantic failure is valid difficulty evidence only when it matches the
-  documented crux and the contract is instruction-sufficient.
-- Setup, compilation, dependency, refusal, and timeout failures do not count.
-- If all local attempts solve the task, fairly strengthen it once or replace it;
-  do not spend platform iteration quota on a locally 100% candidate.
-- If at least one attempt fails semantically, retain the candidate and record a
-  provisional tier signal from the observed local pass rate. Do not present that
-  signal as the final platform tier.
-- For a zero-solve Frontier signal, require 100% per-case union, zero common
-  misses, and de-correlated failures. Otherwise audit the oracle and visible
-  authority before proceeding.
-- A split result is a valid Core/Advanced signal when both the passing and
-  failing runs are trustworthy. Python follows the same rule as every language.
-
-The platform iteration stage uses two runs per current reference model and
-requires at least one failure across all four. Final difficulty is measured over
-eight runs, so local evidence remains provisional.
-
-If hardening changes instructions, tests, fixtures, solution, environment, or metadata, rerun every affected gate and replace the ZIP before continuing.
-
-### 6. Audit LLM Writing Style
-
-Use `task-llm-style-audit` after the task has passed the technical and difficulty gates.
-Create the final submission file described below before this audit so the same
-auditor and receipt cover it.
-
-Audit every reviewer-visible prose surface, including:
-
-- `instruction.md`;
-- environment documentation and code comments;
-- rubric text;
-- submission explanations;
-- metadata descriptions.
-
-Rewrite flagged prose in clear, natural English without changing technical meaning, adding unsupported claims, or breaking instruction/test symmetry.
-
-If the audit changes task contents, rerun the affected validation and all local
-solve probes because their task snapshots are now stale. Recreate the ZIP and
-re-review it. If it changes only the external submission file, re-audit that
-file. Preserve the raw audit transcript at
-`workspace/reports/<slug>/style-audit-transcript.md`, then create the hash-bound
-receipt with:
-
-```bash
-scripts/python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
-  workspace/<slug> \
-  --submission submissions/SUBMISSION-<slug>.md \
-  --transcript workspace/reports/<slug>/style-audit-transcript.md \
-  --runtime <actual-runtime> --model <actual-model> \
-  --session-id <actual-session-id> \
-  --output workspace/reports/<slug>/style-audit.json
-```
-
-Do not create a passing receipt unless the named auditor actually reviewed every
-surface listed in it.
-
-### 7. Seal the Final Snapshot
-
-After all task, submission, probe, and style changes are complete, create the
-final mechanical evidence and ZIP in one strict run:
-
-```bash
-scripts/preflight.sh workspace/<slug> --strict \
-  --report-json workspace/reports/<slug>/preflight.json \
-  --evidence-dir workspace/reports/<slug>/preflight-logs \
-  --emit-zip submissions/<slug>.zip
-```
-
-The receipt must include successful policy, agent/verifier image builds,
-Oracle=1, NOP=0, Oracle under noexec `/tmp`, and hashes for the raw build,
-solve, verifier, CTRF, and reward artifacts. A summary without those raw files
-is not auditable evidence.
-
-Run the client scanner on that exact final ZIP and save its receipt:
-
-```bash
-scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
-  submissions/<slug>.zip --json \
-  --manual-review-pass \
-  --review-transcript workspace/reports/<slug>/client-review-transcript.md \
-  --review-runtime <actual-runtime> --review-model <actual-model> \
-  --review-session-id <actual-session-id> \
-  --evidence-output workspace/reports/<slug>/client-review.json
-```
-
-Complete the manual portions required by `task-client-feedback-review`; the
-scanner is a fail-closed mechanical subset, not a substitute for semantic
-review. Preserve that manual review as the named non-empty transcript before
-running this command. Then run the final handover gate:
-
-```bash
-scripts/python3 scripts/batch-handover.py workspace/<slug> \
-  --report-dir workspace/reports/<slug> \
-  --probe-dir workspace/local-solve-probes/<slug> \
-  --zip submissions/<slug>.zip \
-  --submission submissions/SUBMISSION-<slug>.md \
-  --output workspace/reports/<slug>/handover.json
-```
-
-Count the task only when this command exits `0`, prints `CANDIDATE_READY`, and
-the saved handover has `status: candidate_ready`. It independently recomputes
-the task/ZIP file map, receipt hashes, sufficiency sources and transcripts,
-probe diffs/CTRF, style surfaces, submission hash, and trusted probe verifier
-results. Never hand-edit receipts to clear a failure; rerun the originating
-stage.
-
-## Submission File
-
-Create one file per accepted task:
-
-```text
-workspace/submissions/SUBMISSION-<slug>.md
-```
-
-Use this exact structure:
-
-```markdown
-# Difficulty Explanation
-
-Describe in original language why the task is challenging for humans and coding agents. Base the explanation on the actual task design and observed probe failures. Name the professional role that would perform this work and why it is relevant. State where any corpus, fixtures, captures, traces, or dataset came from and why they are realistic; if the task uses no external data, say that explicitly. Do not claim unsupported platform difficulty.
-
-# Solution Explanation
-
-Describe the high-level solution approach and the key implementation insights. Do not copy the full Oracle or expose hidden fixture values.
-
-# Verification Explanation
-
-Explain how the tests verify correctness, including the major behavior clusters, preservation checks, edge cases, and anti-shortcut coverage.
-
-# Metadata
-
-- Does this task use an approved canonical base image? Yes — `<exact image reference>` / No — `<reason>`
-- Did you use a Task Inspiration from the Task Gallery for this submission? Yes / No
-- Task Inspiration ID: `<ID or N/A>`
-
-# Rubrics
-
-Agent completes `<observable behavior>`, +5
-Agent completes `<observable behavior>`, +5
-Agent preserves `<observable behavior>`, +3
-Agent breaks `<observable behavior>`, -3
-```
-
-Rubrics must:
-
-- grade observable behavior, not implementation style;
-- use one physical line per rubric item;
-- start with `Agent`;
-- end with an allowed signed score;
-- avoid hidden fixture values, test names, solution details, and private failure evidence;
-- cover the task's main independent behavior clusters;
-- remain consistent with the instruction and verifier.
-
-Run the style audit on the completed submission file.
-
-## Acceptance Gate
-
-Count a task toward `N` only when all of the following are true:
-
-- The task is fresh and uses a domain-appropriate language.
-- The task folder is complete.
-- The visible contract is instruction-sufficient.
-- Whole-task Ruff validation, including `PLW1510`, is clean.
-- Docker builds successfully.
-- Oracle reward is `1.0`.
-- NOP reward is `0.0`.
-- Applicable local Harbor checks pass without requiring an API key.
-- The final ZIP passes client-feedback review with no blocker.
-- Two valid fresh attempts exist, with an adaptive third when required, and at
-  least one trustworthy semantic failure provides a local difficulty signal.
-- The LLM-style audit is clean.
-- `workspace/submissions/<slug>.zip` exists and matches the final task state.
-- `workspace/submissions/SUBMISSION-<slug>.md` exists and is accurate.
-- The final `workspace/reports/<slug>/handover.json` is schema version 2,
-  hash-binds every required evidence file, and says `candidate_ready` after a
-  successful `scripts/batch-handover.py` run.
-
-Do not count rejected, infrastructure-failed, ambiguous, locally all-pass, or
-merely packaged candidates. A trustworthy split is valid Terminus 3 evidence.
-
-## Final Response
-
-Report one row per accepted task with:
-
-- slug;
-- language;
-- category;
-- Docker result;
-- Oracle reward;
-- NOP reward;
-- Harbor result;
-- ZIP review result;
-- probe run results and any adaptive third run;
-- provisional local tier signal;
-- ZIP path;
-- submission file path;
-- final ZIP SHA-256 and handover receipt path.
-
-Also list any discarded candidates and their concise rejection reasons. Distinguish verified results from unavailable external checks.
+# Task Batch Router
+
+Create exactly `N` fresh Terminus 3 tasks using one explicitly selected
+execution profile. Treat `N` as the delivery count, not an attempt count.
+
+## Select one profile before Stage A
+
+Read [execution profiles](references/execution-profiles.md), record the selected
+profile in the batch index and never mix receipts or result labels between
+profiles.
+
+- Default to `campaign_ready`. Read
+  [the complete campaign workflow](references/campaign-ready.md) before acting.
+- Select `panel_ready` only when the user explicitly omits ordinary
+  fairness/auditor roles and difficulty probes. Read only this router,
+  `references/execution-profiles.md`, the bounded-design reference and the
+  quality-panel skill/resources needed by that path. Do not load the campaign
+  workflow, quota hooks, fairness workflow, solve-probe, rubric or style skills.
+
+User-specified category, language, attempt and time budgets override profile
+defaults. Record an attempt when the user's definition says it begins. Keep one
+active candidate at a time unless the user explicitly authorizes isolated
+parallel candidates.
+
+## Shared invariants
+
+- Every task is genuinely new: no port, reskin, reused corpus or previously
+  submitted topology presented as a new task.
+- Choose exactly one current Title Case category and one valid matching
+  subcategory by domain, not by the repair verb.
+- Use one persistent builder for a candidate. Preserve its evidence when the
+  candidate is rejected or requires rescope.
+- Start from one primary outcome and a bounded connected causal core. Do not add
+  functions, behaviors, corpus families, malformed-input domains, tests or
+  exact-output conventions to satisfy a count or imply difficulty.
+- Keep arbitrary public conventions explicit and agent-visible. Hidden cases
+  may vary instances and interactions only under the same inferable model.
+- Treat infrastructure/setup failures as infrastructure evidence, never task
+  difficulty. Never claim a command, reviewer, result, model or hash that was
+  not observed.
+- Evidence is immutable and snapshot-bound. Any semantic task change
+  invalidates dependent checks, packets and reviews.
+- Harbor API-key-dependent agent runs are not required. Run the applicable
+  local Docker and non-API checks selected by the profile.
+
+## `panel_ready` route
+
+Use `task-miner`, `task-clone`, `terminus-regular-task-authoring`,
+`task-quality-panel-judgement`, deterministic `task-client-feedback-review`,
+`task-harbor-runner`, and `task-zip-submit` only as their stages become
+relevant. Read each selected skill completely before using it.
+
+For each candidate:
+
+1. Mine a fresh domain-native candidate and create the scope ledger required by
+   [bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md).
+2. Create `workspace/reports/<slug>/panel-precheck-manifest.json` and run the
+   quality-panel `panel_precheck.py --design-only`. Reject or rescope a
+   disconnected core, standalone subtask bundle or serialization-only join
+   before scaffold expansion.
+3. Build only the retained contract, supplied support plumbing, Oracle and
+   obligation-driven verifier. Run deterministic structure, isolation and
+   compatibility checks.
+4. Run strict Docker Oracle=1, NOP=0 and noexec Oracle=1. Bind the verifier
+   inventory and minimal natural wrong-path/harness-bypass receipts, then run
+   `panel_precheck.py --full` on the exact snapshot. Do not spend reviewer
+   sessions while it is red.
+5. Run one eight-reviewer discovery panel: four isolated packets, two fresh
+   independent reviewers per axis. Collect all eight complete responses before
+   adjudicating or editing.
+6. If discovery is already four-axis `None` with complete mandatory coverage,
+   package the unchanged snapshot without duplicate clearance. Otherwise
+   verify findings, remove speculation, deduplicate by root invariant and apply
+   exactly one consolidated remediation batch. Rerun affected checks, strict
+   Docker closure and full precheck.
+7. Run exactly one fresh eight-reviewer clearance panel. If any axis remains
+   blocking/`Unsure` or mandatory coverage is incomplete, stop that obligation
+   set as `rescope_required`; do not run another repair/clearance under a renamed
+   phase. Move to a new candidate only when the batch/user authority permits.
+8. Package only the exact snapshot whose deterministic gates and four semantic
+   axes passed. Count it as `local_panel_cleared`, never `candidate_ready` or a
+   measured tier.
+
+Minimal wrong-path closure is verifier-quality evidence, not a campaign mutant
+suite or difficulty probe. `mechanically_ready` from the precheck is not a
+quality-axis `None`; the semantic panel remains mandatory.
+
+## Result labels and stopping
+
+- `campaign_ready` follows `references/campaign-ready.md` and may reach
+  `candidate_ready` only through its real handover gate.
+- `panel_ready` stops at `local_panel_cleared`; difficulty is `not measured` and
+  platform acceptance is not guaranteed.
+- Stop when the profile-specific accepted count reaches `N`, the explicit
+  attempt budget is exhausted, the user stops, or a concrete external blocker
+  prevents all useful progress. Never count a rejected, merely packaged or
+  deterministically green task as accepted.
+
+Return task/ZIP paths and hashes, category/subcategory, deterministic results,
+profile-specific review/probe evidence, accepted status, and concise rejected
+candidate dispositions. Clearly distinguish unavailable checks and unmeasured
+difficulty from verified results.

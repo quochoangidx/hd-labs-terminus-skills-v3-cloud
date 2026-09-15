@@ -159,7 +159,11 @@ The paths declared in a task's top-level `artifacts` array. These are the only f
 
 ### Separate verifier
 
-The Terminus 3 grading model: the verifier runs in its own container, built from `tests/Dockerfile`, which the agent cannot see or reach. Set with `[verifier].environment_mode = "separate"`.
+The Terminus 3 grading model: the verifier runs in its own container, built from `tests/Dockerfile`, which the agent cannot see or reach. Terminus requires the explicit `[verifier].environment_mode = "separate"` key. Harbor also treats a `[verifier.environment]` table as separate and defaults to **shared** if neither is set; Terminus CI rejects both the implicit-only form and that shared default.
+
+### Quality panel
+
+An automated four-axis review of a submitted task (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`) that blocks before a human reviewer and gates the difficulty measurement. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ### Difficulty tiers
 
@@ -167,7 +171,7 @@ The four empirical tiers — **Frontier** (<20%), **Advanced** (20–50%), **Cor
 
 ### Accuracy
 
-Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier. In-platform iteration uses a shorter 4-run check (2 per model).
+Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier. Measured once, after the quality panel passes and before review; nothing re-runs after acceptance.
 
 ### Canary string
 
@@ -175,7 +179,7 @@ A marker used to keep benchmark data out of training corpora. Terminus 3 is a tr
 
 ### network_mode
 
-The `task.toml` setting declaring whether a task has network access. `"public"` is the default; `"no-network"` is used only when a task does not make sense to complete with internet access.
+The `task.toml` setting declaring network access, set **per phase**. `[environment].network_mode` must be `"public"` on every task — the image build and harness install need the network. `[agent].network_mode` and `[verifier].network_mode` are `"public"` or `"no-network"` as the task requires; an offline task keeps the environment public and closes the agent.
 
 ### Terminal-Bench 3.0
 

@@ -44,6 +44,7 @@ LEAK_WORDS = [
 ]
 
 WORD_LIMIT = 300
+MAX_FLAT_LIST_ITEMS = 20
 
 
 def scan(path: pathlib.Path) -> list[str]:
@@ -52,14 +53,26 @@ def scan(path: pathlib.Path) -> list[str]:
     prose = re.sub(r"```.*?```", "", text, flags=re.S)
     findings: list[str] = []
 
+    list_items: list[tuple[int, str]] = []
     for i, raw in enumerate(prose.splitlines(), 1):
         s = raw.strip()
         if re.match(r"^#{2,}\s", s):
             findings.append(f"line {i}: section header {s[:50]!r} — use flowing prose, no ##/### headers")
-        if re.match(r"^(?:[-*+]|\d+[.)])\s", s):
-            findings.append(f"line {i}: bullet/numbered list item {s[:50]!r} — rewrite as prose")
+        list_match = re.match(r"^(\s*)(?:[-*+]|\d+[.)])\s", raw)
+        if list_match:
+            list_items.append((i, s))
+            if list_match.group(1):
+                findings.append(
+                    f"line {i}: nested list item {s[:50]!r} — keep instruction lists flat"
+                )
         if s.count("|") >= 3:
             findings.append(f"line {i}: table-like row {s[:50]!r} — tables always trip the check")
+
+    if len(list_items) > MAX_FLAT_LIST_ITEMS:
+        findings.append(
+            f"{len(list_items)} bullet/numbered items — keep a flat list to at most "
+            f"{MAX_FLAT_LIST_ITEMS} items"
+        )
 
     words = len(prose.split())
     if words > WORD_LIMIT:

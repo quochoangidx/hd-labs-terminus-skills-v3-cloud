@@ -51,7 +51,6 @@ CANONICAL_REWARD_FOOTER = [
     "else",
     "    echo 0 > /logs/verifier/reward.txt",
     "fi",
-    "exit 0",
 ]
 FROM_RE = re.compile(
     r"^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+([A-Za-z0-9_.-]+))?\s*(?:#.*)?$",
@@ -62,6 +61,8 @@ RUNTIME_SETUP_RE = re.compile(
     r"\b(?:uvx|pip(?:3)?\s+install|apt-get|npm\s+install|curl|wget|git\s+clone)\b",
     re.IGNORECASE,
 )
+COPY_CHOWN_RE = re.compile(r"(?i)(?:^|\s)--chown=([^\s]+)")
+COPY_FROM_RE = re.compile(r"(?i)(?:^|\s)--from=([^\s]+)")
 
 
 def result(check: str, ok: bool, detail: str) -> dict[str, object]:
@@ -104,6 +105,36 @@ def has_base_justification(text: str) -> bool:
     return len(comments.split()) >= 8 and any(term in comments for term in reason_terms)
 
 
+def cloud_builder_copy_errors(text: str) -> list[str]:
+    """Return COPY option forms accepted locally but rejected by the cloud builder."""
+    aliases = {
+        alias.lower()
+        for _, _, alias, _ in docker_stages(text)
+        if alias
+    }
+    errors: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not re.match(r"(?i)^\s*COPY\b", line):
+            continue
+        chown = COPY_CHOWN_RE.search(line)
+        if chown and not re.fullmatch(r"[0-9]+(?::[0-9]+)?", chown.group(1)):
+            errors.append(f"line {line_number}: COPY --chown={chown.group(1)} must use numeric IDs")
+        source = COPY_FROM_RE.search(line)
+        if not source:
+            continue
+        image = source.group(1)
+        if image.lower() in aliases or image.isdigit():
+            continue
+        digest = DIGEST_RE.search(image)
+        image_name = image[: digest.start()] if digest else image
+        leaf = image_name.rsplit("/", 1)[-1]
+        if digest is None or ":" in leaf:
+            errors.append(
+                f"line {line_number}: COPY --from={image} must use a digest-only image ref"
+            )
+    return errors
+
+
 def validate_dockerfile(
     path: Path,
     role: str,
@@ -130,6 +161,15 @@ def validate_dockerfile(
             f"{role}-dockerfile:digests",
             not unpinned,
             "all external FROM images are digest-pinned" if not unpinned else "; ".join(unpinned),
+        )
+    )
+
+    modal_errors = cloud_builder_copy_errors(text)
+    checks.append(
+        result(
+            f"{role}-dockerfile:modal-syntax",
+            not modal_errors,
+            "COPY options are cloud-builder compatible" if not modal_errors else "; ".join(modal_errors),
         )
     )
 
@@ -293,14 +333,23 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             f"timeout_sec={agent_timeout!r}; expected 1800-18000",
         )
     )
-    network_mode = manifest.get("environment", {}).get("network_mode")
+    environment_network_mode = manifest.get("environment", {}).get("network_mode")
     checks.append(
         result(
-            "task.toml:network-mode",
-            network_mode in {"public", "no-network"},
-            f"network_mode={network_mode!r}",
+            "task.toml:environment-network-mode",
+            environment_network_mode == "public",
+            f"network_mode={environment_network_mode!r}; expected 'public'",
         )
     )
+    for phase in ("agent", "verifier"):
+        phase_network_mode = manifest.get(phase, {}).get("network_mode")
+        checks.append(
+            result(
+                f"task.toml:{phase}-network-mode",
+                phase_network_mode in {"public", "no-network"},
+                f"network_mode={phase_network_mode!r}; expected 'public' or 'no-network'",
+            )
+        )
 
     languages = metadata.get("languages")
     language_ok = (
@@ -332,6 +381,29 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             task_dir / "tests" / "Dockerfile",
             "verifier",
             artifact_paths,
+        )
+    )
+
+    all_modal_errors: list[str] = []
+    for dockerfile in sorted(task_dir.rglob("Dockerfile")):
+        try:
+            dockerfile_text = dockerfile.read_text(errors="replace")
+        except OSError as exc:
+            all_modal_errors.append(f"{dockerfile.relative_to(task_dir)}: {exc}")
+            continue
+        all_modal_errors.extend(
+            f"{dockerfile.relative_to(task_dir)}: {error}"
+            for error in cloud_builder_copy_errors(dockerfile_text)
+        )
+    checks.append(
+        result(
+            "dockerfiles:modal-syntax",
+            not all_modal_errors,
+            (
+                "every submitted Dockerfile is cloud-builder compatible"
+                if not all_modal_errors
+                else "; ".join(all_modal_errors)
+            ),
         )
     )
 

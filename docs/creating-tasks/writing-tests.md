@@ -4,6 +4,10 @@ The `tests/test_outputs.py` file contains pytest tests that verify task completi
 
 All verifier tests must be written in Python and run with pytest, regardless of the task's implementation language. For non-Python tasks, write Python tests that exercise the CLI, service, files, or processes under test. `tests/test.sh` is a bash entry point, but it should invoke the Python pytest suite rather than delegating to another language-specific test framework.
 
+> **Writing a Hardware/CAD task?** Geometry has failure modes this page does not cover — see [CAD Task Guidelines](/portal/docs/creating-tasks/cad-task-guidelines) in addition to everything here.
+
+> **Quality panel.** Before you submit, walk the four-axis checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`). A `Major` or `Minor` on that review blocks the same way a failing CI check would.
+
 ## How Verification Works
 
 In Terminus 3 the verifier runs in a **separate container** the agent cannot see or reach:
@@ -131,6 +135,15 @@ Every requirement in the prompt must map to a test. If it is implied or stated i
 
 **A documented command or mode must be *run*, not just referenced.** If the contract names a subcommand, flag, or behavior mode, a test has to invoke it. A requirement that only appears in the prompt and is never exercised is not covered.
 
+**Each named domain rule needs an isolating case.** A single wrong solution that violates several rules at once — including the shipped buggy environment — only proves the verifier is not a no-op. For every rule the instruction names, there must be a fixture whose expected outcome would change if **that rule alone** were inverted. Do not require a full second implementation per rule; the fixture just has to make that rule bite.
+
+**Held-out data must not be the only pin.** Held-out cases exist to check generalization to unseen inputs. They must not be the **only** place a stated rule is enforced. If the visible suite would still pass when that rule is wrong, the rule is not tested — even when `instruction.md` names it and a mixed held-out set happens to fail.
+
+**Hidden test inputs are fine; hidden requirements are not.** A held-out fixture may introduce a new input, but the instruction and that input must contain everything needed to determine the correct output. A hidden corpus must not be the only source of an unstated mapping, threshold, label, or other fact that decides which behavior passes.
+
+- **Fine:** a hidden test uses a new input (for example a new CSV), and the documented algorithm or rule lets the submitted program compute the answer from that input.
+- **Unfair:** passing depends on a mapping, threshold, label, convention, or ground-truth fact absent from both the instructions and the input the program receives. Example: a hidden test for whether code `X17` maps to category `premium` when that mapping exists only in the hidden corpus.
+
 ```python
 # BAD: the contract documents a `verify` subcommand, but the suite only ever runs `engrave`,
 # so a solution that hardcodes or breaks `verify` still passes.
@@ -179,7 +192,7 @@ The prompt never mentions division by zero, but any reasonable person reading "a
 
 ### 4. Cover Edge Cases
 
-**Make the fixture that carries a rule its hard case.** When one test decides whether a rule is implemented, the input must actually stress that rule — otherwise a solution that skips the rule passes.
+**Make the fixture that carries a rule its hard case.** When one test decides whether a rule is implemented, the input must actually stress that rule — otherwise a solution that skips the rule passes. The same applies across the suite: a rule that only fails when bundled with other violations, or that is enforced only inside a mixed held-out set, is not really tested.
 
 ```python
 # BAD: an ordering rule (timestamp, then sequence, then file-position) is only tested on a
@@ -242,7 +255,7 @@ COPY . /tests/
 RUN mkdir -p /app
 ```
 
-Every `FROM` in `tests/Dockerfile` must be digest-pinned and on a sanctioned base image, exactly as in `environment/Dockerfile`. This is currently reported as a **warning** rather than a hard failure, but treat it as required.
+Every `FROM` in `tests/Dockerfile` must be digest-pinned and on a sanctioned base image, exactly as in `environment/Dockerfile`. This is reported as a **warning**, not a hard failure — it will not block your submission, but a reviewer can still send the task back for it. Floating tags break reproducibility when the dataset is re-validated later, so pin them.
 
 ### tests/test.sh
 
@@ -260,17 +273,30 @@ if [ "$rc" -eq 0 ]; then
 else
   echo 0 > /logs/verifier/reward.txt
 fi
-
-exit 0
 ```
 
 Three things about this script are deliberate:
 
-- **No `set -e`.** With `-e`, a failing pytest aborts the script before the reward file is written, and the trial records no result at all. Capture the exit code instead.
-- **Always `exit 0`.** Harbor grades from `/logs/verifier/reward.txt`, not from the script's exit status. A non-zero exit does not mark the task failed — it risks the trial being treated as errored.
+- **No `set -e`.** With `-e`, a failing pytest aborts the script before the reward file is written. The trial then has no reward file, and a real test failure is reclassified as an infrastructure error. Capture the exit code instead. This applies to `tests/test.sh` specifically — fail-fast is still fine in setup and solution scripts.
+- **End on the `fi`. No trailing `exit`.** The script's status then reflects whether the reward was *recorded*: zero when the write succeeded, non-zero when it failed — which correctly surfaces as an infrastructure error. Note that pytest's `rc` is captured in a variable and never propagated, so a failing test exits zero either way; a trailing `exit 0` adds nothing except masking a failed write.
 - **`--ctrf /logs/verifier/ctrf.json` is required** for any pytest-based verifier, and is enforced by an automated check.
 
-> **Verify against the task skeleton.** These shapes are confirmed by the team but predate the published Terminus 3 skeleton. If the skeleton differs, the skeleton wins — and please flag it. The `set -e` guidance and the digest-pinning scope for `tests/Dockerfile` are still being confirmed and may change.
+> **This shape matches the published [task skeleton](/Terminus-3-Prod/default-template.zip).** If you find a difference, the skeleton wins — and please flag it.
+
+### Preserve Interpreter Permissions
+
+If your verifier temporarily changes interpreter permissions, its cleanup must leave those interpreters usable. Harbor still needs to collect verifier logs and rewards after the tests finish.
+
+On images where `/bin` resolves to `/usr/bin`, `/bin/bash` and `/usr/bin/bash` name the same executable. Saving a mode and disabling execution for each path in turn can save `000` for the second path. Restoring those entries in order then leaves Bash non-executable, even when the tests wrote a reward successfully.
+
+Handle the targets before changing any permissions:
+
+1. Resolve every path unconditionally with `Path.resolve()`. Checking only `path.is_symlink()` misses symlinks in parent directories such as `/bin`.
+2. Deduplicate the resolved targets, then record every target's original permission mode before making any changes.
+3. Put both the permission changes and the test work inside a `try`/`finally` scope so cleanup runs if setup or execution fails.
+4. Restore each target's saved mode once. Attempt all restorations even if one fails, and report any restoration error. Do not replace the saved modes with a hardcoded `0755`.
+
+Repair the verifier source and run the complete Oracle evaluation in the target image, confirming that reward and log collection finish. The [platform preflight](/portal/docs/testing-and-validation/ci-checks-reference#verifier-interpreter-permissions-platform-preflight) `verifier_interpreter_permissions` flags this known pattern but does not repair submitted packages.
 
 ## Common Patterns
 
@@ -344,14 +370,14 @@ def test_cli_help():
 
 A rigorous verifier often contains substantial logic — that is expected and fine. The following are **legitimate and encouraged**, not violations:
 
-- **Run the agent's own program.** Build and run the agent's binary/CLI, then grade its output. **Build it from the submitted source** — do not grade a binary the agent delivered without rebuilding it (see *Grading a Delivered Binary Without Rebuilding*).
+- **Run the agent's own program.** Build and run the agent's binary/CLI, then grade its output. **Build it from the submitted source** — do not grade a binary the agent delivered without rebuilding it. If the contract separately requires a delivered binary, package, report, or file, validate that artifact too and confirm it corresponds to the submitted source; a separate rebuild does not prove the required artifact is correct (see *Grading a Delivered Binary Without Rebuilding*).
 - **Parse the agent's output** to check semantics (e.g., interpreting the config, policy, or files the agent produced).
-- **Precomputed golden fixtures or hashes** for exact-match or byte-exact tasks (numerical, ML, reporting). Hardcoding the *expected result* is fine and often required.
+- **Precomputed golden fixtures or hashes** for exact-match or byte-exact tasks (numerical, ML, reporting). Hardcoding the *expected result* is fine and often required — this is the same rule as *Matching at the Wrong Specificity*, seen from the other side: when the instruction pins the output exactly, an exact comparison is what verifies it.
 - **Spec-derived invariants** — compute an expected property from the task's spec/config and check the output against it (e.g., a floor, budget, or cost ceiling).
-- **Held-out ground truth**, ideally **sealed into memory and unlinked from `tests/` before the agent's program is built or run**, so a rebuilt program cannot read the answer key at grade time.
+- **Held-out ground truth**, baked into the **verifier image** (`tests/Dockerfile`). Separate mode keeps goldens out of the **agent** container. It does **not** hide them from **agent code the verifier executes** (rebuild-from-source, then run the agent's program). Drop to an unprivileged uid **before** exec'ing that program and probe that it cannot read the goldens. Sealing a key into memory and unlinking it can be an extra step — it is not a substitute for that boundary, and it is not a substitute for separate mode (which Terminus requires via the explicit `[verifier].environment_mode = "separate"` key).
   - **Do not hand the candidate a path whose sibling is the answer.** If a held-out input is passed to the agent's program by directory path, its expected output must not live in that same directory (or anywhere reachable from that path) — the program can read the sibling instead of computing. Seal held-out inputs and their goldens in separate trees, and never pass a path inside the fixture tree.
   - **Do not leave the agent's own prior output at a predictable path before its graded run.** Moving delivered artifacts to a fixed location (e.g. `/app/out.delivered`) and then running the candidate lets the candidate copy them back instead of recomputing.
-- **Perturbation / holdout re-runs** — re-run the agent's program on modified or held-out inputs and assert the output changes. This is the recommended way to prove the solution is *computed*, not hardcoded.
+- **Perturbation / holdout re-runs** — re-run the agent's program on meaningfully varied or held-out inputs and assert the output changes. Vary the sizes, values, ordering, paths, formats, or business conditions the stated domain makes relevant; this does not require combinatorial coverage of behavior the contract never promises. This is the recommended way to prove the solution is *computed*, not hardcoded.
 
 The line to hold is narrow: don't put a **callable end-to-end solver** in `tests/` that maps task inputs to the complete expected artifact (that belongs in `solution/`), and don't hardcode a value the instruction says the agent must read from a config file. Everything above stays fair game.
 
@@ -390,19 +416,34 @@ assert model.features == cfg["features"]
 
 **Not a ban on hardcoded values.** Hardcoding the expected *result* — exact numeric/ML targets (with tolerance), byte-exact outputs, format constants — is fine and often required. For config-driven tasks, confirm the dependency by **mutating the config and re-running** (the output must change).
 
-### Brittle String Matching
+### Matching at the Wrong Specificity
+
+**Assert at the specificity the instruction states.** If the instruction pins an exact output — a format, a filename, a byte-exact artifact — then `==` or a byte comparison is *required*, and a looser check fails to verify what the task asked for. If the instruction is silent on format, assert semantics only and never `==`, because you would be grading formatting the task never specified.
+
+The word that decides it is **undocumented**: a check is brittle when it pins something the instruction never stated, not because it uses `==`.
+
+The required path and filename are part of that contract. A correct implementation must not fail because `instruction.md` names `/app/report.json` while the verifier reads `/app/output/report.json`, or because the verifier expects a different filename. Check both directions: every path the verifier grades is disclosed, and every required output path in the instruction is the artifact the verifier actually reads.
 
 ```python
-# BAD: Exact string match
+# BAD: the instruction never specifies the log wording, so `==` grades undocumented formatting
 def test_output():
     output = open("/output/log.txt").read()
     assert output == "Processing complete\n"
 
-# GOOD: Check for key content
+# BAD: too loose in the other direction — an agent that echoes the word anywhere passes
 def test_output():
     output = open("/output/log.txt").read()
     assert "complete" in output.lower()
+
+# GOOD: the instruction specifies the report schema, so assert the parsed values
+def test_run_reports_completion():
+    """The documented status field must report completion, with the processed count."""
+    report = json.loads(Path("/app/output/report.json").read_text())
+    assert report["status"] == "complete"
+    assert report["records_processed"] == 1432
 ```
+
+When the instruction *does* pin the output exactly, `==` is the correct check — see [What a Good Verifier Legitimately Does](#what-a-good-verifier-legitimately-does) for golden fixtures and byte-exact comparison.
 
 ### Checking a Proxy Instead of the Value
 
@@ -448,6 +489,8 @@ def test_decoder_actually_decodes_a_fresh_registry():
 
 This is what **Perturbation / holdout re-runs** is for — use it, and rebuild rather than trusting the delivered binary.
 
+Rebuilding is not permission to ignore the deliverable. If the instruction requires the agent to leave a binary, package, report, or other built artifact, the verifier must validate that required artifact as well as the clean rebuild and confirm they correspond. Testing only a separately rebuilt copy allows a stale, fabricated, or independently prepared deliverable to pass.
+
 ### No Equivalence Between Artifacts the Agent Controls Both Sides Of
 
 When correctness depends on two representations agreeing — a simulated build and a synthesized one, or a library and the consumer that exercises it — and the agent controls both, grade the **equivalence**, not each side alone. Otherwise the agent satisfies each with different code.
@@ -459,6 +502,88 @@ When correctness depends on two representations agreeing — a simulated build a
 
 # GOOD: drive both from the same source and assert identical behavior, or run a consumer the
 # verifier owns (not one the agent can edit).
+```
+
+### Deriving Ground Truth from Agent-Writable Paths
+
+Goldens, corpus metadata, sizing truth, or default held-out fixtures must not come from paths the agent can edit. If the verifier reads expected bytes, row counts, or structural properties from `/app`, a mutable corpus, or an agent-delivered tree, the agent can replace the truth and pass with the wrong answer.
+
+```python
+# BAD: sizing limits are inferred from filenames in /app/corpus — the agent can swap file contents
+# while keeping the same names and pass every size check.
+peak = max(os.path.getsize(p) for p in glob("/app/corpus/*"))
+
+# BAD: the held-out case is built at grade time from agent-visible inputs under /app.
+held_out_input = read_json("/app/config/held_out.json")
+
+# GOOD: goldens and held-out inputs live in the verifier image (baked into tests/Dockerfile).
+GOLDEN = (Path(__file__).parent / "fixtures" / "held_out.golden").read_bytes()
+```
+
+See also [Dockerfile Best Practices → Separate Agent-Visible Runtime from Verifier-Only Assets](/portal/docs/creating-tasks/dockerfile-best-practices#8-separate-agent-visible-runtime-from-verifier-only-assets).
+
+### Symlink and Copy Staging Leaks
+
+Manually copying or re-owning agent-controlled trees before grading is a smell. `copytree` follows symlinks by default — an agent symlink can make protected verifier fixtures look like agent output. The fix is architectural, not a copy flag.
+
+```python
+# BAD: staging an agent-controlled tree by hand. copytree follows symlinks by default, so a
+# symlink to /tests/fixtures/expected.json lands in staging as the golden's contents.
+shutil.copytree("/app/submission", "/tmp/staging")
+```
+
+**GOOD:** Put the verifier in its own container. Terminus requires the explicit `[verifier].environment_mode = "separate"` key in `task.toml` (Harbor also treats a `[verifier.environment]` table as separate; with neither it defaults to shared — Terminus CI rejects both the implicit-only form and that shared default). Keep goldens and held-out fixtures in the verifier image — baked into `tests/Dockerfile`. They never exist in the **agent's** container. They **do** exist in the verifier, and if you rebuild and run the agent's program there, that process can read them unless you drop uid before the exec and confirm it cannot. Declare explicit artifact paths in top-level `artifacts`; let the harness copy those into the verifier — don't stage agent directories yourself.
+
+### Instruction Tolerance Must Match Verifier Tolerance
+
+When `instruction.md` states a numeric error band — "within 1e-4", "±0.01", "relative error below 1%" — the tests must enforce **that same band**, not a tighter one the agent was never told about. A conforming implementation that satisfies the written spec should not fail because the verifier demands extra precision.
+
+```python
+# BAD: instruction says "match within 1e-3"; test asserts 1e-9.
+assert abs(got - expected) < 1e-9
+
+# GOOD: use the tolerance from the instruction (or a single stricter value also stated there).
+assert abs(got - expected) <= 1e-3
+```
+
+If the verifier needs a tighter band for stability, state it in the instruction.
+
+### Optimization Objectives and Tie-Breaks Must Be Tested
+
+When the spec defines an objective — minimize peak memory, then job count; minimize cost subject to a SLA; preserve lexicographic order on ties — the verifier must reject a solution that satisfies feasibility but optimizes the **wrong** quantity or ignores the tie-break. Checking only that *some* valid plan exists, or only the first term in a multi-part objective, lets a materially wrong optimizer pass.
+
+```python
+# BAD: spec says "minimize peak batch size, then number of batches"; test only checks every
+# item is assigned and under the cap — a plan with twice as many batches as necessary passes.
+
+# GOOD: construct or load a case where two feasible plans differ on the primary objective (or on
+# the tie-break when the primary ties) and assert the agent's output matches the better one.
+assert plan.peak_size <= ALT_PLAN.peak_size
+assert plan.batch_count <= ALT_PLAN.batch_count if plan.peak_size == ALT_PLAN.peak_size else True
+```
+
+Spot-check the oracle on such a case too — a reference that hardcodes one heuristic may encode the wrong objective into the tests.
+
+### Stated Lifecycle and Resilience Behavior Must Be Tested
+
+If the instruction promises restart or crash recovery, idempotency, invalid-input handling, concurrency, existing-output behavior, or reset semantics, exercise that behavior directly. A happy-path run cannot establish a lifecycle promise.
+
+Choose cases that isolate the stated guarantee: interrupt before and after the durability boundary, invoke twice, start from an existing output, submit malformed input, overlap operations, or reuse state across cycles as the contract requires. Do not add lifecycle requirements to a task whose contract does not claim them.
+
+### Agent Code Must Not Redefine What Gets Graded
+
+Do not import, load, or execute agent-controlled modules **before** the verifier has fixed the meaning of the assertions that follow. In DSL or proof tasks, agent-exported notations, macros, or hooks can make equality and range checks vacuous. For subprocess checks, assert the **exit code** (and stderr when relevant), not a stdout prefix the agent can print without running the real tool.
+
+```python
+# BAD: import Solution before parsing pinned obligation types — agent notations can rewrite "=".
+import submitted_solution  # agent module loaded first
+assert parse_obligations(submitted_solution) == EXPECTED
+
+# BAD: pass if stdout contains "result" regardless of simulator exit code.
+assert "result" in proc.stdout
+
+# GOOD: parse expected types from sealed fixtures first; load agent code in an isolated step;
+# compare against fixed expectations. Require proc.returncode == 0.
 ```
 
 ### Hardcoded Random Values

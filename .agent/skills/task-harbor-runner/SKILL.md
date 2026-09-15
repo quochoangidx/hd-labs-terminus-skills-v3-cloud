@@ -62,6 +62,23 @@ Examples:
 - If Docker says it cannot connect to the daemon, ask the user to start Docker Desktop or enable the Docker socket.
 - If CI says `environment/` is too large, reduce the build context before changing tests.
 - If CI says `FROM` lacks a digest, pin the base image digest.
+- If CI reports `check_modal_dockerfile_compat`, edit the exact Dockerfile line
+  it names. Replace named `COPY --chown=user:group` values with the intended
+  numeric IDs, and write external-image `COPY --from=` as
+  `image@sha256:<digest>` with no tag. Do not alter valid
+  `FROM image:tag@sha256:<digest>`, `COPY --from=<stage-name>`, or `RUN chown`.
+- If platform preflight reports `verifier_interpreter_permissions`, inspect
+  every Python file under `tests/`. Resolve and deduplicate permission targets
+  before saving modes or chmod; `/bin/bash` and `/usr/bin/bash` may resolve to
+  the same file on merged-`/usr` images. Restore each original mode once in a
+  `finally` path, attempt every restoration, then run a complete Oracle and
+  confirm reward/log collection. This check is not in `stb harbor check`.
+- If the quality panel returns `Minor`, `Major`, or `Unsure`, treat the task as
+  not cleared. Review the cited axis (`coherent_contract`,
+  `correct_reference_solution`, `protected_ground_truth`, or
+  `sound_verifier`), repair a demonstrated task defect, and request human or
+  repeat judgment for an evidence-backed false positive or unstable `Unsure`.
+  Only `None` on all four axes auto-accepts.
 - If CI says the final runtime base is non-canonical (`check_sanctioned_base_images`),
   switch the final stage to the **canonical Terminal-Bench base image** for the
   task's language, using the EXACT digest-pinned ref (registry + tag + digest all
@@ -94,12 +111,12 @@ Examples:
   build-required ones in place (see `upstream-repo-sanitizer`).
 - If `test.sh` reward handling is rejected, use the current canonical ending:
   run pytest, immediately capture `rc=$?`, write
-  `/logs/verifier/reward.txt`, and finish with `exit 0`. Harbor grades the
-  reward file, not the script exit status.
+  `/logs/verifier/reward.txt`, and end on the reward block's `fi`. Do not add a
+  trailing `exit`; a failed reward write must surface as infrastructure error.
 - If build output names a missing package, add it to Dockerfile build-time or verifier dependency installation. Do not move dependency setup into `tests/test.sh` or bundle dependency wheels under `tests/`.
 - If LLMaJ says tests assert behavior not in instructions, update `instruction.md` or remove the test requirement.
-- If review flags a missing trailing `exit 0`, add it; the Terminus 3 test
-  runner requires it.
+- If review asks for a trailing `exit 0`, treat that as stale guidance: the
+  published Terminus 3 skeleton ends on `fi` with no trailing exit.
 - If review flags hidden instructions in environment docs, remove procedural hints from README/spec/config/comments/scripts and keep all task goals in `instruction.md`.
 
 - **Platform "Oracle failed" while local harbor+docker are GREEN ⇒ suspect
@@ -167,8 +184,10 @@ Dockerfile:
   re-zip. Mandatory check whenever the base image is not a tb-canonical one.
 - missing `asciinema` can fail agent runtime.
 - Runtime dependency installation in the verifier is invalid. Install every
-  verifier dependency in `tests/Dockerfile`; `network_mode` does not permit
-  fetching verifier tooling at trial time.
+  verifier dependency in `tests/Dockerfile`; even a public
+  `[verifier].network_mode` is not licence to fetch verifier tooling at trial
+  time. `[environment].network_mode` must remain public for image build/harness
+  setup, independently of agent/verifier policy.
 - `COPY tests/` or `COPY solution/` is a hard failure.
 
 Oracle:

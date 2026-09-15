@@ -119,8 +119,18 @@ if [ -f "$TT" ]; then
     && report PASS "toml:expert-hours" "present" || report FAIL "toml:expert-hours" "required"
   grep -q '^environment_mode = "separate"' "$TT" \
     && report PASS "toml:separate-verifier" "enabled" || report FAIL "toml:separate-verifier" "required"
-  grep -q '^network_mode = \("public"\|"no-network"\)' "$TT" \
-    && report PASS "toml:network-mode" "valid" || report FAIL "toml:network-mode" "use public or no-network"
+  if python3 - "$TT" <<'PYEOF'
+import sys, tomllib
+task = tomllib.load(open(sys.argv[1], "rb"))
+assert task.get("environment", {}).get("network_mode") == "public"
+assert task.get("agent", {}).get("network_mode") in {"public", "no-network"}
+assert task.get("verifier", {}).get("network_mode") in {"public", "no-network"}
+PYEOF
+  then
+    report PASS "toml:network-mode" "environment public; agent/verifier explicitly valid"
+  else
+    report FAIL "toml:network-mode" "environment must be public; agent/verifier must each declare public or no-network"
+  fi
   OBSOLETE="$(grep -nE '^(version|codebase_size|number_of_milestones|subcategories|allow_internet|expert_time_estimate_min|junior_time_estimate_min)[[:space:]]*=' "$TT" || true)"
   [ -z "$OBSOLETE" ] && report PASS "toml:no-terminus2" "obsolete fields absent" \
     || report FAIL "toml:no-terminus2" "$OBSOLETE"
@@ -215,6 +225,37 @@ if [ -f "$TEST_SH" ]; then
   fi
 fi
 
+# 7c. Candidate-controlled build/runtime code must not share the verifier owner.
+STATIC_VERIFIER_CHECK="$REPO_ROOT/.agent/skills/task-client-feedback-review/scripts/verifier_static_checks.py"
+PRIVILEGE_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check privilege 2>&1)"
+PRIVILEGE_RC=$?
+if [ "$PRIVILEGE_RC" -eq 0 ]; then
+  report PASS "verifier:unprivileged-candidate" "candidate-controlled subprocesses are demoted"
+else
+  report FAIL "verifier:unprivileged-candidate" "$PRIVILEGE_OUTPUT"
+fi
+ALIGNMENT_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check alignment 2>&1)"
+ALIGNMENT_RC=$?
+if [ "$ALIGNMENT_RC" -eq 0 ]; then
+  report PASS "verifier:explicit-promise-alignment" "mechanical preservation-promise checks pass"
+else
+  report FAIL "verifier:explicit-promise-alignment" "$ALIGNMENT_OUTPUT"
+fi
+IDENTITY_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check identity 2>&1)"
+IDENTITY_RC=$?
+if [ "$IDENTITY_RC" -eq 0 ]; then
+  report PASS "verifier:test-identity" "no request.node.name leak detected"
+else
+  report FAIL "verifier:test-identity" "$IDENTITY_OUTPUT"
+fi
+INTERPRETER_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check interpreter 2>&1)"
+INTERPRETER_RC=$?
+if [ "$INTERPRETER_RC" -eq 0 ]; then
+  report PASS "verifier:interpreter-permissions" "no unsafe dual Bash-path restore pattern detected"
+else
+  report FAIL "verifier:interpreter-permissions" "$INTERPRETER_OUTPUT"
+fi
+
 # 8. Rubric format (workspace/submissions/SUBMISSION-<slug>.md, if present)
 SUB_MD="$REPO_ROOT/workspace/submissions/SUBMISSION-$SLUG.md"
 if [ -f "$SUB_MD" ]; then
@@ -256,7 +297,7 @@ PYEOF
   [ "$RERR" = "none" ] && report PASS "rubric:format" "$(echo "$RUBOUT" | sed -n 's/^CRIT://p') criteria, closed-set + sum OK" \
     || report FAIL "rubric:format" "$RERR"
 else
-  report WARN "rubric:format" "no SUBMISSION-$SLUG.md found; rubric unchecked"
+  report PASS "rubric:format" "submission rubric is deferred to the submission-only style and ZIP review gates"
 fi
 
 # 9. Docker: build both images, solve in the agent image, transfer only declared
@@ -289,10 +330,10 @@ for path in task.get("artifacts", []):
     print(path)
 PYEOF
 )"
-  NETWORK_MODE="$("$PYTHON_BIN" - "$TT" <<'PYEOF'
+  read -r AGENT_NETWORK_MODE VERIFIER_NETWORK_MODE <<<"$("$PYTHON_BIN" - "$TT" <<'PYEOF'
 import sys, tomllib
 task = tomllib.load(open(sys.argv[1], "rb"))
-print(task.get("environment", {}).get("network_mode", "public"))
+print(task.get("agent", {}).get("network_mode", "no-network"), task.get("verifier", {}).get("network_mode", "no-network"))
 PYEOF
 )"
   AGENT_BUILD_LOG="${EVIDENCE_DIR:-$(mktemp -d)}/docker-agent-build.log"
@@ -318,7 +359,8 @@ PYEOF
       # Keep this non-empty: macOS ships Bash 3.2, where expanding an empty
       # array under `set -u` raises "unbound variable".
       VERIFIER_ARGS=(--label "terminus.preflight=$SLUG")
-      [ "$NETWORK_MODE" = "no-network" ] && AGENT_ARGS+=(--network none)
+      [ "$AGENT_NETWORK_MODE" = "no-network" ] && AGENT_ARGS+=(--network none)
+      [ "$VERIFIER_NETWORK_MODE" = "no-network" ] && VERIFIER_ARGS+=(--network none)
       if [ "$USE_NOEXEC" -eq 1 ]; then
         AGENT_ARGS+=(--tmpfs /tmp:noexec,nosuid,size=256m)
         VERIFIER_ARGS+=(--tmpfs /tmp:noexec,nosuid,size=256m)
@@ -355,7 +397,26 @@ EOF
       done <<EOF
 $ARTIFACT_LIST
 EOF
-      RESULT="$(docker start -a "$VERIFIER_C" 2>/dev/null)"
+      RESULT="$(python3 - "$VERIFIER_C" <<'PYEOF'
+import subprocess
+import sys
+
+container = sys.argv[1]
+try:
+    result = subprocess.run(
+        ["docker", "start", "-a", container],
+        capture_output=True,
+        text=True,
+        timeout=900,
+        check=False,
+    )
+except (OSError, subprocess.TimeoutExpired):
+    sys.exit(124)
+sys.stdout.write(result.stdout)
+sys.stderr.write(result.stderr)
+sys.exit(result.returncode)
+PYEOF
+)" || { docker rm -f "$VERIFIER_C" >/dev/null 2>&1; rm -rf "$STAGE_DIR"; return 1; }
       if [ -n "$EVIDENCE_DIR" ]; then
         docker cp "$VERIFIER_C:/logs/verifier/test-output.log" "$EVIDENCE_DIR/$LABEL-verifier.log" >/dev/null 2>&1 || true
         docker cp "$VERIFIER_C:/logs/verifier/ctrf.json" "$EVIDENCE_DIR/$LABEL-ctrf.json" >/dev/null 2>&1 || true
@@ -383,13 +444,30 @@ fi
 echo "----"
 if [ -n "$REPORT_JSON" ]; then
   mkdir -p "$(dirname "$REPORT_JSON")"
-  "$PYTHON_BIN" - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" "$EVIDENCE_DIR" <<'PYEOF'
+  "$PYTHON_BIN" - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" "$EVIDENCE_DIR" "$TASK_DIR" <<'PYEOF'
 import hashlib
 import json
 import sys
 from pathlib import Path
 
-slug, strict, fails, rows_path, output_path, zip_path, evidence_dir = sys.argv[1:]
+slug, strict, fails, rows_path, output_path, zip_path, evidence_dir, task_dir = sys.argv[1:]
+
+
+def tree_hash(root):
+    digest = hashlib.sha256()
+    volatile = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", "reports", "submissions"}
+    root = Path(root)
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root)
+        if any(part in volatile for part in rel.parts):
+            continue
+        if path.is_dir() or path.is_symlink():
+            continue
+        digest.update(rel.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 checks = []
 with open(rows_path) as rows:
     for line in rows:
@@ -400,6 +478,7 @@ payload = {
     "status": "pass" if int(fails) == 0 else "fail",
     "strict": strict == "1",
     "fail_count": int(fails),
+    "task_snapshot_sha256": tree_hash(task_dir),
     "artifact_sha256": hashlib.sha256(open(zip_path, "rb").read()).hexdigest(),
     "checks": checks,
     "evidence_files": {},
@@ -428,4 +507,4 @@ if [ -n "$EMIT_ZIP" ]; then
   echo "  zip written: $EMIT_ZIP"
 fi
 [ -n "$EVIDENCE_DIR" ] && echo "  evidence written: $EVIDENCE_DIR"
-echo "RESULT: all checks passed."
+echo "RESULT: all mechanical checks passed; semantic/manual review remains required."

@@ -20,8 +20,19 @@ Immediately after submission, your task goes through:
 - CI checks (syntax, structure, dependencies)
 - LLMaJ checks (quality, completeness)
 - Oracle agent run
+- **Quality panel judge** (blocking) — four axes on contract, reference solution, protected ground truth, and verifier soundness. `Minor`, `Major`, and `Unsure` come back to you with a cited reason; only `None` on every axis lets the task proceed. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
-### 2. Peer Review
+### 2. Agent Evaluation
+
+Once the quality panel passes, your task is run against:
+- Claude Opus 5 with Claude Code (4 runs)
+- GPT-5.6 with Codex agent (4 runs)
+
+Pass rate across all 8 runs sets the difficulty tier. At least one run must fail for the task to proceed.
+
+> **This is the only measurement, and it is final.** There is no shorter platform check before it and nothing re-runs after acceptance. The tier recorded here is the one your reviewer sees.
+
+### 3. Peer Review
 
 A qualified coding expert reviews:
 - Task clarity and correctness
@@ -30,15 +41,7 @@ A qualified coding expert reviews:
 - Anti-cheating measures
 - Overall quality
 
-### 3. Agent Evaluation
-
-Your task is run against:
-- Claude Opus 5 with Claude Code (4 runs)
-- GPT-5.6 with Codex agent (4 runs)
-
-Pass rate determines final difficulty classification.
-
-> **This is the full measurement.** While you were iterating, the platform ran 2 trials per model (4 runs). The 8-run measurement here runs only after a reviewer accepts the task, and it sets the final tier — which can differ from what you saw during iteration.
+The reviewer has your difficulty measurement and trial analysis in hand.
 
 ## Review Outcomes
 
@@ -86,7 +89,7 @@ Understand exactly what's being asked:
 ### Make Targeted Changes
 
 Don't rewrite everything. Fix only what's needed.
-Use the [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) to make sure all high-severity and relevant medium-severity criteria are covered before resubmitting.
+Use the [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) to make sure all high-severity and medium-severity criteria are covered before resubmitting. One failed Medium is enough for revision.
 
 ### Explain Your Changes
 

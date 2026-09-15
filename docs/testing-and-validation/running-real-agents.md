@@ -50,7 +50,7 @@ stb harbor run -m @anthropic/claude-opus-5 -p <path-to-task>
 
 ### Pass
 
-The agent successfully completed the task. Run each agent 5 times to establish a reliable pass rate.
+The agent successfully completed the task. Run each agent 4 times to establish a reliable pass rate.
 
 ### Fail - Good
 
@@ -72,7 +72,7 @@ This means your task needs revision.
 
 ## Determining Difficulty
 
-Run each agent **5 times** per model. Difficulty is the **mean pass@1 across both models**:
+Run each agent **4 times** per model — the same count the platform uses. Difficulty is the **mean pass@1 across both models**:
 
 | Tier | Accuracy |
 |---|---|
@@ -89,18 +89,16 @@ There is no best-model / worst-model gate, and tasks above 80% are **not** rejec
 Run 1 (GPT-5.6): FAIL
 Run 2 (GPT-5.6): PASS
 Run 3 (GPT-5.6): FAIL
-Run 4 (GPT-5.6): FAIL
-Run 5 (GPT-5.6): PASS
+Run 4 (GPT-5.6): PASS
 Run 1 (Claude): FAIL
 Run 2 (Claude): FAIL
 Run 3 (Claude): PASS
 Run 4 (Claude): FAIL
-Run 5 (Claude): FAIL
 
-GPT-5.6: 2/5 = 40%
-Claude:  1/5 = 20%
+GPT-5.6: 2/4 = 50%
+Claude:  1/4 = 25%
 
-Accuracy = mean of both = 30% → Advanced
+Accuracy = mean of both = 37.5% → Advanced
 ```
 
 ## Analyzing Failures

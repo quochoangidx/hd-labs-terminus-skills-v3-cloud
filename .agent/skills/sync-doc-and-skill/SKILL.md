@@ -103,22 +103,29 @@ For each key rule area, compare online content with local docs:
 | Sanctioned bases | `creating-tasks/dockerfile-best-practices.md` | `sanctioned` |
 | test.sh canonical form | `creating-tasks/writing-tests.md` | `reward.txt` |
 | Difficulty thresholds | `understanding-tasks/difficulty-guidelines.md` | `accuracy` |
+| Inference vs under-specification | `understanding-tasks/what-makes-a-good-task.md`, `testing-and-validation/running-real-agents.md` | `specification must be inferred`, `hidden requirements`, `could not possibly obtain` |
 | Category taxonomy | `understanding-tasks/task-taxonomy.md` | `subcategory` |
 | Instruction styling | `understanding-tasks/prompt-styling.md` | `canary` |
 | Category/policy live status | `reference/category-status.md` | `Terminus 3`, `subcategory`, `network_mode` |
 | Rubric format | `understanding-tasks/rubrics.md` | `rubric` |
 | tmux/asciinema | `creating-tasks/dockerfile-best-practices.md` | `tmux` |
-| Network mode | `understanding-tasks/task-requirements.md` | `network_mode` |
+| Per-phase network mode | `understanding-tasks/task-requirements.md` | `[environment]`, `[agent]`, `[verifier]`, `network_mode` |
 | Docker-compose flags | `reviewing-tasks/reviewer-checklist.md` | `docker_compose` |
 | Verifier integrity | `creating-tasks/writing-tests.md`, `reviewing-tasks/reviewer-checklist.md` | `complete expected artifact`, `dynamically`, `config` |
 | CLI installation and credentials | `getting-started/quick-start.md`, `testing-and-validation/running-real-agents.md` | `snorkelai-stb`, `stb login`, `keys refresh` |
 | Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5` |
 | Live category availability | `reference/category-status.md`, `reference/changelog.md` | `seven categories`, `milestones are removed` |
-| Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | `network_mode = "public"`, `digest`, `stable invariants` |
+| Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | per-phase `network_mode`, `digest`, `stable invariants` |
+| Cloud image-builder syntax | `creating-tasks/dockerfile-best-practices.md`, `testing-and-validation/ci-checks-reference.md` | `check_modal_dockerfile_compat`, `COPY --chown`, `COPY --from` |
+| Hardware/CAD geometry verification | `creating-tasks/cad-task-guidelines.md` | `direct measurement`, `sampling`, `recompute`, `built geometry` |
+| Quality panel blocking review | `testing-and-validation/quality-panel-judge-guide.md`, `testing-and-validation/quality-panel-examples.md` | `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, `Minor`, `Unsure` |
 | Negative verifier control | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `reject a wrong solution`, `delivered binary`, `equivalence` |
 | Oracle correctness | `creating-tasks/writing-oracle-solution.md` | `Correct, Not Just Passing`, `against the spec` |
 | Near-miss interpretation | `understanding-tasks/difficulty-guidelines.md` | `same one or few tests`, `different tests each time` |
 | Reviewer non-triggers | `reviewing-tasks/review-guidelines.md` | `difficulty value`, `instruction length`, `not revision triggers` |
+| Isolating named-rule fixtures | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `rule alone`, `only enforcement`, `mixed held-out` |
+| Verifier-executed candidate boundary | `creating-tasks/dockerfile-best-practices.md`, `creating-tasks/writing-tests.md` | `no-new-privs`, `drop`, `colocation`, `agent code` |
+| Interpreter permission cleanup | `creating-tasks/writing-tests.md`, `testing-and-validation/ci-checks-reference.md` | `verifier_interpreter_permissions`, `Path.resolve`, `/bin/bash`, `/usr/bin/bash` |
 
 ### Diff format
 
@@ -153,6 +160,7 @@ After docs are synced, audit the doctrine-coupled set:
 .agent/skills/task-zip-validator/SKILL.md
 .agent/skills/task-zip-submit/SKILL.md
 .agent/skills/task-client-feedback-review/SKILL.md
+.agent/skills/task-quality-panel-judgement/SKILL.md (+ axis prompts and packet builder)
 .agent/skills/task-language-port/SKILL.md
 .agent/skills/terminus-regular-task-authoring/SKILL.md
 .agent/skills/task-harbor-runner/SKILL.md
@@ -188,10 +196,35 @@ After docs are synced, audit the doctrine-coupled set:
 | One-model platform-Hard early exit | scoring mapping | validation | check |
 | Net-new category availability | candidate filter | category gate | check |
 | Internet-enabled source pinning | viability | Docker/verifier review | check |
+| Clear goal vs inferred domain model | evidence graph | prompt/evidence gate | V3 schema check |
+| Held-out generalization vs hidden arbitrary policy | candidate shape | verifier design | review |
+| Cloud-compatible COPY syntax | — | Docker Rules | blocking check |
+| CAD geometry and parametric recompute | candidate feasibility | verifier design | CAD review |
+| Quality panel four-axis gate | candidate return risk | pre-submit review | blocking review |
+| Named-rule isolating fixture | plan feasibility | verifier matrix | blocking review |
 | Deliberately wrong solution rejected | candidate verifier shape | validation | manual check |
 | Oracle independently checked against spec | authority viability | oracle validation | manual check |
 | Delivered source rebuilt / artifact equivalence | — | verifier architecture | manual check |
 | Difficulty mismatch and instruction length are not standalone revision triggers | — | reviewer guidance | advisory check |
+| In-verifier candidate read boundary | architecture viability | privilege/fixture design | blocking review |
+| Bash permission alias cleanup | — | verifier cleanup | platform-preflight check |
+
+### Terminus 3 epistemic consistency check
+
+Do not resolve generic phrases such as "fully specified" or "all tested
+behavior" by forcing every semantic invariant into `instruction.md`. Reconcile
+them with the Terminus 3-specific guidance:
+
+- the goal, artifact/interface, and arbitrary exact conventions must be clear;
+- the domain model may be inferred from agent-visible evidence, system state,
+  realistic specs, or conventions;
+- hidden instances/combinations are valid when they exercise that same model;
+- unobtainable facts and oracle-only policies are invalid.
+
+Flag any skill that requires one visible sentence/source per test, forbids all
+hidden feature values, or requires fairness reviewers to reproduce the exact
+oracle. Those are legacy contract-transcription rules, not the Terminus 3
+fairness model.
 
 For each cell, verify the skill's text matches the current docs. Report discrepancies.
 
@@ -280,11 +313,19 @@ reward.txt
 set -uo pipefail
 CLAUDE.md
 cursorrules
-reject a wrong solution
-Correct, Not Just Passing
-near_miss
-delivered binary
-equivalence
+check_modal_dockerfile_compat
+COPY --chown
+COPY --from
+CAD Task Guidelines
+recompute
+coherent_contract
+correct_reference_solution
+protected_ground_truth
+sound_verifier
+verifier_interpreter_permissions
+no-new-privs
+/bin/bash
+/usr/bin/bash
 ```
 
 If any of these appear in a different context than expected, flag for investigation.

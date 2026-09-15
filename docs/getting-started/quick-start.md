@@ -156,7 +156,7 @@ Follow the complete [Platform Submission Guide](/portal/docs/submitting-tasks/pl
 
 ---
 
-We have found the following VS Code extensions will improve your experience with Terminus 3:
+We have found the following VS Code extensions will improve your experience with Terminus 3: 
 
 - **Docker** — For managing containers in VS Code; 
 - **Python** — For highlighting syntax, linting, etc.; 

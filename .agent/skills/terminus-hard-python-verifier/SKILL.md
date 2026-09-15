@@ -73,8 +73,6 @@ For substantive tasks, include:
 - one normal-behavior preservation test
 - one anti-shortcut test
 - one test proving the failure mode is recoverable, not just hidden
-- one invocation of every documented command/mode, with the rule-carrying
-  fixture exercising a discriminating hard case rather than a degenerate input
 
 For stronger Advanced/Frontier calibration, prefer several focused behavior
 clusters rather than one monolithic test:
@@ -92,36 +90,51 @@ the same shallow reason, merge or redesign.
 Corpus-graded verifiers (case tables, conformance vectors) add three design
 rules on top of the list above:
 
-- **Per-case floor:** any case you predict fewer than ~35% of runs will pass
-  is a statistical 0/N candidate at N=10 — disclose it in one prose sentence
-  or drop it at design time, before the platform flag forces the choice
-  (`lever_patterns.md` L1 step 6; `task-revise-flag-remediation`).
+- **Per-case risk:** a predicted low-pass case is a statistical 0/N risk. Audit
+  the oracle, explicit interface, evidence support, and test resolution before
+  changing it. Do not automatically disclose an evidence-derived rule or drop
+  a valid held-out case from a small local sample.
 - **Soft-representative rule and trimming direction:** every feature cluster
   keeps ≥1 "soft" case a majority of runs pass; never build or trim toward a
   hard-cases-only corpus. When cutting, cut data-driven from the per-case pass
   table — easy cases are the coverage that keeps the 0/N flag from firing.
-- **Soft size cap and broad-wall preference:** ~≤100 curated cases is the
-  right default; prefer many INDEPENDENT quirk families each at ~40–80%
-  per-run pass rate (full-pass ≈ the product across families) over one or two
-  deep boundaries — a single deep boundary is the fair⊥hard single-lever
-  shape that cannot ship (hide = unfair 0/N, disclose = EASY).
+- **Soft size cap and semantic breadth:** ~≤100 curated cases is a useful
+  default for conformance corpora. Prefer independently meaningful families
+  and hidden generalization under one inferable model over hundreds of
+  correlated rows. A single arbitrary hidden convention is invalid; a deep
+  evidence-supported inference is not invalid merely because it is difficult.
 
-## Instruction/Test Symmetry
+Count semantic breadth by implementation decisions, not rows. One keyword
+tested through eight values, or one numeric stability branch tested at fourteen
+scales, remains one mechanism. Before a counted solve probe, write the
+mechanism/interaction map and execute one plausible partial-fix mutant for each
+node as required by
+`terminus-regular-task-authoring/references/semantic-coverage-gate.md`.
 
-Map every prompt requirement to at least one test, and every tested behavior
-back to `instruction.md`.
+## Terminus 3 Contract/Evidence/Test Symmetry
+
+Map every prompt requirement to at least one test. Map each tested behavior
+either to the explicit success surface or to an inference family supported by
+agent-visible evidence. Do not force every derived semantic rule into
+`instruction.md`.
 
 Quality checks often fail when a verifier tests preserved behavior that the
 instruction never mentions. Preservation tests are not exempt.
 
 Before finalizing, audit:
 
-- every CLI flag asserted by tests appears naturally in `instruction.md`
-- every mode/alias/fallback/legacy behavior asserted by tests is mentioned
-- every structured field/XML tag/JSON key/order guarantee asserted by tests is
-  stated in the instruction
+- every public CLI flag, output path, and required schema element appears
+  naturally in `instruction.md` or a realistic visible format source
+- public preservation scope is mentioned, while held-out values/layouts may
+  remain hidden when they follow the same inferable invariant
+- representation-specific ordering is explicit only when the consumer requires
+  it; otherwise parse semantically and accept equivalent outputs
 - every required output file/path is named in the instruction
-- no test asserts behavior that is only implied by upstream history
+- no test depends on an oracle-only policy, unreachable authority, or arbitrary
+  value absent from all visible sources
+- every public entry point promised by the instruction has a discriminating
+  platform-visible test; no test pins undocumented keyword spelling, internal
+  object shape, or exact diagnostic text when equivalent behavior is valid
 
 Example fix:
 
@@ -131,8 +144,9 @@ and `append` import modes working for the same shadowed-layout projects, and
 preserve assertion rewriting for nested package tests.
 ```
 
-If the instruction should stay narrower, remove the extra test instead of
-silently checking hidden behavior.
+If a test exercises a new instance or combination of the same evidence-backed
+model, keep it hidden. If it introduces a new policy, add authentic evidence,
+make the interface fact explicit, relax the assertion, or remove the test.
 
 ## Verifier Integrity
 
@@ -147,13 +161,32 @@ hardcoded parameter must no longer pass. This does not prohibit hardcoded
 expected results, tolerances, or format constants that are not claimed config
 values.
 
-Keep held-out inputs and expected outputs in separate trees, and never pass a
-candidate a path whose sibling contains the answer. Remove predictable prior
-outputs before a graded re-run. Rebuild submitted source when source changes are
-the contract; do not grade only a delivered binary on fixed input. Assert actual
-values rather than proxies such as counts, first elements, or field presence. If
-the candidate controls both representations being compared, drive them from one
-source and assert equivalence, or use a verifier-owned consumer.
+Keep goldens and held-out fixtures in the separate verifier image; never derive
+expected truth from `/app`, mutable corpora, or agent-delivered trees. Declare
+specific top-level artifacts and let the harness transfer them instead of
+copying agent-controlled directories where symlinks can expose verifier data.
+If tests rebuild or execute agent-supplied code, demote before exec with
+`--no-new-privs` or equivalent, keep goldens outside every input tree readable
+by that process, and probe that it cannot read protected fixtures or
+`/logs/verifier`. Separate mode alone does not create that in-verifier boundary.
+
+Every domain rule explicitly named by the contract needs an isolating fixture
+whose result changes when only that rule is inverted. A single multi-rule mutant
+or mixed held-out corpus does not establish this, and held-out inputs must not
+be the sole enforcement of a stated rule.
+
+When Python verifier code changes interpreter modes, resolve and deduplicate
+targets before recording modes and chmod; `/bin/bash` and `/usr/bin/bash` may
+resolve to the same file. Restore each saved mode once from `finally`, attempt
+all restorations, and confirm Oracle reward/log collection completes. The
+platform-only `verifier_interpreter_permissions` preflight blocks the unsafe
+dual-path pattern.
+
+Use exact matching when the instruction pins an exact format or byte artifact,
+and semantic matching when it does not. A stated numeric tolerance must equal
+the verifier tolerance. For optimization/order tasks, include a case where a
+merely feasible answer or the wrong tie-break loses, and independently
+spot-check the Oracle against a second feasible plan.
 
 ## Building stronger Python task signals
 
@@ -235,13 +268,11 @@ Before accepting the verifier, answer these questions:
 - Does each test have a docstring naming the behavior it validates?
 - Would a source-grep patch or prompt-keyword search lead directly to the fix?
 - Are there at least two independent failure modes for incomplete fixes?
+- Has a dedicated executable mutant for every mechanism and interaction been
+  killed while retaining both passing and failing tests?
 - Are preservation tests explicitly described in `instruction.md`?
 - Are verifier dependencies available before `tests/test.sh` starts?
 - Does `tests/test.sh` avoid runtime setup and network access?
-- Does a deliberately wrong, incomplete, or lazy solution fail for the intended
-  semantic reason (not merely nop)?
-- Has the oracle been independently checked against the visible contract on
-  hard/edge inputs outside the fixtures used to tune it?
 
 If any answer is no, repair the task before running real agents.
 
@@ -279,7 +310,6 @@ if [ "$rc" -eq 0 ]; then
 else
     echo 0 > /logs/verifier/reward.txt
 fi
-exit 0
 ```
 
 The final reward block must end the script. The current `check_test_sh` gate
@@ -288,8 +318,9 @@ defensive form above, where `rc=$?` is captured immediately after pytest and
 used in `if [ "$rc" -eq 0 ]`. Do not wrap the block in a helper, add extra
 commands between pytest and the capture/conditional, or rewrite it as
 `pytest && echo 1`.
-End with `exit 0`. Harbor reads `/logs/verifier/reward.txt` for pass/fail; the
-script's exit code is not the reward signal.
+End on the reward block's `fi`, with no trailing `exit`. Pytest's status is
+captured rather than propagated, while a failed reward write must surface as an
+infrastructure error.
 
 Verifier dependencies must be available before `tests/test.sh` starts. Install
 `pytest`, `pytest-json-ctrf`, and other verifier-only packages in the separate
@@ -298,6 +329,14 @@ top-level artifact path there. Do not put dependency wheels in `tests/`, and do
 not run `pip install` from `tests/test.sh`.
 
 Keep project runtime dependencies separate from verifier-only packages.
+
+For Hardware / CAD tasks, use the geometry-specific gate in
+`docs/creating-tasks/cad-task-guidelines.md`. Measure every stated dimension on
+the built solid with an observable method, keep any sampling grain finer than
+the claimed tolerance, verify through/repeated/exact-count features, and test
+the Oracle geometry rather than its constants. A parametric requirement needs a
+fresh parameter mutation followed by recompute, error checking, and measurement
+of the changed solid; parameter readback alone must fail review.
 
 ## Oracle Pattern
 

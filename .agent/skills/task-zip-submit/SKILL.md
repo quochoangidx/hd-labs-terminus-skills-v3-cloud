@@ -9,9 +9,24 @@ Use this skill when creating or validating a submission ZIP.
 
 **Mandatory pre-zip gate:** run `scripts/preflight.sh <task-dir>` (repo root)
 before every zip — it machine-checks the mechanical gates (layout,
-.dockerignore entries, Dockerfile hygiene, task.toml, leak sweep, zip
+.dockerignore entries, Dockerfile hygiene including cloud-compatible
+`COPY --chown`/`COPY --from`, task.toml, leak sweep, zip
 arcnames/CRLF, rubric format, docker oracle=1/nop=0, noexec-/tmp repro). Zero
 FAIL rows required.
+
+**Mandatory judgment gate:** the exact snapshot must also clear the quality
+panel's `coherent_contract`, `correct_reference_solution`,
+`protected_ground_truth`, and `sound_verifier` axes. Only `None` on every axis
+auto-accepts; `Minor`, `Major`, and `Unsure` are blocking/return outcomes. The
+local preflight now catches known `request.node.name`, incomplete `setpriv`, and
+dual `/bin/bash` + `/usr/bin/bash` permission-restore shapes, but it does not
+replace the semantic four-axis review.
+
+For a new `task-batch` candidate, do not create a handoff ZIP before the counted
+difficulty gate. The pre-probe strict run writes receipts and raw Docker evidence
+without `--emit-zip`; only a shortlisted, submission-audited task receives the
+final ZIP. Returned-task remediation may keep its versioned revision archives as
+described below.
 
 ## Zip Rule
 
@@ -54,11 +69,11 @@ The ZIP must contain only the files/folders required by the Platform Submission 
 
 **Make shell scripts executable before zipping.** Reviewers reject a ZIP whose `tests/test.sh` or `solution/solve.sh` is non-executable. Run `chmod +x tests/test.sh solution/solve.sh` first, then verify the stored Unix mode with `unzip -Z <zip> tests/test.sh solution/solve.sh` (expect `-rwxr-xr-x`). `zip -X` preserves the Unix permission mode — it only strips uid/gid and timestamps — so the allowlist command below keeps the exec bit intact.
 
-The platform's `Difficulty Explanation`, `Solution Explanation`, and
-`Verification Explanation` fields are entered separately in the UI. They are
-not ZIP contents.
+The platform's `Difficulty Explanation`, `Solution Explanation`,
+`Verification Explanation`, and `Relevant Experience` fields are entered
+separately in the UI. They are not ZIP contents.
 
-For a Regular task, the ZIP root should contain:
+The Terminus 3 ZIP root should contain:
 
 ```text
 instruction.md
@@ -67,9 +82,6 @@ environment/
 solution/
 tests/
 ```
-
-Milestone task layouts are obsolete in Terminus 3 and must not be packaged for
-submission.
 
 ## Metadata Update
 
@@ -102,7 +114,7 @@ find . \( -name '.DS_Store' -o -name '._*' -o -name '__pycache__' -o -name 'targ
 
 Do not use macOS Finder "Compress" when possible; it can add `__MACOSX` and `._*` files that fail CI.
 
-## Regular ZIP
+## Task ZIP
 
 From inside the task folder:
 
@@ -167,9 +179,15 @@ Before upload, fail the package if any of these are present:
 - rubrics reference tests, verifier logic, `test.sh`, `test_outputs.py`,
   `/tests/`, hidden tests, CI, reward files, or pytest results
 - `tests/test.sh` writes `/logs/verifier` only after an early exit guard
+- any Dockerfile uses named IDs in `COPY --chown=` or a non-digest-only
+  external image ref in `COPY --from=`
+- a Hardware / CAD task has not passed the geometry-specific review in
+  `docs/creating-tasks/cad-task-guidelines.md`, including built-solid dimension
+  coverage and fresh-value recompute for any parametric promise
 
-Verifier dependencies must be installed by `environment/Dockerfile`; `tests/`
-should contain verifier scripts and fixtures, not dependency wheels.
+Verifier dependencies must be installed with exact pins by `tests/Dockerfile`;
+`tests/` should contain verifier scripts and fixtures, not dependency wheels.
+Agent/runtime dependencies belong in `environment/Dockerfile`.
 
 Before upload, inspect environment README/spec/config/comment-heavy files for
 hidden solution walkthroughs or prompt-bypass instructions. Supporting docs
@@ -228,10 +246,9 @@ On first upload:
   2, 3, or 5, never use 4, carry an explicit leading `+` on every positive
   score (write `+3`, not `3` — unsigned positives are sent back for revision),
   and focus on trace-evidenced behavior rather than final pytest results
-- use a flat `Agent ...` list; a single `# Rubric 1` header is tolerated but not
-  required. Terminus 3 has no milestone rubric blocks
-- ensure rubrics have at least one negative criterion and a cumulative positive
-  total of 10-40 points
+- use one flat list of `Agent ...` criteria; Terminus 3 has no milestones
+- ensure the rubric has at least one negative criterion and a cumulative
+  positive total of 10-40 points
 - before final reviewer submission, uncheck "Generate Rubric(s)" so the edited
   rubric is not overwritten, then check "Send to Reviewer"
 - after final submission, expect peer review in 1-7 business days; total review

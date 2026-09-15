@@ -1,10 +1,19 @@
 # Lever Pattern Catalog — historical shape evidence for Terminus 3 mining
 
+> **Current routing:** start with `frontier_task_design_patterns.md`. Use this
+> file only for conformance-lane history, resource claims, and legacy lever
+> calibration. It does not replace the current adaptive established/derived
+> portfolio policy.
+
 > **⛔ Terminus 3 status.** The classic L1 engines (WHATWG-URL, IDNA,
 > UAX-14/29, HTML5, version constraints, URI templates, LOWESS) are closed by
 > novelty, saturation, and repeated difficulty collapse. The old category-block
 > rationale no longer applies. Use this catalog as a forbidden-zone and design
-> evidence map, then run the current domain-first `category_rules.md` screen.
+> evidence map for the **conformance/transcription lane**, then run the current
+> V3 evidence-and-interaction screen in `task-miner`. This catalog must not
+> reject evidence-reconstruction, native-artifact, live-state, or multi-system
+> candidates. Where historical disclosure/pruning advice conflicts with the V3
+> evidence-inferability gate or `task-revise-flag-remediation`, the V3 rules win.
 
 **Why this file exists.** A *lever* (a technique that historically produced a strong, fair signal)
 is the reusable asset. The *resource* a lever is applied to — a conformance suite, a
@@ -240,16 +249,11 @@ unfair-hard, never real difficulty.
    that real implementers get INCONSISTENTLY wrong. Reject clean finite rule-sets, named
    algorithms, and clean bidirectional codecs — those probe EASY even *with* an official suite.
 4. **Claim it** in `mined-candidates/index.jsonl` (dedupe_key = `conformance_suite + spec + language`).
-5. **Skeleton probe gate — probe BEFORE building the full oracle/verifier.** As soon as
-   you have `instruction.md` + a buildable `environment/` + the stub + a ROUGH check
-   command (a thrown-together differential or a handful of hand-checked cases — the
-   real oracle and hidden suite do not exist yet), run the skeleton probe
-   (`task-local-solve-probe`, Skeleton mode), N≥3. 3/3 pass → DROP or redesign the
-   lever now; do NOT spend the oracle/verifier/Docker build on a candidate the
-   collapse law already killed. 0–2/3 with semantic failures → proceed to step 6.
-   Setup/instruction failures → fix the skeleton and re-probe. This gate exists
-   because the old ordering (full build first, probe last) burned the entire build
-   cost on candidates that then probed 3/3 EASY.
+5. **Optional exploratory skeleton screen.** When the build cost is high, use
+   `task-local-solve-probe --exploratory` with a rough check to reject an obvious
+   all-pass idea cheaply. Every result is exploratory: it cannot qualify a tier,
+   count toward a batch quota, or substitute for the mutation-backed frozen
+   verifier. A non-all-pass result only justifies completing step 6.
 6. **Build.** Ship a stub (reads input, emits nothing/minimal). Put the official suite
    HIDDEN under `tests/`; oracle = a full correct impl that passes 100%; nop/stub fails.
    NEVER commit the answer table (input→expected) into `environment/repo` — grep for it
@@ -266,19 +270,28 @@ unfair-hard, never real difficulty.
    coverage that keeps the 0/N flag from firing, and they satisfy anti-hardcoding
    minimum-coverage guards). **Soft size cap:** a curated corpus of ~≤100 cases is
    the right default for a normal task; a large corpus (300+) is justified only when
-   the wall is genuinely broad AND the per-case pass-table pre-audit below has run. A case EVERY fresh implementation will miss (insider quirk,
-   undisclosed convention, data-table-only knowledge) is intersection-of-misses = a
-   guaranteed 0/N flag — disclose it in one prose sentence or drop it BEFORE shipping.
+   the wall is genuinely broad AND the per-case pass-table pre-audit below has run.
+   A case every fresh implementation misses is a 0/N risk: audit the oracle,
+   explicit interface, visible evidence, and CTRF resolution. Disclose only an
+   arbitrary non-inferable convention; keep a valid evidence-supported held-out
+   inference, strengthen authentic evidence when needed, or drop an invalid case.
    Structure the verifier per-case (parametrized) or as graded bands whose top band the
    best realistic run can actually reach; never ONE monolithic all-N-cases-must-pass
    function, where a single universal blind spot turns the whole test 0/N, and never a
    group-aggregate test sitting on top of per-case tests (structurally 0/N forever).
    Cheap pre-audit: after the blind probe (step 7), score the probe solvers' diffs
-   per-case against the corpus — any case NO probe run passes is a correlated blind
-   spot to disclose/prune now (see task-local-solve-probe, Coverage pre-audit).
-7. **Probe difficulty AND fairness — do BOTH before trusting the task:**
-   - Run ≥3 BLIND solvers (fresh agent, no `solution/`, no `tests/`). HARD ≈ 0–1/3 solve.
+   per-case against the corpus — any case no probe run passes needs the V3
+   revision classification before disclosure or removal.
+7. **Freeze semantic coverage, then probe difficulty and fairness:**
+   - Map every public surface and the natural causal mechanisms/interactions.
+     Never add a node to meet a count. Kill a dedicated plausible partial-fix mutant for each retained node
+     and pass `semantic_coverage_check.py --advanced-plus`.
+   - Prepare fresh counted solve copies only after the complete task/verifier
+     snapshot is frozen. Run exactly two BLIND solvers; do not add a third.
    - Do NOT let a solver paste the spec source (blows up context, distorts the probe).
+   - A `1/3` result qualifies only when both failing runs cross at least two
+     semantic nodes and their node sets differ. One replicated lever is not
+     Advanced even when it occupies many rows.
    - Sanity gate: oracle must PASS and nop/stub must FAIL, or the harness is broken —
      that is not a difficulty signal (see the missing-tmux / verifier-did-not-run traps).
 8. **Fairness audit — a green `✅ HARD` verdict is NECESSARY-NOT-SUFFICIENT; read the
@@ -286,14 +299,13 @@ unfair-hard, never real difficulty.
    `✅ HARD / ✅ Solvable / oracle 100% / agents 0/5` and STILL be an invalid, fake-hard
    task — the disqualified TOML decoder did exactly that: its "hardness" was pure artifact
    (binary all-or-nothing over 714 corpus tests + one under-specified BOM blind spot +
-   in-env `tomllib`), and it FAILED `Task Instruction Sufficiency` outright. Trust the
+   in-env `tomllib`), and it had a genuine explicit/evidence gap. Trust the
    audit below, not the verdict:
-   - A test that **ALL runs fail** (a *universal blind spot*, e.g. TOML's UTF-8 BOM) is an
-     UNDER-SPECIFICATION, not hardness; hidden, it fails `Task Instruction Sufficiency`
-     (instruction↔test asymmetry). You may disclose it in the instruction to restore
-     symmetry — **but ONLY if** (a) partial-fail *surviving levers* still keep it hard AND
-     (b) no in-env reference exists. If disclosing it lets the obvious pivot score 100%
-     (TOML + `tomllib`), the resource is DISQUALIFIED — retire it, there is no prose fix.
+   - A test that **all runs fail** is not automatically under-specification.
+     Recheck the authority and classify it as an explicit-contract gap,
+     evidence-inferability gap, legitimate semantic miss, or statistical
+     coverage risk. TOML's arbitrary BOM convention was an explicit/evidence
+     gap; that result does not generalize to all inferred semantics.
    - Tests that **~half the runs fail** are genuine surviving levers → keep them; predicted
      post-disclosure pass ≈ product of their pass rates (predict HARD without re-probing).
    - Binary all-or-nothing scoring is legitimate here (each impl misses a DIFFERENT tail
@@ -302,14 +314,11 @@ unfair-hard, never real difficulty.
    - **The platform submit-time flag `❌ Some tests not passed by any agent run` is
      BLOCKING, not advisory — the task gets RETURNED (user-confirmed 2026-07-02); every
      verifier test must be passed by ≥1 of the ~10 agent runs.** Full remediation
-     decision tree (infra look-alikes → classify each 0/N test → delete redundant group
-     test / parametrize per-case / prune / disclose / ship reference data → margin-prune
-     the ≤2/N tail → difficulty-retention guards → offline validation) lives in
+     decision tree (infra → oracle/verifier → explicit contract → evidence
+     inferability → legitimate semantic miss → solvability repair) lives in
      `.agent/skills/task-revise-flag-remediation/SKILL.md` — follow it, don't
-     improvise. The two hard NEVERs: never delete the per-case parametrized suite or
-     collapse the corpus to clear the flag (flips the task EASY), and never prune when
-     the 0/N cases ARE the lever (undisclosed reference-class divergence → disclose
-     instead). The flag is stochastic across re-runs — re-run to confirm both the
+     improvise. Never delete valid semantic coverage or disclose an inferred
+     model merely to clear the sample. The flag is stochastic across re-runs — re-run to confirm both the
      failure and the fix.
 9. **instruction_check pre-flight — run the binary preflight in
    `terminus-regular-task-authoring` (Prompt Rules) BEFORE the first platform check.**

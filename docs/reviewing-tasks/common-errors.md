@@ -61,19 +61,29 @@ Change the port from 8080 to 3000 in `/app/config.txt`
 
 *Feedback categories: `test_alignment`, `test_build`*
 
-### Brittle String Matching
+### Matching at the Wrong Specificity
+
+Assert at the specificity the instruction states. `==` on an output the instruction never pinned grades undocumented formatting; a bare substring check on an output it *did* pin fails to verify it. The deciding word is **undocumented** — a check is brittle when it pins something the instruction never stated, not because it uses `==`.
 
 ```python
-# Bad - Breaks with formatting changes
+# Bad - the instruction never specifies the log wording
 def test_output():
     output = open("/output/log.txt").read()
     assert output == "Processing complete.\n"
 
-# Good - Checks for key content
+# Bad - too loose the other way; an agent that echoes the word anywhere passes
 def test_output():
     output = open("/output/log.txt").read()
     assert "complete" in output.lower()
+
+# Good - assert the documented fields
+def test_run_reports_completion():
+    """The documented status field must report completion."""
+    report = json.loads(Path("/app/output/report.json").read_text())
+    assert report["status"] == "complete"
 ```
+
+See [Writing Tests](/portal/docs/creating-tasks/writing-tests) for the full rule, including when exact matching is required.
 
 ### Implementation Testing
 
@@ -198,12 +208,28 @@ RUN apt-get update \
 RUN pip install pandas==2.0.0
 ```
 
+### Offline Baseline Kills Every Trial Before the Agent Starts
+
+If `[environment].network_mode` is anything but `"public"`, the agent harness cannot install its own toolchain during setup, and every trial dies before the agent begins work. The symptom is package-resolution failures in `exception.txt`:
+
+```text
+E: Unable to locate package curl
+E: Unable to locate package nodejs
+E: Unable to locate package npm
+W: Failed to fetch http://deb.debian.org/debian/dists/bookworm/InRelease
+   Temporary failure resolving 'deb.debian.org'
+```
+
+This reads like a defect in the task environment, and the oracle and NOP agents can pass on the same task — they don't install a harness. The fix is one field: `[environment].network_mode = "public"`. Set `"no-network"` on `[agent]` if the task should still be solved offline.
+
+A blocking static check now catches this at submission, so it should not reach a trial. If you see it on an older run, this is the cause.
+
 ### Runtime Network Installs in test.sh
 
-With `network_mode = "no-network"`, `tests/test.sh` cannot fetch packages from the network at runtime. All verifier dependencies must be baked into the Docker image. A `test.sh` that runs `apt-get install`, `curl … install.sh`, `uvx`, `pip install`, `npm install`, `git clone`, or `wget` will succeed locally during development (where the network is available) and fail in production with `RewardNotFoundError`. This applies to the default `network_mode = "no-network"`; for `network_mode = "public"` tasks that genuinely require the network, runtime network use is permitted — though bundling dependencies into the image is still preferred where possible for deterministic grading.
+With `[verifier].network_mode = "no-network"`, `tests/test.sh` cannot fetch packages from the network at runtime. All verifier dependencies must be baked into the Docker image. A `test.sh` that runs `apt-get install`, `curl … install.sh`, `uvx`, `pip install`, `npm install`, `git clone`, or `wget` will succeed locally during development (where the network is available) and fail in production with `RewardNotFoundError`. Where `[verifier].network_mode = "public"` and the verifier genuinely requires the network, runtime use is permitted — though bundling dependencies into the image is still preferred for deterministic grading. Note that `[environment].network_mode = "public"` says nothing about the verifier: it exists so the image can build.
 
 ```bash
-# Bad - test.sh installs deps at runtime, fails with network_mode = "no-network"
+# Bad - test.sh installs deps at runtime, fails with [verifier].network_mode = "no-network"
 #!/bin/bash
 apt-get update && apt-get install -y curl
 curl -LsSf https://astral.sh/uv/0.9.5/install.sh | sh
@@ -289,6 +315,28 @@ services:
   app:
     image: my-task-base:1.0
 ```
+
+### Named `--chown` and tag+digest `COPY --from=`
+
+The cloud image builder rejects two patterns that work on local Docker. Preflight fails immediately with the line to change. Applies to every Dockerfile in the submission.
+
+```dockerfile
+# Bad - named user on COPY --chown
+COPY --chown=root:root script.sh /app/script.sh
+
+# Good - numeric IDs
+COPY --chown=0:0 script.sh /app/script.sh
+```
+
+```dockerfile
+# Bad - tag and digest on COPY --from= image ref
+COPY --from=golang:1.24-bookworm@sha256:<digest> /usr/local/go /usr/local/go
+
+# Good - digest only (stage names such as COPY --from=builder are fine)
+COPY --from=golang@sha256:<digest> /usr/local/go /usr/local/go
+```
+
+`FROM image:tag@sha256:<digest>` and `RUN chown` are unchanged. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 
 ### Reserved Directory Conflicts
 
@@ -399,7 +447,7 @@ def test_computation():
 
 *Feedback category: `task_difficulty`*
 
-> **A difficulty tier _mismatch_ is not a revision reason.** Final difficulty is measured automatically after acceptance, so don't send a task back because the declared tier doesn't match the run. *Do* flag a **retired tier name** (`hard` / `easy` / `medium`) or a task that is **genuinely too trivial** (below). See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
+> **A difficulty tier _mismatch_ is not a revision reason.** The measured tier is already final when the task reaches you and is what gets recorded; the declared value is the author's estimate. Don't send a task back over it, and don't spend review time on it. *Do* flag a **retired tier name** (`hard` / `easy` / `medium`) or a task that is **genuinely too trivial** (below). See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
 
 ### Too Easy
 
@@ -431,6 +479,8 @@ Signs a task might be problematic:
 | Solution | Echo answers | Derive answers |
 | Solution | Random without seed | Add seeds |
 | Environment | Missing `tmux` / `asciinema` | Pre-install in Dockerfile |
+| Environment | `COPY --chown=root:root` (named user) | Numeric IDs (`--chown=0:0`) |
+| Environment | `COPY --from=image:tag@sha256:…` | Digest only (`COPY --from=image@sha256:…`) |
 | Environment | Runtime network installs in `test.sh` | Bake deps into image |
 | Environment | AI-scaffolding filenames (`CLAUDE.md`, `skills.md`, etc.) | Remove from environment |
 | Environment | `solution/` or `tests/` copied in Dockerfile | Use Harbor's runtime mounts |

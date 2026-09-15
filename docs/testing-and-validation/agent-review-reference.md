@@ -2,7 +2,7 @@
 
 Agent Review uses Claude Code to comprehensively evaluate Terminal-Bench tasks for compliance with format requirements, best practices, and quality standards. This automated review provides detailed feedback on task structure, correctness, and potential issues.
 
-> **Note:** Agent Review currently does not block task submission. It is provided as an additional tool to help identify potential issues, warnings, and areas for improvement.
+> **Note:** Agent Review currently does not block task submission. It is provided as an additional tool to help identify potential issues, warnings, and areas for improvement. The **quality panel** is a separate four-axis review that does block — see the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ## How It Works
 
@@ -59,7 +59,9 @@ Validates your task metadata:
 | `[agent].timeout_sec` | Required. Minimum 1800 sec, ceiling 18000 sec |
 | `[environment].build_timeout_sec` | Required |
 | `[environment].cpus` / `.memory_mb` / `.storage_mb` | Resource limits — no GPU |
-| `[environment].network_mode` | `"public"` (default) or `"no-network"` |
+| `[environment].network_mode` | Must be `"public"` — required on every task |
+| `[agent].network_mode` | Required. `"public"` or `"no-network"` |
+| `[verifier].network_mode` | Required. `"public"` or `"no-network"` |
 
 ---
 

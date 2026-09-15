@@ -10,21 +10,55 @@ All Terminal-Bench task images must be:
 | **Cacheable** | Common layers are shared across tasks |
 | **Lazy-pull friendly** | Startup-critical files are accessible without pulling the full image |
 | **Auditable** | Images are digest-pinned, signed, labeled, and free of any secrets |
-| **Complete** | Images contain all required dependencies — tasks must not depend on fetching dependencies at run time. `network_mode = "public"` is the default; use `"no-network"` only when the task should run offline |
+| **Complete** | Images contain all required dependencies — tasks must not depend on fetching dependencies at run time. `[environment].network_mode` is `"public"` on every task so the build can run; `[agent]` and `[verifier]` are set per task |
 | **Siloed** | The image must not leak task solutions or tests |
 | **Resourced** | Tasks must define CPU, memory, and storage needs in `task.toml` |
 
 ## CI Enforcement Summary
 
-Three Dockerfile checks block by default:
+Four Dockerfile checks block by default:
 
 | Check | Requirement |
 |---|---|
 | `check_pinned_images` | Every `FROM` image must be digest-pinned with `@sha256:<digest>` |
 | `check_sanctioned_base_images` | The final runtime base image must be sanctioned or explicitly exempt |
 | `check_build_context_size` | `environment/` must be at most 100 MiB total, with no file over 50 MiB |
+| `check_modal_dockerfile_compat` | `COPY --chown=` uses numeric user/group IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`) |
 
 The remaining Dockerfile checks warn by default, but warning checks can still emit structural errors when required files such as `environment/` or `environment/Dockerfile` are missing.
+
+---
+
+## Cloud Image Builder Syntax
+
+Local Docker accepts two patterns that the Terminus 3 cloud image builder **rejects**. Preflight scans every Dockerfile in the submission (`environment/Dockerfile`, `tests/Dockerfile`, and any others) and fails immediately with the line to change — you do not wait for a long eval to crash.
+
+These rules do **not** change `FROM` pins. `FROM image:tag@sha256:<digest>` is still required. Stage names such as `COPY --from=builder` are still fine. `RUN chown` is unchanged.
+
+**1. `COPY --chown=` must use numeric IDs.** Named users (`root`, `appuser`) are not resolved.
+
+```dockerfile
+# Bad
+COPY --chown=root:root script.sh /app/script.sh
+COPY --chown=appuser:appuser src/ /app/src/
+
+# Good
+COPY --chown=0:0 script.sh /app/script.sh
+COPY --chown=1000:1000 src/ /app/src/
+```
+
+**2. `COPY --from=` image refs must be digest-only.** If the source is an image (not a build stage), drop the `:tag` and keep `@sha256:<digest>`.
+
+```dockerfile
+# Bad — tag and digest together
+COPY --from=golang:1.24-bookworm@sha256:<digest> /usr/local/go /usr/local/go
+
+# Good — digest only
+COPY --from=golang@sha256:<digest> /usr/local/go /usr/local/go
+
+# Good — stage name (not an image ref)
+COPY --from=builder /build/target/release/my-tool /usr/local/bin/my-tool
+```
 
 ---
 
@@ -239,30 +273,33 @@ COPY --from=builder /build/target/release/my-tool /usr/local/bin/my-tool
 WORKDIR /app
 ```
 
+When `COPY --from=` points at an **image** rather than a stage name, use a digest-only ref — not `image:tag@sha256:…`. See [Cloud Image Builder Syntax](#cloud-image-builder-syntax).
+
 ---
 
 ## 7. Images Must Contain All Dependencies
 
-Images must contain everything the task needs at build time, regardless of `network_mode`. Even with `network_mode = "public"` (the default), the verifier must not fetch dependencies at trial time — network access is for the task's own work, not for installing tooling. The requirements below apply in full to tasks that run offline.
+Images must contain everything the task needs at build time. `[environment].network_mode` is `"public"` on every task so the build and harness install can run — that is **not** licence to fetch dependencies at trial time. Network access is for the task's own work, not for installing tooling. The requirements below apply in full to tasks whose agent runs offline.
 
 **Requirements:**
 - `tmux` and `asciinema` **must** be installed — the agent runtime requires both to start a session. Missing them breaks tasks that run without network access, since nothing can fetch them at runtime; a task with network access may still obtain them and appear to work. Install them explicitly either way.
 - All package downloads happen at image build time
 - `test.sh` must not use `curl`, `wget`, `pip install`, `npm install`, `cargo fetch`, `mvn dependency:get`, or similar networked operations
 - Python wheels, npm packages, Maven artifacts, Cargo registry state, reference binaries, and fixtures must be preloaded during build
-- For `network_mode = "no-network"` tasks, the Oracle agent must pass with network access disabled
+- For tasks with `[agent].network_mode = "no-network"`, the Oracle agent must pass with network access disabled
 - Agents must be able to complete the task without any missing assets or dependencies
 
 ### Internet access (`network_mode`)
 
-Both values are allowed, and the setting **must accurately match what the task genuinely needs.**
+Network access is set **per phase**, and each setting must accurately match what that phase genuinely needs.
 
-- **`network_mode = "public"` — the default.** Use this unless you have a specific reason not to. Most tasks either benefit from network access or are unaffected by it.
-- **`network_mode = "no-network"`** — use **only when the task does not make sense to complete with internet access**, for example when network access would let the agent retrieve the answer directly rather than do the work.
+- **`[environment].network_mode` must be `"public"`** on every task. The image is built and the agent harness installed during this phase, and both need the network. Closing it here fails the task before the agent runs — this is not an author choice.
+- **`[agent].network_mode`** — `"public"` or `"no-network"`. Use `"no-network"` when the task should be solved offline, for example when network access would let the agent retrieve the answer rather than do the work.
+- **`[verifier].network_mode`** — `"public"` or `"no-network"`. Normally `"no-network"`: verifier dependencies belong in `tests/Dockerfile`, not fetched at grade time.
 
-If you are unsure which applies, use `"public"`.
+**An offline task keeps `[environment]` public and closes `[agent]`.** Making the environment `"no-network"` does not produce an offline task — it produces a task that cannot build.
 
-Independently of this setting, all of your task's own dependencies must still be baked into the image at build time, and `test.sh` must never fetch from the network at trial time. `"public"` exists for the task's work — not as a substitute for a complete image.
+Independently of these settings, all of your task's own dependencies must still be baked into the image at build time, and `test.sh` must never fetch from the network at trial time. A `"public"` phase exists for the task's work — not as a substitute for a complete image.
 
 ---
 
@@ -270,13 +307,25 @@ Independently of this setting, all of your task's own dependencies must still be
 
 Solution files, hidden tests, and privileged assets must never be accessible to the agent.
 
-**Requirements:**
+**Requirements (agent environment):**
 - Do not copy `solution/` into the runtime image
 - Do not copy hidden tests into agent-visible locations
 - Do not store expected outputs in writable agent paths
 - Do not let the verifier derive ground truth from files the agent can modify
 - Place reference binaries or fixtures in controlled verifier-only locations
 - Public fixtures used by the task may be copied into the image; hidden verifier assets must stay isolated
+
+**The verifier image needs its own pass.** Terminus tasks must run the verifier in **separate** mode so goldens baked into `tests/Dockerfile` never exist in the **agent** container.
+
+Harbor resolves verifier mode from the *combination* of keys, not from one required spelling:
+
+- `[verifier].environment_mode = "separate"`, **or** a `[verifier.environment]` table, resolves to **separate**.
+- With **neither**, Harbor defaults to **shared** — the verifier runs in the agent environment.
+- `environment_mode = "shared"` together with a `[verifier.environment]` table is **invalid**.
+
+**Terminus-specific (not Harbor):** CI requires the explicit `[verifier].environment_mode = "separate"` key, and `artifacts` must be a **top-level** key. The implicit Harbor form (`[verifier.environment]` with no `environment_mode`) is valid separate mode in Harbor; Terminus rejects it. Omitting both would be Harbor's **shared** default; Terminus rejects that too. Set the explicit key so accepted tasks always run separate. See [CI Checks Reference](/portal/docs/testing-and-validation/ci-checks-reference).
+
+**Separate mode protects the verifier from the agent environment, not from code that the verifier itself executes.** If a test rebuilds and runs agent-supplied code inside the verifier, do not assume verifier-only assets are inaccessible to that process. Goldens, held-out fixtures, and `test_outputs.py` itself live in that container. Drop to an unprivileged uid **before** that exec, confirm that uid cannot read verifier-only assets or `/logs/verifier` (including `reward.txt`), and probe it in a test. A single `USER` for the whole verify phase cannot express this split: the verifier must read the goldens while the agent's program must not. Do not prescribe a `COPY` mode or a chmod octal — cloud `COPY --chown=` uses numeric IDs and builder-assigned modes; build the boundary in the image and the runner.
 
 ---
 
@@ -352,9 +401,9 @@ Only change permissions for files that actually need it. Do not recursively rewr
 RUN chmod -R 755 /app
 RUN chown -R appuser:appuser /app
 
-# Good
+# Good — COPY --chown= must be numeric IDs (named users fail cloud builds)
 COPY --chmod=0755 run.sh /usr/local/bin/run-task
-COPY --chown=appuser:appuser src/ /app/src/
+COPY --chown=1000:1000 src/ /app/src/
 ```
 
 ---
@@ -428,7 +477,7 @@ memory_mb = 2048
 storage_mb = 10240
 gpus = 0
 gpu_types = []
-network_mode = "public"     # default; use "no-network" only if the task should run offline
+network_mode = "public"     # required on every task
 ```
 
 **Note — `gpus`, `gpu_types`, and `docker_flags` are optional.** These are valid Harbor resource fields, not requirements. Terminus 3 tasks must not require GPU, so `gpus` and `gpu_types` may be omitted or left blank — a task is equally valid with or without them. `gpu_types` only matters when a task actually requests GPUs (`gpus > 0`); for a typical non-GPU task, `gpu_types = []` adds nothing. The minimal form below is just as acceptable as the full block above:
@@ -439,7 +488,7 @@ build_timeout_sec = 600.0
 cpus = 1
 memory_mb = 2048
 storage_mb = 10240
-network_mode = "public"     # default; use "no-network" only if the task should run offline
+network_mode = "public"     # required on every task
 ```
 
 ---

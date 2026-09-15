@@ -16,6 +16,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from verifier_static_checks import (
+    analyze_candidate_privileges,
+    interpreter_permission_alias_issue,
+    setpriv_missing_no_new_privs,
+    test_identity_leak,
+    unit_test_alignment_issue,
+)
+
 
 TEXT_SUFFIXES = {
     "",
@@ -94,6 +102,35 @@ REMOVED_METADATA_FIELDS = {
     "junior_time_estimate_min",
     "expert_time_estimate_min",
 }
+
+
+def cloud_builder_copy_issues(dockerfile: str) -> list[str]:
+    """Find COPY options that the Terminus cloud image builder rejects."""
+    aliases = {
+        match.group(1).lower()
+        for match in re.finditer(
+            r"(?im)^\s*FROM\s+(?:--platform=\S+\s+)?\S+\s+AS\s+(\S+)",
+            dockerfile,
+        )
+    }
+    issues: list[str] = []
+    for line_number, line in enumerate(dockerfile.splitlines(), start=1):
+        if not re.match(r"(?i)^\s*COPY\b", line):
+            continue
+        chown = re.search(r"(?i)(?:^|\s)--chown=([^\s]+)", line)
+        if chown and not re.fullmatch(r"[0-9]+(?::[0-9]+)?", chown.group(1)):
+            issues.append(f"line {line_number}: --chown={chown.group(1)} must use numeric IDs")
+        source = re.search(r"(?i)(?:^|\s)--from=([^\s]+)", line)
+        if not source:
+            continue
+        image = source.group(1)
+        if image.lower() in aliases or image.isdigit():
+            continue
+        digest = re.search(r"@sha256:[0-9a-f]{64}$", image, re.IGNORECASE)
+        image_name = image[: digest.start()] if digest else image
+        if digest is None or ":" in image_name.rsplit("/", 1)[-1]:
+            issues.append(f"line {line_number}: --from={image} must be a digest-only image ref")
+    return issues
 
 
 @dataclass
@@ -186,7 +223,10 @@ class TaskView:
                 for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                     digest.update(chunk)
             return digest.hexdigest()
-        for name in sorted(self.files()):
+        # Match the canonical task-tree ordering used by the pre-probe gate:
+        # compare path components, not raw path strings.  These differ when a
+        # directory name is also a prefix of a sibling filename.
+        for name in sorted(self.files(), key=lambda value: Path(value).parts):
             digest.update(name.encode("utf-8"))
             digest.update(b"\0")
             digest.update(self.read_bytes(name))
@@ -308,6 +348,7 @@ def run_ruff(view: TaskView, findings: list[Finding]) -> None:
             [
                 ruff,
                 "check",
+                "--no-cache",
                 "--extend-select",
                 "PLW1510",
                 "--output-format",
@@ -356,7 +397,7 @@ def check_instruction_sufficiency_evidence(
     findings: list[Finding],
     task_slug: str,
 ) -> None:
-    """Require the external semantic-sufficiency report for folders and ZIPs."""
+    """Require the external Terminus 3 evidence-inferability report."""
     if view.is_zip:
         bases = [Path.cwd(), *view.path.resolve().parents]
         candidates = [
@@ -365,13 +406,18 @@ def check_instruction_sufficiency_evidence(
         ]
         report = next((path for path in candidates if path.is_file()), candidates[0])
     else:
-        report = view.path.parent / "reports" / task_slug / "instruction-sufficiency.json"
+        candidates = [
+            view.path.parent.parent / "reports" / task_slug / "instruction-sufficiency.json",
+            view.path.parent / "reports" / task_slug / "instruction-sufficiency.json",
+            Path.cwd() / "workspace" / "reports" / task_slug / "instruction-sufficiency.json",
+        ]
+        report = next((path for path in candidates if path.is_file()), candidates[0])
     if not report.is_file():
         add(
             findings,
             "blocker",
             "instruction-sufficiency-evidence",
-            "Missing workspace/reports/<slug>/instruction-sufficiency.json; solver coverage cannot replace the semantic contract audit, including for a packaged ZIP.",
+            "Missing workspace/reports/<slug>/instruction-sufficiency.json; new and revised tasks need the V3 goal/evidence/inferability audit even when solver coverage is complete.",
             str(report),
             "terminus-regular-task-authoring",
         )
@@ -395,7 +441,7 @@ def check_instruction_sufficiency_evidence(
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.write_bytes(view.read_bytes(rel))
                 proc = subprocess.run(
-                    [sys.executable, str(checker), str(task_path), str(report)],
+                    [sys.executable, str(checker), "--require-v3", str(task_path), str(report)],
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -403,7 +449,7 @@ def check_instruction_sufficiency_evidence(
                 )
         else:
             proc = subprocess.run(
-                [sys.executable, str(checker), str(view.path), str(report)],
+                [sys.executable, str(checker), "--require-v3", str(view.path), str(report)],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -414,7 +460,7 @@ def check_instruction_sufficiency_evidence(
             findings,
             "blocker",
             "instruction-sufficiency-evidence",
-            f"Could not validate instruction-sufficiency evidence: {exc}",
+            f"Could not validate V3 evidence-inferability evidence: {exc}",
             str(report),
             "terminus-regular-task-authoring",
         )
@@ -425,13 +471,103 @@ def check_instruction_sufficiency_evidence(
             findings,
             "blocker",
             "instruction-sufficiency-evidence",
-            f"Instruction-sufficiency manifest failed validation: {detail}",
+            f"V3 evidence-inferability manifest failed validation: {detail}",
             str(report),
             "terminus-regular-task-authoring",
         )
 
 
-def review(path: Path) -> dict:
+def check_semantic_coverage_evidence(
+    view: TaskView,
+    findings: list[Finding],
+    task_slug: str,
+) -> None:
+    """Require frozen mechanism/mutation coverage for new counted tasks."""
+    if view.is_zip:
+        bases = [Path.cwd(), *view.path.resolve().parents]
+        report_dirs = [base / "workspace" / "reports" / task_slug for base in bases]
+        report_dir = next(
+            (path for path in report_dirs if (path / "semantic-coverage.json").is_file()),
+            report_dirs[0],
+        )
+    else:
+        candidates = [
+            view.path.parent.parent / "reports" / task_slug,
+            view.path.parent / "reports" / task_slug,
+            Path.cwd() / "workspace" / "reports" / task_slug,
+        ]
+        report_dir = next(
+            (path for path in candidates if (path / "semantic-coverage.json").is_file()),
+            candidates[0],
+        )
+    manifest = report_dir / "semantic-coverage.json"
+    verifier = report_dir / "verifier-matrix.json"
+    missing = [str(path) for path in (manifest, verifier) if not path.is_file()]
+    if missing:
+        add(
+            findings,
+            "blocker",
+            "semantic-coverage-evidence",
+            "Missing frozen semantic-coverage/verifier-matrix evidence: " + ", ".join(missing),
+            str(report_dir),
+            "terminus-regular-task-authoring",
+        )
+        return
+    import subprocess
+    import tempfile
+
+    checker = (
+        Path(__file__).resolve().parents[2]
+        / "terminus-regular-task-authoring"
+        / "scripts"
+        / "semantic_coverage_check.py"
+    )
+    try:
+        if view.is_zip:
+            with tempfile.TemporaryDirectory(prefix="semantic_coverage_review_") as tmp:
+                task_path = Path(tmp) / view.name
+                for rel in view.files():
+                    destination = task_path / rel
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(view.read_bytes(rel))
+                proc = subprocess.run(
+                    [sys.executable, str(checker), str(task_path), str(manifest), str(verifier)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+        else:
+            proc = subprocess.run(
+                [sys.executable, str(checker), str(view.path), str(manifest), str(verifier)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+    except Exception as exc:
+        add(
+            findings,
+            "blocker",
+            "semantic-coverage-evidence",
+            f"Could not validate semantic coverage evidence: {exc}",
+            str(manifest),
+            "terminus-regular-task-authoring",
+        )
+        return
+    if proc.returncode != 0:
+        detail = " ".join((proc.stdout + " " + proc.stderr).split())[:700]
+        add(
+            findings,
+            "blocker",
+            "semantic-coverage-evidence",
+            f"Semantic coverage manifest failed validation: {detail}",
+            str(manifest),
+            "terminus-regular-task-authoring",
+        )
+
+
+def review(path: Path, *, include_external_evidence: bool = True) -> dict:
     view = TaskView(path)
     findings: list[Finding] = []
     files = view.files()
@@ -463,6 +599,19 @@ def review(path: Path) -> dict:
         for item in sorted(roots):
             if item not in allowed_roots:
                 add(findings, "should_fix", "zip-allowlist", f"Unexpected root entry: {item}", item, "task-zip-submit")
+
+        for name in files:
+            if Path(name).name != "Dockerfile":
+                continue
+            for issue in cloud_builder_copy_issues(view.read_text(name)):
+                add(
+                    findings,
+                    "blocker",
+                    "dockerfile-modal-syntax",
+                    issue,
+                    name,
+                    "terminus-regular-task-authoring",
+                )
 
         explanation_files = [
             name for name in files
@@ -564,9 +713,16 @@ def review(path: Path) -> dict:
         verifier = task.get("verifier", {}) if isinstance(task, dict) else {}
         if not isinstance(verifier, dict) or verifier.get("environment_mode") != "separate":
             add(findings, "blocker", "verifier-mode", "[verifier].environment_mode must be 'separate'.", "task.toml", "terminus-regular-task-authoring")
-        network_mode = environment.get("network_mode") if isinstance(environment, dict) else None
-        if network_mode not in {"public", "no-network"}:
-            add(findings, "blocker", "network-mode", "[environment].network_mode must be 'public' or 'no-network'.", "task.toml", "terminus-regular-task-authoring")
+        environment_network_mode = environment.get("network_mode") if isinstance(environment, dict) else None
+        if environment_network_mode != "public":
+            add(findings, "blocker", "environment-network-mode", "[environment].network_mode must be 'public' on every Terminus 3 task.", "task.toml", "terminus-regular-task-authoring")
+        agent = task.get("agent", {}) if isinstance(task, dict) else {}
+        agent_network_mode = agent.get("network_mode") if isinstance(agent, dict) else None
+        if agent_network_mode not in {"public", "no-network"}:
+            add(findings, "blocker", "agent-network-mode", "[agent].network_mode must explicitly be 'public' or 'no-network'.", "task.toml", "terminus-regular-task-authoring")
+        verifier_network_mode = verifier.get("network_mode") if isinstance(verifier, dict) else None
+        if verifier_network_mode not in {"public", "no-network"}:
+            add(findings, "blocker", "verifier-network-mode", "[verifier].network_mode must explicitly be 'public' or 'no-network'.", "task.toml", "terminus-regular-task-authoring")
 
         if "pyproject.toml" in file_set:
             add(findings, "blocker", "root-pyproject", "Root-level pyproject.toml should not be submitted.", "pyproject.toml", "task-zip-submit")
@@ -613,8 +769,9 @@ def review(path: Path) -> dict:
                 add(findings, "blocker", "test-sh-set-e", "tests/test.sh must not use set -e; pytest failures must reach the reward block.", "tests/test.sh", "terminus-regular-task-authoring")
             if "--ctrf /logs/verifier/ctrf.json" not in test_sh:
                 add(findings, "blocker", "test-sh-ctrf", "pytest must write /logs/verifier/ctrf.json with --ctrf.", "tests/test.sh", "terminus-regular-task-authoring")
-            if not re.search(r"(?m)^\s*exit\s+0\s*$", test_sh) or not test_sh.rstrip().endswith("exit 0"):
-                add(findings, "blocker", "test-sh-exit", "Terminus 3 tests/test.sh must end with exit 0 after writing reward.txt.", "tests/test.sh", "terminus-regular-task-authoring")
+            nonempty_test_lines = [line.strip() for line in test_sh.splitlines() if line.strip()]
+            if not nonempty_test_lines or nonempty_test_lines[-1] != "fi":
+                add(findings, "blocker", "test-sh-ending", "Terminus 3 tests/test.sh must end on the reward block's fi, with no trailing command that can mask a failed reward write.", "tests/test.sh", "terminus-regular-task-authoring")
 
         dockerfile = view.read_text("environment/Dockerfile")
         if dockerfile:
@@ -661,10 +818,53 @@ def review(path: Path) -> dict:
             for name in files
             if name.startswith("tests/") and name.endswith(".py")
         )
-        runs_demoted_candidate = bool(
-            re.search(r"(?i)(_candidate_user_kwargs|\buser\s*=|[\"']user[\"']\s*:|\bnobody\b)", verifier_python)
-        )
-        if runs_demoted_candidate:
+        candidate_call_count, unsafe_candidate_calls = analyze_candidate_privileges(verifier_python)
+        if setpriv_missing_no_new_privs(verifier_python):
+            add(
+                findings,
+                "blocker",
+                "verifier-no-new-privs",
+                "setpriv-based candidate execution must include --no-new-privs or equivalent containment.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        if test_identity_leak(verifier_python):
+            add(
+                findings,
+                "blocker",
+                "verifier-test-identity-leak",
+                "Do not derive candidate-visible paths, arguments, or environment values from request.node.name.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        for name in files:
+            if not name.startswith("tests/") or not name.endswith(".py"):
+                continue
+            if interpreter_permission_alias_issue(view.read_text(name)) is True:
+                add(
+                    findings,
+                    "blocker",
+                    "verifier-interpreter-permissions",
+                    "Resolve and deduplicate /bin/bash and /usr/bin/bash before saving or changing modes; restore each target once.",
+                    name,
+                    "terminus-regular-task-authoring",
+                )
+        if unsafe_candidate_calls:
+            locations = ", ".join(
+                f"line {call.line} ({call.function})" for call in unsafe_candidate_calls[:6]
+            )
+            if len(unsafe_candidate_calls) > 6:
+                locations += f", and {len(unsafe_candidate_calls) - 6} more"
+            add(
+                findings,
+                "blocker",
+                "verifier-unprivileged-candidate",
+                "Candidate-controlled build/runtime subprocesses must run as an unprivileged "
+                f"user, not as the pytest/reward owner; unsafe calls: {locations}.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        if candidate_call_count:
             missing_isolation = []
             if "subprocess.Popen" not in verifier_python:
                 missing_isolation.append("Popen")
@@ -695,6 +895,16 @@ def review(path: Path) -> dict:
                 and Path(name).suffix.lower() in {".md", ".txt", ".rst"}
             )
         )
+        if unit_test_alignment_issue(contract_text, verifier_python):
+            add(
+                findings,
+                "blocker",
+                "contract-unit-tests-unverified",
+                "The task promises that existing unit tests keep passing, but the verifier "
+                "does not run `go test`/`make test` or an equivalent verifier-owned preservation suite.",
+                "instruction.md",
+                "terminus-regular-task-authoring",
+            )
         order_promised = bool(
             re.search(r"(?i)(keys?.{0,32}in this order|key order|ordered keys?|sorted keys?)", contract_text)
         )
@@ -747,7 +957,9 @@ def review(path: Path) -> dict:
 
         run_ruff(view, findings)
         check_blacklisted_db(view, findings)
-        check_instruction_sufficiency_evidence(view, findings, task_slug)
+        if include_external_evidence:
+            check_instruction_sufficiency_evidence(view, findings, task_slug)
+            check_semantic_coverage_evidence(view, findings, task_slug)
 
         for name in files:
             if re.search(r"(^|/)(\.DS_Store|__MACOSX|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache)(/|$)", name) or name.endswith(".pyc") or "/._" in name or name.startswith("._"):
@@ -803,6 +1015,7 @@ def review(path: Path) -> dict:
             "task": task_slug,
             "path": str(path),
             "artifact_sha256": view.artifact_sha256(),
+            "evidence_scope": "full" if include_external_evidence else "mechanical_only",
             "status": status,
             "counts": {
                 "blocker": sum(f.severity == "blocker" for f in findings),
@@ -853,6 +1066,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--review-model")
     parser.add_argument("--review-session-id")
     parser.add_argument(
+        "--mechanical-only",
+        action="store_true",
+        help=(
+            "Skip external fairness and semantic-review receipts during the pre-review "
+            "mechanical scan. Full scans remain required after independent review."
+        ),
+    )
+    parser.add_argument(
         "--waive-environment-hints",
         action="store_true",
         help=(
@@ -862,7 +1083,21 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    results = [review(Path(p)) for p in args.paths]
+    if args.mechanical_only and any(
+        (
+            args.manual_review_pass,
+            args.review_transcript,
+            args.review_runtime,
+            args.review_model,
+            args.review_session_id,
+        )
+    ):
+        parser.error("--mechanical-only cannot be combined with manual review attestation")
+
+    results = [
+        review(Path(p), include_external_evidence=not args.mechanical_only)
+        for p in args.paths
+    ]
     if args.waive_environment_hints:
         if not args.manual_review_pass:
             parser.error("--waive-environment-hints requires --manual-review-pass")

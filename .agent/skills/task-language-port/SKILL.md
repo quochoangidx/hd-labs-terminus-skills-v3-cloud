@@ -34,14 +34,26 @@ and behavior contract, then build it with `task-clone`.
 4. Update `[metadata].languages` using lowercase language names. Keep the exact
    Terminus 3 category/subcategory pair unless the domain itself changes.
 5. Keep the Terminus 3 contract: top-level `artifacts`, separate verifier,
-   `tests/Dockerfile`, `network_mode`, 1800–18000 second agent timeout, and no
+   `tests/Dockerfile`, public environment network plus explicit agent/verifier
+   network modes, 1800–18000 second agent timeout, and no
    removed Terminus 2 fields.
-6. Adapt digest-pinned images and build commands. Bake every dependency into the
-   relevant image; never install verifier dependencies at trial time.
-7. Re-run oracle, nop, a deliberately wrong/incomplete candidate, static checks,
-   instruction sufficiency, and artifact transfer checks. Independently
-   spot-check the migrated oracle against the visible contract on hard inputs. A
+6. Adapt digest-pinned images and build commands. In every Dockerfile,
+   `COPY --chown=` must use numeric IDs and external-image `COPY --from=` refs
+   must be digest-only (`image@sha256:<digest>`, without a tag); stage aliases
+   remain valid. Bake agent dependencies into `environment/Dockerfile` and
+   verifier-only dependencies into `tests/Dockerfile`; never install verifier
+   dependencies at trial time.
+7. Re-run oracle, nop, static checks, V3 evidence inferability, artifact
+   transfer checks, and the four-axis quality-panel review. `Minor`, `Major`,
+   and `Unsure` all block a replacement upload; only `None` on
+   `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
+   and `sound_verifier` clears it. If verifier Python changes interpreter
+   permissions, also pass the platform-only dual-Bash-path cleanup check. A
    successful source-language task does not prove the migrated runtime works.
+   For a Hardware / CAD port, rerun the geometry-specific checks from
+   `docs/creating-tasks/cad-task-guidelines.md`, including fresh-value
+   parametric recompute when that behavior is promised; a new frontend or
+   kernel can change what is measurable and how topology survives recompute.
 8. Package only if the user requested an internal ZIP or a replacement upload.
 
 Do not create multiple sibling ports, mandatory narrative reskins, or a

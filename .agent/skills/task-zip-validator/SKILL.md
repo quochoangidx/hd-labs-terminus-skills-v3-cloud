@@ -27,21 +27,24 @@ A single argument: path to a `.zip` file (absolute or relative).
 
 1. **Unzip** to a temp directory
 2. **Structural audit** — check every file against rules
-3. **Instruction sufficiency** — recreate or locate the external contract-source
-   manifest, run two blind contract reviews, and pass
-   `terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`
+3. **V3 evidence inferability** — recreate or locate the external schema-v3
+   manifest, run two fresh task-visible fairness reviews, and pass
+   `sufficiency_manifest_check.py --require-v3`
 4. **Auto-fix** — apply fixes for known issues
 5. **Oracle + Nop** — run harbor tests if Docker available
-6. **Report** — summarize findings and fixes
-7. **Re-zip** — if fixes applied, create updated ZIP
+6. **Quality panel audit** — review `coherent_contract`,
+   `correct_reference_solution`, `protected_ground_truth`, and
+   `sound_verifier`; only `None` on every axis clears this gate
+7. **Report** — summarize findings and fixes
+8. **Re-zip** — if fixes applied, create updated ZIP
 
-The sufficiency manifest is intentionally absent from the ZIP. Look first for
+The compatibility-named V3 evidence manifest is intentionally absent from the ZIP. Look first for
 `workspace/reports/<slug>/instruction-sufficiency.json`. If it is unavailable,
-rebuild it from the extracted instruction/environment/tests using
+rebuild schema version 3 from the extracted instruction/environment/tests using
 `terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
 Do not mark a ZIP ready merely because every test has a passer: coverage and
-solver success cannot certify that the visible contract defines the expected
-behavior.
+solver success cannot certify goal clarity or evidence inferability. Conversely,
+do not require every inferred semantic rule to appear in `instruction.md`.
 
 ### Verifier-integrity review (manual, blocking when violated)
 
@@ -56,13 +59,32 @@ read it dynamically and reject a candidate that hardcodes the original value.
 Do not flag hardcoded expected results, tolerances, or format constants unless
 they replace values the instruction says come from that file.
 
-Also run a deliberately wrong/incomplete candidate; nop=0 alone is insufficient.
-Reject verifiers that trust a delivered binary without rebuilding required source,
-expose a held-out golden beside the input path, leave prior output at a predictable
-replay path, assert only proxies instead of required values, or independently
-grade two artifacts the candidate controls without checking their equivalence.
-Spot-check oracle outputs against the visible contract on hard inputs outside the
-fixtures used to tune the suite.
+Reject verifier truth loaded or derived from `/app`, a mutable corpus, or any
+other agent-writable tree. Goldens and held-out fixtures belong in the separate
+verifier image. Do not manually stage whole agent-controlled directories:
+symlinks can turn protected fixture contents into apparent candidate output;
+declare exact top-level artifacts and let the harness transfer them instead.
+If the verifier executes agent-supplied code, drop privileges before exec with
+`--no-new-privs` or equivalent and confirm that process cannot read goldens,
+hidden fixtures, or `/logs/verifier`. Do not place expected answers in a parent
+tree of an input path passed to that process; demotion stops writes, not reads.
+
+For each domain rule explicitly named by the contract, require an isolating
+fixture whose expected result changes when that rule alone is inverted. A
+coarse multi-rule wrong solution or mixed held-out corpus is insufficient, and
+held-out data cannot be the sole enforcement of a stated rule.
+
+Scan every Python file under `tests/` for temporary interpreter permission
+changes. Resolve and deduplicate targets before recording modes; specifically,
+`/bin/bash` and `/usr/bin/bash` may resolve to one executable. Restore each
+saved mode once from `finally`, then verify complete Oracle reward/log
+collection. This blocking platform preflight is not run by `stb harbor check`.
+
+Assert at the specificity of the instruction: exact comparison is required for
+byte-exact or otherwise pinned output, but exact undocumented wording is invalid.
+When the instruction states a numeric tolerance, enforce that same band. When it
+defines an optimization objective or tie-break, include a case that rejects a
+merely feasible or differently optimized answer and spot-check the Oracle there.
 
 ## Step 1 — Unzip and Identify
 
@@ -119,12 +141,14 @@ relevant_experience = "..."
 [verifier]
 timeout_sec = N
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = N                # 1800-18000
+network_mode = "no-network"
 
 [environment]
-network_mode = "public"        # default; "no-network" only when needed
+network_mode = "public"        # required on every task
 build_timeout_sec = N
 cpus = N
 memory_mb = N
@@ -161,8 +185,8 @@ Media: Music, Design
 | Check | Rule | Auto-fix |
 |-------|------|----------|
 | `artifacts` | Required top-level array; every verifier input path must be declared | ❌ manual |
-| `network_mode` | `"public"` by default; `"no-network"` only when the task should be offline | ✅ set to public when absent |
-| `difficulty` | Must use `frontier`, `advanced`, `core`, or `base`; a declared-value mismatch is advisory because final difficulty is re-measured after acceptance | ❌ manual |
+| per-phase `network_mode` | `[environment]` must be `"public"`; `[agent]` and `[verifier]` must each declare `"public"` or `"no-network"` | ✅ set environment public; add agent/verifier only when task intent is unambiguous |
+| `difficulty` | Must be `frontier`, `advanced`, `core`, or `base` and match measured accuracy | ❌ manual |
 | `environment_mode` | `[verifier].environment_mode` must be `"separate"` | ✅ set to separate |
 | `agent.timeout_sec` | Must be between 1800 and 18000 seconds | ❌ manual |
 | `languages` | Must list task/oracle implementation languages, not verifier-only Python | ❌ manual |
@@ -178,7 +202,9 @@ Check `environment/Dockerfile`:
 
 | Check | Rule | Auto-fix |
 |-------|------|----------|
-| Digest pin | `FROM image@sha256:<64hex>` required, NOT `FROM image:tag` | ❌ manual (need to pull digest) |
+| Digest pin | Every external `FROM` must end in `@sha256:<64hex>`; canonical `FROM image:tag@sha256:<digest>` is valid and expected, while a plain floating `FROM image:tag` is not | ❌ manual (need to pull digest) |
+| Numeric `COPY --chown` | Every Dockerfile must use numeric IDs such as `--chown=0:0` or `--chown=1000:1000`; named users fail the cloud builder | ✅ replace when the intended UID/GID is known |
+| Digest-only image `COPY --from` | External image refs must be `image@sha256:<digest>`, never `image:tag@sha256:<digest>`; stage aliases remain valid | ❌ manual |
 | Canonical final-stage base | Final stage must use a **canonical Terminal-Bench base image** (digest-pinned) when one matches the task's language, OR a non-canonical base with a brief credible justification in the `Dockerfile`/`README.md`. Canonical refs: Python `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`, Node `…/node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383`, Go `…/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac`, Rust `…/rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36`, Java `…/eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14`, GCC `…/gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c`, Ruby `…/ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df`, Maven `…/maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e`, Debian `…/debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d`, Ubuntu `…/ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932`. Builder stages may use any task-appropriate toolchain image. | ❌ manual |
 | **tmux + asciinema REQUIRED** | MUST be in apt-get install. Missing either = ALL agent runs fail with zero output. | ✅ add to apt-get |
 | No COPY tests | NO `COPY tests/` or `COPY solution/` | ✅ remove line |
@@ -197,6 +223,14 @@ builds the isolated verifier, must be digest-pinned, must bake in
 must `COPY . /tests/`, and must create the parent directory for every declared
 artifact path. Do not put dependency wheels under `tests/`, and do not install
 packages in `tests/test.sh`.
+
+For Hardware / CAD submissions, additionally apply
+`docs/creating-tasks/cad-task-guidelines.md`: every stated dimension must be
+measured on built geometry; sampling spacing must be finer than the tolerance;
+through/repeated/exact-count features must be covered; the Oracle solid must be
+independently measured; free pose/construction choices must pass; and any
+parametric requirement must be exercised by changing a fresh value,
+recomputing, and measuring the changed part.
 
 ### 2c. .dockerignore (WARNING → auto-fix)
 
@@ -250,13 +284,12 @@ if [ "$rc" -eq 0 ]; then
 else
     echo 0 > /logs/verifier/reward.txt
 fi
-
-exit 0
 ```
 
-The current portal explicitly requires no `set -e`, requires a trailing
-`exit 0`, and grades from `reward.txt`. If the published Terminus 3 skeleton
-differs, the skeleton wins and the discrepancy must be reported.
+The current portal explicitly requires no `set -e` and no trailing `exit`.
+End on `fi`: pytest's status is captured, while a failed reward write remains
+visible as an infrastructure error. If the published Terminus 3 skeleton differs,
+the skeleton wins and the discrepancy must be reported.
 
 ### 2e. Dependency wheels and root pyproject
 
@@ -329,7 +362,7 @@ Fast first pass — run the shared mechanical scanner, then audit the content ru
 scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <unzipped-task-dir>
 ```
 
-### 3a. Structure and style (review — leakage/prescription can block)
+### 3a. Structure and style (BLOCKING — instruction_check)
 
 | Check | Rule | Detect |
 |-------|------|--------|
@@ -340,7 +373,7 @@ scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instructio
 | No canary strings | No `CANARY_STRING`, UUID-like tokens, or marker strings | grep |
 | No emojis | No emoji characters | regex |
 | Narrative paragraphs | Reads like a bug report, not bullet-list spec | manual |
-| Length | Prefer 1-3 paragraphs and <20 "must"/"should" items, but these are guidance; never reject solely for length | count/advisory |
+| Length | 1-3 paragraphs, < 20 "must"/"should" items | count |
 
 ### 3b. No solution leaks (BLOCKING — instruction_check)
 
@@ -357,18 +390,22 @@ scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instructio
 | No pitfall/trap emphasis | No "where a naive X goes wrong", "the tricky/subtle parts are", "a few points bear emphasis", "getting it wrong is easy", "worth calling out". Points the solver at the traps (no-hints violation) and makes it easier. For spec/conformance tasks, delegate rule detail to the named standard ("per RFC 9535 / UAX-14, treat it as authoritative") and let the solver find the hard parts. | `grep -inE 'naive\|goes wrong\|bear emphasis\|tricky\|worth calling out\|getting (it\|them) wrong'` |
 | No verifier/test mention | Instruction never references the grader: no "the verifier", "the tests check/lean on", "the verifier expects" | `grep -inE '\bverifier\b\|the tests\b'` |
 
-### 3c. Behavioral completeness (BLOCKING — behavior_in_tests)
+### 3c. V3 contract/evidence completeness (BLOCKING)
 
-Every behavior asserted by `tests/test_outputs.py` MUST be mentioned in `instruction.md`:
+Every behavior asserted by `tests/test_outputs.py` must map either to the
+explicit success surface or to an evidence-backed inference family:
 
-1. Read test_outputs.py, list every distinct asserted behavior
-2. For each behavior, verify instruction.md states it (even implicitly)
-3. Flag any test assertion not covered by instruction
+1. Read `test_outputs.py` and list each distinct asserted behavior.
+2. Require paths, public API/schema, exact consumer-visible strings, and
+   arbitrary constants in `instruction.md` or a realistic visible source.
+3. For semantic rules, verify the schema-v3 report cites sufficient visible
+   evidence; do not require the final derived rule to be copied into the prompt.
+4. Flag oracle-only policy, unobtainable facts, or representation overfit.
 
 Common gaps:
 - Tests assert a specific error message string → instruction must mention it
-- Tests check preservation of behavior X → instruction must say "X should continue to work"
-- Tests check a specific API/method name → instruction must mention it (if it's a public API)
+- Tests check a public non-target mode → instruction should make its preservation scope clear
+- Tests check a specific API/method name → instruction must mention it when it is a required public API
 
 ### 3d. No meta-language (WARNING)
 
@@ -406,8 +443,6 @@ For each Python test function in test_outputs.py:
 For each requirement in instruction.md:
 1. Identify the claimed behavior
 2. Verify at least one test covers it
-3. Confirm every documented command/mode is invoked, and the fixture carrying a
-   rule actually stresses that rule rather than a degenerate easy case
 
 Report:
 - Tests with no instruction coverage → **add to instruction or remove test**
@@ -470,13 +505,15 @@ Print summary table:
 | task.toml structure      | ✅     | -          |
 | artifacts top-level      | ✅     | -          |
 | verifier separate mode   | ✅     | YES        |
-| network_mode             | ✅     | -          |
+| per-phase network_mode   | ✅     | -          |
 | category/subcategory     | ✅     | -          |
 | docker-compose flags     | N/A    | -          |
 | Dockerfile digest pin    | ✅     | -          |
 | Canonical base image     | ✅     | -          |
+| Cloud COPY syntax        | ✅     | -          |
 | tmux + asciinema         | ✅     | -          |
 | tests/Dockerfile         | ✅     | -          |
+| CAD geometry review      | ✅/N/A | -          |
 | artifact landing dirs    | ✅     | -          |
 | test.sh canonical form   | ✅     | YES        |
 | .dockerignore            | ✅     | YES        |
@@ -527,17 +564,18 @@ Top recurring CI failures from empirical data:
 1. **verifier isolation** — missing `tests/Dockerfile`, `environment_mode = "separate"`, top-level artifacts, or artifact landing directories
 2. **verifier deps** — missing pinned pytest/pytest-json-ctrf in `tests/Dockerfile` or runtime installation in test.sh
 3. **FROM not digest-pinned** — missing `@sha256:` suffix
-4. **check_sanctioned_base_images** — final stage uses a non-canonical base with no (or vague) justification; or uses a different digest/registry than the canonical entry for that language (e.g. bare `golang@sha256:…` instead of the canonical `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d…`)
-5. **ruff errors** — unused imports, ambiguous variable names
-6. **secret files** — .pem/.key/.crt in environment/
-7. **missing .dockerignore** — or incomplete exclusions
-8. **instruction_check** — headers, solution hints, prescriptive language
-9. **reward section** — test.sh doesn't use canonical `$?` pattern
-10. **blacklisted databases** — MSSQL/Oracle/DB2 references in repo files
-11. **AI scaffolding files** — CLAUDE.md, .cursorrules in environment/
-12. **build context size** — environment/ exceeds 100MiB or single file >50MiB
-13. **root pyproject.toml** — remove from submission ZIP
-14. **Terminus 2 metadata** — stale difficulty/category/network/milestone fields remain
+4. **check_modal_dockerfile_compat** — named `COPY --chown=` IDs or an external-image `COPY --from=` ref that is not digest-only
+5. **check_sanctioned_base_images** — final stage uses a non-canonical base with no (or vague) justification; or uses a different digest/registry than the canonical entry for that language (e.g. bare `golang@sha256:…` instead of the canonical `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d…`)
+6. **ruff errors** — unused imports, ambiguous variable names
+7. **secret files** — .pem/.key/.crt in environment/
+8. **missing .dockerignore** — or incomplete exclusions
+9. **instruction_check** — headers, solution hints, prescriptive language
+10. **reward section** — test.sh doesn't use canonical `$?` pattern
+11. **blacklisted databases** — MSSQL/Oracle/DB2 references in repo files
+12. **AI scaffolding files** — CLAUDE.md, .cursorrules in environment/
+13. **build context size** — environment/ exceeds 100MiB or single file >50MiB
+14. **root pyproject.toml** — remove from submission ZIP
+15. **Terminus 2 metadata** — stale difficulty/category/network/milestone fields remain
 
 ## Go-specific Checks
 

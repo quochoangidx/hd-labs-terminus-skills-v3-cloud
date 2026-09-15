@@ -19,9 +19,9 @@ Run through this before every submission.
 
 - [ ] `task.toml` — all required fields present
 - [ ] `instruction.md`
-- [ ] `environment/Dockerfile` — builds successfully; dependencies pinned; every `FROM` digest-pinned
+- [ ] `environment/Dockerfile` — builds successfully; dependencies pinned; every `FROM` digest-pinned; `COPY --chown=` uses numeric IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`)
 - [ ] `solution/solve.sh` — deterministic, human-written
-- [ ] `tests/Dockerfile` — verifier image with dependencies baked in
+- [ ] `tests/Dockerfile` — verifier image with dependencies baked in; same `COPY --chown=` / `COPY --from=` rules as the environment Dockerfile
 - [ ] `tests/test.sh` — verifier entrypoint
 - [ ] `tests/test_outputs.py` — Python pytest tests with docstrings
 
@@ -35,13 +35,26 @@ Run through this before every submission.
 - [ ] `solution/` and `tests/` are absent from the agent image
 - [ ] Tests are deterministic — no network, no wall-clock dependence, no unseeded randomness
 - [ ] Tests check semantics, not appearance
-- [ ] Verification covers every correctness axis the task claims to care about
+- [ ] Every required output path/name in `instruction.md` is the same path/name the verifier reads
+- [ ] Verification covers every stated core requirement and the full required output — values, fields, rows/files, ordering, uniqueness, types, and formatting where required, not just presence or a partial sample
+- [ ] Tests vary inputs meaningfully across the stated domain so fixed sizes, values, ordering, paths, formats, or business rules cannot be hardcoded
+- [ ] Any stated lifecycle behavior (restart/recovery, idempotency, invalid input, concurrency, existing output, reset) is exercised, not just the happy path
+- [ ] `tests/` does not contain a callable end-to-end solver; expected results come from sealed goldens or spec-derived invariants
+- [ ] If the task reads a variable config/input, mutate it and re-run to prove the solution does not hardcode the shipped values
+- [ ] If source and a built/package/report artifact are both required, tests rebuild from source **and** validate the required delivered artifact and their correspondence
+- [ ] Goldens and held-out fixtures are baked into the verifier image (`tests/Dockerfile`), not read from agent-writable paths (`/app`, mutable corpus, agent-delivered trees)
+- [ ] If tests rebuild and run the agent's program, drop uid before that exec and probe that it cannot read goldens or `/logs/verifier` — separate mode does not hide those files from that process
+- [ ] Agent outputs are declared as top-level `artifacts` in `task.toml` — don't stage agent directories yourself
+- [ ] Any numeric tolerance stated in `instruction.md` matches what the tests enforce
+- [ ] When the spec defines an optimization objective or tie-break, tests reject a feasible plan that optimizes the wrong quantity
+- [ ] Walked the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) pre-submit checklist — every grading rule has a citable sentence, goldens are not colocated with paths passed to the agent's program, and a documented requirement has a test that would fail if it were removed
 
 ## Configuration
 
 - [ ] `[agent].timeout_sec` is at least **1800** (30 min) and reflects the time the task actually needs
 - [ ] `[verifier].timeout_sec` and `[environment].build_timeout_sec` set
-- [ ] `network_mode` is `"public"` unless the task specifically needs to run offline
+- [ ] `[environment].network_mode = "public"` — required on every task
+- [ ] `[agent].network_mode` and `[verifier].network_mode` are **both present** — an omitted phase is a blocking finding, not a default; an offline task uses `"no-network"` on both
 - [ ] No GPU required; runs within ~2 CPU cores, ~8 GB memory, ~10 GB storage
 - [ ] Descriptive fields are under `[metadata]`, not at the top level
 - [ ] 3–6 `tags`; `languages` and `expert_time_estimate_hours` set
@@ -88,10 +101,10 @@ stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 | **Core** | 50% – < 80% |
 | **Base** | 80% – < 100% |
 
-- [ ] `difficulty` in `task.toml` matches the measured tier
+- [ ] `difficulty` in `task.toml` set to the tier your local runs point at — the platform's own 8-run measurement is what gets recorded, so this is your best estimate, not a value a reviewer checks
 - [ ] Failures reflect genuine task difficulty — not unclear instructions, environment defects, or flaky tests
 - [ ] **Checked which tests the failing runs miss.** If they keep missing the same one or few tests, the check or the instructions are likely the problem — fix that check, or state the requirement in the instruction. If they miss different tests each time, the difficulty is genuine. Either way, don't leave the difficulty rated higher just because near-complete runs count as failures
-- [ ] **Ran a deliberately wrong or incomplete solution against your own verifier and confirmed it fails**
+- [ ] **Ran a deliberately wrong or incomplete solution against your own verifier and confirmed it fails.** One mutant that breaks several rules at once (including the shipped buggy code) is not enough — for each **named** domain rule, a case should exist that would fail if **that rule alone** were wrong. Held-out must not be the only enforcement of any stated rule.
 
 ---
 

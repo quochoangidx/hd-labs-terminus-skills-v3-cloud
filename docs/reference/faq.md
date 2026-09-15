@@ -1,6 +1,6 @@
 # Terminus 3 — Frequently Asked Questions
 
-*Last updated: August 10, 2026*
+*Last updated: September 4, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
@@ -44,7 +44,9 @@ No — work on and submit multiple tasks in parallel.
 **How do I initialize a new task with the CLI?**
 `stb init my-task-name -p "Terminus-3-Prod"`
 
-> **Pending:** the template flag (`-t`) is not yet documented for Terminus 3. Download the [task skeleton](/Terminus-3-Prod/default-template.zip) and rename the folder instead.
+This downloads the Terminus 3 task skeleton into `my-task-name/`. Terminus 3 has a single template, so the template flag (`-t`) is optional — `stb init my-task-name -p "Terminus-3-Prod" -t default` does the same thing.
+
+You can also download the [task skeleton](/Terminus-3-Prod/default-template.zip) directly and rename the folder.
 
 ---
 
@@ -95,7 +97,7 @@ That install method is retired — the old Harbor wheel URL no longer serves. In
 No. Milestone / multi-step tasks are not part of Terminus 3. Every task is a single-shot, outcome-verified problem.
 
 **Where do tests run?**
-In a **separate container**, built from `tests/Dockerfile`. The agent cannot see or reach it. Set `[verifier].environment_mode = "separate"`.
+In a **separate container**, built from `tests/Dockerfile`. The agent cannot see or reach it. Terminus requires the explicit `[verifier].environment_mode = "separate"` key (Harbor would also treat a `[verifier.environment]` table as separate, and defaults to shared if neither is set — Terminus CI rejects both).
 
 **How does the verifier see the agent's work?**
 Only through the paths you declare in the top-level `artifacts` array. Nothing else crosses over — and the parent directories for those paths must already exist in the verifier image. Nesting `artifacts` under `[verifier]` silently drops it.
@@ -112,13 +114,13 @@ No. Snorkel adds `README.md` at packaging, assembled from the `difficulty_explan
 **How is difficulty determined?**
 Empirically. **Accuracy = mean pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5.** Tiers: **Frontier** < 20%, **Advanced** 20–50%, **Core** 50–80%, **Base** 80–100%. Tasks above 80% are not rejected — Base is a wanted tier, but **100% averaged across both models is not accepted**: a task every run solves gives no signal. There is no language-specific difficulty rule. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
-**Why does the in-platform check run fewer trials than the final measurement?**
-Difficulty is measured in two stages. While you iterate, the platform runs **2 trials per model across both models — 4 runs total**. The full **8-run** measurement (4 per model) happens only **after a reviewer accepts your task**, and that is what sets your final tier.
+**When is difficulty measured, and is it final?**
+Once. After your task passes the [quality panel](/portal/docs/testing-and-validation/quality-panel-judge-guide) and before it reaches a reviewer, the platform runs **4 trials per model across both models — 8 runs total**. That measurement sets your tier, and it is the one a reviewer sees. Nothing re-runs after acceptance.
 
-**The tier shown while iterating is provisional.** It comes from 4 runs, not 8, so a task can shift tiers between the two. Don't treat the iteration result as final.
+Your local `-k 4` runs are an estimate, not the measurement — different seeds and different days move results.
 
-**My task passed every run in the platform check. Why can't I submit it?**
-At least one of the 4 iteration runs must fail. A task that every run solves produces no signal about agent capability, so it can't proceed to review. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty.
+**My task passed every run in the platform check. Why can't it proceed?**
+At least one of the 8 runs must fail. A task that every run solves produces no signal about agent capability, so it can't proceed to review. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty.
 
 **My task keeps coming back too easy. What makes a task land in the harder tiers?**
 Requirements the agent must infer rather than read off a checklist, outputs judged on semantics rather than appearance, and several correctness axes that interact. Single-bug or template-based tasks tend to land in Core or Base. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
@@ -245,6 +247,12 @@ Run `docker network prune` to clean up stale networks.
 **My Dockerfile references a base image that seems unavailable.**
 Some images may not be accessible on the platform. Post the exact image name and task UUID in Slack.
 
+**Preflight failed on `COPY --chown=` or `COPY --from=`.**
+The cloud image builder rejects two patterns that work on local Docker. `COPY --chown=` must use numeric IDs (`0:0`, `1000:1000`), not names such as `root` or `appuser`. `COPY --from=` **image** refs must drop the tag and keep the digest (`golang@sha256:<digest>`), not `golang:1.24-bookworm@sha256:<digest>`. Stage names (`COPY --from=builder`) and `FROM image:tag@sha256:<digest>` are unchanged. The preflight names the exact line. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+
+**Preflight failed on `verifier_interpreter_permissions`, or Oracle log collection failed with Bash `Permission denied`.**
+On images where `/bin` is `/usr/bin`, `/bin/bash` and `/usr/bin/bash` are the same file. Saving a mode and disabling each path in turn can record `000` for the second path; restoring both leaves Bash non-executable. Harbor then fails to collect verifier logs (`DownloadVerifierDirError`) even if pytest wrote a reward. Resolve every path with `Path.resolve()`, deduplicate, restore each original mode once — do not hardcode `0755`. The platform check scans every `tests/**/*.py` before Oracle and is **not** in `stb harbor check`. An unreadable or unparseable file is a warning that the scan is incomplete for that file, not a pass. See [Writing Tests → Preserve Interpreter Permissions](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions).
+
 **Which base image should I use?**
 Prefer one of the **10 canonical digest-pinned images** (Python, Node, Go, Rust, Java, Ruby, GCC, Maven, Debian, Ubuntu) listed in [Dockerfile Best Practices §2](/portal/docs/creating-tasks/dockerfile-best-practices). Non-canonical images are allowed with a brief, credible justification as a Dockerfile comment; missing/vague justifications are blocked. Tasks whose CI passed before Jun 15, 2026 are grandfathered — reviewers shouldn't flag their base image (pinning is still required).
 
@@ -277,7 +285,10 @@ You can also drill into a specific submission:
 | `REJECTED` | Task rejected | No |
 | `SKIPPED` | Task skipped | No |
 
-See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#check-submission-status) for the full set of submission commands.
+See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#5-check-submission-status) for the full set of submission commands.
+
+**What is the quality panel judge?**
+An automated four-axis review that runs before a human reviewer, and must pass before difficulty is measured: contract disclosure, reference-solution correctness, whether ground truth is reachable, and whether the verifier can be passed without solving the task. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. Walk the checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) before you submit. If you think a finding is wrong, contest it with the cited passage the same way you would a human note — see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
 
 **What are the submission limits?**
 
@@ -344,6 +355,9 @@ Check "Generate Rubric(s)" and submit _without_ checking "Send to Reviewer". Gen
 
 **My rubrics disappear or appear empty after a revision cycle.**
 Known platform bug. Report with the task UUID in Slack.
+
+**How is the quality panel different from LLMaJ or Agent Review?**
+LLMaJ and Agent Review are separate helpers (Agent Review does not block). The quality panel is a four-axis review that **blocks** before a human reviewer, and gates the difficulty measurement. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ---
 
@@ -416,3 +430,4 @@ Yes. The current schedule is **pinned at the top of the `#terminus-3-announcemen
 | Agent logs unavailable for some reviews | Report with task UUID |
 | Docker network limit from repeated harbor runs | Run `docker network prune` |
 | `stb harbor check` fails: "unexpected response" / Usage Policy refusal | Provider content refusal — re-run, switch judge model (`-m opus` or `-m claude-haiku-4-5`), review content; escalate with UUID if a legitimate task keeps failing |
+| Platform preflight `verifier_interpreter_permissions`, or Oracle `DownloadVerifierDirError` / Bash `Permission denied` | Dual `/bin/bash` and `/usr/bin/bash` restore without `Path.resolve()` dedup; not in `stb harbor check`. See [Writing Tests](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions) |

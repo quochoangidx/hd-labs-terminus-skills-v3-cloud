@@ -36,15 +36,39 @@ Set the timeout to what the work actually needs. Padding a short task doesn't ma
 
 ## Internet Access
 
-`network_mode = "public"` is the **default** — use it unless you have a specific reason not to:
+Network access is set **per phase**. Each of the three phases carries its own `network_mode`:
 
 ```toml
+[environment]
 network_mode = "public"
+
+[agent]
+network_mode = "no-network"
+
+[verifier]
+network_mode = "no-network"
 ```
 
-Set `network_mode = "no-network"` **only when the task does not make sense to complete with internet access** — for example, when network access would let the agent retrieve the answer directly instead of doing the work. If you're unsure, use `"public"`.
+**`[environment].network_mode` must be `"public"`.** This is required on every task, offline tasks included. The environment phase is where the image is built and the agent harness is installed, and that installation needs the network. A task that closes the network at this phase fails before the agent ever runs.
 
-Either way, your task's dependencies must still be baked into the image at build time, and `tests/test.sh` must never fetch from the network at trial time.
+**All three phases must declare `network_mode`.** An omitted phase is not a default — it silently inherits the baseline, so the agent and verifier end up running on a policy nobody chose. The static check reports each missing one, and it blocks submission.
+
+**The value on `[agent]` and `[verifier]` is yours to choose** — `"public"` or `"no-network"` on each, according to what the task needs:
+
+| If the task… | `[agent]` | `[verifier]` |
+|---|---|---|
+| Should be solved offline | `"no-network"` | `"no-network"` |
+| Genuinely requires the internet to solve | `"public"` | `"no-network"` |
+
+Air-gapped is the stronger and more common choice for both. **You do not need to open the network for the agent's own tooling** — the platform grants the harness its gateway access separately, so a task never has to allow hosts on its behalf.
+
+**Making a task offline no longer means closing `[environment]`.** Keep the environment public so the build succeeds, and set `"no-network"` on `[agent]` — that is what stops the agent reaching the network while it works.
+
+> ⚠️ **`"allowlist"` is not a supported value**, and `allowed_hosts` is rejected with it. Production sandboxes have no network-allowlist capability, so a task using it is refused at creation and the difficulty check reports `Oracle ran 0 trials` — an infrastructure refusal that reads like a task defect.
+>
+> **`network_mode` at the top level is ignored.** Harbor drops unrecognised root keys, so a top-level setting looks correct and does nothing. It belongs inside `[environment]`, `[agent]` and `[verifier]`. The legacy `allow_internet` field is also rejected — it cannot express a per-phase policy.
+
+Whatever you choose, your task's dependencies must still be baked into the image at build time, and `tests/test.sh` must never fetch from the network at trial time. A public `[verifier]` is not licence to install at grade time.
 
 ## Compute Limits
 

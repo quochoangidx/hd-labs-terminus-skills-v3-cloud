@@ -78,9 +78,11 @@ relevant_experience = "The background that qualified you to author this task."
 [verifier]
 timeout_sec = 1800
 environment_mode = "separate"
+network_mode = "no-network"
 
 [agent]
 timeout_sec = 7200
+network_mode = "no-network"
 
 [environment]
 network_mode = "public"
@@ -92,7 +94,7 @@ storage_mb = 10240
 
 > Descriptive fields go under `[metadata]` — top-level copies are no longer counted by the structure check. `artifacts` stays top-level, and `name` resolves in either place.
 >
-> `network_mode = "public"` is the default. Use `"no-network"` only when the task does not make sense to complete with internet access. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
+> **`[environment].network_mode` must be `"public"`** on every task — the build and harness install need the network. Choose `"public"` or `"no-network"` on `[agent]` and `[verifier]` for what the task itself needs; an offline task keeps the environment public and sets `[agent]` to `"no-network"`. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
 
 ## Step 4: Configure Docker Environment
 
@@ -101,7 +103,9 @@ Edit the `environment/Dockerfile` to set up your task environment:
 - Install `tmux` and `asciinema` — **required by the agent runtime**. Leaving them out breaks any task running without network access, since nothing can fetch them at runtime. Install them explicitly regardless of `network_mode`.
 - Add any dependencies required by your task
 - Pin all package versions for reproducibility
-- Digest-pin every `FROM` image with `@sha256:<digest>`
+- Digest-pin every `FROM` image with `@sha256:<digest>` (`FROM image:tag@sha256:<digest>` is still the pin form)
+- `COPY --chown=` uses numeric IDs (`0:0` or `1000:1000`), not named users such as `root` or `appuser`
+- `COPY --from=` image refs are digest-only (`golang@sha256:<digest>`) — drop the `:tag`. Stage names (`COPY --from=builder`) are fine
 - For the final runtime stage, use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices) when one matches your task's language. Non-canonical images are allowed with a brief written justification as a `Dockerfile` comment; missing justifications are blocked.
 - Keep `environment/` at or below 100 MiB total and no file over 50 MiB
 - Add `.dockerignore` for non-trivial environments

@@ -37,7 +37,7 @@ Every `instruction.md` should adhere to these seven general principles:
 
 ### 2. Task Instructions Must be Well Specified
 
-- While task instructions should be concise, they still must be well specified. This means that the goal of a task is clear and obvious to the human/agent.
+- While task instructions should be concise, they still must be well specified. This means that the goal of a task is clear and obvious to the human/agent. 
 
 - The main criteria to look for here is tasks with a larger number of edge cases and requirements. If a task is primarily hard due to a large number of edge cases/requirements that are not handled well, it should be rejected.
 
@@ -50,7 +50,7 @@ Every `instruction.md` should adhere to these seven general principles:
 - Conceptually, we are going for tasks that represent one shot tasks from a user to a terminal agent. If tasks contain significant hints or rubrics in the instruction.md for how to solve the task, it is not representative of the style of task we are looking for. Requirements can be included, but hints or stepwise instructions should not be.
 
 ### 5. Task Instruction Must be Unique
-- The task must be noticeably unique to any task in Terminal-Bench 2.1, Terminal-Bench 3.0, or Snorkel's prior Terminus editions.
+- The task must be noticeably unique to any task in Terminal-Bench 2.1, Terminal-Bench 3.0, or Snorkel's prior Terminus editions. 
 
 - Similarity search evaluation results are provided to help make this determination. Generally, the logic for too similar tasks is:
 

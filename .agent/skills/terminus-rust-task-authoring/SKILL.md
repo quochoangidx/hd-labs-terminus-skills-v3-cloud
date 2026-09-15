@@ -16,6 +16,9 @@ file conflicts with those skills, the canonical skills win.
   only under `solution/`.
 - Use a digest-pinned Rust runtime image and install `tmux`, `asciinema`, Git,
   patching/search tools, Python, and the Rust toolchain needed by the task.
+- In every Dockerfile, use numeric IDs for `COPY --chown=` and digest-only
+  external image refs for `COPY --from=`; do not write
+  `COPY --from=image:tag@sha256:...`. Stage aliases remain valid.
 - Put Cargo on the AGENT login-shell `PATH`. The `rust:*-slim` images expose
   cargo only via a Docker `ENV PATH=/usr/local/cargo/bin:$PATH` addition, which
   the verifier keeps through `docker exec` but the agent's tmux login shell drops
@@ -43,6 +46,11 @@ file conflicts with those skills, the canonical skills win.
   APIs. Avoid source-string checks and private implementation assertions.
 - Run deterministic focused commands rather than the entire upstream suite.
   Every subprocess should have a practical timeout and useful captured output.
+- When verifier Python rebuilds or executes Rust code, demote before exec and
+  include `--no-new-privs` or equivalent containment. Keep goldens outside all
+  directory trees passed to that process and probe that it cannot read them or
+  `/logs/verifier`; separate mode alone does not hide verifier files from code
+  executed inside the verifier.
 - Preserve instruction/test symmetry for feature flags, workspace layouts,
   target-specific behavior, generated artifacts, and compatibility paths.
 - Keep end-to-end expected-artifact generation in `solution/`, not `tests/`.

@@ -82,7 +82,7 @@ Physical and digital hardware design.
 
 | Subcategory | Covers |
 |---|---|
-| `CAD` | Parametric CAD, mechanical part design |
+| `CAD` | Parametric CAD, mechanical part design — see [CAD Task Guidelines](/portal/docs/creating-tasks/cad-task-guidelines) |
 | `RTL` | HDL, RTL, digital logic |
 
 ### Media

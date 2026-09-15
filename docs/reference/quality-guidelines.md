@@ -14,7 +14,7 @@ These quality control guidelines define the quality bar for Terminus 3 formatted
 
 **Testable**: Each task must be fully specified and self-contained for the agent to solve without ambiguity and should be accompanied by a sufficient set of tests that can be used to deterministically measure the final state of the environment and determine if the task has been completed correctly.
 
-**Novel**: Avoid ANY variations of existing tasks in the Terminal-Bench 2.1 or Terminal-Bench 3.0 repositories, or in Snorkel's prior Terminus editions; each task should introduce a new task setup, definition, and data used to solve the task. Tasks should also be novel with respect to tasks included in Snorkel’s Terminal Bench Edition 1 dataset.
+**Novel**: Avoid ANY variations of existing tasks in the Terminal-Bench 2.1 or Terminal-Bench 3.0 repositories, or in Snorkel's prior Terminus editions; each task should introduce a new task setup, definition, and data used to solve the task. Tasks should also be novel with respect to tasks included in Snorkel’s Terminal Bench Edition 1 dataset. 
 
 **No Privileged Ops**: Tasks must not require root-level privileges or unsafe Docker settings like --privileged.
 

@@ -4,6 +4,15 @@
 
 | Date | Type | Change |
 |------|------|--------|
+| Sep 10, 2026 | 🔄 Update | **Verifier and reference-solution criteria tightened.** One failed Medium is now revision; High and Medium both block, while Lows still do not. Added a High contract check for required output paths/names, expanded the existing wrong-solution check to cover meaningful input variation and stated lifecycle behavior, and raised six verifier/reference criteria from Medium to High: no end-to-end solver in <code>tests/</code>, dynamic config use, rebuilt and delivered-artifact validation, oracle correctness, tolerance alignment, and objective/tie-break coverage. Missing <code>.dockerignore</code> moves to Low. Canary strings are dropped from this checklist because static checks catch them. [Review Guidelines](/portal/docs/reviewing-tasks/review-guidelines) now include oracle-correctness under Check Solution; the difficulty metadata bullet only flags retired tier names. |
+| Sep 9, 2026 | 🔄 Update | **You now see the final difficulty.** Difficulty is measured once — 4 trials per model, 8 runs — after the quality panel passes and **before** the task reaches you. The post-acceptance measurement is gone, so the tier in front of you is the one that gets recorded. Two consequences: (1) the **Too easy** decline is directly checkable, since you have all 8 runs — though a task at 100% should not have reached you; (2) the declared `difficulty` value is the author's estimate and **a mismatch is not worth your time** — don't send a task back over it, don't note it. A **retired tier name** (`hard` / `easy` / `medium`) is still a valid flag. The "solvable" definition now reads across the 8 runs, not 10. |
+| Sep 4, 2026 | 🆕 New | [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) published for EC Submitters. The panel is a four-axis automated review being wired in before human review. **`Minor` and `Major` both block** (as does `Unsure`). It is **not** a new checklist row and **not** a substitute for this checklist. Do not copy unverified panel findings into your review — confirm them the same way as Agent Review or trial analysis. |
+| Sep 3, 2026 | 🔄 Update | Folded into the existing **High** reject-wrong-solution criterion: (1) each <strong>named</strong> domain rule needs an isolating case — one mutant of the shipped buggy code is not enough; held-out must not be the only pin; hidden test inputs are fine, hidden requirements are not; (2) separate mode protects the verifier from the agent environment, not from code the verifier itself executes — drop uid before that exec and probe it. Harbor defaults to shared if neither <code>environment_mode = "separate"</code> nor a <code>[verifier.environment]</code> table is set; Terminus CI requires the explicit key. See [Writing Tests](/portal/docs/creating-tasks/writing-tests) and [Dockerfile §8](/portal/docs/creating-tasks/dockerfile-best-practices#8-separate-agent-visible-runtime-from-verifier-only-assets). |
+| Sep 2, 2026 | 🆕 New | Cloud image builder preflight: <code>COPY --chown=</code> must be numeric IDs; <code>COPY --from=</code> image refs digest-only. Added a Low Environment note so reviewers do not invent extra nits around <code>FROM tag@digest</code>, stage names, or <code>RUN chown</code>. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices). |
+| Aug 31, 2026 | 🔄 Update | **A parametric requirement has to be exercised, not read back.** Folded into the existing **High** reject-wrong-solution criterion rather than added as a new row — it is the same failure the criterion already names, a documented behavior no test runs. When the instruction says changing a driving parameter must update the output, a test asserting that the parameter still holds its value proves only that a number is stored; a solution that hardcodes the result stores the same number. Look for a test that **changes** the parameter, rebuilds, and measures the result. Comes up most in Hardware/CAD, where rebuild is also where parametric models genuinely break — see [CAD Task Guidelines](/portal/docs/creating-tasks/cad-task-guidelines), now linked from the criterion. **This is a behavior check, not a toolchain-version check:** do not send a task back over a CAD library version. |
+| Aug 24, 2026 | 🔄 Update | Reconciled with the blocking static check: **all three phases must declare `network_mode`** — an omitted phase silently inherits the baseline rather than defaulting, and is a finding. `"allowlist"` is not a supported value anywhere, `allowed_hosts` is rejected with it, and a top-level `network_mode` is ignored by Harbor. |
+| Aug 24, 2026 | 🔄 Update | **`network_mode` is now set per phase.** `[environment].network_mode` must be `"public"` on **every** task — the image build and agent-harness install need the network, and closing it there fails the task before the agent runs. **Do not flag a public environment as a defect.** `[agent].network_mode` and `[verifier].network_mode` are new fields, author's choice of `"public"` or `"no-network"`; an offline task keeps the environment public and sets `[agent]` to `"no-network"`. The oracle and verifier internet-use criteria now reference `[agent]` and `[verifier]` specifically. Enforced by a blocking static check. |
+| Aug 19, 2026 | 🆕 New | **Named verifier exploit patterns from delivery review.** Extends the Aug 17 too-loose-verifier guidance with four anti-patterns in [Writing Tests](/portal/docs/creating-tasks/writing-tests): ground truth from agent-writable paths, symlink/copy staging leaks, instruction–verifier tolerance drift, and untested optimization objectives or tie-breaks, plus a short note on not loading agent code before fixed assertions. Ground-truth and symlink patterns are folded into the existing **High** reject-wrong-solution criterion; tolerance drift and untested objectives get new **Medium** rows. [Submission Checklist](/portal/docs/submitting-tasks/submission-checklist) self-checks added. |
 | Aug 17, 2026 | 🆕 New | Three Verifier criteria covering the too-loose side: **the verifier rejects a wrong solution** (High) — reachable answers, hollow checks that assert a proxy, and documented behaviors never exercised; **delivered binaries are rebuilt from source** before grading, and artifacts the agent controls both sides of are graded on their equivalence (Medium); and **the oracle is correct, not just passing** (Medium) — tests and oracle are tuned together, so a green oracle does not establish the reference is right. The `near_miss` criterion is rewritten around the **failure pattern across runs**: the same one or few tests failing points at the check or the instructions, different tests each time is genuine difficulty. Do not ask an author to make a task harder solely because near-complete runs count as failures. |
 | Aug 13, 2026 | 🔄 Update | Added a **Not revision triggers** note under Task Metadata: the `difficulty` *value* is re-measured after acceptance and is not grounds for revision (only a retired tier name is), and a `task.toml` structure complaint must be confirmed against the actual static-check result before flagging. See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines). |
 | Aug 10, 2026 | 🔄 Update | Difficulty now runs in two stages: **in-platform iteration** uses 2 trials per model (4 runs) and requires **at least one failure** before a task can reach review; **final difficulty** uses 4 trials per model (8 runs) and runs only **after reviewer acceptance**. **100% accuracy averaged across both models** is not accepted — 90% is fine. Also added two High-severity criteria: **known environment defects block acceptance** regardless of whether they caused a visible failure in the difficulty run, and **`difficulty` must use a current tier** (`frontier`/`advanced`/`core`/`base` — the Edition 2 names are retired). |
@@ -29,8 +38,8 @@ This is the verbose version of the list that outlines all of our requirements. M
 Each criterion is marked with a different severity level (high, medium, or low). Here is how to interpret each criterion when doing a review:
 
 - High: If any criterion marked ‘high’ is not met, the task should not be accepted. High severity criteria must always pass for every single task.
-- Medium: If a task fails multiple ‘medium` criteria, the task should not be accepted. If the task only fails one ‘medium’ criteria, it is ok to be accepted. In the case of just a single ‘medium’ failure, leave a note in the acceptance comments on what the failure is.
-- Low: If a task fails only ‘low’ criteria, it is ok to be accepted. These are typically ‘nice to have’, but should not block a submission from being accepted. If a task is to be sent to revision regardless, i.e failures of ‘high’ or ‘medium’ severity, please include in the revision notes to correct those low severity issues as well.
+- Medium: One failed Medium criterion means the task must be sent to revision.
+- Low: If a task fails only ‘low’ criteria, it is ok to be accepted. These are typically ‘nice to have’, but should not block a submission from being accepted. If a task is to be sent to revision regardless, i.e. failures of ‘high’ or ‘medium’ severity, please include in the revision notes to correct those low severity issues as well.
 
 ## Instruction Prompt
 
@@ -89,18 +98,12 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Instruction.md does not contain a canary string</td>
-      <td>Task instruction.md file should not contain a canary string. This is usually a key indicator that an older task skeleton was used. The canary string gets passed as part of the prompt which we do not want represented in the data</td>
-      <td>Medium</td>
-    </tr>
-    <tr>
       <td>Instruction.md does not contain the task name</td>
       <td>The task name should not appear in the instruction.md. (Context: Many tasks have a comment in the first line with the task name or some variant)</td>
       <td>Medium</td>
     </tr>
   </tbody>
 </table>
-
 
 ## Environment
 
@@ -124,8 +127,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td><code>network_mode</code> accurately matches the task's actual needs.</td>
-      <td>The <code>network_mode</code> setting must reflect what the task genuinely requires. <code>"public"</code> is the default and applies to most tasks. <code>"no-network"</code> is correct only when the task does not make sense to complete with internet access — for example when network access would let the agent retrieve the answer directly rather than do the work. Do not flag <code>"public"</code> as a defect on its own.</td>
+      <td><code>network_mode</code> is set per phase and matches the task's actual needs.</td>
+      <td><code>[environment].network_mode</code> must be <code>"public"</code> on every task — the image build and harness install need the network, and closing it there fails the task before the agent runs. Do <strong>not</strong> flag a public environment as a defect; flag an environment that is <em>not</em> public. All three phases must <strong>declare</strong> <code>network_mode</code> — an omitted phase silently inherits the baseline rather than defaulting, and is a blocking static-check finding. The <em>value</em> on <code>[agent]</code> and <code>[verifier]</code> is the author's choice of <code>"public"</code> or <code>"no-network"</code> and must reflect what the task genuinely requires. <code>"allowlist"</code> is not a supported value anywhere — an offline task keeps the environment public and sets <code>[agent]</code> to <code>"no-network"</code>.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -181,11 +184,16 @@ Each criterion is marked with a different severity level (high, medium, or low).
     <tr>
       <td>Non-trivial environment includes <code>.dockerignore</code></td>
       <td>Exclude build-context clutter and secrets such as <code>.git</code>, <code>__pycache__/</code>, <code>*.pyc</code>, <code>node_modules/</code>, <code>.env</code>, <code>solution/</code>, and <code>tests/</code>.</td>
-      <td>Medium</td>
+      <td>Low</td>
     </tr>
     <tr>
       <td>Avoids using heredocs in Dockerfile</td>
       <td>It is preferred that Dockerfiles do not use heredocs format like:<br><ul><li>cat &lt;&lt; EOF</li><li>RUN cat &gt; /app/script &lt;&lt;'EOF'</li></ul></td>
+      <td>Low</td>
+    </tr>
+    <tr>
+      <td>Do not request extra Dockerfile nits already gated by preflight</td>
+      <td><code>COPY --chown=</code> named users and <code>COPY --from=</code> image refs that mix a tag with a digest are blocked by a static preflight. If a task reached you, those two patterns already passed. Do not send back for <code>FROM image:tag@sha256:</code> (that pin form is required), for <code>COPY --from=builder</code> stage names, or for <code>RUN chown</code>. See <a href="/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax">Cloud Image Builder Syntax</a>.</td>
       <td>Low</td>
     </tr>
     <tr>
@@ -218,8 +226,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Oracle's internet use matches the <code>network_mode</code> setting</td>
-      <td>When <code>network_mode = "no-network"</code>, the oracle solution must not have any actions that require accessing the internet, including downloading packages — any dependencies required for the solution must be installed in the environment. When <code>network_mode = "public"</code>, the oracle may access the internet where the task genuinely requires it.</td>
+      <td>Oracle's internet use matches <code>[agent].network_mode</code></td>
+      <td>When <code>[agent].network_mode = "no-network"</code>, the oracle solution must not have any actions that require accessing the internet, including downloading packages — any dependencies required for the solution must be installed in the environment. When <code>network_mode = "public"</code>, the oracle may access the internet where the task genuinely requires it.</td>
       <td>High</td>
     </tr>
     <tr>
@@ -257,8 +265,8 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
-      <td>Verifier files' internet use matches the <code>network_mode</code> setting</td>
-      <td>When <code>network_mode = "no-network"</code>, <code>test.sh</code> and other verifier files must not rely on any content from the internet, and all verifier dependencies must be baked into the Dockerfile (not downloaded at runtime). When <code>network_mode = "public"</code>, verifier network use is allowed only where the task genuinely requires it, and grading must still be deterministic (see the determinism criterion above).</td>
+      <td>Verifier files' internet use matches <code>[verifier].network_mode</code></td>
+      <td>When <code>[verifier].network_mode = "no-network"</code>, <code>test.sh</code> and other verifier files must not rely on any content from the internet, and all verifier dependencies must be baked into the Dockerfile (not downloaded at runtime). When <code>network_mode = "public"</code>, verifier network use is allowed only where the task genuinely requires it, and grading must still be deterministic (see the determinism criterion above).</td>
       <td>High</td>
     </tr>
     <tr>
@@ -272,34 +280,49 @@ Each criterion is marked with a different severity level (high, medium, or low).
       <td>High</td>
     </tr>
     <tr>
+      <td>Required output paths and names match verifier expectations.</td>
+      <td>Every required output path and filename in <code>instruction.md</code> must match the artifact the verifier reads. Send the task back if a correct implementation following the documented path or name would fail because the verifier checks a different location or artifact. This is the opposite direction from an undocumented verifier requirement: both the contract and the check must point to the same deliverable.</td>
+      <td>High</td>
+    </tr>
+    <tr>
       <td>Verifiers check for correctness, not just format.</td>
-      <td>The verifiers must actually verify that an implemented solution is correct. They should not just settle for checking high level requirements or general formatting.</td>
+      <td>The verifier must validate every stated core requirement and the actual content of every required output — not just file presence, parseability, a row count, or a partial sample. Required fields, rows, files, values, ordering, uniqueness, data types, and formatting must be checked when the contract requires them. Do not create a separate finding for each missing assertion when they are one coverage gap; report the uncovered requirement and the passing wrong solution it permits.</td>
       <td>High</td>
     </tr>
     <tr>
       <td>Solution logic is not reimplemented in <code>tests/</code>.</td>
       <td>No function in <code>tests/</code> may map task inputs to the <strong>complete expected artifact</strong> except by running the agent's own program. End-to-end solution generation belongs in <code>solution/</code> (never present in the agent environment). <strong>Legitimate and not flagged:</strong> running the agent's binary/CLI, parsing the agent's output, precomputed golden fixtures/hashes, spec-derived invariants (floors/budgets/ceilings), and sealed held-out truth. Rule of thumb: if deleting <code>solution/</code> would still let the test compute the expected answer, trim the solver logic.</td>
-      <td>Medium</td>
+      <td>High</td>
     </tr>
     <tr>
       <td>Config-claimed values are read dynamically, not hardcoded.</td>
       <td>Applies <strong>only</strong> when the instruction says the agent must read a config/input file that can vary. Then the verifier must read those values from the config at runtime rather than re-declaring them as literals, so an agent that ignores the config and hardcodes the parameters cannot pass. <strong>Not a general ban on hardcoded values:</strong> hardcoding the expected <em>result</em> — exact numeric/ML targets (with tolerance), byte-exact outputs, format constants — is fine and often required. Confirm config dependence by mutating the config and re-running.</td>
-      <td>Medium</td>
-    </tr>
-    <tr>
-      <td>The verifier rejects a wrong solution, not just accepts a right one.</td>
-      <td>A passing oracle only shows the task runs. Satisfy yourself that a deliberately wrong, incomplete, or lazy solution would <strong>fail</strong> — that is the question the verifier exists to answer. Check the three ways this breaks down: the answer is <strong>reachable</strong> (a held-out input staged beside its expected output, a sealed directory the graded process can still read, or prior output left at a predictable path to replay); the checks are <strong>hollow</strong> (asserting a count, a first element, a field's presence but not its value, or an expected result recomputed from an input the agent controls); or a <strong>documented behavior is never exercised</strong> (a command or mode the tests reference but never run). See <a href="/portal/docs/understanding-tasks/what-makes-a-good-task">What Makes a Good Task</a>.</td>
       <td>High</td>
     </tr>
     <tr>
-      <td>Delivered binaries are rebuilt from source before grading.</td>
-      <td>If the verifier runs an artifact the agent delivered without rebuilding it from the submitted source, and without varying the input, a hardcoded binary that emits the fixed answer passes without implementing anything. Where correctness depends on two artifacts the agent controls both sides of — a simulated and a synthesized build, or a library and its consumer — the verifier must grade their <strong>equivalence</strong> rather than each side alone.</td>
-      <td>Medium</td>
+      <td>The verifier rejects a wrong solution, not just accepts a right one.</td>
+      <td>A passing oracle only shows the task runs. Satisfy yourself that a deliberately wrong, incomplete, or lazy solution would <strong>fail</strong> — that is the question the verifier exists to answer. One mutant of the shipped buggy code is not enough if several stated rules have no isolating case: for each <strong>named</strong> domain rule, a fixture should exist whose outcome would change if <strong>that rule alone</strong> were inverted. Tests must also include meaningful variation across the <strong>stated</strong> input domain so a solution cannot pass by hardcoding the shipped sizes, values, ordering, paths, formats, or business rule. This does not require combinatorial coverage of conditions the contract does not promise.<br><br>Held-out that exists to check generalization must not be the <strong>only</strong> enforcement of any stated rule. Hidden test inputs are fine; hidden requirements are not — the instruction plus that input must determine the output; a hidden corpus must not be the only source of an unstated mapping, threshold, or label. When the contract states lifecycle or resilience behavior — restart/recovery, idempotency, invalid-input handling, concurrency, existing-output handling, or reset behavior — the verifier must exercise that behavior, not only the happy path. Do not require lifecycle cases the task never claims to support.<br><br>Check the ways this breaks down: the answer is <strong>reachable</strong> (held-out input beside its expected output, ground truth derived from agent-writable paths, a sealed directory the graded process can still read, prior output left at a predictable path to replay, or goldens readable by agent code the verifier <strong>execs</strong> — separate mode protects the verifier from the agent environment, not from that process; drop uid before the exec, and probe it); the checks are <strong>hollow</strong> (asserting a count, a first element, a field's presence but not its value, an expected result recomputed from an input the agent controls, or staging agent trees by hand so symlinks expose verifier goldens); or a <strong>documented behavior is never exercised</strong> (a command or mode the tests reference but never run; a named rule that only fails when bundled with other violations or only inside mixed held-out data; a parametric model whose driving parameter is read back rather than changed and rebuilt — reading a stored value proves a number exists, not that the output depends on it, and a solution that hardcodes the result stores the same number). Goldens belong in the <strong>verifier image</strong> (Terminus requires explicit <code>[verifier].environment_mode = "separate"</code>, fixtures baked into <code>tests/Dockerfile</code>) — not in paths the agent can edit or symlink to. See <a href="/portal/docs/understanding-tasks/what-makes-a-good-task">What Makes a Good Task</a>, <a href="/portal/docs/creating-tasks/writing-tests">Writing Tests</a>, and <a href="/portal/docs/creating-tasks/dockerfile-best-practices#8-separate-agent-visible-runtime-from-verifier-only-assets">Dockerfile §8</a>; for geometry tasks, <a href="/portal/docs/creating-tasks/cad-task-guidelines">CAD Task Guidelines</a>.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Source is rebuilt, and the required delivered artifact is validated.</td>
+      <td>If the verifier runs an artifact the agent delivered without rebuilding it from submitted source and varying the input, a hardcoded binary that emits the fixed answer can pass without implementing anything. Rebuilding source does not by itself validate a required delivered binary, package, report, or file: when the contract requires that artifact, the verifier must also inspect or execute the artifact itself and confirm it corresponds to the submitted source. Where correctness depends on two artifacts the agent controls both sides of — a simulated and synthesized build, or a library and its consumer — grade their <strong>equivalence</strong> rather than accepting each side independently.</td>
+      <td>High</td>
     </tr>
     <tr>
       <td>The oracle is correct, not just passing.</td>
       <td>Tests and oracle are written together and tuned until the oracle passes, so a green oracle does <strong>not</strong> establish that the reference is right. Where correctness turns on a rule the fixtures don't stress, spot-check the oracle's logic against the spec. A wrong oracle is worse than a broken one: the tests encode its output as the answer key, so a correct agent solution fails and difficulty is measured against a bad truth. See <a href="/portal/docs/creating-tasks/writing-oracle-solution">Writing Oracle Solution</a>.</td>
-      <td>Medium</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Instruction tolerances match verifier tolerances.</td>
+      <td>When <code>instruction.md</code> states a numeric error band, tests must enforce that band — not a tighter precision the agent was never told about. Send back when a conforming implementation that meets the written spec would fail the verifier. See <a href="/portal/docs/creating-tasks/writing-tests">Writing Tests → Instruction Tolerance Must Match Verifier Tolerance</a>.</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>The tested objective matches the specified one.</td>
+      <td>When the spec defines an optimization objective, ordering rule, or tie-break, tests must reject feasible plans that optimize the wrong quantity or ignore the tie-break — not just check that <em>some</em> valid output exists. Spot-check the oracle on a case where two feasible answers differ on the primary objective or tie-break. See <a href="/portal/docs/creating-tasks/writing-tests">Writing Tests → Optimization Objectives and Tie-Breaks Must Be Tested</a>.</td>
+      <td>High</td>
     </tr>
   </tbody>
 </table>
@@ -315,7 +338,7 @@ The other four require you to examine the flag and decide whether its reason hol
 - **The reason is valid** — the flag identifies a real problem. **Send the task back for revision.**
 - **The reason is invalid** — the flag is a false positive. **Write a description explaining why, then accept.**
 
-Judge each flag on its own merits. The multiple-Medium rule in [Severity Guidance](#severity-guidance) does **not** apply here — two false positives are still two false positives, and a single valid flag is still grounds for revision. What is never acceptable is passing over a flag without examining it.
+Judge each flag on its own merits. A dismissed false positive is not a failed Medium. A single valid flag is still grounds for revision. What is never acceptable is passing over a flag without examining it.
 
 <table class="checklist-table">
   <colgroup>
@@ -467,7 +490,7 @@ Judge each flag on its own merits. The multiple-Medium rule in [Severity Guidanc
 
 ## Task Metadata
 
-> **Not revision triggers.** The `difficulty` *value* is re-measured automatically after acceptance — don't send a task back to change it (only a **retired tier name** is a valid flag). And a `task.toml` "structure" complaint from Agent Review should be **confirmed against the actual static-check result** before flagging — CI runs the structure check on every submission, and a task only reaches you once CI is passing. See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
+> **Not revision triggers.** The `difficulty` *value* — the measured tier is already final when the task reaches you and is what gets recorded, so a declared value that doesn't match it is the author's estimate, not a defect. Don't send a task back to change it and don't spend time on it (only a **retired tier name** is a valid flag). And a `task.toml` "structure" complaint from Agent Review should be **confirmed against the actual static-check result** before flagging — CI runs the structure check on every submission, and a task only reaches you once CI is passing. See [Review Guidelines → Don't request changes for these](/portal/docs/reviewing-tasks/review-guidelines).
 
 <table class="checklist-table">
   <colgroup>
@@ -506,7 +529,11 @@ environment_mode = "separate"
 [agent]
 timeout_sec   (minimum 1800)
 [environment]
-network_mode  ("public" default | "no-network")
+network_mode  (MUST be "public")
+[agent]
+network_mode  ("public" | "no-network")
+[verifier]
+network_mode  ("public" | "no-network")
 build_timeout_sec
 cpus
 memory_mb

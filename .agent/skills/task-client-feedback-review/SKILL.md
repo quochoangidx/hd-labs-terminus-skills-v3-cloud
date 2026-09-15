@@ -13,6 +13,12 @@ the user explicitly asks for fixes.
 
 ## Review Order
 
+For submission readability, read
+[panel input hygiene](../terminus-regular-task-authoring/references/panel-input-hygiene.md).
+Report task files over 800 lines and packet-size risks as advisory diagnostics,
+not correctness findings. Do not auto-split files or prune cases in review-only
+mode; actual incomplete mandatory inspection is a separate clearance issue.
+
 1. Run the bundled scanner:
 
 ```bash
@@ -25,39 +31,74 @@ from the repo root.)
 
 Use `--json` when another script will consume the result.
 
-For `task-batch`, preserve the manual semantic-review transcript and write a
-hash-bound combined receipt for the exact final ZIP:
+For the task-batch mechanical gate that must run before any independent review,
+use `--mechanical-only`. This skips only the external instruction-sufficiency
+and semantic-review receipts that cannot exist yet; it does not skip layout,
+metadata, isolation, privilege, Ruff, leakage, or contract-shape checks. Never
+combine it with `--manual-review-pass`, and always run the normal full scan after
+the fairness and consolidated-auditor evidence exists.
+
+For `task-batch`, run the same scanner/manual review twice at different trust
+boundaries. Before counted probes, review the task folder and save:
 
 ```bash
 scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
-  submissions/<slug>.zip --json --manual-review-pass \
+  workspace/tasks/<slug> --json --manual-review-pass \
+  --review-transcript workspace/reports/<slug>/consolidated-pre-freeze-audit.md \
+  --review-runtime <actual-runtime> --review-model <actual-model> \
+  --review-session-id <actual-session-id> \
+  --evidence-output workspace/reports/<slug>/pre-freeze-review.json
+```
+
+After probes and final packaging, review the exact ZIP and save:
+
+```bash
+scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+  workspace/submissions/<slug>.zip --json --manual-review-pass \
   --review-transcript workspace/reports/<slug>/client-review-transcript.md \
   --review-runtime <actual-runtime> --review-model <actual-model> \
   --review-session-id <actual-session-id> \
   --evidence-output workspace/reports/<slug>/client-review.json
 ```
 
+In `task-batch`, this manual judgment belongs to the one consolidated auditor,
+not a separate client-review agent. Before freeze, that auditor also performs
+semantic realism and the task-tree style audit; all three receipts use the same
+runtime/model/session/transcript provenance. After probes, reuse the same
+auditor identity in a new turn for the exact ZIP, submission prose, and
+handover surfaces. The scanner is deterministic and consumes no additional
+agent session. Its static scan may run alongside the auditor's prose inventory,
+but final Docker/package/handover commands stay sequential.
+
 Use `--manual-review-pass` only after completing the manual checks below and
 recording their real findings and disposition in the transcript. The batch
 handover rejects a missing, empty, out-of-directory, or hash-mismatched
 transcript.
 
-For a task that was already in the platform revision queue or awaiting review
-before its category closed, pass `--revision-exception`. Never use this flag for
-a net-new task; category availability remains a blocker by default.
+`environment-hint` is intentionally broad. After the named manual reviewer has
+checked every hit and recorded why each is ordinary upstream prose, add
+`--waive-environment-hints`; this moves only those hits to `waived_findings`.
+It requires `--manual-review-pass` and cannot waive any other check.
 
 Also run `scripts/preflight.sh <task-dir>` (repo root) for the mechanical
 subset review_task.py doesn't itself check (.dockerignore contents,
 `# syntax=` line, CRLF/arcnames, rubric closed-set).
 
-For a workspace task, require and validate
-`workspace/reports/<slug>/instruction-sufficiency.json` with
-`terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py`. Missing
-or failing evidence is a blocker. For a standalone ZIP, the report is correctly
-absent from the archive; recreate the contract-source matrix manually from the
-ZIP and apply the blind-review procedure in
+For a workspace task, require schema version 3 in
+`workspace/reports/<slug>/instruction-sufficiency.json` and validate it with
+`sufficiency_manifest_check.py --require-v3`. Missing or failing evidence is a blocker. For a standalone ZIP,
+the report is correctly absent from the archive; recreate the goal/evidence/
+inference matrix manually from the ZIP and apply the fairness-review procedure in
 `terminus-regular-task-authoring/references/instruction-sufficiency-gate.md`.
-The automated scanner cannot certify semantic sufficiency.
+The automated scanner cannot certify semantic inferability.
+
+For a counted-probe or batch task, also require
+`workspace/reports/<slug>/semantic-coverage.json` and validate it against the
+final task plus `verifier-matrix.json` with `semantic_coverage_check.py`
+(`--advanced-plus` for that campaign). Confirm the receipt covers every public
+entry point and that each mechanism/interaction mutant is a plausible partial
+fix with both passing and failing CTRF units. Raw case count or cluster labels
+do not substitute for this review.
 
 2. Read `instruction.md` and any provided/generated rubric manually for prompt
    realism:
@@ -78,18 +119,16 @@ The automated scanner cannot certify semantic sufficiency.
      cases the tests assert are NOT this problem (keep them for symmetry).
    - Two-way instruction/test symmetry (scanner does not catch; read for both
      directions; confirmed 2026-06 ssh-rsa-privatekey-dos hit BOTH at once):
-     - **Not vaguer than the tests (else Task Instruction Sufficiency FAIL).**
-       If a test asserts a specific numeric threshold or exact value, the
-       instruction MUST state that number. "reject a too-large exponent" while
+     - **No unobtainable success-surface value.** If a test asserts an arbitrary
+       numeric threshold or exact interface value that no visible source defines,
+       the instruction must state it. "reject a too-large exponent" while
        the test requires `> 24 bits` made 8/9 agents guess 31/33/64 and fail.
-       Flag any tested cutoff/value that the instruction leaves implicit
-       (`should_fix`). Naming the spec value the test checks is required
-       sufficiency, not over-spec; optionally cite an in-repo precedent.
-       Treat a reasonable implementation that passes every visible statement
-       but fails a test as a blocker even when another solver guessed the hidden
-       rule or every test has at least one passer.
-       The "spec value" here means VALUES (numbers, output keys, data schema,
-       exact-match constants) — docs want these explicit
+       Flag any arbitrary cutoff/value absent from all task-visible evidence.
+       Do not require a derived threshold, causal rule, protocol transition, or
+       domain convention to be handed over when realistic evidence supports the
+       inference. In that case audit the evidence graph and trajectory instead.
+       The non-inferable interface surface means VALUES (output keys, public
+       schema, exact-match constants, arbitrary policy numbers) — docs want these explicit
        (`structured_data_schema`, `behavior_in_task_description`). Distinguish
        these from CODE IDENTIFIERS the test pins (function signatures, struct
        field names/types, project layout). A test that reads `cp.CompressedOffset
@@ -101,7 +140,7 @@ The automated scanner cannot certify semantic sufficiency.
        prompt-styling.md section 4 ("Overly Prescriptive Guidelines") calls
        listing exact signatures/struct layouts BAD, and that is exactly what the
        `instruction_check`/design-document reviewer rejects (flate hit
-       Sufficiency-FAIL when names were omitted, then the design-doc WARN when
+       a compile-time interface gap when names were omitted, then the design-doc WARN when
        the full schema was pasted in — the schema route cannot win). The
        docs-aligned fix is to make the verifier BEHAVIORAL/OPAQUE: pass the new
        value straight back into the consuming API as a black box and assert
@@ -124,15 +163,11 @@ The automated scanner cannot certify semantic sufficiency.
        build's own `Validate` already rejects, so a test passes on both nop and
        oracle = a dud). The oracle may legitimately do more than the instruction
        promises; the instruction must not promise more than the tests verify.
-     - **Reject a wrong solution, not just accept the oracle.** Run a deliberately
-       wrong/incomplete/lazy candidate. Nop=0 is not enough. Verify that every
-       documented command/mode is invoked on a discriminating case; held-out
-       inputs cannot reach sibling goldens or predictable prior outputs; checks
-       assert actual values rather than counts/first elements/field presence;
-       submitted source is rebuilt when source changes are required; and two
-       agent-controlled artifacts are checked for equivalence with verifier-owned
-       input or a verifier-owned consumer. Independently spot-check the oracle
-       against the visible contract on hard inputs outside the tuned fixtures.
+     - **Documented commands and modes must actually run.** Referencing a
+       subcommand, flag, or mode in a test name, fixture, or comment is not
+       coverage. Invoke it on a case where its defining rule can change the
+       result; an easy/degenerate fixture that cannot discriminate the rule is
+       still a miss.
    - Numeric exact-string match on floating/irrational results (scanner does not
      catch; read the verifier; confirmed 2026-06 decimal-pow-precision FAILED +
      0/10 same two tests). If a test asserts `someFloatResult.String() ==
@@ -200,7 +235,14 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
    agent-visible files, or claims contradicted by the oracle/verifier are
    `blocker`.
 
-4. Classify findings:
+4. Run a quality-panel-shaped review across `coherent_contract`,
+   `correct_reference_solution`, `protected_ground_truth`, and
+   `sound_verifier`. Only `None` on every axis clears this gate; `Minor`,
+   `Major`, and `Unsure` are all blocking/return outcomes. Require citations
+   for exact grading conventions without collapsing Terminus 3 evidence-based
+   inference into one prose sentence per semantic rule.
+
+5. Classify findings:
    - `blocker`: likely reject or high-severity client feedback issue.
    - `should_fix`: not always fatal, but fix before a new submission.
    - `polish`: useful prompt/rubric quality improvement.
@@ -230,6 +272,33 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
 - `/logs/verifier` not prepared before pytest runs in `tests/test.sh`
 - `/logs/verifier` created without mode `0700` before reward/CTRF creation or
   before candidate execution; existence alone does not isolate the reward channel
+- candidate-controlled build commands, Makefiles, package scripts, imports, or
+  binaries run as the pytest/reward owner. Demote every untrusted build and
+  runtime process (normally to `nobody:nogroup`) and stage writable inputs and
+  outputs in a candidate-owned scratch directory; protecting `/logs/verifier`
+  with mode `0700` is ineffective when candidate code also runs as root
+- a UID/GID drop that can regain privilege because `setpriv` omits
+  `--no-new-privs` (or equivalent containment), or an agent-supplied process
+  that can read a golden/hidden fixture colocated with an input path it receives
+- a named domain rule with no isolating case whose expected result changes when
+  that rule alone is inverted, or a stated rule enforced only by mixed held-out
+  data. One coarse wrong solution that violates several rules is insufficient
+- Python verifier cleanup that saves/restores both `/bin/bash` and
+  `/usr/bin/bash` without resolving and deduplicating targets first. The
+  platform-only `verifier_interpreter_permissions` preflight blocks this because
+  merged-`/usr` images can be left without executable Bash
+- no preserved deliberately wrong/incomplete solution that the verifier kills,
+  or a suite whose assertions only check proxies such as counts, first elements,
+  field presence, or values recomputed from agent-controlled input. Oracle=1 is
+  not evidence that a wrong solution fails
+- for Hardware / CAD, stated dimensions or through/repeated features without a
+  geometry-capable measurement; sampling coarser than the claimed tolerance;
+  trusting Oracle source constants instead of measuring its built solid; or a
+  parametric promise checked only by reading a stored value rather than changing
+  a fresh driver, recomputing, and measuring the result
+- delivered binaries graded without rebuilding from submitted source and a
+  varied/held-out input, or two agent-controlled artifacts graded separately
+  without testing their semantic equivalence
 - candidate subprocesses run without a fresh process group/session and without
   whole-group kill+reap on timeout and teardown. Dropping only the direct child
   to `nobody` does not stop descendants from holding pipes or surviving cases
@@ -237,6 +306,9 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
 - hidden solution walkthroughs or bug hints in environment docs/comments
 - missing `tmux`/`asciinema` in the task image (agent runs fail with
   `Failed to start tmux session` / `verifier_did_not_run`)
+- any Dockerfile using a named `COPY --chown=` value or an external-image
+  `COPY --from=` ref other than digest-only `image@sha256:<digest>`; the cloud
+  builder blocks these even when local Docker accepts them
 - `tests/` or `solution/` copied into the Docker image
 - `privileged: true`, `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities, or
   `/var/run/docker.sock` mounts in docker-compose
@@ -259,21 +331,22 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   verifier behavior
 - submission explanations that materially contradict the task, oracle, or
   verifier, including unrun oracle/nop claims
-- `tests/test.sh` using `set -e`, omitting `--ctrf`, or returning a non-zero
-  script status. The current Terminus 3 form captures pytest's status, writes
-  reward 1/0, then ends with `exit 0`; if the published skeleton differs, the
-  skeleton wins.
+- `tests/test.sh` using `set -e`, omitting `--ctrf`, or adding a trailing
+  `exit`. The current Terminus 3 form captures pytest's status, writes reward
+  1/0, and ends on the reward block's `fi`; this preserves an infrastructure
+  error when the reward write itself fails.
+- missing or invalid per-phase network policy: `[environment].network_mode`
+  must be `"public"`, while `[agent]` and `[verifier]` must each explicitly
+  declare `"public"` or `"no-network"`.
+- verifier truth derived from agent-writable paths, manual copying of
+  agent-controlled trees that can follow symlinks into verifier fixtures,
+  instruction/test numeric-tolerance drift, or an optimization/tie-break
+  contract with no discriminating witness.
 - when the instruction requires source changes, a verifier that checks only a
   prebuilt binary does not enforce the source contract. Declare the project
   directory as an artifact, bake the compiler into `tests/Dockerfile`, and
   rebuild inside the separate verifier before cases. If the deliverable itself
   is a binary, declaring and testing that binary is valid.
-- a verifier that accepts a deliberately wrong/incomplete solution, exposes a
-  held-out answer beside the input, replays a predictable prior output, checks
-  only a proxy rather than the required value, leaves a documented command/mode
-  uninvoked, or lets the agent control both sides of an unchecked comparison
-- an oracle that passes its tuned suite but disagrees with the visible contract
-  on an independently derived hard/edge case
 - environment reference docs (`CANONICAL_FORM.md`, `FORMAT.md`, `SPEC.md`) that
   use GRADER vocabulary ("grading", "grader", "compares", "checks", "verifier",
   "test", "reward") OR contradict the instruction/rubric (e.g. doc says "key
@@ -292,14 +365,9 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   pre-create a root-owned sentinel destination that the demoted candidate cannot
   write, then assert exit 1, non-empty stderr, and byte-identical contents; also
   cover the no-preexisting-file branch when the contract promises no creation
-- a retired `difficulty` name (`easy`/`medium`/`hard`). Do not return a task only
-  because its declared current tier differs from observed accuracy; final
-  difficulty is re-measured after acceptance. A 100% iteration result still
-  cannot proceed because it provides no difficulty signal.
-- for `near_miss`, repeated failure of the same one/few tests across runs points
-  first to the check, instruction, or oracle; different missed tests across runs
-  are more credible difficulty. Do not ask the author to make the task harder
-  solely because nearly complete runs count as failures.
+- `difficulty` in `task.toml` not matching the measured Terminus 3 tier:
+  Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%, averaged across
+  both current reference models. A 100% iteration result cannot proceed.
 - category chosen by coding activity instead of domain. Use `Software` only when
   software itself is the subject; otherwise choose the domain category and its
   exact subcategory (for example ML training repair is `ML / Training`).
