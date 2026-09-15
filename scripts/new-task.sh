@@ -19,7 +19,7 @@ LANG_ID="${2:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
 CATEGORY="${3:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
 SUBCATEGORY="${4:?usage: new-task.sh <slug> <lang> <category> <subcategory>}"
 
-if ! POLICY_RESULT="$(python3 "$REPO_ROOT/scripts/task-policy.py" category "$CATEGORY" "$SUBCATEGORY" 2>&1)"; then
+if ! POLICY_RESULT="$("$REPO_ROOT/scripts/python3" "$REPO_ROOT/scripts/task-policy.py" category "$CATEGORY" "$SUBCATEGORY" 2>&1)"; then
   echo "$POLICY_RESULT" >&2
   exit 1
 fi
@@ -138,7 +138,7 @@ EOF
 cat > "$TASK_DIR/solution/solve.sh" <<'EOF'
 #!/bin/bash
 # Oracle entry point. Platform rule: realistic engineer commands only —
-# never `patch -p1 < fix.patch` as the visible action for milestone-0 tasks
+# never `patch -p1 < fix.patch` as the visible action for a single-step task
 # where reviewers flagged it; copy/edit source then rebuild.
 set -euo pipefail
 cd /app

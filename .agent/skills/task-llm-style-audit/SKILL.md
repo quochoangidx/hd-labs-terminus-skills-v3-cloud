@@ -148,7 +148,7 @@ For `task-batch`, inventory every UTF-8 reviewer-visible task file before the
 counted snapshot and generate the schema-1 task receipt after the real audit:
 
 ```bash
-python3 .agent/skills/task-batch/scripts/evidence.py task-style-receipt \
+scripts/python3 .agent/skills/task-batch/scripts/evidence.py task-style-receipt \
   workspace/tasks/<slug> \
   --transcript workspace/reports/<slug>/consolidated-pre-freeze-audit.md \
   --runtime <actual-runtime> --model <actual-model> \
@@ -161,7 +161,7 @@ After probes, audit the final external submission and generate schema-2
 than pretending the submission auditor reread every task file:
 
 ```bash
-python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
+scripts/python3 .agent/skills/task-batch/scripts/evidence.py style-receipt \
   workspace/tasks/<slug> \
   --submission workspace/submissions/SUBMISSION-<slug>.md \
   --transcript workspace/reports/<slug>/style-audit-transcript.md \

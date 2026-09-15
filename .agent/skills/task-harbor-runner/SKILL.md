@@ -195,11 +195,16 @@ Oracle:
 - oracle failure usually means `solution/solve.sh` or tests are wrong.
 - verify the patch applies cleanly from the initial state.
 - rebuild artifacts if tests invoke a compiled binary.
+- oracle success proves execution, not reference correctness. Independently
+  spot-check hard/edge inputs against the visible contract.
 
 Nop:
 
 - nop must fail.
 - if nop passes, tests are too weak or initial state already satisfies the task.
+- nop failure is not the full negative-control gate. Before submission, also run
+  a deliberately wrong/incomplete candidate that exercises plausible shortcuts
+  and confirm it receives reward 0 for the intended semantic reason.
 
 CI:
 

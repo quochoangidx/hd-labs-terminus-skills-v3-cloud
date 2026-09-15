@@ -16,6 +16,11 @@
 # Exit 0 = no FAIL rows (WARNs allowed). Docker checks need a running daemon.
 set -uo pipefail
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# All repository helpers share one version gate. This avoids silently selecting
+# macOS /usr/bin/python3 (3.9) for scripts that require tomllib.
+PYTHON_BIN="$REPO_ROOT/scripts/python3"
+
 TASK_DIR=""
 NO_DOCKER=0
 STRICT=0
@@ -44,7 +49,6 @@ done
 [ -n "$TASK_DIR" ] || { usage >&2; exit 2; }
 TASK_DIR="$(cd "$TASK_DIR" && pwd)" || exit 2
 SLUG="$(basename "$TASK_DIR")"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [ -n "$EVIDENCE_DIR" ]; then
   mkdir -p "$EVIDENCE_DIR"
   EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
@@ -132,7 +136,7 @@ PYEOF
     || report FAIL "toml:no-terminus2" "$OBSOLETE"
 fi
 
-POLICY_OUTPUT="$(python3 "$REPO_ROOT/scripts/task-policy.py" validate-task "$TASK_DIR" 2>&1)"
+POLICY_OUTPUT="$("$PYTHON_BIN" "$REPO_ROOT/scripts/task-policy.py" validate-task "$TASK_DIR" 2>&1)"
 POLICY_RC=$?
 if [ "$POLICY_RC" -eq 0 ]; then
   report PASS "policy:static" "metadata, all Docker stages, verifier, compose, and test runner pass"
@@ -143,7 +147,10 @@ fi
 # 5. Leak sweep
 LEAKS="$(grep -rlE 'CANARY-|CLAUDE\.md|AGENTS\.md' "$TASK_DIR/environment" "$TASK_DIR/tests" "$TASK_DIR/instruction.md" 2>/dev/null || true)"
 [ -n "$LEAKS" ] && report FAIL "leak:canary/memory-refs" "$(echo "$LEAKS" | tr '\n' ' ')" || report PASS "leak:canary/memory-refs" "clean"
-STRAYS="$(find "$TASK_DIR/environment" \( -name '*.whl' -o -name '.DS_Store' -o -path '*/.git/*' \) 2>/dev/null | head -5)"
+# A pyproject at environment/ is a task-packaging leak. A nested pyproject under
+# environment/app belongs to an upstream Python project and may be required to
+# build the submitted artifact.
+STRAYS="$(find "$TASK_DIR/environment" \( -name '*.whl' -o -path "$TASK_DIR/environment/pyproject.toml" -o -name '.DS_Store' -o -path '*/.git/*' \) 2>/dev/null | head -5)"
 [ -n "$STRAYS" ] && report WARN "leak:stray-files" "$(echo "$STRAYS" | tr '\n' ' ')" || report PASS "leak:stray-files" "clean"
 grep -qE 'https?://' "$TASK_DIR/instruction.md" 2>/dev/null \
   && report WARN "instruction:external-url" "instruction must be self-contained; verify each URL is not a doc crutch" \
@@ -165,7 +172,7 @@ fi
 
 # 7. Zip build + arcname verification (python zipfile — never Compress-Archive/Explorer)
 ZIP_OUT="$(mktemp -d)/$SLUG.zip"
-PYOUT="$(python3 - "$TASK_DIR" "$ZIP_OUT" <<'PYEOF'
+PYOUT="$("$PYTHON_BIN" - "$TASK_DIR" "$ZIP_OUT" <<'PYEOF'
 import os, sys, zipfile
 task_dir, zip_out = sys.argv[1], sys.argv[2]
 roots = ["task.toml", "instruction.md", "environment", "solution", "tests"]
@@ -252,7 +259,7 @@ fi
 # 8. Rubric format (workspace/submissions/SUBMISSION-<slug>.md, if present)
 SUB_MD="$REPO_ROOT/workspace/submissions/SUBMISSION-$SLUG.md"
 if [ -f "$SUB_MD" ]; then
-  RUBOUT="$(python3 - "$SUB_MD" <<'PYEOF'
+  RUBOUT="$("$PYTHON_BIN" - "$SUB_MD" <<'PYEOF'
 import re, sys
 text = open(sys.argv[1]).read()
 lines = [l.strip() for l in text.splitlines()]
@@ -296,7 +303,7 @@ fi
 # 9. Docker: build both images, solve in the agent image, transfer only declared
 # artifacts, then run the separate verifier image.
 if [ "$NO_DOCKER" -eq 0 ]; then
-  if python3 - <<'PYEOF'
+  if "$PYTHON_BIN" - <<'PYEOF'
 import subprocess
 import sys
 
@@ -316,14 +323,14 @@ PYEOF
     report PASS "docker:daemon" "Docker daemon responded within 15 seconds"
   AGENT_IMG="preflight-agent-$SLUG"
   VERIFIER_IMG="preflight-verifier-$SLUG"
-  ARTIFACT_LIST="$(python3 - "$TT" <<'PYEOF'
+  ARTIFACT_LIST="$("$PYTHON_BIN" - "$TT" <<'PYEOF'
 import sys, tomllib
 task = tomllib.load(open(sys.argv[1], "rb"))
 for path in task.get("artifacts", []):
     print(path)
 PYEOF
 )"
-  read -r AGENT_NETWORK_MODE VERIFIER_NETWORK_MODE <<<"$(python3 - "$TT" <<'PYEOF'
+  read -r AGENT_NETWORK_MODE VERIFIER_NETWORK_MODE <<<"$("$PYTHON_BIN" - "$TT" <<'PYEOF'
 import sys, tomllib
 task = tomllib.load(open(sys.argv[1], "rb"))
 print(task.get("agent", {}).get("network_mode", "no-network"), task.get("verifier", {}).get("network_mode", "no-network"))
@@ -437,7 +444,7 @@ fi
 echo "----"
 if [ -n "$REPORT_JSON" ]; then
   mkdir -p "$(dirname "$REPORT_JSON")"
-  python3 - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" "$EVIDENCE_DIR" "$TASK_DIR" <<'PYEOF'
+  "$PYTHON_BIN" - "$SLUG" "$STRICT" "$FAILS" "$REPORT_ROWS" "$REPORT_JSON" "$ZIP_OUT" "$EVIDENCE_DIR" "$TASK_DIR" <<'PYEOF'
 import hashlib
 import json
 import sys

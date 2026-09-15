@@ -63,11 +63,9 @@ candidate belongs on a Core/Advanced/Frontier shortlist.
   mechanically, do not rely on inheritance:
   - Codex: use `gpt-5.6-sol` with `reasoning_effort: medium` for every subagent:
     builder, fairness reviewer, both blind solvers, and auditor.
-  - Claude Code: use Claude Opus 5 with medium reasoning. Pass `model: opus`
-    and the medium reasoning setting EXPLICITLY on every subagent call —
-    subagents inherit the session model by default, so a session running a
-    stronger tier that omits the parameter probes with a solver outside the
-    current platform pool (Opus 5 + GPT-5.6), distorting the tier estimate.
+  - Claude Code: launch the checked-in `terminus-probe` project agent with
+    `model: opus`. Its profile pins `effort: medium`; Claude's Agent call has no
+    per-call effort field. Run it from the isolated `run_N/solve/` directory.
   Do not silently substitute a cheaper OR stronger model across runtimes. Use a
   different model or higher reasoning effort only when the user explicitly asks
   for it.
@@ -147,11 +145,11 @@ candidate belongs on a Core/Advanced/Frontier shortlist.
 Use the helper script when possible:
 
 ```bash
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
   workspace/tasks/tbrain-example --profile general
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py materialize workspace/local-solve-probes/tbrain-example/run_1
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py diff workspace/local-solve-probes/tbrain-example/run_1
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py materialize workspace/local-solve-probes/tbrain-example/run_1
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
   workspace/local-solve-probes/tbrain-example/run_1 \
   --result fail --type semantic \
   --notes "missed target-specific manifest section" \
@@ -163,15 +161,15 @@ python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
   --verification-ctrf /path/to/verification-ctrf.json \
   --verification-command '<offline verifier command>' \
   --verification-exit-code 1 --reward 0
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
 ```
 
 For the current CORE+ campaign, summarize with the profile used at preparation:
 
 ```bash
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py prepare \
   workspace/tasks/tbrain-example --profile core_advanced_frontier
-python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize \
+scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize \
   workspace/local-solve-probes/tbrain-example \
   --profile core_advanced_frontier
 ```

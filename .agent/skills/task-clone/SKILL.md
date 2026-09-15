@@ -440,19 +440,22 @@ fix every finding (structure, length, hint phrases, leakage) before the first
 platform check:
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
 ```
 
 Write like a real engineer describing the requested observable work:
 
-- 1-3 short FLOWING paragraphs — never a spec sheet. Do NOT use `## Input` /
+- Prefer 1-3 short FLOWING paragraphs, but treat that as guidance rather than a
+  hard cap — never a spec sheet. Do NOT use `## Input` /
   `## Output` / `## Build` (or any similar) section headers, format tables, or
   bulleted "rules" lists. The platform `instruction_check` reviewer flags a
   section-structured instruction as a "design document that prescribes
   implementation" and warns even after the rule enumeration is removed (confirmed
   twice, 2026-06-21: rule-free-but-sectioned still warned; the prose rewrite
   cleared it). Weave the stdin/stdout format, constraints, and the build note
-  into narrative sentences that explain *why* each part matters. When the
+  into narrative sentences that explain *why* each part matters. A longer
+  instruction is acceptable when the contract genuinely needs the space and
+  does not leak implementation steps. When the
   behaviour follows a known standard or tool, reference it ("the result must
   match `git check-ignore`") instead of restating its rules.
 - Before the first platform check, run the `instruction_check` binary preflight
@@ -461,7 +464,8 @@ Write like a real engineer describing the requested observable work:
   `.agent/skills/task-miner/lever_patterns.md` (L1 step 9): ship the non-blocking
   ⚠️ when the flagged items are test-pinned, use natural JSON + a semantic
   verifier instead of a bespoke byte format, and move unavoidable disclosures
-  into an in-env reference file with a one-line pointer.
+  into an in-env reference file with a one-line pointer. Treat paragraph and
+  bullet-count findings as style guidance, not standalone rejection reasons.
 - Absolute paths only, such as `/app` and `/app/src/module.py`.
 - State observable contract and exact user-facing strings only if tests assert them.
 - No issue URLs, PR numbers, test names, rubrics, or solution hints.
@@ -716,6 +720,10 @@ If the project requires build artifacts, rebuild them in `solve.sh`. The patch m
 For domain-profile tasks, the patch must implement the general
 target behavior, not only the concrete verifier fixtures.
 
+A green oracle run proves that the task executes, not that the reference is
+correct. Independently derive the expected result for several hard/edge inputs
+outside the tuned fixtures and reconcile the oracle with the visible contract.
+
 ## Verifier Pattern
 
 `tests/test_outputs.py` runs inside the isolated verifier container. It may see
@@ -728,6 +736,16 @@ the agent filesystem. Choose artifacts to match the deliverable:
   compiler/toolchain into `tests/Dockerfile`, and rebuild there before testing
 - service/state tasks: export deterministic state or another portable artifact
   that the verifier can inspect; do not assume the agent container remains live
+
+Before difficulty probing, prove that the verifier rejects a deliberately wrong,
+incomplete, or lazy solution. Nop=0 alone is not enough. Rebuild submitted source
+inside the verifier when the contract requires source changes; never trust a
+delivered binary on one fixed input. Keep held-out inputs separate from their
+goldens and remove any predictable prior output before the graded run. Assert
+actual values, not only counts/endpoints/field presence. If the candidate controls
+two related artifacts, grade their equivalence with verifier-owned inputs or a
+verifier-owned consumer. Invoke every documented command/mode, and make each
+rule-carrying fixture exercise the hard case that distinguishes an incomplete fix.
 
 Verifier-only tests and expected data stay under `tests/` and are copied into
 the verifier image with `COPY . /tests/`; they are never staged in the agent
@@ -973,7 +991,7 @@ Recommended smoke command before Harbor:
 
 ```bash
 cd <task-folder>
-python3 -m py_compile tests/test_outputs.py
+<repo-root>/scripts/python3 -m py_compile tests/test_outputs.py
 ```
 
 Then run oracle and nop. A broken verifier must be fixed before any difficulty
@@ -1031,7 +1049,8 @@ mistakes each cost a full rebuild this session — avoid them up front:
   This ALSO satisfies instruction/test symmetry (the named reference defines
   correctness) without listing internals. Keep only YOUR I/O format + the
   observable contract; drop the mechanics. AND write the whole instruction as
-  flowing prose (1-3 paragraphs) — NOT as `Input`/`Output`/`Build` sections:
+  flowing prose (usually 1-3 paragraphs, not a hard cap) — NOT as
+  `Input`/`Output`/`Build` sections:
   `instruction_check` flags rigid spec-section structure as a "design document"
   too, even after the rule tables are gone. Weave the stdin/stdout format into
   narrative sentences that say *why* each part matters (confirmed: a
@@ -1245,8 +1264,8 @@ tier measurement.
 If Docker is not running, still run static checks:
 
 ```bash
-python3 -m py_compile <python files>
-python3 - <<'PY'
+scripts/python3 -m py_compile <python files>
+scripts/python3 - <<'PY'
 import tomllib
 tomllib.load(open("task.toml", "rb"))
 PY
@@ -1265,6 +1284,10 @@ locally):
 - If the oracle patch is `<= 10` meaningful LOC in one obvious file, require empirical agent failures before keeping it.
 - Timeouts, refusals, unclear instructions, and environment defects do not count
   as legitimate difficulty; resolve the trial-analysis flags and re-measure.
+- For `near_miss`, inspect the per-run failure pattern: repeated misses on the
+  same one/few tests point first to the check, instruction, or oracle; different
+  misses across runs are more credible difficulty. Do not raise the tier merely
+  because nearly complete runs count as failures.
 
 ## Final Packaging
 

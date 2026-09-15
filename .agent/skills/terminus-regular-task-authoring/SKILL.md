@@ -221,7 +221,7 @@ draft and the task artifacts once more.
 pre-flight and fix every finding before anything else:**
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/instruction_preflight.py <task-folder>
 ```
 
 It catches the structural triggers (headers, bullets, tables, over-length, hint
@@ -257,7 +257,7 @@ declares a profile and planned budget. As soon as the verifier skeleton is
 collectable, create `workspace/reports/<slug>/verifier-matrix.json` and run:
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/verifier_architecture_check.py \
   matrix workspace/reports/<slug>/verifier-matrix.json \
   --task-slug <slug> --allow-missing-ctrf
 ```

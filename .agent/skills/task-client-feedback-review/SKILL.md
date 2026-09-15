@@ -22,7 +22,7 @@ mode; actual incomplete mandatory inspection is a separate clearance issue.
 1. Run the bundled scanner:
 
 ```bash
-python .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
+scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py <task-or-zip> [...]
 ```
 
 (The script lives in-repo at
@@ -42,7 +42,7 @@ For `task-batch`, run the same scanner/manual review twice at different trust
 boundaries. Before counted probes, review the task folder and save:
 
 ```bash
-python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
   workspace/tasks/<slug> --json --manual-review-pass \
   --review-transcript workspace/reports/<slug>/consolidated-pre-freeze-audit.md \
   --review-runtime <actual-runtime> --review-model <actual-model> \
@@ -53,7 +53,7 @@ python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
 After probes and final packaging, review the exact ZIP and save:
 
 ```bash
-python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
+scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py \
   workspace/submissions/<slug>.zip --json --manual-review-pass \
   --review-transcript workspace/reports/<slug>/client-review-transcript.md \
   --review-runtime <actual-runtime> --review-model <actual-model> \
@@ -74,6 +74,11 @@ Use `--manual-review-pass` only after completing the manual checks below and
 recording their real findings and disposition in the transcript. The batch
 handover rejects a missing, empty, out-of-directory, or hash-mismatched
 transcript.
+
+`environment-hint` is intentionally broad. After the named manual reviewer has
+checked every hit and recorded why each is ordinary upstream prose, add
+`--waive-environment-hints`; this moves only those hits to `waived_findings`.
+It requires `--manual-review-pass` and cannot waive any other check.
 
 Also run `scripts/preflight.sh <task-dir>` (repo root) for the mechanical
 subset review_task.py doesn't itself check (.dockerignore contents,

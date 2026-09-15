@@ -292,12 +292,16 @@ def run_trusted_nop_verifier(run_dir: Path) -> dict:
     stb = shutil.which("stb")
     if not stb:
         raise RuntimeError("stb executable is unavailable for trusted local NOP verification")
+    bundled_harbor = Path(stb).resolve().with_name("harbor")
+    harbor_command = (
+        [str(bundled_harbor), "run"]
+        if bundled_harbor.is_file() and os.access(bundled_harbor, os.X_OK)
+        else [stb, "harbor", "run"]
+    )
     with tempfile.TemporaryDirectory(prefix="batch-handover-nop-") as temp:
         jobs_dir = Path(temp) / "jobs"
         command = [
-            stb,
-            "harbor",
-            "run",
+            *harbor_command,
             "--force-build",
             "-a",
             "nop",

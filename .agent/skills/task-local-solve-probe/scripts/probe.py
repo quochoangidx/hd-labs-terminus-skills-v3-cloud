@@ -14,11 +14,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-EXCLUDE_DIRS = {
+GLOBAL_EXCLUDE_DIRS = {
     ".git",
     "__pycache__",
     ".pytest_cache",
     ".ruff_cache",
+}
+TOP_LEVEL_EXCLUDE_DIRS = {
     "reports",
     "solution",
     "submissions",
@@ -33,12 +35,15 @@ VALID_RUNNERS = {"codex-subagent", "claude-agent"}
 VALID_RUNTIMES = {"codex", "claude-code"}
 
 
-def should_ignore(path: Path) -> bool:
+def should_ignore(path: Path, root: Path | None = None) -> bool:
     name = path.name
     if name in EXCLUDE_FILES:
         return True
-    if path.is_dir() and name in EXCLUDE_DIRS:
-        return True
+    if path.is_dir():
+        if name in GLOBAL_EXCLUDE_DIRS:
+            return True
+        if root is not None and path.parent.resolve() == root.resolve() and name in TOP_LEVEL_EXCLUDE_DIRS:
+            return True
     if name.startswith(EXCLUDE_PREFIXES):
         return True
     return name.endswith(EXCLUDE_SUFFIXES)
@@ -52,7 +57,7 @@ def copy_task(src: Path, dst: Path, *, sanitized: bool) -> None:
         if not sanitized:
             return set()
         base = Path(directory)
-        return {name for name in names if should_ignore(base / name)}
+        return {name for name in names if should_ignore(base / name, src)}
 
     # Keep upstream repository symlinks as symlinks. Dereferencing them changes
     # the sanitized tree shape and makes an otherwise unchanged baseline fail
@@ -79,11 +84,15 @@ def tree_hash(root: Path, *, sanitized: bool) -> str:
         rel = path.relative_to(root)
         if any(part in volatile_dirs for part in rel.parts):
             continue
-        if sanitized and any(part in EXCLUDE_DIRS for part in rel.parts):
+        if sanitized and any(part in GLOBAL_EXCLUDE_DIRS for part in rel.parts):
             continue
-        if sanitized and should_ignore(path):
+        if sanitized and rel.parts and rel.parts[0] in TOP_LEVEL_EXCLUDE_DIRS:
             continue
-        if path.is_dir() or path.is_symlink():
+        if sanitized and should_ignore(path, root):
+            continue
+        # Hash symlink targets by content so source and symlink-preserving probe
+        # copies share the same frozen contract representation.
+        if path.is_dir():
             continue
         digest.update(rel.as_posix().encode("utf-8"))
         digest.update(b"\0")
@@ -99,11 +108,13 @@ def file_hash_map(root: Path, *, sanitized: bool) -> dict[str, str]:
         rel = path.relative_to(root)
         if any(part in volatile_dirs for part in rel.parts):
             continue
-        if sanitized and any(part in EXCLUDE_DIRS for part in rel.parts):
+        if sanitized and any(part in GLOBAL_EXCLUDE_DIRS for part in rel.parts):
             continue
-        if sanitized and should_ignore(path):
+        if sanitized and rel.parts and rel.parts[0] in TOP_LEVEL_EXCLUDE_DIRS:
             continue
-        if path.is_dir() or path.is_symlink():
+        if sanitized and should_ignore(path, root):
+            continue
+        if path.is_dir():
             continue
         files[rel.as_posix()] = sha256(path)
     return files

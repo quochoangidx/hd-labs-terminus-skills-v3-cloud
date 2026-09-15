@@ -1,6 +1,6 @@
 ---
 name: find-task-prs
-description: Scan a GitHub repository's recently merged PRs and return the top ~10 candidates suitable for building tb-quality TerminalBench tasks. Each PR is scored by asking OpenAI to judge the diff. Use when the user gives a repo URL (or `owner/repo`) and wants to mine it for benchmark-worthy PRs.
+description: Scan a GitHub repository's recently merged PRs and return the top ~10 candidates suitable for building tb-quality TerminalBench tasks. Score diffs with the active Claude or Codex runtime, or OpenAI API only when explicitly selected. Use when the user gives a repo URL (or `owner/repo`) and wants to mine it for benchmark-worthy PRs.
 ---
 
 # Find Task-Worthy PRs
@@ -18,7 +18,8 @@ Given a GitHub repo, surface ~10 merged PRs that would make good tb-quality task
 - **Repo**: `owner/repo` or full GitHub URL (required)
 - Optional: `--limit N` (how many merged PRs to fetch; default 50)
 - Optional: `--pick K` (how many to return; default 10)
-- Reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env` (default model: `gpt-5.6`)
+- Optional `--scorer runtime|openai` (default `runtime`)
+- `openai` scoring reads `OPENAI_API_KEY` + `LLM_MODEL` from `.env`
 
 ## Steps
 
@@ -39,9 +40,9 @@ Filter out obvious non-candidates before scoring (cheap, saves LLM calls):
   The file is a JSON array of `{pr_url, task_slug, built_at}` records; treat a
   missing file as an empty list.
 
-Keep candidates (cap at `2 * K`, e.g. 20, to minimize OpenAI calls).
+Keep candidates (cap at `2 * K`, e.g. 20, to bound scoring work).
 
-### 2. Score each candidate with OpenAI
+### 2. Score each candidate
 
 For each remaining PR, fetch a truncated diff:
 
@@ -49,7 +50,12 @@ For each remaining PR, fetch a truncated diff:
 gh pr diff <PR_NUMBER> --repo <owner/repo> | head -500
 ```
 
-Call OpenAI Responses API (single request **per PR**, `LLM_MODEL` from `.env`) with this rubric:
+With the default `runtime` scorer, apply this rubric directly in the active
+Claude or Codex session and preserve one structured assessment per PR. Do not
+claim a separate model call or provider receipt.
+
+Only when the user selects `--scorer openai`, call the OpenAI Responses API
+(single request **per PR**, `LLM_MODEL` from `.env`) with this rubric:
 
 ```
 Rate this merged PR as a candidate for a TerminalBench-style coding task (an
@@ -88,7 +94,8 @@ Low-score PRs (filter out):
 
 Run batched using asyncio or a simple for-loop; show progress (`Scoring 1/20…`) so the user sees it's alive.
 
-If OpenAI returns non-JSON, log and skip that PR (don't crash).
+For runtime scoring, emit the schema directly. If the optional OpenAI scorer
+returns non-JSON, log and skip that PR rather than crashing.
 
 ### 3. Rank and present
 
@@ -105,7 +112,8 @@ Include each PR's URL (markdown link).
 
 ### 4. Ask user what to do next
 
-Use `AskUserQuestion`:
+Ask the user concisely in the normal response. Use a runtime-native structured
+question tool only when it is available in the current mode:
 
 > "Which PR(s) should I turn into tb-quality tasks?"
 
@@ -122,7 +130,9 @@ When saving, create `reports/<owner>-<repo>/pr-candidates.md` with the table + f
 ## Implementation tips
 
 - Respect GitHub rate limits. `gh pr diff` is one API call each; batching to ~20 is fine on an authenticated `gh` CLI.
-- Truncate diffs to `head -500` before sending to OpenAI — enough signal, bounded tokens.
-- If `.env` has no `OPENAI_API_KEY`, abort early with the hint to add it.
+- Truncate diffs to `head -500` before scoring — enough signal, bounded tokens.
+- If `--scorer openai` was explicitly selected and `.env` has no
+  `OPENAI_API_KEY`, abort early with the hint to add it. The default runtime
+  scorer never requires that key.
 - If the repo is huge and rate limits hit, report partial results instead of failing — tell the user how many PRs were actually scored.
 - Do NOT create task folders in this skill; that's what `task-clone` is for. Keep this skill read-only (plus the optional summary file).

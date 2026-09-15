@@ -119,6 +119,10 @@ For each key rule area, compare online content with local docs:
 | Cloud image-builder syntax | `creating-tasks/dockerfile-best-practices.md`, `testing-and-validation/ci-checks-reference.md` | `check_modal_dockerfile_compat`, `COPY --chown`, `COPY --from` |
 | Hardware/CAD geometry verification | `creating-tasks/cad-task-guidelines.md` | `direct measurement`, `sampling`, `recompute`, `built geometry` |
 | Quality panel blocking review | `testing-and-validation/quality-panel-judge-guide.md`, `testing-and-validation/quality-panel-examples.md` | `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, `Minor`, `Unsure` |
+| Negative verifier control | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `reject a wrong solution`, `delivered binary`, `equivalence` |
+| Oracle correctness | `creating-tasks/writing-oracle-solution.md` | `Correct, Not Just Passing`, `against the spec` |
+| Near-miss interpretation | `understanding-tasks/difficulty-guidelines.md` | `same one or few tests`, `different tests each time` |
+| Reviewer non-triggers | `reviewing-tasks/review-guidelines.md` | `difficulty value`, `instruction length`, `not revision triggers` |
 | Isolating named-rule fixtures | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `rule alone`, `only enforcement`, `mixed held-out` |
 | Verifier-executed candidate boundary | `creating-tasks/dockerfile-best-practices.md`, `creating-tasks/writing-tests.md` | `no-new-privs`, `drop`, `colocation`, `agent code` |
 | Interpreter permission cleanup | `creating-tasks/writing-tests.md`, `testing-and-validation/ci-checks-reference.md` | `verifier_interpreter_permissions`, `Path.resolve`, `/bin/bash`, `/usr/bin/bash` |
@@ -198,6 +202,10 @@ After docs are synced, audit the doctrine-coupled set:
 | CAD geometry and parametric recompute | candidate feasibility | verifier design | CAD review |
 | Quality panel four-axis gate | candidate return risk | pre-submit review | blocking review |
 | Named-rule isolating fixture | plan feasibility | verifier matrix | blocking review |
+| Deliberately wrong solution rejected | candidate verifier shape | validation | manual check |
+| Oracle independently checked against spec | authority viability | oracle validation | manual check |
+| Delivered source rebuilt / artifact equivalence | — | verifier architecture | manual check |
+| Difficulty mismatch and instruction length are not standalone revision triggers | — | reviewer guidance | advisory check |
 | In-verifier candidate read boundary | architecture viability | privilege/fixture design | blocking review |
 | Bash permission alias cleanup | — | verifier cleanup | platform-preflight check |
 

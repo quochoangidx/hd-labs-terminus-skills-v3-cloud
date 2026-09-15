@@ -1073,6 +1073,14 @@ def main(argv: list[str]) -> int:
             "mechanical scan. Full scans remain required after independent review."
         ),
     )
+    parser.add_argument(
+        "--waive-environment-hints",
+        action="store_true",
+        help=(
+            "With a passing manual review, record environment-hint scanner hits as "
+            "reviewed false positives instead of unresolved should-fix findings."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.mechanical_only and any(
@@ -1090,6 +1098,28 @@ def main(argv: list[str]) -> int:
         review(Path(p), include_external_evidence=not args.mechanical_only)
         for p in args.paths
     ]
+    if args.waive_environment_hints:
+        if not args.manual_review_pass:
+            parser.error("--waive-environment-hints requires --manual-review-pass")
+        for result in results:
+            waived = [
+                finding
+                for finding in result["findings"]
+                if finding.get("check") == "environment-hint"
+            ]
+            result["findings"] = [
+                finding
+                for finding in result["findings"]
+                if finding.get("check") != "environment-hint"
+            ]
+            result["waived_findings"] = waived
+            result["counts"] = {
+                severity: sum(
+                    finding.get("severity") == severity
+                    for finding in result["findings"]
+                )
+                for severity in ("blocker", "should_fix", "polish")
+            }
     if args.evidence_output:
         manual_values = (
             args.manual_review_pass,

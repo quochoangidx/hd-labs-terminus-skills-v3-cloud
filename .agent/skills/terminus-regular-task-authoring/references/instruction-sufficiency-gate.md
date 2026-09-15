@@ -117,7 +117,7 @@ folder and ZIP. New reports use this shape:
 Run the V3 gate:
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py \
+scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manifest_check.py \
   --require-v3 workspace/tasks/<slug> \
   workspace/reports/<slug>/instruction-sufficiency.json
 ```
