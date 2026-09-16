@@ -113,12 +113,13 @@ For each key rule area, compare online content with local docs:
 | Docker-compose flags | `reviewing-tasks/reviewer-checklist.md` | `docker_compose` |
 | Verifier integrity | `creating-tasks/writing-tests.md`, `reviewing-tasks/reviewer-checklist.md` | `complete expected artifact`, `dynamically`, `config` |
 | CLI installation and credentials | `getting-started/quick-start.md`, `testing-and-validation/running-real-agents.md` | `snorkelai-stb`, `stb login`, `keys refresh` |
-| Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5` |
+| Difficulty trial schedule | `understanding-tasks/difficulty-guidelines.md` | `4 runs`, `8 runs`, `GPT-5.6`, `Claude Opus 5`, `3 of the 8`, `62.5%`, `grandfathered` |
+| Expertise floor | `understanding-tasks/difficulty-guidelines.md`, `understanding-tasks/task-requirements.md` | `Requires Expertise`, `difficult`, `Designing for Expert Reasoning`, `expertise floor` |
 | Live category availability | `reference/category-status.md`, `reference/changelog.md` | `seven categories`, `milestones are removed` |
 | Internet-enabled reproducibility | `creating-tasks/dockerfile-best-practices.md` | per-phase `network_mode`, `digest`, `stable invariants` |
 | Cloud image-builder syntax | `creating-tasks/dockerfile-best-practices.md`, `testing-and-validation/ci-checks-reference.md` | `check_modal_dockerfile_compat`, `COPY --chown`, `COPY --from` |
 | Hardware/CAD geometry verification | `creating-tasks/cad-task-guidelines.md` | `direct measurement`, `sampling`, `recompute`, `built geometry` |
-| Quality panel blocking review | `testing-and-validation/quality-panel-judge-guide.md`, `testing-and-validation/quality-panel-examples.md` | `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, `Minor`, `Unsure` |
+| Quality panel blocking review | `testing-and-validation/quality-panel-judge-guide.md`, `testing-and-validation/quality-panel-examples.md` | `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, `deterministic_execution`, `Advisory`, `Minor`, `Unsure` |
 | Negative verifier control | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `reject a wrong solution`, `delivered binary`, `equivalence` |
 | Oracle correctness | `creating-tasks/writing-oracle-solution.md` | `Correct, Not Just Passing`, `against the spec` |
 | Near-miss interpretation | `understanding-tasks/difficulty-guidelines.md` | `same one or few tests`, `different tests each time` |
@@ -200,7 +201,9 @@ After docs are synced, audit the doctrine-coupled set:
 | Held-out generalization vs hidden arbitrary policy | candidate shape | verifier design | review |
 | Cloud-compatible COPY syntax | — | Docker Rules | blocking check |
 | CAD geometry and parametric recompute | candidate feasibility | verifier design | CAD review |
-| Quality panel four-axis gate | candidate return risk | pre-submit review | blocking review |
+| Quality panel five-axis gate | candidate return risk | pre-submit review | blocking review |
+| Expertise floor (`difficult` check) | candidate screen | metadata/explanation | advisory check |
+| 3-of-8-failure difficulty gate | scoring mapping | validation | check |
 | Named-rule isolating fixture | plan feasibility | verifier matrix | blocking review |
 | Deliberately wrong solution rejected | candidate verifier shape | validation | manual check |
 | Oracle independently checked against spec | authority viability | oracle validation | manual check |
@@ -322,6 +325,10 @@ coherent_contract
 correct_reference_solution
 protected_ground_truth
 sound_verifier
+deterministic_execution
+Advisory
+Requires Expertise
+Designing for Expert Reasoning
 verifier_interpreter_permissions
 no-new-privs
 /bin/bash

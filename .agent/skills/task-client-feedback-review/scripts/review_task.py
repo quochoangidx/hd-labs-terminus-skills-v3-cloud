@@ -709,6 +709,22 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
                 "task.toml",
                 "terminus-regular-task-authoring",
             )
+        # The field must describe why the task challenges a human expert; the
+        # measured pass rate is what the tier records, not this explanation.
+        pass_rate_re = re.compile(
+            r"(?i)(pass[@ ]?1|pass[- ]rate|solve[- ]rate|accuracy of|"
+            r"\d+\s*(?:/|out of)\s*\d+\s*(?:runs?|trials?)|"
+            r"\b(?:frontier|advanced|core|base)[- ]tier\b|agents? (?:solved|failed|passed))"
+        )
+        if difficulty_text and pass_rate_re.search(difficulty_text):
+            add(
+                findings,
+                "should-fix",
+                "difficulty-explanation-pass-rate",
+                "difficulty_explanation must say why the task is inherently a challenge for a human expert, not cite a model pass rate or measured tier.",
+                "task.toml",
+                "terminus-regular-task-authoring",
+            )
 
         verifier = task.get("verifier", {}) if isinstance(task, dict) else {}
         if not isinstance(verifier, dict) or verifier.get("environment_mode") != "separate":

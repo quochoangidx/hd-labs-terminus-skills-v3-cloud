@@ -23,6 +23,7 @@ AXES = (
     "correct_reference_solution",
     "protected_ground_truth",
     "sound_verifier",
+    "deterministic_execution",
 )
 CLASSES = {"core", "support", "non_goal"}
 VOLATILE_DIRS = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", "reports", "submissions"}

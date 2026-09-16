@@ -425,7 +425,7 @@ the order `full task/verifier → complete Oracle/NOP/quality gates → contract
 The CORE+ profile
 uses Step 5 as a selection gate, but the technical validity checks in Step 3
 always happen first. Only the final handover in Step 7 increments the
-`campaign_ready` counter; four-axis `None` plus exact deterministic closure and
+`campaign_ready` counter; five-axis non-blocking closure plus exact deterministic closure and
 packaging increments the `panel_ready` counter.
 Handover each finished task immediately using the incremental batch index. A
 later task is screened against every earlier accepted task; on a diversity
@@ -618,8 +618,12 @@ Before a full difficulty probe, verify Terminus 3 goal/evidence/inferability:
 Create `workspace/reports/<slug>/instruction-sufficiency.json` with
 `schema_version: 3` and pass `sufficiency_manifest_check.py --require-v3`.
 
-Run `task-quality-panel-judgement` when required by the selected profile. Only
-`None` on all four axes clears the gate. Its discovery → one remediation batch
+Run `task-quality-panel-judgement` when required by the selected profile.
+`Minor` and `Major` block on `coherent_contract`,
+`correct_reference_solution`, `sound_verifier`, and `deterministic_execution`;
+only `Major` blocks on `protected_ground_truth`. Findings marked `Advisory` do
+not block, and `Unsure` is not itself a confirmed defect, but an undecided axis
+leaves the gate uncleared. Its discovery → one remediation batch
 → one clearance stop overrides generic retry language: a blocking clearance
 returns `rescope_required`, not another witness-expansion loop. If tests execute agent code in
 the verifier, require privilege demotion plus `--no-new-privs` or equivalent,
@@ -781,14 +785,19 @@ third run.
   and every quality gate is green. Union coverage, common misses, and semantic
   geometry remain diagnostic only.
 - A split result is a valid Core signal when both the passing and
-  failing runs are trustworthy. Python follows the same rule as every language.
+  failing runs are trustworthy, but a local 1/2 maps near the platform's 62.5%
+  ceiling, so treat it as marginal rather than comfortable. Python follows the
+  same rule as every language.
 - If `2/2` solve the task, the builder may strengthen the task fairly once,
   rerun every invalidated quality receipt, and run one fresh two-solver probe.
   If the second probe is also `2/2`, reject the candidate.
 
-The platform iteration stage uses two runs per current reference model and
-requires at least one failure across all four. Final difficulty is measured over
-eight runs, so local evidence remains provisional.
+The platform measures difficulty once, after the quality panel passes: four
+runs per current reference model, eight total. A new submission needs at least
+3 of those 8 runs to fail, so no more than 5 may pass and the ceiling is 62.5%
+accuracy. Tasks already on the platform by the morning of Sep 15, 2026 keep the
+prior one-failure rule, including their later revisions. Local evidence remains
+provisional.
 
 If hardening changes instructions, tests, fixtures, solution, environment, or
 metadata, return to Step 3 and prepare fresh counted runs.
@@ -1015,10 +1024,13 @@ Count a task toward `N` only when all of the following are true:
 - NOP reward is `0.0`.
 - Applicable local Harbor checks pass without requiring an API key.
 - The final ZIP passes client-feedback review with no blocker.
-- The exact snapshot clears all four quality-panel axes with `None`; no
-  `Minor`, `Major`, or `Unsure` remains.
+- The exact snapshot clears all five quality-panel axes with no blocking
+  verdict: no `Minor` or `Major` on `coherent_contract`,
+  `correct_reference_solution`, `sound_verifier`, or `deterministic_execution`,
+  no `Major` on `protected_ground_truth`, and no axis left undecided.
 - Exactly two valid fresh attempts exist and zero or one solved the task. At
-  least one trustworthy semantic failure provides a local difficulty signal.
+  least one trustworthy semantic failure provides a local difficulty signal,
+  which remains provisional against the platform's 3-of-8-failure gate.
 - The role receipt and final probe evidence prove one persistent builder, one
   fresh reviewer identity covering contract and final review, one distinct
   auditor identity, and exactly two valid blind-solver results. Failed attempts

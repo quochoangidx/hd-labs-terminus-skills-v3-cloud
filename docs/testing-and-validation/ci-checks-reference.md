@@ -10,7 +10,7 @@ stb harbor check <task-folder>
 
 > **Check list evolving.** Terminus 3 uses the Terminal-Bench 3.0 check suite. The list below covers the checks that apply to Terminus 3 submissions; individual checks may be added or adjusted as the edition progresses.
 
-The **quality panel** is a separate four-axis LLM review that blocks before a human reviewer, and gates the difficulty measurement. It is not one of the `stb harbor check` items below. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+The **quality panel** is a separate five-axis review that gates the difficulty measurement before human review. It is not one of the `stb harbor check` items below. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ---
 

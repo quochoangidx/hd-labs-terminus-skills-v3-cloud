@@ -47,7 +47,7 @@ Run through this before every submission.
 - [ ] Agent outputs are declared as top-level `artifacts` in `task.toml` — don't stage agent directories yourself
 - [ ] Any numeric tolerance stated in `instruction.md` matches what the tests enforce
 - [ ] When the spec defines an optimization objective or tie-break, tests reject a feasible plan that optimizes the wrong quantity
-- [ ] Walked the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) pre-submit checklist — every grading rule has a citable sentence, goldens are not colocated with paths passed to the agent's program, and a documented requirement has a test that would fail if it were removed
+- [ ] Walked all five axes in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide): requirements are disclosed, the reference solution satisfies them, goldens stay protected, wrong solutions fail, and grading is reproducible under the stated environment
 
 ## Configuration
 
@@ -60,6 +60,7 @@ Run through this before every submission.
 - [ ] 3–6 `tags`; `languages` and `expert_time_estimate_hours` set
 - [ ] `author_name` and `author_email` set (`"anonymous"` is fine)
 - [ ] `difficulty_explanation`, `solution_explanation`, `verification_explanation`, and `relevant_experience` written
+- [ ] `difficulty_explanation` says why the task is inherently a challenge for a human expert — not the pass rate you measured
 
 ## Rubric
 
@@ -101,6 +102,7 @@ stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 | **Core** | 50% – < 80% |
 | **Base** | 80% – < 100% |
 
+- [ ] For a new submission, the local 8-run estimate includes at least **3 genuine task-driven failures** — 6–8 passes will not clear the platform gate. Tasks already on the platform by the morning of Sep 15, 2026 remain grandfathered, including later revisions
 - [ ] `difficulty` in `task.toml` set to the tier your local runs point at — the platform's own 8-run measurement is what gets recorded, so this is your best estimate, not a value a reviewer checks
 - [ ] Failures reflect genuine task difficulty — not unclear instructions, environment defects, or flaky tests
 - [ ] **Checked which tests the failing runs miss.** If they keep missing the same one or few tests, the check or the instructions are likely the problem — fix that check, or state the requirement in the instruction. If they miss different tests each time, the difficulty is genuine. Either way, don't leave the difficulty rated higher just because near-complete runs count as failures

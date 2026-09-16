@@ -37,28 +37,29 @@ def test_builds_axis_specific_packets(tmp_path: Path) -> None:
     reference = root / "correct_reference_solution"
     protected = root / "protected_ground_truth"
     sound = root / "sound_verifier"
+    determinism = root / "deterministic_execution"
 
-    assert (coherent / "tests").is_dir()
-    assert not (coherent / "solution").exists()
+    # Guide: contract, ground-truth and verifier review see the candidate-visible
+    # contract/environment plus the tests and never the reference; reference
+    # review sees the contract/environment plus the reference and never the
+    # tests; determinism review sees all three.
+    for packet in (coherent, protected, sound):
+        assert (packet / "instruction.md").is_file()
+        assert (packet / "environment").is_dir()
+        assert (packet / "tests").is_dir()
+        assert not (packet / "solution").exists()
+    assert (reference / "instruction.md").is_file()
+    assert (reference / "environment").is_dir()
     assert (reference / "solution").is_dir()
     assert not (reference / "tests").exists()
-    assert not (reference / "task.toml").exists()
-    assert not (reference / "environment").exists()
-    assert (protected / "tests").is_dir()
-    assert not (protected / "solution").exists()
-    assert not (protected / "instruction.md").exists()
-    assert not (protected / "task.toml").exists()
-    assert (sound / "tests").is_dir()
-    assert not (sound / "solution").exists()
-    assert not (sound / "task.toml").exists()
-    assert not (sound / "environment").exists()
-    assert (coherent / "instruction.md").is_file()
+    for surface in ("instruction.md", "task.toml", "environment", "solution", "tests"):
+        assert (determinism / surface).exists()
+    # `task.toml` can disclose the intended solution through its explanation
+    # fields, so only the axes the guide places it in receive it.
     assert (coherent / "task.toml").is_file()
-    assert (coherent / "environment").is_dir()
-    assert (reference / "instruction.md").is_file()
-    assert (protected / "environment").is_dir()
-    assert (sound / "instruction.md").is_file()
-    for packet in (coherent, reference, protected, sound):
+    for packet in (reference, protected, sound):
+        assert not (packet / "task.toml").exists()
+    for packet in (coherent, reference, protected, sound, determinism):
         assert (packet / "_panel_docs" / "quality-panel-judge-guide.md").is_file()
         assert (packet / "_panel_docs" / "quality-panel-examples.md").is_file()
         assert (packet / "packet-manifest.json").is_file()
@@ -102,12 +103,16 @@ def test_explicit_contract_closure_preserves_isolation_and_old_packets(tmp_path:
     after = PACKETS.build_packets(task, output, ("environment/contract.md",))
     assert before != after
     assert before.exists()
-    for axis in ("correct_reference_solution", "sound_verifier"):
+    for axis in ("correct_reference_solution", "sound_verifier", "deterministic_execution"):
         packet = after.parent / axis
         assert (packet / "environment/contract.md").read_text() == doc.read_text()
-        assert not (packet / "environment/environment.txt").exists()
         manifest = json.loads((packet / "packet-manifest.json").read_text())
         assert "environment/contract.md" in manifest["files"]
+    # Every axis now carries the whole environment, so an explicitly selected
+    # contract file records the authority without widening visibility.
+    for axis in ("correct_reference_solution", "sound_verifier", "deterministic_execution"):
+        assert (after.parent / axis / "environment/environment.txt").exists()
+    assert (after.parent / "deterministic_execution/environment/environment.txt").exists()
     assert not (after.parent / "correct_reference_solution/tests").exists()
     assert not (after.parent / "sound_verifier/solution").exists()
 

@@ -1,6 +1,6 @@
 # Root-cause remediation
 
-Use this only after the four-axis discovery pass has finished and the user asked
+Use this only after the five-axis discovery pass has finished and the user asked
 to update the task, or to interpret the root-invariant map when consolidating
 a review-only report (without authorization to edit). The goal is to close each violated semantic invariant, not to
 make the reported example pass.
@@ -41,7 +41,8 @@ Each group must record:
     "coherent_contract": [],
     "correct_reference_solution": [],
     "protected_ground_truth": [],
-    "sound_verifier": []
+    "sound_verifier": [],
+    "deterministic_execution": []
   }
 }
 ```

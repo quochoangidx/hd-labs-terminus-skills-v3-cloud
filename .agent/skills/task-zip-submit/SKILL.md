@@ -16,11 +16,16 @@ FAIL rows required.
 
 **Mandatory judgment gate:** the exact snapshot must also clear the quality
 panel's `coherent_contract`, `correct_reference_solution`,
-`protected_ground_truth`, and `sound_verifier` axes. Only `None` on every axis
-auto-accepts; `Minor`, `Major`, and `Unsure` are blocking/return outcomes. The
+`protected_ground_truth`, `sound_verifier`, and `deterministic_execution` axes.
+`Minor` and `Major` block on `coherent_contract`,
+`correct_reference_solution`, `sound_verifier`, and `deterministic_execution`;
+only `Major` blocks on `protected_ground_truth`. Findings explicitly marked
+`Advisory` do not block, and `Unsure` is not itself a confirmed defect, though
+an undecided axis still leaves the panel uncleared. Passing the panel allows
+difficulty measurement; it is not task acceptance. The
 local preflight now catches known `request.node.name`, incomplete `setpriv`, and
 dual `/bin/bash` + `/usr/bin/bash` permission-restore shapes, but it does not
-replace the semantic four-axis review.
+replace the semantic five-axis review.
 
 For a new `task-batch` candidate, do not create a handoff ZIP before the counted
 difficulty gate. The pre-probe strict run writes receipts and raw Docker evidence

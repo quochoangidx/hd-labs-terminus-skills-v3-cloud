@@ -33,8 +33,9 @@ A single argument: path to a `.zip` file (absolute or relative).
 4. **Auto-fix** — apply fixes for known issues
 5. **Oracle + Nop** — run harbor tests if Docker available
 6. **Quality panel audit** — review `coherent_contract`,
-   `correct_reference_solution`, `protected_ground_truth`, and
-   `sound_verifier`; only `None` on every axis clears this gate
+   `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`,
+   and `deterministic_execution`; `Minor` and `Major` block on every axis
+   except `protected_ground_truth`, where only `Major` blocks
 7. **Report** — summarize findings and fixes
 8. **Re-zip** — if fixes applied, create updated ZIP
 

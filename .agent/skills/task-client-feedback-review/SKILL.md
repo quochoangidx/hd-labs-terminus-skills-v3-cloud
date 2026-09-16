@@ -236,9 +236,11 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
    `blocker`.
 
 4. Run a quality-panel-shaped review across `coherent_contract`,
-   `correct_reference_solution`, `protected_ground_truth`, and
-   `sound_verifier`. Only `None` on every axis clears this gate; `Minor`,
-   `Major`, and `Unsure` are all blocking/return outcomes. Require citations
+   `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`,
+   and `deterministic_execution`. `Minor` and `Major` block on every axis
+   except `protected_ground_truth`, where only `Major` blocks; findings marked
+   `Advisory` do not block, and `Unsure` is not itself a confirmed defect
+   though an undecided axis leaves the panel uncleared. Require citations
    for exact grading conventions without collapsing Terminus 3 evidence-based
    inference into one prose sentence per semantic rule.
 
@@ -367,7 +369,9 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   cover the no-preexisting-file branch when the contract promises no creation
 - `difficulty` in `task.toml` not matching the measured Terminus 3 tier:
   Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%, averaged across
-  both current reference models. A 100% iteration result cannot proceed.
+  both current reference models. A new submission also needs at least 3
+  failures across the platform's 8 runs, so a result above 62.5% cannot
+  proceed; `base` is reachable only by grandfathered tasks.
 - category chosen by coding activity instead of domain. Use `Software` only when
   software itself is the subject; otherwise choose the domain category and its
   exact subcategory (for example ML training repair is `ML / Training`).

@@ -70,19 +70,19 @@ For each candidate:
    inventory and minimal natural wrong-path/harness-bypass receipts, then run
    `panel_precheck.py --full` on the exact snapshot. Do not spend reviewer
    sessions while it is red.
-5. Run one eight-reviewer discovery panel: four isolated packets, two fresh
-   independent reviewers per axis. Collect all eight complete responses before
+5. Run one ten-reviewer discovery panel: five isolated packets, two fresh
+   independent reviewers per axis. Collect all ten complete responses before
    adjudicating or editing.
-6. If discovery is already four-axis `None` with complete mandatory coverage,
+6. If discovery is already five-axis `None` with complete mandatory coverage,
    package the unchanged snapshot without duplicate clearance. Otherwise
    verify findings, remove speculation, deduplicate by root invariant and apply
    exactly one consolidated remediation batch. Rerun affected checks, strict
    Docker closure and full precheck.
-7. Run exactly one fresh eight-reviewer clearance panel. If any axis remains
-   blocking/`Unsure` or mandatory coverage is incomplete, stop that obligation
+7. Run exactly one fresh ten-reviewer clearance panel. If any axis remains
+   blocking or mandatory coverage is incomplete, stop that obligation
    set as `rescope_required`; do not run another repair/clearance under a renamed
    phase. Move to a new candidate only when the batch/user authority permits.
-8. Package only the exact snapshot whose deterministic gates and four semantic
+8. Package only the exact snapshot whose deterministic gates and five semantic
    axes passed. Count it as `local_panel_cleared`, never `candidate_ready` or a
    measured tier.
 

@@ -8,7 +8,7 @@ If you authored tasks for Terminus 2nd Edition, this page covers everything that
 |---|---|---|
 | Difficulty | Easy / Medium / Hard | **Frontier / Advanced / Core / Base** |
 | Difficulty metric | ≤20% on best *or* worst model | Average pass@1 across **both** models, 4 trials each |
-| Pass rate >80% | Rejected | **Accepted** — that's the Base tier |
+| Pass rate >80% | Rejected | Became the Base tier at launch; since Sep 15, 2026, a separate gate requires at least **3 failures in 8 runs** for new submissions, while existing platform tasks remain grandfathered |
 | Categories | 9 flat categories | **7 categories, each with subcategories** |
 | Verifier | Ran in the task container | **Separate container** the agent can't reach |
 | Milestone tasks | Supported | **Removed** |

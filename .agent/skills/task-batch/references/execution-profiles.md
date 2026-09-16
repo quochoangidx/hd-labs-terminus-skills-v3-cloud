@@ -43,7 +43,7 @@ needed to adjudicate a panel claim are verifier-quality evidence, not a campaign
 mutation campaign or difficulty evidence. Never fabricate or waive a missing
 receipt from the other profile.
 
-If discovery is already four-axis `None` and the task is unchanged, package it
+If discovery is already five-axis non-blocking and the task is unchanged, package it
 without a duplicate clearance panel. If clearance is blocking or incomplete,
 stop with `rescope_required`; do not enter another repair-panel round. A user
 may authorize a new rescope, but it starts from a revised scope ledger and is

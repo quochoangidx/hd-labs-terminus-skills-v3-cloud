@@ -22,9 +22,10 @@ stb harbor check <task-folder>          # replaces the removed `harbor tasks che
 If agent credentials are missing or expired, run `stb login` and `stb keys
 refresh`; do not set `OPENAI_API_KEY` or `OPENAI_BASE_URL` manually.
 
-Run real agents only when the user approves API usage. Terminus 3 difficulty
-uses four runs per model for the final tier; the in-platform iteration stage
-uses two per model:
+Run real agents only when the user approves API usage. Terminus 3 measures
+difficulty once, after the quality panel passes: four runs per model, eight
+total. A new submission needs at least 3 of those 8 runs to fail. Local runs
+are an estimate, not the measurement:
 
 ```bash
 stb harbor run -m @openai/gpt-5.6 -k 4 -p <task-folder>
@@ -73,12 +74,15 @@ Examples:
   the same file on merged-`/usr` images. Restore each original mode once in a
   `finally` path, attempt every restoration, then run a complete Oracle and
   confirm reward/log collection. This check is not in `stb harbor check`.
-- If the quality panel returns `Minor`, `Major`, or `Unsure`, treat the task as
-  not cleared. Review the cited axis (`coherent_contract`,
-  `correct_reference_solution`, `protected_ground_truth`, or
-  `sound_verifier`), repair a demonstrated task defect, and request human or
-  repeat judgment for an evidence-backed false positive or unstable `Unsure`.
-  Only `None` on all four axes auto-accepts.
+- If the quality panel returns a blocking verdict, treat the task as not
+  cleared. `Minor` and `Major` block on `coherent_contract`,
+  `correct_reference_solution`, `sound_verifier`, and `deterministic_execution`;
+  only `Major` blocks on `protected_ground_truth`, and `Advisory` findings do
+  not block. Review the cited axis, repair a demonstrated task defect, and
+  request human or repeat judgment for an evidence-backed false positive or an
+  unstable `Unsure`. `Unsure` is not itself a confirmed defect, but an
+  undecided axis means the axis was never cleared. Clearing the panel allows
+  difficulty measurement; it is not task acceptance.
 - If CI says the final runtime base is non-canonical (`check_sanctioned_base_images`),
   switch the final stage to the **canonical Terminal-Bench base image** for the
   task's language, using the EXACT digest-pinned ref (registry + tag + digest all

@@ -95,7 +95,11 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 For new submissions:
 
 - Use difficulty `frontier`, `advanced`, `core`, or `base`; tiers are
-  language-independent.
+  language-independent. The bands are unchanged, but a new submission needs at
+  least 3 failures across the platform's 8 runs, so no more than 5 may pass and
+  a result above 62.5% accuracy cannot proceed; `base` and a 75% `core` outcome
+  are reachable only by tasks grandfathered on the platform by the morning of
+  Sep 15, 2026, including their later revisions.
 - Put `artifacts` at top level and every descriptive field under `[metadata]`.
 - Set `[verifier].environment_mode = "separate"`.
 - Declare all three network policies. `[environment].network_mode` must be
@@ -107,6 +111,26 @@ For new submissions:
   `expert_time_estimate_min`, or `junior_time_estimate_min`.
 - `languages` lists the main language(s) used by the task/oracle changes. Do
   not include Python solely because verifier tests are written in pytest.
+
+## Expertise Floor
+
+Difficulty has two independent parts and every task must clear both. The
+**expertise floor** asks whether solving the task requires genuine domain
+expertise — graduate-level knowledge or several years of professional
+experience. A blocking `difficult` check judges this on the task itself, before
+agents run on it, and it applies at every tier including `base`: `base` means
+agents usually solve it, not that a person could. The **tier** separately
+records how often frontier agents solve the task.
+
+The floor is cleared by substantive domain reasoning, which comes from three
+places: choosing between valid methods under real constraints, where the wrong
+choice produces a result that looks fine and is not; diagnosing
+plausible-but-wrong results whose shape passes a surface check; and reasoning
+about interactions and edge cases a generic approach misses. Obscure facts, a
+long checklist, and sheer volume of work do not clear it.
+
+Write `difficulty_explanation` about why the task is inherently a challenge for
+a human expert — not about a model's pass rate, which is what the tier records.
 
 ## Reviewer-Facing Submission Explanations
 
@@ -677,10 +701,14 @@ the changed solid; reading a stored parameter back is insufficient.
   still finishes reward and log collection; platform preflight
   `verifier_interpreter_permissions` is blocking and is not in `stb harbor check`.
 
-Before submission, review the exact task against all four quality-panel axes:
+Before submission, review the exact task against all five quality-panel axes:
 `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
-and `sound_verifier`. `Minor`, `Major`, and `Unsure` all block or require human
-routing; only `None` on every axis auto-accepts. Exact grading conventions need
+`sound_verifier`, and `deterministic_execution`. `Minor` and `Major` block on `coherent_contract`,
+`correct_reference_solution`, `sound_verifier`, and `deterministic_execution`;
+only `Major` blocks on `protected_ground_truth`. Findings explicitly marked
+`Advisory` do not block, and `Unsure` is not itself a confirmed defect, though
+an undecided axis still leaves the panel uncleared. Passing the panel allows
+difficulty measurement; it is not task acceptance. Exact grading conventions need
 a citable candidate-visible authority, but this does not require inferred
 domain mechanisms to be restated when distributed visible evidence supports
 them under the Terminus 3 epistemic contract.

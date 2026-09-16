@@ -228,7 +228,10 @@ for diagnosis, not acceptance. Common misses or concentrated geometry should
 be reported, but they do not block a valid `0/2` or `1/2` result.
 
 For larger comparable samples, map the pooled accuracy to the current tiers:
-Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%.
+Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%. The bands are
+unchanged, but a new submission needs at least 3 failures across the platform's
+8 runs, so a local signal at or above 62.5% predicts a task that cannot
+proceed; Base is reachable only by grandfathered tasks.
 
 Compile-only failures are weak difficulty evidence. Strong signals are partial
 fixes that compile but miss legitimate contexts, preservation behavior, edge
@@ -303,12 +306,17 @@ solver reached an authority unavailable in the real task.
 ## Candidate-readiness verdict
 
 The local probe produces preliminary evidence, not the final Terminus 3 tier.
-The platform iteration stage runs two trials per model and requires at least one
-failure across the four; final difficulty uses four trials per model.
+The platform measures difficulty once, after the quality panel passes: four
+trials per model, eight runs total. A new submission needs at least 3 of those
+8 runs to fail, so no more than 5 may pass. Tasks already on the platform by
+the morning of Sep 15, 2026 keep the prior one-failure rule, including their
+later revisions.
 
 Use these local outcomes:
 
 - **All runs pass:** `rework_or_replace`. The local sample provides no signal.
+  A single local failure no longer predicts platform eligibility either, since
+  the platform needs 3 failures in 8 runs.
 - **At least one trustworthy semantic failure:** `needs_handover_validation`.
   Map the pass fraction to a provisional tier and preserve the real geometry.
 - **Zero solves:** keep a provisional Frontier signal after all quality gates

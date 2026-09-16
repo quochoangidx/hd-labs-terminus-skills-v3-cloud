@@ -129,4 +129,4 @@ python3 .agent/skills/task-quality-panel-judgement/scripts/panel_precheck.py \
 
 Only `status: "pass"` permits packet preparation. The four
 `mechanically_ready` labels mean only that deterministic prerequisites passed;
-the eight fresh reviewers still perform the semantic panel.
+the ten fresh reviewers still perform the semantic panel.

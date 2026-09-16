@@ -16,6 +16,14 @@ You will see **"at least 5 agent steps"** used as shorthand for this. It is a **
 
 The question to ask is not *"how many steps is this?"* but *"could an agent finish this in one shot, without reacting to anything along the way?"* If the answer is yes, the task is too simple.
 
+## Requires Expertise
+
+Every task must require genuine domain expertise to solve — graduate-level knowledge or several years of professional experience in the field. A task that someone without that background could work through in a few days does not qualify.
+
+This is judged on the task itself, independently of how often agents solve it, and it applies at every difficulty tier. A [Base](/portal/docs/understanding-tasks/difficulty-guidelines) task is one agents usually solve; it is still expected to be expert work.
+
+The floor is not met by obscure facts an agent already knows, a long checklist, or sheer volume of work. It is met by substantive domain reasoning: knowing which method applies, recognizing plausible but wrong results, and reasoning about interacting constraints. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for what raises a task's difficulty and what only makes it longer.
+
 ## Testable
 
 Each task must be fully specified and self-contained, solvable without ambiguity, and accompanied by tests that deterministically measure the **final state of the environment** to decide whether the task was completed correctly.

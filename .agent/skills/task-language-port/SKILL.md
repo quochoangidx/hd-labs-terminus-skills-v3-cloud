@@ -44,10 +44,11 @@ and behavior contract, then build it with `task-clone`.
    verifier-only dependencies into `tests/Dockerfile`; never install verifier
    dependencies at trial time.
 7. Re-run oracle, nop, static checks, V3 evidence inferability, artifact
-   transfer checks, and the four-axis quality-panel review. `Minor`, `Major`,
-   and `Unsure` all block a replacement upload; only `None` on
+   transfer checks, and the five-axis quality-panel review across
    `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
-   and `sound_verifier` clears it. If verifier Python changes interpreter
+   `sound_verifier`, and `deterministic_execution`. `Minor` and `Major` block a
+   replacement upload on every axis except `protected_ground_truth`, where only
+   `Major` blocks; `Advisory` findings do not block. If verifier Python changes interpreter
    permissions, also pass the platform-only dual-Bash-path cleanup check. A
    successful source-language task does not prove the migrated runtime works.
    For a Hardware / CAD port, rerun the geometry-specific checks from

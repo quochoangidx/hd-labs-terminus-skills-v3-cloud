@@ -1,563 +1,222 @@
 # Quality Panel Judge Guide
 
-This page explains the **quality panel judge**: an automated review that reads a Terminus 3 task you have built (`instruction.md`, `task.toml`, `environment/`, `solution/`, `tests/`) and checks it along four axes before it reaches a human reviewer. It is a **blocking check** in the Terminus submission pipeline, and the difficulty measurement runs only once it passes — a `Minor` or `Major` (or `Unsure`) does not get silently accepted; it comes back to you with a specific reason, the same way a failing CI check would.
+The quality panel reviews your Terminus 3 task before difficulty is measured and before human review. It checks whether the task is clearly specified, your reference solves it, grading rewards the right behavior, protected answers stay protected, and repeated grading is stable.
 
-This guide is for **EC Submitters** (task authors). It is the checklist and the how-it-works. Numbered worked cases live only in the [Quality Panel Appendix](/portal/docs/testing-and-validation/quality-panel-examples) — they are synthetic composites, not excerpts from submitted tasks.
+This guide is for **expert contributors writing and revising tasks**. Start with the result table if you have feedback to address; use the five checklists before submitting. The [worked examples](/portal/docs/testing-and-validation/quality-panel-examples) show realistic failure patterns, repairs, and checks. They are illustrative composites, not published contributor submissions or recorded judge runs.
 
-The panel does not replace [Writing Tests](/portal/docs/creating-tasks/writing-tests), [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices), or a human [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist). Use it so a `Minor` or `Major` is not a surprise. If you think a finding is wrong, see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission) and the [FAQ](#faq) below.
+> **Updated panel:** five axes, numbered findings, and execution evidence when a defect is reproduced. Read **Blocking severity** as well as **Overall severity**: a `protected_ground_truth` Minor and findings explicitly marked `Advisory` do not block by themselves. An unfinished review is not a confirmed task defect.
 
----
+<div id="1-how-the-review-works"></div>
 
-## 1. How the review works
+## How the review works
 
-Four independent axes, each auditing a different question about your task:
+Two models independently review each axis. For contract, reference, and verifier review, the panel first lists the contract's requirements and checks them one by one against the relevant files. Findings include evidence and file citations. A third model adjudicates different severity ratings. The report presents the reasoning behind the resulting verdict; it does not necessarily show every model's separate review.
 
-| Axis | One-line question | What it reads |
+For flagged reference, verifier, or ground-truth issues, an additional execution step can test the claim with the task's own grader. A proven defect receives `Major`. Read the [execution evidence section](#what-execution-evidence-proves) for what those results establish.
+
+| Axis shown in the report | What it asks | Findings that block |
 |---|---|---|
-| [`coherent_contract`](#axis-1--coherent_contract) | Does `instruction.md`/`task.toml` fully disclose every rule the grader enforces? | `instruction.md`, `task.toml`, `environment/`, `tests/` (not `solution/`) |
-| [`correct_reference_solution`](#axis-2--correct_reference_solution) | Does your own reference solution actually satisfy the contract you wrote, including edge cases? | `instruction.md`, `solution/` (not `tests/`) |
-| [`protected_ground_truth`](#axis-3--protected_ground_truth) | Can a candidate reach, forge, or infer the expected answer instead of computing it? | `tests/`, `environment/` |
-| [`sound_verifier`](#axis-4--sound_verifier) | Could a submission pass `tests/` without actually solving the task? | `instruction.md`, `tests/` (not `solution/`) |
+| [`coherent_contract`](#axis-1--coherent_contract) | Can a candidate determine every rule used to grade the task? | `Minor`, `Major` |
+| [`correct_reference_solution`](#axis-2--correct_reference_solution) | Does the reference satisfy the documented task? | `Minor`, `Major` |
+| [`protected_ground_truth`](#axis-3--protected_ground_truth) | Can candidate code obtain or control the answer the grader trusts? | `Major` only |
+| [`sound_verifier`](#axis-4--sound_verifier) | Does grading reject wrong solutions and accept contract-valid ones? | `Minor`, `Major` |
+| [`deterministic_execution`](#axis-5--deterministic_execution) | Does the same submission receive stable grading on repeated runs? | `Minor`, `Major` |
 
-Each axis only sees the files relevant to its own question — this is
-deliberate ("axis isolation"). `coherent_contract` never sees your reference
-solution, so it can't validate one particular implementation choice instead
-of asking whether the contract itself discloses the rule. `sound_verifier`
-never sees your reference solution either, for the same reason: a verifier
-that only happens to accept the one known-good answer proves nothing about
-whether it correctly rejects everything it should.
+The reviewers receive different views of your package on purpose. Contract, ground-truth, and verifier review use the candidate-visible contract/environment and the tests, without the reference solution. Reference review uses the contract/environment and reference, without the tests. Determinism review can inspect all three. Agreement between your reference and your tests is useful evidence, but both can agree on the same mistake.
 
-**Two independent frontier models judge every axis, blind to each other.**
-When they agree, that's the verdict. When they disagree, a third,
-independent model adjudicates — shown both rationales (not which model said
-what) and asked to engage with each claim directly, rather than just
-splitting the difference.
+### Read the result before making changes
 
-**Severity scale**, per axis:
+| Result | Meaning and next action |
+|---|---|
+| `None` | No defect found on that axis. This is not a guarantee that every possible defect was ruled out. |
+| `Minor` | A narrower issue. Address it on contract, reference, verifier, or determinism; on ground-truth protection alone, it is reported without blocking. |
+| `Major` | A serious, concrete defect under that axis's criteria. It blocks on every axis. Read the evidence and repair or contest the specific claim. |
+| `Advisory` | A recommendation explicitly excluded from the blocking decision. For example, a requirement may have only one easy case exercised, without a demonstrated incorrect outcome. |
+| `Unsure` / `not finished` | No decisive result for that axis. It does not itself count as a blocking defect, and it does not mean the axis passed a completed review. |
 
-- **None** — no issue found.
-- **Minor** — a real issue, but narrow enough (unreachable input, no
-  demonstrated effect on a graded outcome) that it is not a `Major`.
-  **This still blocks.** You'll see it in the report and the task comes
-  back; it is not optional.
-- **Major** — a concrete, reachable defect that changes a graded outcome, or
-  a way for a submission to pass without actually solving the task. **This
-  blocks.**
-- **Unsure** — the panel could not reach a decisive verdict (both models
-  disagreed and the tiebreak also failed, or the whole review crashed/timed
-  out). **This also blocks** — a task that couldn't be judged is routed to a
-  human, not silently waved through. If you see this, it usually isn't a
-  defect in your task specifically; it means the review needs a person to
-  look, which will happen regardless of what you do next.
+**Overall severity** summarizes the axis ratings; **Blocking severity** applies the thresholds above. For example, `Overall severity: Minor` with `Blocking severity: None` is possible when the only issue is a ground-truth Minor. Passing the quality panel lets the task continue to the remaining evaluation stages; it does not mean the task has been accepted by a human reviewer.
 
-Your task's overall result is the **worst** severity across all four axes.
-Only `None` on every axis passes automatically. `Minor`, `Major`, and
-`Unsure` each block.
+`PANEL INCOMPLETE` means some review work did not finish. Findings on axes that did finish can still block. `PANEL DEGRADED` means a configured reviewer was replaced or lost; the report may still contain a usable decision and explain when it rests on a single review. If evaluation is stuck or reports an execution error, provide the submission identifier and report to support. Do not change a valid requirement just to address a model timeout. See [After Submission](/portal/docs/submitting-tasks/after-submission) for the rest of the workflow.
 
-**Why two blocking labels instead of one.** The pipeline needs a binary
-outcome (auto-accept vs send back). The report still needs to say *how
-serious* the defect is. `Major` is a demonstrated, reachable effect on a
-graded outcome, or a way to pass without solving. `Minor` is a real defect
-that is narrower, not shown on a graded fixture, or not independently
-knowable from candidate-visible material. Fix both. Do not treat `Minor` as
-optional polish.
+## Reading and responding to feedback
+
+Read **every numbered finding** in the displayed report. One axis can contain several distinct issues; fixing the opening paragraph's example may leave another finding unresolved. Findings marked `Advisory` are separate from the blocking findings.
+
+This shortened, illustrative excerpt shows the report's structure. The paths, line numbers, and rewards below are examples, not a recorded run:
+
+```text
+Overall severity: Major
+Blocking severity: Major
+
+[sound_verifier] Major
+  Exploit proven by execution: the grader accepted a submission that returns a constant report for every input (reference reward 1.0, mutated reward 1.0).
+  The verifier accepts a fixed report without processing the supplied transactions.
+
+  Findings (1):
+    1. (Major) [4] A fixed report passes without processing new transactions.
+       The contract requires aggregating the supplied CSV, but every graded run uses the same rows.
+       Cited: instruction.md:12-16, tests/test_outputs.py:40-58
+```
+
+The actionable claim is that the grader accepts a fixed answer for an input-dependent task. To resolve it, add distinct inputs whose correct totals differ and check the complete required result. Then show that the reference still passes and that the fixed-answer implementation fails. More assertions about the original CSV alone would not establish that the program processes new inputs.
+
+For each finding:
+
+1. **Read the cited files in the submitted version.** Identify the requirement, the affected behavior, and the evidence supporting the claim.
+2. **Construct the smallest relevant case.** For a verifier issue, show an incorrect submission accepted or a contract-valid submission rejected. For a reference issue, show the input and the expected versus actual output.
+3. **Repair the responsible component.** Clarify a genuinely missing rule, fix incorrect reference logic, or correct the grader. Keep the intended task intact.
+4. **Verify both sides.** The correct solution must pass; the specific wrong behavior must fail. Keep the input, output, command, and result so the reviewer can reproduce your conclusion.
+5. **Summarize each resolution.** State the finding, the changed file or rule, and the evidence. If you dispute a finding, provide the same level of detail.
+
+### What execution evidence proves
+
+Execution evidence connects a finding to an observed result from the task's own grader. It can appear for three kinds of claim:
+
+| Report wording | What was observed | What to investigate |
+|---|---|---|
+| `Exploit proven by execution` | A submission with the described defect was accepted. In a full-credit example, both reference and altered submission earn `1.0`. | Which required behavior or answer-protection boundary the grader failed to enforce. |
+| `Defect proven by execution` | The grader rejected a submission described as contract-valid. For example, the reference earns `1.0` and a valid alternative earns `0.0`. | Whether the grader enforces an undocumented restriction, ordering, format, or implementation choice. |
+| `Reference failure proven by execution` | The shipped reference was not accepted by the task's own grader. | The reference, declared artifacts, contract, and verifier together. A failed reward alone does not identify which one is wrong. |
+
+A proof may raise an axis from `Minor` to `Major`. It demonstrates the tested behavior, not exhaustive coverage of the entire task. If the claimed contract validity or reachability is wrong, you can still contest it with evidence.
+
+**No execution line does not clear a finding.** A defect can be established by reading the files. An unsuccessful or unfinished reproduction leaves that finding unchanged, and those attempts are not displayed as proof. Contract and determinism findings do not use this execution stage. You still need the normal [Oracle](/portal/docs/testing-and-validation/oracle-agent), [NOP](/portal/docs/testing-and-validation/nop-agent), and [CI checks](/portal/docs/testing-and-validation/ci-checks-reference).
+
+### When a Previous review section appears
+
+If the previous verdict was supplied to the new review, the report can carry earlier findings forward as `P1`, `P2`, and so on. This section is conditional; its absence does not mean an old finding was resolved.
+
+| Status | How to read it |
+|---|---|
+| `closed` | The reviewing model or models consider the earlier finding addressed. |
+| `STILL OPEN` | At least one reviewing model still identifies the issue. Check the current finding and cited files. |
+| `not_a_defect` | The earlier claim was rejected on reinspection. |
+| `mixed` / `unanswered` | The history did not get a single resolved answer. These labels alone do not prove that your repair failed. |
+
+These are statuses of earlier findings, not replacements for the current axis verdicts. A revision can close an old issue and uncover a different one. Include a short, explicit response to each earlier finding in your revision notes; see the [worked response example](/portal/docs/testing-and-validation/quality-panel-examples#e--responding-to-a-review).
 
 ---
 
 <h2 id="axis-1--coherent_contract">Axis 1 — <code>coherent_contract</code></h2>
 
-**The question:** could two competent people, given only what the candidate
-sees (`instruction.md`, `task.toml`, referenced docs, the environment), reach
-different — both reasonable — answers that your verifier would score
-differently? If yes, the contract hasn't actually disclosed the rule that
-determines correctness; it's left it for the candidate to guess, and your
-reference solution just happens to encode one guess.
+**The question:** could two competent people follow the available instructions and produce different answers that your grader scores differently?
 
-This axis does **not** look at your reference solution. It's asking whether
-*the words you wrote* are enough, not whether one particular implementation
-of them exists.
+Common gaps include unstated tie-breaks, rounding rules, boundary behavior, output paths, or conflicting sources of truth. A hidden fixture can supply a new input; it cannot be the only place that defines what makes an answer correct. A specific candidate-visible file may define a rule when the contract identifies it as authoritative and it fully determines the graded behavior.
 
-### What gets checked
+**Before submitting:**
 
-1. **Unpinned methodology or model** — a reward-critical formula, estimator,
-   probability model, or tie-break rule the grader depends on, left
-   unstated in the contract.
-2. **Contradictory or impossible authorities** — instructions, referenced
-   docs, and the verifier's own behavior disagree with each other, or a
-   required output type can't represent every input the contract allows.
-3. **Hidden grading semantics** — a hidden test enforces an ordering,
-   precedence, or uniqueness rule the candidate-visible contract never
-   mentions anywhere.
-4. **Missing edge-case semantics** — the contract allows an input or
-   requires an output without saying what should happen at the edge (empty
-   input, malformed input, a tie, a conflict).
-5. **Corrupted or unsatisfiable contract text** — literal broken-pipeline
-   artifacts in your rendered `instruction.md`: a stray Python `repr()`
-   fragment, an internal test-identifier string, a "required output" path
-   that isn't a plausible artifact for this task at all.
+- [ ] For every grading rule, identify the sentence or authoritative candidate-visible artifact that defines it.
+- [ ] Specify the permitted input domain and the behavior at relevant boundaries: empty input, duplicates, ties, invalid records, and conflicting updates.
+- [ ] Compare the rendered `instruction.md`, declared artifacts, and verifier output paths. Remove broken template text and accidental test sentinels.
+- [ ] Confirm that examples support the stated rules. If inferring a rule is explicitly the task, check that the available examples determine the intended result.
 
-A contract that names a specific, complete, deterministic reference artifact
-(a data file, a source file) as authoritative is **not** a violation of
-category 1, even if the rule itself lives in that file rather than in prose
-— pointing at the exact place a candidate can read the full rule *is*
-disclosing it. What counts as unpinned is a rule a candidate has to
-*generalize* from a handful of illustrative examples, with no single place
-that states it completely.
-
-The severity distinction depends on reachability: an ambiguity that changes
-a graded answer is `Major`; one that cannot occur in any graded fixture is
-at most `Minor`. Both severities block, but the label should still describe
-the demonstrated impact accurately.
-
-Worked cases: [appendix A](/portal/docs/testing-and-validation/quality-panel-examples#a--contract).
-
-### Before you submit
-
-- [ ] Open your rendered `instruction.md` and read it as a stranger would —
-      does every "required output," "format," and "rule" look like real
-      prose, with no leftover template syntax, object reprs, or internal
-      identifiers?
-- [ ] For every rule your verifier enforces (precedence, tie-breaking,
-      rounding, uniqueness), can you point to the exact sentence in
-      `instruction.md`/`task.toml` that states it? If the only place it's
-      stated is your reference solution's source code, that's a gap.
-- [ ] For every edge case your contract's input domain allows (empty,
-      malformed, boundary, conflicting), does the contract say what the
-      correct output looks like — not just what the common case looks like?
-- [ ] If you cite a data file or source file as authoritative for a rule
-      instead of stating the rule in prose, does that file **fully and
-      deterministically** answer every graded case — not just a handful of
-      illustrative examples a candidate still has to generalize from?
-
----
+**Example:** a payment reconciliation task asks for the "latest transaction" but never defines how equal timestamps are resolved. If the grader requires the larger sequence number, disclose that tie-break and include a case where it changes the result. See [contract examples](/portal/docs/testing-and-validation/quality-panel-examples#a--contract).
 
 <h2 id="axis-2--correct_reference_solution">Axis 2 — <code>correct_reference_solution</code></h2>
 
-**The question:** does *your own reference solution* — the thing your
-verifier is built around — actually do what your contract says, on every
-input your contract allows, not just the common case it was probably
-developed against? This axis reads your reference against the contract, not
-against whether it happens to pass your own tests (that's a different
-question, and a weak verifier proves nothing about a wrong reference).
+**The question:** does `solution/solve.sh` and the code it produces actually satisfy the contract, including its boundary cases?
 
-Misses on this axis cluster around a handful of shapes — exactly the places
-a quick review of "does the reference implement rule X" tends to miss:
+An Oracle pass shows that the reference passes your current tests. It cannot establish a requirement those tests never check. Watch for stale loop state, reused identifiers treated as unique, lost precision, incorrect tie-breaks, and crash-recovery steps performed in the wrong order.
 
-### Shapes that repeatedly slip through
+**Before submitting:**
 
-1. **Format and width, separate from numeric correctness.** A value can be
-   numerically right while violating a width, precision, or padding rule.
-2. **Loop-carried state.** A stale value often causes a failure one
-   iteration after the branch that should have reset it.
-3. **Undisclosed domain relationships.** A reference can hardcode a model
-   that the candidate-visible data cannot determine.
-4. **One reduced value reused for two distinct paths.** A summary suitable
-   for one behavior may discard information another behavior must preserve.
-5. **Reusable identifiers modeled as unique.** Keying by an identifier
-   alone fails when the contract says it may be reused over time.
-6. **Durability markers written after the irreversible action.** A marker
-   cannot recover from a crash that occurs before the marker is persisted.
-7. **One helper assumed to cover a similar rule elsewhere.** Check each
-   implementation site independently.
+- [ ] Trace at least one ordinary case and each relevant boundary through the actual reference logic.
+- [ ] Check output bytes for required widths, precision, padding, delimiters, and paths.
+- [ ] Check every branch that updates state, including deletion, expiry, replacement, and identifier reuse.
+- [ ] Verify that recovery and durability claims hold at the documented interruption points.
 
-Worked cases: [appendix B](/portal/docs/testing-and-validation/quality-panel-examples#b--reference).
-
-### Before you submit
-
-- [ ] For every documented format/width/precision requirement, check your
-      reference's *actual output bytes* (not the formula) against the
-      stated requirement — printf-style specifiers are a common trap.
-- [ ] For every loop that carries state across iterations, list every
-      branch that writes that state and confirm all of them keep it
-      consistent — not just the branch your fixtures exercise.
-- [ ] For every rule that depends on a physical/statistical/domain
-      relationship, confirm the agent-visible data actually spans the
-      conditions a candidate would need to derive that relationship from
-      scratch. If it doesn't, either disclose the relationship or fix the
-      data.
-- [ ] If the same rule (skip comments, handle revisions, ignore malformed
-      rows) applies in more than one place your reference touches, check
-      each site separately — don't assume one correct implementation
-      generalizes to the others.
-- [ ] Pick the actual boundary values your contract implies (first/last
-      element, inclusive/exclusive cutoff, empty/singleton/duplicate case)
-      and trace each one through your reference's real logic, step by
-      step, rather than eyeballing whether "the formula looks right."
-- [ ] For every identifier your contract calls out as reusable/non-unique,
-      and every requirement stated as "X must be durable/undoable if
-      interrupted," trace it through your reference's actual data
-      structures and write order — not just whether the formula looks
-      right.
-
----
+**Example:** a fixed-width banking export requires an eleven-digit field. The reference copies a ten-digit input unchanged, and its goldens repeat the error. Pad according to the contract, regenerate the expected outputs, and assert the field width. See [reference examples](/portal/docs/testing-and-validation/quality-panel-examples#b--reference).
 
 <h2 id="axis-3--protected_ground_truth">Axis 3 — <code>protected_ground_truth</code></h2>
 
-**The question:** can you name the exact bytes a candidate can write, and
-the exact site your grader reads them from, such that writing those bytes
-earns credit without solving the task? This axis is about **reachability**
-— a golden file existing somewhere under `tests/` is not itself a finding;
-it only matters if a candidate can actually reach, steer, or infer it.
+**The question:** can candidate-controlled code obtain or change what the grader treats as the expected answer, earning credit without doing the task?
 
-This is the most mechanically specific axis: every real finding traces back
-to one of ten named mechanisms (the judge's output tags each finding with
-one of these, so you know exactly which one to fix).
+The evidence must connect something the candidate controls or can access to a trusted grading decision. A golden file existing under `tests/` is normal; a candidate process being able to read that golden and return it as its answer is a defect. A `Major` blocks; a `Minor` on this axis is reported without blocking by itself.
 
-### Auditor-visibility is not candidate-visibility
+**Separate verifier containers do not protect goldens from candidate code executed inside the verifier.** If your tests rebuild and run the submitted program, check what that process can read and write. Dropping its privileges only helps when the resulting permissions and process restrictions enforce the boundary.
 
-The panel sees `tests/` in full; the candidate usually does not. Do not
-confuse "the auditor can trace an exploit" with "the candidate can discover
-and use it." Ask three questions, in order, before a mechanism earns
-`Major`:
+**Before submitting:**
 
-1. **Does the artifact reach the candidate's writable filesystem at all?**
-   Check `task.toml`'s declared artifacts and what the verifier's own
-   `Dockerfile`/staging step actually copies — not what a helper function
-   *would* do if handed the path. Never reaching the candidate's own image
-   (a common effect of `environment_mode = "separate"`, or a
-   `.dockerignore` entry) makes the finding `None`, not `Minor` — an
-   unreachable precondition isn't a theoretical exposure, it isn't an
-   exposure. **Separate mode answers this question for the agent
-   container only.** It does not hide goldens from **agent code the
-   verifier executes** (rebuild-from-source, then run the program). If
-   that process can read a sibling golden or follow a symlink to one,
-   that is still `colocation_walk` / `chmod_follow` — not `None`. See
-   [Dockerfile §8](/portal/docs/creating-tasks/dockerfile-best-practices#8-separate-agent-visible-runtime-from-verifier-only-assets).
-2. **Is the exact path, filename, or value the exploit needs actually
-   knowable to the candidate** — named in `instruction.md`, present under
-   `environment/`, or derivable with certainty from something the candidate
-   does see? A plausible guess at your verifier's own internal layout is
-   not the same thing as a derivation, no matter how conventional the guess
-   is. If the only way to hit it is to guess a string that appears nowhere
-   in candidate-visible material, that's `Minor`, not `Major`, however
-   cleanly the code path traces.
-3. **Does another test in the same suite already independently recompute or
-   re-verify the value your mechanism claims is forgeable?** If every path
-   to reward also has to pass that check, the join doesn't survive grading
-   and the finding is `None`. This cuts both ways — don't assume broad
-   coverage exists without confirming it actually reaches your finding's
-   specific case; a real, uncovered exploit on a case that only *looks*
-   defended is still `Major`.
+- [ ] Keep expected answers and live reference implementations inaccessible to candidate code, including code your verifier executes.
+- [ ] Check privileged reads of candidate-influenced paths for symlink and path-traversal escapes.
+- [ ] Compute expected values independently of the submitted artifact. A candidate-provided checksum cannot certify that artifact's correctness.
+- [ ] Avoid exposing hidden outcomes through filenames, arguments, working directories, or environment variables.
+- [ ] Keep grading results in a trusted channel; candidate stdout or an early successful exit must not impersonate completed verification.
+- [ ] Test the access boundary from the same execution context as the candidate program. Confirm another test really defeats a suspected shortcut before treating it as harmless.
 
-When a `Major` rationale rests on "guessable from convention" rather than
-"named, present, or derivable with certainty," the reachability bar has not
-been met. That may still be a blocking `Minor`, but it is not a demonstrated
-`Major`.
-
-### Mechanisms
-
-**`symlink_deref`.** A privileged verifier process reads a candidate-influenced
-path and follows a symlink to a golden or other protected file. Guard *that
-exact read* (for example `O_NOFOLLOW`). A guard on an unrelated staging step
-does not count. Writing `symlinks=False` on `copytree` is not a guard — it
-is the same silent default as omitting the argument. Do not hand-stage
-agent-controlled trees; see [Writing Tests](/portal/docs/creating-tasks/writing-tests).
-
-**`chmod_follow` / incomplete privilege drop.** A UID/GID drop without
-`--no-new-privs` (or equivalent) lets a candidate-supplied setuid binary
-regain privilege on exec. Two things that look like containment but aren't:
-a `chown` onto an otherwise-empty output or scratch directory isn't the same
-as handing the candidate a populated source/golden tree, and a
-world-writable candidate output directory isn't a finding on its own if its
-contents are never the artifact the grader actually reads back and compares.
-
-**Adjacent-directory read-reach (`colocation_walk`) — a UID drop stops
-writes, not reads of a world-readable sibling.** Dropping the candidate's
-re-executed process to an unprivileged UID before running it is real
-containment for one thing only: it stops that process *writing* somewhere
-it shouldn't. It says nothing about whether the same process can *read* a
-protected file that happens to sit next to a path you handed it.
-
-Never place a golden in the same directory tree as a path passed to
-candidate code. Stage only the legitimate input into its own tree, and keep
-goldens where that process has no read access. Write protection and read
-protection are different properties.
-
-**A compiled test binary's own exit code trusted as the verdict
-(`init_forces_success`).** The verifier treats a subprocess's exit status as
-proof its assertions ran and passed — but if the candidate's own code links
-into that same binary, the candidate controls whether it ever reaches those
-assertions at all.
-
-Do not trust a compiled test binary's exit code when candidate code is
-linked into it. Candidate initialization can exit successfully before any
-assertion runs. Parse and assert on structured per-test results instead.
-
-**Metrics parsed out of a shared, unstructured stdout stream the candidate
-also writes to (`stdout_inject`).** If the grader's parser does an
-unanchored search over combined stdout for the field it wants, and the
-candidate's own code writes to that same stream first, the candidate's own
-text can supply the match.
-
-Do not parse a protected metric from a shared unstructured stream that also
-contains candidate-controlled text. Use a separate channel or structured
-record whose protected value cannot be preceded by a forged match.
-
-**Test-identity leak via cwd/argv/env (a `label_from_basename` variant).** A
-hidden test's own name, path, or scenario label leaks to the candidate
-through an incidental channel — not the expected *answer*, but which
-*scenario* is currently running.
-
-Do not derive a candidate-visible path, argument, cwd, or environment value
-from a test name or expected-outcome label (`reject`, `invalid`, `accept`).
-Use a neutral hash, index, or UUID.
-
-**Unreset candidate-writable state between solve and grading.** The same
-family covers a verifier that pulls the comparison digest/hash *out of a
-field inside the candidate's own submitted file* (a submitted
-`.json`/`.bundle` whose `sha256`-style field the verifier trusts as the
-expected value) instead of computing or pinning it independently — the
-candidate's own file is asserting its own correctness, which is the same
-trust failure as an unreset directory, just one field wide instead of a
-whole tree.
-
-Reset everything that persists from solve into grading except explicitly
-required artifacts. Never derive the required roster or passing threshold
-from the same candidate-controlled artifact being graded.
-
-**Invocable reference implementation staged into the candidate's own
-workspace.**
-
-Exclude any reference/oracle executable from the candidate's build and
-execution workspace. "Read-only reference material" is not protected if the
-candidate's program can invoke it.
-
-**Self-modifiable persistent state.** If a contract promises fresh,
-stateless invocation, the candidate process must not be able to mutate its
-own executable or another undocumented file that persists across cycles.
-
-Worked cases: [appendix C](/portal/docs/testing-and-validation/quality-panel-examples#c--verifier).
-
-### Before you submit
-
-- [ ] For any real mechanism you find in your own review, before treating
-      it as blocking: does the artifact actually reach the candidate's
-      filesystem (or, if tests exec the agent's program in the verifier,
-      that process — separate mode does not hide goldens from it), is the
-      exact path/value it needs genuinely knowable (not just a plausible
-      guess) from candidate-visible material, and does no other test in
-      the same suite already independently defeat the join?
-- [ ] For every place a privileged process reads a candidate-influenced
-      path, is there an explicit symlink guard on *that exact* read — not
-      on some other helper? Writing `symlinks=False` on a `copytree` call
-      does not count — it is the same silent default as omitting the
-      argument, and [Writing Tests](/portal/docs/creating-tasks/writing-tests)
-      rejects hand-staging agent trees; the fix is architectural, not a
-      copy flag.
-- [ ] For every place your verifier trusts a digest/hash as the expected
-      value, confirm it's computed or pinned independently — not read out
-      of a field inside the candidate's own submitted file.
-- [ ] For every `setpriv`/UID-drop in your verifier, is `--no-new-privs`
-      (or an equivalent containment) present? *(This is now checked
-      automatically as a static preflight — but check it yourself too.)*
-- [ ] For every path you pass as an argument to the candidate's own
-      (re)executed code, confirm no golden/expected-answer file lives in
-      that path's parent directory, or anywhere else that same process can
-      read — a dropped-privilege UID stops it writing there, not reading a
-      world-readable sibling.
-- [ ] Grep your own `tests/` for `request.node.name`, and for any fixture
-      directory, argument, or env var whose literal name contains an
-      outcome word (`reject`, `invalid`, `accept`, `pass`, `fail`, a test's
-      own function name). If you find one, rename it to something neutral.
-- [ ] If any directory/file persists from the candidate's solve session
-      into grading, confirm your reset step actually clears *everything* in
-      it except what you intend to keep — not just the one file you
-      rebuild, and not a file whose own content also defines what's
-      required or how many records must pass.
-- [ ] If your task includes a reference/oracle implementation as
-      candidate-visible material, confirm it is excluded from wherever the
-      candidate's own code actually builds and runs — not just labeled
-      "do not modify" in prose.
-- [ ] If your verifier asserts a compiled test binary's own process exit
-      code, confirm nothing linked into that binary (an `init` function, a
-      static initializer/constructor) can short-circuit before any real
-      assertion runs — assert on structured per-test output instead.
-- [ ] If your grader parses a value out of combined/shared stdout, confirm
-      no candidate-controlled string can flow through that same stream
-      ahead of the real value under an unanchored search.
-
----
+**Example:** a document classifier is passed `/fixtures/reject/case-07/input.json`. The path reveals the expected label before the program reads the document. Use neutral paths, vary the inputs, and verify that a label-from-path stub cannot pass. See [verifier and ground-truth examples](/portal/docs/testing-and-validation/quality-panel-examples#c--verifier) and [Writing Tests](/portal/docs/creating-tasks/writing-tests).
 
 <h2 id="axis-4--sound_verifier">Axis 4 — <code>sound_verifier</code></h2>
 
-**The question:** could a submission pass `tests/` without actually solving
-the task? Incomplete verifier coverage is, by a wide margin, the most common
-finding this axis surfaces. The bar that separates a blocking `Major` from a
-`Minor` is not "can a sufficiently
-deliberate construction defeat this verifier" (almost any real verifier
-can, with enough specific reverse-engineering) — it's **would a genuine,
-honest attempt at the task plausibly produce or stumble into this,** even a
-lazy or corner-cutting one.
+**The question:** does the grader distinguish solving the documented task from plausible wrong behavior, while accepting valid alternatives?
 
-### Patterns
+Both directions matter. A report that merely exists may contain wrong totals; an exact string comparison may reject correct JSON with a different key order. Findings need a concrete mechanism. Advice to exercise more cases is different from showing that a required behavior is never tested or that the tests enforce the wrong behavior.
 
-- **Candidate-controlled verdict channel.** The verifier trusts an exit
-  code, notation, comparison method, or parser input whose meaning candidate
-  code can redefine.
-- **Reachable oracle.** A live reference implementation is as
-  answer-bearing as a static golden if candidate code can invoke it.
-- **Verifier enforces the wrong behavior.** A test can actively lock in a
-  result that contradicts the documented contract.
-- **Missing requirement coverage.** A required output or behavior has no
-  test that would fail if it were absent.
-- **Unenforced restriction.** A dependency, language, or interface
-  restriction exists only in prose.
+**Before submitting:**
 
-Worked cases: [appendix A](/portal/docs/testing-and-validation/quality-panel-examples#a--contract), [appendix C](/portal/docs/testing-and-validation/quality-panel-examples#c--verifier).
+- [ ] Map each required behavior to an assertion that would fail if that behavior were missing or reversed.
+- [ ] Check the full core result: values, membership, uniqueness, and required outputs, not just file existence, keys, or row count.
+- [ ] For each named domain rule, include a case whose outcome changes when that rule is wrong. General held-out variation must not be its only check.
+- [ ] Try a plausible incorrect solution, such as ignoring reversals or rejecting every request. Confirm the verifier rejects it.
+- [ ] Try contract-valid alternatives for unconstrained formatting, ordering, and implementation choices. Confirm the verifier accepts them.
+- [ ] Enforce documented restrictions and lifecycle behavior, including failure handling, cleanup, and recovery when required.
 
-### Before you submit
+**Example:** a financial aggregation grader checks that every account appears but never compares balances. A program writing zero for each balance passes. Add independently calculated expected balances and a case that isolates reversal handling. See [verifier examples](/portal/docs/testing-and-validation/quality-panel-examples#c--verifier).
 
-- [ ] For anything your verifier trusts as proof of correctness (an exit
-      code, stdout, an imported comparison method, a proof assistant's own
-      notations), ask: is this something the candidate's own code gets to
-      define the meaning of? If yes, that trust needs an independent,
-      verifier-computed check instead.
-- [ ] If your task stages any reference/oracle artifact, confirm it's
-      unreachable from the candidate's own execution path — a "final
-      output looked correct" test does not distinguish a real solution from
-      one that shelled out to your own oracle.
-- [ ] For every documented behavior/contract promise, find the specific
-      test that would fail if that behavior were removed or reversed. If
-      you can't point to one, that's a coverage gap — even if the reference
-      itself happens to behave correctly.
-- [ ] If your contract states a restriction (a dependency, a language, an
-      interface), confirm the verifier actually enforces it mechanically —
-      not just documents it.
-- [ ] Ask, for each check: would a **genuine, even lazy** attempt at this
-      task plausibly stumble into passing this without solving it? If the
-      answer is only "yes, if someone specifically reverse-engineered this
-      verifier's own quirks," that's a `Minor`. If a normal honest attempt
-      could pass it, that's a `Major`. **Both block** — `Minor` is a
-      narrower finding, not a pass.
+Findings explicitly marked `Advisory` can recommend broader coverage without blocking. That label does not excuse an actual incorrect result or change the authoring requirements in [Writing Tests](/portal/docs/creating-tasks/writing-tests).
 
----
+<h2 id="axis-5--deterministic_execution">Axis 5 — <code>deterministic_execution</code></h2>
+
+**The question:** if the submission and task package stay the same, can an uncontrolled input or race change the grade?
+
+Look for fresh random seeds, the current date or time, mutable remote data or dependencies, filesystem ordering, and timing assumptions. The issue is their effect on the graded result. A random temporary filename that cannot affect grading is different from a fresh random test corpus that sometimes exposes a bug and sometimes misses it.
+
+**Before submitting:**
+
+- [ ] Use fixed test fixtures or an explicit, stable seed for generated cases. Make important boundary cases guaranteed fixtures.
+- [ ] Fix the evaluation clock when the task uses expiry dates or time windows.
+- [ ] Pin dependencies and provide required inputs locally, following the task's environment requirements.
+- [ ] Sort where the contract requires order; accept equivalent orderings where it does not.
+- [ ] Wait for a defined readiness condition instead of assuming a short sleep is sufficient.
+- [ ] Grade the same correct and deliberately incorrect submissions repeatedly from clean environments and check that their outcomes stay stable.
+
+**Example:** an invoice parser's hidden generator chooses a new random seed on each run. A parser that mishandles leap days passes whenever no leap-day invoice is drawn. Use a fixed corpus that always includes the leap-day case, plus seeded variation. See the [deterministic execution examples](/portal/docs/testing-and-validation/quality-panel-examples#d--deterministic-execution).
 
 ## Master pre-submission checklist
 
-Before you submit a task, walk through these in order — they're grouped by
-axis above, but this is the fast pass:
-
-1. **Read your own rendered `instruction.md`, not the template.** No
-   leftover repr fragments, sentinel paths, or internal identifiers.
-2. **Every grading rule your verifier enforces has a citable sentence in
-   the contract.** If the only place a rule lives is your reference's
-   source code, write it down.
-3. **Check your reference's actual output bytes against every stated
-   format/width/precision requirement** — not just the formula.
-4. **Trace every loop-carried state variable across all its branches**, not
-   just the one your fixtures happen to exercise.
-5. **Grep your own `tests/` for outcome-revealing names**: `reject`,
-   `invalid`, `accept`, `request.node.name`, or any hardcoded test label
-   reaching a candidate-visible path/arg/env var.
-6. **Every `setpriv`/UID-drop in your verifier includes `--no-new-privs`**
-   (or equivalent containment).
-7. **Anything persisting from solve into grading is either fully reset or
-   explicitly enumerated** — don't assume rebuilding one file implies the
-   rest is clean.
-8. **Any reference/oracle implementation is unreachable from the
-   candidate's own build/execution path**, not just labeled "don't modify."
-9. **Every documented requirement has a test that would fail if the
-   behavior were removed.**
-10. **Any documented restriction (dependency, language, interface) is
-    enforced by the verifier, not just stated in prose.**
-11. **Any path passed to the candidate's own (re)executed code has no
-    golden/expected-answer file in its parent directory** — a
-    dropped-privilege UID stops writes, not reads of a world-readable
-    sibling.
-12. **A compiled test binary's own exit code, or a shared/combined stdout
-    stream, is never trusted as the verdict** — assert on structured
-    per-test output, and confirm no candidate-controlled string can match
-    your parser ahead of the real value.
-13. **Any identifier your contract flags as reusable, or any "must survive
-    an interruption" durability requirement, is traced through your
-    reference's actual data structures and write order** — not just whether
-    the formula looks right.
-14. **Before treating a PGT `Major` as confirmed, check it clears all three
-    bars**: the artifact actually reaches the candidate's filesystem
-    (or the process you exec in the verifier — separate mode does not
-    hide goldens from that), the exact path/value it needs is genuinely
-    knowable (not just a plausible guess) from candidate-visible
-    material, and no other test in the same suite already independently
-    defeats the join.
-
----
+1. **Contract:** every graded rule is available to the candidate and determines the expected behavior.
+2. **Reference:** the shipped solution follows those rules, including relevant edge cases and exact output requirements.
+3. **Ground truth:** candidate code cannot read, replace, or impersonate the grader's trusted answer or verdict.
+4. **Verifier:** correct alternatives pass, and a plausible solution violating each core requirement fails.
+5. **Determinism:** the same package and submission receive stable grading from clean runs.
+6. **Evidence:** retain Oracle, NOP, CI, and targeted regression results. Passing those checks does not replace reviewing the contract and assertions.
 
 ## FAQ
 
-**What if I think a flag is wrong?**
-See also [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission). Every `Major` finding comes with a rationale citing the specific contract
-passage, code location, or test the panel is pointing at. If you can show
-the cited passage doesn't say what the finding claims, or that the
-"reachable" input the finding names isn't actually contract-valid, that's
-grounds to contest it — the same as you would push back on a human
-reviewer's note. The panel is built to require an actual citation for every
-`Major`, precisely so a "sounds plausible" objection on either side can be
-checked against the same evidence.
+**Does every Minor block?**
 
-Separately: measured run-to-run variance means repeating the identical
-review (same files, same code, same rubric text) can land on a different
-severity for the same task+axis a meaningful fraction of the time — that's
-sampling noise in the underlying model calls, not something about your task
-changing between runs. The adjudicator now takes a 3-vote self-consistency
-majority on every disagreement it resolves (raised from a single call,
-specifically to cut this down), but that mitigation hasn't yet been
-confirmed with its own before/after re-run, so don't assume the noise is
-fully gone. If a cited passage checks out against your own files but the
-verdict still feels off, that's legitimate grounds to ask for a re-judge,
-not just a citation dispute.
+No. `Minor` blocks on contract, reference correctness, verifier soundness, and deterministic execution. Ground-truth protection blocks only on `Major`. A finding explicitly separated as `Advisory` does not contribute to the blocking result. Use the report's `Blocking severity` and the evaluation status.
 
-**Does a `Minor` block my submission?**
-Yes. `Minor` and `Major` both block auto-accept. `Minor` is still a real
-issue (usually narrower or not reachable on a graded case); it is not
-optional. The difference from `Major` is how serious the defect is, not
-whether the task comes back.
+**What if I think a finding is wrong?**
 
-**What does `Unsure` mean for me?**
-It means the panel itself couldn't reach a decisive verdict on at least one
-axis — not that something is definitely wrong with your task. It still
-blocks (a task nobody could judge doesn't get auto-accepted), but it routes
-to a human rather than being held against you as a confirmed defect. If you
-see this repeatedly on unrelated tasks, that's worth flagging as an
-infrastructure issue, not something to debug in your own task.
+Quote the exact requirement, the cited implementation or assertion, and the concrete input or output that resolves the disagreement. If the finding assumes candidate access, show the actual staging and permissions. If it assumes an allowed input, check that input against the documented domain. Include a reproduction where useful; an Oracle pass alone does not disprove a coverage gap. See the [worked response](/portal/docs/testing-and-validation/quality-panel-examples#e--responding-to-a-review) and [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
 
-**Why doesn't `coherent_contract` see my reference solution, and why
-doesn't `sound_verifier` either?**
-Both axes are checking your *contract* and your *verifier* against an
-independent standard — not against whether they happen to agree with one
-specific implementation. If `coherent_contract` could see your reference,
-it might validate a rule that's only ever stated in your code, when the
-actual question is whether a candidate who never sees that code would know
-the rule. Same logic for `sound_verifier`: a verifier that only ever gets
-checked against the one reference that's known to pass tells you nothing
-about whether it correctly rejects a bad submission.
+**Should I resubmit unchanged until the panel passes?**
 
-**Where do the `protected_ground_truth` `kind` labels come from, and why
-does it matter which one my finding gets tagged with?**
-Each `Major`/`Minor` PGT finding is tagged with exactly one mechanism from a
-closed list (`symlink_deref`, `chmod_follow`, `mutate_expected_source`,
-`stdout_inject`, `namespace_redefine`, `init_forces_success`,
-`colocation_walk`, `holdout_overlap`, `label_from_basename`,
-`mutated_tests`). It's there so the fix is unambiguous — each mechanism in
-this guide's PGT section maps to exactly one of these tags, and the fix for
-one doesn't necessarily apply to another that merely *sounds* similar.
+Model judgments can vary. Address a supported finding or request review with evidence when you disagree. A different rating on an unchanged task does not explain or repair the original issue.
 
-**Some of these fixes are things a static check already catches (like
-`--no-new-privs`) — why does the panel check them too?**
-A handful of the sharpest, cheapest-to-detect issues (privilege-drop
-completeness, test-identity leaks via `request.node.name`) are now caught
-by fast, deterministic checks that run before this panel does, so you get
-that feedback immediately rather than waiting on an LLM review. Those
-checks look for an exact textual pattern; the panel can still catch the
-same underlying issue expressed a different way (a different
-privilege-drop mechanism entirely, a test-identity leak through a channel
-the static check doesn't grep for).
+**Does `Unsure` mean I must rewrite the task?**
 
-A static check may also flag `copytree` usage. That is **not** the author
-fix. `symlinks=False` is the same silent default as omitting the argument
-and does not count as a guard. Do not hand-stage agent-controlled trees;
-see [Writing Tests → Symlink and Copy Staging Leaks](/portal/docs/creating-tasks/writing-tests).
+No. It means that axis has no decisive result, not that a defect was established. Check the other axes and the evaluation status. An evaluation with no readable result may require a retry or support; a readable partial report may already contain actionable findings. No automatic human-routing outcome is implied by this label.
 
-**Are the appendix cases from a real submission (possibly mine)?**
-No. They are synthetic composites with generic paths and names. Matching a
-shape to a finding does not mean the panel trained on, or published, your
-files.
+**Does execution prove the whole task is correct?**
+
+No. It tests a particular claim. A reference failure shows disagreement with the grader; an accepted wrong submission shows a gap on the exercised path. Neither replaces reviewing the other requirements. Absence of an execution proof does not dismiss a supported finding.
+
+**Will every revision show Previous review?**
+
+Only when the earlier verdict is available to that review. Keep your own finding-by-finding revision notes. If the section is absent, do not treat earlier findings as automatically closed.
+
+**Is this the same as CI, Agent Review, or human review?**
+
+No. The panel evaluates task quality and gates the difficulty stage according to the thresholds above. Static CI checks, Oracle/NOP runs, Agent Review, difficulty measurement, and the human [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) serve different purposes. A panel pass is one part of submission review.

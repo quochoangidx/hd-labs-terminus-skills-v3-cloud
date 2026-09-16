@@ -103,7 +103,7 @@ tags = ["python", "wal", "recovery", "concurrency", "storage-engine"]
 languages = ["python"]
 difficulty = "advanced"
 expert_time_estimate_hours = 6
-difficulty_explanation = "What makes this task hard — the core crux an agent has to get right."
+difficulty_explanation = "Why this task is inherently a challenge for a human expert — the core crux, not a pass rate."
 solution_explanation = "How the oracle solves it."
 verification_explanation = "How the verifier decides the task was solved."
 relevant_experience = "The background that qualified you to author this task."
@@ -137,7 +137,7 @@ storage_mb = 10240
 | `[metadata].difficulty` | Empirical tier — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) |
 | `[metadata].expert_time_estimate_hours` | Estimated expert time to author the task |
 | `[metadata].author_name` / `.author_email` | Required. Both may be `"anonymous"` |
-| `[metadata].difficulty_explanation` | What makes the task hard — the core crux an agent has to get right |
+| `[metadata].difficulty_explanation` | Why the task is inherently a challenge for a human expert — the core crux. Not a model's pass rate; that is what the tier records |
 | `[metadata].solution_explanation` | How the oracle solves it |
 | `[metadata].verification_explanation` | How the verifier decides the task was solved |
 | `[metadata].relevant_experience` | The background that qualified you to author this task |

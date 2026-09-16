@@ -13,9 +13,12 @@ Tasking is performed through the **Terminus-3-Prod** project on the Snorkel Expe
 5. Create and test your solution
 6. Write and verify tests
 7. Run agents 
-8. Create ZIP file, check rubric generation checkbox, and Submit on platform
-9. Review CI feedback and iterate + review generated rubric and edit for accuracy and completeness
-10. When CI is passing, submit on platform to a reviewer
+8. Create the ZIP, request rubric generation, and submit it on the platform
+9. Review automated feedback and the generated rubric, then revise as needed
+10. When the pre-submit checks pass, send the task to review
+11. Pass the five-axis quality panel, including `deterministic_execution`
+12. Complete the platform's 8-run difficulty measurement; new submissions need at least 3 failures
+13. Complete peer review
 
 ---
 
@@ -70,7 +73,7 @@ tags = ["python", "wal", "recovery", "concurrency", "storage-engine"]
 languages = ["python"]
 difficulty = "advanced"
 expert_time_estimate_hours = 6
-difficulty_explanation = "What makes this task hard — the core crux an agent has to get right."
+difficulty_explanation = "Why this task is inherently a challenge for a human expert — the core crux, not a pass rate."
 solution_explanation = "How the oracle solves it."
 verification_explanation = "How the verifier decides the task was solved."
 relevant_experience = "The background that qualified you to author this task."
@@ -217,7 +220,7 @@ stb harbor run -m @openai/gpt-5.6 -p <task-folder>
 stb harbor run -m @anthropic/claude-opus-5 -p <task-folder>
 ```
 
-Run each agent 4 times per model. Difficulty is the mean pass@1 across both models — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines). Tasks above 80% are not rejected; that is the Base tier. 100% across both models is.
+Run each agent 4 times per model as a local estimate. The platform performs the final 8-run measurement only after the quality panel passes — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines). For a new submission to proceed, at least 3 runs must fail, so no more than 5 may pass. Tasks already on the platform by the morning of Sep 15, 2026, including later revisions of those tasks, retain the prior one-failure gate.
 
 ## Step 10: Run LLMaJ Checks Locally
 
@@ -241,7 +244,7 @@ Before submitting, verify:
 
 - Oracle agent passes
 - All LLMaJ checks pass
-- Tested against real agents (4 runs per model; tier recorded in `task.toml`)
+- Tested against real agents (4 runs per model as a local difficulty estimate)
 - All files are present and correct
 
 Run final checks:
@@ -309,7 +312,7 @@ stb harbor check harbor_tasks/<task_name>
 7. Submit
 
 ## Step 16: Monitor Status
-After submission. wait for peer review (1-7 business days)
+After submission, monitor the quality panel and difficulty measurement before the task enters peer review. Peer review typically takes 1-7 business days.
 
 ---
 
@@ -317,10 +320,13 @@ After submission. wait for peer review (1-7 business days)
 
 ### Review Process
 
-1. **Automated checks** runs immediately
-2. **Peer review** within 1-7 business days
-3. **Feedback** provided if changes needed
-4. **Acceptance** when all criteria met
+1. **Automated checks** run immediately.
+2. **Quality panel** reviews five axes: contract, reference solution, protected ground truth, verifier soundness, and deterministic execution. `Minor` and `Major` block except on `protected_ground_truth`, where only `Major` blocks; findings explicitly marked `Advisory` do not block.
+3. **Difficulty measurement** runs 4 trials per model, 8 total, after the panel passes. New submissions need at least 3 failures across those runs to proceed.
+4. **Peer review** follows with the final difficulty result available to the reviewer.
+5. **Feedback or acceptance** is provided after review.
+
+See [After Submission](/portal/docs/submitting-tasks/after-submission) for the full sequence and [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) for panel findings and thresholds.
 
 ### If Changes Requested
 

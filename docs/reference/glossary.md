@@ -163,15 +163,19 @@ The Terminus 3 grading model: the verifier runs in its own container, built from
 
 ### Quality panel
 
-An automated four-axis review of a submitted task (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`) that blocks before a human reviewer and gates the difficulty measurement. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+An automated five-axis review of a submitted task: `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, and `deterministic_execution`. It gates difficulty measurement before human review. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block. Passing the panel is not task acceptance. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ### Difficulty tiers
 
-The four empirical tiers — **Frontier** (<20%), **Advanced** (20–50%), **Core** (50–80%), **Base** (80–100%) — assigned from measured accuracy rather than self-assessment.
+The four empirical tiers — **Frontier** (<20%), **Advanced** (20–<50%), **Core** (50–<80%), **Base** (80–<100%) — assigned from measured accuracy rather than self-assessment. The tier taxonomy is separate from the eligibility gate below.
+
+### Difficulty eligibility gate
+
+For a new submission to proceed, at least **3 of the 8 platform solver runs must fail**; no more than 5 may pass (62.5% maximum measured accuracy). Tasks already on the platform by the morning of Sep 15, 2026 remain under the prior one-failure rule, including later revisions. This gate determines whether a task can proceed, while the difficulty tier describes its measured accuracy.
 
 ### Accuracy
 
-Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier. Measured once, after the quality panel passes and before review; nothing re-runs after acceptance.
+Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier and is checked against the eligibility gate. Measured once, after the quality panel passes and before review; nothing re-runs after acceptance.
 
 ### Canary string
 
