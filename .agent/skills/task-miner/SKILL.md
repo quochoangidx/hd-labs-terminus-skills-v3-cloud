@@ -127,7 +127,7 @@ Difficulty is measured once, after the quality panel passes and before human
 review: four runs per current reference model, eight total. For a new
 submission, at least 3 of those 8 runs must fail, so no more than 5 may pass
 and the maximum measured accuracy that can proceed is 62.5%. Tasks already on
-the platform by the morning of Sep 15, 2026 keep the prior one-failure rule,
+the platform by the morning of Sep 11, 2026 keep the prior one-failure rule,
 including their later revisions. A new candidate must therefore
 aim below the 62.5% ceiling; `base` and a 75% `core` outcome no longer proceed.
 Python has no special difficulty requirement.

@@ -309,7 +309,7 @@ The local probe produces preliminary evidence, not the final Terminus 3 tier.
 The platform measures difficulty once, after the quality panel passes: four
 trials per model, eight runs total. A new submission needs at least 3 of those
 8 runs to fail, so no more than 5 may pass. Tasks already on the platform by
-the morning of Sep 15, 2026 keep the prior one-failure rule, including their
+the morning of Sep 11, 2026 keep the prior one-failure rule, including their
 later revisions.
 
 Use these local outcomes:

@@ -44,7 +44,7 @@ OpenAI's code-focused agent. Used with GPT-5.6 to evaluate task difficulty.
 A script that defines how to build a Docker container. In Terminus 3, it sets up the task environment with all required dependencies, digest-pinned base images, and no copied solution or test files.
 
 ### docker-compose.yaml
-Configuration file that defines how containers, volumes, and networks are orchestrated for a task.
+Configuration file that defines how containers and volumes are orchestrated for a task. Do not declare `networks:` or a per-service `network_mode:` — the Terminus 3 runner already puts every service in one shared namespace. See [Creating Docker Environment](/portal/docs/creating-tasks/creating-docker-environment#compose-networking).
 
 ---
 
@@ -171,7 +171,7 @@ The four empirical tiers — **Frontier** (<20%), **Advanced** (20–<50%), **Co
 
 ### Difficulty eligibility gate
 
-For a new submission to proceed, at least **3 of the 8 platform solver runs must fail**; no more than 5 may pass (62.5% maximum measured accuracy). Tasks already on the platform by the morning of Sep 15, 2026 remain under the prior one-failure rule, including later revisions. This gate determines whether a task can proceed, while the difficulty tier describes its measured accuracy.
+For a new submission to proceed, at least **3 of the 8 platform solver runs must fail**; no more than 5 may pass (62.5% maximum measured accuracy). Tasks already on the platform by the morning of Sep 11, 2026 remain under the prior one-failure rule, including later revisions. This gate determines whether a task can proceed, while the difficulty tier describes its measured accuracy.
 
 ### Accuracy
 
@@ -183,7 +183,7 @@ A marker used to keep benchmark data out of training corpora. Terminus 3 is a tr
 
 ### network_mode
 
-The `task.toml` setting declaring network access, set **per phase**. `[environment].network_mode` must be `"public"` on every task — the image build and harness install need the network. `[agent].network_mode` and `[verifier].network_mode` are `"public"` or `"no-network"` as the task requires; an offline task keeps the environment public and closes the agent.
+The `task.toml` setting declaring network access, set **per phase**. `[environment].network_mode` must be `"public"` on every task. On single-container tasks, `[agent]` and `[verifier]` are `"public"` or `"no-network"` as needed. Compose tasks must set all three phases to `"public"` because the runner cannot apply separate phase policies to a Compose environment.
 
 ### Terminal-Bench 3.0
 

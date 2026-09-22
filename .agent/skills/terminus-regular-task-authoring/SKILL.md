@@ -99,12 +99,17 @@ For new submissions:
   least 3 failures across the platform's 8 runs, so no more than 5 may pass and
   a result above 62.5% accuracy cannot proceed; `base` and a 75% `core` outcome
   are reachable only by tasks grandfathered on the platform by the morning of
-  Sep 15, 2026, including their later revisions.
+  Sep 11, 2026, including their later revisions.
 - Put `artifacts` at top level and every descriptive field under `[metadata]`.
 - Set `[verifier].environment_mode = "separate"`.
 - Declare all three network policies. `[environment].network_mode` must be
-  `"public"`; `[agent].network_mode` and `[verifier].network_mode` must each be
-  `"public"` or `"no-network"` and match what that phase genuinely needs.
+  `"public"`; for a single-container task, `[agent].network_mode` and
+  `[verifier].network_mode` must each be `"public"` or `"no-network"` and match
+  what that phase genuinely needs. **Compose exception:** when
+  `environment/docker-compose*.yml` / `.yaml` is present, all three phases must
+  be `"public"` — the runner cannot apply separate phase policies to a Compose
+  environment, and `check_compose_networks` blocks any other value. A task that
+  must be solved offline has to ship as a single container.
 - Set `[agent].timeout_sec` between 1800 and 18000 seconds.
 - Do not emit removed Terminus 2 fields: `version = "2.0"`, `codebase_size`,
   `number_of_milestones`, `subcategories`, `allow_internet`,
@@ -514,11 +519,14 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
 `environment/Dockerfile` must:
 
 - Use `FROM ...@sha256:<digest>` on every stage.
-- Keep every Dockerfile compatible with the cloud image builder:
-  `COPY --chown=` must use numeric IDs (such as `0:0` or `1000:1000`), and
-  external-image `COPY --from=` refs must be digest-only
-  (`image@sha256:<digest>`, never `image:tag@sha256:<digest>`). Stage aliases
-  remain valid, and `FROM image:tag@sha256:<digest>` remains required.
+- Keep every Dockerfile compatible with the cloud image builder: external-image
+  `COPY --from=` refs must be digest-only (`image@sha256:<digest>`, never
+  `image:tag@sha256:<digest>`). Stage aliases remain valid, and
+  `FROM image:tag@sha256:<digest>` remains required. Since Sep 17, 2026 the
+  builder resolves names through `/etc/passwd`, so `COPY --chown=` accepts named
+  users and groups (`root:root`, `appuser:appuser`) as well as numeric IDs;
+  `check_modal_dockerfile_compat` no longer rejects either form, including on
+  `ADD --chown=`. `ADD` with a local source is still unsupported — use `COPY`.
 - Use a **canonical Terminal-Bench base image** for the final runtime stage when
   one matches the task's language (all under `public.ecr.aws/docker/library/`,
   exact digest required): `python:3.13-slim-bookworm@sha256:01f4…24fb`,
@@ -827,7 +835,8 @@ Quality preflight:
   claims or agent/AI meta language
 - `tests/Dockerfile` is digest-pinned, installs all verifier dependencies,
   copies `/tests`, creates artifact landing directories, and all Dockerfiles use
-  numeric `COPY --chown=` IDs plus digest-only external-image `COPY --from=` refs
+  digest-only external-image `COPY --from=` refs (`COPY --chown=` may be named
+  or numeric)
 - no root-level `pyproject.toml`
 - final runtime base image is canonical for the task's language (or non-canonical with a credible justification)
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP
@@ -836,6 +845,11 @@ Quality preflight:
 - no `privileged: true`, no `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities,
   no `/var/run/docker.sock` mounts; compose volume mounts must not shadow the
   reserved paths `/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`
+- no top-level `networks:` block, per-service `networks:` list, or per-service
+  `network_mode:` in any `environment/docker-compose*.yml` / `.yaml`, and all
+  three `task.toml` phases set `network_mode = "public"` when a Compose file is
+  present (`check_compose_networks`, blocking in `stb harbor check` and at
+  platform preflight)
 - no runtime dependency setup in `tests/test.sh`
 - no end-to-end solution generator in `tests/`; golden data, parsed output,
   sealed truth, and spec-derived invariants are allowed

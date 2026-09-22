@@ -545,6 +545,7 @@ network_mode = "no-network"
 
 [environment]
 network_mode = "public" # required on every task; build/harness phase stays public
+# Compose task? All three phases above must be "public" (check_compose_networks).
 build_timeout_sec = 1800
 cpus = 2
 memory_mb = 8192
@@ -722,10 +723,11 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 `environment/Dockerfile` must:
 
 - use `FROM ...@sha256:<digest>` on every stage
-- keep every Dockerfile cloud-builder compatible: `COPY --chown=` uses numeric
-  IDs (for example `0:0` or `1000:1000`), and an external-image
+- keep every Dockerfile cloud-builder compatible: an external-image
   `COPY --from=` uses `image@sha256:<digest>` with no tag. `FROM
   image:tag@sha256:<digest>` and `COPY --from=<stage-name>` remain valid.
+  `COPY --chown=` takes named users/groups or numeric IDs — the builder resolves
+  both since Sep 17, 2026. `ADD` with a local source stays unsupported.
 - use a **canonical Terminal-Bench base image** for the final runtime stage when
   one matches the task's language (exact digest-pinned refs):
   - Python: `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`
@@ -1503,7 +1505,7 @@ Difficulty is measured once, after the quality panel passes and before human
 review: four runs per current reference model, eight total. For a new
 submission, at least 3 of those 8 runs must fail, so no more than 5 may pass
 and the maximum measured accuracy that can proceed is 62.5%. Tasks already on
-the platform by the morning of Sep 15, 2026 keep the prior one-failure rule,
+the platform by the morning of Sep 11, 2026 keep the prior one-failure rule,
 including their later revisions.
 
 Difficulty gate (PLATFORM-result interpretation only — these numbers come from

@@ -19,9 +19,10 @@ Run through this before every submission.
 
 - [ ] `task.toml` — all required fields present
 - [ ] `instruction.md`
-- [ ] `environment/Dockerfile` — builds successfully; dependencies pinned; every `FROM` digest-pinned; `COPY --chown=` uses numeric IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`)
+- [ ] `environment/Dockerfile` — builds successfully; dependencies pinned; every `FROM` digest-pinned; `COPY --from=` image refs are digest-only (no `:tag@sha256`)
+- [ ] `environment/docker-compose.yaml` (if present) — no top-level or per-service `networks:`, no per-service `network_mode:`
 - [ ] `solution/solve.sh` — deterministic, human-written
-- [ ] `tests/Dockerfile` — verifier image with dependencies baked in; same `COPY --chown=` / `COPY --from=` rules as the environment Dockerfile
+- [ ] `tests/Dockerfile` — verifier image with dependencies baked in; same `COPY --from=` rule as the environment Dockerfile
 - [ ] `tests/test.sh` — verifier entrypoint
 - [ ] `tests/test_outputs.py` — Python pytest tests with docstrings
 
@@ -54,7 +55,7 @@ Run through this before every submission.
 - [ ] `[agent].timeout_sec` is at least **1800** (30 min) and reflects the time the task actually needs
 - [ ] `[verifier].timeout_sec` and `[environment].build_timeout_sec` set
 - [ ] `[environment].network_mode = "public"` — required on every task
-- [ ] `[agent].network_mode` and `[verifier].network_mode` are **both present** — an omitted phase is a blocking finding, not a default; an offline task uses `"no-network"` on both
+- [ ] `[agent].network_mode` and `[verifier].network_mode` are **both present** — single-container tasks use `"public"` or `"no-network"` as needed; Compose tasks must use `"public"` on all three phases
 - [ ] No GPU required; runs within ~2 CPU cores, ~8 GB memory, ~10 GB storage
 - [ ] Descriptive fields are under `[metadata]`, not at the top level
 - [ ] 3–6 `tags`; `languages` and `expert_time_estimate_hours` set
@@ -102,7 +103,7 @@ stb harbor run -m @anthropic/claude-opus-5 -p <task-folder> -k 4
 | **Core** | 50% – < 80% |
 | **Base** | 80% – < 100% |
 
-- [ ] For a new submission, the local 8-run estimate includes at least **3 genuine task-driven failures** — 6–8 passes will not clear the platform gate. Tasks already on the platform by the morning of Sep 15, 2026 remain grandfathered, including later revisions
+- [ ] For a new submission, the local 8-run estimate includes at least **3 genuine task-driven failures** — 6–8 passes will not clear the platform gate. Tasks already on the platform by the morning of Sep 11, 2026 remain grandfathered, including later revisions
 - [ ] `difficulty` in `task.toml` set to the tier your local runs point at — the platform's own 8-run measurement is what gets recorded, so this is your best estimate, not a value a reviewer checks
 - [ ] Failures reflect genuine task difficulty — not unclear instructions, environment defects, or flaky tests
 - [ ] **Checked which tests the failing runs miss.** If they keep missing the same one or few tests, the check or the instructions are likely the problem — fix that check, or state the requirement in the instruction. If they miss different tests each time, the difficulty is genuine. Either way, don't leave the difficulty rated higher just because near-complete runs count as failures

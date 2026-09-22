@@ -170,7 +170,7 @@ Tests must not check for performance thresholds—these vary by hardware and are
 Testing logic must be exactly the same for both oracle and agent. Conditional behavior based on execution mode is banned.
 
 ### Multi-Container Tagging
-Tasks that run multiple containers must set `is_multi_container = true` under `[metadata]` in `task.toml`. The field is optional — omit it for single-container tasks. The harness detects `environment/docker-compose.yaml` on its own; nothing in `task.toml` points at it.
+Tasks that run multiple containers must set `is_multi_container = true` under `[metadata]` in `task.toml`. The field is optional — omit it for single-container tasks. The harness detects `environment/docker-compose.yaml` on its own; nothing in `task.toml` points at it. Compose files must not declare `networks:` or a per-service `network_mode:`, and all three `task.toml` phases must set `network_mode = "public"`.
 
 ### No Web Data Fetching
 Tasks should not fetch data from URLs (except package managers). Pre-download data into `environment/`.

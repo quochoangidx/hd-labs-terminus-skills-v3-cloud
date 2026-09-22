@@ -61,7 +61,7 @@ network_mode = "no-network"
 
 **All three phases must declare `network_mode`.** An omitted phase is not a default — it silently inherits the baseline, so the agent and verifier end up running on a policy nobody chose. The static check reports each missing one, and it blocks submission.
 
-**The value on `[agent]` and `[verifier]` is yours to choose** — `"public"` or `"no-network"` on each, according to what the task needs:
+**For a single-container task, the value on `[agent]` and `[verifier]` is yours to choose** — `"public"` or `"no-network"` on each, according to what the task needs:
 
 | If the task… | `[agent]` | `[verifier]` |
 |---|---|---|
@@ -72,6 +72,8 @@ Air-gapped is the stronger and more common choice for both. **You do not need to
 
 **Making a task offline no longer means closing `[environment]`.** Keep the environment public so the build succeeds, and set `"no-network"` on `[agent]` — that is what stops the agent reaching the network while it works.
 
+> **Compose exception:** If `environment/docker-compose.yaml` (or another `docker-compose*.yml` / `.yaml`) is present, `[environment]`, `[agent]`, and `[verifier]` must all declare `network_mode = "public"`. The runner cannot apply separate phase network policies to a Compose environment. `check_compose_networks` blocks any Compose task with a non-public agent or verifier. If the task must be solved offline, package it as a single container.
+>
 > ⚠️ **`"allowlist"` is not a supported value**, and `allowed_hosts` is rejected with it. Production sandboxes have no network-allowlist capability, so a task using it is refused at creation and the difficulty check reports `Oracle ran 0 trials` — an infrastructure refusal that reads like a task defect.
 >
 > **`network_mode` at the top level is ignored.** Harbor drops unrecognised root keys, so a top-level setting looks correct and does nothing. It belongs inside `[environment]`, `[agent]` and `[verifier]`. The legacy `allow_internet` field is also rejected — it cannot express a per-phase policy.

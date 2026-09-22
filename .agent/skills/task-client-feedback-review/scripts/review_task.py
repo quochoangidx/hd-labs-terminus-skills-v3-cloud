@@ -117,9 +117,8 @@ def cloud_builder_copy_issues(dockerfile: str) -> list[str]:
     for line_number, line in enumerate(dockerfile.splitlines(), start=1):
         if not re.match(r"(?i)^\s*COPY\b", line):
             continue
-        chown = re.search(r"(?i)(?:^|\s)--chown=([^\s]+)", line)
-        if chown and not re.fullmatch(r"[0-9]+(?::[0-9]+)?", chown.group(1)):
-            issues.append(f"line {line_number}: --chown={chown.group(1)} must use numeric IDs")
+        # --chown= accepts named users and numeric IDs alike since Sep 17, 2026;
+        # the cloud builder resolves names through /etc/passwd.
         source = re.search(r"(?i)(?:^|\s)--from=([^\s]+)", line)
         if not source:
             continue

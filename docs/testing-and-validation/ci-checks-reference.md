@@ -52,14 +52,15 @@ The **quality panel** is a separate five-axis review that gates the difficulty m
 
 **Dockerfile hygiene** — additional non-fatal warnings flag common issues. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
 
-**Cloud image builder syntax** — blocking preflight (`check_modal_dockerfile_compat`) on every Dockerfile in the submission. Local Docker often accepts these; the cloud builder does not:
+**Cloud image builder syntax** — blocking preflight (`check_modal_dockerfile_compat`) on every Dockerfile in the submission:
 
-- `COPY --chown=` must use numeric user/group IDs (`0:0`, `1000:1000`), not names such as `root` or `appuser`.
 - `COPY --from=` **image** refs must be digest-only (`golang@sha256:<digest>`), not `image:tag@sha256:<digest>`. Stage names (`COPY --from=builder`) are fine. `FROM image:tag@sha256:<digest>` is unchanged.
 
-The check reports the exact line and the replacement. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+Named and numeric `COPY --chown=` values are both supported. The preflight also no longer rejects names on `ADD --chown=`, but the cloud image builder still rejects `ADD` with a local source; use `COPY` for local files. The check reports the exact line and replacement for an incompatible `COPY --from=` reference. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 
 **No host bind mounts in compose** — multi-container environments must not use host bind mounts as volume sources. Containers that need to share state must do so another way.
+
+**Compose networking** — blocking check (`check_compose_networks`) on `environment/docker-compose*.yml` / `.yaml`, in `stb harbor check` and in platform preflight. Do not declare a top-level `networks:` block, a per-service `networks:` list, or a per-service `network_mode:`. In `task.toml`, Compose tasks must also set `[environment]`, `[agent]`, and `[verifier]` `network_mode = "public"`; the runner cannot apply separate phase policies to Compose environments. Extra Compose networking makes the project invalid before the image builds, while a non-public agent or verifier is refused during environment validation. Services still reach each other by service name. If the task must run offline, package it as a single container. See [Creating Docker Environment → Compose networking](/portal/docs/creating-tasks/creating-docker-environment#compose-networking).
 
 ---
 

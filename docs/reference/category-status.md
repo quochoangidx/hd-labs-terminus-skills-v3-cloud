@@ -23,7 +23,7 @@ All categories are open for Terminus 3. Category definitions are in [Task Taxono
 | Policy | Status | Since |
 |---|---|---|
 | Milestone tasks | 🚫 Not part of this edition | Jul 31, 2026 |
-| Internet access | ✅ Set per phase. `[environment]` must be `"public"`; `[agent]` and `[verifier]` are `"public"` or `"no-network"` as the task needs | Aug 24, 2026 |
+| Internet access | ✅ Single-container: `[environment]` is `"public"`; `[agent]` / `[verifier]` are `"public"` or `"no-network"` as needed. Compose: all three are `"public"` | Sep 18, 2026 |
 | GPU tasks | 🚫 Tasks must not require a GPU — kernel work is authorable CPU-simulated or compile-only | Jul 31, 2026 |
 | Canary strings | 🚫 Excluded from all components | Jul 31, 2026 |
 | Verifier isolation | ✅ Required — `environment_mode = "separate"` | Jul 31, 2026 |

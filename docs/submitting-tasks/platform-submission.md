@@ -97,7 +97,7 @@ storage_mb = 10240
 
 > Descriptive fields go under `[metadata]` — top-level copies are no longer counted by the structure check. `artifacts` stays top-level, and `name` resolves in either place.
 >
-> **`[environment].network_mode` must be `"public"`** on every task — the build and harness install need the network. Choose `"public"` or `"no-network"` on `[agent]` and `[verifier]` for what the task itself needs; an offline task keeps the environment public and sets `[agent]` to `"no-network"`. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
+> **`[environment].network_mode` must be `"public"`** on every task — the build and harness install need the network. On a single-container task, choose `"public"` or `"no-network"` on `[agent]` and `[verifier]` for what the task needs. A Compose task must set all three phases to `"public"`; package the task as a single container if it must run offline. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
 
 ## Step 4: Configure Docker Environment
 
@@ -107,14 +107,14 @@ Edit the `environment/Dockerfile` to set up your task environment:
 - Add any dependencies required by your task
 - Pin all package versions for reproducibility
 - Digest-pin every `FROM` image with `@sha256:<digest>` (`FROM image:tag@sha256:<digest>` is still the pin form)
-- `COPY --chown=` uses numeric IDs (`0:0` or `1000:1000`), not named users such as `root` or `appuser`
+- `COPY --chown=` may use named users/groups or numeric IDs
 - `COPY --from=` image refs are digest-only (`golang@sha256:<digest>`) — drop the `:tag`. Stage names (`COPY --from=builder`) are fine
 - For the final runtime stage, use a [canonical Terminal-Bench base image](/portal/docs/creating-tasks/dockerfile-best-practices) when one matches your task's language. Non-canonical images are allowed with a brief written justification as a `Dockerfile` comment; missing justifications are blocked.
 - Keep `environment/` at or below 100 MiB total and no file over 50 MiB
 - Add `.dockerignore` for non-trivial environments
 - Never copy `solution/` or `tests/` folders in the Dockerfile
 
-For multi-container environments or custom configurations, see the [Docker environment documentation](/portal/docs/creating-tasks/creating-docker-environment).
+For multi-container environments or custom configurations, see the [Docker environment documentation](/portal/docs/creating-tasks/creating-docker-environment). If you ship `environment/docker-compose.yaml`, do not declare `networks:` or a per-service `network_mode:`, and set `[environment]`, `[agent]`, and `[verifier]` `network_mode = "public"` — `check_compose_networks` blocks other shapes.
 
 ### Docker Troubleshooting
 
@@ -220,7 +220,7 @@ stb harbor run -m @openai/gpt-5.6 -p <task-folder>
 stb harbor run -m @anthropic/claude-opus-5 -p <task-folder>
 ```
 
-Run each agent 4 times per model as a local estimate. The platform performs the final 8-run measurement only after the quality panel passes — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines). For a new submission to proceed, at least 3 runs must fail, so no more than 5 may pass. Tasks already on the platform by the morning of Sep 15, 2026, including later revisions of those tasks, retain the prior one-failure gate.
+Run each agent 4 times per model as a local estimate. The platform performs the final 8-run measurement only after the quality panel passes — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines). For a new submission to proceed, at least 3 runs must fail, so no more than 5 may pass. Tasks already on the platform by the morning of Sep 11, 2026, including later revisions of those tasks, retain the prior one-failure gate.
 
 ## Step 10: Run LLMaJ Checks Locally
 

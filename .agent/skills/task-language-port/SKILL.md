@@ -38,9 +38,9 @@ and behavior contract, then build it with `task-clone`.
    network modes, 1800–18000 second agent timeout, and no
    removed Terminus 2 fields.
 6. Adapt digest-pinned images and build commands. In every Dockerfile,
-   `COPY --chown=` must use numeric IDs and external-image `COPY --from=` refs
-   must be digest-only (`image@sha256:<digest>`, without a tag); stage aliases
-   remain valid. Bake agent dependencies into `environment/Dockerfile` and
+   external-image `COPY --from=` refs must be digest-only
+   (`image@sha256:<digest>`, without a tag); stage aliases remain valid.
+   `COPY --chown=` accepts named users and numeric IDs alike. Bake agent dependencies into `environment/Dockerfile` and
    verifier-only dependencies into `tests/Dockerfile`; never install verifier
    dependencies at trial time.
 7. Re-run oracle, nop, static checks, V3 evidence inferability, artifact

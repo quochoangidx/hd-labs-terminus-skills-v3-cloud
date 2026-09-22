@@ -61,7 +61,6 @@ RUNTIME_SETUP_RE = re.compile(
     r"\b(?:uvx|pip(?:3)?\s+install|apt-get|npm\s+install|curl|wget|git\s+clone)\b",
     re.IGNORECASE,
 )
-COPY_CHOWN_RE = re.compile(r"(?i)(?:^|\s)--chown=([^\s]+)")
 COPY_FROM_RE = re.compile(r"(?i)(?:^|\s)--from=([^\s]+)")
 
 
@@ -126,9 +125,8 @@ def cloud_builder_copy_errors(text: str) -> list[str]:
     for line_number, line in enumerate(text.splitlines(), start=1):
         if not re.match(r"(?i)^\s*COPY\b", line):
             continue
-        chown = COPY_CHOWN_RE.search(line)
-        if chown and not re.fullmatch(r"[0-9]+(?::[0-9]+)?", chown.group(1)):
-            errors.append(f"line {line_number}: COPY --chown={chown.group(1)} must use numeric IDs")
+        # --chown= takes named users/groups or numeric IDs: the cloud builder has
+        # resolved names through /etc/passwd since 2026-09-17.
         source = COPY_FROM_RE.search(line)
         if not source:
             continue
@@ -272,6 +270,31 @@ def validate_category(category: str, subcategory: str) -> list[dict[str, object]
     ]
 
 
+def platform_compose_files(task_dir: Path) -> list[Path]:
+    """Compose files the platform's check_compose_networks actually scans."""
+    return sorted(
+        path
+        for pattern in ("docker-compose*.yml", "docker-compose*.yaml")
+        for path in (task_dir / "environment").glob(pattern)
+    )
+
+
+def compose_network_errors(text: str) -> list[str]:
+    """Return Compose networking keys that collide with the Terminus 3 runner."""
+    errors: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if re.match(r"^networks\s*:", line):
+            errors.append(f"line {line_number}: top-level 'networks:' block")
+        elif re.match(r"^\s+networks\s*:", line):
+            errors.append(f"line {line_number}: per-service 'networks:' list")
+        elif re.match(r"^\s+network_mode\s*:", line):
+            errors.append(f"line {line_number}: per-service 'network_mode:'")
+    return errors
+
+
 def validate_task(task_dir: Path) -> list[dict[str, object]]:
     checks: list[dict[str, object]] = []
     task_toml = task_dir / "task.toml"
@@ -359,13 +382,19 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             f"network_mode={environment_network_mode!r}; expected 'public'",
         )
     )
+    # A Compose environment shares one network namespace, so the runner cannot
+    # apply separate phase policies: check_compose_networks requires all three
+    # phases to be "public" (portal 2026-09-18).
+    is_compose = bool(platform_compose_files(task_dir))
     for phase in ("agent", "verifier"):
         phase_network_mode = manifest.get(phase, {}).get("network_mode")
+        allowed = {"public"} if is_compose else {"public", "no-network"}
         checks.append(
             result(
                 f"task.toml:{phase}-network-mode",
-                phase_network_mode in {"public", "no-network"},
-                f"network_mode={phase_network_mode!r}; expected 'public' or 'no-network'",
+                phase_network_mode in allowed,
+                f"network_mode={phase_network_mode!r}; expected "
+                + ("'public' (compose task)" if is_compose else "'public' or 'no-network'"),
             )
         )
 
@@ -467,6 +496,21 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             "no dangerous compose privileges, capabilities, sockets, or mounts"
             if not dangerous_compose
             else "; ".join(dangerous_compose),
+        )
+    )
+
+    network_errors = [
+        f"{compose_file.name}: {error}"
+        for compose_file in platform_compose_files(task_dir)
+        for error in compose_network_errors(compose_file.read_text(errors="replace"))
+    ]
+    checks.append(
+        result(
+            "environment:compose-networks",
+            not network_errors,
+            "no compose-declared networks or per-service network_mode"
+            if not network_errors
+            else "; ".join(network_errors),
         )
     )
 

@@ -120,7 +120,7 @@ Once. After your task passes the [quality panel](/portal/docs/testing-and-valida
 Your local `-k 4` runs are an estimate, not the measurement — different seeds and different days move results.
 
 **My task passed 6 or more of the 8 platform runs. Why can't it proceed?**
-For new submissions, at least **3 of the 8 runs must fail**. A result with 6–8 passes does not clear the gate. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty. Tasks already on the platform by the morning of Sep 15, 2026, including later revisions of those tasks, remain under the prior one-failure rule.
+For new submissions, at least **3 of the 8 runs must fail**. A result with 6–8 passes does not clear the gate. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty. Tasks already on the platform by the morning of Sep 11, 2026, including later revisions of those tasks, remain under the prior one-failure rule.
 
 **My task keeps coming back too easy. What makes a task land in the harder tiers?**
 Requirements the agent must infer rather than read off a checklist, outputs judged on semantics rather than appearance, and several correctness axes that interact. Single-bug or template-based tasks tend to land in Core or, for grandfathered tasks, Base; a new submission with 6–8 passes does not clear the gate. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
@@ -244,11 +244,17 @@ Harbor sets the build context to `environment/`. If your Dockerfile references f
 **Docker network errors after running many tests.**
 Run `docker network prune` to clean up stale networks.
 
+**Preflight or `stb harbor check` failed on `compose_networks`, or Oracle died before a Compose build.**
+Delete the top-level `networks:` block and every service's `networks:` list and `network_mode:` line in `environment/docker-compose.yaml`. In `task.toml`, set `[environment]`, `[agent]`, and `[verifier]` `network_mode = "public"`. The runner already puts every service in one shared namespace but cannot apply separate phase network policies to a Compose environment. These fixes cover `mutually exclusive network_mode and networks` and `network_mode='no-network' is not supported` failures. Keep `depends_on` and service-name hostnames. If the task must run offline, package it as a single container. See [Creating Docker Environment → Compose networking](/portal/docs/creating-tasks/creating-docker-environment#compose-networking).
+
 **My Dockerfile references a base image that seems unavailable.**
 Some images may not be accessible on the platform. Post the exact image name and task UUID in Slack.
 
-**Preflight failed on `COPY --chown=` or `COPY --from=`.**
-The cloud image builder rejects two patterns that work on local Docker. `COPY --chown=` must use numeric IDs (`0:0`, `1000:1000`), not names such as `root` or `appuser`. `COPY --from=` **image** refs must drop the tag and keep the digest (`golang@sha256:<digest>`), not `golang:1.24-bookworm@sha256:<digest>`. Stage names (`COPY --from=builder`) and `FROM image:tag@sha256:<digest>` are unchanged. The preflight names the exact line. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+**Can `COPY --chown=` use named users and groups?**
+Yes. The cloud image builder resolves names such as `root:root` and `appuser:appuser`; numeric IDs also work. The platform preflight no longer rejects names on `COPY` or `ADD --chown=`, but the cloud image builder still rejects `ADD` with a local source. Use `COPY` for local files.
+
+**Preflight failed on `COPY --from=`.**
+When the source is an **image**, drop the tag and keep the digest: use `golang@sha256:<digest>`, not `golang:1.24-bookworm@sha256:<digest>`. Stage names (`COPY --from=builder`) and `FROM image:tag@sha256:<digest>` are unchanged. The preflight names the exact line. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 
 **Preflight failed on `verifier_interpreter_permissions`, or Oracle log collection failed with Bash `Permission denied`.**
 On images where `/bin` is `/usr/bin`, `/bin/bash` and `/usr/bin/bash` are the same file. Saving a mode and disabling each path in turn can record `000` for the second path; restoring both leaves Bash non-executable. Harbor then fails to collect verifier logs (`DownloadVerifierDirError`) even if pytest wrote a reward. Resolve every path with `Path.resolve()`, deduplicate, restore each original mode once — do not hardcode `0755`. The platform check scans every `tests/**/*.py` before Oracle and is **not** in `stb harbor check`. An unreadable or unparseable file is a warning that the scan is incomplete for that file, not a pass. See [Writing Tests → Preserve Interpreter Permissions](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions).
@@ -337,7 +343,7 @@ Known caching issue — reviewers may receive stale or wrong zip files. If the f
 Use the dispute mechanism on the portal. Reference specific docs or announcements. If the reviewer keeps returning the same incorrect feedback, escalate in Slack by tagging the team.
 
 **Are new guidelines being applied to my old revisions?**
-They shouldn't be — new rules are for new submissions only. In particular, tasks already on the platform by the morning of Sep 15, 2026 keep the prior one-failure difficulty gate, including later revisions of those tasks. If a reviewer enforces new requirements on an older task, flag it. Noelle has confirmed reviewers are aware of this distinction.
+They shouldn't be — new rules are for new submissions only. In particular, tasks already on the platform by the morning of Sep 11, 2026 keep the prior one-failure difficulty gate, including later revisions of those tasks. If a reviewer enforces new requirements on an older task, flag it. Noelle has confirmed reviewers are aware of this distinction.
 
 ---
 

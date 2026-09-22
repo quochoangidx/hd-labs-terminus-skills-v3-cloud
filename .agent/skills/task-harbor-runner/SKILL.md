@@ -64,10 +64,19 @@ Examples:
 - If CI says `environment/` is too large, reduce the build context before changing tests.
 - If CI says `FROM` lacks a digest, pin the base image digest.
 - If CI reports `check_modal_dockerfile_compat`, edit the exact Dockerfile line
-  it names. Replace named `COPY --chown=user:group` values with the intended
-  numeric IDs, and write external-image `COPY --from=` as
-  `image@sha256:<digest>` with no tag. Do not alter valid
-  `FROM image:tag@sha256:<digest>`, `COPY --from=<stage-name>`, or `RUN chown`.
+  it names: write external-image `COPY --from=` as `image@sha256:<digest>` with
+  no tag. Do not alter valid `FROM image:tag@sha256:<digest>`,
+  `COPY --from=<stage-name>`, `RUN chown`, or a named `COPY --chown=` value —
+  named users and groups have been accepted again since Sep 17, 2026.
+- If `stb harbor check` or platform preflight reports `check_compose_networks`,
+  fix `environment/docker-compose*.yml` / `.yaml` and `task.toml` together:
+  delete the top-level `networks:` block, every per-service `networks:` list,
+  and every per-service `network_mode:`, then set `[environment]`, `[agent]`,
+  and `[verifier]` `network_mode = "public"`. Services still reach each other by
+  service name via `depends_on` and DNS. This failure fires before the image
+  builds, so an unexplained Oracle death on a Compose task is worth checking
+  here first. If the task must be solved offline, repackage it as a single
+  container instead of restoring Compose isolation.
 - If platform preflight reports `verifier_interpreter_permissions`, inspect
   every Python file under `tests/`. Resolve and deduplicate permission targets
   before saving modes or chmod; `/bin/bash` and `/usr/bin/bash` may resolve to

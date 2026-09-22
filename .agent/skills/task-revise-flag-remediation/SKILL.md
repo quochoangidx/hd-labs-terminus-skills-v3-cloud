@@ -327,7 +327,7 @@ Report the newly measured tier honestly. For a new submission the platform also
 requires at least 3 failures across its 8 runs, so no more than 5 may pass and a
 re-measured result above 62.5% accuracy cannot proceed; `base` and a 75% `core`
 outcome remain valid only for a task grandfathered on the platform by the
-morning of Sep 15, 2026, including this revision of it. Never prune passing
+morning of Sep 11, 2026, including this revision of it. Never prune passing
 cases or tighten a threshold to manufacture a qualifying number — repair the
 underlying challenge. Under an explicit Advanced+ campaign, preserve lower-tier
 evidence but do not count it toward the campaign quota.

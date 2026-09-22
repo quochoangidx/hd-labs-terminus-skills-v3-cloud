@@ -184,8 +184,11 @@ Before upload, fail the package if any of these are present:
 - rubrics reference tests, verifier logic, `test.sh`, `test_outputs.py`,
   `/tests/`, hidden tests, CI, reward files, or pytest results
 - `tests/test.sh` writes `/logs/verifier` only after an early exit guard
-- any Dockerfile uses named IDs in `COPY --chown=` or a non-digest-only
-  external image ref in `COPY --from=`
+- any Dockerfile uses a non-digest-only external image ref in `COPY --from=`
+  (a named `COPY --chown=` value is accepted again since Sep 17, 2026)
+- an `environment/docker-compose*.yml` / `.yaml` declares `networks:` or a
+  per-service `network_mode:`, or a Compose task leaves `[agent]` or
+  `[verifier]` `network_mode` set to anything but `"public"`
 - a Hardware / CAD task has not passed the geometry-specific review in
   `docs/creating-tasks/cad-task-guidelines.md`, including built-solid dimension
   coverage and fresh-value recompute for any parametric promise

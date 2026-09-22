@@ -592,9 +592,11 @@ launch blind solvers while any review, audit, Oracle, NOP, or quality failure
 remains.
 
 The strict preflight must include `check_modal_dockerfile_compat` for every
-Dockerfile: numeric `COPY --chown=` IDs and digest-only external-image
-`COPY --from=` refs. Local Docker success does not waive this cloud-builder
-gate.
+Dockerfile: digest-only external-image `COPY --from=` refs. Local Docker success
+does not waive this cloud-builder gate. `COPY --chown=` may be named or numeric.
+When the task ships a Compose file, also run `check_compose_networks`: no
+`networks:` or per-service `network_mode:` in the Compose file, and all three
+`task.toml` phases `"public"`.
 
 Before a full difficulty probe, verify Terminus 3 goal/evidence/inferability:
 
@@ -795,7 +797,7 @@ third run.
 The platform measures difficulty once, after the quality panel passes: four
 runs per current reference model, eight total. A new submission needs at least
 3 of those 8 runs to fail, so no more than 5 may pass and the ceiling is 62.5%
-accuracy. Tasks already on the platform by the morning of Sep 15, 2026 keep the
+accuracy. Tasks already on the platform by the morning of Sep 11, 2026 keep the
 prior one-failure rule, including their later revisions. Local evidence remains
 provisional.
 

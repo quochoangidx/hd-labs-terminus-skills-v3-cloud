@@ -32,7 +32,7 @@ Once the quality panel passes, your task is run against:
 - Claude Opus 5 with Claude Code (4 runs)
 - GPT-5.6 with Codex agent (4 runs)
 
-Pass rate across all 8 runs sets the difficulty tier. For a new submission to proceed, at least **3 runs must fail**; no more than 5 may pass. Tasks already on the platform by the morning of Sep 15, 2026, including later revisions of those tasks, retain the prior one-failure gate.
+Pass rate across all 8 runs sets the difficulty tier. For a new submission to proceed, at least **3 runs must fail**; no more than 5 may pass. Tasks already on the platform by the morning of Sep 11, 2026, including later revisions of those tasks, retain the prior one-failure gate.
 
 > **This is the only measurement, and it is final.** There is no shorter platform check before it and nothing re-runs after acceptance. The tier recorded here is the one your reviewer sees.
 

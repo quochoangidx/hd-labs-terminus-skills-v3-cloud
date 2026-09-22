@@ -58,7 +58,8 @@ class DockerPolicyTests(unittest.TestCase):
 
         self.assertEqual(statuses(checks)["agent-dockerfile:harness-tools"], "fail")
 
-    def test_cloud_builder_rejects_named_copy_chown(self):
+    def test_cloud_builder_accepts_named_copy_chown(self):
+        """The builder resolves --chown names through /etc/passwd (portal 2026-09-17)."""
         self.dockerfile.write_text(
             f"FROM {PYTHON_IMAGE}\n"
             "COPY --chown=root:root app/ /app/\n"
@@ -67,7 +68,7 @@ class DockerPolicyTests(unittest.TestCase):
 
         checks = POLICY.validate_dockerfile(self.dockerfile, "agent")
 
-        self.assertEqual(statuses(checks)["agent-dockerfile:modal-syntax"], "fail")
+        self.assertEqual(statuses(checks)["agent-dockerfile:modal-syntax"], "pass")
 
     def test_cloud_builder_accepts_numeric_chown_and_stage_copy(self):
         self.dockerfile.write_text(
@@ -140,12 +141,43 @@ class DockerPolicyTests(unittest.TestCase):
         nested = task_dir / "environment" / "repo" / "tools"
         nested.mkdir(parents=True)
         (nested / "Dockerfile").write_text(
-            "FROM scratch\nCOPY --chown=appuser:appuser . /app\n"
+            "FROM scratch\n"
+            f"COPY --from=golang:1.24-bookworm@sha256:{'a' * 64} /usr/local/go /go\n"
         )
 
         checks = POLICY.validate_task(task_dir)
 
         self.assertEqual(statuses(checks)["dockerfiles:modal-syntax"], "fail")
+
+    def test_compose_networks_rejects_runner_colliding_keys(self):
+        """check_compose_networks: the runner owns the namespace (portal 2026-09-17)."""
+        errors = POLICY.compose_network_errors(
+            "networks:\n"
+            "  backend:\n"
+            "    internal: true\n"
+            "services:\n"
+            "  app:\n"
+            "    build: .\n"
+            "    networks: [backend]\n"
+            "    network_mode: bridge\n"
+        )
+
+        self.assertEqual(len(errors), 3)
+
+    def test_compose_networks_accepts_default_project_network(self):
+        errors = POLICY.compose_network_errors(
+            "services:\n"
+            "  app:\n"
+            "    build: .\n"
+            "    depends_on:\n"
+            "      - db\n"
+            "    environment:\n"
+            "      - DATABASE_URL=postgresql://user:pass@db:5432/app\n"
+            "  db:\n"
+            f"    image: postgres:15@sha256:{'a' * 64}\n"
+        )
+
+        self.assertEqual(errors, [])
 
 
 class TestSheCalibration(unittest.TestCase):

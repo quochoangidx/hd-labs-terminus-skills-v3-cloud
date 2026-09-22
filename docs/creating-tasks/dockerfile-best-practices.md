@@ -23,7 +23,7 @@ Four Dockerfile checks block by default:
 | `check_pinned_images` | Every `FROM` image must be digest-pinned with `@sha256:<digest>` |
 | `check_sanctioned_base_images` | The final runtime base image must be sanctioned or explicitly exempt |
 | `check_build_context_size` | `environment/` must be at most 100 MiB total, with no file over 50 MiB |
-| `check_modal_dockerfile_compat` | `COPY --chown=` uses numeric user/group IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`) |
+| `check_modal_dockerfile_compat` | `COPY --from=` image refs are digest-only (no `:tag@sha256`) |
 
 The remaining Dockerfile checks warn by default, but warning checks can still emit structural errors when required files such as `environment/` or `environment/Dockerfile` are missing.
 
@@ -31,23 +31,13 @@ The remaining Dockerfile checks warn by default, but warning checks can still em
 
 ## Cloud Image Builder Syntax
 
-Local Docker accepts two patterns that the Terminus 3 cloud image builder **rejects**. Preflight scans every Dockerfile in the submission (`environment/Dockerfile`, `tests/Dockerfile`, and any others) and fails immediately with the line to change — you do not wait for a long eval to crash.
+Local Docker accepts a `COPY --from=` pattern that the Terminus 3 cloud image builder **rejects**. Preflight scans every Dockerfile in the submission (`environment/Dockerfile`, `tests/Dockerfile`, and any others) and fails immediately with the line to change — you do not wait for a long eval to crash.
 
-These rules do **not** change `FROM` pins. `FROM image:tag@sha256:<digest>` is still required. Stage names such as `COPY --from=builder` are still fine. `RUN chown` is unchanged.
+This rule does **not** change `FROM` pins. `FROM image:tag@sha256:<digest>` is still required. Stage names such as `COPY --from=builder` are still fine.
 
-**1. `COPY --chown=` must use numeric IDs.** Named users (`root`, `appuser`) are not resolved.
+Named users and groups in `COPY --chown=` are supported. Values such as `root:root`, `appuser:appuser`, and numeric IDs all pass preflight. The preflight also no longer rejects names on `ADD --chown=`, but the cloud image builder still rejects `ADD` with a local source; use `COPY` for local files.
 
-```dockerfile
-# Bad
-COPY --chown=root:root script.sh /app/script.sh
-COPY --chown=appuser:appuser src/ /app/src/
-
-# Good
-COPY --chown=0:0 script.sh /app/script.sh
-COPY --chown=1000:1000 src/ /app/src/
-```
-
-**2. `COPY --from=` image refs must be digest-only.** If the source is an image (not a build stage), drop the `:tag` and keep `@sha256:<digest>`.
+**`COPY --from=` image refs must be digest-only.** If the source is an image (not a build stage), drop the `:tag` and keep `@sha256:<digest>`.
 
 ```dockerfile
 # Bad — tag and digest together
@@ -291,13 +281,15 @@ Images must contain everything the task needs at build time. `[environment].netw
 
 ### Internet access (`network_mode`)
 
-Network access is set **per phase**, and each setting must accurately match what that phase genuinely needs.
+Network access is set **per phase**, and each setting must accurately match what that phase genuinely needs. The choices below apply to single-container tasks; Compose tasks use the exception that follows.
 
 - **`[environment].network_mode` must be `"public"`** on every task. The image is built and the agent harness installed during this phase, and both need the network. Closing it here fails the task before the agent runs — this is not an author choice.
 - **`[agent].network_mode`** — `"public"` or `"no-network"`. Use `"no-network"` when the task should be solved offline, for example when network access would let the agent retrieve the answer rather than do the work.
 - **`[verifier].network_mode`** — `"public"` or `"no-network"`. Normally `"no-network"`: verifier dependencies belong in `tests/Dockerfile`, not fetched at grade time.
 
 **An offline task keeps `[environment]` public and closes `[agent]`.** Making the environment `"no-network"` does not produce an offline task — it produces a task that cannot build.
+
+**Compose tasks must keep all three phases public.** When `environment/docker-compose*.yml` or `.yaml` is present, set `[environment]`, `[agent]`, and `[verifier]` to `"public"`. The runner cannot apply separate phase network policies to Compose environments. If the task must run offline, package it as a single container.
 
 Independently of these settings, all of your task's own dependencies must still be baked into the image at build time, and `test.sh` must never fetch from the network at trial time. A `"public"` phase exists for the task's work — not as a substitute for a complete image.
 
@@ -325,7 +317,7 @@ Harbor resolves verifier mode from the *combination* of keys, not from one requi
 
 **Terminus-specific (not Harbor):** CI requires the explicit `[verifier].environment_mode = "separate"` key, and `artifacts` must be a **top-level** key. The implicit Harbor form (`[verifier.environment]` with no `environment_mode`) is valid separate mode in Harbor; Terminus rejects it. Omitting both would be Harbor's **shared** default; Terminus rejects that too. Set the explicit key so accepted tasks always run separate. See [CI Checks Reference](/portal/docs/testing-and-validation/ci-checks-reference).
 
-**Separate mode protects the verifier from the agent environment, not from code that the verifier itself executes.** If a test rebuilds and runs agent-supplied code inside the verifier, do not assume verifier-only assets are inaccessible to that process. Goldens, held-out fixtures, and `test_outputs.py` itself live in that container. Drop to an unprivileged uid **before** that exec, confirm that uid cannot read verifier-only assets or `/logs/verifier` (including `reward.txt`), and probe it in a test. A single `USER` for the whole verify phase cannot express this split: the verifier must read the goldens while the agent's program must not. Do not prescribe a `COPY` mode or a chmod octal — cloud `COPY --chown=` uses numeric IDs and builder-assigned modes; build the boundary in the image and the runner.
+**Separate mode protects the verifier from the agent environment, not from code that the verifier itself executes.** If a test rebuilds and runs agent-supplied code inside the verifier, do not assume verifier-only assets are inaccessible to that process. Goldens, held-out fixtures, and `test_outputs.py` itself live in that container. Drop to an unprivileged uid **before** that exec, confirm that uid cannot read verifier-only assets or `/logs/verifier` (including `reward.txt`), and probe it in a test. A single `USER` for the whole verify phase cannot express this split: the verifier must read the goldens while the agent's program must not. Do not prescribe a `COPY` mode or a chmod octal — build the boundary in the image and the runner.
 
 ---
 
@@ -401,9 +393,9 @@ Only change permissions for files that actually need it. Do not recursively rewr
 RUN chmod -R 755 /app
 RUN chown -R appuser:appuser /app
 
-# Good — COPY --chown= must be numeric IDs (named users fail cloud builds)
+# Good — set metadata while copying only the files that need it
 COPY --chmod=0755 run.sh /usr/local/bin/run-task
-COPY --chown=1000:1000 src/ /app/src/
+COPY --chown=appuser:appuser src/ /app/src/
 ```
 
 ---

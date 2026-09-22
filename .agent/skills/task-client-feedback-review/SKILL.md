@@ -308,9 +308,10 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
 - hidden solution walkthroughs or bug hints in environment docs/comments
 - missing `tmux`/`asciinema` in the task image (agent runs fail with
   `Failed to start tmux session` / `verifier_did_not_run`)
-- any Dockerfile using a named `COPY --chown=` value or an external-image
-  `COPY --from=` ref other than digest-only `image@sha256:<digest>`; the cloud
-  builder blocks these even when local Docker accepts them
+- any Dockerfile using an external-image `COPY --from=` ref other than
+  digest-only `image@sha256:<digest>`; the cloud builder blocks it even when
+  local Docker accepts it. A named `COPY --chown=` value is no longer a finding
+  (accepted again since Sep 17, 2026), but `ADD` with a local source still is.
 - `tests/` or `solution/` copied into the Docker image
 - `privileged: true`, `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities, or
   `/var/run/docker.sock` mounts in docker-compose
@@ -339,7 +340,13 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   error when the reward write itself fails.
 - missing or invalid per-phase network policy: `[environment].network_mode`
   must be `"public"`, while `[agent]` and `[verifier]` must each explicitly
-  declare `"public"` or `"no-network"`.
+  declare `"public"` or `"no-network"`. When an `environment/docker-compose*.yml`
+  / `.yaml` file is present, all three must be `"public"`.
+- Compose networking keys that `check_compose_networks` blocks: a top-level
+  `networks:` block, a per-service `networks:` list, or a per-service
+  `network_mode:` in `environment/docker-compose*.yml` / `.yaml`. These fail the
+  project before the image builds; delete them and keep `depends_on` plus
+  service-name DNS.
 - verifier truth derived from agent-writable paths, manual copying of
   agent-controlled trees that can follow symlinks into verifier fixtures,
   instruction/test numeric-tolerance drift, or an optimization/tie-break

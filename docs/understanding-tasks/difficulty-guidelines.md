@@ -42,7 +42,7 @@ Difficulty is measured **once**, in a single 8-run stage, and the result is fina
 
 **For new submissions, at least 3 of the 8 platform runs must fail.** No more than 5 may pass, so the maximum measured accuracy that can proceed is **62.5%**. Previously, one failure was enough. Fix a task that misses this gate by making the underlying challenge harder, not by narrowing a grading threshold.
 
-Tasks already on the platform by the morning of **Sep 15, 2026** are grandfathered under the prior one-failure rule. Later revisions of those existing tasks remain grandfathered.
+Tasks already on the platform by the morning of **Sep 11, 2026** are grandfathered under the prior one-failure rule. Later revisions of those existing tasks remain grandfathered.
 
 There is no separate iteration measurement, and nothing runs after acceptance — the tier a reviewer sees is the one your task keeps.
 
