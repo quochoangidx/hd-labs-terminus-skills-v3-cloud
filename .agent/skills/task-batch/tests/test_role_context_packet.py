@@ -27,8 +27,8 @@ class RoleContextPacketTests(unittest.TestCase):
                 "tbrain-example",
                 [("instruction", instruction), ("task_visible_tree", visible)],
             )
-            self.assertEqual("gpt-5.6-luna", result["model"])
-            self.assertEqual("high", result["reasoning_effort"])
+            self.assertEqual("gpt-5.6-sol", result["model"])
+            self.assertEqual("medium", result["reasoning_effort"])
 
     def test_fairness_packet_rejects_tests_and_solution(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
