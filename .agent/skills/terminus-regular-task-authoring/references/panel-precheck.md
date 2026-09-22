@@ -1,4 +1,4 @@
-# Deterministic quality-panel precheck
+# Deterministic obligation precheck
 
 Run this fail-closed gate before spending reviewer sessions. It validates
 authored scope/closure evidence and existing deterministic receipts. It cannot
@@ -124,7 +124,7 @@ directory. Bind the full form to the exact task tree. Minimal shape:
   name. `universal_rule`, `silence` and `coverage_envelope` are required; add
   `entrypoint_scope` when tests drive public helpers directly. Each anchor must
   appear verbatim in the cited file. Rationale and worked examples:
-  [contract closure](../../terminus-regular-task-authoring/references/contract-closure.md).
+  [contract closure](contract-closure.md).
 - **`expected_source`** — where a witness's expected value comes from, one of
   `independent_model`, `authority_text`, `shipped_differential`, `invariant`,
   `oracle_recorded`. The last records what the reference already does, so it
@@ -157,7 +157,7 @@ reach a count.
 Before scaffolding, planned implementation paths need not exist:
 
 ```bash
-python3 .agent/skills/task-quality-panel-judgement/scripts/panel_precheck.py \
+python3 .agent/skills/terminus-regular-task-authoring/scripts/panel_precheck.py \
   workspace/tasks/<slug> \
   --manifest workspace/reports/<slug>/panel-precheck-manifest.json \
   --design-only
@@ -167,7 +167,7 @@ After strict Docker closure, require current paths, verifier inventory,
 Oracle/NOP/noexec, demotion and minimal wrong-path receipts:
 
 ```bash
-python3 .agent/skills/task-quality-panel-judgement/scripts/panel_precheck.py \
+python3 .agent/skills/terminus-regular-task-authoring/scripts/panel_precheck.py \
   workspace/tasks/<slug> \
   --manifest workspace/reports/<slug>/panel-precheck-manifest.json \
   --full --output workspace/reports/<slug>/panel-precheck.json

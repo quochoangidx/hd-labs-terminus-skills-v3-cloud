@@ -1,12 +1,20 @@
 ---
 name: task-quality-panel-judgement
-description: Run a review-only Terminus 3 quality-panel audit with ten fresh-context subagents, two independent reviewers per axis, isolated file visibility, and evidence-based consolidation. Use before submission or after a platform quality-panel return. Does not itself authorize repairs or replace deterministic preflight or difficulty measurement.
+description: Run a review-only Terminus 3 quality-panel audit with fresh-context subagents, isolated per-axis file visibility, and evidence-based consolidation. Primary use is after a platform quality-panel return, reviewing only the returned axis with two reviewers. The full five-axis ten-reviewer panel is an explicit opt-in. Does not authorize repairs or replace deterministic gates or difficulty measurement.
 ---
 
 # Terminus Quality Panel Judgement
 
-Audit one frozen Terminus task snapshot with exactly ten fresh reviewers,
-two independently reviewing the full scope of each of these five axes:
+Reviewers are the expensive instrument here. Point them at a known target.
+
+Since `builder_certified` became the default creation profile, tasks are built
+without a panel: the five axes are carried by executable receipts plus one
+reviewer. This skill's main job is now **diagnosis after a platform return** —
+reproduce the reported finding locally on the axis it names, and prove the repair
+closes it, rather than resubmitting and waiting.
+
+Audit one frozen Terminus task snapshot with fresh reviewers, two independently
+reviewing the full scope of an axis, across these five:
 
 1. `coherent_contract`
 2. `correct_reference_solution`
@@ -14,16 +22,23 @@ two independently reviewing the full scope of each of these five axes:
 4. `sound_verifier`
 5. `deterministic_execution`
 
-The ten reviewers are review-only and must not edit files. Always finish all
-five axes on the same snapshot, even when an early axis returns a blocker. Never
-repair between axis results: partial repair contaminates the shared snapshot and
-causes serial fix-review loops.
+Reviewers are review-only and must not edit files. Finish every axis you started
+on the same snapshot, even when an early one returns a blocker. Never repair
+between axis results: partial repair contaminates the shared snapshot and causes
+serial fix-review loops.
 
 ## Select the operating mode
 
-Use **orchestrator mode** when the user asks to run the whole panel on a task.
-Follow the remaining sections to prepare packets, spawn reviewers, and combine
-their verdicts.
+Use **targeted mode** by default, after a platform return. Run **only the
+returned axis**, two reviewers, on the exact returned snapshot. Read the platform
+report first and classify its findings with
+`../task-revise-flag-remediation/SKILL.md`; use this skill to reproduce a finding
+you could not confirm by reading, or to show a repair closed it. Two sessions,
+not ten. Do not widen to other axes because they are cheap to add — they are not.
+
+Use **orchestrator mode** only when the user explicitly asks for a full panel, or
+when the active profile is `panel_ready`. Follow the remaining sections to
+prepare all five packets, spawn ten reviewers, and combine their verdicts.
 
 Use **isolated reviewer mode** when the prompt assigns exactly one axis and one
 packet path. Loading this `SKILL.md` is required by Codex skill dispatch and does
@@ -47,21 +62,17 @@ Its editing steps apply only when repairs were requested.
 
 The portal-mirrored docs are authoritative when they conflict with this skill.
 
-## Run deterministic precheck before reviewers
+## Require the deterministic gate first
 
-Before preparing packets, read
-[`references/panel-precheck.md`](references/panel-precheck.md). Require the
-builder to create the snapshot-bound obligation manifest and run
-`scripts/panel_precheck.py --full`. During candidate selection, use its
-`--design-only` mode to reject disconnected/composite causal cores before
-scaffolding.
+The obligation gate now lives with the other gates, in
+`../terminus-regular-task-authoring/`: `scripts/panel_precheck.py` and
+[`references/panel-precheck.md`](../terminus-regular-task-authoring/references/panel-precheck.md).
+Every profile runs it, panel or not.
 
-The full precheck must pass before any reviewer is spawned. It binds retained
-contract obligations to authority, implementation sites, verifier witnesses,
-strict Oracle/NOP/noexec evidence, minimal natural wrong paths, and a harness
-bypass check. Fix deterministic blockers without spending panel sessions. Do
-not expose the manifest or precheck result to fresh reviewers; they must judge
-the task surfaces independently.
+A passing snapshot-bound `panel_precheck.py --full` is a precondition for
+spawning any reviewer. Fix deterministic blockers first — they cost nothing to
+find and a reviewer session to rediscover. Do not expose the manifest or the
+precheck result to reviewers; they must judge the task surfaces independently.
 
 `mechanically_ready` is not an axis verdict. The script cannot prove semantic
 coherence, reference correctness, completeness against an omitted branch, or
@@ -134,9 +145,12 @@ which keeps the dependency inventory auditable. Packet recipes include document
 hashes and the selected file list; changed recipes preserve earlier packets under
 the same task snapshot rather than silently reusing stale judge docs.
 
-## Spawn ten fresh reviewers
+## Spawn fresh reviewers
 
-Spawn exactly two reviewers (`A` and `B`) for each axis. Keep five axis packets;
+In targeted mode, spawn exactly two reviewers for the one returned axis and stop;
+everything below about five packets and ten reviewers applies to a full panel.
+
+Spawn exactly two reviewers (`A` and `B`) for each axis in scope. Keep one packet per axis;
 both reviewers of an axis receive the same packet bytes and the same full brief,
 not complementary checklist halves. Record unique IDs `<axis>-A` and `<axis>-B`.
 Use:

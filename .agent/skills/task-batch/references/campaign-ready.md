@@ -456,7 +456,7 @@ The candidate must:
   discriminating coverage of every promised public surface and real interaction;
   do not impose unit/cluster/shape quotas or inflate scope to satisfy them;
 - for `panel_ready`, create the obligation manifest and pass
-  `task-quality-panel-judgement/scripts/panel_precheck.py --design-only` before
+  `terminus-regular-task-authoring/scripts/panel_precheck.py --design-only` before
   scaffolding; a disconnected core or serialization-only bundle is rejected;
 - record its source repository, base commit, task contract, category, language, and novelty evidence;
 - define the pattern-blind domain crux and pass the convention/assertion audit

@@ -19,7 +19,6 @@ sản xuất nhiều task, và tránh Codex đọc lại repo quá nhiều lần
 | 1 | **Task Miner** | `/task-miner` | Mine metadata/scoring từ closed issue/PR upstream quota thấp-trung bình, không tạo task |
 | 2 | **Task Clone** | `/task-clone` | Transform mined candidate thành Terminus Regular task trong `workspace/tasks/tbrain-<problem-slug>` |
 | 3 | **Terminus Regular Task Authoring** | `/terminus-regular-task-authoring` | Tạo/audit cấu trúc Regular task theo Platform Submission Guide |
-| 4 | **Issue To Regression Test** | `/issue-to-regression-test` | Biến issue/PR thành verifier tests hành vi, có regression và anti-shortcut |
 | 5 | **Terminus Hard Python Verifier** | `/terminus-hard-python-verifier` | Viết verifier/oracle cho Python debugging task đủ khó |
 | 6 | **Upstream Repo Sanitizer** | `/upstream-repo-sanitizer` | Làm sạch `environment/repo`, giữ build context dưới giới hạn CI |
 | 7 | **Task Harbor Runner** | `/task-harbor-runner` | Chạy và debug Harbor: oracle, nop, CI checks, real agents |
@@ -40,14 +39,12 @@ terminus-bench/
 |   |-- task-miner/SKILL.md
 |   |-- terminus-regular-task-authoring/SKILL.md
 |   |-- terminus-rust-task-authoring/SKILL.md
-|   |-- issue-to-regression-test/SKILL.md
 |   |-- terminus-hard-python-verifier/SKILL.md
 |   |-- upstream-repo-sanitizer/SKILL.md
 |   |-- task-harbor-runner/SKILL.md
 |   |-- task-zip-submit/SKILL.md
 |   |-- task-zip-validator/SKILL.md
 |   |-- sync-doc-and-skill/SKILL.md
-|   |-- find-task-prs/SKILL.md
 |   |-- task-local-solve-probe/SKILL.md
 |   `-- task-client-feedback-review/
 |       |-- SKILL.md
@@ -97,8 +94,6 @@ task-clone                         [transform candidate thành task]
         ↓
 upstream-repo-sanitizer
         ↓
-issue-to-regression-test
-        ↓
 terminus-hard-python-verifier
         ↓
 terminus-regular-task-authoring    [audit/sửa cấu trúc task]
@@ -117,7 +112,6 @@ task-zip-submit
 1. **task-miner**: Quét closed issue/PR upstream, ưu tiên nguồn quota thấp-trung bình như `pytest-dev/pytest`, `pypa/pip`, `django/django`, và chọn lọc `pandas-dev/pandas`. Skill này chỉ xuất artifact ngắn ở `workspace/reports/mined-candidates/`, không viết Dockerfile, verifier, oracle, hay task folder.
 2. **task-clone**: Đọc mined candidate artifact rồi transform thành task. Nếu artifact đã đủ thông tin, không re-mine GitHub và không quét lại lịch sử repo.
 3. **upstream-repo-sanitizer**: Clone/stage repo vào `environment/repo`, prune file nặng, xóa file giống secret, kiểm tra `environment/ <= 100 MiB`.
-4. **issue-to-regression-test**: Chuyển bug upstream thành verifier tests: direct regression, boundary, normal behavior, anti-shortcut.
 5. **terminus-hard-python-verifier**: Hoàn thiện `tests/test_outputs.py`, `tests/test.sh`, oracle pattern và coverage cho Python Hard task.
 6. **terminus-regular-task-authoring**: Audit `instruction.md`, `task.toml`, Dockerfile, oracle và verifier theo Platform Submission Guide.
 7. **task-client-feedback-review**: Review prompt/rubric/package theo feedback client hiện tại. Mặc định review-only; chỉ sửa khi user yêu cầu.
@@ -129,7 +123,7 @@ task-zip-submit
 - **task-miner** là bước lọc nhanh. Dừng khi đã có candidate đủ điểm, tránh over-search.
 - **task-clone** là bước transform chính. Khi người dùng đưa `mined_candidate.json`, bắt đầu từ đây và không mine lại.
 - **upstream-repo-sanitizer** chạy trước khi build Docker để tránh fail vì build context quá lớn hoặc file bị blacklist.
-- **issue-to-regression-test** và **terminus-hard-python-verifier** nên dùng cùng nhau: một skill chuyển issue thành test cases, skill còn lại chuẩn hóa verifier cho Terminus.
+- **terminus-hard-python-verifier** chuẩn hóa verifier cho Terminus; thiết kế test (assertion policy, instruction/test symmetry, anti-shortcut shapes) nằm ở `terminus-regular-task-authoring/references/contract-closure.md`.
 - **task-client-feedback-review** chạy trước upload hoặc resubmission để bắt
   prompt leakage, rubric leakage, metadata sai, `tests/` chứa wheels, root
   `pyproject.toml`, canary, hidden hints trong environment, và ZIP sai layout.
@@ -474,21 +468,6 @@ Ví dụ:
   - Kiểm tra `instruction.md`, `task.toml`, Dockerfile, oracle, verifier.
   - Đảm bảo task không copy `tests/` hoặc `solution/` vào image.
 - **Khi nào dùng**: Khi dựng task mới hoặc cần audit cấu trúc trước khi chạy Harbor.
-
----
-
-### 5) Issue To Regression Test
-
-- **Slash command gợi ý**: `/issue-to-regression-test`
-- **Input**: Issue/PR đã chọn và hành vi cần reproduce.
-- **Output**: Thiết kế verifier tests cho `tests/test_outputs.py`.
-- **Mục tiêu**:
-  - Tạo direct regression reproducer.
-  - Thêm boundary/ordering case.
-  - Thêm normal behavior preservation.
-  - Thêm anti-shortcut case.
-  - Đảm bảo mọi behavior trong tests đều có trong `instruction.md`.
-- **Khi nào dùng**: Sau khi đã chọn bug upstream, trước khi viết verifier.
 
 ---
 

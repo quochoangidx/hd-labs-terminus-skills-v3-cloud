@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
-"""Fail-closed deterministic readiness check before a semantic quality panel.
+"""Fail-closed deterministic obligation gate for a Terminus 3 task.
 
-This validates authored obligation evidence and existing deterministic receipts.
-It deliberately never emits a semantic quality-axis ``None`` verdict.
+Validates authored obligation evidence and existing deterministic receipts: closure
+clauses, expected-value provenance, witness discrimination, orphan units in both
+directions, restriction enforcement, determinism and wrong-path receipts.
+
+Every profile runs it. Under ``builder_certified`` it carries most of what a review
+panel would otherwise be asked to check; it never emits a semantic quality-axis
+``None`` verdict, because no script can establish semantic coherence or reference
+correctness over a whole domain.
+
+The file name is historical: it predates the gate being used outside the panel flow.
 """
 
 from __future__ import annotations
@@ -13,8 +21,7 @@ import json
 import sys
 from pathlib import Path
 
-AUTHORING_SCRIPTS = Path(__file__).resolve().parents[2] / "terminus-regular-task-authoring" / "scripts"
-sys.path.insert(0, str(AUTHORING_SCRIPTS))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from verifier_architecture_check import validate_matrix  # noqa: E402
 
 

@@ -23,7 +23,7 @@ Required path:
 
 1. Mine and scaffold using the bounded scope ledger. Keep one primary outcome,
    one causal core and supplied/narrow support boundaries.
-2. Run `task-quality-panel-judgement/scripts/panel_precheck.py --design-only`
+2. Run `terminus-regular-task-authoring/scripts/panel_precheck.py --design-only`
    before scaffolding. Reject a disconnected core or serialization-only bundle.
 3. Run relevant deterministic structure, isolation and cloud-compat checks.
 4. Run exact local Docker Oracle=1, NOP=0 and noexec Oracle=1, then require a

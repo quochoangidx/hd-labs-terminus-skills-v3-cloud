@@ -156,3 +156,59 @@ When a contract finding lands, add a deterministic sentence to the authority.
 Loosen or delete a test only when it is demanding something no authority
 supports. Patching the test to match the reference hides the defect and keeps the
 verifier circular.
+
+## 12. Assert behaviour, not shape
+
+An assertion should fail when the behaviour is wrong and pass when it is right in a
+way the author did not anticipate. That rules out most of the convenient forms.
+
+Prefer:
+
+- parse JSON/XML/CSV with a real parser and assert on the structure, rather than
+  comparing whole files;
+- assert the category of an exit status, not an incidental code;
+- assert the absence of an internal error for a bug the contract says is
+  recoverable;
+- assert a side-effect file that proves a step did or did not run;
+- assert an exact diagnostic string only where the authority fixes that string.
+
+Avoid:
+
+- inspecting source text, which any correct rewrite breaks;
+- importing private implementation details, unless the contract is explicitly
+  about internals;
+- checking that a function, flag or key merely exists;
+- a loose substring match where the contract promises an exact message — it
+  accepts wrong output that happens to contain the right fragment.
+
+## 13. Instruction/test symmetry
+
+Before freezing the verifier, list every literal and public symbol the tests
+assert: command names, paths, function and constant names, output keys, exact
+error strings, ordering guarantees, boundary values.
+
+Each one must be derivable from what the candidate can see — stated in
+`instruction.md`, fixed by the authority, or inferable from the visible evidence
+under the task's declared model. **If a literal cannot fairly be disclosed, the
+test asserting it has to go or soften**, not the other way round.
+
+Preservation cases need the same treatment and are the ones usually missed: a
+mode or flag that is not the main subject is still asserted behaviour, and a
+candidate who never learns it is in scope cannot be expected to keep it.
+
+## 14. Anti-shortcut shapes
+
+A wrong path proves the verifier rejects one specific wrong answer. These shapes
+close the cheaper cheats a candidate reaches for before that:
+
+- the same scenario with different data, so a hardcoded output fails;
+- a pair just below and just above a threshold;
+- the normal case with the trigger absent, so a blanket change fails;
+- a checksum over files the contract forbids editing;
+- a side-effect sentinel proving a later step did not silently skip;
+- fixture data that looks arbitrary but is deterministic, so it cannot be
+  recognised and special-cased.
+
+Pick the ones the contract actually exposes. A shape that no plausible shortcut
+would reach is padding, and padding is what the obligation manifest's
+`wrong_but_plausible` field exists to prevent.
