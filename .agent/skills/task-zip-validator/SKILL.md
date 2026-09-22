@@ -33,8 +33,9 @@ A single argument: path to a `.zip` file (absolute or relative).
 4. **Auto-fix** — apply fixes for known issues
 5. **Oracle + Nop** — run harbor tests if Docker available
 6. **Quality panel audit** — review `coherent_contract`,
-   `correct_reference_solution`, `protected_ground_truth`, and
-   `sound_verifier`; only `None` on every axis clears this gate
+   `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`,
+   and `deterministic_execution`; `Minor` and `Major` block on every axis
+   except `protected_ground_truth`, where only `Major` blocks
 7. **Report** — summarize findings and fixes
 8. **Re-zip** — if fixes applied, create updated ZIP
 
@@ -203,7 +204,7 @@ Check `environment/Dockerfile`:
 | Check | Rule | Auto-fix |
 |-------|------|----------|
 | Digest pin | Every external `FROM` must end in `@sha256:<64hex>`; canonical `FROM image:tag@sha256:<digest>` is valid and expected, while a plain floating `FROM image:tag` is not | ❌ manual (need to pull digest) |
-| Numeric `COPY --chown` | Every Dockerfile must use numeric IDs such as `--chown=0:0` or `--chown=1000:1000`; named users fail the cloud builder | ✅ replace when the intended UID/GID is known |
+| `COPY --chown` values | Named users/groups and numeric IDs are both accepted by the cloud builder since Sep 17, 2026 — do not flag either form. `ADD` with a local source is still unsupported; use `COPY` | ✅ convert a local-source `ADD` to `COPY` |
 | Digest-only image `COPY --from` | External image refs must be `image@sha256:<digest>`, never `image:tag@sha256:<digest>`; stage aliases remain valid | ❌ manual |
 | Canonical final-stage base | Final stage must use a **canonical Terminal-Bench base image** (digest-pinned) when one matches the task's language, OR a non-canonical base with a brief credible justification in the `Dockerfile`/`README.md`. Canonical refs: Python `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`, Node `…/node:22-bookworm-slim@sha256:f3a68cf41a855d227d1b0ab832bed9749469ef38cf4f58182fb8c893bc462383`, Go `…/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac`, Rust `…/rust:1.85-slim@sha256:9f841bbe9e7d8e37ceb96ed907265a3a0df7f44e3737d0b100e7907a679acb36`, Java `…/eclipse-temurin:21-jdk-jammy@sha256:25d1276565738d3c805e632a4542c3a7598866ef967f4def6544c15de3a74b14`, GCC `…/gcc:13-bookworm@sha256:930f2ebe239275fa67226654cb79273ea34eee672ae61c8a39f689c37fb7ac5c`, Ruby `…/ruby:3.3-slim-bookworm@sha256:e76733e94b3a5893e4a141024ef3a583dc10781dc24becebf74f9c9f9a33e3df`, Maven `…/maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e`, Debian `…/debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d`, Ubuntu `…/ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932`. Builder stages may use any task-appropriate toolchain image. | ❌ manual |
 | **tmux + asciinema REQUIRED** | MUST be in apt-get install. Missing either = ALL agent runs fail with zero output. | ✅ add to apt-get |
@@ -215,6 +216,8 @@ Check `environment/Dockerfile`:
 | No `--mount=type=bind` | NO BuildKit `RUN --mount=type=bind` — convert to plain `COPY` + `rm -rf` in the same layer | ❌ manual (convert to COPY + rm) |
 | `set -uo pipefail` | test.sh must have `set -uo pipefail` (not `-e`) | check |
 | No privileged/dangerous caps | docker-compose must NOT use `privileged: true`, `cap_add` of `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE`, or mount `/var/run/docker.sock`; volume mounts must not shadow reserved paths (`/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`) | ❌ manual |
+| Compose networking (BLOCKING) | `environment/docker-compose*.yml` / `.yaml` must NOT declare a top-level `networks:` block, a per-service `networks:` list, or a per-service `network_mode:` — `check_compose_networks` fails the project before the image builds. `depends_on` and service-name DNS stay valid | ✅ delete those keys |
+| Compose phase networking (BLOCKING) | When any Compose file is present, `task.toml` must set `[environment]`, `[agent]`, and `[verifier]` `network_mode = "public"`; the runner cannot apply separate phase policies to Compose. An offline task must be repackaged as a single container | ✅ set all three to `"public"` |
 
 **Agent image vs verifier image:** `environment/Dockerfile` builds the agent
 environment and must never copy `tests/` or `solution/`. `tests/Dockerfile`
@@ -508,6 +511,8 @@ Print summary table:
 | per-phase network_mode   | ✅     | -          |
 | category/subcategory     | ✅     | -          |
 | docker-compose flags     | N/A    | -          |
+| compose networking keys  | N/A    | -          |
+| compose public phases    | N/A    | -          |
 | Dockerfile digest pin    | ✅     | -          |
 | Canonical base image     | ✅     | -          |
 | Cloud COPY syntax        | ✅     | -          |
@@ -564,7 +569,8 @@ Top recurring CI failures from empirical data:
 1. **verifier isolation** — missing `tests/Dockerfile`, `environment_mode = "separate"`, top-level artifacts, or artifact landing directories
 2. **verifier deps** — missing pinned pytest/pytest-json-ctrf in `tests/Dockerfile` or runtime installation in test.sh
 3. **FROM not digest-pinned** — missing `@sha256:` suffix
-4. **check_modal_dockerfile_compat** — named `COPY --chown=` IDs or an external-image `COPY --from=` ref that is not digest-only
+4. **check_modal_dockerfile_compat** — an external-image `COPY --from=` ref that is not digest-only (named `COPY --chown=` values are fine again)
+4b. **check_compose_networks** — Compose file declaring `networks:` or a per-service `network_mode:`, or a Compose task whose `task.toml` phases are not all `"public"`
 5. **check_sanctioned_base_images** — final stage uses a non-canonical base with no (or vague) justification; or uses a different digest/registry than the canonical entry for that language (e.g. bare `golang@sha256:…` instead of the canonical `public.ecr.aws/docker/library/golang:1.24-bookworm@sha256:1a6d…`)
 6. **ruff errors** — unused imports, ambiguous variable names
 7. **secret files** — .pem/.key/.crt in environment/

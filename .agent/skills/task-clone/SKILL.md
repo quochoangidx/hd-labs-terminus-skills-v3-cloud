@@ -243,8 +243,145 @@ Reject all candidates that are:
 - likely to pass current frontier agents in one shot
 
 Difficulty is language-independent. Keep a candidate only when it is non-trivial
-and likely to produce at least one failure in the four-run iteration gate; do not
+and likely to produce at least three failures in the eight-run measurement; do not
 force Python into a special tier.
+
+## Difficulty Design
+
+Decide difficulty here, before scaffolding. Difficulty checked only at
+packaging is difficulty you cannot change without rebuilding the task.
+
+Two quantities move independently:
+
+```text
+difficulty    ∝ coupling between obligations
+panel risk    ∝ count of obligations
+```
+
+Each retained obligation creates five proof duties, one per panel axis:
+contract wording, Oracle branch, ground-truth surface, discriminating witness,
+and determinism. Count raises all five at once; coupling raises none of them.
+So a task gets harder by tightening the causal graph over the obligations it
+already has, never by adding obligations. `bounded-task-design.md` governs what
+enters the core; this section governs how much the core must interact.
+
+### Coupling is the lever
+
+An obligation set is coupled when a plausible repair of one obligation changes
+the correct behavior of another before serialization. Record the causal graph
+in the scope ledger and require, for the causal core:
+
+- at least one genuine result-changing interaction, per the semantic-coverage
+  gate; for an Advanced+ claim, prefer a core where most obligation pairs
+  interact rather than one interacting pair bolted onto independent work;
+- at least two natural-but-wrong repairs that fail on **disjoint** witness sets;
+- each plausible wrong repair cheaper than the correct one. A trap as expensive
+  as the real fix catches nobody and contributes no failures to the 8-run gate.
+
+Counts stay diagnostics. `bounded-task-design.md` is explicit that no number of
+mechanisms, interactions, or traps proves a tier, and a naturally thin candidate
+is redesigned or rejected rather than padded to reach a number. Use the observed
+portfolio only to notice an outlier worth re-reading, not as a target:
+`tbrain-c1-security` froze at six mechanisms, four interactions, ten mutants.
+
+### Three axes of difficulty
+
+Classify the candidate's difficulty source before choosing a pattern:
+
+```text
+A  inference depth      the contract must be reconstructed from distributed evidence
+B  coupling degree      several obligations must hold simultaneously
+C  verification reach   hidden checks probe understanding, not example-matching
+```
+
+Roughly, `P3`/`P5` supply A, `P1`/`P2`/`P8` supply B, and `P4`/`P6`/`P7` supply
+C. A task strong only in A tends to produce `near_miss`: the agent models the
+domain correctly and slips on isolated cases. A task strong only in B without
+inference is length, which `difficulty-guidelines.md` rejects. Aim for A and B
+together with enough C to discriminate; all three maximal usually fails
+`coherent_contract` because the contract outgrows what the instruction can
+state.
+
+### Difficulty operators
+
+These are transformations applied within a pattern, not patterns themselves. A
+pattern fixes the causal topology; an operator raises the cost of solving it.
+Recording an operator never substitutes for the pattern-blind crux.
+
+- **Defensive documentation.** Comments, docstrings, or design notes justify the
+  incorrect behavior in plausible domain language. Legitimate only when
+  agent-visible evidence — data, runtime behavior, an in-repo test — refutes the
+  prose without outside knowledge. If the prose is the only authority, this is
+  unstated-requirement ambiguity and the task is broken.
+- **Symptom-cause displacement with a cheap decoy.** The most reproducible
+  symptom has a local repair that is genuinely cheaper than the correct one and
+  fails only on interaction witnesses. This is the concrete form `P1` assumes;
+  state which decoy and which witnesses separate it.
+- **Cross-representation disagreement.** Two visible representations of the same
+  fact disagree — schema against migration, documentation against
+  implementation, configuration against live state — and precedence is inferable
+  from evidence. A static, cheaper relative of
+  `X-dynamic-authority-reconciliation`, which needs an event schedule.
+- **Verifier-aware adversarial pass.** See Workflow step 15.
+
+### Size budgets
+
+Instruction length is not a difficulty lever. Research on terminal-agent
+benchmark design finds the strongest tasks fit roughly two paragraphs and assume
+an experienced engineer; long instructions usually describe procedure, which
+hands over the solution, or output format, which measures compliance rather than
+capability and surfaces later as a `task_specification` flag.
+
+Advisory, from the frozen portfolio — a breach is a prompt to re-read, not a
+failure:
+
+| Surface | Observed range | Read again when |
+| --- | --- | --- |
+| `instruction.md` | 3–27 lines | over ~60 lines |
+| `solution/` implementation | ~490–1400 LOC | the Oracle cannot cover every branch |
+| `tests/test_outputs.py` | ~70–280 lines | logic grows past a corpus driver |
+| graded corpus cases | 28–219 | cases outnumber distinguishable rules |
+
+Corpus size is not semantic rank: a large matrix over one branch remains one
+mechanism. The verifier body stays small because cases live in
+`tests/corpus.json` and are generated through `_make_case`; grading logic that
+grows instead of the corpus usually signals obligations that never coupled.
+
+### Design sheet
+
+Write this before scaffolding; materialize it as
+`workspace/reports/<slug>/difficulty-design.json` at Workflow step 7 alongside
+the scope ledger.
+
+```yaml
+crux:        # one sentence, no catalog vocabulary (P*, X*, coupled-invariant)
+evidence:    # visible sources from which the crux is inferable
+deliverable: # the artifact and its consumers
+coupling:    # edges: obligation -> obligation, and what changes
+traps:       # >=2 cheap wrong repairs, each with its disjoint witness IDs
+cheats:      # shortest paths to reward without the work, and the block for each
+axes:        # {inference: low|med|high, coupling: ..., verification: ...}
+operators:   # applied difficulty operators, if any
+```
+
+If the crux cannot be stated without catalog vocabulary, the candidate is a
+reskin: return it to mining. This is the pattern-blind crux gate in
+`frontier_task_design_patterns.md`, in the form used during cloning.
+
+### Every difficulty decision carries a receipt
+
+Each lever threatens one axis and is cleared by one existing artifact. No new
+receipts are introduced here; the change is that they are owed at design time
+rather than discovered at packaging.
+
+| Lever | Axis at risk | Receipt |
+| --- | --- | --- |
+| Contract inferred from evidence | `coherent_contract` | `instruction-sufficiency.json` maps every static test to a contract row or inference family |
+| Coupled obligations | `sound_verifier` | one killed mutant per mechanism and interaction in `semantic-coverage.json` |
+| Defensive documentation | `coherent_contract` | the refuting visible evidence, cited in the sufficiency manifest |
+| Hidden variation | `coherent_contract` | variation changes values, sequences, layouts, or combinations only — never policy |
+| Hardened anti-cheat | `correct_reference_solution` | Oracle rerun after each tightening |
+| Graded secondary observable | `deterministic_execution` | derived from artifact or runtime state, never wall-clock |
 
 ## Workflow
 
@@ -276,6 +413,11 @@ force Python into a special tier.
    First apply
    [bounded task design](../terminus-regular-task-authoring/references/bounded-task-design.md):
    classify every planned obligation as core, supplied support, or non-goal.
+   In the same pass, complete the `## Difficulty Design` sheet and write
+   `workspace/reports/<slug>/difficulty-design.json` beside the scope ledger.
+   State the crux without catalog vocabulary, record the coupling edges, and
+   name at least two cheap wrong repairs with disjoint witness sets. Return an
+   uncoupled or decoy-free core to mining rather than scaffolding it.
    Do not expose generic parser/schema/serialization hardening as solver work
    unless it is the task's primary domain outcome.
    For a `panel_ready` build, materialize this ledger as the quality-panel
@@ -302,9 +444,18 @@ force Python into a special tier.
     non-behavior units.
 14. Complete V3 evidence inferability, public-surface coverage, the semantic
     mechanism/interaction map, and executable partial-fix mutation evidence.
-15. Run the folder-level client/manual review and task-visible style audit;
+15. Run the verifier-aware adversarial pass before freezing. Assume the
+    candidate can read the verifier source, then walk the exploit-class table in
+    `## Verifier Pattern` and try to reach reward without doing the work. Patch
+    each reachable class and **rerun the Oracle after every tightening**: a patch
+    that also rejects the reference solution is over-restrictive and must be
+    replaced, not kept. Record the classes checked, exploits found, patches, and
+    post-patch Oracle results in
+    `workspace/reports/<slug>/adversarial-pass.json`. This is a bounded single
+    pass, not an open-ended hardening loop.
+16. Run the folder-level client/manual review and task-visible style audit;
     clear findings, then freeze the full task/verifier snapshot.
-16. Run counted real-agent trials. Package only after the difficulty gate;
+17. Run counted real-agent trials. Package only after the difficulty gate;
     then write and separately style-audit reviewer-facing Difficulty, Solution,
     and Verification explanations outside the task folder.
 
@@ -378,7 +529,7 @@ subcategory = "<exact matching Title Case subcategory>"
 languages = ["<main implementation language>"]
 tags = ["<3-6 useful tags>"]
 expert_time_estimate_hours = 6
-difficulty_explanation = "<intrinsic crux>"
+difficulty_explanation = "<why this is inherently a challenge for a human expert>"
 solution_explanation = "<oracle approach>"
 verification_explanation = "<behavior and artifact checks>"
 relevant_experience = "<author background>"
@@ -394,6 +545,7 @@ network_mode = "no-network"
 
 [environment]
 network_mode = "public" # required on every task; build/harness phase stays public
+# Compose task? All three phases above must be "public" (check_compose_networks).
 build_timeout_sec = 1800
 cpus = 2
 memory_mb = 8192
@@ -432,6 +584,29 @@ Do not add generic meta-criteria for reading instructions or routine commands
 that say nothing task-specific. Keep diagnostic, binary criteria tied to the
 actual domain workflow, include at least one negative criterion, use only
 ±1/2/3/5 with signed positives, and keep the positive total between 10 and 40.
+
+## Contract Closure
+
+Read
+[contract closure](../terminus-regular-task-authoring/references/contract-closure.md)
+before writing `instruction.md`. It carries the rules that let a task answer the
+five quality axes on receipts rather than reviewer opinion, and every one of them
+is checked by `panel_precheck.py`:
+
+- one authority, plus a universal-rule clause and a silence clause that close the
+  rest of the input domain (an entry-point scope clause too, when tests drive
+  helpers directly);
+- a coverage-envelope paragraph naming the hidden input families and no values;
+- an authority sentence behind every exact convention the verifier pins;
+- restrictions listed with their legal exceptions, each backed by a mechanical
+  audit;
+- expectations derived from the authority independently of the Oracle, written
+  before the Oracle exists;
+- a differential guarding whatever the silence clause promised to leave alone.
+
+An instruction that carries this much contract will run past the advisory word
+and backtick counts in `instruction_preflight.py`. That is expected. Trim
+narration, never contract.
 
 ## Instruction Style
 
@@ -548,10 +723,11 @@ The output must <format/schema/order/tolerance requirements>. Preserve <existing
 `environment/Dockerfile` must:
 
 - use `FROM ...@sha256:<digest>` on every stage
-- keep every Dockerfile cloud-builder compatible: `COPY --chown=` uses numeric
-  IDs (for example `0:0` or `1000:1000`), and an external-image
+- keep every Dockerfile cloud-builder compatible: an external-image
   `COPY --from=` uses `image@sha256:<digest>` with no tag. `FROM
   image:tag@sha256:<digest>` and `COPY --from=<stage-name>` remain valid.
+  `COPY --chown=` takes named users/groups or numeric IDs — the builder resolves
+  both since Sep 17, 2026. `ADD` with a local source stays unsupported.
 - use a **canonical Terminal-Bench base image** for the final runtime stage when
   one matches the task's language (exact digest-pinned refs):
   - Python: `public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb`
@@ -747,6 +923,50 @@ two related artifacts, grade their equivalence with verifier-owned inputs or a
 verifier-owned consumer. Invoke every documented command/mode, and make each
 rule-carrying fixture exercise the hard case that distinguishes an incomplete fix.
 
+### Exploit classes
+
+The detailed incident notes below are organized by discovery date. Use this
+table to find the class that applies to the task at hand, then read the matching
+note. Workflow step 15 walks every row; an audit of 1,968 tasks across five
+terminal-agent benchmarks found 16% reward-hackable, so treat a clean sweep as
+evidence only for the classes actually exercised.
+
+| Class | Reaches reward by | Where covered |
+| --- | --- | --- |
+| Answer key reachable | Reading a `/tests` corpus, or a golden staged beside its input | corpus hiding note below |
+| Privileged candidate | Running as root and reading verifier-owned state | run-as-`nobody` note below |
+| Build bypass | Grading a delivered binary never rebuilt from source | checker-owned compile note below |
+| Hollow assertion | Satisfying a count, field presence, or first element | "assert actual values" above |
+| Timing manipulation | Patching the clock or counter a performance check reads | below |
+| Deferred computation | Returning a lazy or proxy object that passes a shape check | below |
+| Subprocess injection | Spawning a background worker that finishes before verification | below |
+| Binary wrapping | Shadowing a system utility the verifier invokes | below |
+
+The last four classes matter most for `P4` secondary-observable and `P6`
+holistic tasks, whose graded observable is a runtime measurement rather than a
+returned value:
+
+- **Timing manipulation.** Never grade a duration the candidate's process can
+  report or influence. Measure from the verifier's own process around a
+  candidate invocation it controls, or grade a structural proxy — an operation
+  count, an emitted plan, an allocation profile — read from an artifact the
+  candidate cannot rewrite after the fact. A candidate that can `import` the
+  timing module the check uses can redefine it.
+- **Deferred computation.** Force materialization before asserting. Check the
+  concrete type, not just the interface; a wrapper that defers work until the
+  result is consumed passes a shape assertion and never computes anything.
+- **Subprocess injection.** Reap the candidate's process group and confirm it
+  exited before reading artifacts. The existing `_kill_process_group` helper is
+  the mechanism; the rule is that no candidate-spawned process may outlive the
+  invocation whose output is graded.
+- **Binary wrapping.** Invoke system utilities by absolute path from the
+  verifier image, never through a `PATH` the candidate can prepend to. A
+  candidate-supplied `python`, `bash`, or `curl` earlier on `PATH` intercepts
+  the verifier's own tooling.
+
+No single defense is sufficient; hardening composes, and each layer must leave
+the reference solution passing.
+
 Verifier-only tests and expected data stay under `tests/` and are copied into
 the verifier image with `COPY . /tests/`; they are never staged in the agent
 environment. Create every artifact parent directory in `tests/Dockerfile`.
@@ -862,10 +1082,14 @@ fixture whose expected result changes when that rule alone is inverted; a
 coarse wrong solution or mixed held-out corpus is not enough, and held-out data
 must not be the only enforcement of a stated rule.
 
-Before packaging, walk the portal quality panel's four axes:
+Before packaging, walk the portal quality panel's five axes:
 `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
-and `sound_verifier`. Only `None` on every axis clears the panel; `Minor`,
-`Major`, and `Unsure` all block or route the task back. Preserve Terminus 3
+`sound_verifier`, and `deterministic_execution`. `Minor` and `Major` block on `coherent_contract`,
+`correct_reference_solution`, `sound_verifier`, and `deterministic_execution`;
+only `Major` blocks on `protected_ground_truth`. Findings explicitly marked
+`Advisory` do not block, and `Unsure` is not itself a confirmed defect, though
+an undecided axis still leaves the panel uncleared. Passing the panel allows
+difficulty measurement; it is not task acceptance. Preserve Terminus 3
 inference: exact grading conventions need a citable visible authority, while a
 domain mechanism may still be reconstructed from distributed visible evidence.
 
@@ -1095,6 +1319,13 @@ Before packaging or platform upload:
   shared blind spot. For Core/Base candidates, shared misses are a review risk
   rather than an automatic rejection, but every shared miss still needs an
   authority/oracle and V3 evidence-inferability audit before packaging.
+- **close the difficulty-design loop.** Re-read
+  `workspace/reports/<slug>/difficulty-design.json` against the frozen task:
+  every declared trap has a killed mutant in `semantic-coverage.json`, every
+  declared cheat has a block recorded in `adversarial-pass.json`, and the
+  coupling edges still hold after repairs. A trap that lost its witness, or a
+  coupling edge that a repair severed, is a difficulty regression — re-measure
+  rather than packaging on the earlier probe.
 - **run the Terminus 3 domain screen.** Apply
   `.agent/skills/task-miner/category_rules.md`, choose exactly one category and
   subcategory, and write `workspace/reports/<slug>/category-screen.json` with a
@@ -1258,8 +1489,7 @@ stb harbor run -m @anthropic/claude-opus-5 -k 4 -p <task-folder>
 
 Use the current Terminus 3 model commands when credentials and quota are
 available. Otherwise record fresh isolated local probes as preliminary evidence;
-they do not replace the platform's four-run iteration gate or eight-run final
-tier measurement.
+they do not replace the platform's single eight-run difficulty measurement.
 
 If Docker is not running, still run static checks:
 
@@ -1271,16 +1501,21 @@ tomllib.load(open("task.toml", "rb"))
 PY
 ```
 
-At the four-run iteration gate, at least one run must fail. Final difficulty is
-the average pass@1 across eight runs, four per current reference model.
+Difficulty is measured once, after the quality panel passes and before human
+review: four runs per current reference model, eight total. For a new
+submission, at least 3 of those 8 runs must fail, so no more than 5 may pass
+and the maximum measured accuracy that can proceed is 62.5%. Tasks already on
+the platform by the morning of Sep 11, 2026 keep the prior one-failure rule,
+including their later revisions.
 
 Difficulty gate (PLATFORM-result interpretation only — these numbers come from
 the platform's own agent runs after submission, not from anything runnable
 locally):
 
 - `frontier`: <20%; `advanced`: 20–<50%; `core`: 50–<80%; `base`: 80–<100%.
-- A result above 80% is acceptable as Base; only 100% across the iteration sample
-  cannot proceed because it provides no signal.
+- The tier bands are unchanged, but a new submission needs at least 3 failures
+  in 8 runs, so `base` and a 75% `core` result cannot proceed. `base` remains a
+  valid tier only for grandfathered tasks and their later revisions.
 - If the oracle patch is `<= 10` meaningful LOC in one obvious file, require empirical agent failures before keeping it.
 - Timeouts, refusals, unclear instructions, and environment defects do not count
   as legitimate difficulty; resolve the trial-analysis flags and re-measure.

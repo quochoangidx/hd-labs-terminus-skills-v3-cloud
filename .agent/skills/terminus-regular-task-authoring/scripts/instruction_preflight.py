@@ -31,8 +31,9 @@ HINT_PHRASES = [
     "where a naive",
 ]
 
+# Names and paths of the grading apparatus. These tell the agent where the answer key
+# lives or how the score is computed, and no contract ever needs them.
 LEAK_WORDS = [
-    "verifier",
     "test.sh",
     "test_outputs",
     "pytest",
@@ -43,15 +44,31 @@ LEAK_WORDS = [
     "ctrf",
 ]
 
+# Bare benchmark nouns. These are worth rewriting — say what is checked, not who checks
+# it — but they can carry real contract: naming the harness is how a task states that a
+# restriction is audited over compiled output as well as source. A task that cleared the
+# platform panel does exactly that, so this is guidance, not a gate.
+META_WORDS = ["verifier", "oracle"]
+
 WORD_LIMIT = 300
 MAX_FLAT_LIST_ITEMS = 20
 
 
-def scan(path: pathlib.Path) -> list[str]:
+def scan(path: pathlib.Path) -> tuple[list[str], list[str]]:
+    """Return (blocking, advisory).
+
+    Blocking = a structural trigger the platform check actually rejects.
+    Advisory = size/shape guidance. SKILL.md already treats paragraph, word and
+    bullet counts as style guidance rather than standalone rejection reasons, so
+    they must not fail the gate: a task whose contract genuinely needs the space
+    (an in-env authority note plus closure and restriction clauses) is correct and
+    long, and failing it here pushes an author to cut real contract.
+    """
     text = path.read_text(encoding="utf-8")
     # Fenced code blocks (worked I/O examples) are allowed — scan prose only.
     prose = re.sub(r"```.*?```", "", text, flags=re.S)
     findings: list[str] = []
+    advisory: list[str] = []
 
     list_items: list[tuple[int, str]] = []
     for i, raw in enumerate(prose.splitlines(), 1):
@@ -69,16 +86,18 @@ def scan(path: pathlib.Path) -> list[str]:
             findings.append(f"line {i}: table-like row {s[:50]!r} — tables always trip the check")
 
     if len(list_items) > MAX_FLAT_LIST_ITEMS:
-        findings.append(
+        advisory.append(
             f"{len(list_items)} bullet/numbered items — keep a flat list to at most "
             f"{MAX_FLAT_LIST_ITEMS} items"
         )
 
     words = len(prose.split())
     if words > WORD_LIMIT:
-        findings.append(
+        advisory.append(
             f"{words} words of prose (aim <= ~{WORD_LIMIT}) — trim, delegate rules to the "
-            "named standard, or move reference data to an in-env file (disclosure ladder)"
+            "named standard, or move reference data to an in-env file (disclosure ladder). "
+            "Keep the length if it is carrying contract: closure clauses, a restriction "
+            "whitelist with its allowed exceptions, or a coverage envelope."
         )
 
     low = prose.lower()
@@ -87,7 +106,17 @@ def scan(path: pathlib.Path) -> list[str]:
             findings.append(f'hint framing "{phrase}" — state the contract, never point at traps')
     for word in LEAK_WORDS:
         if word in low:
-            findings.append(f'verifier/test leakage "{word}" — rename or remove (bare-word scanner also flags this)')
+            findings.append(
+                f'grading-apparatus leakage "{word}" — rename or remove; the contract never '
+                "needs the harness's own paths or scoring names"
+            )
+    for word in META_WORDS:
+        if word in low:
+            advisory.append(
+                f'benchmark noun "{word}" — prefer naming the requirement over the harness '
+                '("compiled references are checked as well as source"). Keep it if removing '
+                "it would cost a real restriction; this is repo style, not a platform gate."
+            )
 
     if re.search(r"https?://github\.com/\S+/(?:pull|issues)/\d+", prose):
         findings.append("PR/issue URL in the prompt — remove")
@@ -96,12 +125,13 @@ def scan(path: pathlib.Path) -> list[str]:
 
     literal_density = len(re.findall(r"`[^`]+`", prose))
     if literal_density >= 15:
-        findings.append(
+        advisory.append(
             f"{literal_density} backtick literals — possible inline mapping chain/spec table; "
-            "keep only family-covering facts or move examples to an in-env data file"
+            "keep only family-covering facts or move examples to an in-env data file. "
+            "A namespace whitelist or a named-exclusion list is contract, not a spec table."
         )
 
-    return findings
+    return findings, advisory
 
 
 def main() -> int:
@@ -115,11 +145,15 @@ def main() -> int:
         print(f"not found: {path}")
         return 2
 
-    findings = scan(path)
+    findings, advisory = scan(path)
+    if advisory:
+        print(f"{len(advisory)} advisory note(s) in {path} — judgement, not a gate:")
+        for a in advisory:
+            print(f"~ {a}")
     if not findings:
         print(f"OK: {path} passes the mechanical instruction_check pre-flight")
         return 0
-    print(f"{len(findings)} finding(s) in {path}:")
+    print(f"{len(findings)} blocking finding(s) in {path}:")
     for f in findings:
         print(f"- {f}")
     return 1

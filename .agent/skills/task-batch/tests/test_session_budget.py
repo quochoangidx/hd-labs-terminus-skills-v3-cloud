@@ -66,7 +66,7 @@ class SessionBudgetTests(unittest.TestCase):
             sufficiency = json.loads(
                 (report_dir / "instruction-sufficiency.json").read_text(encoding="utf-8")
             )
-            sufficiency["fairness_review"]["reviewers"][0]["model"] = "gpt-5.6-luna"
+            sufficiency["fairness_review"]["reviewers"][0]["model"] = "gpt-5.6-terra"
             (report_dir / "instruction-sufficiency.json").write_text(
                 json.dumps(sufficiency), encoding="utf-8"
             )

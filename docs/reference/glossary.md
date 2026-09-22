@@ -44,7 +44,7 @@ OpenAI's code-focused agent. Used with GPT-5.6 to evaluate task difficulty.
 A script that defines how to build a Docker container. In Terminus 3, it sets up the task environment with all required dependencies, digest-pinned base images, and no copied solution or test files.
 
 ### docker-compose.yaml
-Configuration file that defines how containers, volumes, and networks are orchestrated for a task.
+Configuration file that defines how containers and volumes are orchestrated for a task. Do not declare `networks:` or a per-service `network_mode:` — the Terminus 3 runner already puts every service in one shared namespace. See [Creating Docker Environment](/portal/docs/creating-tasks/creating-docker-environment#compose-networking).
 
 ---
 
@@ -163,15 +163,19 @@ The Terminus 3 grading model: the verifier runs in its own container, built from
 
 ### Quality panel
 
-An automated four-axis review of a submitted task (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`) that blocks before a human reviewer and gates the difficulty measurement. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+An automated five-axis review of a submitted task: `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, and `deterministic_execution`. It gates difficulty measurement before human review. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block. Passing the panel is not task acceptance. See [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ### Difficulty tiers
 
-The four empirical tiers — **Frontier** (<20%), **Advanced** (20–50%), **Core** (50–80%), **Base** (80–100%) — assigned from measured accuracy rather than self-assessment.
+The four empirical tiers — **Frontier** (<20%), **Advanced** (20–<50%), **Core** (50–<80%), **Base** (80–<100%) — assigned from measured accuracy rather than self-assessment. The tier taxonomy is separate from the eligibility gate below.
+
+### Difficulty eligibility gate
+
+For a new submission to proceed, at least **3 of the 8 platform solver runs must fail**; no more than 5 may pass (62.5% maximum measured accuracy). Tasks already on the platform by the morning of Sep 11, 2026 remain under the prior one-failure rule, including later revisions. This gate determines whether a task can proceed, while the difficulty tier describes its measured accuracy.
 
 ### Accuracy
 
-Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier. Measured once, after the quality panel passes and before review; nothing re-runs after acceptance.
+Average pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5. Determines a task's difficulty tier and is checked against the eligibility gate. Measured once, after the quality panel passes and before review; nothing re-runs after acceptance.
 
 ### Canary string
 
@@ -179,7 +183,7 @@ A marker used to keep benchmark data out of training corpora. Terminus 3 is a tr
 
 ### network_mode
 
-The `task.toml` setting declaring network access, set **per phase**. `[environment].network_mode` must be `"public"` on every task — the image build and harness install need the network. `[agent].network_mode` and `[verifier].network_mode` are `"public"` or `"no-network"` as the task requires; an offline task keeps the environment public and closes the agent.
+The `task.toml` setting declaring network access, set **per phase**. `[environment].network_mode` must be `"public"` on every task. On single-container tasks, `[agent]` and `[verifier]` are `"public"` or `"no-network"` as needed. Compose tasks must set all three phases to `"public"` because the runner cannot apply separate phase policies to a Compose environment.
 
 ### Terminal-Bench 3.0
 

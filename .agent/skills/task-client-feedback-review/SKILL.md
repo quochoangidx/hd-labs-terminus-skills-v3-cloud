@@ -236,9 +236,11 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
    `blocker`.
 
 4. Run a quality-panel-shaped review across `coherent_contract`,
-   `correct_reference_solution`, `protected_ground_truth`, and
-   `sound_verifier`. Only `None` on every axis clears this gate; `Minor`,
-   `Major`, and `Unsure` are all blocking/return outcomes. Require citations
+   `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`,
+   and `deterministic_execution`. `Minor` and `Major` block on every axis
+   except `protected_ground_truth`, where only `Major` blocks; findings marked
+   `Advisory` do not block, and `Unsure` is not itself a confirmed defect
+   though an undecided axis leaves the panel uncleared. Require citations
    for exact grading conventions without collapsing Terminus 3 evidence-based
    inference into one prose sentence per semantic rule.
 
@@ -306,9 +308,10 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
 - hidden solution walkthroughs or bug hints in environment docs/comments
 - missing `tmux`/`asciinema` in the task image (agent runs fail with
   `Failed to start tmux session` / `verifier_did_not_run`)
-- any Dockerfile using a named `COPY --chown=` value or an external-image
-  `COPY --from=` ref other than digest-only `image@sha256:<digest>`; the cloud
-  builder blocks these even when local Docker accepts them
+- any Dockerfile using an external-image `COPY --from=` ref other than
+  digest-only `image@sha256:<digest>`; the cloud builder blocks it even when
+  local Docker accepts it. A named `COPY --chown=` value is no longer a finding
+  (accepted again since Sep 17, 2026), but `ADD` with a local source still is.
 - `tests/` or `solution/` copied into the Docker image
 - `privileged: true`, `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities, or
   `/var/run/docker.sock` mounts in docker-compose
@@ -337,7 +340,13 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   error when the reward write itself fails.
 - missing or invalid per-phase network policy: `[environment].network_mode`
   must be `"public"`, while `[agent]` and `[verifier]` must each explicitly
-  declare `"public"` or `"no-network"`.
+  declare `"public"` or `"no-network"`. When an `environment/docker-compose*.yml`
+  / `.yaml` file is present, all three must be `"public"`.
+- Compose networking keys that `check_compose_networks` blocks: a top-level
+  `networks:` block, a per-service `networks:` list, or a per-service
+  `network_mode:` in `environment/docker-compose*.yml` / `.yaml`. These fail the
+  project before the image builds; delete them and keep `depends_on` plus
+  service-name DNS.
 - verifier truth derived from agent-writable paths, manual copying of
   agent-controlled trees that can follow symlinks into verifier fixtures,
   instruction/test numeric-tolerance drift, or an optimization/tie-break
@@ -367,7 +376,9 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
   cover the no-preexisting-file branch when the contract promises no creation
 - `difficulty` in `task.toml` not matching the measured Terminus 3 tier:
   Frontier <20%, Advanced 20–<50%, Core 50–<80%, Base 80–<100%, averaged across
-  both current reference models. A 100% iteration result cannot proceed.
+  both current reference models. A new submission also needs at least 3
+  failures across the platform's 8 runs, so a result above 62.5% cannot
+  proceed; `base` is reachable only by grandfathered tasks.
 - category chosen by coding activity instead of domain. Use `Software` only when
   software itself is the subject; otherwise choose the domain category and its
   exact subcategory (for example ML training repair is `ML / Training`).

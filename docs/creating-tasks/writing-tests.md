@@ -6,7 +6,7 @@ All verifier tests must be written in Python and run with pytest, regardless of 
 
 > **Writing a Hardware/CAD task?** Geometry has failure modes this page does not cover — see [CAD Task Guidelines](/portal/docs/creating-tasks/cad-task-guidelines) in addition to everything here.
 
-> **Quality panel.** Before you submit, walk the four-axis checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) (`coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`). A `Major` or `Minor` on that review blocks the same way a failing CI check would.
+> **Quality panel.** Before you submit, walk the five-axis checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide): contract, reference solution, protected ground truth, verifier soundness, and deterministic execution. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block. See the [worked examples](/portal/docs/testing-and-validation/quality-panel-examples) for concrete defects, fixes, and verification steps.
 
 ## How Verification Works
 

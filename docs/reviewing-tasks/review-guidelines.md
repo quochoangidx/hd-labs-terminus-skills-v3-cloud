@@ -21,7 +21,7 @@ _If the EC addresses your comments, the task should be ready for acceptance, ass
 
 > **A green run is where a review *starts*, not where it ends.** A passing oracle, a clean-looking setup, or a green automated check is *material for* your review — not the review itself. Accept each point because **you confirmed it holds**, not because the eval passed or the doc says so. When your reason to accept is an assumption (the tests cover the contract, the answer's protected, the difficulty fits, the solution matches the spec), do the thing that confirms or breaks it before you sign off.
 >
-> **Don't repost unverified output as your review.** The Agent Review summary, the quality-check output, the **quality panel** report, and the difficulty trial-analysis are inputs to *help* you review — copying their claims (or an earlier reviewer's notes) back into your review says nothing about whether the task is sound. If you rely on any of it, **verify it first.** Your review should briefly say **what you checked and what convinced you** — "looks solid," a restatement of the design, or "Oracle / NOP / CI pass" is not a review. The [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) is written for EC Submitters; treat a panel `Major` as a lead to confirm, not as the review itself.
+> **Don't repost unverified output as your review.** The Agent Review summary, the quality-check output, the **quality panel** report, and the difficulty trial-analysis are inputs to *help* you review — copying their claims (or an earlier reviewer's notes) back into your review says nothing about whether the task is sound. If you rely on any of it, **verify it first.** Your review should briefly say **what you checked and what convinced you** — "looks solid," a restatement of the design, or "Oracle / NOP / CI pass" is not a review. The [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) is written for EC Submitters; treat any panel finding as a lead to confirm, not as the review itself.
 
 ## Review Checklist
 
@@ -199,11 +199,12 @@ These come up often but are **not** valid revision reasons — usually they're u
 - **`task.toml` "is incorrect."** CI runs the structure check on every submission, and a task only reaches you once CI is passing — so the manifest in front of you has already passed it. **Confirm the static check actually fails** before flagging — an Agent Review "toml wrong" is usually a false positive (a common one: flagging fields as "top-level" that are correctly under `[metadata]`).
 - **Difficulty value / tier mismatch** (declared `frontier`, measures `core`, etc.). **The measured tier is already final when the task reaches you**, and it is what gets recorded — the declared value is the author's estimate, and a mismatch is not a revision trigger or worth your time. *Still flag:* a **retired tier name** (`hard` / `easy` / `medium` — must be `frontier` / `advanced` / `core` / `base`), or a task that is **genuinely too trivial** (that's a quality issue, not a label).
 - **Instruction length** ("too many paragraphs / bullets"). The 2-paragraph / 20-bullet figure is **guidance, not a hard cap** — complex tasks may need more room. Don't flag on length; flag only if the instruction **leaks implementation steps or the answer**.
+- **Pass count.** The 3-failure gate is enforced by the difficulty check before a task reaches you, so a **new** submission with 6–8 passes never gets this far. If a task in front of you passed 6 or 7 of 8 runs, it is a task already on the platform by the morning of Sep 11, 2026 — or a revision of one — and it stays under the prior one-failure rule. That is **not** a revision reason. The only pass count you act on is **8/8**, which still blocks a grandfathered task; see *Decline*.
 
 ### Decline
 
 Fundamental issues that can't be easily fixed:
-- Too easy (100% accuracy averaged across both models provides no signal; 90% is acceptable, 100% is not). You see all 8 runs, so this is directly checkable — though a task at 100% should not have reached you
+- Too easy under the platform gate: a new submission needs at least 3 failures across the 8 runs, so a task with 6–8 passes should not have reached review. Do not apply this gate retroactively to tasks already on the platform by the morning of Sep 11, 2026; later revisions of those tasks remain grandfathered under the prior one-failure rule. That prior rule still blocks a grandfathered task solved in all 8 runs
 - Essentially duplicate of existing task
 - Core concept is flawed
 

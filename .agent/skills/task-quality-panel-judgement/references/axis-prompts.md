@@ -49,7 +49,13 @@ independent correctness argument.
 
 Return JSON only, matching the schema below. Use `None` when no valid finding
 exists and required inspection is complete. Use `Unsure` when packet evidence cannot resolve a
-reward-relevant concern; state what evidence is missing.
+reward-relevant concern; state what evidence is missing. Use `Advisory` for a
+supported recommendation that you are deliberately excluding from the blocking
+decision, such as a requirement exercised only by one easy case with no
+demonstrated incorrect outcome; `Advisory` is not a weaker `Minor`, so do not
+use it to soften a defect whose wrong grading effect you can show. Blocking
+thresholds are applied by the orchestrator, not by you: `Minor` and `Major`
+block on every axis except `protected_ground_truth`, where only `Major` blocks.
 If confirmed defects coexist with incomplete checks, retain their severity and
 list the gaps separately; the panel still cannot clear. Never claim a static
 trace was executed. Separate unsupported hypotheses from confirmed findings.
@@ -62,7 +68,8 @@ agent-visible evidence. Do not assess whether the reference solution happens to
 implement it; no solution is present. Look for contradictions, impossible
 requirements, hidden arbitrary conventions, representation-specific grading,
 and instruction/test asymmetry. Allow hidden instances and combinations that
-exercise the same inferable model.
+exercise the same inferable model. This axis sees the instruction, metadata,
+environment, and tests; no solution is present.
 
 ## `correct_reference_solution`
 
@@ -70,7 +77,8 @@ Judge whether the reference solution correctly implements the agent-visible
 contract across relevant normal, boundary, and interaction cases. Do not inspect
 or infer hidden tests; none are present. Check the solution directly against the
 instruction and domain semantics. Report only a concrete incorrect behavior,
-not missing optimization or preferred style.
+not missing optimization or preferred style. This axis sees the instruction,
+environment, and solution; no tests are present.
 
 ## `protected_ground_truth`
 
@@ -79,7 +87,9 @@ hooks, permissions, or network behavior can read, replace, predict, or influence
 hidden checks, expected values, or the reward channel. Trace real execution and
 ownership paths through tests and environment. A mere filename, conventional
 path, or theoretical attack is insufficient without a reachable exploit path.
-No solution is present.
+This axis sees the instruction, environment, and tests; no solution is present.
+Use the instruction to establish what a candidate is permitted to do before
+treating an access path as an exploit.
 
 ## `sound_verifier`
 
@@ -87,16 +97,35 @@ Judge whether the verifier measures the promised behavior, rejects plausible
 wrong or incomplete implementations, and avoids rewarding proxy behavior,
 Oracle-specific representation, stale binaries, self-controlled comparisons, or
 unreachable test cases. Evaluate failure localization and semantic coverage, not
-raw test count. No solution is present; do not reconstruct or assume it.
+raw test count. This axis sees the instruction, environment, and tests; no
+solution is present, so do not reconstruct or assume it. Judge the verifier
+against the contract and the candidate-visible code it grades, not against a
+guessed reference.
+
+## `deterministic_execution`
+
+Judge whether the same submission receives a stable grade on repeated clean
+runs of the same package. Look for fresh random seeds, unpinned generated
+corpora, the current date or time, mutable remote data or dependencies,
+filesystem or iteration ordering, and timing or readiness assumptions, and judge
+each by its effect on the graded result: a random temporary filename that cannot
+change grading is not a defect, while a regenerated corpus that sometimes
+exercises a boundary case and sometimes misses it is. Check that boundary cases
+are guaranteed fixtures rather than drawn, that the evaluation clock is fixed
+when expiry or time windows are graded, that dependencies are pinned and
+required inputs are local, that ordering is sorted where the contract requires
+order and equivalent orderings are accepted where it does not, and that waits
+use a defined readiness condition rather than a fixed sleep. This axis sees the
+contract, environment, tests, and solution.
 
 ## Required JSON schema
 
 ```json
 {
-  "axis": "coherent_contract | correct_reference_solution | protected_ground_truth | sound_verifier",
+  "axis": "coherent_contract | correct_reference_solution | protected_ground_truth | sound_verifier | deterministic_execution",
   "reviewer_id": "<axis>-A | <axis>-B",
   "snapshot_sha256": "<snapshot_sha256>",
-  "severity": "None | Minor | Major | Unsure",
+  "severity": "None | Advisory | Minor | Major | Unsure",
   "summary": "one concise verdict",
   "input_completeness": {
     "status": "complete | incomplete",
@@ -107,7 +136,7 @@ raw test count. No solution is present; do not reconstruct or assume it.
   "findings": [
     {
       "id": "AXIS-1",
-      "severity": "Minor | Major | Unsure",
+      "severity": "Advisory | Minor | Major | Unsure",
       "claim": "specific defect",
       "finding_evidence": {
         "status": "static_proof",

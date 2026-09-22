@@ -16,6 +16,14 @@ You will see **"at least 5 agent steps"** used as shorthand for this. It is a **
 
 The question to ask is not *"how many steps is this?"* but *"could an agent finish this in one shot, without reacting to anything along the way?"* If the answer is yes, the task is too simple.
 
+## Requires Expertise
+
+Every task must require genuine domain expertise to solve — graduate-level knowledge or several years of professional experience in the field. A task that someone without that background could work through in a few days does not qualify.
+
+This is judged on the task itself, independently of how often agents solve it, and it applies at every difficulty tier. A [Base](/portal/docs/understanding-tasks/difficulty-guidelines) task is one agents usually solve; it is still expected to be expert work.
+
+The floor is not met by obscure facts an agent already knows, a long checklist, or sheer volume of work. It is met by substantive domain reasoning: knowing which method applies, recognizing plausible but wrong results, and reasoning about interacting constraints. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) for what raises a task's difficulty and what only makes it longer.
+
 ## Testable
 
 Each task must be fully specified and self-contained, solvable without ambiguity, and accompanied by tests that deterministically measure the **final state of the environment** to decide whether the task was completed correctly.
@@ -53,7 +61,7 @@ network_mode = "no-network"
 
 **All three phases must declare `network_mode`.** An omitted phase is not a default — it silently inherits the baseline, so the agent and verifier end up running on a policy nobody chose. The static check reports each missing one, and it blocks submission.
 
-**The value on `[agent]` and `[verifier]` is yours to choose** — `"public"` or `"no-network"` on each, according to what the task needs:
+**For a single-container task, the value on `[agent]` and `[verifier]` is yours to choose** — `"public"` or `"no-network"` on each, according to what the task needs:
 
 | If the task… | `[agent]` | `[verifier]` |
 |---|---|---|
@@ -64,6 +72,8 @@ Air-gapped is the stronger and more common choice for both. **You do not need to
 
 **Making a task offline no longer means closing `[environment]`.** Keep the environment public so the build succeeds, and set `"no-network"` on `[agent]` — that is what stops the agent reaching the network while it works.
 
+> **Compose exception:** If `environment/docker-compose.yaml` (or another `docker-compose*.yml` / `.yaml`) is present, `[environment]`, `[agent]`, and `[verifier]` must all declare `network_mode = "public"`. The runner cannot apply separate phase network policies to a Compose environment. `check_compose_networks` blocks any Compose task with a non-public agent or verifier. If the task must be solved offline, package it as a single container.
+>
 > ⚠️ **`"allowlist"` is not a supported value**, and `allowed_hosts` is rejected with it. Production sandboxes have no network-allowlist capability, so a task using it is refused at creation and the difficulty check reports `Oracle ran 0 trials` — an infrastructure refusal that reads like a task defect.
 >
 > **`network_mode` at the top level is ignored.** Harbor drops unrecognised root keys, so a top-level setting looks correct and does nothing. It belongs inside `[environment]`, `[agent]` and `[verifier]`. The legacy `allow_internet` field is also rejected — it cannot express a per-phase policy.

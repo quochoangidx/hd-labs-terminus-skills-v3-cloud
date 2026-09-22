@@ -66,7 +66,7 @@ Aim for **around 2 short paragraphs or a list of up to 20 bullets**; more comple
 
 Fully sets up the environment, including all tools and dependencies. A small subset of tasks use `docker-compose.yaml` for multi-container environments. See [Dockerfile Requirements](/portal/docs/creating-tasks/dockerfile-best-practices).
 
-> **Multi-container tasks.** The harness picks up `environment/docker-compose.yaml` on its own — no field in `task.toml` points at it. Set `[metadata].is_multi_container = true` when the task runs multiple containers; otherwise leave the field out.
+> **Multi-container tasks.** The harness picks up `environment/docker-compose.yaml` on its own — no field in `task.toml` points at it. Set `[metadata].is_multi_container = true` when the task runs multiple containers; otherwise leave the field out. Compose tasks must set `[environment]`, `[agent]`, and `[verifier]` `network_mode = "public"`.
 
 ### `solution/solve.sh`
 
@@ -103,7 +103,7 @@ tags = ["python", "wal", "recovery", "concurrency", "storage-engine"]
 languages = ["python"]
 difficulty = "advanced"
 expert_time_estimate_hours = 6
-difficulty_explanation = "What makes this task hard — the core crux an agent has to get right."
+difficulty_explanation = "Why this task is inherently a challenge for a human expert — the core crux, not a pass rate."
 solution_explanation = "How the oracle solves it."
 verification_explanation = "How the verifier decides the task was solved."
 relevant_experience = "The background that qualified you to author this task."
@@ -137,14 +137,14 @@ storage_mb = 10240
 | `[metadata].difficulty` | Empirical tier — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines) |
 | `[metadata].expert_time_estimate_hours` | Estimated expert time to author the task |
 | `[metadata].author_name` / `.author_email` | Required. Both may be `"anonymous"` |
-| `[metadata].difficulty_explanation` | What makes the task hard — the core crux an agent has to get right |
+| `[metadata].difficulty_explanation` | Why the task is inherently a challenge for a human expert — the core crux. Not a model's pass rate; that is what the tier records |
 | `[metadata].solution_explanation` | How the oracle solves it |
 | `[metadata].verification_explanation` | How the verifier decides the task was solved |
 | `[metadata].relevant_experience` | The background that qualified you to author this task |
 | `[metadata].is_multi_container` | Optional. Set to `true` only when the task runs multiple containers; omit it otherwise |
 | `[environment].network_mode` | **Must be `"public"`.** Required on every task — the image build and harness install need the network |
-| `[agent].network_mode` | **Required.** `"public"` or `"no-network"`. Use `"no-network"` to make the agent solve the task offline — an omitted phase silently inherits the baseline |
-| `[verifier].network_mode` | **Required.** `"public"` or `"no-network"`. Normally `"no-network"` — verifier dependencies belong in `tests/Dockerfile` |
+| `[agent].network_mode` | **Required.** Single-container: `"public"` or `"no-network"`. Compose: must be `"public"` |
+| `[verifier].network_mode` | **Required.** Single-container: `"public"` or `"no-network"` (normally `"no-network"`). Compose: must be `"public"` |
 | `[verifier].timeout_sec` | Maximum verifier runtime |
 | `[verifier].environment_mode` | Terminus requires `"separate"` (explicit key). Harbor also treats a `[verifier.environment]` table as separate and defaults to **shared** if neither is set; Terminus CI rejects both the implicit-only form and that shared default |
 | `[agent].timeout_sec` | Maximum agent runtime. **Minimum 1800** (30 min); ceiling 18000 (5 h). Most tasks sit around 3600–5400 |

@@ -4,7 +4,9 @@ How to respond to review feedback and appeal decisions.
 
 ## Quality panel findings
 
-A quality-panel `Major` or `Minor` cites a specific contract passage, code location, or test. If that citation does not say what the finding claims, or the named input is not actually contract-valid, contest it the same way you would a human reviewer's note. Both severities **block**. `Unsure` blocks routing to a human, not as a confirmed defect in your task. Details, including when to ask for a re-judge, are in the [Quality Panel Judge Guide → FAQ](/portal/docs/testing-and-validation/quality-panel-judge-guide#faq).
+A quality-panel finding should identify a specific contract passage, code location, or test and explain the failure. Axis verdicts of `Minor` or `Major` block on contract, reference solution, verifier soundness, and deterministic execution; for `protected_ground_truth`, only `Major` blocks. Findings explicitly marked `Advisory` do not block. If the citation does not support the claim, or the proposed input falls outside the stated contract, respond with the exact passage and a reproducible counterexample.
+
+Use the report's evidence: a deliberately wrong solution that passes your verifier supports a soundness finding; a runner failure or an unsuccessful proof attempt does not establish that the task is sound. `Unsure` or incomplete evidence is not a confirmed task defect. Check the evaluation status and report, and request support if evaluation remains unfinished. When resubmitting, connect each fix to the original finding and include the relevant test result; do not assume the next review automatically has the prior report. See the [Quality Panel Judge Guide → FAQ](/portal/docs/testing-and-validation/quality-panel-judge-guide#faq) and [worked examples](/portal/docs/testing-and-validation/quality-panel-examples).
 
 ## Responding to Feedback
 

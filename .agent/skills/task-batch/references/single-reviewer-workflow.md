@@ -1,6 +1,23 @@
 # Single-Reviewer Workflow
 
-This is the default review geometry for new `task-batch` runs.
+This is the default review geometry for new `task-batch` runs, and the entire model
+review under `builder_certified`.
+
+## What the one reviewer is for
+
+The deterministic gates already cover everything a script can decide: coverage
+bookkeeping, isolation, determinism, receipt integrity, and — through
+`expected_source` and `independence_check.py` — the circularity that would
+otherwise make Oracle=1 meaningless.
+
+What no script decides is whether a second competent engineer would read the
+contract the same way. That needs someone who has **not** seen the tests or the
+solution, which is exactly the `contract_review` visibility below. Protect that
+blindness: a reviewer who has read the answer resolves ambiguity without noticing
+it, and then cannot see the ambiguity at all.
+
+Under `builder_certified` the reviewer's turns are the only semantic judgement in
+the build, so do not skip the second turn or fold it into the first.
 
 ## Default role
 
@@ -38,7 +55,12 @@ the affected full gates, and a recheck by the same reviewer when semantic
 judgment is involved. Do not launch a second reviewer identity merely to obtain
 a different opinion.
 
-## Mandatory auditor
+## Auditor
+
+`campaign_ready` only. `builder_certified` does not run one: its deterministic
+receipts cover what a full-visibility auditor would check, and the reviewer above
+covers what receipts cannot. Say so in the report rather than recording a missing
+auditor as an expected failure.
 
 After final-review remediation and the complete mechanical Oracle/NOP/quality
 gates pass, launch exactly one distinct independent auditor. Use

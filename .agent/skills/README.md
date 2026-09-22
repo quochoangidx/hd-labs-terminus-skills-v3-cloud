@@ -21,8 +21,8 @@ Run repository Python helpers through `scripts/python3`; it selects Python
 
 | Stage | Skill(s) |
 |---|---|
-| 1. Mine candidates (metadata only) | `task-miner` (+ `find-task-prs` for the PR lane); rules-first category gate via `task-miner/category_rules.md` before any build |
-| 2. Build and prove semantic coverage | `task-clone` (+ `upstream-repo-sanitizer` for repo staging; `issue-to-regression-test`, `terminus-hard-python-verifier` for verifiers; `terminus-regular-task-authoring` for V3 inferability, semantic coverage, layout, and prompt rules; `terminus-rust-task-authoring` for Rust) |
+| 1. Mine candidates (metadata only) | `task-miner`; rules-first category gate via `task-miner/category_rules.md` before any build |
+| 2. Build and prove semantic coverage | `task-clone` (+ `upstream-repo-sanitizer` for repo staging; `terminus-hard-python-verifier` for verifiers; `terminus-regular-task-authoring/references/contract-closure.md` for contract closure, assertion policy, instruction/test symmetry and anti-shortcut shapes; `terminus-regular-task-authoring` for V3 inferability, semantic coverage, layout, and prompt rules; `terminus-rust-task-authoring` for Rust) |
 | 3. Prove pre-freeze validity | Strict exact-Docker Oracle/NOP/noexec preflight, folder-level `task-client-feedback-review`, task-tree phase of `task-llm-style-audit`, then the shared pre-probe receipt gate |
 | 4. Freeze and probe | Hash-bind the completed Step 2/3 receipts, then run counted `task-local-solve-probe`; exploratory runs never qualify a tier |
 | 5. Harden, audit, and package | `task-harbor-runner` for full integration checks; `terminus-rubric-authoring` for contract-witness coverage and a hash-bound rubric receipt; submission-only `task-llm-style-audit`; exact-ZIP `task-client-feedback-review`, `task-zip-validator`, and `task-zip-submit` |

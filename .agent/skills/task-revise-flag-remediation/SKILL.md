@@ -20,6 +20,11 @@ Read, in order:
 5. `docs/understanding-tasks/difficulty-guidelines.md` and
    `docs/testing-and-validation/running-real-agents.md`.
 
+When the return is a quality-panel report, also read
+`docs/testing-and-validation/quality-panel-judge-guide.md` and
+`docs/testing-and-validation/quality-panel-examples.md` before classifying any
+finding.
+
 For Hardware / CAD, also read
 `docs/creating-tasks/cad-task-guidelines.md` before classifying a geometry miss.
 
@@ -49,7 +54,95 @@ python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manife
   --require-v3 <task-dir> workspace/reports/<slug>/instruction-sufficiency.json
 ```
 
+## Platform quality-panel returns
+
+A panel return is a separate input from the trial-analysis flags. Read the
+report before classifying anything.
+
+Read **Blocking severity** as well as **Overall severity**. `Minor` and `Major`
+block on `coherent_contract`, `correct_reference_solution`, `sound_verifier`,
+and `deterministic_execution`; on `protected_ground_truth` only `Major` blocks.
+Findings explicitly marked `Advisory` are excluded from the blocking decision.
+`Unsure` or `not finished` is not a confirmed task defect, so do not change a
+valid requirement to satisfy one; check the evaluation status instead. An
+`Overall severity: Minor` with `Blocking severity: None` needs no repair to
+proceed. `PANEL INCOMPLETE` means some review work did not finish, and findings
+on axes that did finish still block. `PANEL DEGRADED` means a configured
+reviewer was replaced or lost. For a stuck evaluation or an execution error,
+request support with the submission identifier and report rather than editing
+the task.
+
+Read every numbered finding. One axis can carry several distinct issues, so
+resolving the opening example may leave another finding open. For each finding:
+
+1. read the cited files in the submitted version and identify the requirement,
+   the affected behavior, and the evidence offered;
+2. construct the smallest relevant case — for a verifier finding, an incorrect
+   submission that is accepted or a contract-valid submission that is rejected;
+   for a reference finding, the input with expected versus actual output;
+3. repair the responsible component while keeping the intended task intact;
+4. verify both sides, so the correct solution passes and the specific wrong
+   behavior fails, retaining the input, output, command, and result;
+5. summarize each resolution, naming the finding, the changed file or rule, and
+   the evidence. Dispute a finding with the same level of detail.
+
+An execution line changes what the finding establishes, not whether it must be
+answered:
+
+| Report wording | What was observed |
+|---|---|
+| `Exploit proven by execution` | a submission with the described defect was accepted |
+| `Defect proven by execution` | the grader rejected a submission described as contract-valid |
+| `Reference failure proven by execution` | the task's own grader did not accept the shipped reference |
+
+A proof demonstrates the tested behavior, not exhaustive coverage, and may raise
+an axis from `Minor` to `Major`. The absence of an execution line does not clear
+a finding: a defect can be established by reading the files, and an unsuccessful
+or unfinished reproduction leaves the finding unchanged. Contract and
+determinism findings never use that execution stage. Contest a claim only with
+the cited contract passage and a reproducible counterexample, for instance when
+the claimed contract validity or reachability is wrong.
+
+A conditional `Previous review` section carries earlier findings forward as
+`P1`, `P2`, and so on; its absence does not mean an old finding was resolved.
+`closed` means the reviewing models consider it addressed, `STILL OPEN` means at
+least one still identifies it, `not_a_defect` means the earlier claim was
+rejected on reinspection, and `mixed` or `unanswered` means the history reached
+no single answer — those two labels alone do not prove a repair failed. These
+are statuses of earlier findings, not replacements for the current axis
+verdicts, so a revision can close an old issue and uncover a different one.
+Include a short explicit response to each earlier finding in the revision notes.
+
+Passing the panel allows difficulty measurement; it is not task acceptance.
+
+## Expertise-floor (`difficult`) returns
+
+The blocking `difficult` check is separate from both the panel and the tier. It
+judges whether the task requires genuine domain expertise — graduate-level
+knowledge or several years of professional experience — independently of how
+often agents solve it, and it applies at every tier including `base`.
+
+A task returned on this check needs deeper domain reasoning, not a lower pass
+rate. Lengthening the work, adding obscure facts, expanding a checklist, or
+inflating data volume does not clear the floor. Re-anchor the task on
+substantive domain reasoning instead: a choice between valid methods under real
+constraints where the wrong choice still looks right, a plausible-but-wrong
+result whose shape passes a surface check, or interacting constraints and edge
+cases a generic approach misses.
+
+Fix `[metadata].difficulty_explanation` in the same pass when it argues from a
+measured pass rate or tier: the field must state why the task is inherently a
+challenge for a human expert, which is what this check reads. Do not lower the
+declared tier to answer a `difficult` return.
+
 ## Six trial-analysis flags
+
+`task_specification` and `reward_hacking` are definite issues: a flag on either
+sends the task back. `difficulty_crux`, `near_miss`, `refusals`, and
+`low_timeout` must be examined on their own merits — repair the task when the
+flag's reason holds up, and otherwise record why it does not rather than
+editing to silence it. The multiple-Medium reviewer rule does not apply to
+these four.
 
 ### `task_specification`
 
@@ -107,7 +200,7 @@ refusal provides no difficulty evidence.
 ### `low_timeout`
 
 Raise `[agent].timeout_sec` when the solver was making progress, up to the
-documented ceiling. Reduce cold rebuild cost where possible. Time starvation is
+documented ceiling of 18000 seconds (the minimum is 1800). Reduce cold rebuild cost where possible. Time starvation is
 not difficulty.
 
 ## 0/N solvability returns
@@ -150,10 +243,38 @@ least one run. A 0/N test is blocking, but the repair depends on its cause.
 - Do not replace semantic verification with source-shape assertions.
 - Do not keep a historical tier after the task changes; re-measure it.
 
+## Every finding buys a permanent gate
+
+A return is expensive. Spend it once.
+
+After a platform finding is repaired and verified, convert the *class* of defect
+into a deterministic rule, so it cannot recur in any future task:
+
+1. Name the class, not the instance. "This task's rounding convention had no
+   visible sentence" is an instance; "an exact convention with no authority
+   anchor" is the class.
+2. Add the rule to `panel_precheck.py` (or the relevant gate script) with a test
+   that fails on the shape you just fixed and passes on the repaired snapshot.
+3. Run the new rule over the existing corpus before committing it. **Any failure
+   on a task that already passed the platform is a bug in the rule until proven
+   otherwise** — roughly four in five such rows have been. Fix the rule to judge
+   the property rather than one spelling; do not edit the passing tasks.
+4. If the class cannot be mechanised — it needs semantic judgement — record it in
+   `AGENTS.md` §2 as a known exposure, naming what no script will catch.
+
+Skipping this turns each return into pure cost. Under `builder_certified`, where
+gates stand in for a review panel, it is the only mechanism by which the process
+improves at all.
+
+A gate the builder believes is wrong is recorded as a `documented_exception` in
+the manifest with its reason and contract citation. Never silently reshape a task
+to satisfy a rule you think is mistaken: with no panel above the scripts, a wrong
+gate otherwise rewrites correct work without anyone noticing.
+
 ## Revision verification
 
 For quality-panel-driven repairs, read
-[root-cause remediation](../task-quality-panel-judgement/references/root-cause-remediation.md)
+[root-cause remediation](references/root-cause-remediation.md)
 before choosing edits. Compare repair, narrowing, removal, justified expansion,
 and retirement/redesign per confirmed root cause; the smallest textual patch
 is not necessarily the smallest total repair. Use prior attempts and concrete
@@ -163,11 +284,11 @@ failing test while retaining its promise. If only the core can be removed, stop
 and propose task retirement/redesign unless that decision is already authorized.
 Preserve artifacts; this is not authorization for destructive deletion.
 
-When the input is a four-axis quality-panel report, collect and adjudicate every
+When the input is a five-axis quality-panel report, collect and adjudicate every
 axis before editing. Deduplicate overlapping findings into one dependency-ordered
 repair batch, apply that batch once, and run deterministic validation after all
 edits. Do not alternate between fixing one axis and respawning its reviewer. Run
-one fresh four-axis clearance panel only after the revised snapshot is complete;
+one fresh five-axis clearance panel only after the revised snapshot is complete;
 if it remains blocking, report the remainder instead of automatically starting a
 third repair-review cycle.
 
@@ -190,19 +311,26 @@ handover scope or explicit request.
 7. rerun the folder-level client/manual review and the task-tree style audit,
    write fresh `probe-preflight.json`, `pre-freeze-review.json`, and
    `task-style-preflight.json`, then pass `preprobe_check.py`;
-8. repeat the four-axis quality-panel review on the exact snapshot; only
-   `None` on `coherent_contract`, `correct_reference_solution`,
-   `protected_ground_truth`, and `sound_verifier` clears it, while `Minor`,
-   `Major`, and `Unsure` remain blocking/return outcomes;
+8. repeat the five-axis quality-panel review on the exact snapshot across
+   `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
+   `sound_verifier`, and `deterministic_execution`; `Minor` and `Major` block
+   on every axis except `protected_ground_truth`, where only `Major` blocks,
+   `Advisory` findings do not block, and an undecided `Unsure` axis is not a
+   confirmed defect but is also not cleared;
 9. freeze the new snapshot and rerun fresh counted difficulty trials because
    old probe snapshots are stale;
 10. update `difficulty` and the external submission prose from the newly measured
    facts, run the submission-only style audit, then regenerate and review the
    exact final ZIP and submission packet.
 
-Base and Core are valid Terminus 3 outcomes. Under an explicit Advanced+
-campaign, preserve lower-tier evidence but do not count it toward the campaign
-quota.
+Report the newly measured tier honestly. For a new submission the platform also
+requires at least 3 failures across its 8 runs, so no more than 5 may pass and a
+re-measured result above 62.5% accuracy cannot proceed; `base` and a 75% `core`
+outcome remain valid only for a task grandfathered on the platform by the
+morning of Sep 11, 2026, including this revision of it. Never prune passing
+cases or tighten a threshold to manufacture a qualifying number — repair the
+underlying challenge. Under an explicit Advanced+ campaign, preserve lower-tier
+evidence but do not count it toward the campaign quota.
 
 ## Revision report
 

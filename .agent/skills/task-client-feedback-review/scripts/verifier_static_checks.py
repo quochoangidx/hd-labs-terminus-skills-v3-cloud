@@ -61,8 +61,60 @@ def _is_process_call(node: ast.Call) -> bool:
     }
 
 
-def _is_candidate_controlled(node: ast.Call, function_name: str) -> bool:
+# Tools that read candidate bytes without handing them control: a disassembler or a
+# symbol dumper produces text, it never executes what it is pointed at. Auditing a
+# candidate artifact with one of these is the safe shape, not a privilege defect.
+# Deliberately narrow: the tool name must appear as a quoted command token, optionally
+# with a path. A bare identifier is not enough — a false negative here would wave a real
+# candidate execution through, which is far worse than one noisy row.
+STATIC_ANALYSIS_RE = re.compile(
+    r"""(?ix)
+    ['"]                          # a string literal, i.e. an argv entry
+    (?:/\S*/)?                    # optional absolute path
+    (?:javap|readelf|objdump|nm|strings)
+    ['"]
+    """
+)
+
+
+def _static_analysis_names(tree: ast.AST) -> set[str]:
+    """Names bound to a static-analysis tool, e.g. `JAVAP = shutil.which("javap")`.
+
+    Verifiers normally resolve the tool once and reuse the constant, so matching only
+    inline literals would miss the common spelling.
+    """
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        if node.value is None or not STATIC_ANALYSIS_RE.search(_node_text(node.value)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name):
+                names.add(target.id)
+    return names
+
+
+def _is_static_analysis(node: ast.Call, tool_names: frozenset[str] = frozenset()) -> bool:
+    """True when the call only disassembles or dumps candidate bytes.
+
+    These tools turn an artifact into text; they never hand it control. Auditing a
+    candidate class file with `javap -v` is the safe shape the anti-cheat design asks
+    for, so flagging it as an undemoted candidate execution is a false alarm.
+    """
     rendered = _node_text(node)
+    if STATIC_ANALYSIS_RE.search(rendered):
+        return True
+    return any(re.search(rf"(?:^|[\s(\[,]){name}(?=[\s,\])]|$)", rendered) for name in tool_names)
+
+
+def _is_candidate_controlled(
+    node: ast.Call, function_name: str, tool_names: frozenset[str] = frozenset()
+) -> bool:
+    rendered = _node_text(node)
+    if _is_static_analysis(node, tool_names):
+        return False
     if re.search(r"(?i)(candidate|simulator|compile|build)", function_name):
         return True
     if BUILD_OR_CANDIDATE_RE.search(rendered):
@@ -87,7 +139,8 @@ def _is_demoted(node: ast.Call) -> bool:
 
 
 class _CandidateCallVisitor(ast.NodeVisitor):
-    def __init__(self) -> None:
+    def __init__(self, tool_names: frozenset[str] = frozenset()) -> None:
+        self.tool_names = tool_names
         self.function_stack: list[str] = []
         self.unsafe: list[UnsafeCandidateCall] = []
         self.candidate_call_count = 0
@@ -101,7 +154,7 @@ class _CandidateCallVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         function_name = self.function_stack[-1] if self.function_stack else "<module>"
-        if _is_process_call(node) and _is_candidate_controlled(node, function_name):
+        if _is_process_call(node) and _is_candidate_controlled(node, function_name, self.tool_names):
             self.candidate_call_count += 1
             if not _is_demoted(node):
                 expression = " ".join(_node_text(node).split())[:240]
@@ -121,7 +174,7 @@ def analyze_candidate_privileges(source: str) -> tuple[int, list[UnsafeCandidate
         tree = ast.parse(source)
     except SyntaxError:
         return 0, []
-    visitor = _CandidateCallVisitor()
+    visitor = _CandidateCallVisitor(frozenset(_static_analysis_names(tree)))
     visitor.visit(tree)
     return visitor.candidate_call_count, visitor.unsafe
 
@@ -134,9 +187,29 @@ def unit_test_alignment_issue(contract_text: str, verifier_source: str) -> bool:
     )
 
 
+# Making a candidate artifact setuid/setgid, or granting it capabilities, is what turns
+# a missing no-new-privs guard into a real escalation path.
+PRIVILEGE_ACQUIRABLE_RE = re.compile(
+    # A setuid/setgid/sticky mode in any of the spellings a verifier actually writes:
+    # 0o4755, 04755, 4755, plus the symbolic and capability forms.
+    r"(?i)(?:\b0?o?[2467][0-7]{3}\b|\bS_ISUID\b|\bS_ISGID\b|chmod\s+[ug]\+s|\bsetcap\b)"
+)
+
+
 def setpriv_missing_no_new_privs(source: str) -> bool:
     """Flag a setpriv-based boundary that omits the no-new-privileges guard."""
     return bool(re.search(r"(?i)\bsetpriv\b", source)) and "--no-new-privs" not in source
+
+
+def privilege_acquirable(source: str) -> bool:
+    """Whether anything here could let demoted candidate code regain privilege.
+
+    The platform's own judge guidance is explicit that a missing ``--no-new-privs``
+    flag alone is not a confirmed finding without evidence that the executed binary can
+    acquire the privilege — the escalation needs a setuid-root or capability-bearing
+    artifact to exist in the first place.
+    """
+    return bool(PRIVILEGE_ACQUIRABLE_RE.search(source))
 
 
 def test_identity_leak(source: str) -> bool:
@@ -207,6 +280,7 @@ def main() -> int:
     candidate_count, unsafe = analyze_candidate_privileges(verifier)
     alignment_issue = unit_test_alignment_issue(contract, verifier)
     setpriv_issue = setpriv_missing_no_new_privs(verifier)
+    escalation_reachable = setpriv_issue and privilege_acquirable(verifier)
     identity_issue = test_identity_leak(verifier)
     interpreter_issues = []
     interpreter_parse_warnings = []
@@ -222,13 +296,17 @@ def main() -> int:
         "candidate_execution_count": candidate_count,
         "unsafe_candidate_calls": [asdict(item) for item in unsafe],
         "setpriv_missing_no_new_privs": setpriv_issue,
+        "no_new_privs_escalation_reachable": escalation_reachable,
         "test_identity_leak": identity_issue,
         "interpreter_permission_alias_issues": interpreter_issues,
         "interpreter_parse_warnings": interpreter_parse_warnings,
         "unit_test_alignment_issue": alignment_issue,
     }
     print(json.dumps(payload, sort_keys=True))
-    if args.check in {"privilege", "all"} and (unsafe or setpriv_issue):
+    # Keep the advisory in the payload either way, but only block when the escalation
+    # is actually reachable: blocking on the bare flag rejects a task the platform
+    # accepts, and under a no-panel profile nobody is there to overrule it.
+    if args.check in {"privilege", "all"} and (unsafe or escalation_reachable):
         return 1
     if args.check in {"alignment", "all"} and alignment_issue:
         return 1

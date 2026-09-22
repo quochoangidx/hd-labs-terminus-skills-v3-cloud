@@ -81,7 +81,7 @@ Run each agent **4 times** per model — the same count the platform uses. Diffi
 | **Core** | 50% – < 80% |
 | **Base** | 80% – < 100% |
 
-There is no best-model / worst-model gate, and tasks above 80% are **not** rejected — that is the Base tier. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
+There is no best-model / worst-model gate; count results across all 8 runs. The tier table describes measured accuracy, while a separate gate requires at least **3 genuine task-driven failures** for a new submission to proceed. No more than 5 runs may pass. Base remains a valid tier for tasks already on the platform by the morning of Sep 11, 2026, including their later revisions. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
 ### Example Testing
 

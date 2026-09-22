@@ -79,6 +79,43 @@ manufacture difficulty, and do not demand a prose rule for an inference already
 supported by visible evidence. If only transcription remains, lower priority
 and prospect another design rather than inflate the fixture count.
 
+## Expertise floor
+
+Difficulty has two independent parts, and every candidate must clear both.
+
+The **expertise floor** asks whether solving the task requires genuine domain
+expertise — graduate-level knowledge or several years of professional
+experience in the field. A task that someone without that background could work
+through in a few days does not qualify, whatever its pass rate. The platform
+judges this with a blocking `difficult` check on the task itself, before agents
+ever run on it, and it applies at every tier including `base`.
+
+The **tier** records how often frontier agents solve the task. The two are
+independent: agents know a great deal, so a task can demand years of human
+expertise and still be solved often.
+
+What clears the floor is substantive domain reasoning, which reliably comes
+from three places:
+
+- choosing between valid methods under real constraints, where more than one
+  approach works in principle but the task's specifics decide which is right
+  and the wrong choice produces a result that looks fine and is not;
+- diagnosing plausible-but-wrong results, where the output has the right shape
+  and passes a surface check, and knowing it is wrong takes knowing what a
+  correct one must satisfy;
+- reasoning about interactions and edge cases a generic approach misses, where
+  each constraint is simple alone and the domain knowledge is in how they
+  interact.
+
+Obscure facts, a long checklist, and sheer volume of work do not clear the
+floor. They may raise effort or lower agent pass rate, but that is the separate
+job of raising the tier.
+
+Write `difficulty_explanation` about why the task is inherently a challenge for
+a human expert — not about a model's pass rate, which is what the tier records.
+
+## Tier
+
 Difficulty is average pass@1 across both current reference models:
 
 - frontier: below 20%
@@ -86,9 +123,14 @@ Difficulty is average pass@1 across both current reference models:
 - core: 50% to below 80%
 - base: 80% to below 100%
 
-The in-platform iteration gate runs four trials and requires at least one
-failure. Base tasks are accepted; only 100% across the iteration sample cannot
-proceed. Python has no special difficulty requirement.
+Difficulty is measured once, after the quality panel passes and before human
+review: four runs per current reference model, eight total. For a new
+submission, at least 3 of those 8 runs must fail, so no more than 5 may pass
+and the maximum measured accuracy that can proceed is 62.5%. Tasks already on
+the platform by the morning of Sep 11, 2026 keep the prior one-failure rule,
+including their later revisions. A new candidate must therefore
+aim below the 62.5% ceiling; `base` and a 75% `core` outcome no longer proceed.
+Python has no special difficulty requirement.
 
 Mine toward genuine signal:
 
@@ -1128,8 +1170,8 @@ Downgrade or reject candidates when:
 - the likely oracle is a tiny one-file patch
 - all tests reduce to variants of the same condition
 - a strong agent can locate the fix by grepping one or two obvious symbols from the prompt
-- the four-run iteration sample is 4/4 solved; redesign because it provides no
-  signal. Results above 80% but below 100% are valid Base-tier evidence.
+- the platform measurement leaves fewer than 3 failures across its 8 runs;
+  redesign, because a new submission cannot proceed above 62.5% accuracy.
 - difficulty comes mainly from unrelated components, exhaustive validation, or
   interface breadth rather than the causal core
 

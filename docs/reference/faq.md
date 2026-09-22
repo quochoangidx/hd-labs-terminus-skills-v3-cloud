@@ -1,6 +1,6 @@
 # Terminus 3 — Frequently Asked Questions
 
-*Last updated: September 4, 2026*
+*Last updated: September 11, 2026*
 
 > **How to use this document:** Sections are ordered to follow the task lifecycle — from onboarding through building, testing, submitting, and getting paid. Use `Ctrl+F` to search for keywords, or jump to a section below.
 
@@ -21,10 +21,10 @@
 ## 1. Getting Started & Onboarding
 
 **How do I get started on this project?**
-Review the [project website](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal), then check pinned posts in #terminus-3-submissions and #terminus-3-announcements. Once you've reviewed the materials, complete the **Terminus-3-Prod-Assessment** on your [Snorkel dashboard](https://experts.snorkel-ai.com/home) under "My Projects." You must score 80% or higher to advance and will receive your results with next steps via Slack DM once ready.
+Review the [project website](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal), then check pinned posts in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W) and [`#terminus-3-announcements`](https://snorkel-team.enterprise.slack.com/archives/C0BLN0YUNQN). Once you've reviewed the materials, complete the **Terminus-3-Assessment** on your [Snorkel dashboard](https://experts.snorkel-ai.com/home) under "My Projects." You must score 80% or higher to advance and will receive your results with next steps via Slack DM once ready.
 
 **Where do I find the assessment?**
-On your [dashboard](https://experts.snorkel-ai.com/home), look for **Terminus-3-Prod-Assessment** under "My Projects" (you may need to scroll or search). Click the Submissions node to begin. If you don't see it, ask in #terminus-3-submissions.
+On your [dashboard](https://experts.snorkel-ai.com/home), look for **Terminus-3-Assessment** under "My Projects" (you may need to scroll or search). Click the Submissions node to begin. If you don't see it, ask in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W).
 
 **How soon do I need to take the assessment? Are there deadlines?**
 No deadlines — take it whenever you're ready. However, the assessment has a **90-minute time limit** once started, so review the materials first.
@@ -56,7 +56,7 @@ You can also download the [task skeleton](/Terminus-3-Prod/default-template.zip)
 Expected if you haven't been onboarded to the main project yet. Complete and pass the assessment first, then wait for team confirmation. CLI and API keys only work after assignment.
 
 **I hit the maximum key refresh limit (20).**
-Post in #terminus-3-submissions and ask an admin to reset your key. They can delete the old key so you can regenerate, or top it up manually. You don't need to run the refresh command after an admin resets it.
+Post in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W) and ask an admin to reset your key. They can delete the old key so you can regenerate, or top it up manually. You don't need to run the refresh command after an admin resets it.
 
 **`stb login` works but `stb keys refresh` fails with "Authentication failed."**
 Known intermittent issue. Try: (1) regenerate a new API key in the browser using the "Copy" button, (2) run `stb login` again, then (3) retry `stb keys refresh`. If it persists, post in Slack and tag the team.
@@ -112,18 +112,18 @@ No. Snorkel adds `README.md` at packaging, assembled from the `difficulty_explan
 ### Difficulty
 
 **How is difficulty determined?**
-Empirically. **Accuracy = mean pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5.** Tiers: **Frontier** < 20%, **Advanced** 20–50%, **Core** 50–80%, **Base** 80–100%. Tasks above 80% are not rejected — Base is a wanted tier, but **100% averaged across both models is not accepted**: a task every run solves gives no signal. There is no language-specific difficulty rule. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
+Empirically. **Accuracy = mean pass@1 across 8 runs — 4 per model, over both GPT-5.6 and Claude Opus 5.** Tiers remain **Frontier** < 20%, **Advanced** 20–<50%, **Core** 50–<80%, and **Base** 80–<100%. A separate gate now requires at least **3 failures across the 8 runs** for a new submission to proceed, so no more than 5 may pass (62.5% maximum). Base remains a valid tier for grandfathered tasks and their later revisions. There is no language-specific difficulty rule. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
 **When is difficulty measured, and is it final?**
 Once. After your task passes the [quality panel](/portal/docs/testing-and-validation/quality-panel-judge-guide) and before it reaches a reviewer, the platform runs **4 trials per model across both models — 8 runs total**. That measurement sets your tier, and it is the one a reviewer sees. Nothing re-runs after acceptance.
 
 Your local `-k 4` runs are an estimate, not the measurement — different seeds and different days move results.
 
-**My task passed every run in the platform check. Why can't it proceed?**
-At least one of the 8 runs must fail. A task that every run solves produces no signal about agent capability, so it can't proceed to review. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty.
+**My task passed 6 or more of the 8 platform runs. Why can't it proceed?**
+For new submissions, at least **3 of the 8 runs must fail**. A result with 6–8 passes does not clear the gate. Make the task genuinely harder — don't just tighten a numeric threshold, which shows up as a `near_miss` flag rather than real difficulty. Tasks already on the platform by the morning of Sep 11, 2026, including later revisions of those tasks, remain under the prior one-failure rule.
 
 **My task keeps coming back too easy. What makes a task land in the harder tiers?**
-Requirements the agent must infer rather than read off a checklist, outputs judged on semantics rather than appearance, and several correctness axes that interact. Single-bug or template-based tasks tend to land in Core or Base. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
+Requirements the agent must infer rather than read off a checklist, outputs judged on semantics rather than appearance, and several correctness axes that interact. Single-bug or template-based tasks tend to land in Core or, for grandfathered tasks, Base; a new submission with 6–8 passes does not clear the gate. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
 **My non-Python task (e.g., Go) is being classified as a Python task.**
 All verifier tests are written in Python pytest, but Python test infrastructure alone should not be listed in `task.toml` `languages`. The `languages` field should describe the main task/oracle/agent work. Remove Python from `languages` if it is present only because of `tests/test_outputs.py`.
@@ -232,7 +232,7 @@ This is a **provider content refusal**, not a CLI bug and not a verdict on your 
 1. **Re-run the check** — refusals can be intermittent; a fresh session sometimes passes.
 2. **Switch the judge model** — re-run with `-m opus` or `-m claude-haiku-4-5`. A refusal on one model frequently clears on another.
 3. **Review your task content** — security/exploit/malware-adjacent framing, harmful instructions, or sensitive-looking data can trip the flag even for legitimate tasks. Where possible, frame the task in clearly legitimate, defensive/educational terms.
-4. **Escalate** — if the task is legitimately security-related (e.g., a CTF or defensive-security task) and keeps refusing on every model, post the task UUID in #terminus-3-submissions so the team can review.
+4. **Escalate** — if the task is legitimately security-related (e.g., a CTF or defensive-security task) and keeps refusing on every model, post the task UUID in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W) so the team can review.
 
 This is separate from the **`refusals` trial-analysis flag**, which reports that the *agent under test* aborted on a content policy during a difficulty trial. Same word, unrelated causes — see [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
@@ -244,11 +244,17 @@ Harbor sets the build context to `environment/`. If your Dockerfile references f
 **Docker network errors after running many tests.**
 Run `docker network prune` to clean up stale networks.
 
+**Preflight or `stb harbor check` failed on `compose_networks`, or Oracle died before a Compose build.**
+Delete the top-level `networks:` block and every service's `networks:` list and `network_mode:` line in `environment/docker-compose.yaml`. In `task.toml`, set `[environment]`, `[agent]`, and `[verifier]` `network_mode = "public"`. The runner already puts every service in one shared namespace but cannot apply separate phase network policies to a Compose environment. These fixes cover `mutually exclusive network_mode and networks` and `network_mode='no-network' is not supported` failures. Keep `depends_on` and service-name hostnames. If the task must run offline, package it as a single container. See [Creating Docker Environment → Compose networking](/portal/docs/creating-tasks/creating-docker-environment#compose-networking).
+
 **My Dockerfile references a base image that seems unavailable.**
 Some images may not be accessible on the platform. Post the exact image name and task UUID in Slack.
 
-**Preflight failed on `COPY --chown=` or `COPY --from=`.**
-The cloud image builder rejects two patterns that work on local Docker. `COPY --chown=` must use numeric IDs (`0:0`, `1000:1000`), not names such as `root` or `appuser`. `COPY --from=` **image** refs must drop the tag and keep the digest (`golang@sha256:<digest>`), not `golang:1.24-bookworm@sha256:<digest>`. Stage names (`COPY --from=builder`) and `FROM image:tag@sha256:<digest>` are unchanged. The preflight names the exact line. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+**Can `COPY --chown=` use named users and groups?**
+Yes. The cloud image builder resolves names such as `root:root` and `appuser:appuser`; numeric IDs also work. The platform preflight no longer rejects names on `COPY` or `ADD --chown=`, but the cloud image builder still rejects `ADD` with a local source. Use `COPY` for local files.
+
+**Preflight failed on `COPY --from=`.**
+When the source is an **image**, drop the tag and keep the digest: use `golang@sha256:<digest>`, not `golang:1.24-bookworm@sha256:<digest>`. Stage names (`COPY --from=builder`) and `FROM image:tag@sha256:<digest>` are unchanged. The preflight names the exact line. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 
 **Preflight failed on `verifier_interpreter_permissions`, or Oracle log collection failed with Bash `Permission denied`.**
 On images where `/bin` is `/usr/bin`, `/bin/bash` and `/usr/bin/bash` are the same file. Saving a mode and disabling each path in turn can record `000` for the second path; restoring both leaves Bash non-executable. Harbor then fails to collect verifier logs (`DownloadVerifierDirError`) even if pytest wrote a reward. Resolve every path with `Path.resolve()`, deduplicate, restore each original mode once — do not hardcode `0755`. The platform check scans every `tests/**/*.py` before Oracle and is **not** in `stb harbor check`. An unreadable or unparseable file is a warning that the scan is incomplete for that file, not a pass. See [Writing Tests → Preserve Interpreter Permissions](/portal/docs/creating-tasks/writing-tests#preserve-interpreter-permissions).
@@ -288,7 +294,10 @@ You can also drill into a specific submission:
 See the [CLI User Guide → Check submission status](/portal/docs/cli-user-guide#5-check-submission-status) for the full set of submission commands.
 
 **What is the quality panel judge?**
-An automated four-axis review that runs before a human reviewer, and must pass before difficulty is measured: contract disclosure, reference-solution correctness, whether ground truth is reachable, and whether the verifier can be passed without solving the task. `Minor`, `Major`, and `Unsure` block; only `None` on every axis auto-accepts. Walk the checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) before you submit. If you think a finding is wrong, contest it with the cited passage the same way you would a human note — see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
+An automated five-axis review that gates difficulty measurement before human review: contract clarity, reference-solution correctness, protected ground truth, verifier soundness, and deterministic execution. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block, even if their text contains a severity. Passing the panel lets the task proceed through evaluation; it does not accept the task. Use the checklists in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) and the [worked examples](/portal/docs/testing-and-validation/quality-panel-examples) before submitting.
+
+**Does `Unsure` mean I need to rewrite my task?**
+No. `Unsure` or incomplete evidence is not a confirmed task defect, and `Unsure` alone is not a blocking severity. Read the decided findings and check the evaluation status. If evaluation remains unfinished, request support with the task ID and report. If you disagree with a specific finding, provide the cited contract passage and a reproducible example — see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
 
 **What are the submission limits?**
 
@@ -297,7 +306,7 @@ You are a **new contributor** until your first task is accepted. After that you 
 | Limit | New | Regular |
 |---|---|---|
 | Net-new submissions per day | **2** | **5** |
-| Submissions in "needs revision" | **1** | **1** |
+| Submissions in "needs revision" | **1** | **3** |
 | Pending submissions | **2** | **10** |
 
 Only **net-new** submissions count toward the daily limit — **revisions do not**. Daily limits reset at **midnight UTC** (~7–8 PM EST).
@@ -306,7 +315,7 @@ Only **net-new** submissions count toward the daily limit — **revisions do not
 Anything not yet accepted or rejected: needs revision, pending review, and pending adjudication all count. Reaching the cap blocks new assignments until something clears.
 
 **What happens when I have a submission in "needs revision"?**
-It blocks new assignments — for new and regular contributors alike, the limit is one. Clear it before starting something new: either revise and resubmit, or hit **"Discard"**, which rejects the task and removes it.
+It counts against a cap — **1** for new contributors, **3** for regular contributors — and reaching the cap blocks new assignments. Clear one before starting something new: either revise and resubmit, or hit **"Discard"**, which rejects the task and removes it.
 
 If you're blocked from a net-new submission while still under your daily limit, check both of the other two limits before reporting a bug — a submission in needs revision, or a full pending queue, will block you independently of the daily count.
 
@@ -328,13 +337,13 @@ Yes. The skeleton download appears on the claim-success screen and stays availab
 Assessments: ~24 hours (excluding weekends). Task reviews: 1–7 business days.
 
 **My task keeps coming back with blank, incorrect, or mismatched feedback.**
-Known caching issue — reviewers may receive stale or wrong zip files. If the feedback references files, code, or features not in your submission, dispute with screenshots and escalate in #terminus-3-submissions.
+Known caching issue — reviewers may receive stale or wrong zip files. If the feedback references files, code, or features not in your submission, dispute with screenshots and escalate in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W).
 
 **I disagree with the reviewer. What should I do?**
 Use the dispute mechanism on the portal. Reference specific docs or announcements. If the reviewer keeps returning the same incorrect feedback, escalate in Slack by tagging the team.
 
 **Are new guidelines being applied to my old revisions?**
-They shouldn't be — new rules are for new submissions only. If a reviewer enforces new requirements on an older task, flag it. Noelle has confirmed reviewers are aware of this distinction.
+They shouldn't be — new rules are for new submissions only. In particular, tasks already on the platform by the morning of Sep 11, 2026 keep the prior one-failure difficulty gate, including later revisions of those tasks. If a reviewer enforces new requirements on an older task, flag it. Noelle has confirmed reviewers are aware of this distinction.
 
 ---
 
@@ -357,7 +366,7 @@ Check "Generate Rubric(s)" and submit _without_ checking "Send to Reviewer". Gen
 Known platform bug. Report with the task UUID in Slack.
 
 **How is the quality panel different from LLMaJ or Agent Review?**
-LLMaJ and Agent Review are separate helpers (Agent Review does not block). The quality panel is a four-axis review that **blocks** before a human reviewer, and gates the difficulty measurement. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+LLMaJ and Agent Review are separate helpers (Agent Review does not block). The quality panel reviews five axes and can block progress before difficulty measurement and human review. Some flagged findings may also receive an execution check against the task's own verifier; an unsuccessful proof attempt does not clear the finding. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
 
 ---
 
@@ -365,6 +374,8 @@ LLMaJ and Agent Review are separate helpers (Agent Review does not block). The q
 
 **What's the pay per task?**
 See the [Rate Schedule](https://snorkel-ai.github.io/Terminus-EC-Training-stateful/portal/docs/reference/rate-schedule) for current rates and bonuses.
+
+Access to the Rate Schedule is granted through a **Google Group**, not through the document itself. **Do not request access on the file directly — those requests will be rejected.** You are added to the group once you have passed the **Terminus-3-Assessment**. If you have passed the assessment and still cannot open the Rate Schedule, flag it to the managers in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W).
 
 **When do I get paid?**
 Payouts follow a **Friday-to-Thursday** cycle — tasks accepted in that window are paid the following Friday. Example: accepted Monday the 7th → paid around Friday the 17th.
@@ -395,8 +406,8 @@ Yes. The current schedule is **pinned at the top of the `#terminus-3-announcemen
 
 | Channel | Use for |
 |---|---|
-| #terminus-3-submissions | General questions, tech issues, submission help |
-| #terminus-3-announcements | Guideline updates (read-only for most) |
+| [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W) | General questions, tech issues, submission help |
+| [`#terminus-3-announcements`](https://snorkel-team.enterprise.slack.com/archives/C0BLN0YUNQN) | Guideline updates (read-only for most) |
 
 ---
 

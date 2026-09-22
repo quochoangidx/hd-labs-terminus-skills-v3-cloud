@@ -105,3 +105,45 @@ for path in paths:
 
 def test_interpreter_permission_parse_failure_is_incomplete_warning() -> None:
     assert MODULE.interpreter_permission_alias_issue("def broken(:") is None
+
+
+def test_a_missing_no_new_privs_flag_alone_is_not_an_escalation() -> None:
+    """The platform's own judge guidance requires evidence of privilege acquisition.
+
+    `quality-panel-examples.md`: "A missing `--no-new-privs` flag alone is not a
+    confirmed finding" without evidence the executed binary can acquire the privilege.
+    Blocking on the bare flag rejects tasks the platform accepts.
+    """
+    source = (
+        "DROP = [SETPRIV, '--reuid=12000', '--regid=12000', '--clear-groups']\n"
+        "def run_candidate(argv):\n"
+        "    return subprocess.run(DROP + argv, env={'PATH': ''})\n"
+    )
+
+    assert MODULE.setpriv_missing_no_new_privs(source) is True
+    assert MODULE.privilege_acquirable(source) is False
+
+
+def test_a_setuid_candidate_artifact_makes_the_missing_flag_reachable() -> None:
+    source = (
+        "os.chmod(binary, 0o4755)\n"
+        "DROP = ['setpriv', '--reuid=12000']\n"
+        "subprocess.run(DROP + [str(binary)])\n"
+    )
+
+    assert MODULE.setpriv_missing_no_new_privs(source) is True
+    assert MODULE.privilege_acquirable(source) is True
+
+
+def test_disassembling_a_candidate_class_is_not_candidate_execution() -> None:
+    """javap turns bytes into text; it never hands the artifact control."""
+    source = (
+        "JAVAP = shutil.which('javap')\n"
+        "def audit_candidate(classes):\n"
+        "    return subprocess.run([JAVAP, '-v', '-p', *classes], capture_output=True)\n"
+    )
+
+    count, unsafe = MODULE.analyze_candidate_privileges(source)
+
+    assert unsafe == []
+    assert count == 0

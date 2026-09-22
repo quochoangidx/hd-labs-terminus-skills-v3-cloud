@@ -86,7 +86,7 @@ class ReviewRoleGuardTests(unittest.TestCase):
             root = Path(tmp)
             paths = self.open_reviewers(root)
             code, _ = self.hook(root, {
-                "hook_event_name": "SessionStart", "model": "gpt-5.6-luna", "session_id": "thread-1",
+                "hook_event_name": "SessionStart", "model": "gpt-5.6-sol", "session_id": "thread-1",
             })
             self.assertEqual(0, code)
             owners = {guard.load(path)["owner"]["session_id"] for path in paths}
@@ -97,7 +97,7 @@ class ReviewRoleGuardTests(unittest.TestCase):
             root = Path(tmp)
             self.open_reviewers(root)
             self.hook(root, {
-                "hook_event_name": "SessionStart", "model": "gpt-5.6-luna", "session_id": "thread-1",
+                "hook_event_name": "SessionStart", "model": "gpt-5.6-sol", "session_id": "thread-1",
             })
             code, output = self.hook(root, {
                 "hook_event_name": "PreToolUse", "session_id": "thread-1", "turn_id": "turn-1",
@@ -145,7 +145,7 @@ class ReviewRoleGuardTests(unittest.TestCase):
             args = argparse.Namespace(
                 lease=lease["lease_id"], session_id="thread-1", turn_id="turn-1",
                 started_at=started.isoformat(), ended_at=ended.isoformat(),
-                model="gpt-5.6-luna", reasoning_effort="high", evidence=evidence,
+                model="gpt-5.6-sol", reasoning_effort="medium", evidence=evidence,
             )
             with redirect_stdout(StringIO()):
                 guard.reconcile_completed(args, root / "leases")
@@ -166,7 +166,7 @@ class ReviewRoleGuardTests(unittest.TestCase):
             with redirect_stdout(StringIO()):
                 guard.open_leases(open_args, root / "leases")
             self.hook(root, {
-                "hook_event_name": "SessionStart", "model": "gpt-5.6-luna", "session_id": "auditor-thread",
+                "hook_event_name": "SessionStart", "model": "gpt-5.6-sol", "session_id": "auditor-thread",
             })
             self.hook(root, {"hook_event_name": "Stop", "session_id": "auditor-thread"})
             lease_path = guard.paths(root / "leases")[0]

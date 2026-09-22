@@ -316,17 +316,46 @@ services:
     image: my-task-base:1.0
 ```
 
-### Named `--chown` and tag+digest `COPY --from=`
+### Compose networking and non-public phases
 
-The cloud image builder rejects two patterns that work on local Docker. Preflight fails immediately with the line to change. Applies to every Dockerfile in the submission.
+The Terminus 3 runner puts every Compose service in one shared namespace and cannot apply separate phase network policies. `check_compose_networks` (`stb harbor check` and platform preflight) blocks:
 
-```dockerfile
-# Bad - named user on COPY --chown
-COPY --chown=root:root script.sh /app/script.sh
+- a top-level `networks:` block
+- a per-service `networks:` list
+- a per-service `network_mode:`
+- `[agent]` or `[verifier]` `network_mode` other than `"public"` when a Compose file is present
 
-# Good - numeric IDs
-COPY --chown=0:0 script.sh /app/script.sh
+Before that check, these shapes failed every Oracle trial with `mutually exclusive network_mode and networks` or `network_mode='no-network' is not supported`.
+
+```yaml
+# Bad - named networks
+networks:
+  backend:
+services:
+  app:
+    build: .
+    networks: [backend]
+  db:
+    image: postgres:15@sha256:<digest>
+    networks: [backend]
 ```
+
+```yaml
+# Good - default project network; services still reach each other by name
+services:
+  app:
+    build: .
+    depends_on:
+      - db
+  db:
+    image: postgres:15@sha256:<digest>
+```
+
+For Compose tasks, set all three `task.toml` phases to `"public"`. If the task must run offline, package it as a single container. See [Creating Docker Environment → Compose networking](/portal/docs/creating-tasks/creating-docker-environment#compose-networking).
+
+### Tag+digest `COPY --from=`
+
+The cloud image builder rejects tag+digest image references in `COPY --from=`. Preflight fails immediately with the line to change. This applies to every Dockerfile in the submission.
 
 ```dockerfile
 # Bad - tag and digest on COPY --from= image ref
@@ -336,7 +365,7 @@ COPY --from=golang:1.24-bookworm@sha256:<digest> /usr/local/go /usr/local/go
 COPY --from=golang@sha256:<digest> /usr/local/go /usr/local/go
 ```
 
-`FROM image:tag@sha256:<digest>` and `RUN chown` are unchanged. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+Named and numeric `COPY --chown=` values are both supported. `FROM image:tag@sha256:<digest>` and `RUN chown` are unchanged. See [Dockerfile Requirements → Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 
 ### Reserved Directory Conflicts
 
@@ -479,12 +508,12 @@ Signs a task might be problematic:
 | Solution | Echo answers | Derive answers |
 | Solution | Random without seed | Add seeds |
 | Environment | Missing `tmux` / `asciinema` | Pre-install in Dockerfile |
-| Environment | `COPY --chown=root:root` (named user) | Numeric IDs (`--chown=0:0`) |
 | Environment | `COPY --from=image:tag@sha256:…` | Digest only (`COPY --from=image@sha256:…`) |
 | Environment | Runtime network installs in `test.sh` | Bake deps into image |
 | Environment | AI-scaffolding filenames (`CLAUDE.md`, `skills.md`, etc.) | Remove from environment |
 | Environment | `solution/` or `tests/` copied in Dockerfile | Use Harbor's runtime mounts |
 | Environment | `--privileged` / `SYS_ADMIN` / docker socket | Use standard sandbox |
+| Environment | Compose `networks:` or service `network_mode:` | Delete those keys; keep service-name DNS |
 | Environment | Floating base image tag (`latest`) | Specific version tag + digest |
 | Cheating | Tests in image | Mount at runtime |
 | Cheating | Mutable data | Verify computation |

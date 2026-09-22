@@ -95,18 +95,47 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 For new submissions:
 
 - Use difficulty `frontier`, `advanced`, `core`, or `base`; tiers are
-  language-independent.
+  language-independent. The bands are unchanged, but a new submission needs at
+  least 3 failures across the platform's 8 runs, so no more than 5 may pass and
+  a result above 62.5% accuracy cannot proceed; `base` and a 75% `core` outcome
+  are reachable only by tasks grandfathered on the platform by the morning of
+  Sep 11, 2026, including their later revisions.
 - Put `artifacts` at top level and every descriptive field under `[metadata]`.
 - Set `[verifier].environment_mode = "separate"`.
 - Declare all three network policies. `[environment].network_mode` must be
-  `"public"`; `[agent].network_mode` and `[verifier].network_mode` must each be
-  `"public"` or `"no-network"` and match what that phase genuinely needs.
+  `"public"`; for a single-container task, `[agent].network_mode` and
+  `[verifier].network_mode` must each be `"public"` or `"no-network"` and match
+  what that phase genuinely needs. **Compose exception:** when
+  `environment/docker-compose*.yml` / `.yaml` is present, all three phases must
+  be `"public"` — the runner cannot apply separate phase policies to a Compose
+  environment, and `check_compose_networks` blocks any other value. A task that
+  must be solved offline has to ship as a single container.
 - Set `[agent].timeout_sec` between 1800 and 18000 seconds.
 - Do not emit removed Terminus 2 fields: `version = "2.0"`, `codebase_size`,
   `number_of_milestones`, `subcategories`, `allow_internet`,
   `expert_time_estimate_min`, or `junior_time_estimate_min`.
 - `languages` lists the main language(s) used by the task/oracle changes. Do
   not include Python solely because verifier tests are written in pytest.
+
+## Expertise Floor
+
+Difficulty has two independent parts and every task must clear both. The
+**expertise floor** asks whether solving the task requires genuine domain
+expertise — graduate-level knowledge or several years of professional
+experience. A blocking `difficult` check judges this on the task itself, before
+agents run on it, and it applies at every tier including `base`: `base` means
+agents usually solve it, not that a person could. The **tier** separately
+records how often frontier agents solve the task.
+
+The floor is cleared by substantive domain reasoning, which comes from three
+places: choosing between valid methods under real constraints, where the wrong
+choice produces a result that looks fine and is not; diagnosing
+plausible-but-wrong results whose shape passes a surface check; and reasoning
+about interactions and edge cases a generic approach misses. Obscure facts, a
+long checklist, and sheer volume of work do not clear it.
+
+Write `difficulty_explanation` about why the task is inherently a challenge for
+a human expert — not about a model's pass rate, which is what the tier records.
 
 ## Reviewer-Facing Submission Explanations
 
@@ -490,11 +519,14 @@ Common quality-check failure: a test asserts that unaffected modes such as `prep
 `environment/Dockerfile` must:
 
 - Use `FROM ...@sha256:<digest>` on every stage.
-- Keep every Dockerfile compatible with the cloud image builder:
-  `COPY --chown=` must use numeric IDs (such as `0:0` or `1000:1000`), and
-  external-image `COPY --from=` refs must be digest-only
-  (`image@sha256:<digest>`, never `image:tag@sha256:<digest>`). Stage aliases
-  remain valid, and `FROM image:tag@sha256:<digest>` remains required.
+- Keep every Dockerfile compatible with the cloud image builder: external-image
+  `COPY --from=` refs must be digest-only (`image@sha256:<digest>`, never
+  `image:tag@sha256:<digest>`). Stage aliases remain valid, and
+  `FROM image:tag@sha256:<digest>` remains required. Since Sep 17, 2026 the
+  builder resolves names through `/etc/passwd`, so `COPY --chown=` accepts named
+  users and groups (`root:root`, `appuser:appuser`) as well as numeric IDs;
+  `check_modal_dockerfile_compat` no longer rejects either form, including on
+  `ADD --chown=`. `ADD` with a local source is still unsupported — use `COPY`.
 - Use a **canonical Terminal-Bench base image** for the final runtime stage when
   one matches the task's language (all under `public.ecr.aws/docker/library/`,
   exact digest required): `python:3.13-slim-bookworm@sha256:01f4…24fb`,
@@ -677,10 +709,14 @@ the changed solid; reading a stored parameter back is insufficient.
   still finishes reward and log collection; platform preflight
   `verifier_interpreter_permissions` is blocking and is not in `stb harbor check`.
 
-Before submission, review the exact task against all four quality-panel axes:
+Before submission, review the exact task against all five quality-panel axes:
 `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`,
-and `sound_verifier`. `Minor`, `Major`, and `Unsure` all block or require human
-routing; only `None` on every axis auto-accepts. Exact grading conventions need
+`sound_verifier`, and `deterministic_execution`. `Minor` and `Major` block on `coherent_contract`,
+`correct_reference_solution`, `sound_verifier`, and `deterministic_execution`;
+only `Major` blocks on `protected_ground_truth`. Findings explicitly marked
+`Advisory` do not block, and `Unsure` is not itself a confirmed defect, though
+an undecided axis still leaves the panel uncleared. Passing the panel allows
+difficulty measurement; it is not task acceptance. Exact grading conventions need
 a citable candidate-visible authority, but this does not require inferred
 domain mechanisms to be restated when distributed visible evidence supports
 them under the Terminus 3 epistemic contract.
@@ -799,7 +835,8 @@ Quality preflight:
   claims or agent/AI meta language
 - `tests/Dockerfile` is digest-pinned, installs all verifier dependencies,
   copies `/tests`, creates artifact landing directories, and all Dockerfiles use
-  numeric `COPY --chown=` IDs plus digest-only external-image `COPY --from=` refs
+  digest-only external-image `COPY --from=` refs (`COPY --chown=` may be named
+  or numeric)
 - no root-level `pyproject.toml`
 - final runtime base image is canonical for the task's language (or non-canonical with a credible justification)
 - no `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.DS_Store`, `._*`, `__MACOSX`, reports, logs, or submissions in the ZIP
@@ -808,6 +845,11 @@ Quality preflight:
 - no `privileged: true`, no `SYS_ADMIN`/`NET_ADMIN`/`SYS_MODULE` capabilities,
   no `/var/run/docker.sock` mounts; compose volume mounts must not shadow the
   reserved paths `/logs/artifacts`, `/logs/verifier`, `/tests`, `/solution`
+- no top-level `networks:` block, per-service `networks:` list, or per-service
+  `network_mode:` in any `environment/docker-compose*.yml` / `.yaml`, and all
+  three `task.toml` phases set `network_mode = "public"` when a Compose file is
+  present (`check_compose_networks`, blocking in `stb harbor check` and at
+  platform preflight)
 - no runtime dependency setup in `tests/test.sh`
 - no end-to-end solution generator in `tests/`; golden data, parsed output,
   sealed truth, and spec-derived invariants are allowed

@@ -42,7 +42,7 @@ Before moving on to task-specific setup, make sure your environment satisfies th
 - `environment/Dockerfile` exists and builds.
 - The final runtime image includes `tmux` and `asciinema`.
 - Every `FROM` image, and every pulled compose `image:`, includes `@sha256:<digest>`.
-- `COPY --chown=` uses numeric IDs; `COPY --from=` image refs are digest-only (no `:tag@sha256`). See [Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
+- `COPY --from=` image refs are digest-only (no `:tag@sha256`). Named and numeric `COPY --chown=` values are both supported. See [Cloud Image Builder Syntax](/portal/docs/creating-tasks/dockerfile-best-practices#cloud-image-builder-syntax).
 - The final runtime base image is sanctioned or explicitly exempt.
 - Language dependencies are exact-pinned or locked.
 - Apt installs use `--no-install-recommends` and clean `/var/lib/apt/lists/*` in the same layer.
@@ -51,6 +51,7 @@ Before moving on to task-specific setup, make sure your environment satisfies th
 - The image does not copy `solution/`, `tests/`, or hidden verifier assets.
 - `tests/test.sh` dependencies are baked into the image; the verifier does not install or download at runtime.
 - Compose files do not use privileged containers or unsafe capabilities.
+- Compose files do not declare `networks:` (top-level or per service) or a per-service `network_mode:`. See [Compose networking](#compose-networking).
 
 See [Dockerfile & Image Best Practices](/portal/docs/creating-tasks/dockerfile-best-practices) for the full rationale and examples behind each item.
 
@@ -90,6 +91,44 @@ services:
       - POSTGRES_PASSWORD=pass
       - POSTGRES_DB=app
 ```
+
+Do not add a top-level `networks:` block, a per-service `networks:` list, or a per-service `network_mode:`. `depends_on` and service-name hostnames (for example `DATABASE_URL=…@db:5432`) stay valid.
+
+### Compose networking
+
+The Terminus 3 runner puts every Compose service in one shared network namespace. Docker Compose then rejects a service that also declares `networks:` (`mutually exclusive network_mode and networks`), and any service-level `network_mode:` is ignored. A blocking check (`check_compose_networks`) scans `environment/docker-compose*.yml` and `environment/docker-compose*.yaml` at `stb harbor check` and at platform preflight.
+
+```yaml
+# Bad — named networks and a service-level network_mode
+networks:
+  backend:
+    internal: true
+services:
+  app:
+    build: .
+    networks: [backend]
+    network_mode: bridge
+  db:
+    image: postgres:15@sha256:<digest>
+    networks: [backend]
+```
+
+```yaml
+# Good — default project network; services still reach each other by name
+services:
+  app:
+    build: .
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db:5432/app
+  db:
+    image: postgres:15@sha256:<digest>
+```
+
+Delete the extra keys and keep everything else. Isolation such as `internal: true` or `network_mode: none` is not available; if a peer must be unreachable, enforce that inside the service (bind to `127.0.0.1`, drop the route, require a token).
+
+Compose also changes the `task.toml` network rule: `[environment]`, `[agent]`, and `[verifier]` must all declare `network_mode = "public"`. The runner cannot apply separate phase network policies to a Compose environment, so `check_compose_networks` blocks a Compose task whose agent or verifier is `"no-network"`. If the task must be solved offline, package it as a single container.
 
 ## Common Patterns
 

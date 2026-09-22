@@ -4,13 +4,14 @@ What happens after you submit your task, and how to handle feedback.
 
 ## Review Timeline
 
-| Stage | Duration |
-|-------|----------|
-| Automated CI checks | Immediate |
-| Peer review assignment | 1 day |
-| Initial review | 1-7 business days |
-| Follow-up reviews | 1-7 business days |
-| **Total** | 7-14 business days |
+| Stage | Timing |
+|-------|--------|
+| Automated checks | Begin after submission |
+| Quality panel | Before difficulty measurement |
+| Difficulty measurement (8 runs) | After the quality panel passes |
+| Peer review assignment | After difficulty measurement |
+| Initial review | Typically 1-7 business days |
+| Follow-up reviews | Typically 1-7 business days |
 
 ## Review Process
 
@@ -19,8 +20,11 @@ What happens after you submit your task, and how to handle feedback.
 Immediately after submission, your task goes through:
 - CI checks (syntax, structure, dependencies)
 - LLMaJ checks (quality, completeness)
+- **Expertise check** (`difficult`, blocking) — judges whether the task requires genuine domain expertise, independent of its tier. A task that fails here needs deeper domain reasoning, not a lower pass rate. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 - Oracle agent run
-- **Quality panel judge** (blocking) — four axes on contract, reference solution, protected ground truth, and verifier soundness. `Minor`, `Major`, and `Unsure` come back to you with a cited reason; only `None` on every axis lets the task proceed. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+- **Quality panel judge** — five axes on contract, reference solution, protected ground truth, verifier soundness, and deterministic execution. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+
+`Unsure` or incomplete evidence is not a confirmed task defect. Check the evaluation status and report, requesting support if evaluation remains unfinished. Passing the panel allows difficulty measurement; acceptance still requires the remaining evaluation and human review.
 
 ### 2. Agent Evaluation
 
@@ -28,7 +32,7 @@ Once the quality panel passes, your task is run against:
 - Claude Opus 5 with Claude Code (4 runs)
 - GPT-5.6 with Codex agent (4 runs)
 
-Pass rate across all 8 runs sets the difficulty tier. At least one run must fail for the task to proceed.
+Pass rate across all 8 runs sets the difficulty tier. For a new submission to proceed, at least **3 runs must fail**; no more than 5 may pass. Tasks already on the platform by the morning of Sep 11, 2026, including later revisions of those tasks, retain the prior one-failure gate.
 
 > **This is the only measurement, and it is final.** There is no shorter platform check before it and nothing re-runs after acceptance. The tier recorded here is the one your reviewer sees.
 

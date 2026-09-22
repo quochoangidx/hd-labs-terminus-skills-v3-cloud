@@ -2,7 +2,7 @@
 
 Agent Review uses Claude Code to comprehensively evaluate Terminal-Bench tasks for compliance with format requirements, best practices, and quality standards. This automated review provides detailed feedback on task structure, correctness, and potential issues.
 
-> **Note:** Agent Review currently does not block task submission. It is provided as an additional tool to help identify potential issues, warnings, and areas for improvement. The **quality panel** is a separate four-axis review that does block — see the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+> **Note:** Agent Review currently does not block task submission. It is provided as an additional tool to help identify potential issues, warnings, and areas for improvement. The **quality panel** is a separate five-axis review: `Minor` and `Major` block except on `protected_ground_truth`, where only `Major` blocks; findings explicitly marked `Advisory` do not block. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide) for the axes and how to respond.
 
 ## How It Works
 
@@ -50,7 +50,7 @@ Validates your task metadata:
 | `[metadata].difficulty` | Must be: frontier, advanced, core, or base |
 | `[metadata].expert_time_estimate_hours` | Estimated expert time to author the task |
 | `[metadata].author_name` / `.author_email` | Required. Both may be `"anonymous"` |
-| `[metadata].difficulty_explanation` | What makes the task hard |
+| `[metadata].difficulty_explanation` | Why the task is inherently a challenge for a human expert — not a model's pass rate |
 | `[metadata].solution_explanation` | How the oracle solves it |
 | `[metadata].verification_explanation` | How the verifier decides the task was solved |
 | `[metadata].relevant_experience` | Author's relevant background |
@@ -170,7 +170,7 @@ Tests must not check for performance thresholds—these vary by hardware and are
 Testing logic must be exactly the same for both oracle and agent. Conditional behavior based on execution mode is banned.
 
 ### Multi-Container Tagging
-Tasks that run multiple containers must set `is_multi_container = true` under `[metadata]` in `task.toml`. The field is optional — omit it for single-container tasks. The harness detects `environment/docker-compose.yaml` on its own; nothing in `task.toml` points at it.
+Tasks that run multiple containers must set `is_multi_container = true` under `[metadata]` in `task.toml`. The field is optional — omit it for single-container tasks. The harness detects `environment/docker-compose.yaml` on its own; nothing in `task.toml` points at it. Compose files must not declare `networks:` or a per-service `network_mode:`, and all three `task.toml` phases must set `network_mode = "public"`.
 
 ### No Web Data Fetching
 Tasks should not fetch data from URLs (except package managers). Pre-download data into `environment/`.

@@ -12,11 +12,25 @@ import tempfile
 from pathlib import Path
 
 
+# Mirrors the judge guide: contract, ground-truth and verifier review see the
+# candidate-visible contract/environment plus the tests and never the reference;
+# reference review sees the contract/environment plus the reference and never
+# the tests; determinism review sees all three. `task.toml` is submission
+# metadata whose explanation fields can disclose the intended solution, so it
+# stays out of every packet the guide does not require it in.
 AXIS_SURFACES = {
     "coherent_contract": ("instruction.md", "task.toml", "environment", "tests"),
-    "correct_reference_solution": ("instruction.md", "solution"),
-    "protected_ground_truth": ("environment", "tests"),
-    "sound_verifier": ("instruction.md", "tests"),
+    "correct_reference_solution": ("instruction.md", "environment", "solution"),
+    "protected_ground_truth": ("instruction.md", "environment", "tests"),
+    "sound_verifier": ("instruction.md", "environment", "tests"),
+    "deterministic_execution": ("instruction.md", "task.toml", "environment", "solution", "tests"),
+}
+# Every axis now receives the whole environment, so an explicitly selected
+# contract file adds nothing; the option is kept for callers that still pass it.
+CONTRACT_FILE_AXES = {
+    "correct_reference_solution",
+    "sound_verifier",
+    "deterministic_execution",
 }
 REQUIRED_SURFACES = ("instruction.md", "task.toml", "environment", "solution", "tests")
 IGNORED_NAMES = {".DS_Store", ".git", ".pytest_cache", ".ruff_cache", "__pycache__"}
@@ -148,7 +162,7 @@ def build_packets(task: Path, output: Path, contract_files: tuple[str, ...] = ()
             packet.mkdir()
             for surface in surfaces:
                 copy_surface(task / surface, packet / surface)
-            if axis in {"correct_reference_solution", "sound_verifier"}:
+            if axis in CONTRACT_FILE_AXES:
                 for relative in selected:
                     copy_surface(task / relative, packet / relative)
 
@@ -163,9 +177,7 @@ def build_packets(task: Path, output: Path, contract_files: tuple[str, ...] = ()
                 "axis": axis,
                 "snapshot_sha256": snapshot,
                 "included_surfaces": list(surfaces),
-                "contract_files": selected if axis in {
-                    "correct_reference_solution", "sound_verifier"
-                } else [],
+                "contract_files": selected if axis in CONTRACT_FILE_AXES else [],
                 "files": file_manifest(packet),
             }
             (packet / "packet-manifest.json").write_text(
@@ -196,7 +208,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("task_dir", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--contract-file", action="append", default=[],
-                        help="Task-relative candidate-visible authority under environment; repeat for dependencies")
+                        help="Task-relative candidate-visible authority under environment; repeat for "
+                             "dependencies. Every axis packet already carries the whole environment, so "
+                             "this records the authority in the manifest rather than widening visibility")
     return parser.parse_args()
 
 

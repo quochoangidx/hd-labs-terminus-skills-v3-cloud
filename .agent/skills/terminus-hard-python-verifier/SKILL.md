@@ -22,7 +22,8 @@ any of these are true:
   meaningful LOC in one obvious file
 - the prompt keywords point directly to the exact function/class to edit
 - all verifier tests exercise the same condition with only renamed inputs
-- the task has reached 100% across the four-run platform iteration sample
+- the platform's eight-run measurement leaves fewer than 3 failures, so a new
+  submission cannot proceed above 62.5% accuracy
 - the core bug is message-only, typo-only, docs-only, dependency-only, or config
   plumbing without cross-behavior interaction
 - the verifier needs credentials, a mutable external service, GPU, or

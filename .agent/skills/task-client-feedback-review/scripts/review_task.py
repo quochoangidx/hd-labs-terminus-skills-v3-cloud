@@ -117,9 +117,8 @@ def cloud_builder_copy_issues(dockerfile: str) -> list[str]:
     for line_number, line in enumerate(dockerfile.splitlines(), start=1):
         if not re.match(r"(?i)^\s*COPY\b", line):
             continue
-        chown = re.search(r"(?i)(?:^|\s)--chown=([^\s]+)", line)
-        if chown and not re.fullmatch(r"[0-9]+(?::[0-9]+)?", chown.group(1)):
-            issues.append(f"line {line_number}: --chown={chown.group(1)} must use numeric IDs")
+        # --chown= accepts named users and numeric IDs alike since Sep 17, 2026;
+        # the cloud builder resolves names through /etc/passwd.
         source = re.search(r"(?i)(?:^|\s)--from=([^\s]+)", line)
         if not source:
             continue
@@ -706,6 +705,22 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
                 "blocker",
                 "difficulty-explanation-data",
                 "difficulty_explanation must state the origin/realism of the accompanying corpus, captures, fixtures, or dataset.",
+                "task.toml",
+                "terminus-regular-task-authoring",
+            )
+        # The field must describe why the task challenges a human expert; the
+        # measured pass rate is what the tier records, not this explanation.
+        pass_rate_re = re.compile(
+            r"(?i)(pass[@ ]?1|pass[- ]rate|solve[- ]rate|accuracy of|"
+            r"\d+\s*(?:/|out of)\s*\d+\s*(?:runs?|trials?)|"
+            r"\b(?:frontier|advanced|core|base)[- ]tier\b|agents? (?:solved|failed|passed))"
+        )
+        if difficulty_text and pass_rate_re.search(difficulty_text):
+            add(
+                findings,
+                "should-fix",
+                "difficulty-explanation-pass-rate",
+                "difficulty_explanation must say why the task is inherently a challenge for a human expert, not cite a model pass rate or measured tier.",
                 "task.toml",
                 "terminus-regular-task-authoring",
             )

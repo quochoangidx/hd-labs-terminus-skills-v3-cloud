@@ -40,8 +40,6 @@ SINGLE_REVIEWER_POLICY = {
 }
 IDENTITY_FIELDS = ("runtime", "model", "session_id")
 SOL_MODEL = "gpt-5.6-sol"
-LUNA_MODEL = "gpt-5.6-luna"
-LUNA_RUNTIME = "codex-thread"
 
 
 def nonempty(value: object) -> bool:
@@ -232,7 +230,7 @@ def validate_receipt(task_dir: Path, report_dir: Path) -> tuple[list[str], dict]
     receipt = load_json(path, errors)
     if not receipt:
         return errors, {}
-    role_policy = receipt.get("role_policy", "legacy_luna_v1")
+    role_policy = receipt.get("role_policy", "legacy_v1")
     current_policy = role_policy == SINGLE_REVIEWER_POLICY_NAME
     historical_single_reviewer = role_policy == LEGACY_FIXED_FIVE_POLICY_NAME
     expected_schema = 3 if current_policy or historical_single_reviewer else 2

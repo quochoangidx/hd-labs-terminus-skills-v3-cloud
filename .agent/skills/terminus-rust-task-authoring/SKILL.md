@@ -16,9 +16,10 @@ file conflicts with those skills, the canonical skills win.
   only under `solution/`.
 - Use a digest-pinned Rust runtime image and install `tmux`, `asciinema`, Git,
   patching/search tools, Python, and the Rust toolchain needed by the task.
-- In every Dockerfile, use numeric IDs for `COPY --chown=` and digest-only
-  external image refs for `COPY --from=`; do not write
-  `COPY --from=image:tag@sha256:...`. Stage aliases remain valid.
+- In every Dockerfile, use digest-only external image refs for `COPY --from=`;
+  do not write `COPY --from=image:tag@sha256:...`. Stage aliases remain valid.
+  `COPY --chown=` may use named users or numeric IDs — the cloud builder
+  resolves both.
 - Put Cargo on the AGENT login-shell `PATH`. The `rust:*-slim` images expose
   cargo only via a Docker `ENV PATH=/usr/local/cargo/bin:$PATH` addition, which
   the verifier keeps through `docker exec` but the agent's tmux login shell drops
