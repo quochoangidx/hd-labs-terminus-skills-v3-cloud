@@ -38,9 +38,9 @@ class QuotaGuardTests(unittest.TestCase):
             )
         role_lease_receipts = []
         lease_specs = (
-            ("fairness-1", "fairness_reviewer", "high", "thread-fairness-1", "complete", "initial"),
-            ("fairness-2", "fairness_reviewer", "high", "thread-fairness-2", "complete", "initial"),
-            ("auditor-1", "consolidated_auditor", "max", "thread-auditor-1", "phase_complete", "pre_freeze"),
+            ("fairness-1", "fairness_reviewer", "medium", "thread-fairness-1", "complete", "initial"),
+            ("fairness-2", "fairness_reviewer", "medium", "thread-fairness-2", "complete", "initial"),
+            ("auditor-1", "consolidated_auditor", "medium", "thread-auditor-1", "phase_complete", "pre_freeze"),
         )
         for lease_id, role, effort, session_id, status, phase in lease_specs:
             receipt = root / f"{lease_id}-lease.json"
@@ -49,7 +49,7 @@ class QuotaGuardTests(unittest.TestCase):
                 "lease_id": lease_id,
                 "task_slug": "tbrain-example",
                 "role": role,
-                "model": "gpt-5.6-luna",
+                "model": "gpt-5.6-sol",
                 "reasoning_effort": effort,
                 "owner": {"session_id": session_id},
                 "status": status,
@@ -82,11 +82,11 @@ class QuotaGuardTests(unittest.TestCase):
                     {
                         "turn_id": f"fairness-{index}",
                         "role": "fairness_reviewer",
-                        "model": "gpt-5.6-luna",
-                        "reasoning_effort": "high",
+                        "model": "gpt-5.6-sol",
+                        "reasoning_effort": "medium",
                         "status": "complete",
-                        "execution_surface": "codex_thread",
-                        "runtime": "codex-thread",
+                        "execution_surface": "collaboration_subagent",
+                        "runtime": "collaboration-subagent",
                         "session_id": f"thread-fairness-{index}",
                         "thread_id": f"thread-fairness-{index}",
                         "host_id": "local",
@@ -97,11 +97,11 @@ class QuotaGuardTests(unittest.TestCase):
                 {
                     "turn_id": "auditor-1",
                     "role": "consolidated_auditor",
-                    "model": "gpt-5.6-luna",
-                    "reasoning_effort": "max",
+                    "model": "gpt-5.6-sol",
+                    "reasoning_effort": "medium",
                     "status": "complete",
-                    "execution_surface": "codex_thread",
-                    "runtime": "codex-thread",
+                    "execution_surface": "collaboration_subagent",
+                    "runtime": "collaboration-subagent",
                     "session_id": "thread-auditor-1",
                     "thread_id": "thread-auditor-1",
                     "host_id": "local",
@@ -187,10 +187,10 @@ class QuotaGuardTests(unittest.TestCase):
             self.assertEqual([], errors)
             self.assertEqual(9, summary["turn_count"])
 
-    def test_luna_model_is_rejected_for_builder(self) -> None:
+    def test_a_foreign_model_is_rejected_for_builder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path, data = self.ledger(Path(tmp))
-            data["turns"][0]["model"] = "gpt-5.6-luna"
+            data["turns"][0]["model"] = "gpt-5.6-terra"
             errors, _ = quota_guard.validate(data, path, "pre-solver")
             self.assertTrue(any("gpt-5.6-sol" in error for error in errors))
 
@@ -199,7 +199,7 @@ class QuotaGuardTests(unittest.TestCase):
             path, data = self.ledger(Path(tmp))
             data["turns"][1]["model"] = "gpt-5.6-terra"
             errors, _ = quota_guard.validate(data, path, "pre-solver")
-            self.assertTrue(any("gpt-5.6-luna" in error for error in errors))
+            self.assertTrue(any("must be gpt-5.6-sol for role fairness_reviewer" in error for error in errors))
 
     def test_builder_cannot_be_fresh_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -281,17 +281,19 @@ class QuotaGuardTests(unittest.TestCase):
             errors, _ = quota_guard.validate(data, path, "handover")
             self.assertEqual([], errors)
 
-    def test_reviewer_must_use_codex_thread_provenance(self) -> None:
+    def test_reviewer_must_use_collaboration_subagent_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path, data = self.ledger(Path(tmp))
             reviewer = data["turns"][1]
-            reviewer["execution_surface"] = "collaboration_subagent"
+            reviewer["execution_surface"] = "codex_thread"
             reviewer["session_id"] = "not-the-thread"
             errors, _ = quota_guard.validate(data, path, "pre-solver")
-            self.assertTrue(any("execution_surface must be codex_thread" in error for error in errors))
-            self.assertTrue(any("session_id must equal" in error for error in errors))
+            self.assertTrue(any("execution_surface must be collaboration_subagent" in error for error in errors))
+            # The session binding is now checked against the lease rather than against a
+            # Codex thread id, so the mismatch surfaces through the lease reconciliation.
+            self.assertTrue(any("lease sessions do not match" in error for error in errors))
 
-    def test_failed_luna_launch_does_not_satisfy_completed_role_gate(self) -> None:
+    def test_a_failed_reviewer_launch_does_not_satisfy_the_completed_role_gate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path, data = self.ledger(Path(tmp))
             reviewer = data["turns"][1]

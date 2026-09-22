@@ -11,21 +11,23 @@ from pathlib import Path
 from typing import Any
 
 BUILDER_MODEL = "gpt-5.6-sol"
-REVIEW_MODEL = "gpt-5.6-luna"
+REVIEW_MODEL = "gpt-5.6-sol"
 SOLVER_MODEL = "gpt-5.6-sol"
 SINGLE_REVIEWER_POLICY = "single_reviewer_two_pass_v1"
 FIXED_FIVE_POLICY = "fixed_five_roles_v2"
 UNBOUNDED_ROLE_POLICY = "fixed_roles_unbounded_v3"
 ROLE_PROFILES = {
     "builder": (BUILDER_MODEL, "medium"),
-    "fairness_reviewer": (REVIEW_MODEL, "high"),
-    "consolidated_auditor": (REVIEW_MODEL, "max"),
+    "fairness_reviewer": (REVIEW_MODEL, "medium"),
+    "consolidated_auditor": (REVIEW_MODEL, "medium"),
     "blind_solver": (SOLVER_MODEL, "medium"),
 }
+# Every role now runs as a collaboration subagent. The Codex-thread surface existed
+# only for the retired Luna reviewer/auditor path.
 ROLE_SURFACES = {
     "builder": "collaboration_subagent",
-    "fairness_reviewer": "codex_thread",
-    "consolidated_auditor": "codex_thread",
+    "fairness_reviewer": "collaboration_subagent",
+    "consolidated_auditor": "collaboration_subagent",
     "blind_solver": "collaboration_subagent",
 }
 ROLES = {
@@ -216,7 +218,6 @@ def validate_role_lease_receipts(
     errors: list[str],
     *,
     single_reviewer: bool = False,
-    luna_sessions: dict[str, set[str]] | None = None,
 ) -> dict[str, list[str]]:
     sessions = {"fairness_reviewer": [], "consolidated_auditor": []}
     if not isinstance(records, list):
@@ -260,10 +261,11 @@ def validate_role_lease_receipts(
         for role in sessions
     }
     if single_reviewer:
-        expected = luna_sessions or {role: set() for role in sessions}
+        # Review roles run as collaboration subagents, which take no lease. A lease
+        # here means a Codex-thread role the hook guard would not protect.
         for role, group in role_groups.items():
-            if len(group) != len(expected.get(role, set())):
-                errors.append(f"role leases do not match opted-in Luna {role} sessions")
+            if group:
+                errors.append(f"single-reviewer runs take no {role} role lease")
     else:
         if len(role_groups["fairness_reviewer"]) != 2:
             errors.append("role leases require exactly two fairness reviewers")
@@ -285,7 +287,7 @@ def validate_role_lease_receipts(
             if lease.get("remediation_cycles") not in {0, 1}:
                 errors.append(f"{label}: remediation cycle cap exceeded")
 
-    expected_sessions = luna_sessions if single_reviewer else completed_sessions
+    expected_sessions = {role: set() for role in sessions} if single_reviewer else completed_sessions
     reviewer_sessions = set(sessions["fairness_reviewer"])
     if reviewer_sessions != expected_sessions["fairness_reviewer"]:
         errors.append("fairness lease sessions do not match completed reviewer task sessions")
@@ -334,7 +336,6 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
     completed_role_counts = {role: 0 for role in ROLES}
     completed_role_session_ids = {role: set() for role in ROLES}
     completed_review_phases: dict[str, set[str]] = {}
-    luna_sessions = {"fairness_reviewer": set(), "consolidated_auditor": set()}
     runtime_families: set[str] = set()
     for index, turn in enumerate(turns):
         label = f"turns[{index}]"
@@ -371,12 +372,9 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
             model = str(turn.get("model", ""))
             default_codex = model == SOLVER_MODEL and turn.get("reasoning_effort") == "medium"
             default_claude = (model == "opus-5" or model.startswith("claude-opus-5")) and turn.get("reasoning_effort") == "medium"
-            optional_luna = model == REVIEW_MODEL and turn.get("reasoning_effort") == "high"
-            if not (default_codex or default_claude or optional_luna):
-                errors.append(f"{label}: reviewer must use Sol medium, Opus 5 medium, or opted-in Luna high")
-            expected_surface = "codex_thread" if optional_luna else "collaboration_subagent"
-            if optional_luna and status == "complete" and nonempty(turn.get("session_id")):
-                luna_sessions["fairness_reviewer"].add(str(turn["session_id"]))
+            if not (default_codex or default_claude):
+                errors.append(f"{label}: reviewer must use Sol medium or Opus 5 medium")
+            expected_surface = "collaboration_subagent"
         else:
             if turn.get("model") != expected_model:
                 errors.append(f"{label}.model must be {expected_model} for role {role}")
@@ -385,8 +383,6 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
                     f"{label}.reasoning_effort must be {expected_effort} for role {role}"
                 )
             expected_surface = ROLE_SURFACES[str(role)]
-            if single_reviewer and role == "consolidated_auditor" and status == "complete" and nonempty(turn.get("session_id")):
-                luna_sessions["consolidated_auditor"].add(str(turn["session_id"]))
         if status not in STATUSES:
             errors.append(f"{label}.status is invalid; failed/interrupted turns still count")
         if turn.get("execution_surface") != expected_surface:
@@ -524,13 +520,12 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
             completed_role_session_ids,
             errors,
             single_reviewer=single_reviewer,
-            luna_sessions=luna_sessions,
         )
 
     summary = {
         "status": "fail" if errors else "pass",
         "phase": phase,
-        "role_policy": data.get("role_policy", "legacy_luna_v1"),
+        "role_policy": data.get("role_policy", "legacy_v1"),
         "turn_count": len(turns),
         "role_turn_counts": role_counts,
         "completed_role_turn_counts": completed_role_counts,
