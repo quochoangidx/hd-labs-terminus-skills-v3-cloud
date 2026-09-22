@@ -45,6 +45,9 @@ Step 4: Audit skills against updated docs
 Step 5: Auto-fix skills
     │
     ▼
+Step 5b: Sweep AGENTS.md (and skills) for claims this sync reversed
+    │
+    ▼
 Step 6: Report changes
 ```
 
@@ -127,6 +130,7 @@ For each key rule area, compare online content with local docs:
 | Isolating named-rule fixtures | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `rule alone`, `only enforcement`, `mixed held-out` |
 | Verifier-executed candidate boundary | `creating-tasks/dockerfile-best-practices.md`, `creating-tasks/writing-tests.md` | `no-new-privs`, `drop`, `colocation`, `agent code` |
 | Interpreter permission cleanup | `creating-tasks/writing-tests.md`, `testing-and-validation/ci-checks-reference.md` | `verifier_interpreter_permissions`, `Path.resolve`, `/bin/bash`, `/usr/bin/bash` |
+| Compose networking | `creating-tasks/creating-docker-environment.md`, `testing-and-validation/ci-checks-reference.md` | `check_compose_networks`, `networks:`, `network_mode:`, `Compose` |
 
 ### Diff format
 
@@ -211,6 +215,7 @@ After docs are synced, audit the doctrine-coupled set:
 | Difficulty mismatch and instruction length are not standalone revision triggers | — | reviewer guidance | advisory check |
 | In-verifier candidate read boundary | architecture viability | privilege/fixture design | blocking review |
 | Bash permission alias cleanup | — | verifier cleanup | platform-preflight check |
+| Compose networking keys + all-public phases | runtime risk | Docker/metadata rules | blocking check |
 
 ### Terminus 3 epistemic consistency check
 
@@ -246,6 +251,40 @@ For each discrepancy found in Step 4:
 - Preserve empirical notes and Go-specific guidance
 - Flag ambiguous changes for manual review
 
+## Step 5b — Sweep `AGENTS.md` for claims the sync just reversed
+
+Appending a new entry does not retire the old one. `AGENTS.md` states its own
+rule — *keep the whole file consistent and conflict-free; the newest verdict
+replaces the old claim in place* — and a sync that only adds leaves the file
+asserting both. An agent that reads the earlier section and stops then follows
+the withdrawn rule.
+
+This happened on 2026-09-17: the portal reversed the named `COPY --chown=`
+restriction, the sync recorded it in section 10, and section 1 went on saying
+`check_modal_dockerfile_compat` blocks named values and requires numeric IDs.
+Both sentences lived in the file for days.
+
+For every rule this run changed or reversed:
+
+1. Grep `AGENTS.md` for the subject, not for the new wording — the stale claim
+   is phrased the old way, so searching for what you just wrote will miss it:
+
+   ```bash
+   grep -n "chown" AGENTS.md | grep -iE "numeric|named|required|blocks|reject"
+   ```
+
+2. Read every hit. A hit that merely mentions the subject is fine; a hit that
+   asserts the superseded rule is not.
+3. **Repair the old sentence in place.** Keep whatever part of it is still
+   true, state the reversal with its date, and point at the newer entry. Do not
+   delete the entry wholesale — it usually carries unrelated facts — and do not
+   leave the correction only in the new entry.
+4. Run the same sweep over `.agent/skills/` for the same subject. A rule stated
+   in several skills goes stale in several skills.
+
+A reversal is the dangerous case; a tightened rule usually reads as consistent
+and hides the same way. Sweep both directions.
+
 ## Step 6 — Report
 
 Print a summary:
@@ -272,11 +311,22 @@ Local pages: 42
 | task-miner | Terminus 3 taxonomy missing | added exact category/subcategory screen | ✅ fixed |
 | ... | ... | ... | ... |
 
+=== Superseded Claims Swept (Step 5b) ===
+| File | Stale claim | Repair | Status |
+|------|-------------|--------|--------|
+| AGENTS.md §1 | check_modal_dockerfile_compat blocks named --chown | corrected in place, points at §10 | ✅ fixed |
+| ... | ... | ... | ... |
+
 New online pages not in local: 0
 Docs with changes: 1
 Skill fixes applied: 3
+Superseded claims repaired: 1
 Manual review needed: 0
 ```
+
+Report `Superseded claims repaired: 0` only after running the Step 5b greps.
+Leaving the row out because no sweep happened is how the contradiction survived
+the previous sync.
 
 ## Appendix: Change Detection (do NOT rely on bundle hash)
 
@@ -319,6 +369,7 @@ cursorrules
 check_modal_dockerfile_compat
 COPY --chown
 COPY --from
+check_compose_networks
 CAD Task Guidelines
 recompute
 coherent_contract
