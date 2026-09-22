@@ -4,11 +4,13 @@
 # can run, so returns for mechanical defects stop happening.
 #
 # Usage: scripts/preflight.sh <task-dir> [--no-docker] [--strict]
-#        [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]
+#        [--determinism] [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]
 #   <task-dir>   folder containing task.toml, instruction.md, environment/,
 #                solution/, tests/
 #   --no-docker  skip the docker build + oracle/nop + noexec-/tmp reruns
 #   --strict     promote every WARN to FAIL (required for batch handover)
+#   --determinism repeat the verifier and require identical results; deterministic_execution
+#                blocks on Minor and nothing else here would notice a flaky suite
 #   --report-json write a machine-readable evidence report
 #   --evidence-dir retain raw build, solve, verifier, CTRF, and reward artifacts
 #   --emit-zip   write the submission zip only after every check passes
@@ -24,17 +26,19 @@ PYTHON_BIN="$REPO_ROOT/scripts/python3"
 TASK_DIR=""
 NO_DOCKER=0
 STRICT=0
+DETERMINISM=0
 REPORT_JSON=""
 EVIDENCE_DIR=""
 EMIT_ZIP=""
 usage() {
-  echo "usage: preflight.sh <task-dir> [--no-docker] [--strict] [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]"
+  echo "usage: preflight.sh <task-dir> [--no-docker] [--strict] [--determinism] [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]"
 }
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
     --no-docker) NO_DOCKER=1 ;;
     --strict) STRICT=1 ;;
+    --determinism) DETERMINISM=1 ;;
     --report-json) shift; REPORT_JSON="${1:?--report-json needs a path}" ;;
     --evidence-dir) shift; EVIDENCE_DIR="${1:?--evidence-dir needs a path}" ;;
     --emit-zip) shift; EMIT_ZIP="${1:?--emit-zip needs a path}" ;;
@@ -90,10 +94,33 @@ done
 # 2. .dockerignore required entries (reviewer-return class: harbor-green but returned)
 DI="$TASK_DIR/environment/.dockerignore"
 if [ -f "$DI" ]; then
-  for entry in .gitignore .pytest_cache .mypy_cache .ruff_cache node_modules "solution/" "tests/" .env "**/.git"; do
-    if grep -qxF "$entry" "$DI"; then report PASS "dockerignore:$entry" "present"
+  # Match the pattern, not the exact line: `**/.pytest_cache/` ignores the same thing as
+  # `.pytest_cache`, so strip the `**/` prefix and the trailing `/` before comparing.
+  DI_NORM="$(sed -e 's:^\*\*/::' -e 's:/$::' -e 's/[[:space:]]*$//' "$DI")"
+  for entry in .gitignore .pytest_cache .mypy_cache .ruff_cache node_modules .git; do
+    if printf '%s\n' "$DI_NORM" | grep -qxF "$entry"; then report PASS "dockerignore:$entry" "present"
     else report FAIL "dockerignore:$entry" "missing (returned-by-reviewer class)"; fi
   done
+  # The point is that no env/secret file reaches the image. Demanding the entry when no
+  # such file exists anywhere in the context is noise, not safety.
+  if printf '%s\n' "$DI_NORM" | grep -qxF ".env"; then
+    report PASS "dockerignore:.env" "present"
+  elif find "$TASK_DIR/environment" \( -name '.env' -o -name '.env.*' -o -name '*.env' \) -print -quit 2>/dev/null | grep -q .; then
+    report FAIL "dockerignore:.env" "an env file exists in the build context and is not ignored"
+  else
+    report WARN "dockerignore:.env" "not listed; no env file exists in the build context, so add it only as future-proofing"
+  fi
+  # solution/ and tests/ only matter when they can actually enter the build context.
+  # With the context at environment/ they are out of reach and requiring them is noise.
+  if grep -qE '^[[:space:]]*context:' "$TASK_DIR/environment/"*.y*ml 2>/dev/null \
+    || [ -f "$TASK_DIR/Dockerfile" ]; then
+    for entry in solution tests; do
+      if printf '%s\n' "$DI_NORM" | grep -qxF "$entry"; then report PASS "dockerignore:$entry/" "present"
+      else report FAIL "dockerignore:$entry/" "reachable from the build context and not ignored"; fi
+    done
+  else
+    report PASS "dockerignore:solution+tests" "outside the environment/ build context"
+  fi
 fi
 
 # 3. Dockerfile hygiene
@@ -141,7 +168,12 @@ POLICY_RC=$?
 if [ "$POLICY_RC" -eq 0 ]; then
   report PASS "policy:static" "metadata, all Docker stages, verifier, compose, and test runner pass"
 else
-  report FAIL "policy:static" "$POLICY_OUTPUT"
+  # Surface the sub-checker's own failing rows instead of flattening its whole
+  # report into one unreadable detail column.
+  printf '%s\n' "$POLICY_OUTPUT" | grep -E '^(FAIL|WARN)' | while IFS='|' read -r st name detail; do
+    report "$(echo "$st" | tr -d ' ')" "policy:$(echo "$name" | tr -d ' ')" "$(echo "$detail" | sed 's/^ *//')"
+  done
+  report FAIL "policy:static" "$(printf '%s\n' "$POLICY_OUTPUT" | grep -cE '^FAIL') failing policy row(s) listed above"
 fi
 
 # 5. Leak sweep
@@ -217,8 +249,11 @@ CRLF="$(echo "$PYOUT" | sed -n 's/^CRLF://p')"; COUNT="$(echo "$PYOUT" | sed -n 
 # 7b. Reward-channel permission is part of verifier isolation, not cosmetic.
 TEST_SH="$TASK_DIR/tests/test.sh"
 if [ -f "$TEST_SH" ]; then
-  if grep -Eq '^[[:space:]]*install[[:space:]]+-d[[:space:]]+-m[[:space:]]+0?700[[:space:]]+/logs/verifier[[:space:]]*$' "$TEST_SH" \
-    || { grep -q '^mkdir -p /logs/verifier$' "$TEST_SH" && grep -Eq '^[[:space:]]*chmod[[:space:]]+0?700[[:space:]]+/logs/verifier[[:space:]]*$' "$TEST_SH"; }; then
+  # The property is mode 0700 on /logs/verifier before candidate code runs. `install -d -m 700`
+  # and `mkdir` + `chmod 700` are equivalent, and chmod may harden several paths at once.
+  if grep -Eq '^[[:space:]]*install[[:space:]]+-d[[:space:]]+-m[[:space:]]+0?700[[:space:]]+.*/logs/verifier' "$TEST_SH" \
+    || { grep -Eq '^[[:space:]]*mkdir[[:space:]]+(-p[[:space:]]+)?.*/logs/verifier' "$TEST_SH" \
+      && grep -Eq '^[[:space:]]*chmod[[:space:]]+(-R[[:space:]]+)?0?700[[:space:]]+.*/logs/verifier' "$TEST_SH"; }; then
     report PASS "verifier:reward-dir-mode" "/logs/verifier is created with mode 0700"
   else
     report FAIL "verifier:reward-dir-mode" "create /logs/verifier with mode 0700 before reward/CTRF or candidate code"
@@ -433,6 +468,25 @@ PYEOF
     [ "$R_NOP" = "0" ] && report PASS "docker:nop" "separate-verifier reward 0" || report FAIL "docker:nop" "reward '$R_NOP' (expected 0)"
     R_NOEXEC="$(run_reward oracle-noexec 1 1 || echo ERR)"
     [ "$R_NOEXEC" = "1" ] && report PASS "docker:noexec-tmp" "oracle reward 1 under noexec /tmp" || report FAIL "docker:noexec-tmp" "reward '$R_NOEXEC' — executable staged under bare /tmp?"
+
+    # `deterministic_execution` blocks on Minor, and no other check here would notice a
+    # suite that depends on the clock, an unseeded source of randomness, or the order it
+    # happens to collect in. Repeating the Oracle is the cheapest way to see it.
+    if [ "$DETERMINISM" -eq 1 ]; then
+      DET_FAIL=0
+      for attempt in 2 3; do
+        R_REPEAT="$(run_reward oracle 1 0 || echo ERR)"
+        [ "$R_REPEAT" = "$R_ORACLE" ] || { DET_FAIL=1; report FAIL "determinism:repeat-$attempt" "reward '$R_REPEAT' after '$R_ORACLE' on the same snapshot"; }
+      done
+      [ "$DET_FAIL" -eq 0 ] && report PASS "determinism:repeat" "three Oracle runs agree"
+      if [ -f "$TASK_DIR/tests/test.sh" ]; then
+        if grep -Eq '(-p no:randomly|PYTHONHASHSEED|--randomly-seed)' "$TASK_DIR/tests/test.sh"; then
+          report PASS "determinism:ordering" "collection order is pinned or explicitly randomized"
+        else
+          report WARN "determinism:ordering" "collection order is neither pinned nor deliberately shuffled — an order-dependent suite passes here and fails on the platform"
+        fi
+      fi
+    fi
   fi
   else
     report FAIL "docker:daemon" "Docker daemon did not respond within 15 seconds"

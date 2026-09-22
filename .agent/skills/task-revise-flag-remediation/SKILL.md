@@ -243,10 +243,38 @@ least one run. A 0/N test is blocking, but the repair depends on its cause.
 - Do not replace semantic verification with source-shape assertions.
 - Do not keep a historical tier after the task changes; re-measure it.
 
+## Every finding buys a permanent gate
+
+A return is expensive. Spend it once.
+
+After a platform finding is repaired and verified, convert the *class* of defect
+into a deterministic rule, so it cannot recur in any future task:
+
+1. Name the class, not the instance. "This task's rounding convention had no
+   visible sentence" is an instance; "an exact convention with no authority
+   anchor" is the class.
+2. Add the rule to `panel_precheck.py` (or the relevant gate script) with a test
+   that fails on the shape you just fixed and passes on the repaired snapshot.
+3. Run the new rule over the existing corpus before committing it. **Any failure
+   on a task that already passed the platform is a bug in the rule until proven
+   otherwise** — roughly four in five such rows have been. Fix the rule to judge
+   the property rather than one spelling; do not edit the passing tasks.
+4. If the class cannot be mechanised — it needs semantic judgement — record it in
+   `AGENTS.md` §2 as a known exposure, naming what no script will catch.
+
+Skipping this turns each return into pure cost. Under `builder_certified`, where
+gates stand in for a review panel, it is the only mechanism by which the process
+improves at all.
+
+A gate the builder believes is wrong is recorded as a `documented_exception` in
+the manifest with its reason and contract citation. Never silently reshape a task
+to satisfy a rule you think is mistaken: with no panel above the scripts, a wrong
+gate otherwise rewrites correct work without anyone noticing.
+
 ## Revision verification
 
 For quality-panel-driven repairs, read
-[root-cause remediation](../task-quality-panel-judgement/references/root-cause-remediation.md)
+[root-cause remediation](references/root-cause-remediation.md)
 before choosing edits. Compare repair, narrowing, removal, justified expansion,
 and retirement/redesign per confirmed root cause; the smallest textual patch
 is not necessarily the smallest total repair. Use prior attempts and concrete

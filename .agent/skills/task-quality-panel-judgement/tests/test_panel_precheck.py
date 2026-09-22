@@ -18,12 +18,21 @@ def make_fixture(tmp_path: Path) -> tuple[Path, Path, dict]:
     (task / "environment/repo").mkdir(parents=True)
     (task / "tests").mkdir()
     (task / "solution").mkdir()
-    (task / "instruction.md").write_text("Select historical authority and reconcile state.\n")
+    (task / "instruction.md").write_text(
+        "Select historical authority and reconcile state. "
+        "A stated rule holds for every argument. "
+        "Where this says nothing the shipped behavior stands. "
+        "Expect ordinary and extreme states, in either order.\n"
+    )
     (task / "task.toml").write_text('version = "1.0"\n')
     (task / "environment/repo/core.py").write_text("def run():\n    return True\n")
     (task / "environment/repo/parser.py").write_text("def parse(x):\n    return x\n")
     (task / "tests/test_outputs.py").write_text("def test_authority(): pass\ndef test_interaction(): pass\ndef test_parser(): pass\n")
-    (task / "solution/solve.sh").write_text("#!/bin/sh\n")
+    (task / "solution/solve.sh").write_text(
+        "#!/bin/sh\n"
+        "# AUTHORITY  core.py  select the authority valid at the action\n"
+        "# RECONCILE  core.py  reconcile that authority with action evidence\n"
+    )
 
     report = tmp_path / "reports"
     (report / "wrong-paths").mkdir(parents=True)
@@ -40,6 +49,9 @@ def make_fixture(tmp_path: Path) -> tuple[Path, Path, dict]:
                 "implementation_sites": ["environment/repo/core.py"],
                 "separability": {"standalone_deliverable": False, "joins_before_output": True, "rationale": "changes the decision"},
                 "witnesses": {"positive": ["test_outputs.py::test_authority"], "boundary": ["test_outputs.py::test_authority"]},
+                "expected_source": "independent_model",
+                "discriminating_instance": "an action between two authority versions",
+                "wrong_but_plausible": "use the newest authority regardless of the action date",
             },
             {
                 "id": "RECONCILE",
@@ -49,6 +61,9 @@ def make_fixture(tmp_path: Path) -> tuple[Path, Path, dict]:
                 "implementation_sites": ["environment/repo/core.py"],
                 "separability": {"standalone_deliverable": False, "joins_before_output": True, "rationale": "changes the same decision"},
                 "witnesses": {"positive": ["test_outputs.py::test_interaction"], "boundary": [], "boundary_not_applicable": "finite state join"},
+                "expected_source": "invariant",
+                "discriminating_instance": "evidence that contradicts the selected authority",
+                "wrong_but_plausible": "trust the evidence and drop the authority",
             },
             {
                 "id": "PARSER",
@@ -62,6 +77,13 @@ def make_fixture(tmp_path: Path) -> tuple[Path, Path, dict]:
         ],
         "causal_graph": {"edges": [{"from": "AUTHORITY", "to": "RECONCILE"}, {"from": "RECONCILE", "to": "PRIMARY_OUTCOME"}]},
         "interactions": [{"id": "authority-state", "obligation_ids": ["AUTHORITY", "RECONCILE"], "witness_ids": ["test_outputs.py::test_interaction"], "joins_before_output": True}],
+        "closure": {
+            "universal_rule": {"file": "instruction.md", "anchor": "holds for every argument"},
+            "silence": {"file": "instruction.md", "anchor": "the shipped behavior stands"},
+            "coverage_envelope": {"file": "instruction.md", "anchor": "ordinary and extreme states"},
+        },
+        "determinism": {"seeds": [], "clock_dependence": "none", "network": "none", "order_sensitivity": "none"},
+        "reference_selfdescription": "solution/solve.sh",
         "exact_output_requirements": [],
         "verifier_matrix": "verifier-matrix.json",
         "strict_preflight": "preflight.json",
@@ -173,3 +195,96 @@ def test_rejects_incidental_exact_output_and_support_repair_surface(tmp_path: Pa
     codes = {item["code"] for item in result["blockers"]}
     assert "incidental_exact_output" in codes
     assert "support_boundary" in codes
+
+
+def codes(task: Path, manifest_path: Path, manifest: dict, *, full: bool) -> set[str]:
+    manifest_path.write_text(json.dumps(manifest))
+    result = CHECK.validate(task, manifest_path, full=full)
+    return {blocker["code"] for blocker in result["blockers"]}
+
+
+def test_recording_the_reference_answers_needs_corroboration(tmp_path: Path) -> None:
+    """Oracle=1 proves nothing when the expected values came from the Oracle."""
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["obligations"][0]["expected_source"] = "oracle_recorded"
+
+    assert "circular_expectation" in codes(task, manifest_path, manifest, full=False)
+
+    manifest["obligations"][0]["oracle_recorded_corroboration"] = "invariant"
+    assert "circular_expectation" not in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_witness_must_name_the_answer_it_rules_out(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    del manifest["obligations"][0]["wrong_but_plausible"]
+
+    assert "wrong_but_plausible" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_closure_anchors_must_exist_in_the_cited_file(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["silence"]["anchor"] = "a sentence nobody wrote"
+    finish_receipts(task, manifest_path, manifest)
+
+    assert "closure_silence" in codes(task, manifest_path, manifest, full=True)
+
+
+def test_a_missing_closure_clause_blocks(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    del manifest["closure"]["universal_rule"]
+
+    assert "closure_universal_rule" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_an_exact_convention_must_cite_a_visible_sentence(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["exact_output_requirements"] = [
+        {"id": "ORDER", "domain_required": True, "rationale": "downstream signed exchange"}
+    ]
+
+    assert "uncited_exact_output" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_network_use_needs_a_rationale(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["determinism"]["network"] = "localhost fixture server"
+
+    assert "determinism_network" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_unit_no_obligation_claims_is_reported(tmp_path: Path) -> None:
+    """Either the manifest forgot the coverage, or the suite grades an unmade promise."""
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    (task / "tests/test_outputs.py").write_text(
+        "def test_authority(): pass\ndef test_interaction(): pass\ndef test_parser(): pass\ndef test_stray(): pass\n"
+    )
+    finish_receipts(task, manifest_path, manifest)
+    matrix_path = manifest_path.parent / "verifier-matrix.json"
+    matrix = json.loads(matrix_path.read_text())
+    matrix["unit_ids"].append("test_outputs.py::test_stray")
+    matrix["unit_clusters"]["test_outputs.py::test_stray"] = ["core"]
+    matrix["platform_visible_unit_count"] = len(matrix["unit_ids"])
+    ctrf_path = manifest_path.parent / "oracle-ctrf.json"
+    ctrf = json.loads(ctrf_path.read_text())
+    ctrf["results"]["tests"].append({"name": "test_outputs.py::test_stray", "status": "passed"})
+    ctrf["results"]["summary"]["tests"] = len(ctrf["results"]["tests"])
+    ctrf_path.write_text(json.dumps(ctrf))
+    matrix["ctrf"]["sha256"] = hashlib.sha256(ctrf_path.read_bytes()).hexdigest()
+    matrix_path.write_text(json.dumps(matrix))
+    manifest["task_snapshot_sha256"] = CHECK.tree_hash(task)
+
+    assert "orphan_unit" in codes(task, manifest_path, manifest, full=True)
+
+    manifest["unclaimed_units_rationale"] = {
+        "test_outputs.py::test_stray": "collection smoke test, grades no promise"
+    }
+    assert "orphan_unit" not in codes(task, manifest_path, manifest, full=True)
+
+
+def test_the_reference_header_must_account_for_every_core_obligation(tmp_path: Path) -> None:
+    """The reference is judged with the instruction alone, so it has to explain itself."""
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    (task / "solution/solve.sh").write_text("#!/bin/sh\n# AUTHORITY core.py pick the authority\n")
+    finish_receipts(task, manifest_path, manifest)
+
+    assert "reference_selfdescription" in codes(task, manifest_path, manifest, full=True)

@@ -26,6 +26,20 @@ AXES = (
     "deterministic_execution",
 )
 CLASSES = {"core", "support", "non_goal"}
+# Where a witness's expected value comes from. `oracle_recorded` makes the verifier
+# agree with the reference by construction, so it proves nothing on its own and has to
+# be paired with an invariant or a differential that the reference cannot influence.
+EXPECTED_SOURCES = {
+    "independent_model",
+    "authority_text",
+    "shipped_differential",
+    "invariant",
+    "oracle_recorded",
+}
+NON_CIRCULAR_SOURCES = EXPECTED_SOURCES - {"oracle_recorded"}
+# The clauses that close the input domain the authority does not name. Without them a
+# boundary case has no stated answer, which is where contract findings come from.
+CLOSURE_CLAUSES = ("universal_rule", "silence", "coverage_envelope")
 VOLATILE_DIRS = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", "reports", "submissions"}
 
 
@@ -206,6 +220,29 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
                     errors.append({"axis": "sound_verifier", "code": "boundary_witness", "message": f"{label} needs boundary witnesses or boundary_not_applicable"})
                 witness_ids.update(positive)
                 witness_ids.update(boundary)
+
+            # Where the expected values come from decides whether Oracle=1 is evidence
+            # or a tautology. A verifier that records the reference's answers agrees
+            # with the reference no matter what the reference got wrong.
+            expected_source = row.get("expected_source")
+            if expected_source not in EXPECTED_SOURCES:
+                errors.append({"axis": "correct_reference_solution", "code": "expected_source", "message": f"{label}.expected_source must be one of {sorted(EXPECTED_SOURCES)}"})
+            elif expected_source == "oracle_recorded":
+                corroboration = row.get("oracle_recorded_corroboration")
+                if corroboration not in NON_CIRCULAR_SOURCES - {"authority_text"}:
+                    errors.append({
+                        "axis": "correct_reference_solution",
+                        "code": "circular_expectation",
+                        "message": f"{label} records the reference's own answers; pair it with an invariant or shipped differential in oracle_recorded_corroboration",
+                    })
+
+            # A witness only discriminates if some plausible wrong implementation gives
+            # a different answer on it. Naming that wrong answer is what separates a
+            # real witness from a fixture that any shape happens to pass.
+            if not nonempty(row.get("discriminating_instance")):
+                errors.append({"axis": "sound_verifier", "code": "discriminating_instance", "message": f"{label}.discriminating_instance is required"})
+            if not nonempty(row.get("wrong_but_plausible")):
+                errors.append({"axis": "sound_verifier", "code": "wrong_but_plausible", "message": f"{label}.wrong_but_plausible must name the answer the witness rules out"})
         elif row_class == "support":
             if row.get("implementation_complete") is not True or row.get("repair_surface") is not False:
                 errors.append({"axis": "coherent_contract", "code": "support_boundary", "message": f"{label} support plumbing must be complete and outside the repair surface"})
@@ -266,6 +303,61 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
             label = f"exact_output_requirements[{index}]"
             if not isinstance(row, dict) or not nonempty(row.get("id")) or row.get("domain_required") is not True or not nonempty(row.get("rationale")):
                 errors.append({"axis": "coherent_contract", "code": "incidental_exact_output", "message": f"{label} must identify a domain-required exact convention with rationale"})
+                continue
+            # An arbitrary convention the verifier pins has to be readable somewhere the
+            # candidate can reach. A rationale explains why it exists; it does not tell
+            # the candidate what the convention is.
+            anchor = row.get("authority_anchor")
+            if not isinstance(anchor, dict) or not nonempty(anchor.get("file")) or not nonempty(anchor.get("anchor")):
+                errors.append({"axis": "coherent_contract", "code": "uncited_exact_output", "message": f"{label}.authority_anchor must cite the visible sentence that fixes this convention"})
+            elif full:
+                anchor_path = task_file(task_dir, anchor.get("file"), f"{label}.authority_anchor.file", "coherent_contract", errors, must_exist=True)
+                if anchor_path and anchor_path.is_file():
+                    try:
+                        if str(anchor.get("anchor")) not in anchor_path.read_text(encoding="utf-8"):
+                            errors.append({"axis": "coherent_contract", "code": "uncited_exact_output", "message": f"{label}.authority_anchor.anchor is absent from {anchor.get('file')}"})
+                    except UnicodeDecodeError:
+                        errors.append({"axis": "coherent_contract", "code": "authority_encoding", "message": f"{label}.authority_anchor.file must be UTF-8 text"})
+
+    # Closure: the clauses that decide what happens outside the cases the authority
+    # names. Without them every boundary input is an open question, and an open
+    # question is a contract finding waiting to be written.
+    closure = manifest.get("closure")
+    if not isinstance(closure, dict):
+        errors.append({"axis": "coherent_contract", "code": "closure", "message": "closure must be an object carrying the universal-rule, silence and coverage-envelope clauses"})
+    else:
+        for clause in CLOSURE_CLAUSES:
+            row = closure.get(clause)
+            if not isinstance(row, dict) or not nonempty(row.get("file")) or not nonempty(row.get("anchor")):
+                errors.append({"axis": "coherent_contract", "code": f"closure_{clause}", "message": f"closure.{clause} must cite a file and an anchor sentence"})
+                continue
+            if not full:
+                continue
+            clause_path = task_file(task_dir, row.get("file"), f"closure.{clause}.file", "coherent_contract", errors, must_exist=True)
+            if clause_path and clause_path.is_file():
+                try:
+                    if str(row.get("anchor")) not in clause_path.read_text(encoding="utf-8"):
+                        errors.append({"axis": "coherent_contract", "code": f"closure_{clause}", "message": f"closure.{clause}.anchor is absent from {row.get('file')}"})
+                except UnicodeDecodeError:
+                    errors.append({"axis": "coherent_contract", "code": "authority_encoding", "message": f"closure.{clause}.file must be UTF-8 text"})
+        # Only meaningful when tests drive public helpers directly rather than going
+        # through the top-level entry point every time.
+        scope = closure.get("entrypoint_scope")
+        if scope is not None and (not isinstance(scope, dict) or not nonempty(scope.get("file")) or not nonempty(scope.get("anchor"))):
+            errors.append({"axis": "coherent_contract", "code": "closure_entrypoint_scope", "message": "closure.entrypoint_scope, when present, must cite a file and an anchor sentence"})
+
+    # Determinism is a blocking axis in its own right, and nothing else in this
+    # manifest would notice a verifier that depends on the clock, the network or the
+    # order its tests happen to run in.
+    determinism = manifest.get("determinism")
+    if not isinstance(determinism, dict):
+        errors.append({"axis": "deterministic_execution", "code": "determinism", "message": "determinism must declare seeds, clock_dependence, network and order_sensitivity"})
+    else:
+        for field in ("clock_dependence", "network", "order_sensitivity"):
+            if not nonempty(determinism.get(field)):
+                errors.append({"axis": "deterministic_execution", "code": "determinism", "message": f"determinism.{field} is required"})
+        if determinism.get("network") not in (None, "none") and not nonempty(determinism.get("network_rationale")):
+            errors.append({"axis": "deterministic_execution", "code": "determinism_network", "message": "a verifier that uses the network needs determinism.network_rationale"})
 
     if full:
         if manifest.get("task_snapshot_sha256") != snapshot:
@@ -287,6 +379,52 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
         unknown = sorted(witness_ids - known_tests)
         if unknown:
             errors.append({"axis": "sound_verifier", "code": "unknown_witness", "message": "witness IDs missing from verifier_matrix.unit_ids: " + ", ".join(unknown)})
+
+        # Sweep the other way too. A test no obligation claims is either coverage the
+        # manifest forgot to declare — so nothing is tracking whether it still
+        # discriminates — or a promise the contract never made.
+        unclaimed_rationale = manifest.get("unclaimed_units_rationale")
+        unclaimed_rationale = unclaimed_rationale if isinstance(unclaimed_rationale, dict) else {}
+        orphans = sorted(unit for unit in known_tests - witness_ids if not nonempty(unclaimed_rationale.get(unit)))
+        if orphans:
+            errors.append({
+                "axis": "sound_verifier",
+                "code": "orphan_unit",
+                "message": "verifier units claimed by no obligation: " + ", ".join(orphans)
+                + " — map each to an obligation or justify it in unclaimed_units_rationale",
+            })
+
+        # The reference is judged against the instruction alone: no authority document,
+        # no tests. A header mapping each contract topic to its change is what keeps a
+        # correct reference from reading as unverifiable.
+        selfdesc = manifest.get("reference_selfdescription")
+        if not nonempty(selfdesc):
+            errors.append({"axis": "correct_reference_solution", "code": "reference_selfdescription", "message": "reference_selfdescription must point at the solution file carrying the contract-to-change header"})
+        else:
+            selfdesc_path = task_file(task_dir, selfdesc, "reference_selfdescription", "correct_reference_solution", errors, must_exist=True)
+            if selfdesc_path and selfdesc_path.is_file():
+                try:
+                    selfdesc_text = selfdesc_path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    errors.append({"axis": "correct_reference_solution", "code": "reference_selfdescription", "message": "reference_selfdescription must be UTF-8 text"})
+                else:
+                    missing_topics = sorted(
+                        row_id for row_id in core_ids
+                        if row_id.lower() not in selfdesc_text.lower()
+                        and not any(
+                            nonempty(obligation.get("selfdescription_phrase"))
+                            and str(obligation["selfdescription_phrase"]).lower() in selfdesc_text.lower()
+                            for obligation in obligations
+                            if isinstance(obligation, dict) and obligation.get("id") == row_id
+                        )
+                    )
+                    if missing_topics:
+                        errors.append({
+                            "axis": "correct_reference_solution",
+                            "code": "reference_selfdescription",
+                            "message": "the reference header does not account for core obligations: " + ", ".join(missing_topics)
+                            + " — name each one, or give it a selfdescription_phrase matching the wording used",
+                        })
 
         preflight_path = resolve_report_file(manifest_path, manifest.get("strict_preflight"), "strict_preflight", errors)
         if preflight_path:

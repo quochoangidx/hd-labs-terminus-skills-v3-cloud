@@ -69,6 +69,16 @@ def result(check: str, ok: bool, detail: str) -> dict[str, object]:
     return {"check": check, "status": "pass" if ok else "fail", "detail": detail}
 
 
+def advisory(check: str, ok: bool, detail: str) -> dict[str, object]:
+    """A check that is stricter than the documented platform contract.
+
+    Hardening we want but the portal template does not require belongs here. Failing
+    such a check would reject a task built exactly to the published template, and with
+    no reviewer above the gate an author would then "fix" correct work.
+    """
+    return {"check": check, "status": "pass" if ok else "warn", "detail": detail}
+
+
 def docker_stages(text: str) -> list[tuple[int, str, str | None, bool]]:
     """Return FROM entries and mark references to earlier stage aliases."""
     aliases: set[str] = set()
@@ -222,8 +232,16 @@ def validate_dockerfile(
                 "pytest and pytest-json-ctrf exactly pinned" if not missing_deps else f"missing={missing_deps}",
             )
         )
-        copied = re.search(r"(?im)^\s*COPY\s+\.\s+/tests/?\s*$", text) is not None
-        checks.append(result("verifier-dockerfile:copy-tests", copied, "COPY . /tests/" if copied else "missing"))
+        # Any COPY whose destination is /tests satisfies this: `COPY . /tests/` and an
+        # explicit `COPY test.sh probe.py ... /tests/` file list are equally correct.
+        copy_tests = re.search(r"(?im)^\s*COPY\s+(?:--\S+\s+)*\S.*?\s+/tests/?\s*$", text)
+        checks.append(
+            result(
+                "verifier-dockerfile:copy-tests",
+                copy_tests is not None,
+                copy_tests.group(0).strip() if copy_tests else "no COPY lands in /tests/",
+            )
+        )
         missing_landing: list[str] = []
         for artifact in artifacts or []:
             landing = artifact.rstrip("/") if artifact.endswith("/") else str(Path(artifact).parent)
@@ -487,18 +505,40 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             "valid shell syntax" if syntax.returncode == 0 else syntax.stderr.strip(),
         )
     )
+    # Comments describe intent and routinely quote the very construct a check forbids
+    # ("Deliberately NOT `set -e`: ..."). Judge the executable lines only.
+    code_lines = [re.sub(r"(?<!\$)#.*$", "", line).rstrip() for line in text.splitlines()]
+    code_lines = [line for line in code_lines if line.strip()]
+    code = "\n".join(code_lines)
+
+    # The property is that a failing step still reaches the reward write, so `set -e`
+    # must be absent from the executable lines. How the rest of the flags are spelled
+    # does not matter.
+    aborts_early = re.search(r"^\s*set\s+-\S*e", code, re.M) is not None
     checks.append(
         result(
-            "test.sh:pipefail",
-            "set -uo pipefail" in text and "set -e" not in text,
-            "uses set -uo pipefail without -e",
+            "test.sh:no-errexit",
+            not aborts_early,
+            "a failing step still reaches the reward write"
+            if not aborts_early
+            else "set -e aborts before the reward write",
         )
+    )
+    # The property is a deterministic, explicitly versioned interpreter: `python3`, or
+    # an absolute path such as a pinned venv (`/venv/bin/python`). Bare `python` on
+    # PATH is what must not happen.
+    bare_python = re.search(r"(?:^|[|&;(]\s*)python(?![0-9./\w-])", code, re.M) is not None
+    explicit_python = (
+        re.search(r"(?:^|[\s|&;(])(?:/\S+/)?python3(?![\w.-])", code, re.M) is not None
+        or re.search(r"(?:^|[\s|&;(])/\S+/python(?![\w.-])", code, re.M) is not None
     )
     checks.append(
         result(
             "test.sh:python3",
-            "python3" in text and "\npython " not in text,
-            "uses python3, not bare python",
+            explicit_python and not bare_python,
+            "explicit interpreter (python3 or an absolute/venv path)"
+            if explicit_python and not bare_python
+            else "resolve the interpreter explicitly: python3 or an absolute path, never bare python",
         )
     )
     checks.append(
@@ -516,37 +556,63 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
         )
     )
 
-    nonempty_lines = [line.rstrip() for line in text.splitlines() if line.strip()]
-    secure_log_setup = "install -d -m 700 /logs/verifier"
-    try:
-        mkdir_index = nonempty_lines.index(secure_log_setup)
-    except ValueError:
-        default_reward_ok = False
-    else:
-        default_reward_ok = (
-            len(nonempty_lines) > mkdir_index + 1
-            and nonempty_lines[mkdir_index + 1] == "echo 0 > /logs/verifier/reward.txt"
-        )
+    # The property is that a killed or crashed verifier still leaves reward 0 behind, so
+    # a default 0 must be written before the first step that can fail or hang. Any
+    # spelling of the directory creation and the write is fine.
+    def first_index(pattern: str) -> int | None:
+        for index, line in enumerate(code_lines):
+            if re.search(pattern, line):
+                return index
+        return None
+
+    # The published portal template creates /logs/verifier and writes the reward only in
+    # the two branches at the end; it does NOT pre-write a default 0. Blocking on the
+    # early write would reject a task built exactly to the documented shape.
+    #
+    # What must hold is that both outcomes record a reward, so Harbor never hits
+    # RewardNotFoundError. The early default is extra insurance against the verifier
+    # being killed mid-run — worth suggesting, never worth failing.
+    logdir_index = first_index(r"\b(?:install\s+-d|mkdir)\b.*\B/logs/verifier\b")
     checks.append(
         result(
-            "test.sh:default-reward",
-            default_reward_ok,
-            (
-                "default reward is initialized before risky verifier work"
-                if default_reward_ok
-                else "install -d -m 700 must create /logs/verifier and echo 0 must immediately follow"
-            ),
+            "test.sh:reward-dir",
+            logdir_index is not None,
+            "/logs/verifier is created before the reward is written"
+            if logdir_index is not None
+            else "create /logs/verifier before writing the reward",
         )
     )
-    footer_ok = nonempty_lines[-len(CANONICAL_REWARD_FOOTER) :] == CANONICAL_REWARD_FOOTER
+    default_index = first_index(r"\b0\b.*>\s*/logs/verifier/reward\.txt")
+    risky_index = first_index(r"\b(?:pytest|javac|go\s+test|cargo|npm|mvn|gradle|timeout)\b")
+    early_default = (
+        default_index is not None and (risky_index is None or default_index < risky_index)
+    )
+    checks.append(
+        advisory(
+            "test.sh:default-reward",
+            early_default,
+            "a default reward 0 is in place before the first step that can fail"
+            if early_default
+            else "optional hardening beyond the portal template: writing a default 0 before "
+            "the first risky step leaves a reward behind even if the verifier is killed",
+        )
+    )
+    # The property is that the exit status decides the reward: 1 on success, 0 otherwise.
+    # Indentation, quoting and `[`/`[[` are the author's choice.
+    tail = "\n".join(code_lines[-12:])
+    footer_ok = (
+        re.search(r"^\s*\w+=\$\?", tail, re.M) is not None
+        and re.search(r"\b1\b.*>\s*/logs/verifier/reward\.txt", tail) is not None
+        and re.search(r"\b0\b.*>\s*/logs/verifier/reward\.txt", tail) is not None
+    )
     checks.append(
         result(
             "test.sh:reward-footer",
             footer_ok,
             (
-                "canonical multiline reward footer"
+                "the captured exit status decides reward 1 or 0"
                 if footer_ok
-                else "test.sh must end with the canonical multiline rc/if/else/fi block"
+                else "end test.sh by capturing the exit status and writing reward 1 on success, 0 otherwise"
             ),
         )
     )
@@ -554,7 +620,7 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
 
 
 def emit(checks: list[dict[str, object]], json_out: Path | None) -> int:
-    status = "pass" if all(check["status"] == "pass" for check in checks) else "fail"
+    status = "pass" if all(check["status"] != "fail" for check in checks) else "fail"
     payload = {"status": status, "checks": checks}
     if json_out:
         json_out.parent.mkdir(parents=True, exist_ok=True)

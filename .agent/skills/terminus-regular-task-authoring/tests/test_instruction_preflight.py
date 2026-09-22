@@ -20,10 +20,10 @@ def test_accepts_flat_requirement_list_up_to_twenty_items(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    assert MODULE.scan(instruction) == []
+    assert MODULE.scan(instruction) == ([], [])
 
 
-def test_rejects_more_than_twenty_list_items(tmp_path: Path) -> None:
+def test_more_than_twenty_list_items_is_advisory_not_blocking(tmp_path: Path) -> None:
     instruction = tmp_path / "instruction.md"
     instruction.write_text(
         "Update `/app/output.json`.\n\n"
@@ -32,8 +32,30 @@ def test_rejects_more_than_twenty_list_items(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    findings = MODULE.scan(instruction)
-    assert any("21 bullet/numbered items" in finding for finding in findings)
+    findings, advisory = MODULE.scan(instruction)
+    assert any("21 bullet/numbered items" in note for note in advisory)
+    assert findings == []
+
+
+def test_long_contract_carrying_prose_is_advisory_not_blocking(tmp_path: Path) -> None:
+    """A closure clause plus a restriction whitelist legitimately runs long.
+
+    Failing such an instruction pushes the author to cut real contract, which is the
+    opposite of what the gate is for.
+    """
+    instruction = tmp_path / "instruction.md"
+    instruction.write_text(
+        "Fix the package under `/app/src` so it matches `/app/NOTE.md`. "
+        + "Where the note gives a rule it holds for every argument; where it gives none "
+        + "the package already answers correctly. "
+        + " ".join(f"Boundary clause {index} stays observable." for index in range(1, 120))
+        + "\n",
+        encoding="utf-8",
+    )
+
+    findings, advisory = MODULE.scan(instruction)
+    assert any("words of prose" in note for note in advisory)
+    assert findings == []
 
 
 def test_rejects_nested_lists(tmp_path: Path) -> None:
@@ -43,5 +65,37 @@ def test_rejects_nested_lists(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    findings = MODULE.scan(instruction)
+    findings, _advisory = MODULE.scan(instruction)
     assert any("nested list item" in finding for finding in findings)
+
+
+def test_naming_the_harness_is_advisory_not_blocking(tmp_path: Path) -> None:
+    """A panel-cleared task names the verifier to scope a restriction it audits.
+
+    Blocking the bare noun would have an author cut a real contract sentence.
+    """
+    instruction = tmp_path / "instruction.md"
+    instruction.write_text(
+        "Fix the package under `/app/src`. Package declarations and explicit type "
+        "references stay inside the listed namespaces; the verifier reads compiled "
+        "references as well as source.\n",
+        encoding="utf-8",
+    )
+
+    findings, advisory = MODULE.scan(instruction)
+
+    assert findings == []
+    assert any('benchmark noun "verifier"' in note for note in advisory)
+
+
+def test_grading_apparatus_paths_still_block(tmp_path: Path) -> None:
+    instruction = tmp_path / "instruction.md"
+    instruction.write_text(
+        "Fix the package so the checks in `/tests/` pass and the rubric scores it.\n",
+        encoding="utf-8",
+    )
+
+    findings, _advisory = MODULE.scan(instruction)
+
+    assert any("/tests/" in finding for finding in findings)
+    assert any("rubric" in finding for finding in findings)

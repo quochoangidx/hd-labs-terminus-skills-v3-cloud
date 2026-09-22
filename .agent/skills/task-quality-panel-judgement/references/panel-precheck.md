@@ -30,7 +30,11 @@ directory. Bind the full form to the exact task tree. Minimal shape:
       "witnesses": {
         "positive": ["test_a.py::test_historical_authority"],
         "boundary": ["test_a.py::test_authority_boundary"]
-      }
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "an action dated between two authority versions",
+      "wrong_but_plausible": "use the newest authority regardless of the action date",
+      "selfdescription_phrase": "which authority applies"
     },
     {
       "id": "RECONCILIATION",
@@ -73,11 +77,26 @@ directory. Bind the full form to the exact task tree. Minimal shape:
       "joins_before_output": true
     }
   ],
+  "closure": {
+    "universal_rule": {"file": "instruction.md", "anchor": "holds for every argument"},
+    "silence": {"file": "instruction.md", "anchor": "the shipped behavior stands"},
+    "coverage_envelope": {"file": "instruction.md", "anchor": "ordinary and extreme states"},
+    "entrypoint_scope": {"file": "environment/repo/NOTE.md", "anchor": "when called directly"}
+  },
+  "determinism": {
+    "seeds": [],
+    "clock_dependence": "none",
+    "network": "none",
+    "order_sensitivity": "none"
+  },
+  "reference_selfdescription": "solution/solve.sh",
+  "unclaimed_units_rationale": {},
   "exact_output_requirements": [
     {
       "id": "INTEROP-ORDER",
       "domain_required": true,
-      "rationale": "downstream signed exchange requires canonical order"
+      "rationale": "downstream signed exchange requires canonical order",
+      "authority_anchor": {"file": "environment/repo/NOTE.md", "anchor": "written in this order"}
     }
   ],
   "verifier_matrix": "verifier-matrix.json",
@@ -98,6 +117,33 @@ directory. Bind the full form to the exact task tree. Minimal shape:
   ]
 }
 ```
+
+## What the added fields are for
+
+- **`closure`** — the clauses that decide the input domain the authority does not
+  name. `universal_rule`, `silence` and `coverage_envelope` are required; add
+  `entrypoint_scope` when tests drive public helpers directly. Each anchor must
+  appear verbatim in the cited file. Rationale and worked examples:
+  [contract closure](../../terminus-regular-task-authoring/references/contract-closure.md).
+- **`expected_source`** — where a witness's expected value comes from, one of
+  `independent_model`, `authority_text`, `shipped_differential`, `invariant`,
+  `oracle_recorded`. The last records what the reference already does, so it
+  agrees with the reference whatever the reference got wrong; pair it with
+  `oracle_recorded_corroboration` naming an invariant or shipped differential.
+- **`discriminating_instance` / `wrong_but_plausible`** — the case the witness
+  runs, and the reasonable wrong answer it rules out. A witness that no plausible
+  wrong implementation fails is not coverage.
+- **`authority_anchor` on an exact convention** — the visible sentence that fixes
+  it. A `rationale` says why the convention exists; it does not let a candidate
+  read the convention off anything.
+- **`determinism`** — `deterministic_execution` blocks on `Minor`, and nothing
+  else here would notice a verifier that depends on the clock, the network or
+  collection order.
+- **`reference_selfdescription`** — the solution file whose header maps each core
+  obligation to its change. The reference is judged against the instruction alone.
+- **`unclaimed_units_rationale`** — the escape hatch for a verifier unit that
+  deliberately belongs to no obligation, such as a collection smoke test. Full
+  mode sweeps units against witnesses in both directions.
 
 A wrong-path receipt must contain `status: "pass"`, its `wrong_path_id`, the
 current `task_snapshot_sha256`, numeric `reward: 0`, non-empty

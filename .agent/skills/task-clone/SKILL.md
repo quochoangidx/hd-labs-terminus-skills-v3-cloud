@@ -584,6 +584,29 @@ that say nothing task-specific. Keep diagnostic, binary criteria tied to the
 actual domain workflow, include at least one negative criterion, use only
 ±1/2/3/5 with signed positives, and keep the positive total between 10 and 40.
 
+## Contract Closure
+
+Read
+[contract closure](../terminus-regular-task-authoring/references/contract-closure.md)
+before writing `instruction.md`. It carries the rules that let a task answer the
+five quality axes on receipts rather than reviewer opinion, and every one of them
+is checked by `panel_precheck.py`:
+
+- one authority, plus a universal-rule clause and a silence clause that close the
+  rest of the input domain (an entry-point scope clause too, when tests drive
+  helpers directly);
+- a coverage-envelope paragraph naming the hidden input families and no values;
+- an authority sentence behind every exact convention the verifier pins;
+- restrictions listed with their legal exceptions, each backed by a mechanical
+  audit;
+- expectations derived from the authority independently of the Oracle, written
+  before the Oracle exists;
+- a differential guarding whatever the silence clause promised to leave alone.
+
+An instruction that carries this much contract will run past the advisory word
+and backtick counts in `instruction_preflight.py`. That is expected. Trim
+narration, never contract.
+
 ## Instruction Style
 
 After writing or editing `instruction.md`, run the mechanical pre-flight and

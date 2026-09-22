@@ -41,7 +41,8 @@ Before preparing packets, read these repository docs completely:
 - `references/axis-prompts.md`
 
 When at least one finding is retained, also read
-`references/root-cause-remediation.md` completely before mapping root causes.
+`../task-revise-flag-remediation/references/root-cause-remediation.md` completely
+before mapping root causes.
 Its editing steps apply only when repairs were requested.
 
 The portal-mirrored docs are authoritative when they conflict with this skill.
@@ -236,7 +237,8 @@ Produce one consolidated remediation batch containing all retained groups. Do
 not emit a sequence of axis-by-axis repair requests.
 
 For every repair group, complete the root-invariant map required by
-`references/root-cause-remediation.md`: contract authority, violated invariant,
+`../task-revise-flag-remediation/references/root-cause-remediation.md`: contract
+authority, violated invariant,
 all reachable implementation sites, sibling and interaction variants, chosen
 repair boundary, proof obligations, and five-axis regression risks. A platform
 reproducer is one witness, not the repair scope. Do not edit until every retained
@@ -256,7 +258,8 @@ check each individual edit.
 
 Repair the invariant at its shared authority boundary. Avoid case-specific
 conditions that only satisfy the reported reproducer. Use the repair-option
-comparison in `references/root-cause-remediation.md`: repair, narrow, remove,
+comparison in `../task-revise-flag-remediation/references/root-cause-remediation.md`:
+repair, narrow, remove,
 expand only when justified, or retire/redesign. No fixed shrink-first or
 add-first order applies. Compare retained task value with coupling, regression
 risk and validation cost; inspect prior attempts and stop non-converging symptom
