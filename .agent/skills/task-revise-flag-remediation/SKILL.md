@@ -159,10 +159,23 @@ same finding a round later. Keep
 `workspace/reports/<slug>/revision-ledger.json` and validate it:
 
 ```bash
-python3 .agent/skills/terminus-regular-task-authoring/scripts/revision_ledger_check.py \
-  workspace/tasks/<slug> workspace/reports/<slug>/revision-ledger.json \
+GATE=.agent/skills/terminus-regular-task-authoring/scripts/revision_ledger_check.py
+
+# 1. the digest of the artifact the platform judged, from the restored returned tree
+python3 $GATE workspace/returned/<slug> x --print-snapshot
+
+# 2. start the ledger, bound to the tree you are repairing
+python3 $GATE workspace/tasks/<slug> workspace/reports/<slug>/revision-ledger.json --init
+
+# 3. after answering every finding
+python3 $GATE workspace/tasks/<slug> workspace/reports/<slug>/revision-ledger.json \
   --manifest workspace/reports/<slug>/panel-precheck-manifest.json
 ```
+
+`--manifest` is optional, but without it the gate cannot confirm that a dropped
+promise also left the prose. Supply it for any task that has an obligation
+manifest; a task returned from before the manifest existed can omit it, and the
+`dropped` rows are then trusted rather than checked.
 
 One row per numbered finding, with `decision` one of:
 

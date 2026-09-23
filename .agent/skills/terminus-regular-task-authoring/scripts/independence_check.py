@@ -48,6 +48,14 @@ DYNAMIC_ENTRY = {
 
 
 def tree_hash(root: Path) -> str:
+    """The task snapshot hash every receipt in this repo is bound to.
+
+    Must stay byte-for-byte identical to ``panel_precheck.tree_hash``. A receipt
+    carrying a differently-computed digest binds to a snapshot no other gate
+    recognises, so it can never be reconciled no matter how sound the check was.
+    The NUL separators are part of that contract: without them a path ending and
+    the file bytes that follow are indistinguishable from a longer path.
+    """
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root)
@@ -56,7 +64,9 @@ def tree_hash(root: Path) -> str:
         if path.is_dir() or path.is_symlink():
             continue
         digest.update(rel.as_posix().encode("utf-8"))
+        digest.update(b"\0")
         digest.update(path.read_bytes())
+        digest.update(b"\0")
     return digest.hexdigest()
 
 

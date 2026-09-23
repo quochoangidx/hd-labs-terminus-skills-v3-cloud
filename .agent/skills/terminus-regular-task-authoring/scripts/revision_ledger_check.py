@@ -66,7 +66,13 @@ def tree_hash(root: Path) -> str:
 
 
 def nonempty(value: object) -> bool:
-    return isinstance(value, str) and bool(value.strip())
+    """Non-empty, and not a skeleton placeholder left unfilled.
+
+    `--init` writes REPLACE-prefixed values so the required fields are visible. They
+    are non-empty strings, so without this they would satisfy every presence check
+    and a ledger could pass while naming no report and no returned snapshot.
+    """
+    return isinstance(value, str) and bool(value.strip()) and not value.startswith("REPLACE")
 
 
 def load_json(path: Path, label: str, errors: list[dict]) -> dict:
@@ -106,9 +112,24 @@ def check_receipt(
 
 def validate(task_dir: Path, ledger_path: Path, manifest_path: Path | None) -> dict:
     errors: list[dict] = []
+    current = tree_hash(task_dir) if task_dir.is_dir() else None
+    if not ledger_path.is_file():
+        # Reporting six schema violations for one absent file buries the only fact
+        # that matters and teaches authors to skim this output.
+        return {
+            "schema_version": 1,
+            "task_slug": task_dir.name,
+            "task_snapshot_sha256": current,
+            "findings_answered": 0,
+            "status": "fail",
+            "blockers": [{
+                "code": "no_ledger",
+                "message": f"{ledger_path} does not exist. Start it with "
+                f"`--init`, which records the current snapshot {str(current)[:12]}… as repaired_snapshot_sha256.",
+            }],
+        }
     ledger = load_json(ledger_path, ledger_path.name, errors)
     ledger_dir = ledger_path.parent
-    current = tree_hash(task_dir) if task_dir.is_dir() else None
 
     if not task_dir.is_dir():
         errors.append({"code": "missing_task", "message": f"task folder not found: {task_dir}"})
@@ -242,7 +263,42 @@ def main() -> int:
     parser.add_argument("ledger", type=Path)
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--print-snapshot",
+        action="store_true",
+        help="print the task's snapshot hash and exit; run it on the restored returned "
+        "artifact to obtain returned_snapshot_sha256",
+    )
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help="write a skeleton ledger bound to the current snapshot, then exit",
+    )
     args = parser.parse_args()
+
+    if not args.task_dir.is_dir():
+        print(f"task folder not found: {args.task_dir}")
+        return 2
+    if args.print_snapshot:
+        print(tree_hash(args.task_dir))
+        return 0
+    if args.init:
+        if args.ledger.exists():
+            print(f"{args.ledger} already exists; refusing to overwrite an answered return")
+            return 2
+        skeleton = {
+            "schema_version": 1,
+            "task_slug": args.task_dir.name,
+            "report_path": "REPLACE-with-the-retained-platform-report",
+            "returned_snapshot_sha256": "REPLACE-run --print-snapshot on the restored returned artifact",
+            "repaired_snapshot_sha256": tree_hash(args.task_dir),
+            "findings": [],
+            "previous_findings": [],
+        }
+        args.ledger.parent.mkdir(parents=True, exist_ok=True)
+        args.ledger.write_text(json.dumps(skeleton, indent=2) + "\n", encoding="utf-8")
+        print(f"wrote {args.ledger}; one row per numbered finding, then rerun without --init")
+        return 0
 
     result = validate(args.task_dir, args.ledger, args.manifest)
     if args.output:
