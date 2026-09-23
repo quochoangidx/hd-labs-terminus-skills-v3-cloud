@@ -112,7 +112,10 @@ Use `task-miner`, `task-clone`, `terminus-regular-task-authoring`,
 `task-local-solve-probe`, deterministic `task-client-feedback-review`,
 `task-harbor-runner` and `task-zip-submit` as their stages become relevant.
 
-The five quality axes are carried by executable receipts, not by reviewers:
+Answer the five axes while scaffolding, not only at closure: follow the
+[scaffold checklist](../terminus-regular-task-authoring/references/scaffold-five-axis-checklist.md),
+and run `contract_review` before any verifier exists. At closure the five
+quality axes are carried by executable receipts, not by reviewers:
 
 | Axis | What stands in for a reviewer |
 |---|---|

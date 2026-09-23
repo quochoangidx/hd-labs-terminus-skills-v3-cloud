@@ -72,19 +72,31 @@ Required path:
    manifest including its `closure`, `determinism` and `expected_source` fields.
 2. `panel_precheck.py --design-only`. Reject a disconnected core before scaffold
    expansion.
-3. Build the contract, the independent expectation model, then the Oracle — **in
-   that order**. An expectation written after the reference tends to copy it.
-4. Deterministic closure, every result written as a receipt:
+3. Write the contract (authority plus instruction) and answer the five axes at
+   scaffold time with the
+   [scaffold checklist](../../terminus-regular-task-authoring/references/scaffold-five-axis-checklist.md):
+   formula domains, the state table, the global-claim check, and the exact
+   conventions. Then run the reviewer's `contract_review` turn
+   ([single-reviewer-workflow.md](single-reviewer-workflow.md)), blind to tests
+   and solution, and repair the contract **before any verifier exists**. A
+   contract finding after the receipts forces the whole wrong-path matrix to
+   rerun.
+4. Build the independent expectation model, then the Oracle, **in that order**.
+   An expectation written after the reference tends to copy it. Fuzz the model
+   against the Oracle before writing tests, fix the harness shape, and write one
+   named test per rule, each run in a state where its violation shows. Score every
+   wrong path and one or two alternative correct implementations locally.
+5. Deterministic closure, every result written as a receipt:
    - `preflight.sh --strict` (layout, Docker, isolation, Oracle=1, NOP=0, noexec)
    - `preflight.sh --determinism` (repeat runs agree)
    - `independence_check.py` (the expectation model does not import the package)
    - `wrong_path_runner.py` for every core obligation (reward 0, its own witness
      fails, controls pass)
    - `panel_precheck.py --full` on the exact snapshot
-5. One reviewer, per [single-reviewer-workflow.md](single-reviewer-workflow.md):
-   `contract_review` blind to `tests/` and `solution/`, then `final_review` on
-   the frozen snapshot.
-6. Blind solve probe, two valid solvers. **The bar is CORE+: at most one of the
+6. The same reviewer's `final_review` on the frozen snapshot, with full task
+   visibility. A repair after it reruns the affected gates and gets a targeted
+   recheck in the same session.
+7. Blind solve probe, two valid solvers. **The bar is CORE+: at most one of the
    two succeeds.** One success and one failure is accepted; do not keep hardening
    a task to chase `advanced` or `frontier`, and do not reject a candidate for
    landing at CORE. Difficulty stays unmeasured either way — this is a local
@@ -97,7 +109,7 @@ Required path:
 
    If both solvers succeed, the task is under the bar. Deepen the causal coupling
    of the existing core rather than bolting on unrelated surface.
-7. Package as `builder_certified`.
+8. Package as `builder_certified`.
 
 The builder never asserts a gate result. Every claim in the report must name a
 receipt file bound to the snapshot hash; a gate with no receipt is not run.

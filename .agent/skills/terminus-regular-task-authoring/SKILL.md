@@ -65,6 +65,8 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 6. Write digest-pinned `tests/Dockerfile` plus Python `pytest` verifier tests in
    `tests/test_outputs.py`; create every artifact landing directory there.
 7. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
+   Answer the five quality axes at scaffold time with the
+   [scaffold checklist](references/scaffold-five-axis-checklist.md).
    When the verifier compiles candidate sources, follow
    [compiled verifier hardening](references/compiled-verifier-hardening.md) and
    for a repair task, [contract closure](references/contract-closure.md): §1–14
