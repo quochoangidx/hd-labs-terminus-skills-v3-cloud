@@ -355,3 +355,42 @@ def test_a_restriction_needs_a_check_that_runs(tmp_path: Path) -> None:
     ]
 
     assert "unenforced_restriction" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_dropped_obligation_must_take_its_promise_with_it(tmp_path: Path) -> None:
+    """Prose that outlives its witness is worse than before the removal.
+
+    The task still promises the behaviour, the panel still enforces it, and now
+    nothing defends it.
+    """
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["removed_obligations"] = [
+        {
+            "id": "RETRY",
+            "reason": "not core; the task is about authority selection, not delivery",
+            "former_anchor": {"file": "instruction.md", "anchor": "reconcile state"},
+        }
+    ]
+    finish_receipts(task, manifest_path, manifest)
+
+    assert "surviving_promise" in codes(task, manifest_path, manifest, full=True)
+
+    (task / "instruction.md").write_text(
+        "Select historical authority. "
+        "A stated rule holds for every argument. "
+        "Where this says nothing the shipped behavior stands. "
+        "Expect ordinary and extreme states, in either order.\n",
+        encoding="utf-8",
+    )
+    manifest["obligations"][1]["authority"]["anchor"] = "Select historical authority"
+    finish_receipts(task, manifest_path, manifest)
+    assert "surviving_promise" not in codes(task, manifest_path, manifest, full=True)
+
+
+def test_a_removed_obligation_cannot_still_be_declared(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["removed_obligations"] = [
+        {"id": "AUTHORITY", "reason": "x", "former_anchor": {"file": "instruction.md", "anchor": "zzz"}}
+    ]
+
+    assert "removed_obligation" in codes(task, manifest_path, manifest, full=False)

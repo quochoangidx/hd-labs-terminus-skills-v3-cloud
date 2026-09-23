@@ -34,7 +34,12 @@ reports, and probe artifacts before editing.
 
 ## First classification
 
-Classify each failure before changing prose or tests:
+Classify each failure before changing prose or tests. Every row below has an
+unwritten second option — **stop promising the thing** — which is correct
+whenever the promise is not core to the hard thing the task tests. The repair
+directions named here are what to do when it *is* core; see
+[the earn-its-place question](#ask-whether-the-promise-earns-its-place-before-asking-how-to-satisfy-it)
+before applying one.
 
 | Class | Evidence | Repair direction |
 |---|---|---|
@@ -82,8 +87,24 @@ So for every finding, ask first: **does this thing earn its place in the task?**
 
 Remove the obligation, its assertions and its contract prose in one move. A
 promise left in the instruction after its test is deleted is still a promise the
-panel will enforce. Update the obligation manifest in the same edit so
-`wrong_paths`, witnesses and authority anchors do not outlive the obligation.
+panel will enforce, and now nothing defends it — strictly worse than before the
+removal. Record the drop in the obligation manifest:
+
+```json
+"removed_obligations": [
+  {"id": "RETRY", "reason": "not core; the task is about authority selection",
+   "former_anchor": {"file": "instruction.md", "anchor": "retries the delivery"}}
+]
+```
+
+`panel_precheck.py --full` then fails if that sentence still reads in the task,
+so a half-removed promise cannot ship quietly. Drop its `wrong_paths`, witnesses
+and authority anchors in the same edit.
+
+**Re-measure after removing.** Trimming changes the thing the solvers face, so
+every difficulty signal collected before the cut is stale. Rerun the blind solve
+probe and confirm the bar still holds; do not carry a tier or a probe result
+across a scope change.
 
 This is the intended use, not a loophole. Exhaustive coverage of nit-picky edge
 cases is not wanted; a tight task that does one hard thing properly is. Only
@@ -117,6 +138,58 @@ on axes that did finish still block. `PANEL DEGRADED` means a configured
 reviewer was replaced or lost. For a stuck evaluation or an execution error,
 request support with the submission identifier and report rather than editing
 the task.
+
+### Work from the snapshot the platform judged
+
+Restore the task from the **exact returned artifact** before reading a finding
+against it. A working tree that has drifted since the upload is a different task:
+a finding may not reproduce on it, or may reproduce for a different reason, and
+either way the evidence you collect is about something the panel never saw. Keep
+any diverged tree only as a rollback artifact under the report directory.
+
+Record both hashes — the snapshot returned and the snapshot you will resubmit —
+in the revision ledger below. Every reproduction receipt binds to the first and
+every closure receipt to the second; the gate rejects a reproduction taken on the
+repaired tree, because that shows a test passing rather than a defect existing.
+
+### Answer each finding in the ledger
+
+The build path runs on receipts and the revision path used to run on prose. That
+asymmetry is where a return gets answered with "repaired" and comes back with the
+same finding a round later. Keep
+`workspace/reports/<slug>/revision-ledger.json` and validate it:
+
+```bash
+GATE=.agent/skills/terminus-regular-task-authoring/scripts/revision_ledger_check.py
+
+# 1. the digest of the artifact the platform judged, from the restored returned tree
+python3 $GATE workspace/returned/<slug> x --print-snapshot
+
+# 2. start the ledger, bound to the tree you are repairing
+python3 $GATE workspace/tasks/<slug> workspace/reports/<slug>/revision-ledger.json --init
+
+# 3. after answering every finding
+python3 $GATE workspace/tasks/<slug> workspace/reports/<slug>/revision-ledger.json \
+  --manifest workspace/reports/<slug>/panel-precheck-manifest.json
+```
+
+`--manifest` is optional, but without it the gate cannot confirm that a dropped
+promise also left the prose. Supply it for any task that has an obligation
+manifest; a task returned from before the manifest existed can omit it, and the
+`dropped` rows are then trusted rather than checked.
+
+One row per numbered finding, with `decision` one of:
+
+| `decision` | Required evidence |
+|---|---|
+| `backed` | a reproduction receipt on the returned snapshot **and** a closure receipt on the repaired one. A closure alone shows a test passing that may never have failed |
+| `dropped` | the `removed_obligation_id`, cross-checked against the manifest so `panel_precheck.py` can confirm the prose left too |
+| `disputed` | the contract passage cited, a reproducible counterexample, and `contested_in_channel` recording where it was posted — a dispute without the first two is an opinion, and one never posted to `#terminus-3-submissions` is a finding left unanswered while the ledger says otherwise |
+| `acknowledged` | non-blocking findings only; the gate refuses it on a blocker |
+
+Every row also carries `gate`: the rule this finding bought, or
+`not_mechanizable` with the reason. And every `P`-finding the report carries
+forward needs an explicit `response` — the report omitting one does not resolve it.
 
 Read every numbered finding. One axis can carry several distinct issues, so
 resolving the opening example may leave another finding open. For each finding:
