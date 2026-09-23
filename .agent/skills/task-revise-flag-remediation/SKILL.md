@@ -33,7 +33,12 @@ reports, and probe artifacts before editing.
 
 ## First classification
 
-Classify each failure before changing prose or tests:
+Classify each failure before changing prose or tests. Every row below has an
+unwritten second option — **stop promising the thing** — which is correct
+whenever the promise is not core to the hard thing the task tests. The repair
+directions named here are what to do when it *is* core; see
+[the earn-its-place question](#ask-whether-the-promise-earns-its-place-before-asking-how-to-satisfy-it)
+before applying one.
 
 | Class | Evidence | Repair direction |
 |---|---|---|
@@ -81,8 +86,24 @@ So for every finding, ask first: **does this thing earn its place in the task?**
 
 Remove the obligation, its assertions and its contract prose in one move. A
 promise left in the instruction after its test is deleted is still a promise the
-panel will enforce. Update the obligation manifest in the same edit so
-`wrong_paths`, witnesses and authority anchors do not outlive the obligation.
+panel will enforce, and now nothing defends it — strictly worse than before the
+removal. Record the drop in the obligation manifest:
+
+```json
+"removed_obligations": [
+  {"id": "RETRY", "reason": "not core; the task is about authority selection",
+   "former_anchor": {"file": "instruction.md", "anchor": "retries the delivery"}}
+]
+```
+
+`panel_precheck.py --full` then fails if that sentence still reads in the task,
+so a half-removed promise cannot ship quietly. Drop its `wrong_paths`, witnesses
+and authority anchors in the same edit.
+
+**Re-measure after removing.** Trimming changes the thing the solvers face, so
+every difficulty signal collected before the cut is stale. Rerun the blind solve
+probe and confirm the bar still holds; do not carry a tier or a probe result
+across a scope change.
 
 This is the intended use, not a loophole. Exhaustive coverage of nit-picky edge
 cases is not wanted; a tight task that does one hard thing properly is. Only

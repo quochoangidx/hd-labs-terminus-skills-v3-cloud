@@ -381,6 +381,42 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
                 "message": f"{label} must name the exceptions that remain legal and set allowed_exceptions_disclosed",
             })
 
+    # Removing an obligation means removing what promised it. Prose left in the task
+    # after its witness is deleted is still a promise the panel enforces, and now
+    # nothing defends it — strictly worse than before the removal.
+    removed = manifest.get("removed_obligations", [])
+    if not isinstance(removed, list):
+        errors.append({"axis": "coherent_contract", "code": "removed_obligations", "message": "removed_obligations must be a list"})
+        removed = []
+    for index, row in enumerate(removed):
+        label = f"removed_obligations[{index}]"
+        if not isinstance(row, dict) or not nonempty(row.get("id")):
+            errors.append({"axis": "coherent_contract", "code": "removed_obligation", "message": f"{label} requires the id of the obligation that was dropped"})
+            continue
+        if str(row["id"]) in obligation_ids:
+            errors.append({"axis": "coherent_contract", "code": "removed_obligation", "message": f"{label} is still present in obligations"})
+        if not nonempty(row.get("reason")):
+            errors.append({"axis": "coherent_contract", "code": "removed_obligation", "message": f"{label}.reason must say why it was not core"})
+        former = row.get("former_anchor")
+        if not isinstance(former, dict) or not nonempty(former.get("file")) or not nonempty(former.get("anchor")):
+            errors.append({"axis": "coherent_contract", "code": "removed_obligation", "message": f"{label}.former_anchor must name the sentence that used to promise it"})
+            continue
+        if not full:
+            continue
+        former_path = task_dir / str(former["file"])
+        if not former_path.is_file():
+            continue
+        try:
+            if str(former["anchor"]) in former_path.read_text(encoding="utf-8"):
+                errors.append({
+                    "axis": "coherent_contract",
+                    "code": "surviving_promise",
+                    "message": f"{label}: obligation {row['id']} was dropped but its promise still reads in "
+                    f"{former['file']} — remove the prose too, or the task promises something nothing checks",
+                })
+        except UnicodeDecodeError:
+            errors.append({"axis": "coherent_contract", "code": "authority_encoding", "message": f"{label}.former_anchor.file must be UTF-8 text"})
+
     # Closure: the clauses that decide what happens outside the cases the authority
     # names. Without them every boundary input is an open question, and an open
     # question is a contract finding waiting to be written.

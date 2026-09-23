@@ -100,6 +100,7 @@ directory. Bind the full form to the exact task tree. Minimal shape:
     }
   ],
   "unclaimed_units_rationale": {},
+  "removed_obligations": [],
   "exact_output_requirements": [
     {
       "id": "INTEROP-ORDER",
@@ -153,6 +154,11 @@ directory. Bind the full form to the exact task tree. Minimal shape:
 - **`unclaimed_units_rationale`** — the escape hatch for a verifier unit that
   deliberately belongs to no obligation, such as a collection smoke test. Full
   mode sweeps units against witnesses in both directions.
+- **`removed_obligations`** — obligations dropped because they were not core,
+  each with the reason and the `former_anchor` sentence that used to promise it.
+  Full mode fails when that sentence still reads in the task: a promise left in
+  the prose after its witness is deleted is still enforced by the panel and now
+  has nothing defending it.
 - **`restrictions`** — one entry per thing the contract forbids. `statement` is
   the restriction as the candidate reads it; `enforced_by` names the checks that
   run, because a restriction the verifier cannot see is decoration;
