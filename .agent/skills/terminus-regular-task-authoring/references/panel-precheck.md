@@ -79,7 +79,8 @@ directory. Bind the full form to the exact task tree. Minimal shape:
   ],
   "closure": {
     "universal_rule": {"file": "instruction.md", "anchor": "holds for every argument"},
-    "silence": {"file": "instruction.md", "anchor": "the shipped behavior stands"},
+    "silence": {"file": "instruction.md", "anchor": "the shipped behavior stands",
+                "named_cases": [{"anchor": "a side of nought or less", "witness_ids": ["test_a.py::test_untouched_edges"]}]},
     "coverage_envelope": {"file": "instruction.md", "anchor": "ordinary and extreme states"},
     "entrypoint_scope": {"file": "environment/repo/NOTE.md", "anchor": "when called directly"}
   },
@@ -133,7 +134,12 @@ directory. Bind the full form to the exact task tree. Minimal shape:
 - **`closure`** — the clauses that decide the input domain the authority does not
   name. `universal_rule`, `silence` and `coverage_envelope` are required; add
   `entrypoint_scope` when tests drive public helpers directly. Each anchor must
-  appear verbatim in the cited file. Rationale and worked examples:
+  appear verbatim in the cited file. `silence.named_cases` is required: one row
+  per case the silence prose names, each with its anchor phrase and the
+  `witness_ids` that check it against the shipped behaviour, or `[]` when the
+  prose names none. A named case with no witness blocks (`silence_case_unwitnessed`):
+  the platform's `test_instruction_alignment` check reads every named case as a
+  requirement, and failed `tbrain-quantized-depthwise-convolution` on exactly this. Rationale and worked examples:
   [contract closure](contract-closure.md).
 - **`expected_source`** — where a witness's expected value comes from, one of
   `independent_model`, `authority_text`, `shipped_differential`, `invariant`,

@@ -79,7 +79,7 @@ def make_fixture(tmp_path: Path) -> tuple[Path, Path, dict]:
         "interactions": [{"id": "authority-state", "obligation_ids": ["AUTHORITY", "RECONCILE"], "witness_ids": ["test_outputs.py::test_interaction"], "joins_before_output": True}],
         "closure": {
             "universal_rule": {"file": "instruction.md", "anchor": "holds for every argument"},
-            "silence": {"file": "instruction.md", "anchor": "the shipped behavior stands"},
+            "silence": {"file": "instruction.md", "anchor": "the shipped behavior stands", "named_cases": []},
             "coverage_envelope": {"file": "instruction.md", "anchor": "ordinary and extreme states"},
         },
         "determinism": {"seeds": [], "clock_dependence": "none", "network": "none", "order_sensitivity": "none"},
@@ -227,6 +227,43 @@ def test_closure_anchors_must_exist_in_the_cited_file(tmp_path: Path) -> None:
     finish_receipts(task, manifest_path, manifest)
 
     assert "closure_silence" in codes(task, manifest_path, manifest, full=True)
+
+
+def test_silence_must_declare_the_cases_it_names(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    del manifest["closure"]["silence"]["named_cases"]
+
+    assert "silence_named_cases" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_named_silent_case_needs_a_witness(tmp_path: Path) -> None:
+    # The shape a platform check rejected: the instruction named a silent case and
+    # no test ever exercised it, because the expectation model answered it its own way.
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["silence"]["named_cases"] = [{"anchor": "the shipped behavior stands", "witness_ids": []}]
+
+    assert "silence_case_unwitnessed" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_named_silent_case_witness_must_be_a_real_unit(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["silence"]["named_cases"] = [
+        {"anchor": "the shipped behavior stands", "witness_ids": ["test_outputs.py::test_nobody_wrote"]}
+    ]
+    finish_receipts(task, manifest_path, manifest)
+
+    assert "silence_case_unwitnessed" in codes(task, manifest_path, manifest, full=True)
+
+
+def test_a_witnessed_silent_case_passes(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["silence"]["named_cases"] = [
+        {"anchor": "the shipped behavior stands", "witness_ids": ["test_outputs.py::test_parser"]}
+    ]
+    finish_receipts(task, manifest_path, manifest)
+
+    found = codes(task, manifest_path, manifest, full=True)
+    assert "silence_case_unwitnessed" not in found and "silence_named_cases" not in found
 
 
 def test_a_missing_closure_clause_blocks(tmp_path: Path) -> None:

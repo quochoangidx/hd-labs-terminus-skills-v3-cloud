@@ -421,6 +421,7 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
     # names. Without them every boundary input is an open question, and an open
     # question is a contract finding waiting to be written.
     closure = manifest.get("closure")
+    silence_case_witnesses: set[str] = set()
     if not isinstance(closure, dict):
         errors.append({"axis": "coherent_contract", "code": "closure", "message": "closure must be an object carrying the universal-rule, silence and coverage-envelope clauses"})
     else:
@@ -438,6 +439,30 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
                         errors.append({"axis": "coherent_contract", "code": f"closure_{clause}", "message": f"closure.{clause}.anchor is absent from {row.get('file')}"})
                 except UnicodeDecodeError:
                     errors.append({"axis": "coherent_contract", "code": "authority_encoding", "message": f"closure.{clause}.file must be UTF-8 text"})
+        # A silence clause that names cases ("a clamp whose lower bound exceeds its
+        # upper") has made a promise about each one, and the quality check reads every
+        # named case as a requirement. Each needs its own witness. Writing the list
+        # down is also what exposes a model that answers a silent case its own way
+        # rather than the way the package ships: the witness cannot be made to pass.
+        silence_row = closure.get("silence") if isinstance(closure.get("silence"), dict) else {}
+        named_cases = silence_row.get("named_cases")
+        if not isinstance(named_cases, list):
+            errors.append({"axis": "sound_verifier", "code": "silence_named_cases", "message": "closure.silence.named_cases must be a list: one row per case the silence prose names, or [] when it names none"})
+        else:
+            for index, case in enumerate(named_cases):
+                label = f"closure.silence.named_cases[{index}]"
+                if not isinstance(case, dict) or not nonempty(case.get("anchor")):
+                    errors.append({"axis": "sound_verifier", "code": "silence_named_cases", "message": f"{label} must carry the anchor phrase that names the case"})
+                    continue
+                ids = case.get("witness_ids")
+                if not isinstance(ids, list) or not ids or not all(nonempty(item) for item in ids):
+                    errors.append({"axis": "sound_verifier", "code": "silence_case_unwitnessed", "message": f"{label} ({case['anchor']!r}) names a silent case no test checks — add a shipped-behaviour witness or stop naming it"})
+                    continue
+                silence_case_witnesses.update(str(item) for item in ids)
+                if full:
+                    case_path = task_file(task_dir, case.get("file", silence_row.get("file")), f"{label}.file", "coherent_contract", errors, must_exist=True)
+                    if case_path and case_path.is_file() and str(case["anchor"]) not in case_path.read_text(encoding="utf-8", errors="replace"):
+                        errors.append({"axis": "coherent_contract", "code": "silence_named_cases", "message": f"{label}.anchor is absent from {case_path.relative_to(task_dir)}"})
         # Only meaningful when tests drive public helpers directly rather than going
         # through the top-level entry point every time.
         scope = closure.get("entrypoint_scope")
@@ -474,6 +499,9 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
             for message in matrix_errors:
                 errors.append({"axis": "sound_verifier", "code": "verifier_matrix", "message": message})
             known_tests = set(derived.get("unit_ids", set()))
+        unknown_silence = sorted(silence_case_witnesses - known_tests)
+        if unknown_silence:
+            errors.append({"axis": "sound_verifier", "code": "silence_case_unwitnessed", "message": "silence named-case witnesses missing from verifier_matrix.unit_ids: " + ", ".join(unknown_silence)})
         unknown = sorted(witness_ids - known_tests)
         if unknown:
             errors.append({"axis": "sound_verifier", "code": "unknown_witness", "message": "witness IDs missing from verifier_matrix.unit_ids: " + ", ".join(unknown)})
