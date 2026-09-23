@@ -552,7 +552,10 @@ After upload to Snorkel, remind the user to create a rubric in the platform UI:
 - Include at least **one negative-reward criterion**.
 - Format: `"Agent <did/did not> <observable action>, +/-N"`
 - Allowed scores: `{+1, +2, +3, +5, -1, -2, -3, -5}` only
-- **Positive scores need an explicit leading `+`** (write `+3`, not `3`); unsigned positives are sent back for revision
+- **Positive scores need an explicit leading `+`** (write `+3`, not `3`); fix
+  unsigned positives before submission. A reviewer fixes defects in a non-empty
+  generated rubric in place; only a blank or never-generated rubric triggers
+  revision.
 - Total positive points: 10–40
 - Rubrics grade trace-evidenced engineering behavior, not the final pytest result.
   Keep criteria task-specific and diagnostic; avoid generic meta-checks such as

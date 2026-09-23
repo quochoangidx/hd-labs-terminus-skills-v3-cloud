@@ -104,6 +104,11 @@ do not substitute for this review.
    realism:
    - Would a real developer who did not already know the solution include each
      sentence?
+   - Does each independent promise earn its place in the hard thing? If deleting
+     a sentence would leave the stated expert crux unchanged, flag the promise
+     as removable breadth rather than asking for more tests. Keep core promises
+     and require real backing; cut breadth without weakening the 3-of-8
+     difficulty gate.
    - Does the prompt state desired behavior, or does it reveal root cause,
      implementation path, or exact patch shape?
    - Niche behavioral detail is acceptable when it makes tests fair.
@@ -185,6 +190,10 @@ do not substitute for this review.
      edited in the platform UI; the submitted ZIP does not contain `rubrics.txt`.
    - Rubrics need at least one negative criterion, signed positive scores, only
      ±1/2/3/5 values, and 10–40 total positive points.
+   - Treat those rubric rows as pre-submission quality fixes, not author-facing
+     revision severities. Once submitted, the reviewer fixes defects in a
+     non-empty platform-generated rubric in place and records them; only an
+     empty or never-generated rubric is returned for revision.
 
 3. Review the four Terminus 3 submission explanations under `[metadata]` in
    `task.toml`: `difficulty_explanation`, `solution_explanation`,

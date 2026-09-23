@@ -819,7 +819,10 @@ checking "Send to Reviewer" so the edited rubric is not overwritten.
 Rubrics must be trace-focused. Every criterion line starts with `Agent` and
 ends with `, +/-N`; allowed values are only 1, 2, 3, or 5; do not use 4; and
 positive scores must carry an explicit leading `+` (write `+3`, not `3`) —
-unsigned positives are sent back for revision.
+fix unsigned positives before submission. If a non-empty generated rubric still
+reaches human review with a rubric defect, the reviewer fixes it in place and
+records the edit; only a blank or never-generated rubric is returned for
+revision.
 Use a flat list, 10-40 total positive points, and at least one negative
 criterion. Rubrics grade trace-evidenced engineering behavior, not the final
 pytest result; make each line task-specific and diagnostic. Do not

@@ -22,8 +22,9 @@ Read, in order:
 
 When the return is a quality-panel report, also read
 `docs/testing-and-validation/quality-panel-judge-guide.md` and
-`docs/testing-and-validation/quality-panel-examples.md` before classifying any
-finding.
+`docs/testing-and-validation/quality-panel-examples.md`, then read
+`docs/reviewing-tasks/defending-your-submission.md` before classifying any
+finding or deciding where to send a contest.
 
 For Hardware / CAD, also read
 `docs/creating-tasks/cad-task-guidelines.md` before classifying a geometry miss.
@@ -131,7 +132,9 @@ resolving the opening example may leave another finding open. For each finding:
 4. verify both sides, so the correct solution passes and the specific wrong
    behavior fails, retaining the input, output, command, and result;
 5. summarize each resolution, naming the finding, the changed file or rule, and
-   the evidence. Dispute a finding with the same level of detail.
+   the evidence. Dispute a finding with the same level of detail, but post that
+   evidence in `#terminus-3-submissions`; the quality panel does not read a
+   rebuttal placed only in the platform revision note.
 
 An execution line changes what the finding establishes, not whether it must be
 answered:
@@ -147,8 +150,10 @@ an axis from `Minor` to `Major`. The absence of an execution line does not clear
 a finding: a defect can be established by reading the files, and an unsuccessful
 or unfinished reproduction leaves the finding unchanged. Contract and
 determinism findings never use that execution stage. Contest a claim only with
-the cited contract passage and a reproducible counterexample, for instance when
-the claimed contract validity or reachability is wrong.
+the task ID, finding axis/severity and cited passage, the exact contract passage
+or assertion at issue, and a reproducible counterexample, for instance when the
+claimed contract validity or reachability is wrong. Post that contest in
+`#terminus-3-submissions`; do not rely on the revision note to reach the panel.
 
 A conditional `Previous review` section carries earlier findings forward as
 `P1`, `P2`, and so on; its absence does not mean an old finding was resolved.
@@ -158,7 +163,9 @@ rejected on reinspection, and `mixed` or `unanswered` means the history reached
 no single answer — those two labels alone do not prove a repair failed. These
 are statuses of earlier findings, not replacements for the current axis
 verdicts, so a revision can close an old issue and uncover a different one.
-Include a short explicit response to each earlier finding in the revision notes.
+Include a short explicit disposition for each earlier finding in the revision
+notes for the human reviewer. This summary does not deliver a contested finding
+to the quality panel; use `#terminus-3-submissions` for that.
 
 Passing the panel allows difficulty measurement; it is not task acceptance.
 

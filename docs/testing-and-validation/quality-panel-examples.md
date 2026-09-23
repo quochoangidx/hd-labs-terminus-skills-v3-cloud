@@ -14,7 +14,8 @@ In the current panel, `Minor` and `Major` block on the contract, reference, veri
 | A reference solution that gets a format or state transition wrong | [B — Reference solution](#b--reference) |
 | Exposed answers, accepting wrong work, or rejecting valid work | [C — Verifier and environment](#c--verifier) |
 | Grading that changes between runs | [D — Deterministic execution](#d--deterministic-execution) |
-| A useful revision note or evidence-backed disagreement | [E — Responding to a review](#e--responding-to-a-review) |
+| A useful revision note or evidence-backed disagreement | [E-1, E-2](#e--responding-to-a-review) |
+| Removing a non-core promise instead of adding tests | [E-3](#e-3--remove-a-non-core-promise) |
 
 ---
 
@@ -383,9 +384,13 @@ Evidence: [revision, command/run ID, and retained result locations].
 Scope: these results exercise ordering; they do not prove every panel axis.
 ```
 
+Disclosing that tie-break is the right move **because the ordering rule is load-bearing** — deleting it would change what the ledger task is. For a promise that is not the hard thing, see [E-3](#e-3--remove-a-non-core-promise).
+
 If the review contains several findings, give each one a disposition and its own evidence. Avoid “fixed all feedback” without a mapping to the claims. Do not rely on the next review automatically receiving earlier comments; include the necessary context in the revision response.
 
 ### E-2 — A disagreement that shows why the proposed failure cannot occur
+
+This is what you post in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W). The panel does not read it in a revision note.
 
 Suppose a finding says JSON key order is incorrectly enforced, but the cited test actually parses JSON before comparing objects. A useful response quotes the check and supplies a counterexample:
 
@@ -404,6 +409,34 @@ If another check rejects the valid serialization, please identify it.
 That addresses the claimed false rejection. “The Oracle passes” would not: the Oracle may emit only the single serialization the disputed check accepts. For an answer-exposure dispute, provide analogous evidence about artifact staging, accessible paths, and the exact privileged read.
 
 See [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission) for the review and escalation process.
+
+### E-3 — Remove a non-core promise
+
+*`coherent_contract` / `sound_verifier` · cut breadth, keep the hard thing*
+
+**Task (before).** Reconstruct account balances from a ledger (the same domain as [A-4](#a-4--a-payment-tie-break-rule-exists-only-in-the-verifier)). The instructions also promise crash recovery after a killed write, a catalog of invalid-input error strings, and extra CSV columns the grader never needed. The panel flags recovery: the contract promises it; the tests never interrupt a write.
+
+**Add-only response (do not do this).** Add recovery fixtures, more contract paragraphs, and more error-string tests. The surface the panel judges grows; the next round flags a different extra promise.
+
+**Cut (after).** Delete crash recovery and the invalid-input catalog from `instruction.md` and `tests/`. Keep the aggregation rules, isolating cases for those rules, and the disclosed `(timestamp, sequence, input position)` tie-break. `difficulty_explanation` still describes reconstructing interacting ledger updates — that crux did not change.
+
+```text
+Finding: sound_verifier — crash recovery is promised and untested.
+
+Removed the recovery sentence and the extra error-catalog bullets from
+instruction.md. Deleted the matching tests. Left the ledger aggregation
+rules, isolating fixtures, and the disclosed tie-break.
+
+Validation performed:
+- Reference on the revised task: passes.
+- A timestamp-only implementation: still fails the equal-timestamp fixture.
+- No remaining instruction text mentions recovery.
+
+Evidence: [revision and retained result locations].
+Disposition: removed — recovery was not the hard thing.
+```
+
+**Check.** Named rules that remain still need an isolating case. Confirm a new submission would still fail at least 3 of 8 solver runs on the remaining crux; if it would not, deepen that crux rather than restoring the extra modes. See [Decide before you add](/portal/docs/testing-and-validation/quality-panel-judge-guide#decide-before-you-add).
 
 ---
 

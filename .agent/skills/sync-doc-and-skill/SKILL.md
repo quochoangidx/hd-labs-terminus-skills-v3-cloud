@@ -123,6 +123,8 @@ For each key rule area, compare online content with local docs:
 | Cloud image-builder syntax | `creating-tasks/dockerfile-best-practices.md`, `testing-and-validation/ci-checks-reference.md` | `check_modal_dockerfile_compat`, `COPY --chown`, `COPY --from` |
 | Hardware/CAD geometry verification | `creating-tasks/cad-task-guidelines.md` | `direct measurement`, `sampling`, `recompute`, `built geometry` |
 | Quality panel blocking review | `testing-and-validation/quality-panel-judge-guide.md`, `testing-and-validation/quality-panel-examples.md` | `coherent_contract`, `correct_reference_solution`, `protected_ground_truth`, `sound_verifier`, `deterministic_execution`, `Advisory`, `Minor`, `Unsure` |
+| Quality-panel keep-or-cut remediation | `testing-and-validation/quality-panel-judge-guide.md`, `testing-and-validation/quality-panel-examples.md`, `reviewing-tasks/defending-your-submission.md` | `Decide before you add`, `earn its place`, `Cut breadth`, `#terminus-3-submissions`, `revision note` |
+| Reviewer-owned rubric fixes | `reviewing-tasks/reviewer-checklist.md` | `Rubric issues are fixed by the reviewer`, `empty rubric`, `Action`, `Revision` |
 | Negative verifier control | `creating-tasks/writing-tests.md`, `understanding-tasks/what-makes-a-good-task.md` | `reject a wrong solution`, `delivered binary`, `equivalence` |
 | Oracle correctness | `creating-tasks/writing-oracle-solution.md` | `Correct, Not Just Passing`, `against the spec` |
 | Near-miss interpretation | `understanding-tasks/difficulty-guidelines.md` | `same one or few tests`, `different tests each time` |
@@ -168,6 +170,7 @@ After docs are synced, audit the doctrine-coupled set:
 .agent/skills/task-quality-panel-judgement/SKILL.md (+ axis prompts and packet builder)
 .agent/skills/task-language-port/SKILL.md
 .agent/skills/terminus-regular-task-authoring/SKILL.md
+.agent/skills/terminus-rubric-authoring/SKILL.md
 .agent/skills/task-harbor-runner/SKILL.md
 .agent/skills/task-llm-style-audit/SKILL.md
 .agent/skills/task-revise-flag-remediation/SKILL.md
@@ -206,6 +209,9 @@ After docs are synced, audit the doctrine-coupled set:
 | Cloud-compatible COPY syntax | — | Docker Rules | blocking check |
 | CAD geometry and parametric recompute | candidate feasibility | verifier design | CAD review |
 | Quality panel five-axis gate | candidate return risk | pre-submit review | blocking review |
+| Finding disposition: back core or remove non-core scope | scope risk | bounded obligation design | remediation guidance |
+| Contested panel finding goes to `#terminus-3-submissions`, not only revision notes | — | handover guidance | returned-task guidance |
+| Reviewer fixes non-empty rubric defects; only empty rubric triggers revision | — | rubric workflow | advisory check |
 | Expertise floor (`difficult` check) | candidate screen | metadata/explanation | advisory check |
 | 3-of-8-failure difficulty gate | scoring mapping | validation | check |
 | Named-rule isolating fixture | plan feasibility | verifier matrix | blocking review |
@@ -378,6 +384,12 @@ protected_ground_truth
 sound_verifier
 deterministic_execution
 Advisory
+Decide before you add
+earn its place
+Cut breadth
+#terminus-3-submissions
+empty rubric
+fixed by the reviewer
 Requires Expertise
 Designing for Expert Reasoning
 verifier_interpreter_permissions
