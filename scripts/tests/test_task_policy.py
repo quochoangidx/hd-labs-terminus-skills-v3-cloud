@@ -51,6 +51,28 @@ class DockerPolicyTests(unittest.TestCase):
         self.assertEqual(statuses(checks)["agent-dockerfile:digests"], "pass")
         self.assertEqual(statuses(checks)["agent-dockerfile:final-base"], "pass")
 
+    def test_platform_pin_and_apt_version_pins_fail_and_nproc_warns(self):
+        self.dockerfile.write_text(
+            f"FROM --platform=linux/amd64 {PYTHON_IMAGE}\n"
+            "RUN apt-get update && apt-get install -y --no-install-recommends curl=7.88.1-10 tmux asciinema \\\n"
+            "    && make -j$(nproc)\n"
+        )
+        checks = statuses(POLICY.validate_dockerfile(self.dockerfile, "agent"))
+        self.assertEqual(checks["agent-dockerfile:no-platform-pin"], "fail")
+        self.assertEqual(checks["agent-dockerfile:apt-unpinned"], "fail")
+        self.assertEqual(checks["agent-dockerfile:no-bare-nproc"], "warn")
+
+    def test_unpinned_apt_and_no_platform_pass(self):
+        self.dockerfile.write_text(
+            f"FROM {PYTHON_IMAGE}\n"
+            "RUN apt-get update && apt-get install -y --no-install-recommends tmux asciinema \\\n"
+            "    && pip install --no-cache-dir requests==2.32.3\n"
+        )
+        checks = statuses(POLICY.validate_dockerfile(self.dockerfile, "agent"))
+        self.assertEqual(checks["agent-dockerfile:no-platform-pin"], "pass")
+        self.assertEqual(checks["agent-dockerfile:apt-unpinned"], "pass")
+        self.assertEqual(checks["agent-dockerfile:no-bare-nproc"], "pass")
+
     def test_agent_image_requires_harness_tools(self):
         self.dockerfile.write_text(f"FROM {PYTHON_IMAGE}\n")
 

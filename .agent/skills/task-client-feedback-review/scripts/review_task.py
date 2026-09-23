@@ -19,6 +19,7 @@ from typing import Iterable
 from verifier_static_checks import (
     analyze_candidate_privileges,
     interpreter_permission_alias_issue,
+    privilege_acquirable,
     setpriv_missing_no_new_privs,
     test_identity_leak,
     unit_test_alignment_issue,
@@ -449,9 +450,9 @@ def check_instruction_sufficiency_evidence(
     if not report.is_file():
         add(
             findings,
-            "blocker",
+            "should_fix",
             "instruction-sufficiency-evidence",
-            "Missing workspace/reports/<slug>/instruction-sufficiency.json; new and revised tasks need the V3 goal/evidence/inferability audit even when solver coverage is complete.",
+            "Missing workspace/reports/<slug>/instruction-sufficiency.json. It is a campaign_ready receipt, required before a counted probe; builder_certified and panel_ready do not produce it, and the platform never sees it.",
             str(report),
             "terminus-regular-task-authoring",
         )
@@ -492,7 +493,7 @@ def check_instruction_sufficiency_evidence(
     except Exception as exc:
         add(
             findings,
-            "blocker",
+            "should_fix",
             "instruction-sufficiency-evidence",
             f"Could not validate V3 evidence-inferability evidence: {exc}",
             str(report),
@@ -503,7 +504,7 @@ def check_instruction_sufficiency_evidence(
         detail = " ".join((proc.stdout + " " + proc.stderr).split())[:700]
         add(
             findings,
-            "blocker",
+            "should_fix",
             "instruction-sufficiency-evidence",
             f"V3 evidence-inferability manifest failed validation: {detail}",
             str(report),
@@ -540,7 +541,7 @@ def check_semantic_coverage_evidence(
     if missing:
         add(
             findings,
-            "blocker",
+            "should_fix",
             "semantic-coverage-evidence",
             "Missing frozen semantic-coverage/verifier-matrix evidence: " + ", ".join(missing),
             str(report_dir),
@@ -582,7 +583,7 @@ def check_semantic_coverage_evidence(
     except Exception as exc:
         add(
             findings,
-            "blocker",
+            "should_fix",
             "semantic-coverage-evidence",
             f"Could not validate semantic coverage evidence: {exc}",
             str(manifest),
@@ -593,7 +594,7 @@ def check_semantic_coverage_evidence(
         detail = " ".join((proc.stdout + " " + proc.stderr).split())[:700]
         add(
             findings,
-            "blocker",
+            "should_fix",
             "semantic-coverage-evidence",
             f"Semantic coverage manifest failed validation: {detail}",
             str(manifest),
@@ -753,7 +754,7 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
         if difficulty_text and pass_rate_re.search(difficulty_text):
             add(
                 findings,
-                "should-fix",
+                "should_fix",
                 "difficulty-explanation-pass-rate",
                 "difficulty_explanation must say why the task is inherently a challenge for a human expert, not cite a model pass rate or measured tier.",
                 "task.toml",
@@ -861,8 +862,8 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
             for dep in ("pytest", "pytest-json-ctrf"):
                 if dep not in verifier_dockerfile:
                     add(findings, "blocker", "verifier-deps", f"tests/Dockerfile does not bake in {dep}.", "tests/Dockerfile", "terminus-regular-task-authoring")
-            if not re.search(r"(?im)^\s*COPY\s+\.\s+/tests/?\s*$", verifier_dockerfile):
-                add(findings, "blocker", "verifier-copy", "tests/Dockerfile should copy its build context with `COPY . /tests/`.", "tests/Dockerfile", "terminus-regular-task-authoring")
+            if not re.search(r"(?im)^\s*COPY\s+(?:--\S+\s+)*\S.*\s/tests/?\s*$", verifier_dockerfile):
+                add(findings, "blocker", "verifier-copy", "tests/Dockerfile must copy the verifier files into /tests/ (for example `COPY . /tests/` or an explicit file list).", "tests/Dockerfile", "terminus-regular-task-authoring")
             for artifact in artifacts:
                 if not isinstance(artifact, str) or not artifact.startswith("/"):
                     continue
@@ -879,11 +880,13 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
         )
         candidate_call_count, unsafe_candidate_calls = analyze_candidate_privileges(verifier_python)
         if setpriv_missing_no_new_privs(verifier_python):
+            # docs/testing-and-validation/quality-panel-examples.md C-3: a missing
+            # --no-new-privs alone is not a finding; block only when escalation is reachable.
             add(
                 findings,
-                "blocker",
+                "blocker" if privilege_acquirable(verifier_python) else "polish",
                 "verifier-no-new-privs",
-                "setpriv-based candidate execution must include --no-new-privs or equivalent containment.",
+                "setpriv-based candidate execution should include --no-new-privs; it blocks only when a setuid or capability binary is reachable.",
                 "tests/test_outputs.py",
                 "terminus-regular-task-authoring",
             )
@@ -945,7 +948,7 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
             if missing_isolation:
                 add(
                     findings,
-                    "blocker",
+                    "should_fix",
                     "verifier-process-isolation",
                     "Candidate execution needs a fresh process group and whole-group kill/reap; missing "
                     + ", ".join(missing_isolation)

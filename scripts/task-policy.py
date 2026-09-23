@@ -227,6 +227,40 @@ def validate_dockerfile(
         )
     )
 
+    # docs/testing-and-validation/ci-checks-reference.md: "No platform pinning",
+    # apt installs must not be version-pinned, and bare `nproc` is listed (severity
+    # not stated, so it warns).
+    logical = [line for line in re.sub(r"\\\n", " ", text).splitlines() if not line.lstrip().startswith("#")]
+    platform_pinned = [line.strip() for line in logical if re.match(r"(?i)^\s*FROM\s+--platform=", line)]
+    checks.append(
+        result(
+            f"{role}-dockerfile:no-platform-pin",
+            not platform_pinned,
+            "no FROM --platform=" if not platform_pinned else "; ".join(platform_pinned),
+        )
+    )
+    apt_pinned = sorted({
+        token
+        for line in logical
+        for segment in re.findall(r"\bapt(?:-get)?\s+install\b([^;&|]*)", line)
+        for token in re.findall(r"(?<![\w=-])([a-z0-9][a-z0-9.+-]*=(?!=)[^\s;&|=]+)", segment)
+    })
+    checks.append(
+        result(
+            f"{role}-dockerfile:apt-unpinned",
+            not apt_pinned,
+            "apt packages are not version-pinned" if not apt_pinned else "apt versions must not be pinned: " + ", ".join(apt_pinned),
+        )
+    )
+    bare_nproc = [line.strip() for line in logical if re.search(r"(?<![\w-])nproc(?![\w-])", line)]
+    checks.append(
+        advisory(
+            f"{role}-dockerfile:no-bare-nproc",
+            not bare_nproc,
+            "no bare nproc" if not bare_nproc else "bare nproc: " + "; ".join(bare_nproc)[:200],
+        )
+    )
+
     final_image = resolved_final_image(stages)
     canonical = final_image in CANONICAL_IMAGES
     justified = has_base_justification(text)
