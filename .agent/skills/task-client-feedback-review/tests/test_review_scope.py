@@ -81,3 +81,82 @@ def test_review_scans_nested_dockerfiles(tmp_path: Path) -> None:
         and finding["path"] == "environment/repo/tools/Dockerfile"
         for finding in result["findings"]
     )
+
+
+def test_review_blocks_verifier_deps_in_the_agent_image(tmp_path: Path) -> None:
+    env = tmp_path / "environment"
+    env.mkdir()
+    (env / "Dockerfile").write_text(
+        "FROM python:3.13@sha256:" + "a" * 64 + "\n"
+        "RUN apt-get update && apt-get install -y tmux asciinema\n"
+        "RUN pip install --no-cache-dir pytest==9.1.1\n"
+    )
+
+    result = MODULE.review(tmp_path, include_external_evidence=False)
+
+    assert any(
+        finding["check"] == "dockerfile-verifier-deps" and finding["severity"] == "blocker"
+        for finding in result["findings"]
+    )
+
+
+def test_review_allows_a_clean_agent_image(tmp_path: Path) -> None:
+    env = tmp_path / "environment"
+    env.mkdir()
+    (env / "Dockerfile").write_text(
+        "FROM python:3.13@sha256:" + "a" * 64 + "\n"
+        "RUN apt-get update && apt-get install -y tmux asciinema\n"
+    )
+
+    result = MODULE.review(tmp_path, include_external_evidence=False)
+
+    assert not any(f["check"] == "dockerfile-verifier-deps" for f in result["findings"])
+
+
+def test_review_allows_pytest_when_a_shipped_suite_uses_it(tmp_path: Path) -> None:
+    app = tmp_path / "environment" / "app"
+    app.mkdir(parents=True)
+    (tmp_path / "environment" / "Dockerfile").write_text(
+        "FROM python:3.13@sha256:" + "a" * 64 + "\n"
+        "RUN apt-get update && apt-get install -y tmux asciinema\n"
+        "RUN pip install pytest==9.1.1\n"
+    )
+    (app / "README.md").write_text("Run the suite with `python3 -m pytest tests -q`.\n")
+
+    result = MODULE.review(tmp_path, include_external_evidence=False)
+
+    assert not any(f["check"] == "dockerfile-verifier-deps" for f in result["findings"])
+
+
+def _driver_task(tmp_path: Path, run_line: str) -> Path:
+    for rel in ("environment/app/tools/pkg_run.py", "tests/shipped/tools/pkg_run.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("# fixed driver\n")
+    (tmp_path / "tests" / "test_outputs.py").write_text(run_line)
+    return tmp_path
+
+
+def test_review_blocks_grading_through_the_candidate_driver(tmp_path: Path) -> None:
+    task = _driver_task(
+        tmp_path,
+        'APP_ROOT = os.environ.get("PKG_APP", "/app")\n'
+        "def run_job(job, *, root: str = APP_ROOT):\n"
+        '    cmd = [sys.executable, "-I", f"{root}/tools/pkg_run.py"]\n',
+    )
+
+    result = MODULE.review(task, include_external_evidence=False)
+
+    assert any(f["check"] == "verifier-trusts-candidate-driver" for f in result["findings"])
+
+
+def test_review_allows_a_verifier_owned_driver(tmp_path: Path) -> None:
+    task = _driver_task(
+        tmp_path,
+        'DRIVER_ROOT = os.environ.get("PKG_DRIVER", "/opt/driver")\n'
+        "def run_job(job, *, root: str = DRIVER_ROOT):\n"
+        '    cmd = [sys.executable, "-I", f"{root}/tools/pkg_run.py"]\n',
+    )
+
+    result = MODULE.review(task, include_external_evidence=False)
+
+    assert not any(f["check"] == "verifier-trusts-candidate-driver" for f in result["findings"])

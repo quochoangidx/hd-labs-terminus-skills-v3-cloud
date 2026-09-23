@@ -58,6 +58,41 @@ EVAL_REF_RE = re.compile(
     r"\bfinal test results?\b|\bCI\b)"
 )
 RUNTIME_SETUP_RE = re.compile(r"(?i)\b(pip install|apt-get|npm install|curl|wget)\b")
+PIP_INSTALL_RE = re.compile(r"\bpip3?\b.*\binstall\b")
+VERIFIER_DEP_RE = re.compile(r"(?<![\w-])(pytest(?:-json-ctrf)?)(?![\w-])")
+
+
+def candidate_driver_trusted(files: list[str], verifier_python: str) -> list[str]:
+    """Fixed drivers the verifier ships a pristine copy of but still runs from /app.
+
+    When the instruction fixes a driver and the verifier keeps its own copy under
+    tests/shipped/tools/, grading through /app/tools/<driver> trusts a file the agent
+    can edit: a driver that carries its own arithmetic passes with the package unfixed.
+    A task whose deliverable is the tool itself ships no such copy and is not flagged.
+    """
+    shipped = {Path(n).name for n in files if n.startswith("tests/shipped/tools/") and n.endswith(".py")}
+    offered = {Path(n).name for n in files if n.startswith("environment/app/tools/") and n.endswith(".py")}
+    app_default = bool(
+        re.search(r"""(?m)^\s*APP_ROOT\s*=.*["']/app["']""", verifier_python)
+        and re.search(r"root\s*:\s*str\s*=\s*APP_ROOT", verifier_python)
+    )
+    flagged = []
+    for name in sorted(shipped & offered):
+        if f"/app/tools/{name}" in verifier_python or (app_default and f"/tools/{name}" in verifier_python):
+            flagged.append(name)
+    return flagged
+
+
+def verifier_deps_installed(dockerfile: str) -> list[str]:
+    """Verifier-only packages a Dockerfile installs with pip (same rule as task-policy.py)."""
+    found: set[str] = set()
+    for line in re.sub(r"\\\n", " ", dockerfile).splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        install = PIP_INSTALL_RE.search(line)
+        if install:
+            found.update(VERIFIER_DEP_RE.findall(line[install.end():]))
+    return sorted(found)
 ENV_HINT_RE = re.compile(
     r"(?i)(step[- ]by[- ]step|solution|hint|TODO|walkthrough|implement by|"
     r"fix by|hidden tests|verifier|oracle)"
@@ -807,6 +842,15 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
                 add(findings, "blocker", "dockerfile-copy", "Dockerfile copies tests/ or solution/ into the image.", "environment/Dockerfile", "terminus-regular-task-authoring")
             if re.search(r"(?im)\bmkdir\b.*(/tests|/solution|/oracle|/logs/verifier)", dockerfile):
                 add(findings, "blocker", "dockerfile-hidden-paths", "Dockerfile creates benchmark runtime paths.", "environment/Dockerfile", "terminus-regular-task-authoring")
+            leaked = verifier_deps_installed(dockerfile)
+            agent_text = () if not leaked else [instruction or ""] + [
+                view.read_text(name)
+                for name in view.files()
+                if name.startswith("environment/")
+                and Path(name).suffix.lower() in {".md", ".rst", ".txt", ".py", ".toml", ".cfg", ".ini"}
+            ]
+            if leaked and not any(re.search(r"(?i)\bpytest\b", text) for text in agent_text):
+                add(findings, "blocker", "dockerfile-verifier-deps", f"environment/Dockerfile installs verifier-only {leaked}; under a separate verifier they belong in tests/Dockerfile only, unless the instruction or a shipped README/test suite has the agent run pytest (quality panel environment_hygiene).", "environment/Dockerfile", "terminus-regular-task-authoring")
         else:
             add(findings, "blocker", "dockerfile", "Missing environment/Dockerfile.", "environment/Dockerfile", "terminus-regular-task-authoring")
 
@@ -840,6 +884,15 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
                 "blocker",
                 "verifier-no-new-privs",
                 "setpriv-based candidate execution must include --no-new-privs or equivalent containment.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        for driver in candidate_driver_trusted(files, verifier_python):
+            add(
+                findings,
+                "blocker",
+                "verifier-trusts-candidate-driver",
+                f"Tests run /app/tools/{driver}, which the agent can edit, although tests/shipped/tools/{driver} holds the fixed copy. Run a verifier-owned copy of the driver against /app/src (quality panel sound_verifier: a driver-side shim passes with the package unfixed).",
                 "tests/test_outputs.py",
                 "terminus-regular-task-authoring",
             )

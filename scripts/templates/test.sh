@@ -12,7 +12,7 @@ fi
 
 RUN_DIR="$(mktemp -d)"
 cd "$RUN_DIR"
-python3 -I -m pytest -p no:cacheprovider --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
+python3 -I -m pytest -p no:cacheprovider -p no:randomly --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
 rc=$?
 if [ "$rc" -eq 0 ]; then
     echo 1 > /logs/verifier/reward.txt

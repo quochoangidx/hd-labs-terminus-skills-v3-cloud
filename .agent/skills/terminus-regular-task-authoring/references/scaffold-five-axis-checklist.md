@@ -12,6 +12,12 @@ None of them was caught by a gate.
 
 Keep the artifacts under `workspace/reports/<slug>/`, never in the task.
 
+**Profile scope.** The order below, with `contract_review` before any verifier,
+is the `builder_certified` order. `campaign_ready` still runs `contract_review`
+after its full mechanical gates (`task-batch/references/campaign-ready.md`); under
+that profile, do every item here except the early `contract_review`, and run the
+review where that profile places it.
+
 ---
 
 ## 1. Coherent contract: can a candidate determine every graded rule?
@@ -71,8 +77,14 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   *Missed:* a file the agent leaves 0600 would fail every job for a reason that
   has nothing to do with the code.
 - A shipped copy used for differentials is readable and not writable.
-- Plan the harness-bypass wrong path now: a wrong solution that tries to write
-  the reward and read the model.
+- **Run a verifier-owned copy of any fixed driver, pointed at `/app/src`.** If the
+  instruction fixes a driver the tests go through, stage `/opt/driver/tools/<pkg>_run.py`
+  from `tests/shipped/tools/` with `/opt/driver/src -> /app/src`. *Missed:* grading
+  through `/app/tools/<pkg>_run.py` let a driver-side shim score reward 1 with the
+  package unfixed, in three tasks. `review_task.py` blocks it as
+  `verifier-trusts-candidate-driver`.
+- Plan the harness-bypass wrong paths now: a wrong solution that tries to write
+  the reward and read the model, and one that fixes the driver instead of the package.
 - Compiled languages: follow [compiled verifier hardening](compiled-verifier-hardening.md).
 
 ## 4. Sound verifier: does grading reject wrong solutions and accept valid ones?
@@ -95,6 +107,9 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 - Every named silent case has a witness (`closure.silence.named_cases`). Every
   family in the coverage envelope is actually exercised: if the instruction
   promises three-channel blocks, run a three-channel session.
+- **Put one fixture exactly on the accepting edge of every strict boundary** ("below",
+  "above nought", "from 0 up to 1"). *Missed:* `charged <= minimum` and a ratio check
+  that refused `0.0` both scored reward 1, because every case sat off the edge.
 - For each *not described* cell of the state table, decide now: witness it with a
   shipped differential, or narrow the prose so it is not promised
   (`contract-closure.md` §11).
@@ -110,8 +125,9 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   digest-pinned image.
 - Collection order is pinned (`-p no:randomly`), every job has a timeout, and each
   job runs in its own process.
-- **Run `preflight.sh --determinism` as soon as the Oracle exists**, not only at
-  closure.
+- **Run `preflight.sh --determinism` as soon as the first named tests pass on
+  the Oracle** (order step 3), not only at closure. It repeats the verifier, so it
+  needs `tests/` to exist.
 
 ---
 
@@ -120,7 +136,8 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 1. Authority, instruction, domains, state table, global-claim check, then
    `contract_review`. Repair the contract.
 2. Model, Oracle, then the model-versus-Oracle fuzz.
-3. Harness shape (§3). Then named tests, with each witness in a revealing state.
+3. Harness shape (§3). Then named tests, with each witness in a revealing state,
+   and a first `preflight.sh --determinism` once they pass on the Oracle.
 4. Local wrong paths, then alternative implementations.
 5. Deterministic closure: preflight strict and determinism, Docker receipts,
    `panel_precheck.py --full`.

@@ -55,7 +55,9 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
    category/subcategory pair. A training-loop repair is `ML / Training`; a
    compiler repair is `Software / Languages`. Do not classify by the repair
    verb alone.
-2. Write concise `instruction.md` using absolute paths only.
+2. Write concise `instruction.md` using absolute paths only. Answer the five
+   quality axes now, before any verifier, with the
+   [scaffold checklist](references/scaffold-five-axis-checklist.md).
 3. Configure Terminus 3 `task.toml` with top-level `artifacts`, one exact
    category/subcategory pair, descriptive fields under `[metadata]`,
    `environment_mode = "separate"`, `network_mode`, and honest runtime limits.
@@ -65,8 +67,6 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 6. Write digest-pinned `tests/Dockerfile` plus Python `pytest` verifier tests in
    `tests/test_outputs.py`; create every artifact landing directory there.
 7. Make `tests/test.sh` run pytest and always write `/logs/verifier/reward.txt`.
-   Answer the five quality axes at scaffold time with the
-   [scaffold checklist](references/scaffold-five-axis-checklist.md).
    When the verifier compiles candidate sources, follow
    [compiled verifier hardening](references/compiled-verifier-hardening.md) and
    for a repair task, [contract closure](references/contract-closure.md): §1–14
