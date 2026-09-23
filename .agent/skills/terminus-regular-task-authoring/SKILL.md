@@ -42,7 +42,8 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 > <category>` stamps steps 2–4 and 7–8 as a skeleton with the packaging +
 > verifier hygiene (canonical digest-pinned base, full .dockerignore,
 > `_hide_corpus`/`nobody`-candidate/`_find_exec_base`/build-exit-check
-> helpers, per-case parametrize) pre-wired — fill its TODOs instead of
+> helpers) pre-wired. Write one named test per rule rather than per-case
+> parametrize: CTRF drops parametrize IDs, so a sweep reports as one row — fill its TODOs instead of
 > re-deriving the boilerplate. `scripts/preflight.sh <task-dir> --strict
 > --report-json workspace/reports/<slug>/preflight.json --evidence-dir
 > workspace/reports/<slug>/preflight-logs` then runs
@@ -72,7 +73,8 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
    for a repair task, [contract closure](references/contract-closure.md): §1–14
    make it fair, §15 is where its difficulty comes from.
 8. Collect the platform-visible unit IDs and pass the verifier architecture
-   integrity gate before writing the Oracle. Use
+   integrity gate once the named tests exist (under `builder_certified` the model and
+   Oracle come first, then the model-versus-Oracle fuzz, then the tests). Use
    [bounded task design](references/bounded-task-design.md) from design through
    repair: cover retained obligations, not numerical test/cluster/shape quotas.
    A failed integrity gate returns to design; passing is not semantic proof.
@@ -264,10 +266,10 @@ phrases, verifier/test leakage, mapping-chain density) mechanically. A clean run
 is necessary, not sufficient — the content rules below (algorithm narration,
 mechanism leaks, goal clarity, and evidence inferability) still need a read.
 
-**Mandatory V3 evidence-inferability gate:** before a full difficulty probe,
+**V3 evidence-inferability gate (`campaign_ready`; `builder_certified` uses its
+single reviewer's `contract_review` turn instead):** before a counted difficulty probe,
 create `workspace/reports/<slug>/instruction-sufficiency.json` with
-`schema_version: 3`, run exactly two fresh task-visible fairness reviews in
-parallel, and validate
+`schema_version: 3`, run the fairness review that profile prescribes, and validate
 it with `scripts/sufficiency_manifest_check.py --require-v3`. Follow
 [`references/instruction-sufficiency-gate.md`](references/instruction-sufficiency-gate.md)
 exactly. Keep the goal/interface explicit, allow domain semantics to be inferred
@@ -276,7 +278,7 @@ hidden knowledge. A skeleton probe needs a lightweight goal/evidence audit, not
 the full two-reviewer manifest. Oracle/NOP success, pass rates, or union coverage
 never override a real ambiguity or impossible-information defect.
 
-**Mandatory semantic coverage gate for counted probes:** after the complete
+**Semantic coverage gate for counted probes (`campaign_ready` only):** after the complete
 verifier and oracle are stable, follow
 [`references/semantic-coverage-gate.md`](references/semantic-coverage-gate.md).
 Create `semantic-coverage.json`, enumerate every promised public surface,
@@ -303,7 +305,8 @@ matrix. After Oracle runs, add its raw CTRF path/hash and rerun without
 non-behavior IDs. Oracle=1 and NOP=0 prove executability, not breadth. Call the
 suite a smoke suite until both this gate and semantic coverage pass.
 
-**Mandatory pre-probe ordering gate:** before `probe.py prepare` in counted
+**Pre-probe ordering gate (counted probes, so `campaign_ready` only;
+`builder_certified` prepares with `--exploratory`):** before `probe.py prepare` in counted
 mode, run strict Docker preflight without emitting a ZIP, complete the
 folder-level client/manual review, and audit all task-visible prose. In
 `task-batch`, one auditor independent of the builder performs semantic realism,
@@ -392,7 +395,7 @@ domain inference merely because a blind run missed it.
   is arbitrary and unavailable, disclose it or relax the test. If it is
   evidence-supported, do not turn a solver miss into a new hint automatically.
 
-Copyable prose skeleton (lists are also allowed when natural; ≤300 words):
+Copyable prose skeleton (lists are also allowed when natural; keep it short):
 
 > The program at `<path>` should `<objective, one sentence>`. It reads `<input>` from
 > `<source>` and writes `<output>` to `<destination>`. Its behavior follows
@@ -407,7 +410,8 @@ Binary preflight (every box YES before running the check):
   at most 20 items and states requirements rather than solution steps;
 - no step-by-step algorithm, no function signatures / struct-field dumps;
 - no "pay attention" / "note that" / "make sure" hint phrases; no PR/issue/test-name/rubric leakage;
-- ≤ ~300 words of flowing prose;
+- short flowing prose; length is guidance, not a cap (docs `review-guidelines.md`), and an
+  instruction may run long when it carries contract;
 - every arbitrary exact value/constant and public schema element appears in the
   instruction or a realistic visible source; evidence-derived edges need not be enumerated;
 - general rule-sets delegated to the named standard, not transcribed;
@@ -813,6 +817,7 @@ Run, when available:
 stb harbor run -a oracle -p <task-folder>
 stb harbor run -a nop -p <task-folder>
 stb harbor check <task-folder>
+# optional, API-key dependent; task-batch never requires these:
 stb harbor run -m @openai/gpt-5.6 -k 4 -p <task-folder>
 stb harbor run -m @anthropic/claude-opus-5 -k 4 -p <task-folder>
 ```
@@ -876,7 +881,8 @@ Quality preflight:
 - for any corpus-graded verifier, the per-case pass-table pre-audit has run
   before zipping (see `task-clone` Quality Preflight / `task-local-solve-probe`):
   re-score the stored blind-probe diffs per-case and confirm (1) every case has
-  ≥1 probe passer, (2) the best union still fails >0 cases, (3) every feature
+  ≥1 probe passer or a documented reason (a CORE+ restraint trap missed by both
+  solvers is legitimate; see `contract-closure.md` §15), (2) the best union still fails >0 cases, (3) every feature
   cluster keeps a soft representative a majority of runs pass
 
 If the platform returns the task with `❌ Some tests not passed by any agent

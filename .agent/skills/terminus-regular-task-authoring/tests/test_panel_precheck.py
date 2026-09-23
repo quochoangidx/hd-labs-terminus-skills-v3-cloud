@@ -266,6 +266,27 @@ def test_a_witnessed_silent_case_passes(tmp_path: Path) -> None:
     assert "silence_case_unwitnessed" not in found and "silence_named_cases" not in found
 
 
+def test_builder_certified_reports_bookkeeping_as_warnings(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["causal_graph"] = {"edges": []}
+    finish_receipts(task, manifest_path, manifest)
+    manifest_path.write_text(json.dumps(manifest))
+    strict = CHECK.validate(task, manifest_path, full=True)
+    assert "disconnected_core" in {e["code"] for e in strict["blockers"]}
+    relaxed = CHECK.validate(task, manifest_path, full=True, profile="builder_certified")
+    assert "disconnected_core" not in {e["code"] for e in relaxed["blockers"]}
+    assert "disconnected_core" in {w["code"] for w in relaxed["warnings"]}
+
+
+def test_builder_certified_still_blocks_an_unwitnessed_silent_case(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["silence"]["named_cases"] = [{"anchor": "the shipped behavior stands", "witness_ids": []}]
+    finish_receipts(task, manifest_path, manifest)
+    manifest_path.write_text(json.dumps(manifest))
+    relaxed = CHECK.validate(task, manifest_path, full=True, profile="builder_certified")
+    assert "silence_case_unwitnessed" in {e["code"] for e in relaxed["blockers"]}
+
+
 def test_a_missing_closure_clause_blocks(tmp_path: Path) -> None:
     task, manifest_path, manifest = make_fixture(tmp_path)
     del manifest["closure"]["universal_rule"]

@@ -92,11 +92,14 @@ Required path:
    - `independence_check.py` (the expectation model does not import the package)
    - `wrong_path_runner.py` for every core obligation (reward 0, its own witness
      fails, controls pass)
-   - `panel_precheck.py --full` on the exact snapshot
+   - `panel_precheck.py --full --profile builder_certified` on the exact snapshot
+     (bookkeeping rows such as graph shape and matrix labels report as warnings;
+     closure, named silent cases, cited conventions and wrong paths still block)
 6. The same reviewer's `final_review` on the frozen snapshot, with full task
    visibility. A repair after it reruns the affected gates and gets a targeted
    recheck in the same session.
-7. Blind solve probe, two valid solvers. **The bar is CORE+: at most one of the
+7. Blind solve probe, two valid solvers, prepared with `probe.py prepare --exploratory`
+   (a counted prepare demands campaign receipts this profile never produces). **The bar is CORE+: at most one of the
    two succeeds.** One success and one failure is accepted; do not keep hardening
    a task to chase `advanced` or `frontier`, and do not reject a candidate for
    landing at CORE. Difficulty stays unmeasured either way — this is a local

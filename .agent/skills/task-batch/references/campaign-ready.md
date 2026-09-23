@@ -16,9 +16,9 @@ does not cap how many candidates, repairs, retries, or recorded model turns the
 workflow may need.
 
 Before Stage A, read and select exactly one profile from
-[`execution-profiles.md`](execution-profiles.md). Default
-to `campaign_ready`; select `panel_ready` only when the user explicitly omits
-difficulty probes and ordinary fairness/auditor roles. The selected profile
+[`execution-profiles.md`](execution-profiles.md). This file
+applies only once `campaign_ready` has been selected explicitly; a bare
+`task-batch N` selects `builder_certified` and never loads it. The selected profile
 controls required roles, evidence, stop conditions and result labels throughout
 the run; never execute the full workflow and mark omitted gates as expected
 failures.

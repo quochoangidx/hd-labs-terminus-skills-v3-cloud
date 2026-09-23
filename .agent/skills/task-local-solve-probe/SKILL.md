@@ -55,9 +55,13 @@ candidate belongs on a Core/Advanced/Frontier shortlist.
 - The solver pair is the safe parallel unit. Do not parallelize their verifier
   executions, Docker builds, or mutation work.
 - In `task-batch`, the two valid solver sessions must be distinct from the
-  builder, fairness reviewer, consolidated auditor, and each other. The role
-  topology is one persistent builder, one persistent reviewer, one persistent
-  auditor, and two valid solver results; failed attempts and corrective
+  builder, the reviewer, any auditor, and each other. Under `campaign_ready` the
+  role topology is one persistent builder, one persistent reviewer, one persistent
+  auditor, and two valid solver results. Under `builder_certified` there is no
+  auditor, and the pair is prepared with `probe.py prepare --exploratory`: a counted
+  prepare runs `preprobe_check`, which demands campaign receipts (auditor,
+  quota ledger, V3 sufficiency, semantic coverage) that profile never produces.
+  The result is a local CORE+ signal, never a tier. In both profiles failed attempts and corrective
   follow-ups have no quota.
 - Select the default blind solver from the active runtime — and PIN it
   mechanically, do not rely on inheritance:

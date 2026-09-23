@@ -28,7 +28,8 @@ A single argument: path to a `.zip` file (absolute or relative).
 1. **Unzip** to a temp directory
 2. **Structural audit** — check every file against rules
 3. **V3 evidence inferability** — recreate or locate the external schema-v3
-   manifest, run two fresh task-visible fairness reviews, and pass
+   manifest, run the fresh task-visible fairness review (one reviewer, two
+   turns, by default), and pass
    `sufficiency_manifest_check.py --require-v3`
 4. **Auto-fix** — apply fixes for known issues
 5. **Oracle + Nop** — run harbor tests if Docker available
