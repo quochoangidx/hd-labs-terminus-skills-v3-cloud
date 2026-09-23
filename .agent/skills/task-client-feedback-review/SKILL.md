@@ -36,7 +36,8 @@ use `--mechanical-only`. This skips only the external instruction-sufficiency
 and semantic-review receipts that cannot exist yet; it does not skip layout,
 metadata, isolation, privilege, Ruff, leakage, or contract-shape checks. Never
 combine it with `--manual-review-pass`, and always run the normal full scan after
-the fairness and consolidated-auditor evidence exists.
+the fairness and consolidated-auditor evidence exists. Outside `campaign_ready` the two
+campaign receipts report as should-fix, not blockers.
 
 For `task-batch`, run the same scanner/manual review twice at different trust
 boundaries. Before counted probes, review the task folder and save:
@@ -61,7 +62,8 @@ scripts/python3 .agent/skills/task-client-feedback-review/scripts/review_task.py
   --evidence-output workspace/reports/<slug>/client-review.json
 ```
 
-In `task-batch`, this manual judgment belongs to the one consolidated auditor,
+In `task-batch` under `campaign_ready`, this manual judgment belongs to the one consolidated auditor
+(`builder_certified` has no auditor: its builder runs the scan and the single reviewer covers the reading),
 not a separate client-review agent. Before freeze, that auditor also performs
 semantic realism and the task-tree style audit; all three receipts use the same
 runtime/model/session/transcript provenance. After probes, reuse the same

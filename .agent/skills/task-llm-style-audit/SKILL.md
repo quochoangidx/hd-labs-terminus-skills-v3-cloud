@@ -18,7 +18,7 @@ sessions are spent. After probes, audit only external rubric/submission prose
 and write schema-2 `style-audit.json`. A post-probe task-tree edit invalidates
 the counted snapshot and returns the workflow to pre-freeze validation.
 
-For `task-batch`, do not create a separate style agent. The consolidated
+For `task-batch` under `campaign_ready`, do not create a separate style agent. The consolidated
 auditor performs semantic realism, folder/manual review, and this task-tree
 style pass in one pre-freeze session, producing three separate receipts backed
 by one real transcript/provenance record. Reuse that same auditor identity in a

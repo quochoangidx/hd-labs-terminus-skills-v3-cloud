@@ -62,6 +62,51 @@ RUNTIME_SETUP_RE = re.compile(
     re.IGNORECASE,
 )
 COPY_FROM_RE = re.compile(r"(?i)(?:^|\s)--from=([^\s]+)")
+PIP_INSTALL_RE = re.compile(r"\bpip3?\b.*\binstall\b")
+VERIFIER_DEP_RE = re.compile(r"(?<![\w-])(pytest(?:-json-ctrf)?)(?![\w-])")
+
+
+AGENT_TEXT_SUFFIXES = {".md", ".rst", ".txt", ".py", ".toml", ".cfg", ".ini"}
+PYTEST_WORD_RE = re.compile(r"(?i)\bpytest\b")
+
+
+def agent_uses_pytest(task_dir: Path) -> bool:
+    """True when the agent-facing task itself has the agent run pytest.
+
+    The instruction, or a shipped README/test suite/config under environment/, counts.
+    A shipped `python3 -m pytest tests` suite in an offline image needs pytest there.
+    """
+    candidates = [task_dir / "instruction.md"]
+    env = task_dir / "environment"
+    if env.is_dir():
+        candidates += [
+            path
+            for path in env.rglob("*")
+            if path.is_file() and path.suffix.lower() in AGENT_TEXT_SUFFIXES
+        ]
+    for path in candidates:
+        try:
+            if path.stat().st_size <= 1_000_000 and PYTEST_WORD_RE.search(path.read_text(errors="replace")):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def verifier_deps_installed(dockerfile: str) -> list[str]:
+    """Names of verifier-only packages a Dockerfile installs with pip.
+
+    Continuation lines are joined first, so a multi-line RUN counts as one line.
+    """
+    logical = re.sub(r"\\\n", " ", dockerfile)
+    found: set[str] = set()
+    for line in logical.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        install = PIP_INSTALL_RE.search(line)
+        if install:
+            found.update(VERIFIER_DEP_RE.findall(line[install.end():]))
+    return sorted(found)
 
 
 def result(check: str, ok: bool, detail: str) -> dict[str, object]:
@@ -147,6 +192,7 @@ def validate_dockerfile(
     path: Path,
     role: str,
     artifacts: list[str] | None = None,
+    agent_uses_pytest: bool = False,
 ) -> list[dict[str, object]]:
     checks: list[dict[str, object]] = []
     try:
@@ -181,6 +227,40 @@ def validate_dockerfile(
         )
     )
 
+    # docs/testing-and-validation/ci-checks-reference.md: "No platform pinning",
+    # apt installs must not be version-pinned, and bare `nproc` is listed (severity
+    # not stated, so it warns).
+    logical = [line for line in re.sub(r"\\\n", " ", text).splitlines() if not line.lstrip().startswith("#")]
+    platform_pinned = [line.strip() for line in logical if re.match(r"(?i)^\s*FROM\s+--platform=", line)]
+    checks.append(
+        result(
+            f"{role}-dockerfile:no-platform-pin",
+            not platform_pinned,
+            "no FROM --platform=" if not platform_pinned else "; ".join(platform_pinned),
+        )
+    )
+    apt_pinned = sorted({
+        token
+        for line in logical
+        for segment in re.findall(r"\bapt(?:-get)?\s+install\b([^;&|]*)", line)
+        for token in re.findall(r"(?<![\w=-])([a-z0-9][a-z0-9.+-]*=(?!=)[^\s;&|=]+)", segment)
+    })
+    checks.append(
+        result(
+            f"{role}-dockerfile:apt-unpinned",
+            not apt_pinned,
+            "apt packages are not version-pinned" if not apt_pinned else "apt versions must not be pinned: " + ", ".join(apt_pinned),
+        )
+    )
+    bare_nproc = [line.strip() for line in logical if re.search(r"(?<![\w-])nproc(?![\w-])", line)]
+    checks.append(
+        advisory(
+            f"{role}-dockerfile:no-bare-nproc",
+            not bare_nproc,
+            "no bare nproc" if not bare_nproc else "bare nproc: " + "; ".join(bare_nproc)[:200],
+        )
+    )
+
     final_image = resolved_final_image(stages)
     canonical = final_image in CANONICAL_IMAGES
     justified = has_base_justification(text)
@@ -207,6 +287,26 @@ def validate_dockerfile(
                 "agent-dockerfile:harness-tools",
                 not missing,
                 "tmux and asciinema present" if not missing else f"missing={missing}",
+            )
+        )
+        # Quality panel `environment_hygiene` blocks on this: under a separate
+        # verifier, pytest and its CTRF plugin belong to tests/Dockerfile only, unless
+        # the agent-facing task itself has the agent run pytest.
+        leaked = verifier_deps_installed(text)
+        checks.append(
+            result(
+                "agent-dockerfile:no-verifier-deps",
+                not leaked or agent_uses_pytest,
+                (
+                    "no verifier-only packages in the agent image"
+                    if not leaked
+                    else f"installs {leaked}; "
+                    + (
+                        "allowed, the agent-facing task has the agent run pytest"
+                        if agent_uses_pytest
+                        else "move them to tests/Dockerfile only"
+                    )
+                ),
             )
         )
         hidden_copy = re.search(r"(?im)^\s*COPY\s+.*(?:tests|solution)(?:/|\s|$)", text)
@@ -422,7 +522,13 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
     )
 
     artifact_paths = [path for path in artifacts or [] if isinstance(path, str) and path.startswith("/")]
-    checks.extend(validate_dockerfile(task_dir / "environment" / "Dockerfile", "agent"))
+    checks.extend(
+        validate_dockerfile(
+            task_dir / "environment" / "Dockerfile",
+            "agent",
+            agent_uses_pytest=agent_uses_pytest(task_dir),
+        )
+    )
     checks.extend(
         validate_dockerfile(
             task_dir / "tests" / "Dockerfile",

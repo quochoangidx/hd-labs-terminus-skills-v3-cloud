@@ -143,12 +143,15 @@ scripts/python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficienc
 
 ## Fairness review
 
-Give two fresh reviewers only `instruction.md` and the agent-visible
-environment. Ask them to identify the goal, evidence, defensible domain model,
+Give the fresh reviewer only `instruction.md` and the agent-visible
+environment. The current default is one reviewer in two turns
+(`single_reviewer_two_pass_v1`, see `task-batch/references/single-reviewer-workflow.md`);
+the two-concurrent-reviewer form below is the legacy layout, still accepted by
+`sufficiency_manifest_check.py`. Ask them to identify the goal, evidence, defensible domain model,
 remaining uncertainty, and any information a correct solution would require
 but could not obtain.
 
-For `task-batch`, launch the two reviews concurrently in exactly two distinct
+Under the legacy layout, launch the two reviews concurrently in two distinct
 fresh sessions. Neither reviewer may be the builder, consolidated auditor, or
 a blind solver. Do not provide solution files, verifier tests, rubrics, reports,
 Oracle outputs, or hidden fixtures. The builder may assemble the final manifest

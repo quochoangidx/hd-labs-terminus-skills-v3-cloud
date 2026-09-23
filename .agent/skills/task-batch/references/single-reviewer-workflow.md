@@ -30,8 +30,12 @@ the build, so do not skip the second turn or fold it into the first.
   `contract_review` and `final_review`. Corrective rechecks remain in that
   session and have no turn or remediation cap.
 
-The first turn reviews the task-visible goal, schemas, evidence, arbitrary
-conventions, preservation promises, and 6--10 grounded witnesses. The second
+The first turn runs as soon as the authority and instruction exist, before any
+verifier is written (`builder_certified` step 3). Its packet is `instruction.md`
+plus `environment/`, so its findings are repaired while repairs are cheap. It
+reviews the task-visible goal, schemas, evidence, arbitrary
+conventions, preservation promises, and 6--10 grounded witnesses that the
+reviewer works out by hand from the contract (no verifier exists yet). The second
 turn reviews the stable task snapshot, assertion-to-source coverage,
 multi-entry/stateful boundaries, semantic-equivalence policy, mutation
 geometry, preservation, isolation, folder quality, and task-visible style.

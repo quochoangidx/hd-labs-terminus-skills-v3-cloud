@@ -1,6 +1,6 @@
 # Unbounded-Attempt Batch Workflow
 
-Use this policy for every `task-batch` run. It supplements the quality gates;
+Use this policy for `campaign_ready` runs only. `builder_certified` and `panel_ready` do not load it (see `execution-profiles.md`). It supplements the quality gates;
 it never weakens fairness, verifier isolation, or empirical difficulty.
 
 ## Model routing

@@ -48,6 +48,23 @@ NON_CIRCULAR_SOURCES = EXPECTED_SOURCES - {"oracle_recorded"}
 # The clauses that close the input domain the authority does not name. Without them a
 # boundary case has no stated answer, which is where contract findings come from.
 CLOSURE_CLAUSES = ("universal_rule", "silence", "coverage_envelope")
+# Rows that check the manifest's own bookkeeping (graph shape, separability prose,
+# matrix labels, header phrases) rather than a property the quality panel judges.
+# Under builder_certified they report as warnings: they caught no task defect in
+# that profile's builds, and with no reviewer above the gate a bookkeeping FAIL only
+# costs rework. Everything tied to a panel finding still blocks: closure and named
+# silent cases, cited exact conventions, expectation sources, wrong paths, the
+# harness bypass, preflight, restrictions and surviving promises.
+BOOKKEEPING_CODES = {
+    "primary_outcome", "contribution", "separability", "separability_rationale",
+    "composite_core", "serialization_only_join", "serialization_only_interaction",
+    "support_boundary", "causal_graph", "causal_edge", "disconnected_core",
+    "interaction", "interaction_members", "uncoupled_core", "boundary_witness",
+    "discriminating_instance", "wrong_but_plausible", "exact_output",
+    "incidental_exact_output", "determinism", "determinism_network",
+    "reference_selfdescription", "orphan_unit", "verifier_matrix",
+}
+PROFILES = ("strict", "builder_certified")
 # How far a restriction is actually enforced. A restriction about what the candidate's
 # program may reach at run time -- reflection, native code, subprocesses, the network,
 # a forbidden namespace -- is not enforced by reading source: the same capability is
@@ -149,7 +166,7 @@ def has_path(edges: dict[str, set[str]], start: str, target: str) -> bool:
     return False
 
 
-def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
+def validate(task_dir: Path, manifest_path: Path, *, full: bool, profile: str = "strict") -> dict:
     errors: list[dict] = []
     warnings: list[dict] = []
     manifest = load_object(manifest_path, errors, manifest_path.name)
@@ -607,6 +624,9 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
         if not has_harness:
             errors.append({"axis": "protected_ground_truth", "code": "harness_bypass", "message": "full precheck requires one harness_bypass wrong-path receipt"})
 
+    if profile == "builder_certified":
+        warnings.extend(dict(error, demoted_by="builder_certified") for error in errors if error["code"] in BOOKKEEPING_CODES)
+        errors = [error for error in errors if error["code"] not in BOOKKEEPING_CODES]
     blocked_axes = {error["axis"] for error in errors}
     if "common" in blocked_axes:
         blocked_axes.update(AXES)
@@ -614,6 +634,7 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
     result = {
         "schema_version": 1,
         "mode": "full" if full else "design_only",
+        "profile": profile,
         "task_slug": task_dir.name,
         "task_snapshot_sha256": snapshot,
         "status": "fail" if errors else "pass",
@@ -639,9 +660,11 @@ def main() -> int:
     mode.add_argument("--design-only", action="store_true")
     mode.add_argument("--full", action="store_true")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--profile", choices=PROFILES, default="strict",
+                        help="builder_certified reports bookkeeping rows as warnings")
     args = parser.parse_args()
 
-    result = validate(args.task_dir.resolve(), args.manifest.resolve(), full=args.full)
+    result = validate(args.task_dir.resolve(), args.manifest.resolve(), full=args.full, profile=args.profile)
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

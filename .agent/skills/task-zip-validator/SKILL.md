@@ -28,7 +28,8 @@ A single argument: path to a `.zip` file (absolute or relative).
 1. **Unzip** to a temp directory
 2. **Structural audit** — check every file against rules
 3. **V3 evidence inferability** — recreate or locate the external schema-v3
-   manifest, run two fresh task-visible fairness reviews, and pass
+   manifest, run the fresh task-visible fairness review (one reviewer, two
+   turns, by default), and pass
    `sufficiency_manifest_check.py --require-v3`
 4. **Auto-fix** — apply fixes for known issues
 5. **Oracle + Nop** — run harbor tests if Docker available
@@ -210,6 +211,7 @@ Check `environment/Dockerfile`:
 | **tmux + asciinema REQUIRED** | MUST be in apt-get install. Missing either = ALL agent runs fail with zero output. | ✅ add to apt-get |
 | No COPY tests | NO `COPY tests/` or `COPY solution/` | ✅ remove line |
 | No reserved dirs | NO `mkdir /tests`, `/oracle`, `/logs/verifier`, `/solution` | ✅ remove line |
+| No verifier-only deps | NO `pip install pytest` / `pytest-json-ctrf` in `environment/Dockerfile` (quality panel `environment_hygiene`, blocking); they belong in `tests/Dockerfile`. Allowed only when the agent-facing task has the agent run pytest (`instruction.md`, or a shipped README/test suite under `environment/`); `task-policy.py` `agent-dockerfile:no-verifier-deps` checks this | ✅ remove the package (or the line) |
 | apt hygiene | `apt-get update && apt-get install ... && rm -rf /var/lib/apt/lists/*` in one RUN | ❌ manual |
 | `patch` installed | For Go/Rust tasks: `patch` must be in apt-get install list | ✅ add to apt-get |
 | No `# syntax=` line | NO `# syntax=docker/dockerfile:1` line — platform build nodes can't pull the frontend → "Oracle failed" (preflight.sh checks this) | ✅ delete line |

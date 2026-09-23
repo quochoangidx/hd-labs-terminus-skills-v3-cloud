@@ -1338,7 +1338,8 @@ Before packaging or platform upload:
   evidence sources and may be tested on held-out instances/combinations
 - create `workspace/reports/<slug>/instruction-sufficiency.json` with
   `schema_version: 3`, map every static test to an explicit-contract row or an
-  inference family, complete two fresh task-visible fairness reviews, and run
+  inference family, complete the task-visible fairness review (one fresh reviewer, two turns, by
+  default), and run
   `sufficiency_manifest_check.py --require-v3`; any failure blocks the full
   solve probe and packaging
 - In `campaign_ready`, create `workspace/reports/<slug>/semantic-coverage.json` following

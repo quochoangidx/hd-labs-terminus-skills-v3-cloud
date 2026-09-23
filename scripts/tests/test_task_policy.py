@@ -51,6 +51,28 @@ class DockerPolicyTests(unittest.TestCase):
         self.assertEqual(statuses(checks)["agent-dockerfile:digests"], "pass")
         self.assertEqual(statuses(checks)["agent-dockerfile:final-base"], "pass")
 
+    def test_platform_pin_and_apt_version_pins_fail_and_nproc_warns(self):
+        self.dockerfile.write_text(
+            f"FROM --platform=linux/amd64 {PYTHON_IMAGE}\n"
+            "RUN apt-get update && apt-get install -y --no-install-recommends curl=7.88.1-10 tmux asciinema \\\n"
+            "    && make -j$(nproc)\n"
+        )
+        checks = statuses(POLICY.validate_dockerfile(self.dockerfile, "agent"))
+        self.assertEqual(checks["agent-dockerfile:no-platform-pin"], "fail")
+        self.assertEqual(checks["agent-dockerfile:apt-unpinned"], "fail")
+        self.assertEqual(checks["agent-dockerfile:no-bare-nproc"], "warn")
+
+    def test_unpinned_apt_and_no_platform_pass(self):
+        self.dockerfile.write_text(
+            f"FROM {PYTHON_IMAGE}\n"
+            "RUN apt-get update && apt-get install -y --no-install-recommends tmux asciinema \\\n"
+            "    && pip install --no-cache-dir requests==2.32.3\n"
+        )
+        checks = statuses(POLICY.validate_dockerfile(self.dockerfile, "agent"))
+        self.assertEqual(checks["agent-dockerfile:no-platform-pin"], "pass")
+        self.assertEqual(checks["agent-dockerfile:apt-unpinned"], "pass")
+        self.assertEqual(checks["agent-dockerfile:no-bare-nproc"], "pass")
+
     def test_agent_image_requires_harness_tools(self):
         self.dockerfile.write_text(f"FROM {PYTHON_IMAGE}\n")
 
@@ -135,6 +157,58 @@ class DockerPolicyTests(unittest.TestCase):
         checks = POLICY.validate_dockerfile(self.dockerfile, "verifier", ["/app/"])
 
         self.assertEqual(statuses(checks)["verifier-dockerfile:copy-tests"], "pass")
+
+    def test_agent_image_must_not_install_verifier_deps(self):
+        """`environment_hygiene` failed a task for exactly this line, split or not."""
+        base = f"FROM {PYTHON_IMAGE}\nRUN apt-get update && apt-get install -y tmux asciinema\n"
+        for install in (
+            "RUN pip install --no-cache-dir pytest==9.1.1\n",
+            "RUN python3 -m pip install \\\n    numpy==2.1.0 \\\n    pytest-json-ctrf==0.5.2\n",
+        ):
+            with self.subTest(install=install):
+                self.dockerfile.write_text(base + install)
+                checks = POLICY.validate_dockerfile(self.dockerfile, "agent")
+                self.assertEqual(statuses(checks)["agent-dockerfile:no-verifier-deps"], "fail")
+
+    def test_agent_image_verifier_deps_allowed_when_the_agent_runs_pytest(self):
+        self.dockerfile.write_text(
+            f"FROM {PYTHON_IMAGE}\nRUN apt-get update && apt-get install -y tmux asciinema\n"
+            "RUN pip install pytest==9.1.1\n"
+        )
+
+        checks = POLICY.validate_dockerfile(self.dockerfile, "agent", agent_uses_pytest=True)
+
+        self.assertEqual(statuses(checks)["agent-dockerfile:no-verifier-deps"], "pass")
+
+    def test_agent_image_ignores_comments_and_similar_package_names(self):
+        self.dockerfile.write_text(
+            f"FROM {PYTHON_IMAGE}\nRUN apt-get update && apt-get install -y tmux asciinema\n"
+            "# RUN pip install pytest==9.1.1\n"
+            "RUN pip install hypothesis==6.0 pytest-cov-free-helper==1.0\n"
+        )
+
+        checks = POLICY.validate_dockerfile(self.dockerfile, "agent")
+
+        self.assertEqual(statuses(checks)["agent-dockerfile:no-verifier-deps"], "pass")
+
+    def test_task_scan_exempts_a_shipped_pytest_suite(self):
+        task_dir = Path(self.temp_dir.name) / "tbrain-shipped-suite"
+        app = task_dir / "environment" / "app"
+        app.mkdir(parents=True)
+        (task_dir / "environment" / "Dockerfile").write_text(
+            f"FROM {PYTHON_IMAGE}\nRUN apt-get update && apt-get install -y tmux asciinema\n"
+            "RUN pip install pytest==9.1.1\n"
+        )
+        (task_dir / "instruction.md").write_text("Fix the package.\n")
+
+        self.assertEqual(
+            statuses(POLICY.validate_task(task_dir))["agent-dockerfile:no-verifier-deps"], "fail"
+        )
+
+        (app / "README.md").write_text("Run `python3 -m pytest tests -q`.\n")
+        self.assertEqual(
+            statuses(POLICY.validate_task(task_dir))["agent-dockerfile:no-verifier-deps"], "pass"
+        )
 
     def test_task_scan_checks_nested_dockerfiles(self):
         task_dir = Path(self.temp_dir.name) / "tbrain-nested-dockerfile"
