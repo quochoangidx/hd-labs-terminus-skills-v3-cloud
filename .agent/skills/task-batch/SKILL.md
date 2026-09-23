@@ -34,7 +34,9 @@ The default carries its own design contract, so a bare `task-batch N` still
 produces a task built to the seeded-departures pattern: the
 [contract closure](../terminus-regular-task-authoring/references/contract-closure.md)
 reference is mandatory reading on this route, not something the user has to ask
-for in the prompt.
+for in the prompt. Its sections 1–14 make the task fair; section 15 is where the
+difficulty comes from. Departures alone are self-verifiable and collapse at 2/2,
+so design the preservation-under-repair traps before seeding a single departure.
 
 User-specified category, language, attempt and time budgets override profile
 defaults. Record an attempt when the user's definition says it begins. Keep one

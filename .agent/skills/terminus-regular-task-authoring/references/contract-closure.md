@@ -61,6 +61,10 @@ Disclosing a set is not disclosing an order. Naming six error codes
 alphabetically while saying *"listed alphabetically, which is not the order that
 matters"* publishes the exact strings and keeps the precedence a real inference.
 
+For a compiled-language verifier — surface snapshot, compiled-reference audit,
+compiler-as-root, cross-language number comparison — see
+[compiled verifier hardening](compiled-verifier-hardening.md).
+
 ## 4. State the restriction *and* its allowed exceptions
 
 A restriction enforced by an audit will reject things the prose did not mention:
@@ -243,3 +247,74 @@ close the cheaper cheats a candidate reaches for before that:
 Pick the ones the contract actually exposes. A shape that no plausible shortcut
 would reach is padding, and padding is what the obligation manifest's
 `wrong_but_plausible` field exists to prevent.
+
+## 15. Where the difficulty comes from: a repair that has to stop
+
+Sections 1–14 make a task fair and panel-clear. They do not make it hard, and a
+complete authority on its own is self-verifiable: the solver writes a reference
+from the note, differential-tests the package against it, and converges. Eight
+solvers beat two tasks built this way (`tbrain-int8-activation-requantization`,
+`tbrain-quantized-depthwise-convolution`) at 2/2 twice.
+
+The panel-cleared Java sample was then probed the same way, and both solvers
+failed it (45/49 and 48/49), after each had found essentially all twenty-nine
+departures. Neither missed a departure. Both **repaired too much**, and the
+attribution was checked by rescoring with one change removed:
+
+- **A departure and a silent sub-domain in one function — both solvers, the same
+  test.** `Bound.hold` sends a negative index to the last cell, which is wrong for
+  a grid; for a span of nought or less the note says nothing, so the shipped
+  answer stands there. Both solvers wrote the natural fix, `return 0`, which
+  repairs the departure and breaks the silent case. The reference fix is
+  `span > 0 ? 0 : span - 1`.
+- **A function already right under the note's own arithmetic rule — one solver.**
+  Flat drawing floors the double product, and the note says "the rounding
+  stands". One solver "improved" it with an exact `Math.fma` check, which cost
+  three more tests. With that change alone removed, it scores 48/49 and fails only
+  the `Bound.hold` test.
+
+**The sample's local difficulty rests on one trap.** Two identical misses on one
+test are the platform's `near_miss` / common-miss shape. That shape is fair here
+only because the instruction names the boundary category outright ("a side of
+nought or less"). It is still fragile: a solver who reads that phrase once more
+passes 49/49. A task built on this lever needs **several independent restraint
+traps at different sites**, each signposted by a boundary category the
+instruction names, so the result does not ride on one sentence.
+
+That is why this lever survives self-verification. The solver's reference comes
+from the authority, and the authority decides nothing about a silent case, so in
+those places the reference holds the solver's own opinion. Differential testing
+against that reference then pushes the package *toward* the over-repair. Finding a
+departure can be self-verified. Knowing when to stop cannot.
+
+Design rules that follow:
+
+1. Put some departures in functions that also own a silent sub-domain with
+   ugly-but-shipped behaviour: overflow, negative or zero sizes, reversed ranges,
+   unknown codes. The fix has to reach only as far as the authority speaks.
+2. Keep functions that are already correct under a stated arithmetic or rounding
+   rule but look imprecise, and guard them with a shipped differential (§7).
+3. State silence as a **rule with boundary categories** ("a side of nought or
+   less, a key or a value of nothing"), never as an **inventory of sites**. A
+   list of the silent sites tells the solver where not to touch, and every named
+   case becomes a promise that needs its own witness. The depthwise task named
+   four sites, and the platform's `test_instruction_alignment` check failed it on
+   the one no test exercised. `closure.silence.named_cases` in the precheck
+   manifest now blocks this.
+4. A silent case's expected value comes from the **shipped code**: use
+   `shipped_differential`, or a model that mirrors the shipped code and cites it.
+   Never take it from the model's natural reading. The depthwise model saturated
+   a reversed clamp with max-of-min while the package checks the lower bound
+   first, so the promised case could never be witnessed, and nobody wrote the
+   test.
+5. It stays fair only while the silence clause is universal and in the
+   instruction, and the shipped behaviour is visible in the code. Never hide a
+   rule the authority should state.
+6. Departure count and rule-surface size are not the lever. Enlarging them only
+   enlarges the solver's reference.
+7. Spread the traps. Give each its own site and its own witness, record the
+   solver's natural fix as a `wrong_path` receipt that the witness rejects, and
+   check that no single instruction sentence disarms all of them.
+
+The evidence is one exploratory two-solver sample. Treat it as a local signal and
+never as a tier.
