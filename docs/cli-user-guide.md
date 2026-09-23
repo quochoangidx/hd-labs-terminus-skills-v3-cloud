@@ -216,7 +216,7 @@ Feedback typically includes:
 
 ### 6. Iterate on Feedback
 
-Read any feedback carefully and either revise your submission accordingly or provide a rebuttal note when updating.
+Read any feedback carefully and revise your submission accordingly. To contest a quality-panel finding, post in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W) — the panel does not read revision notes; see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
 
 **Update when in `NEEDS_REVISION` state:**
 ```bash

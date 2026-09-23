@@ -158,3 +158,22 @@ def test_the_ledger_must_bind_to_the_current_tree(case) -> None:
     (task / "instruction.md").write_text("Reconcile the authority differently.\n", encoding="utf-8")
 
     assert "stale_ledger" in codes(task, path, ledger)
+
+
+def test_a_dispute_must_be_raised_where_the_panel_reads_it(case) -> None:
+    """A rebuttal left in the platform revision note never reaches the panel."""
+    task, path, ledger = case
+    ledger["findings"][0].update(
+        {
+            "decision": "disputed",
+            "contract_citation": {"file": "instruction.md", "anchor": "Reconcile the authority"},
+            "counterexample": "receipts/f1-repro.json",
+        }
+    )
+    for key in ("reproduction", "closure"):
+        ledger["findings"][0].pop(key)
+
+    assert "dispute_not_raised" in codes(task, path, ledger)
+
+    ledger["findings"][0]["contested_in_channel"] = "#terminus-3-submissions 2026-09-23, thread 'tbrain-return F1'"
+    assert "dispute_not_raised" not in codes(task, path, ledger)

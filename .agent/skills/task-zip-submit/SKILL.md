@@ -252,12 +252,15 @@ On first upload:
 - edit the generated rubric for accuracy and completeness
 - verify rubric lines start with `Agent`, end with `, +/-N`, use only values 1,
   2, 3, or 5, never use 4, carry an explicit leading `+` on every positive
-  score (write `+3`, not `3` — unsigned positives are sent back for revision),
+  score (write `+3`, not `3`; correct it before submission),
   and focus on trace-evidenced behavior rather than final pytest results
 - use one flat list of `Agent ...` criteria; Terminus 3 has no milestones
 - ensure the rubric has at least one negative criterion and a cumulative
   positive total of 10-40 points
 - before final reviewer submission, uncheck "Generate Rubric(s)" so the edited
   rubric is not overwritten, then check "Send to Reviewer"
+- after submission, rubric defects in a non-empty platform-generated rubric are
+  fixed in place by the reviewer and recorded in acceptance comments; only a
+  blank or never-generated rubric is returned for revision
 - after final submission, expect peer review in 1-7 business days; total review
   cycles can take 7-14 business days

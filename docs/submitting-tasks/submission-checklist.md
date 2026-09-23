@@ -48,7 +48,7 @@ Run through this before every submission.
 - [ ] Agent outputs are declared as top-level `artifacts` in `task.toml` — don't stage agent directories yourself
 - [ ] Any numeric tolerance stated in `instruction.md` matches what the tests enforce
 - [ ] When the spec defines an optimization objective or tie-break, tests reject a feasible plan that optimizes the wrong quantity
-- [ ] Walked all five axes in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide): requirements are disclosed, the reference solution satisfies them, goldens stay protected, wrong solutions fail, and grading is reproducible under the stated environment
+- [ ] Walked all five axes in the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide): requirements are disclosed, the reference solution satisfies them, goldens stay protected, wrong solutions fail, and grading is reproducible under the stated environment. Every promised behavior is either core and backed, or removed.
 
 ## Configuration
 

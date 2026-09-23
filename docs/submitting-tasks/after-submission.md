@@ -22,7 +22,7 @@ Immediately after submission, your task goes through:
 - LLMaJ checks (quality, completeness)
 - **Expertise check** (`difficult`, blocking) — judges whether the task requires genuine domain expertise, independent of its tier. A task that fails here needs deeper domain reasoning, not a lower pass rate. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 - Oracle agent run
-- **Quality panel judge** — five axes on contract, reference solution, protected ground truth, verifier soundness, and deterministic execution. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block. See the [Quality Panel Judge Guide](/portal/docs/testing-and-validation/quality-panel-judge-guide).
+- **Quality panel judge** — five axes on contract, reference solution, protected ground truth, verifier soundness, and deterministic execution. Axis verdicts of `Minor` or `Major` block, except on `protected_ground_truth`, where only `Major` blocks. Findings explicitly marked `Advisory` do not block. A finding is a keep-or-cut decision, not a to-do to grow the task; see [Decide before you add](/portal/docs/testing-and-validation/quality-panel-judge-guide#decide-before-you-add).
 
 `Unsure` or incomplete evidence is not a confirmed task defect. Check the evaluation status and report, requesting support if evaluation remains unfinished. Passing the panel allows difficulty measurement; acceptance still requires the remaining evaluation and human review.
 
@@ -99,6 +99,8 @@ Use the [Reviewer Checklist](/portal/docs/reviewing-tasks/reviewer-checklist) to
 
 When you resubmit:
 **Platform:** Add a note with your revision summary.
+
+This note is for your human reviewer. The quality panel does not read it — to contest a panel finding, post in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W); see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
 
 ### Re-request Review
 

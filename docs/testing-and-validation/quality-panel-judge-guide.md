@@ -58,15 +58,43 @@ Blocking severity: Major
        Cited: instruction.md:12-16, tests/test_outputs.py:40-58
 ```
 
-The actionable claim is that the grader accepts a fixed answer for an input-dependent task. To resolve it, add distinct inputs whose correct totals differ and check the complete required result. Then show that the reference still passes and that the fixed-answer implementation fails. More assertions about the original CSV alone would not establish that the program processes new inputs.
+The actionable claim is that the grader accepts a fixed answer for an input-dependent task. In that excerpt the aggregation rule **is** the task, so the right move is to back it: add distinct inputs whose correct totals differ and check the complete required result. Then show that the reference still passes and that the fixed-answer implementation fails. More assertions about the original CSV alone would not establish that the program processes new inputs. If the flagged behavior had been extra scope the task did not need, removing that promise would have been equally valid — see [Decide before you add](#decide-before-you-add).
+
+### Decide before you add
+
+A finding is not a to-do to grow the task. It means a promise you made is not backed, or a test does not check what it claims to check. Ask first whether that feature belongs in the task at all.
+
+> **Does this thing earn its place in the task?**
+
+Two responses are equally valid:
+
+- **Make it true.** If the behavior is core to what you are testing, fix the contract, the reference, and an isolating case — even if that is work. Named domain rules that remain in the instruction still need isolating cases; see [Writing Tests](/portal/docs/creating-tasks/writing-tests).
+- **Stop promising it.** If it is not core, delete the instruction sentence, the matching tests, and any extra modes. The finding goes with the promise.
+
+Contesting with evidence remains valid when the citation does not support the claim; see [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission).
+
+This is intended, not a workaround. The panel enforces every promise you make. We want the high-level behavior that matters to be correct and well-defended, not exhaustive coverage of extra edges. Hundreds of tests accumulated across revisions are a symptom of the add-only loop, not a quality bar.
+
+**Cut breadth. Keep the hard thing.**
+
+The **hard thing** is what [`difficulty_explanation`](/portal/docs/understanding-tasks/task-components) already asks for: the expert crux — domain judgment, interacting constraints, diagnosing a plausible-wrong result. See [Designing for Expert Reasoning](/portal/docs/understanding-tasks/difficulty-guidelines#designing-for-expert-reasoning). Named rules that *are* that crux stay.
+
+**Breadth** is a promise whose removal would not change that crux: extra lifecycle modes, extra error catalogs, extra output formats, extra independent edges the problem was never about.
+
+Heuristic: if a competent solution of the hard thing would still be a correct task after this sentence is deleted, it is breadth. If deleting it would make `difficulty_explanation` false, keep it and back it.
+
+**Do not cut into difficulty.** New submissions must still fail at least 3 of 8 solver runs. If a cut drops the task under that gate, do not re-add independent promises. Deepen the remaining crux — harder instances of the same rules, interacting constraints, hidden inputs of those rules. See [Making a Task Harder](/portal/docs/understanding-tasks/difficulty-guidelines#making-a-task-harder--and-what-doesnt-work). Trimming until solvers pass 6–8 of 8 swaps a panel failure for the difficulty gate.
+
+**Signs you are in the add-only loop:** hundreds of tests; findings that move from one axis to another each round; ten or more rounds without clearing. As of 22 Sep 2026, tasks in that pattern did not converge: pass rate by round went from about 2% at round 1 to about 13% at round 20. If you are stuck, try the reverse: take the flagged non-core promise out, then see what the next panel run says. A worked cut is in [E-3](/portal/docs/testing-and-validation/quality-panel-examples#e-3--remove-a-non-core-promise).
 
 For each finding:
 
 1. **Read the cited files in the submitted version.** Identify the requirement, the affected behavior, and the evidence supporting the claim.
-2. **Construct the smallest relevant case.** For a verifier issue, show an incorrect submission accepted or a contract-valid submission rejected. For a reference issue, show the input and the expected versus actual output.
-3. **Repair the responsible component.** Clarify a genuinely missing rule, fix incorrect reference logic, or correct the grader. Keep the intended task intact.
-4. **Verify both sides.** The correct solution must pass; the specific wrong behavior must fail. Keep the input, output, command, and result so the reviewer can reproduce your conclusion.
-5. **Summarize each resolution.** State the finding, the changed file or rule, and the evidence. If you dispute a finding, provide the same level of detail.
+2. **Decide: keep or cut.** If it is the hard thing, keep it. If it is breadth, remove the promise and its tests. If the citation is wrong, contest it.
+3. **If you keep it, construct the smallest relevant case.** For a verifier issue, show an incorrect submission accepted or a contract-valid submission rejected. For a reference issue, show the input and the expected versus actual output.
+4. **Repair the responsible component, or drop the non-core promise.** Clarify a genuinely missing rule, fix incorrect reference logic, or correct the grader. If you keep the behavior, back the intended crux; do not add extra promises to silence the panel.
+5. **Verify both sides.** The correct solution must pass; the specific wrong behavior must fail. Keep the input, output, command, and result so the reviewer can reproduce your conclusion. After a cut, confirm Oracle still passes and the remaining named rules still have isolating cases.
+6. **Summarize each resolution.** State the finding, whether you backed it or removed it, the changed files, and the evidence. If you dispute a finding, provide the same level of detail and post it in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W), not only in your revision note — the panel does not read the note.
 
 ### What execution evidence proves
 
@@ -106,7 +134,7 @@ Common gaps include unstated tie-breaks, rounding rules, boundary behavior, outp
 **Before submitting:**
 
 - [ ] For every grading rule, identify the sentence or authoritative candidate-visible artifact that defines it.
-- [ ] Specify the permitted input domain and the behavior at relevant boundaries: empty input, duplicates, ties, invalid records, and conflicting updates.
+- [ ] Specify the permitted input domain and the behavior at **boundaries the task actually needs**. Extra promised edges (every invalid input, every lifecycle mode) become new findings; see [Decide before you add](#decide-before-you-add).
 - [ ] Compare the rendered `instruction.md`, declared artifacts, and verifier output paths. Remove broken template text and accidental test sentinels.
 - [ ] Confirm that examples support the stated rules. If inferring a rule is explicitly the task, check that the available examples determine the intended result.
 
@@ -203,7 +231,15 @@ Quote the exact requirement, the cited implementation or assertion, and the conc
 
 **Should I resubmit unchanged until the panel passes?**
 
-Model judgments can vary. Address a supported finding or request review with evidence when you disagree. A different rating on an unchanged task does not explain or repair the original issue.
+Model judgments can vary. Address a supported finding, or when you disagree, post your evidence in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W) — the panel does not read revision notes. See [Defending Your Submission](/portal/docs/reviewing-tasks/defending-your-submission). A different rating on an unchanged task does not explain or repair the original issue.
+
+**Does fixing the listed findings guarantee the next panel pass?**
+
+No. Each resubmit is a **new** review. Closing one issue can uncover a different one, especially if you added surface to satisfy the last report. Act on **Blocking severity**; do not rewrite the whole prompt to chase `Advisory` nits, and do not add tests or promises only to silence the panel. Make a core finding true, or stop promising a non-core one — see [Decide before you add](#decide-before-you-add). Contest unsupported findings with evidence.
+
+**Can I delete the behavior the finding is about?**
+
+Yes, when it is not the hard thing. Remove the instruction, the matching tests, and any extra modes. Named rules that remain must still be backed. The task must still fail at least 3 of 8 solver runs; if a cut makes it too easy, deepen the remaining crux rather than re-adding independent promises. See [Difficulty Guidelines](/portal/docs/understanding-tasks/difficulty-guidelines).
 
 **Does `Unsure` mean I must rewrite the task?**
 

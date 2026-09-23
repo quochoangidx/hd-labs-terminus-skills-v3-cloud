@@ -4,7 +4,19 @@ How to respond to review feedback and appeal decisions.
 
 ## Quality panel findings
 
+A panel finding gets one of two responses, and they go to different places:
+
+- **You accept it → fix the task and resubmit.** The panel runs again on the new version. You don't need to write anything for the panel — it does not read revision notes.
+- **You contest it → post in [`#terminus-3-submissions`](https://snorkel-team.enterprise.slack.com/archives/C0BLQ26GN2W).** The panel does not read a rebuttal in your revision note, so a contested finding has to go where a person will see it. Include:
+  - the **task ID** and the **finding** (axis, severity, its cited passage)
+  - the **exact passage or assertion** the finding points at
+  - a **reproducible counterexample** showing why the claimed failure cannot occur, or why the cited input falls outside the stated contract
+
+Resubmitting an unchanged task is not a response — the panel returns the same or a different verdict on the same task.
+
 A quality-panel finding should identify a specific contract passage, code location, or test and explain the failure. Axis verdicts of `Minor` or `Major` block on contract, reference solution, verifier soundness, and deterministic execution; for `protected_ground_truth`, only `Major` blocks. Findings explicitly marked `Advisory` do not block. If the citation does not support the claim, or the proposed input falls outside the stated contract, respond with the exact passage and a reproducible counterexample.
+
+A third valid response is to **drop non-core scope**: if the flagged promise is not the hard thing, remove it instead of adding tests. See [Decide before you add](/portal/docs/testing-and-validation/quality-panel-judge-guide#decide-before-you-add).
 
 Use the report's evidence: a deliberately wrong solution that passes your verifier supports a soundness finding; a runner failure or an unsuccessful proof attempt does not establish that the task is sound. `Unsure` or incomplete evidence is not a confirmed task defect. Check the evaluation status and report, and request support if evaluation remains unfinished. When resubmitting, connect each fix to the original finding and include the relevant test result; do not assume the next review automatically has the prior report. See the [Quality Panel Judge Guide → FAQ](/portal/docs/testing-and-validation/quality-panel-judge-guide#faq) and [worked examples](/portal/docs/testing-and-validation/quality-panel-examples).
 

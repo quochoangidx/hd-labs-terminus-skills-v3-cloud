@@ -218,6 +218,15 @@ def validate(task_dir: Path, ledger_path: Path, manifest_path: Path | None) -> d
             if not isinstance(citation, dict) or not nonempty(citation.get("file")) or not nonempty(citation.get("anchor")):
                 errors.append({"code": "dispute_without_citation", "message": f"{label} must cite the contract passage it relies on"})
             check_receipt(ledger_dir, row.get("counterexample"), f"{label}.counterexample", returned if nonempty(returned) else None, errors)
+            # The quality panel does not read a rebuttal left in the platform revision
+            # note, so a dispute that was never posted is a finding left unanswered
+            # while the ledger claims otherwise.
+            if not nonempty(row.get("contested_in_channel")):
+                errors.append({
+                    "code": "dispute_not_raised",
+                    "message": f"{label} must record where the contest was posted in #terminus-3-submissions; "
+                    "the panel does not read a rebuttal placed only in the revision note",
+                })
 
         # A return is expensive. Spend it once: turn the class into a rule, or say why
         # it resists mechanisation so the exposure is at least recorded.
