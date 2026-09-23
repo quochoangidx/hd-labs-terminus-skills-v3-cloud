@@ -112,7 +112,8 @@ Use `task-miner`, `task-clone`, `terminus-regular-task-authoring`,
 `task-local-solve-probe`, deterministic `task-client-feedback-review`,
 `task-harbor-runner` and `task-zip-submit` as their stages become relevant.
 
-Answer the five axes while scaffolding, not only at closure: follow the
+Build to [what the platform actually checks](../terminus-regular-task-authoring/references/platform-checks.md);
+any other gate is internal hygiene. Answer the five axes while scaffolding, not only at closure: follow the
 [scaffold checklist](../terminus-regular-task-authoring/references/scaffold-five-axis-checklist.md),
 and run `contract_review` before any verifier exists. At closure the five
 quality axes are carried by executable receipts, not by reviewers:
