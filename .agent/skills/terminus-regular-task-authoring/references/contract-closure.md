@@ -150,12 +150,32 @@ one at a time through `wrong_path_runner.py`; the untouched repository must fail
 every behavioral test. No hand-written mutant catalogue, and no padding to reach
 a count.
 
-## 11. Repair the authority, not the test
+## 11. Answer a finding by backing the promise or by dropping it
 
-When a contract finding lands, add a deterministic sentence to the authority.
-Loosen or delete a test only when it is demanding something no authority
-supports. Patching the test to match the reference hides the defect and keeps the
-verifier circular.
+A finding says one of two things: something you promised is not backed, or a test
+does not check what it claims to. Both have two valid answers — **make it true,
+or stop promising it** — and the second is usually the one not taken.
+
+So the first question is not *how do I satisfy this?* but **does this promise
+earn its place in the task?**
+
+- **Core to the hard thing the task tests** — back it properly, even if that is
+  work. When the gap is in the contract, add a deterministic sentence to the
+  authority rather than bending a test to match the reference; patching the test
+  hides the defect and leaves the verifier circular.
+- **Not core** — remove the promise, and the finding goes with it. Delete the
+  obligation, its assertions and its contract prose together, so nothing is left
+  half-promised.
+
+Answering every finding additively is what produces the loop: each new promise is
+new surface the panel judges, which yields new findings, which invite more
+promises. Only promise what the task is actually about.
+
+The limit is difficulty. Cut breadth, keep the hard thing — a task trimmed until
+it is easy has swapped one failure for another. The `wrong_but_plausible` and
+`separability` fields exist to make this decision early: an obligation that no
+plausible wrong implementation fails, or that stands alone without joining the
+causal core, was never earning its place.
 
 ## 12. Assert behaviour, not shape
 

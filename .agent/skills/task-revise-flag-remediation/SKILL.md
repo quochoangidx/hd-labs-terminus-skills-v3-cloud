@@ -59,6 +59,51 @@ python3 .agent/skills/terminus-regular-task-authoring/scripts/sufficiency_manife
 A panel return is a separate input from the trial-analysis flags. Read the
 report before classifying anything.
 
+### Ask whether the promise earns its place, before asking how to satisfy it
+
+A finding means one of two things: something the task promised is not backed, or
+a test does not check what it claims to. There are **two equally valid answers**:
+
+1. **Make it true** — fix or properly defend the behavior.
+2. **Stop promising it** — remove the scope or the assertion.
+
+Most revisions take only the first, and that is what produces the revision loop.
+A finding reads like a to-do list, so the reflex is to add: more tests, more
+contract detail, more edge-case promises. Each addition is new surface the panel
+judges, which yields new findings, which invite more additions.
+
+So for every finding, ask first: **does this thing earn its place in the task?**
+
+| Answer | Do |
+|---|---|
+| Core to the hard thing the task tests | Back it properly, even if that is real work |
+| Not core | Remove it — the finding goes away with it |
+
+Remove the obligation, its assertions and its contract prose in one move. A
+promise left in the instruction after its test is deleted is still a promise the
+panel will enforce. Update the obligation manifest in the same edit so
+`wrong_paths`, witnesses and authority anchors do not outlive the obligation.
+
+This is the intended use, not a loophole. Exhaustive coverage of nit-picky edge
+cases is not wanted; a tight task that does one hard thing properly is. Only
+promise what the task is actually about.
+
+**Do not cut into difficulty.** The task must still clear the bar — since
+2026-09-15 at least 3 of the 8 platform runs must fail. Trimming until the task
+is easy swaps one failure for another. **Cut breadth, keep the hard thing.**
+
+### Signs you are already in the loop
+
+- assertions accumulating into the hundreds;
+- findings moving to a different axis each round;
+- ten or more revision rounds on one task;
+- the same axis failing with a new finding every round.
+
+When any of these hold, try the reverse move: take the flagged promise **out**
+rather than building on top of it, and see what the next run says. If the core
+itself is what cannot be backed, that is a retirement/redesign decision, not
+another repair round — see `references/root-cause-remediation.md`.
+
 Read **Blocking severity** as well as **Overall severity**. `Minor` and `Major`
 block on `coherent_contract`, `correct_reference_solution`, `sound_verifier`,
 and `deterministic_execution`; on `protected_ground_truth` only `Major` blocks.
@@ -80,7 +125,9 @@ resolving the opening example may leave another finding open. For each finding:
 2. construct the smallest relevant case — for a verifier finding, an incorrect
    submission that is accepted or a contract-valid submission that is rejected;
    for a reference finding, the input with expected versus actual output;
-3. repair the responsible component while keeping the intended task intact;
+3. decide whether the promise is core, then either repair the responsible
+   component while keeping the intended task intact, or remove the promise with
+   its assertions, contract prose and manifest entry together;
 4. verify both sides, so the correct solution passes and the specific wrong
    behavior fails, retaining the input, output, command, and result;
 5. summarize each resolution, naming the finding, the changed file or rule, and
