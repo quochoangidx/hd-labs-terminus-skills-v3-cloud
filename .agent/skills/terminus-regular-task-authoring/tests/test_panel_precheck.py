@@ -288,3 +288,70 @@ def test_the_reference_header_must_account_for_every_core_obligation(tmp_path: P
     finish_receipts(task, manifest_path, manifest)
 
     assert "reference_selfdescription" in codes(task, manifest_path, manifest, full=True)
+
+
+def test_a_runtime_restriction_audited_only_at_source_is_unenforced(tmp_path: Path) -> None:
+    """Source text does not decide what a program can reach at run time.
+
+    A forbidden capability stays reachable through a constant, a generated name or a
+    dependency, so the prose promise is not backed until the compiled artifact is read.
+    """
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["restrictions"] = [
+        {
+            "id": "X-no-reflection",
+            "statement": "the package uses no reflection and no native methods",
+            "enforced_by": ["test_outputs.py::test_authority"],
+            "enforcement_level": "source",
+            "allowed_exceptions_disclosed": True,
+        }
+    ]
+
+    assert "unenforced_restriction" in codes(task, manifest_path, manifest, full=False)
+
+    manifest["restrictions"][0]["enforcement_level"] = "both"
+    assert "unenforced_restriction" not in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_source_level_restriction_about_source_is_fine(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["restrictions"] = [
+        {
+            "id": "X-file-layout",
+            "statement": "every source file stays under src/main/java/cairnlift/",
+            "enforced_by": ["test_outputs.py::test_authority"],
+            "enforcement_level": "source",
+            "allowed_exceptions_disclosed": True,
+        }
+    ]
+
+    assert "unenforced_restriction" not in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_restriction_must_name_its_legal_exceptions(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["restrictions"] = [
+        {
+            "id": "X-no-reflection",
+            "statement": "the package uses no reflection",
+            "enforced_by": ["test_outputs.py::test_authority"],
+            "enforcement_level": "both",
+        }
+    ]
+
+    assert "undisclosed_exceptions" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_restriction_needs_a_check_that_runs(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["restrictions"] = [
+        {
+            "id": "X-no-reflection",
+            "statement": "the package uses no reflection",
+            "enforced_by": [],
+            "enforcement_level": "both",
+            "allowed_exceptions_disclosed": True,
+        }
+    ]
+
+    assert "unenforced_restriction" in codes(task, manifest_path, manifest, full=False)

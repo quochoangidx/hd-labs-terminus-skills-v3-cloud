@@ -43,6 +43,14 @@ HUNK_RE = re.compile(r"^@@ .* @@", re.M)
 
 
 def tree_hash(root: Path) -> str:
+    """The task snapshot hash the receipt is bound to.
+
+    This must stay byte-for-byte the same function as ``panel_precheck.tree_hash``:
+    the precheck rejects a receipt whose ``task_snapshot_sha256`` is not its own
+    digest of the same tree, so two spellings of "the snapshot hash" make every
+    wrong-path receipt unusable no matter how sound the wrong path was. The
+    NUL separators below are what the precheck writes; do not drop them.
+    """
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root)
@@ -51,7 +59,9 @@ def tree_hash(root: Path) -> str:
         if path.is_dir() or path.is_symlink():
             continue
         digest.update(rel.as_posix().encode("utf-8"))
+        digest.update(b"\0")
         digest.update(path.read_bytes())
+        digest.update(b"\0")
     return digest.hexdigest()
 
 

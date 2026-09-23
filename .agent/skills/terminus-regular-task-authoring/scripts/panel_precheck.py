@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -47,6 +48,17 @@ NON_CIRCULAR_SOURCES = EXPECTED_SOURCES - {"oracle_recorded"}
 # The clauses that close the input domain the authority does not name. Without them a
 # boundary case has no stated answer, which is where contract findings come from.
 CLOSURE_CLAUSES = ("universal_rule", "silence", "coverage_envelope")
+# How far a restriction is actually enforced. A restriction about what the candidate's
+# program may reach at run time -- reflection, native code, subprocesses, the network,
+# a forbidden namespace -- is not enforced by reading source: the same capability is
+# reachable through a constant, a generated name or a dependency. Such a restriction
+# has to be checked against the compiled artifact.
+ENFORCEMENT_LEVELS = {"source", "compiled", "both"}
+RUNTIME_CAPABILITY_RE = re.compile(
+    r"(?i)\b(?:reflect|reflection|native|jni|subprocess|process|exec|runtime|"
+    r"classloader|class[ -]?loader|dlopen|ffi|ctypes|unsafe|network|socket|import|"
+    r"require|namespace|package)\b"
+)
 VOLATILE_DIRS = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", "reports", "submissions"}
 
 
@@ -325,6 +337,49 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool) -> dict:
                             errors.append({"axis": "coherent_contract", "code": "uncited_exact_output", "message": f"{label}.authority_anchor.anchor is absent from {anchor.get('file')}"})
                     except UnicodeDecodeError:
                         errors.append({"axis": "coherent_contract", "code": "authority_encoding", "message": f"{label}.authority_anchor.file must be UTF-8 text"})
+
+    # Restrictions: prose that forbids something must be backed by a check the verifier
+    # actually runs, and the check has to be able to see what it forbids.
+    restrictions = manifest.get("restrictions", [])
+    if not isinstance(restrictions, list):
+        errors.append({"axis": "sound_verifier", "code": "restrictions", "message": "restrictions must be a list"})
+        restrictions = []
+    for index, row in enumerate(restrictions):
+        label = f"restrictions[{index}]"
+        if not isinstance(row, dict) or not nonempty(row.get("id")):
+            errors.append({"axis": "sound_verifier", "code": "restriction", "message": f"{label} requires an id"})
+            continue
+        statement = row.get("statement")
+        if not nonempty(statement):
+            errors.append({"axis": "coherent_contract", "code": "restriction_statement", "message": f"{label}.statement must quote the restriction as the candidate reads it"})
+        enforced_by = string_list(row.get("enforced_by"), f"{label}.enforced_by", errors, allow_empty=True)
+        if not enforced_by:
+            errors.append({
+                "axis": "sound_verifier",
+                "code": "unenforced_restriction",
+                "message": f"{label} is forbidden in prose with no check that runs; a restriction "
+                "the verifier cannot see is decoration, so enforce it or drop the sentence",
+            })
+        witness_ids.update(enforced_by)
+        level = row.get("enforcement_level")
+        if level not in ENFORCEMENT_LEVELS:
+            errors.append({"axis": "sound_verifier", "code": "enforcement_level", "message": f"{label}.enforcement_level must be one of {sorted(ENFORCEMENT_LEVELS)}"})
+        elif level == "source" and nonempty(statement) and RUNTIME_CAPABILITY_RE.search(str(statement)):
+            errors.append({
+                "axis": "sound_verifier",
+                "code": "unenforced_restriction",
+                "message": f"{label} forbids a run-time capability but is only audited at source level; "
+                "the same capability is reachable through a constant, a generated name or a dependency, "
+                "so audit the compiled artifact or narrow the statement to what source can see",
+            })
+        # Prose that forbids without naming what stays legal fails an honest solution on
+        # a rule nobody wrote down.
+        if row.get("allowed_exceptions_disclosed") is not True:
+            errors.append({
+                "axis": "coherent_contract",
+                "code": "undisclosed_exceptions",
+                "message": f"{label} must name the exceptions that remain legal and set allowed_exceptions_disclosed",
+            })
 
     # Closure: the clauses that decide what happens outside the cases the authority
     # names. Without them every boundary input is an open question, and an open
