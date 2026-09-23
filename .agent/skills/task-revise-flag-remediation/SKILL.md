@@ -138,6 +138,45 @@ reviewer was replaced or lost. For a stuck evaluation or an execution error,
 request support with the submission identifier and report rather than editing
 the task.
 
+### Work from the snapshot the platform judged
+
+Restore the task from the **exact returned artifact** before reading a finding
+against it. A working tree that has drifted since the upload is a different task:
+a finding may not reproduce on it, or may reproduce for a different reason, and
+either way the evidence you collect is about something the panel never saw. Keep
+any diverged tree only as a rollback artifact under the report directory.
+
+Record both hashes — the snapshot returned and the snapshot you will resubmit —
+in the revision ledger below. Every reproduction receipt binds to the first and
+every closure receipt to the second; the gate rejects a reproduction taken on the
+repaired tree, because that shows a test passing rather than a defect existing.
+
+### Answer each finding in the ledger
+
+The build path runs on receipts and the revision path used to run on prose. That
+asymmetry is where a return gets answered with "repaired" and comes back with the
+same finding a round later. Keep
+`workspace/reports/<slug>/revision-ledger.json` and validate it:
+
+```bash
+python3 .agent/skills/terminus-regular-task-authoring/scripts/revision_ledger_check.py \
+  workspace/tasks/<slug> workspace/reports/<slug>/revision-ledger.json \
+  --manifest workspace/reports/<slug>/panel-precheck-manifest.json
+```
+
+One row per numbered finding, with `decision` one of:
+
+| `decision` | Required evidence |
+|---|---|
+| `backed` | a reproduction receipt on the returned snapshot **and** a closure receipt on the repaired one. A closure alone shows a test passing that may never have failed |
+| `dropped` | the `removed_obligation_id`, cross-checked against the manifest so `panel_precheck.py` can confirm the prose left too |
+| `disputed` | the contract passage cited and a reproducible counterexample — a dispute without both is an opinion |
+| `acknowledged` | non-blocking findings only; the gate refuses it on a blocker |
+
+Every row also carries `gate`: the rule this finding bought, or
+`not_mechanizable` with the reason. And every `P`-finding the report carries
+forward needs an explicit `response` — the report omitting one does not resolve it.
+
 Read every numbered finding. One axis can carry several distinct issues, so
 resolving the opening example may leave another finding open. For each finding:
 
