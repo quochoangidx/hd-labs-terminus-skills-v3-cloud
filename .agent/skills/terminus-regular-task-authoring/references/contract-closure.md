@@ -73,8 +73,19 @@ legal — the print stream behind standard output, the compiler's own bootstraps
 four specific reflection-adjacent methods. An honest solution cannot then fail on
 a rule nobody wrote down. Set `allowed_exceptions_disclosed` once this is true.
 
-Every restriction in prose gets a mechanical audit. A restriction the verifier
-cannot see is decoration.
+Every restriction in prose gets a mechanical audit, declared in the manifest with
+`enforced_by` and an `enforcement_level`. A restriction the verifier cannot see is
+decoration.
+
+Choose that level honestly. **Source text does not decide what a program may reach
+at run time** — a forbidden capability stays reachable through a constant, a
+generated name or a dependency — so a restriction on reflection, native code,
+subprocesses, the network or a namespace has to be checked against the compiled
+artifact. `source` is right only for things source genuinely decides: where files
+live, which names appear in an import list. The gate rejects the mismatch.
+
+And apply section 11 here too: if a restriction is not core to the hard thing,
+the cheapest correct answer is to stop stating it.
 
 ## 5. Derive expectations independently of the reference
 

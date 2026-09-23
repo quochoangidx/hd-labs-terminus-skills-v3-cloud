@@ -90,6 +90,15 @@ directory. Bind the full form to the exact task tree. Minimal shape:
     "order_sensitivity": "none"
   },
   "reference_selfdescription": "solution/solve.sh",
+  "restrictions": [
+    {
+      "id": "X-no-reflection",
+      "statement": "the package does its own work: no reflection, no native methods",
+      "enforced_by": ["test_policy.py::test_compiled_code_obeys_the_rules"],
+      "enforcement_level": "both",
+      "allowed_exceptions_disclosed": true
+    }
+  ],
   "unclaimed_units_rationale": {},
   "exact_output_requirements": [
     {
@@ -144,6 +153,19 @@ directory. Bind the full form to the exact task tree. Minimal shape:
 - **`unclaimed_units_rationale`** — the escape hatch for a verifier unit that
   deliberately belongs to no obligation, such as a collection smoke test. Full
   mode sweeps units against witnesses in both directions.
+- **`restrictions`** — one entry per thing the contract forbids. `statement` is
+  the restriction as the candidate reads it; `enforced_by` names the checks that
+  run, because a restriction the verifier cannot see is decoration;
+  `allowed_exceptions_disclosed` asserts the prose also names what stays legal,
+  so an honest solution cannot fail on a rule nobody wrote down.
+
+  `enforcement_level` is `source`, `compiled` or `both`. **A restriction on what
+  the program may reach at run time cannot be enforced by reading source**: the
+  same capability is reachable through a constant, a generated name or a
+  dependency, so the check must read the compiled artifact. The gate flags a
+  run-time restriction declared `source` — either audit the compiled output, or
+  narrow the sentence to what source can actually decide, such as where files
+  live or which names appear in an import list.
 
 A wrong-path receipt must contain `status: "pass"`, its `wrong_path_id`, the
 current `task_snapshot_sha256`, numeric `reward: 0`, non-empty
