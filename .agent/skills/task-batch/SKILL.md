@@ -122,7 +122,7 @@ quality axes are carried by executable receipts, not by reviewers:
 |---|---|
 | `coherent_contract` | closure clauses present and anchored; every exact convention cites a visible authority sentence; the blind solver's failures read for cause |
 | `correct_reference_solution` | the expectation model is derived from the authority independently of the Oracle, so Oracle=1 is a non-circular agreement; `solve.sh` carries a contract header |
-| `sound_verifier` | no orphan test and no witnessless obligation; a wrong-path receipt per core obligation; differential preservation for untouched behavior |
+| `sound_verifier` | the adversarial verifier pass (step 5b): an outside reviewer's wrong submissions, each rejected; plus no orphan test and no witnessless obligation; a wrong-path receipt per core obligation; differential preservation for untouched behavior |
 | `protected_ground_truth` | isolation run and recorded: unprivileged candidate, closed source tree, restricted `/tests` and `/logs/verifier`, and no reachable way for demoted code to regain privilege (`--no-new-privs` unless nothing setuid or capability-bearing exists) |
 | `deterministic_execution` | repeat and shuffled runs agree; no network, no clock or ordering dependence |
 

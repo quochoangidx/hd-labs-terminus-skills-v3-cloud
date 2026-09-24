@@ -23,22 +23,52 @@ An authority that only covers the cases you thought of leaves the rest
 undecided, and an undecided case is where a contract finding comes from. Close
 it with two sentences in the instruction:
 
-- **Universal-rule clause** — a stated rule holds for *every* argument, not only
-  the illustrated ones. Without it, `shorter(0, 5)` is an open question.
+- **Universal-rule clause** — a stated rule holds for *every* input in its
+  domain, not only the illustrated ones. Without it, `shorter(0, 5)` is an open
+  question.
 - **Silence clause** — where the authority says nothing, the existing behavior
   stands. Name what that forbids, with examples from the boundary the candidate
-  will actually reach: *"add no throw, clamp or guard to what a published method
-  takes now: a side of nought or less, a key or a value of nothing, a setting
-  read back that asking for would have been refused."*
+  will actually reach: *"add no throw, clamp or guard for such a value: a side of
+  nought or less, a key or a value of nothing, a setting read back that asking
+  for would have been refused."*
+
+**Declare the input domain, then give every stated rule its own.** The authority
+states what a job or call may carry: types, and which fields may be absent,
+null, nought, negative or unbounded. The panel checks an allegedly missed input
+against that documented domain, and "extra promised edges … become new findings"
+(`docs/testing-and-validation/quality-panel-judge-guide.md`, contract checklist
+and FAQ). Then write each rule with its domain (*"for a rate above nought and
+below one"*). Two things follow:
+
+- the complement of a ruled domain falls under the silence clause and is guarded
+  by a shipped differential (§7) by boundary category, not site by site (§15);
+- a rule written without a domain is universal across the whole declared domain,
+  so it needs a witness in **every region that domain admits**: nought, negative,
+  very large, and each side of every threshold. It also needs one where two such
+  rules meet in either order (a cap before or after a factor). A rule you cannot
+  witness everywhere must get a narrower domain.
+
+On 2026-09-24 two seeded-departure returns
+(`tbrain-health-claim-cost-sharing`, `tbrain-intermittent-infusion-regimen`)
+carried 24 findings of this one kind: a formula with no domain, never run at
+negative, zero or large inputs the job could carry.
 
 The silence clause needs a deterministic artifact behind it, so it belongs to
 tasks that repair existing code. A from-scratch task instead declares the domain
 it grades and grades nothing outside it.
 
-Add an **entry-point scope clause** to the authority itself whenever tests drive
-helpers directly: *"public helpers implement the same rules when called
-directly, not only through the top-level entry point."* Otherwise a candidate who
-satisfies the entry point and leaves a helper inconsistent has a real argument.
+**Grade through the entry point by default.** The authority describes what the
+entry point (driver, CLI, top-level call) returns; the verifier drives only that.
+Promise helpers only when a helper *is* the deliverable. Then add an
+**entry-point scope clause** that names each promised helper, *"`allowed_amount`
+and `copay_due` implement the same rules when called directly"*, and give each
+one direct-call witnesses for every rule it implements. The manifest lists them
+under `closure.entrypoint_scope.helpers`, and `panel_precheck.py` blocks a
+promised helper that no test calls. A documented mode that is never invoked is an
+untested requirement (`docs/creating-tasks/writing-tests.md`, "Match Task
+Requirements"). A broad "the public helpers … when called directly" over many
+names was the largest single block in the same two returns (16 findings). The
+cheaper correct answer is usually not to make the promise.
 
 ## 2. Publish the coverage envelope
 
@@ -49,6 +79,15 @@ maps one-to-one onto the test groups.
 This is the honest way to keep hidden generalization: the candidate learns what
 will be exercised and still has to work out every answer. Without it, a hidden
 case outside the visible families reads as an unannounced requirement.
+
+Every family named is a promise about every rule it reaches. *"Settings and
+amounts at and beyond the edges, including nought and negative values"* promises
+each stated formula at nought and below, and the panel checks each one. Name a
+family only when the suite exercises it for every rule that applies there, or
+narrow it (*"member deductibles of nought or less"*). Varying sizes, values,
+ordering and formats is expected, but only over what the stated domain makes
+relevant. It "does not require combinatorial coverage of behavior the contract
+never promises" (`docs/creating-tasks/writing-tests.md`, perturbation re-runs).
 
 ## 3. Every exact convention quotes a sentence
 
@@ -80,6 +119,11 @@ a rule nobody wrote down. Set `allowed_exceptions_disclosed` once this is true.
 Every restriction in prose gets a mechanical audit, declared in the manifest with
 `enforced_by` and an `enforcement_level`. A restriction the verifier cannot see is
 decoration.
+
+A Python "standard library only" restriction is not enforced by `python3 -I`
+alone: the verifier image has pytest in site-packages, so candidate code can
+import it there. Run every candidate process with `python3 -I -S`
+(`docs/testing-and-validation/quality-panel-examples.md` C-11).
 
 Choose that level honestly. **Source text does not decide what a program may reach
 at run time** — a forbidden capability stays reachable through a constant, a
@@ -201,6 +245,14 @@ Prefer:
 
 - parse JSON/XML/CSV with a real parser and assert on the structure, rather than
   comparing whole files;
+- after parsing, compare **native types** as well as values. Python `==` treats
+  `3`, `3.0` and `True` as equal, so a float or a boolean passes where the
+  contract says integer; compare `type(v)` too, as in
+  `docs/testing-and-validation/quality-panel-examples.md` C-12;
+- reject extra fields and check key or list order **only where the contract
+  fixes the shape or the order**. Where it does not, accept any order: an
+  over-strict comparator that rejects valid output is itself a Major (same file,
+  C-13);
 - assert the category of an exit status, not an incidental code;
 - assert the absence of an internal error for a bug the contract says is
   recoverable;
@@ -316,5 +368,23 @@ Design rules that follow:
    solver's natural fix as a `wrong_path` receipt that the witness rejects, and
    check that no single instruction sentence disarms all of them.
 
+8. Keep the promise surface small enough to witness completely. Every trap
+   needs a silent sub-domain, and the stated rules around it need domains (§1).
+   A design with sixteen departures, six silent categories and seventeen
+   promised helpers could not be witnessed at every region it promised. The
+   panel returned 37 findings for it before difficulty was ever measured. Fewer
+   rules with deeper traps survive both gates; more rules only enlarge the
+   surface (rule 6).
+
 The evidence is one exploratory two-solver sample. Treat it as a local signal and
 never as a tier.
+
+**Where the platform docs stand.** `docs/` neither describes nor forbids
+restraint traps. They define difficulty as domain reasoning: choosing between
+valid methods, diagnosing a plausible-but-wrong result, and constraints that
+interact (`docs/understanding-tasks/difficulty-guidelines.md`, "Designing for
+Expert Reasoning"). Separately, they list "piling on unrelated independent
+requirements" under what does not work. A task whose only difficulty is knowing
+where to stop is therefore a local technique with no documentary backing. Pair
+it with at least one crux of interacting domain constraints, so the
+`difficult` check and a human reviewer have something the docs recognise.

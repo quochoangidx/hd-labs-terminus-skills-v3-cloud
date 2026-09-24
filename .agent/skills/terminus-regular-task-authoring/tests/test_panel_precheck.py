@@ -255,6 +255,48 @@ def test_a_named_silent_case_witness_must_be_a_real_unit(tmp_path: Path) -> None
     assert "silence_case_unwitnessed" in codes(task, manifest_path, manifest, full=True)
 
 
+def test_an_entrypoint_scope_must_list_its_helpers(tmp_path: Path) -> None:
+    # tbrain-health-claim-cost-sharing v1 promised seventeen helpers "when called
+    # directly" and called about half of them; the panel returned the rest.
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["entrypoint_scope"] = {"file": "instruction.md", "anchor": "A stated rule holds for every argument."}
+
+    assert "entrypoint_helper_unwitnessed" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_promised_helper_needs_a_direct_call_witness(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["entrypoint_scope"] = {
+        "file": "instruction.md", "anchor": "A stated rule holds for every argument.",
+        "helpers": [{"name": "reconcile", "witness_ids": []}],
+    }
+
+    assert "entrypoint_helper_unwitnessed" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_promised_helper_must_be_named_where_promised(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["entrypoint_scope"] = {
+        "file": "instruction.md", "anchor": "A stated rule holds for every argument.",
+        "helpers": [{"name": "no_such_helper", "witness_ids": ["test_outputs.py::test_authority"]}],
+    }
+    finish_receipts(task, manifest_path, manifest)
+
+    assert "entrypoint_helper_unnamed" in codes(task, manifest_path, manifest, full=True)
+
+
+def test_a_witnessed_entrypoint_scope_passes(tmp_path: Path) -> None:
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["closure"]["entrypoint_scope"] = {
+        "file": "instruction.md", "anchor": "A stated rule holds for every argument.",
+        "helpers": [{"name": "reconcile", "witness_ids": ["test_outputs.py::test_interaction"]}],
+    }
+    finish_receipts(task, manifest_path, manifest)
+
+    found = codes(task, manifest_path, manifest, full=True)
+    assert not {"entrypoint_helper_unwitnessed", "entrypoint_helper_unnamed", "closure_entrypoint_scope"} & found
+
+
 def test_a_witnessed_silent_case_passes(tmp_path: Path) -> None:
     task, manifest_path, manifest = make_fixture(tmp_path)
     manifest["closure"]["silence"]["named_cases"] = [

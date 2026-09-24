@@ -47,6 +47,20 @@ manifest; this adds no agent or semantic review cycle.
   Preserve applicable semantic-rank and executable-mutant gates; if a candidate
   lacks natural depth, select/redesign it within authority instead of bolting on
   mechanisms. Only fresh empirical probes support the changed task's difficulty.
+- **Budget the promise surface before scaffolding.** The quality panel samples
+  every promise: each stated rule in each region of its declared domain, each
+  helper promised for direct calls, and each named coverage family. It reports
+  whatever the verifier leaves unwitnessed. So size the design by that surface,
+  not by departures or modules, and require the rule × region table
+  (scaffold checklist §1) to be fillable with witnesses before any code exists. If
+  it is not, cut rules, narrow domains, or drop helper promises now.
+  `tbrain-health-claim-cost-sharing` v1 had sixteen departures, six silent
+  categories, seventeen promised helpers and a "nought and negative" envelope,
+  witnessed by 29 tests. It came back with 37 findings (about 17 root causes)
+  before difficulty was measured. The docs' remedy is the same: "Cut breadth.
+  Keep the hard thing." "Piling on unrelated independent requirements" is length,
+  not difficulty (`docs/testing-and-validation/quality-panel-judge-guide.md`,
+  `docs/understanding-tasks/difficulty-guidelines.md`).
 - Evaluate causal density, not component count: one genuine interaction and a
   natural-but-wrong path can be stronger than many independent functions. No
   minimum number of components, mechanisms, interactions or traps proves a

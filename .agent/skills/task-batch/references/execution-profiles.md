@@ -66,6 +66,14 @@ covered by executable receipts plus one reviewer, not by ten isolated reviewers.
 This lowers cost by roughly an order of magnitude and raises the chance of a
 platform return. It is not a claim that the panel was satisfied.
 
+A return is not cheap either. Both `builder_certified` tasks submitted on
+2026-09-24 (`tbrain-health-claim-cost-sharing`, `tbrain-intermittent-infusion-regimen`)
+came back from the quality panel with 37 findings each, 32–34 of them
+`sound_verifier`, before difficulty was measured. Every gate below had been
+green. The builder's receipts show that the task agrees with itself; they do not
+show that the verifier rejects wrong work the builder did not think of. Step 5b
+exists for that gap.
+
 Required path:
 
 1. Mine and scaffold against the bounded scope ledger, then write the obligation
@@ -95,6 +103,21 @@ Required path:
    - `panel_precheck.py --full --profile builder_certified` on the exact snapshot
      (bookkeeping rows such as graph shape and matrix labels report as warnings;
      closure, named silent cases, cited conventions and wrong paths still block)
+   5b. **Adversarial verifier pass**, on the closure snapshot. A fresh reviewer
+   session, separate from the contract/final reviewer and the builder, gets
+   `instruction.md`, `environment/` and `tests/`. It does not see `solution/`,
+   the builder's wrong paths, the manifest or the reports. It writes 10–15
+   plausible wrong submissions, each contract-valid except for one rule, and aims
+   them at the shapes the scaffold checklist §1 and §4 list: undeclared regions,
+   job shapes, loose comparators, promised helpers. It also writes one or two
+   contract-valid alternatives. The builder runs each through
+   `wrong_path_runner.py`. A wrong submission scoring reward 1, or a valid
+   alternative scoring 0, is a finding, and it is answered the §11 way: back the
+   rule with a witness, or narrow the promise. Then rerun the affected closure
+   gates. This mirrors the panel's own "confirmed by running the grader" step
+   (`docs/testing-and-validation/quality-panel-judge-guide.md`) and the docs'
+   pre-submission rule that a deliberately wrong solution must fail
+   (`docs/understanding-tasks/what-makes-a-good-task.md`).
 6. The same reviewer's `final_review` on the frozen snapshot, with full task
    visibility. A repair after it reruns the affected gates and gets a targeted
    recheck in the same session.

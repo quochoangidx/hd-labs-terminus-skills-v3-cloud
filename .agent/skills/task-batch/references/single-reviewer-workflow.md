@@ -59,6 +59,13 @@ the affected full gates, and a recheck by the same reviewer when semantic
 judgment is involved. Do not launch a second reviewer identity merely to obtain
 a different opinion.
 
+The one exception is the **adversarial verifier pass**
+(`execution-profiles.md`, `builder_certified` step 5b). It is a separate role,
+not a second opinion. It sees the tests and not the builder's wrong paths, and it
+produces executable wrong submissions rather than prose. It uses the same model
+pin as the reviewer. Its findings go through the same builder disposition and
+orchestrator adjudication as above.
+
 ## Auditor
 
 `campaign_ready` only. `builder_certified` does not run one: its deterministic

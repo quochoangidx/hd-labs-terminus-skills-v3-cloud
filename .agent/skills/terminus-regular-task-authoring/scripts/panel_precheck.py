@@ -481,10 +481,35 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool, profile: str = 
                     if case_path and case_path.is_file() and str(case["anchor"]) not in case_path.read_text(encoding="utf-8", errors="replace"):
                         errors.append({"axis": "coherent_contract", "code": "silence_named_cases", "message": f"{label}.anchor is absent from {case_path.relative_to(task_dir)}"})
         # Only meaningful when tests drive public helpers directly rather than going
-        # through the top-level entry point every time.
+        # through the top-level entry point every time. A sentence promising that named
+        # helpers obey the rules when called directly is a promise about each helper:
+        # the panel checks every one it names, and in two returns of 2026-09-24 the
+        # helpers without a direct-call witness were the largest block of findings.
         scope = closure.get("entrypoint_scope")
         if scope is not None and (not isinstance(scope, dict) or not nonempty(scope.get("file")) or not nonempty(scope.get("anchor"))):
             errors.append({"axis": "coherent_contract", "code": "closure_entrypoint_scope", "message": "closure.entrypoint_scope, when present, must cite a file and an anchor sentence"})
+        elif isinstance(scope, dict):
+            helpers = scope.get("helpers")
+            if not isinstance(helpers, list) or not helpers:
+                errors.append({"axis": "sound_verifier", "code": "entrypoint_helper_unwitnessed", "message": "closure.entrypoint_scope.helpers must list every helper the scope sentence promises, each with its direct-call witness_ids; if the helpers are not core, drop the sentence and grade through the entry point"})
+            else:
+                scope_text = ""
+                if full:
+                    scope_path = task_file(task_dir, scope.get("file"), "closure.entrypoint_scope.file", "coherent_contract", errors, must_exist=True)
+                    if scope_path and scope_path.is_file():
+                        scope_text = scope_path.read_text(encoding="utf-8", errors="replace")
+                for index, helper in enumerate(helpers):
+                    label = f"closure.entrypoint_scope.helpers[{index}]"
+                    if not isinstance(helper, dict) or not nonempty(helper.get("name")):
+                        errors.append({"axis": "sound_verifier", "code": "entrypoint_helper_unwitnessed", "message": f"{label} must name the helper"})
+                        continue
+                    ids = helper.get("witness_ids")
+                    if not isinstance(ids, list) or not ids or not all(nonempty(item) for item in ids):
+                        errors.append({"axis": "sound_verifier", "code": "entrypoint_helper_unwitnessed", "message": f"{label} ({helper['name']!r}) is promised to follow the rules when called directly, and no test calls it"})
+                        continue
+                    witness_ids.update(str(item) for item in ids)
+                    if scope_text and str(helper["name"]) not in scope_text:
+                        errors.append({"axis": "coherent_contract", "code": "entrypoint_helper_unnamed", "message": f"{label} ({helper['name']!r}) does not appear in {scope.get('file')}"})
 
     # Determinism is a blocking axis in its own right, and nothing else in this
     # manifest would notice a verifier that depends on the clock, the network or the
