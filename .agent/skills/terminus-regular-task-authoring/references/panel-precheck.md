@@ -82,7 +82,8 @@ directory. Bind the full form to the exact task tree. Minimal shape:
     "silence": {"file": "instruction.md", "anchor": "the shipped behavior stands",
                 "named_cases": [{"anchor": "a side of nought or less", "witness_ids": ["test_a.py::test_untouched_edges"]}]},
     "coverage_envelope": {"file": "instruction.md", "anchor": "ordinary and extreme states"},
-    "entrypoint_scope": {"file": "environment/repo/NOTE.md", "anchor": "when called directly"}
+    "entrypoint_scope": {"file": "environment/repo/NOTE.md", "anchor": "when called directly",
+                         "helpers": [{"name": "shorter", "witness_ids": ["test_a.py::test_shorter_direct"]}]}
   },
   "determinism": {
     "seeds": [],
@@ -132,8 +133,13 @@ directory. Bind the full form to the exact task tree. Minimal shape:
 ## What the added fields are for
 
 - **`closure`** — the clauses that decide the input domain the authority does not
-  name. `universal_rule`, `silence` and `coverage_envelope` are required; add
-  `entrypoint_scope` when tests drive public helpers directly. Each anchor must
+  name. `universal_rule`, `silence` and `coverage_envelope` are required.
+  `entrypoint_scope` is optional and discouraged: grade through the entry point
+  unless a helper is the deliverable (`contract-closure.md` §1). When it is
+  present, `entrypoint_scope.helpers` lists every helper the sentence promises,
+  each with the `witness_ids` that call it directly. A promised helper that no
+  test calls blocks (`entrypoint_helper_unwitnessed`). A listed helper the cited
+  file never names also blocks (`entrypoint_helper_unnamed`). Each anchor must
   appear verbatim in the cited file. `silence.named_cases` is required: one row
   per case the silence prose names, each with its anchor phrase and the
   `witness_ids` that check it against the shipped behaviour, or `[]` when the

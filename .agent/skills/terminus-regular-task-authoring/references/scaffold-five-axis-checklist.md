@@ -7,8 +7,14 @@ the gates forces the whole wrong-path matrix to rerun. Answer each question with
 artifact while you scaffold, before the first test is written.
 
 Every item below comes from a defect that reached review in
-`tbrain-lookahead-compressor-ballistics` or `tbrain-quantized-depthwise-convolution`.
+`tbrain-lookahead-compressor-ballistics` or `tbrain-quantized-depthwise-convolution`,
+or from the two platform panel returns of 2026-09-24
+(`tbrain-health-claim-cost-sharing`, `tbrain-intermittent-infusion-regimen`,
+37 findings each, about 17 and 25 root causes once duplicates are merged).
 None of them was caught by a gate.
+
+This list is a floor, not the review. It names defects already seen. The
+adversarial verifier pass (§4, last item) is what finds the ones not yet seen.
 
 Keep the artifacts under `workspace/reports/<slug>/`, never in the task.
 
@@ -24,11 +30,29 @@ review where that profile places it.
 
 Write the authority and the instruction first. Then:
 
+- **Declare the input domain** of every field the job or call carries: its type,
+  and whether it may be absent, null, nought, negative or unbounded
+  (`contract-closure.md` §1). The panel checks a missed input against this
+  documented domain.
 - **State each formula's domain.** Name the arguments the rule covers ("for a knee
   of positive width", "with the rate above nought"). A rule without a domain is
   either universal, so it silently overrides the silence clause, or ambiguous.
   *Missed:* the lookahead formula said nothing about the rate, and a reviewer had
   to find it.
+- **Write the rule × region table** (`rule-regions.md`) for every rule left
+  universal. Rows are rules; columns are the regions the declared domain admits
+  (nought, negative, very large, each side of each threshold, and each order in
+  which two rules can meet). Every cell names its witness. A cell you will not
+  witness means the rule gets a narrower domain. *Missed, 24 times in two returns:*
+  a family deductible and out-of-pocket maximums of nought or less; a primary
+  payment above the allowed amount; half of 30000000000000001 cents; a negative
+  elimination rate; a zero or negative dosing interval; a height below the
+  formula's reference; a creatinine cap applied before or after the female factor.
+- **Budget the promises.** Rules × regions, plus every promised helper and every
+  named coverage family, is the surface the panel samples. If the table above
+  cannot be filled, cut rules or narrow domains now
+  ([bounded task design](bounded-task-design.md)); do not plan to test your way
+  out.
 - **Write the state table** (`state-table.md`): one row per operation (each setter,
   reset, process, a refused call, a repeated call with the same value) and one
   column per piece of observable state (every stored setting, carried values,
@@ -65,6 +89,17 @@ Write the authority and the instruction first. Then:
   reading. *Missed:* the depthwise model saturated a reversed clamp with
   max-of-min while the package checks the lower bound first. The promised case
   could never be witnessed, and the platform failed the task on it.
+- **Probe the numerics of both the model and the Oracle.** Fuzzing the two
+  against each other misses what they share. Take the model to exact arithmetic
+  (`Fraction`, integers) and try:
+  - values one ulp below a rounding half;
+  - magnitudes above 2^53 and near the float limits;
+  - every numeric format the contract allows, decoded through `json.loads` and
+    checked against the value the job writes.
+
+  *Missed:* `floor(x + 0.5)` rounds the float just below one half up; an
+  intermediate quotient overflowed for an exact multiple; a rate the contract
+  allowed decoded to `0.0`.
 - Head `solve.sh` with the contract-topic to change table (`contract-closure.md` §9).
 
 ## 3. Protected ground truth: can candidate code obtain or control the answer?
@@ -76,6 +111,10 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 - Every candidate process drops privilege
   (`setpriv --no-new-privs --reuid --regid --clear-groups`) in its own session, with
   a fixed small environment.
+- A Python candidate runs as `python3 -I -S`. `-I` alone still exposes the
+  verifier's site-packages, so a "standard library only" rule goes unenforced
+  (`docs/testing-and-validation/quality-panel-examples.md` C-11). *Missed:* in
+  both returns of 2026-09-24.
 - Seal `/tests` and `/logs/verifier` (0700) before the first candidate process.
   Root writes the reward only after pytest has exited.
 - **Make `/app` readable to the demoted user** (`chmod -R a+rX /app` in `test.sh`).
@@ -128,6 +167,24 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 - For each *not described* cell of the state table, decide now: witness it with a
   shipped differential, or narrow the prose so it is not promised
   (`contract-closure.md` §11).
+- **Vary every job shape the declared domain admits**, and nothing it does not
+  (`docs/creating-tasks/writing-tests.md`, perturbation re-runs):
+  - an optional field absent, and null where null is allowed;
+  - an object that gives only some of its fields;
+  - an empty list, and a list longer than any plausible hard-coded bound;
+  - list items and members in a different order, with ids that are not the
+    usual ones (the "first listed" member is not always `S`);
+  - identifiers of nought and below where the contract allows them;
+  - a boolean flag both true and false;
+  - no field held at one value in every fixture (a `year_start` that is always
+    the same is never tested).
+
+  *Missed, 19 times in two returns.*
+- **Compare type-strictly and to the promised shape.** Compare native types
+  as well as values (`3`, `3.0` and `True` are equal under `==`; C-12). Reject
+  extra fields and check key order only where the contract fixes them (C-13). A
+  named input class is checked on its full result, not one field. Every promised
+  error output has a witness.
 - **Run one or two alternative correct implementations through the suite** (a
   different loop shape, an algebraically equal but still note-faithful form, a
   different buffer). Include harmless diagnostics, resolving package/artifact
@@ -159,4 +216,4 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 4. Local wrong paths, then alternative implementations.
 5. Deterministic closure: preflight strict and determinism, Docker receipts,
    `panel_precheck.py --full`.
-6. `final_review`, then the blind probe.
+6. `final_review`, the adversarial verifier pass, then the blind probe.
