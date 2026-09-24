@@ -44,6 +44,11 @@ Write the authority and the instruction first. Then:
 - **List every exact convention** (format, operation order, rounding, sign of
   zero, precedence, defaults) with its anchor sentence. That list becomes
   `exact_output_requirements`.
+- **Separate semantic content from representation.** For every schema field or
+  attribute, decide whether consumers require the native storage type/encoding
+  or only the decoded value. Do the same for symlinks, record ordering, package
+  layout, compression and diagnostic output. If the representation does not
+  affect interoperability, do not promise it and do not grade it.
 - **Run `contract_review` now**, blind to tests and solution, on the note plus
   instruction plus shipped code. Adjudicate and repair before the verifier
   exists. A contract repair is cheap here and expensive after the receipts.
@@ -104,6 +109,16 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   - a silent-setting session drove levels far above the knee, so a clamped knee
     gave the same output.
   The fix each time was a richer state, not more tests.
+- **Cross the invocation boundary.** For each state machine, run at least one
+  case where the first requested event must change the initialized state. A
+  later excursion does not expose an implementation that emits the first
+  result before applying its transition.
+- **Partition signed derived values.** If an equation permits negative, zero and
+  positive results, ensure existing fixtures collectively cross those signs.
+  A suite of many positive values still leaves one missing branch.
+- **Do not use tolerance as a directional assertion.** When the contract says
+  nonnegative, monotone, bounded or strictly ordered, assert that property
+  independently before any `allclose`/tolerance comparison.
 - Every named silent case has a witness (`closure.silence.named_cases`). Every
   family in the coverage envelope is actually exercised: if the instruction
   promises three-channel blocks, run a three-channel session.
@@ -115,7 +130,10 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   (`contract-closure.md` §11).
 - **Run one or two alternative correct implementations through the suite** (a
   different loop shape, an algebraically equal but still note-faithful form, a
-  different buffer). A rejection means the verifier demands the Oracle's shape.
+  different buffer). Include harmless diagnostics, resolving package/artifact
+  links, or alternate native text encodings when the contract leaves them free.
+  Keep candidate diagnostics off verifier-owned JSON or other machine channels.
+  A rejection means the verifier demands the Oracle's shape.
 
 ## 5. Deterministic execution: does the same submission grade the same every time?
 

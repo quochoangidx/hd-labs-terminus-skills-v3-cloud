@@ -100,7 +100,14 @@ unreachable test cases. Evaluate failure localization and semantic coverage, not
 raw test count. This axis sees the instruction, environment, and tests; no
 solution is present, so do not reconstruct or assume it. Judge the verifier
 against the contract and the candidate-visible code it grades, not against a
-guessed reference.
+guessed reference. For contract-relevant state machines, inspect whether the
+initialization-to-first-event transition can affect a graded result. For signed
+derived quantities, check that legal sign partitions are discriminated. Do not
+treat approximate equality to zero as proof of a one-sided invariant. Finally,
+distinguish semantic content from native encoding, inode/layout, package shape,
+or candidate diagnostic output; report a gap only when the contract retains that
+representation promise, and report a false rejection when the verifier imposes
+one that it does not.
 
 ## `deterministic_execution`
 

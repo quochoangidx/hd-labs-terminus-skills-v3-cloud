@@ -75,6 +75,21 @@ For substantive tasks, include:
 - one anti-shortcut test
 - one test proving the failure mode is recoverable, not just hidden
 
+Before choosing fixtures, write a compact partition ledger for each retained
+mechanism. Include only contract-legal partitions that can change behavior:
+
+- initialization to the **first** event or sample, not only later transitions;
+- empty, singleton, repeated, and multi-item collections when those shapes are in scope;
+- negative, zero, and positive values for signed derived quantities;
+- the accepting side, exact boundary, and rejecting side of strict inequalities;
+- producer, serialized artifact, loader, and downstream-consumer surfaces when
+  the same invariant crosses more than one of them.
+
+Presence in a fixture is not coverage. A partition is covered only when a
+plausible implementation that mishandles that partition changes the asserted
+result. Prefer enriching an existing witness over adding a near-duplicate test
+function when the missing partition belongs to the same obligation.
+
 For stronger Advanced/Frontier calibration, prefer several focused behavior
 clusters rather than one monolithic test:
 
@@ -130,6 +145,10 @@ Before finalizing, audit:
   remain hidden when they follow the same inferable invariant
 - representation-specific ordering is explicit only when the consumer requires
   it; otherwise parse semantically and accept equivalent outputs
+- distinguish semantic values from native storage encodings and inode/layout
+  choices. Promise a concrete dtype, text encoding, symlink policy, or record
+  layout only when interoperability actually depends on it; otherwise normalize
+  safely and state that the representation is non-semantic
 - every required output file/path is named in the instruction
 - no test depends on an oracle-only policy, unreachable authority, or arbitrary
   value absent from all visible sources
@@ -188,6 +207,17 @@ and semantic matching when it does not. A stated numeric tolerance must equal
 the verifier tolerance. For optimization/order tasks, include a case where a
 merely feasible answer or the wrong tie-break loses, and independently
 spot-check the Oracle against a second feasible plan.
+
+Numeric tolerance and directional invariants are independent. Approximate
+equality to expected zero does not establish nonnegativity, monotonicity, an
+upper bound, or a strict sign. Assert the directional property separately on
+every generated or reconstructed artifact for which the contract requires it.
+
+Keep trusted machine-readable result channels separate from candidate output.
+If submitted code may print diagnostics, redirect or capture its stdout before
+emitting verifier-owned JSON; do not parse the combined stream. Exercise a
+contract-valid implementation with harmless diagnostics when the public API
+does not promise silence.
 
 ## Building stronger Python task signals
 
@@ -271,6 +301,12 @@ Before accepting the verifier, answer these questions:
 - Are there at least two independent failure modes for incomplete fixes?
 - Has a dedicated executable mutant for every mechanism and interaction been
   killed while retaining both passing and failing tests?
+- Does every state machine apply the initialization-to-first-event transition
+  in at least one discriminating witness?
+- Do signed derived quantities cross every contract-legal sign, and are
+  one-sided invariants asserted separately from approximate equality?
+- Has at least one semantically valid alternate representation been accepted
+  for each storage/layout choice the contract leaves free?
 - Are preservation tests explicitly described in `instruction.md`?
 - Are verifier dependencies available before `tests/test.sh` starts?
 - Does `tests/test.sh` avoid runtime setup and network access?
