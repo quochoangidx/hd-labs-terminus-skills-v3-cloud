@@ -68,13 +68,11 @@ Write the authority and the instruction first. Then:
 - **List every exact convention** (format, operation order, rounding, sign of
   zero, precedence, defaults) with its anchor sentence. That list becomes
   `exact_output_requirements`.
-- **Check every example against every rule.** An example in the note that breaks
-  the note's own type or format rule is a contract finding. *Missed:* a type rule
-  said every other field is numeric, and the required example carried a string
-  regimen name.
-- **Promise helpers only when they are the deliverable** (`contract-closure.md`
-  §1, entry point). Otherwise the note describes what the entry point returns and
-  nothing about internal functions.
+- **Separate semantic content from representation.** For every schema field or
+  attribute, decide whether consumers require the native storage type/encoding
+  or only the decoded value. Do the same for symlinks, record ordering, package
+  layout, compression and diagnostic output. If the representation does not
+  affect interoperability, do not promise it and do not grade it.
 - **Run `contract_review` now**, blind to tests and solution, on the note plus
   instruction plus shipped code. Adjudicate and repair before the verifier
   exists. A contract repair is cheap here and expensive after the receipts.
@@ -150,6 +148,16 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   - a silent-setting session drove levels far above the knee, so a clamped knee
     gave the same output.
   The fix each time was a richer state, not more tests.
+- **Cross the invocation boundary.** For each state machine, run at least one
+  case where the first requested event must change the initialized state. A
+  later excursion does not expose an implementation that emits the first
+  result before applying its transition.
+- **Partition signed derived values.** If an equation permits negative, zero and
+  positive results, ensure existing fixtures collectively cross those signs.
+  A suite of many positive values still leaves one missing branch.
+- **Do not use tolerance as a directional assertion.** When the contract says
+  nonnegative, monotone, bounded or strictly ordered, assert that property
+  independently before any `allclose`/tolerance comparison.
 - Every named silent case has a witness (`closure.silence.named_cases`). Every
   family in the coverage envelope is actually exercised: if the instruction
   promises three-channel blocks, run a three-channel session.
@@ -179,15 +187,10 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   error output has a witness.
 - **Run one or two alternative correct implementations through the suite** (a
   different loop shape, an algebraically equal but still note-faithful form, a
-  different buffer). A rejection means the verifier demands the Oracle's shape.
-- **Adversarial verifier pass before packaging** (`task-batch`
-  `execution-profiles.md`, `builder_certified` step 5b). A fresh reviewer who has
-  not seen the builder's wrong paths reads only the contract and `tests/`, writes
-  plausible wrong submissions that stay contract-valid elsewhere, and runs them
-  through the verifier. Each one that scores reward 1 is a finding. This is how the
-  panel works ("confirmed by running the grader"), and it is what the builder's own
-  wrong-path matrix cannot do: v1 of the claims task killed all 51 of its own wrong
-  paths while 15 of the panel's passed.
+  different buffer). Include harmless diagnostics, resolving package/artifact
+  links, or alternate native text encodings when the contract leaves them free.
+  Keep candidate diagnostics off verifier-owned JSON or other machine channels.
+  A rejection means the verifier demands the Oracle's shape.
 
 ## 5. Deterministic execution: does the same submission grade the same every time?
 

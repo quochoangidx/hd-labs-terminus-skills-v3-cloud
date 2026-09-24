@@ -146,7 +146,7 @@ if [ -f "$TT" ]; then
     && report PASS "toml:expert-hours" "present" || report FAIL "toml:expert-hours" "required"
   grep -q '^environment_mode = "separate"' "$TT" \
     && report PASS "toml:separate-verifier" "enabled" || report FAIL "toml:separate-verifier" "required"
-  if python3 - "$TT" <<'PYEOF'
+  if "$PYTHON_BIN" - "$TT" <<'PYEOF'
 import sys, tomllib
 task = tomllib.load(open(sys.argv[1], "rb"))
 assert task.get("environment", {}).get("network_mode") == "public"

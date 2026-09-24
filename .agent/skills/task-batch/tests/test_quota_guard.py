@@ -187,6 +187,26 @@ class QuotaGuardTests(unittest.TestCase):
             self.assertEqual([], errors)
             self.assertEqual(9, summary["turn_count"])
 
+    def test_pre_solver_allows_superseded_probe_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path, data = self.ledger(Path(tmp))
+            for index in (1, 2):
+                data["turns"].append(
+                    {
+                        "turn_id": f"superseded-solver-{index}",
+                        "role": "blind_solver",
+                        "model": "gpt-5.6-sol",
+                        "reasoning_effort": "medium",
+                        "status": "superseded",
+                        "execution_surface": "collaboration_subagent",
+                        "context_mode": "fresh",
+                    }
+                )
+            errors, summary = quota_guard.validate(data, path, "pre-solver")
+            self.assertEqual([], errors)
+            self.assertEqual(2, summary["role_turn_counts"]["blind_solver"])
+            self.assertEqual(0, summary["completed_role_turn_counts"]["blind_solver"])
+
     def test_a_foreign_model_is_rejected_for_builder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path, data = self.ledger(Path(tmp))

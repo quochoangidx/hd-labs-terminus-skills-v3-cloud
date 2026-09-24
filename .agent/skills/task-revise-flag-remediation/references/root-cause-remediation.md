@@ -9,6 +9,10 @@ make the reported example pass.
 
 Create one group for findings that share the same authority and failure
 mechanism. Do not group findings merely because they touch the same file.
+Conversely, when a report repeats the same mutation or reachable path in two
+numbered findings, keep both finding IDs but map them to one root group and one
+reproduction/closure pair. Duplicate prose does not justify duplicate tests or
+an expanded obligation set.
 
 Each group must record:
 
@@ -117,6 +121,18 @@ for retained promises. Never delete only the failing test while leaving its
 requirement active, remove a genuine difficulty case merely for failing, or
 weaken protection against reward bypass. Re-measure any changed task; no old
 tier or clearance survives semantic reduction.
+
+When the removed promise is a representation constraint, retain and verify its
+semantic payload. For example, dropping a native text encoding may still require
+the same keys and decoded values. Run the formerly rejected representation as a
+valid-alternative case so removal is proved by acceptance rather than inferred
+from deleted assertions.
+
+Any authority edit can invalidate copied-evidence hashes, sufficiency manifests,
+packet hashes, verifier matrices, wrong-path receipts and the revision ledger.
+Update these dependencies before interpreting Oracle failures; a stale evidence
+digest is bookkeeping fallout, not a semantic regression. Regenerate receipts
+only after the task snapshot is final.
 
 Retiring a task means mark it not-for-submission and preserve its artifacts and
 reasons, not delete its directory/history or call it fixed. Replacement mining

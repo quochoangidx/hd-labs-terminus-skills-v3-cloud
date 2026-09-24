@@ -498,7 +498,16 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
                 errors.append("pre-solver requires at least two completed fairness-reviewer turns")
             if completed_role_counts["consolidated_auditor"] < 1:
                 errors.append("pre-solver requires a completed consolidated-auditor turn")
-        if role_counts["blind_solver"]:
+        # A fair strengthening cycle preserves the earlier probe turns as
+        # superseded history while reserving a fresh final pair.  Failed or
+        # interrupted current-cycle turns still count, but explicitly
+        # superseded turns must not make the pre-solver gate impossible.
+        if any(
+            isinstance(turn, dict)
+            and turn.get("role") == "blind_solver"
+            and turn.get("status") != "superseded"
+            for turn in turns
+        ):
             errors.append("pre-solver ledger already contains blind-solver turns")
     if phase == "handover" and (
         completed_role_counts["blind_solver"] < 2
