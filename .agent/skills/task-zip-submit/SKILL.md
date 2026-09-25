@@ -28,7 +28,7 @@ dual `/bin/bash` + `/usr/bin/bash` permission-restore shapes, but it does not
 replace the semantic five-axis review.
 
 For a new `campaign_ready` candidate, do not create a handoff ZIP before the counted
-difficulty gate (`builder_certified` packages only after its step-9 `panel_gate.py check` passes; save that JSON beside the ZIP). The pre-probe strict run writes receipts and raw Docker evidence
+difficulty gate (`builder_certified` packages only through `scripts/preflight.sh --emit-zip <zip> --panel-report <report.json>`, whose `panel:receipt` row runs `panel_gate.py check` and blocks the ZIP on failure; the receipt JSON lands in `--evidence-dir` or beside the report). The pre-probe strict run writes receipts and raw Docker evidence
 without `--emit-zip`; only a shortlisted, submission-audited task receives the
 final ZIP. Returned-task remediation may keep its versioned revision archives as
 described below.

@@ -24,6 +24,7 @@ PACKET_OWN_FILES = ("_panel_docs/", "packet-manifest.json")
 # undecided, which never clears.
 CLEARING = {"None", "Advisory"}
 CLEARING_BY_AXIS = {"protected_ground_truth": {"None", "Advisory", "Minor"}}
+SEVERITY_RANK = {"None": 0, "Advisory": 1, "Minor": 2, "Unsure": 2, "Major": 3}
 
 
 def surface_files(task: Path, axis: str) -> dict[str, str]:
@@ -141,6 +142,57 @@ def check(task: Path, report: Path) -> dict:
     return {"snapshot_sha256": snapshot, "report": str(report), "passed": not errors, "errors": errors}
 
 
+def write_report(task: Path, adjudication: Path, output: Path) -> dict:
+    """Assemble report.json from raw reviewer files and the orchestrator's
+    adjudication, so no verdict, completeness flag or hash is typed by hand.
+
+    adjudication.json:
+      {"packet_manifest": <default root manifest>,
+       "reviewers_dir": <default dir holding <axis>-A.json and <axis>-B.json>,
+       "axes": {<axis>: {"verdict": ..., "downgrade_reason": ...,
+                         "packet_manifest"?: ..., "reviewers"?: [a, b],
+                         "source"?: "platform", "platform_report"?: ...}}}
+    """
+    data = json.loads(adjudication.read_text())
+    base = adjudication.parent
+    resolve = lambda value: str((base / value).resolve()) if value else value  # noqa: E731
+    axes: dict[str, dict] = {}
+    errors: list[str] = []
+    for axis in AXIS_SURFACES:
+        given = (data.get("axes") or {}).get(axis)
+        if not given or "verdict" not in given:
+            errors.append(f"{axis}: no adjudicated verdict")
+            continue
+        entry = {"verdict": given["verdict"],
+                 "packet_manifest": resolve(given.get("packet_manifest") or data.get("packet_manifest"))}
+        if given.get("source") == "platform":
+            entry.update(source="platform", platform_report=resolve(given.get("platform_report")), complete=True)
+        else:
+            reviewers = given.get("reviewers") or [
+                str(Path(data.get("reviewers_dir", "reviewers")) / f"{axis}-{side}.json") for side in "AB"]
+            reviewers = [resolve(path) for path in reviewers]
+            raws = [json.loads(Path(path).read_text()) for path in reviewers if Path(path).is_file()]
+            entry["reviewers"] = reviewers
+            entry["complete"] = len(raws) == 2 and all(
+                (raw.get("input_completeness") or {}).get("status") == "complete" for raw in raws)
+            worst = max((raw.get("severity", "None") for raw in raws), key=lambda v: SEVERITY_RANK.get(v, 3),
+                        default="None")
+            entry["raw_severities"] = [raw.get("severity") for raw in raws]
+            if SEVERITY_RANK.get(given["verdict"], 3) < SEVERITY_RANK.get(worst, 3):
+                reason = (given.get("downgrade_reason") or "").strip()
+                if not reason:
+                    errors.append(f"{axis}: verdict {given['verdict']!r} is below raw {worst!r} "
+                                  "without a downgrade_reason citing counter-evidence")
+                entry["downgrade_reason"] = reason
+        axes[axis] = entry
+    if errors:
+        return {"passed": False, "errors": errors, "report": None}
+    report = {"snapshot_sha256": sha256_tree(task), "axes": axes, "adjudication": str(adjudication.resolve())}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return check(task, output)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -155,7 +207,11 @@ def parse_args() -> argparse.Namespace:
     gate = sub.add_parser("check", help="every axis cleared on files identical to the task's")
     gate.add_argument("task_dir", type=Path)
     gate.add_argument("--report", required=True, type=Path)
-    for command in (axes, gate):
+    write = sub.add_parser("write-report", help="build report.json from raw reviews and the adjudication")
+    write.add_argument("task_dir", type=Path)
+    write.add_argument("--adjudication", required=True, type=Path)
+    write.add_argument("--report", required=True, type=Path, help="report.json to write")
+    for command in (axes, gate, write):
         command.add_argument("--output", type=Path, help="also write the JSON receipt here")
     return parser.parse_args()
 
@@ -166,6 +222,8 @@ def main() -> int:
     try:
         if args.command == "clearance-axes":
             result = clearance_axes(task, args.discovery_manifest, args.finding_axis, args.discovery_report)
+        elif args.command == "write-report":
+            result = write_report(task, args.adjudication, args.report)
         else:
             result = check(task, args.report)
     except (OSError, KeyError, ValueError, json.JSONDecodeError) as error:

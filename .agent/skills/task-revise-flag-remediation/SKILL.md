@@ -452,11 +452,12 @@ on revision. This path applies both to the repair batch inside creation step 8
 5. **Re-probe** once with a fresh pair, in a new `--output` directory, when the batch removed or narrowed an
    obligation or changed graded behaviour of the core; 2/2 stops as
    `rescope_required`. Witness-only or editorial repairs keep the prior signal.
-6. **Receipt:** write `report.json` for the repaired snapshot (carried axes point
-   at the baseline manifest with their platform or discovery verdict, platform
-   ones with `"source": "platform"` and the saved report; cleared axes at the
-   clearance manifest with both raw reviewer files) and pass `panel_gate.py check` before
-   `task-zip-submit`.
+6. **Receipt:** write the adjudication for the repaired snapshot (carried axes
+   point at the baseline manifest with their platform or discovery verdict,
+   platform ones with `"source": "platform"` and the saved report; cleared axes
+   at the clearance manifest with both raw reviewer files), build `report.json`
+   with `panel_gate.py write-report`, and package with `scripts/preflight.sh
+   --panel-report <report.json>`.
 
 ### Verification under `campaign_ready` and `panel_ready`
 

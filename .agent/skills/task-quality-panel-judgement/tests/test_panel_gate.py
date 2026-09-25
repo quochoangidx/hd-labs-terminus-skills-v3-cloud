@@ -147,3 +147,47 @@ def test_check_rejects_review_of_another_snapshot(tmp_path: Path) -> None:
     raw.write_text(json.dumps({"axis": "sound_verifier", "snapshot_sha256": "0" * 64,
                                "input_completeness": {"status": "complete"}}))
     assert any("is not a review" in error for error in GATE.check(task, path)["errors"])
+
+
+def adjudication(tmp_path: Path, manifest: Path, verdicts: dict[str, dict] | None = None) -> Path:
+    for axis in AXIS_SURFACES:
+        reviewer_files(tmp_path, manifest, axis)
+    axes = {axis: {"verdict": "None"} for axis in AXIS_SURFACES}
+    axes.update(verdicts or {})
+    path = tmp_path / "adjudication.json"
+    path.write_text(json.dumps({"packet_manifest": str(manifest), "reviewers_dir": "reviewers", "axes": axes}))
+    return path
+
+
+def test_write_report_builds_a_report_that_check_accepts(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    result = GATE.write_report(task, adjudication(tmp_path, manifest), tmp_path / "out" / "report.json")
+    assert result["passed"], result["errors"]
+    written = json.loads((tmp_path / "out" / "report.json").read_text())
+    assert written["snapshot_sha256"] == GATE.sha256_tree(task)
+    assert all(entry["complete"] for entry in written["axes"].values())
+
+
+def test_write_report_refuses_silent_downgrade(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = adjudication(tmp_path, manifest)
+    raw = tmp_path / "reviewers" / "sound_verifier-B.json"
+    data = json.loads(raw.read_text()); data["severity"] = "Major"; raw.write_text(json.dumps(data))
+    result = GATE.write_report(task, path, tmp_path / "report.json")
+    assert not result["passed"]
+    assert "downgrade_reason" in result["errors"][0]
+    adj = json.loads(path.read_text())
+    adj["axes"]["sound_verifier"]["downgrade_reason"] = "B-1 rejected: witness fails on the cited case"
+    path.write_text(json.dumps(adj))
+    assert GATE.write_report(task, path, tmp_path / "report.json")["passed"]
+
+
+def test_write_report_marks_missing_review_incomplete(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = adjudication(tmp_path, manifest)
+    (tmp_path / "reviewers" / "coherent_contract-A.json").unlink()
+    errors = GATE.write_report(task, path, tmp_path / "report.json")["errors"]
+    assert any(error.startswith("coherent_contract: review incomplete") for error in errors)

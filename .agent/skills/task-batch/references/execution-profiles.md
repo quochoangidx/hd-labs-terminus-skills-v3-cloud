@@ -186,9 +186,13 @@ Required path:
      panel-cleared snapshot. Editorial or witness-only repairs keep the step-7
      signal. A defect found by reading a re-probe failure for cause also stops
      with `rescope_required`: fixing it would need a third panel round.
-9. Run `panel_gate.py check` on the exact snapshot to be zipped and keep its
-   JSON as the panel receipt; it fails unless every axis has a complete,
-   non-blocking verdict reviewed on files identical to the task's. Then package
+9. Build the panel receipt with `panel_gate.py write-report <task>
+   --adjudication <adjudication.json> --report <report.json>`: it reads the raw
+   reviewer files, computes completeness and the snapshot hash, refuses a verdict
+   below a raw severity without a `downgrade_reason`, and then runs `check`.
+   Never write `report.json` by hand. Package through
+   `scripts/preflight.sh <task> --strict --emit-zip <zip> --panel-report <report.json>`,
+   where a failing `panel:receipt` row blocks the ZIP. Then report it
    as `builder_certified`, reporting each axis verdict with the snapshot it was
    reviewed on. Any later semantic edit makes that check fail until the changed
    axes are cleared again.

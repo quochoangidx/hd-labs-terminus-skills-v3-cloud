@@ -345,7 +345,14 @@ Write `report.md` and `report.json` under:
 workspace/reports/<slug>/quality-panel/<snapshot-sha256>/
 ```
 
-`report.json` must carry the fields `panel_gate.py check` reads: top-level
+Build `report.json` with `panel_gate.py write-report <task-dir> --adjudication
+<adjudication.json> --report <report.json>`, never by hand. The adjudication
+file holds only the orchestrator's decisions: a default `packet_manifest` and
+`reviewers_dir`, and per axis a `verdict`, a `downgrade_reason` whenever the
+verdict is milder than a raw `severity`, and any per-axis `packet_manifest`,
+`reviewers` or `"source": "platform"` plus `platform_report` override. The
+script derives completeness, raw severities and the snapshot hash, then runs
+`check`. The resulting `report.json` carries the fields `check` reads: top-level
 `snapshot_sha256` (the snapshot the report certifies) and `axes`, one entry per
 axis with `verdict` (`None`, `Minor`, `Major`, `Advisory` or `Unsure`),
 `complete` (true only when both reviews finished), and `packet_manifest` (the
