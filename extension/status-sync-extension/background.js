@@ -1,0 +1,521 @@
+// background.js — service worker (Manifest V3)
+//
+// Nhiệm vụ:
+// 1. Lắng nghe các request mà trang experts.snorkel-ai.com gửi đi để "bắt" được
+//    Bearer token (header `authorization`) và `x-id-token` đang dùng cho session.
+//    Token này được lưu tạm trong chrome.storage.session để popup dùng lại.
+// 2. Cung cấp các hành động cho popup: kiểm tra đăng nhập, lấy danh sách project,
+//    lấy assignments theo project rồi đẩy lên Apps Script Web App (Google Sheet).
+
+const API_BASE = "https://experts.snorkel-ai.com/api/v1";
+const SNORKEL_ORIGIN = "https://experts.snorkel-ai.com";
+
+// URL Apps Script Web App mặc định (hardcode). Có thể bị ghi đè trong Cài đặt.
+const DEFAULT_SHEET_WEBAPP_URL =
+  "https://script.google.com/macros/s/AKfycbys0c3CvN1m6Q0E7TvDzVoUi-GfXVF2Vt1MLtgVv828q11Wo4o2JiyEpY66eJsDMYCG/exec";
+
+// ------------------------------------------------------------------
+// 1. Bắt token từ header request của trang Snorkel
+//
+// QUAN TRỌNG: listener này chạy trên MỌI request API của Snorkel. Nếu mỗi lần
+// đều ghi chrome.storage.session thì service worker bị bận liên tục khi bạn
+// đang ở tab Snorkel → Chrome trì hoãn bung popup trên đúng tab đó.
+// → Dùng cache trong bộ nhớ + throttle: chỉ ghi storage khi token THỰC SỰ đổi.
+// ------------------------------------------------------------------
+// Listener "bắt token rồi tự gỡ": chỉ active trong thời gian ngắn để lấy token,
+// sau đó removeListener để service worker KHÔNG bị gọi trên mỗi request nữa
+// → không còn làm Chrome treo popup khi bạn ở tab Snorkel.
+const WEBREQUEST_FILTER = { urls: ["https://experts.snorkel-ai.com/api/*"] };
+
+function tokenCapturer(details) {
+  try {
+    let auth = null;
+    let idToken = null;
+    for (const h of details.requestHeaders || []) {
+      const name = h.name.toLowerCase();
+      if (name === "authorization" && h.value && h.value.startsWith("Bearer ")) {
+        auth = h.value;
+      } else if (name === "x-id-token" && h.value) {
+        idToken = h.value;
+      }
+    }
+    if (auth) {
+      const data = { authorization: auth, capturedAt: Date.now() };
+      if (idToken) data.xIdToken = idToken;
+      chrome.storage.session.set({ snorkelAuth: data });
+      // đã bắt được token → GỠ listener để SW rảnh hoàn toàn
+      stopCapturing();
+    }
+  } catch (e) {
+    console.error("tokenCapturer error:", e);
+  }
+}
+
+function startCapturing() {
+  try {
+    if (!chrome.webRequest.onBeforeSendHeaders.hasListener(tokenCapturer)) {
+      chrome.webRequest.onBeforeSendHeaders.addListener(
+        tokenCapturer,
+        WEBREQUEST_FILTER,
+        ["requestHeaders"]
+      );
+    }
+  } catch (e) {
+    console.error("startCapturing error:", e);
+  }
+}
+
+function stopCapturing() {
+  try {
+    if (chrome.webRequest.onBeforeSendHeaders.hasListener(tokenCapturer)) {
+      chrome.webRequest.onBeforeSendHeaders.removeListener(tokenCapturer);
+    }
+  } catch (e) {
+    console.error("stopCapturing error:", e);
+  }
+}
+
+// Bật bắt token lúc khởi động SW; bắt được 1 lần là tự gỡ.
+startCapturing();
+
+// ------------------------------------------------------------------
+// Helper: fetch có timeout để không treo service worker vô hạn
+// ------------------------------------------------------------------
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("Quá thời gian chờ máy chủ (timeout).");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ------------------------------------------------------------------
+// Helper: lấy token đã bắt được
+// ------------------------------------------------------------------
+async function getAuth() {
+  const { snorkelAuth } = await chrome.storage.session.get("snorkelAuth");
+  return snorkelAuth || null;
+}
+
+// Lấy email của assignee từ token đã lưu (để build query assignments)
+async function getAssignee() {
+  const { snorkelEmail } = await chrome.storage.local.get("snorkelEmail");
+  if (snorkelEmail) return snorkelEmail;
+  // thử giải mã từ x-id-token (JWT) nếu có
+  const auth = await getAuth();
+  if (auth?.xIdToken) {
+    const email = decodeJwtEmail(auth.xIdToken);
+    if (email) {
+      await chrome.storage.local.set({ snorkelEmail: email });
+      return email;
+    }
+  }
+  return null;
+}
+
+function decodeJwtEmail(jwt) {
+  try {
+    const payload = jwt.split(".")[1];
+    const json = JSON.parse(
+      decodeURIComponent(
+        atob(payload.replace(/-/g, "+").replace(/_/g, "/"))
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join("")
+      )
+    );
+    return json.email || null;
+  } catch {
+    return null;
+  }
+}
+
+// Tạo header chung cho mọi call API Snorkel
+function buildHeaders(auth) {
+  const headers = {
+    accept: "*/*",
+    authorization: auth.authorization,
+  };
+  if (auth.xIdToken) headers["x-id-token"] = auth.xIdToken;
+  return headers;
+}
+
+// ------------------------------------------------------------------
+// 2. Kiểm tra đăng nhập: gọi 1 endpoint nhẹ với token đã bắt
+// ------------------------------------------------------------------
+async function checkLogin() {
+  const auth = await getAuth();
+  if (!auth) {
+    // chưa có token → bật lại listener để bắt khi bạn load trang Snorkel
+    startCapturing();
+    return {
+      ok: false,
+      reason: "NO_TOKEN",
+      message:
+        "Chưa bắt được token. Hãy mở/refresh https://experts.snorkel-ai.com " +
+        "(đang đăng nhập) rồi bấm lại.",
+    };
+  }
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/projects?is_active=true`, {
+      headers: buildHeaders(auth),
+      credentials: "include",
+    });
+    if (res.status === 401 || res.status === 403) {
+      // token hết hạn → xoá token cũ + bật lại bắt token mới
+      await chrome.storage.session.remove("snorkelAuth");
+      startCapturing();
+      return { ok: false, reason: "UNAUTHORIZED", message: "Token hết hạn. Hãy refresh trang Snorkel rồi bấm lại." };
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return {
+        ok: false,
+        reason: "HTTP_" + res.status,
+        message: "Lỗi máy chủ: HTTP " + res.status + (body ? " — " + body.slice(0, 300) : ""),
+      };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "NETWORK", message: "Lỗi mạng: " + e.message };
+  }
+}
+
+// ------------------------------------------------------------------
+// 3. Lấy danh sách project
+// ------------------------------------------------------------------
+async function fetchProjects() {
+  const auth = await getAuth();
+  if (!auth) throw new Error("Chưa có token. Hãy đăng nhập Snorkel và load lại trang.");
+  const res = await fetchWithTimeout(`${API_BASE}/projects?is_active=true`, {
+    headers: buildHeaders(auth),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `Không lấy được project: HTTP ${res.status}` + (body ? ` — ${body.slice(0, 300)}` : "")
+    );
+  }
+  const data = await res.json();
+  // chuẩn hoá: API có thể trả mảng trực tiếp hoặc {projects:[...]}
+  const list = Array.isArray(data) ? data : data.projects || data.items || [];
+  return list.map((p) => normalizeProject(p)).filter((p) => p.id);
+}
+
+function normalizeProject(p) {
+  // project_id có thể là object {id} hoặc string
+  const rawId = p.project_id?.id || p.project_id || p.id?.id || p.id;
+  return {
+    id: typeof rawId === "string" ? rawId : rawId?.id || "",
+    name: p.project_name || p.name || p.title || "(không tên)",
+  };
+}
+
+// ------------------------------------------------------------------
+// 4. Lấy assignments theo project (phân trang) + lọc theo project đã chọn
+// ------------------------------------------------------------------
+async function fetchAssignments(projectId, projectName) {
+  const auth = await getAuth();
+  if (!auth) throw new Error("Chưa có token.");
+  const assignee = await getAssignee();
+  if (!assignee)
+    throw new Error("Chưa xác định được email assignee. Hãy load lại trang Snorkel để bắt token đầy đủ.");
+
+  const limit = 50;
+  let cursor = null;
+  let all = [];
+  const seen = new Set();
+  let guard = 0;
+
+  // Phân trang cursor (đổi từ skip/offset vào 2026-09).
+  // API trả 400 {"detail":"Offset pagination was removed; use `cursor`."} cho `skip`,
+  // và LẶNG LẼ BỎ QUA `offset` — dùng offset sẽ trả mãi trang đầu, không phải lỗi.
+  // Envelope: { assignments, total_count, next_cursor, has_more };
+  // next_cursor là assignment_id của phần tử cuối trang.
+  while (true) {
+    const url =
+      `${API_BASE}/assignments?assignee=${encodeURIComponent(assignee)}` +
+      `&limit=${limit}&remove_offered_assignments=true` +
+      (cursor ? `&cursor=${encodeURIComponent(cursor)}` : "");
+    const res = await fetchWithTimeout(url, { headers: buildHeaders(auth), credentials: "include" });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Không lấy được assignments: HTTP ${res.status}` + (body ? ` — ${body.slice(0, 300)}` : "")
+      );
+    }
+    const data = await res.json();
+    const page = data.assignments || [];
+
+    // Dedupe: một số API cursor trả lại chính phần tử mốc ở đầu trang sau.
+    for (const a of page) {
+      const id = idOf(a.assignment_id) || a.task_id;
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      all.push(a);
+    }
+
+    const next = data.next_cursor || null;
+    // Dừng khi server báo hết, không có cursor mới, hoặc cursor không đổi (chống lặp vô hạn).
+    if (!data.has_more || !next || next === cursor) break;
+    cursor = next;
+    if (++guard > 400) break; // trần cứng ~20k dòng
+  }
+
+  // lọc theo project đã chọn
+  const filtered = all.filter((a) => idOf(a.project_id) === projectId);
+  return { assignee, projectId, projectName, rows: filtered, total: filtered.length };
+}
+
+// ------------------------------------------------------------------
+// 4b. Lấy remaining slot theo Domain/Sub-Domain (available_segments)
+// ------------------------------------------------------------------
+// Endpoint chi tiết assignment trả về `tasks[0].available_segments[]`, mỗi phần tử
+// có dimension_map.Domain / dimension_map["Sub-Domain"] và `remaining`.
+// Cần một task_type SUBMISSION của project; lấy từ assignment bất kỳ của project đó.
+// Chuẩn hoá available_segments[] -> [{domain, sub, remaining}] đã sắp xếp.
+function normalizeSegments(segs) {
+  return (segs || [])
+    .map((s) => {
+      const dm = s.dimension_map || {};
+      // Ưu tiên dimension_map; fallback parse segment_key "Domain=..|Sub-Domain=.."
+      let domain = dm.Domain?.value_key;
+      let sub = dm["Sub-Domain"]?.value_key;
+      if (!domain || !sub) {
+        const m = /Domain=([^|]*)\|Sub-Domain=(.*)$/.exec(s.segment_key || "");
+        domain = domain || (m ? m[1] : "");
+        sub = sub || (m ? m[2] : "");
+      }
+      return { domain: domain || "", sub: sub || "", remaining: s.remaining ?? null };
+    })
+    .filter((r) => r.domain && r.sub)
+    .sort(
+      (a, b) =>
+        a.remaining - b.remaining ||
+        a.domain.localeCompare(b.domain) ||
+        a.sub.localeCompare(b.sub)
+    );
+}
+
+// GET /assignment/{assignment_id} — trả nguyên payload của MỘT assignment,
+// trong đó `available_segments` nằm ở top level. Đường này KHÔNG phụ thuộc việc
+// còn task mới hay không, nên vẫn chạy khi tài khoản đang bị chặn bởi task revise.
+async function fetchSegmentsByAssignment(auth, assignmentId) {
+  const url = `${API_BASE}/assignment/${encodeURIComponent(assignmentId)}`;
+  const res = await fetchWithTimeout(url, {
+    headers: buildHeaders(auth),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}${body ? " — " + body.slice(0, 200) : ""}`);
+  }
+  const data = await res.json().catch(() => null);
+  if (!data) throw new Error("200 nhưng body rỗng");
+  // top level là chỗ chuẩn; phòng hờ vài biến thể lồng trong tasks[0].
+  const segs =
+    data.available_segments ||
+    data.tasks?.[0]?.available_segments ||
+    [];
+  return { segs, taskType: data.task_documents?.[0]?.task_type || data.static_document?.task_type || "" };
+}
+
+async function fetchSegments(projectId) {
+  const auth = await getAuth();
+  if (!auth) throw new Error("Chưa có token.");
+
+  const { rows } = await fetchAssignments(projectId, "");
+  if (!rows.length) throw new Error("Project này chưa có assignment nào để đọc segments.");
+
+  const errors = [];
+
+  // ---- Đường 1 (ưu tiên): chi tiết theo assignment_id ----
+  // Ưu tiên assignment còn sống (submission / cần revise), rồi đến phần còn lại.
+  const ids = [];
+  const pushId = (a) => {
+    const id = a.assignment_id?.id || a.assignment_id;
+    if (id && !ids.includes(id)) ids.push(id);
+  };
+  rows
+    .filter((a) => String(a.task_type || "").startsWith("submission-"))
+    .forEach(pushId);
+  rows.forEach(pushId);
+
+  for (const id of ids.slice(0, 6)) {
+    try {
+      const { segs, taskType } = await fetchSegmentsByAssignment(auth, id);
+      if (segs.length) {
+        const rowsOut = normalizeSegments(segs);
+        if (rowsOut.length) return buildSegmentResult(rowsOut, taskType, `assignment/${id}`);
+      }
+      errors.push(`${id}: không có available_segments`);
+    } catch (e) {
+      errors.push(`${id}: ${e.message}`);
+    }
+  }
+
+  // ---- Đường 2 (dự phòng): theo task_type, cần còn task mới ----
+  const sample =
+    rows.find((a) => String(a.task_type || "").startsWith("submission-")) || rows[0];
+  const taskType = sample.task_type;
+  if (taskType) {
+    const base = `${API_BASE}/assignment/${encodeURIComponent(projectId)}/${encodeURIComponent(taskType)}`;
+    // Endpoint này (số ít) VẪN dùng skip/limit — khác /assignments đã bỏ offset.
+    // Trả null khi không còn task mới (đang vướng revise) → mới cần đường 1 ở trên.
+    for (const q of ["?skip=0&limit=1", "?limit=1", ""]) {
+      try {
+        const res = await fetchWithTimeout(base + q, {
+          headers: buildHeaders(auth),
+          credentials: "include",
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          errors.push(`task_type${q}: HTTP ${res.status}${body ? " — " + body.slice(0, 150) : ""}`);
+          continue;
+        }
+        const parsed = await res.json().catch(() => null);
+        const segs = parsed?.tasks?.[0]?.available_segments || [];
+        if (segs.length) {
+          const rowsOut = normalizeSegments(segs);
+          if (rowsOut.length) return buildSegmentResult(rowsOut, taskType, `task_type${q}`);
+        }
+        errors.push(`task_type${q}: 200 nhưng không có available_segments`);
+      } catch (e) {
+        errors.push(`task_type${q}: ${e.message}`);
+      }
+    }
+  }
+
+  throw new Error(
+    "Không lấy được available_segments. Đã thử:\n- " + errors.slice(0, 10).join("\n- ")
+  );
+}
+
+// CSV đúng định dạng snapshot taxonomy (bọc dấu " nếu có dấu phẩy)
+function buildSegmentResult(rowsOut, taskType, source) {
+  const q = (v) => (/[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const csv = ["Domain,Sub-Domain,Remaining"]
+    .concat(rowsOut.map((r) => `${q(r.domain)},${q(r.sub)},${r.remaining}`))
+    .join("\n");
+  return { taskType, source, count: rowsOut.length, rows: rowsOut, csv };
+}
+
+// API đã đổi: assignment_id / project_id có lúc là object {id}, có lúc là chuỗi.
+// Đọc được cả hai dạng, nếu không Sheet nhận khoá rỗng.
+function idOf(v) {
+  return (v && typeof v === "object" ? v.id : v) || "";
+}
+
+// Map mỗi assignment thành 1 dòng phẳng để ghi Sheet
+function flattenAssignment(a) {
+  return {
+    assignment_id: idOf(a.assignment_id),
+    task_id: a.task_id || "",
+    project_id: idOf(a.project_id),
+    project_name: a.project_name || "",
+    task_title: a.task_title || "",
+    status: a.status || "",
+    assignee: a.assignee || "",
+    payment_status: a.payment_status || "",
+    outcome: a.outcome || "",
+    review_count: a.review_count ?? "",
+    created_at: a.created_at || "",
+    submitted_at: a.submitted_at || "",
+    first_submitted_at: a.first_submitted_at || "",
+    updated_at: a.updated_at || "",
+    reject_notes: a.reject_notes || "",
+  };
+}
+
+// Chặn trước khi ghi: payload rỗng hoặc thiếu khoá sẽ làm Apps Script xoá/ghi đè nhầm
+// record trên Sheet (đã xảy ra khi API đổi assignment_id/project_id từ object sang chuỗi).
+function validateRows(flatRows) {
+  if (!flatRows.length)
+    throw new Error("Không có assignment nào cho project này — dừng, không ghi Sheet.");
+  const bad = flatRows.filter((r) => !r.assignment_id || !r.project_id).length;
+  if (bad)
+    throw new Error(
+      `${bad}/${flatRows.length} dòng thiếu assignment_id/project_id — có thể API Snorkel đã đổi cấu trúc. Dừng, không ghi Sheet.`
+    );
+}
+
+// ------------------------------------------------------------------
+// 5. Đẩy lên Google Sheet qua Apps Script Web App
+// ------------------------------------------------------------------
+async function pushToSheet(payload) {
+  const { sheetWebAppUrl } = await chrome.storage.local.get("sheetWebAppUrl");
+  const url = sheetWebAppUrl || DEFAULT_SHEET_WEBAPP_URL;
+  if (!url)
+    throw new Error("Chưa cấu hình URL Google Apps Script. Hãy nhập trong phần Cài đặt của extension.");
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // tránh preflight CORS với Apps Script
+    body: JSON.stringify(payload),
+  }, 60000); // Apps Script có thể chậm, cho 60s
+  if (!res.ok) throw new Error("Apps Script trả lỗi: HTTP " + res.status);
+  const text = await res.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("Apps Script trả về không phải JSON: " + text.slice(0, 200));
+  }
+  if (!parsed.ok) throw new Error("Apps Script báo lỗi: " + (parsed.error || "unknown"));
+  return parsed;
+}
+
+// ------------------------------------------------------------------
+// 6. Hành động tổng: đồng bộ 1 project
+// ------------------------------------------------------------------
+async function syncProject(projectId, projectName) {
+  const login = await checkLogin();
+  if (!login.ok) throw new Error(login.message);
+
+  const { rows, total } = await fetchAssignments(projectId, projectName);
+  const flatRows = rows.map(flattenAssignment);
+  validateRows(flatRows);
+
+  const result = await pushToSheet({
+    project_id: projectId,
+    project_name: projectName,
+    synced_at: new Date().toISOString(),
+    count: total,
+    rows: flatRows,
+  });
+  return { total, sheet: result };
+}
+
+// ------------------------------------------------------------------
+// Router cho message từ popup
+// ------------------------------------------------------------------
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  (async () => {
+    try {
+      switch (msg.type) {
+        case "CHECK_LOGIN":
+          sendResponse(await checkLogin());
+          break;
+        case "GET_PROJECTS":
+          sendResponse({ ok: true, projects: await fetchProjects() });
+          break;
+        case "SYNC_PROJECT":
+          sendResponse({ ok: true, ...(await syncProject(msg.projectId, msg.projectName)) });
+          break;
+        case "GET_SEGMENTS":
+          sendResponse({ ok: true, ...(await fetchSegments(msg.projectId)) });
+          break;
+        default:
+          sendResponse({ ok: false, error: "Unknown message: " + msg.type });
+      }
+    } catch (e) {
+      sendResponse({ ok: false, error: e.message });
+    }
+  })();
+  return true; // giữ kênh async
+});

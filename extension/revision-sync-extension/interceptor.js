@@ -15,7 +15,9 @@
   // paths. Rather than chase route names, we sniff any same-origin API response
   // for the marker key — a cheap indexOf on the raw text, no JSON.parse unless
   // it hits.
-  var MARKER = '"task_documents"';
+  // FormBlocks/Submission routes do not use task_documents; every task's
+  // submission document still carries the upload_a_zip_file key.
+  var MARKERS = ['"task_documents"', '"upload_a_zip_file"'];
 
   function isApiUrl(url) {
     try {
@@ -32,6 +34,7 @@
   var seen = { n: 0, hits: [] };
   function note(url, hit) {
     seen.n++;
+    seen.urls = (seen.urls || []).concat([String(url).split("?")[0]]).slice(-15);
     if (hit && seen.hits.indexOf(url) < 0 && seen.hits.length < 8) seen.hits.push(url);
     try {
       window.postMessage({ __tbExtractor: true, kind: "seen", seen: seen }, location.origin);
@@ -90,10 +93,64 @@
     return null;
   }
 
-  // Parse only when the raw text carries the marker key.
+  // Find the object that owns an upload_a_zip_file key (the submission
+  // document) and wrap its nearest id-bearing ancestor as a task. Matches keys
+  // only, so the project form_schema ("field": "upload_a_zip_file") is skipped.
+  // A JSON-Schema property map ({field: {type: [...], enum: [...]}}) also owns
+  // an upload_a_zip_file key but holds no answers — the SPA's form validation
+  // schema. Detect it so it is never mistaken for the submission document.
+  var SCHEMA_KEYS = ["type", "enum", "oneOf", "anyOf", "allOf", "$ref", "items"];
+  function isSchemaNode(v) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+    var keys = Object.keys(v);
+    return keys.length > 0 && keys.every(function (k) { return SCHEMA_KEYS.indexOf(k) >= 0; });
+  }
+  function isSchemaMap(doc) {
+    var vals = Object.keys(doc).map(function (k) { return doc[k]; });
+    var n = vals.filter(isSchemaNode).length;
+    return n > 0 && n >= vals.length / 2;
+  }
+
+  function tasksFromSubmissionDoc(obj) {
+    var found = null;
+    function walk(x, anc, depth, key) {
+      if (found || !x || typeof x !== "object" || depth > 10) return;
+      if (!Array.isArray(x) && Object.prototype.hasOwnProperty.call(x, "upload_a_zip_file") &&
+          key !== "properties" && !isSchemaMap(x)) {
+        found = { doc: x, anc: anc };
+        return;
+      }
+      var next = Array.isArray(x) ? anc : anc.concat([x]);
+      for (var k in x) walk(x[k], next, depth + 1, k);
+    }
+    walk(obj, [], 0, "");
+    if (!found) return null;
+    var host = null;
+    for (var i = found.anc.length - 1; i >= 0; i--) {
+      var a = found.anc[i];
+      if (a.task_id || a.task_uuid || a.uuid || a.id) { host = a; break; }
+    }
+    var task = {};
+    if (host) for (var key in host) task[key] = host[key];
+    task.task_documents = [{ submission_document: found.doc }];
+    return { tasks: [task] };
+  }
+
+  // Parse only when the raw text carries a marker key.
   function tasksFromText(txt) {
-    if (!txt || txt.indexOf(MARKER) < 0) return null;
-    try { return normalizeTasks(JSON.parse(txt)); } catch (e) { return null; }
+    if (!txt) return null;
+    var hit = MARKERS.some(function (m) { return txt.indexOf(m) >= 0; });
+    var hasSchema = txt.indexOf('"form_schema"') >= 0;
+    if (!hit && !hasSchema) return null;
+    var obj;
+    try { obj = JSON.parse(txt); } catch (e) { return null; }
+    // /api/v1/projects/{id} carries form_schema but no task.
+    if (hasSchema && obj && obj.form_schema && obj.project_id && !obj.task_documents) {
+      try {
+        window.postMessage({ __tbExtractor: true, kind: "schema", schema: obj.form_schema }, location.origin);
+      } catch (e) {}
+    }
+    return normalizeTasks(obj) || tasksFromSubmissionDoc(obj);
   }
 
   function post(payload, url) {

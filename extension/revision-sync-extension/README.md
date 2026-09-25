@@ -1,4 +1,4 @@
-# Trích xuất & Đóng gói Revise Task TB
+# Revision Task TB3
 
 Tiện ích Chrome/Chromium (Manifest V3) dành cho luồng Revise trên
 `experts.snorkel-ai.com`. Nó thu thập **toàn bộ payload task/revise** của một task
@@ -84,31 +84,35 @@ interceptor bắt được payload.
 5. Sau khi xuất thành công, nút **Sao chép** được mở để đưa prompt Revise đã
    điền sẵn vào clipboard.
 
-Kết quả trong `workspace/revision/<uuid>/`:
+Kết quả trong `workspace/revision/<uuid>/`, chia theo **vòng** (`v1`, `v2`, …).
+Mỗi lần bấm **Xuất vN** sẽ lấy feedback + ZIP hiện tại trên platform vào một thư
+mục vòng mới; các vòng cũ và `revisions/` không bao giờ bị ghi đè:
 
 ```
 workspace/
 ├─ revision/
-│  └─ c9622b76-0ac0-4b18-8740-68063ad29141/
-│     ├─ c9622b76-...-29141.md              # báo cáo Markdown
-│     ├─ revise-prompt.md                   # prompt mà nút Sao chép đưa vào clipboard
-│     ├─ revisions/
-│     │  └─ express-gateway-hardening-polars-source.zip
-│     └─ express-gateway-hardening-polars/  # nội dung task đã giải nén
-│        ├─ environment/
-│        ├─ solution/
-│        ├─ tests/
-│        ├─ instruction.md
-│        └─ task.toml
+│  └─ d1ec597f-4793-4a1e-b1bf-683231e61cf8/
+│     ├─ v1/
+│     │  ├─ d1ec597f-...md                   # feedback vòng 1
+│     │  ├─ revise-prompt.md                 # prompt của vòng 1
+│     │  ├─ task-payload.json                # payload thô (debug)
+│     │  ├─ tbrain-storm-...-source.zip      # ZIP platform vòng 1 (bất biến)
+│     │  └─ tbrain-storm-.../                # task đã giải nén để sửa
+│     ├─ v2/ …                               # sau khi upload rev1 và bị trả lại
+│     └─ revisions/
+│        ├─ tbrain-storm-...-rev1.zip        # bản sửa, đánh số xuyên suốt các vòng
+│        └─ tbrain-storm-...-rev2.zip
 └─ submissions/
-   └─ express-gateway-hardening-polars.zip  # bản mới nhất để upload
+   └─ tbrain-storm-....zip                   # bản mới nhất để upload
 ```
 
-Tiện ích luôn giữ ZIP tải từ platform tại
-`revision/<uuid>/revisions/<slug>-source.zip`. File này là nguồn bất biến để đối chiếu;
-các lần sửa được đóng gói thành `<slug>-rev1.zip`, `rev2.zip`, ... mà không ghi
-đè bản cũ. Bản mới nhất để upload có tên ổn định
-`workspace/submissions/<slug>.zip`.
+- Nếu ZIP và feedback giống hệt vòng mới nhất, Xuất không tạo vòng mới.
+- **Sao chép vN** đưa prompt của vòng mới nhất: sửa trong `vN/<slug>/`, đọc
+  `vN/<uuid>.md` (kèm feedback vòng trước để đối chiếu), và lưu `revM` kế tiếp
+  chưa dùng trong `revisions/`.
+- Bản xuất kiểu cũ (`<uuid>.md` nằm thẳng trong thư mục task, source ZIP trong
+  `revisions/`) được tính là v1; vòng tiếp theo là `v2/`.
+- **Tải difficulty .zip** giải nén vào `difficulty-check/` của vòng mới nhất.
 
 ## Quy tắc thư mục
 

@@ -37,19 +37,38 @@ function setExportEnabled(on) {
   var taskId = currentTaskId();
   var hasTask = !!(on && taskId);
   var hasWorkspace = !!dirHandle;
-  var wasExported = !!(hasTask && state.exportedTasks[taskId]);
-  els.exportBtn.disabled = !(hasTask && hasWorkspace) || wasExported;
+  // exportedTasks[taskId] = latest round number already on disk (0/absent = none).
+  var round = hasTask ? (state.exportedTasks[taskId] || 0) : 0;
+  var wasExported = round > 0;
+  // Export stays available: each click pulls the platform's current state
+  // into the next round folder vN/.
+  els.exportBtn.disabled = !(hasTask && hasWorkspace);
+  els.exportBtn.textContent = "Xuất v" + (round + 1);
   els.copyBtn.disabled = !wasExported;
+  els.copyBtn.textContent = wasExported ? "Sao chép v" + round : "Sao chép";
   els.diffZipBtn.disabled = !wasExported;
 }
 
 /* ---------- current task (read live from the active tab) ---------- */
 
 // Turn a raw task payload into the compact shape the popup renders/exports.
-function metaFromTask(t) {
-  var id = t && t.task_id && t.task_id.id;
+// `pageUuid` (read off the open page) covers payloads that carry no task id.
+function metaFromTask(t, pageUuid, pageZipName) {
+  // Submission-page payloads can lack the task id and the zip filename. Stamp
+  // them from the page so generate.js (report, prompt, slug) agrees with the
+  // export folder instead of falling back to "unknown-task".
+  if (!TBGen.rawTaskId(t) && pageUuid) t.task_id = pageUuid;
   var sd = {};
   try { sd = t.task_documents[0].submission_document || {}; } catch (e) {}
+  if (pageZipName) {
+    var up = sd.upload_a_zip_file;
+    if (!up || typeof up !== "object") {
+      sd.upload_a_zip_file = { filename: pageZipName };
+    } else if (!up.filename && !(up.value && up.value.filename)) {
+      up.filename = pageZipName;
+    }
+  }
+  var id = TBGen.rawTaskId(t);
   return {
     task: t,
     task_id: id || "",
@@ -61,7 +80,11 @@ function metaFromTask(t) {
 
 function renderCurrent() {
   var c = state.current;
-  if (!c || !c.task_id) { setExportEnabled(false); return; }
+  if (!c || !c.task_id) {
+    if (c) els.taskMeta.textContent = "Đã bắt được payload nhưng không tìm thấy UUID của task — hãy bấm Làm mới ⟳.";
+    setExportEnabled(false);
+    return;
+  }
   els.taskMeta.innerHTML =
     '<span class="pill cur">đang mở trong tab</span>' +
     (c.difficulty ? '<span class="pill">' + esc(c.difficulty.toUpperCase()) + "</span>" : "") +
@@ -99,16 +122,21 @@ async function refreshCurrentTask() {
       ? "chưa thấy phản hồi API nào — hãy <b>tải lại trang</b> (F5) rồi mở lại tiện ích."
       : "đã soi " + seen.n + " phản hồi API nhưng không có dữ liệu task; " +
         "hãy bấm <b>Làm mới ⟳</b> sau khi trang tải xong, hoặc chuyển sang trang Revise/Submission của task.";
+    if (seen.n && seen.urls && seen.urls.length) {
+      why += "<br><small>API đã thấy:<br>" + seen.urls.map(esc).join("<br>") + "</small>";
+    }
     els.taskMeta.innerHTML =
       (uuid ? '<span class="pill cur">UID ' + esc(uuid.slice(0, 8)) + "…</span>" : "") + why;
     setExportEnabled(false);
     return;
   }
-  state.current = metaFromTask(resp.task);
-  if (dirHandle && !state.exportedTasks[state.current.task_id]) {
+  state.current = metaFromTask(resp.task, resp.uuid, resp.zipName);
+  state.current.sourceUrl = String(resp.sourceUrl || "").split("?")[0];
+  if (dirHandle) {
     try {
-      if (await completeExportExists(state.current.task_id)) {
-        state.exportedTasks[state.current.task_id] = true;
+      var scan = await scanRounds(state.current.task_id, false);
+      if (scan.latest !== (state.exportedTasks[state.current.task_id] || 0)) {
+        state.exportedTasks[state.current.task_id] = scan.latest;
         await saveExportedTasks();
       }
     } catch (e) {}
@@ -158,14 +186,26 @@ function saveExportedTasks() {
   });
 }
 
-function buildRevisePrompt() {
+// Prompt for the latest round on disk, with the next free revN.
+async function buildRevisePrompt() {
   if (!state.current || !state.current.task) throw new Error("Chưa có task đang mở.");
-  var root = (dirHandle ? dirHandle.name : "workspace") + "/revision";
-  return TBGen.generateRevisePrompt(state.current.task, {
-    exportRoot: root,
-    submissionRoot: (dirHandle ? dirHandle.name : "workspace") + "/submissions",
-    exportReady: !!(dirHandle && state.exportedTasks[currentTaskId()])
-  });
+  var scan = await scanRounds(currentTaskId(), false);
+  if (!scan.latest) throw new Error("Task chưa được xuất.");
+  return TBGen.generateRevisePrompt(state.current.task,
+    promptOptions(scan, scan.latest, submissionSlug()));
+}
+
+function promptOptions(scan, round, slug) {
+  var ws = dirHandle ? dirHandle.name : "workspace";
+  return {
+    exportRoot: ws + "/revision",
+    submissionRoot: ws + "/submissions",
+    round: round,
+    roundDir: roundDir(scan, round),
+    prevRoundDir: round > 1 ? roundDir(scan, round - 1) : null,
+    sourceZip: sourceZipRel(scan, round, slug),
+    nextRev: scan.nextRev
+  };
 }
 
 function currentTaskId() { return state.current ? state.current.task_id : ""; }
@@ -214,24 +254,99 @@ function submissionSlug() {
   return zipName.replace(/\.zip$/i, "") || "task";
 }
 
-async function completeExportExists(taskId) {
-  if (!dirHandle || !taskId) return false;
-  var permission = await dirHandle.queryPermission({ mode: "readwrite" });
-  if (permission !== "granted") return false;
-  try {
-    var revisionDir = await dirHandle.getDirectoryHandle("revision");
-    var taskDir = await revisionDir.getDirectoryHandle(taskId);
-    var slug = submissionSlug();
-    await taskDir.getFileHandle(taskId + ".md");
-    await taskDir.getFileHandle("revise-prompt.md");
-    await taskDir.getDirectoryHandle(slug);
-    var revisionsDir = await taskDir.getDirectoryHandle("revisions");
-    await revisionsDir.getFileHandle(slug + "-source.zip");
+// True when the submission document carries at least one real answer besides
+// the uploaded ZIP. A JSON-Schema-only capture ({type:[...]}) has none.
+function hasAnswers(t) {
+  var sd;
+  try { sd = t.task_documents[0].submission_document || {}; } catch (e) { return false; }
+  return Object.keys(sd).some(function (k) {
+    if (k === "upload_a_zip_file") return false;
+    var v = sd[k];
+    if (v === null || v === undefined || v === "") return false;
+    if (typeof v === "object" && !Array.isArray(v)) {
+      var keys = Object.keys(v);
+      return keys.length && !keys.every(function (x) {
+        return ["type", "enum", "oneOf", "anyOf", "allOf", "$ref", "items"].indexOf(x) >= 0;
+      });
+    }
     return true;
+  });
+}
+
+/* ---------- rounds: revision/<uuid>/vN/ ----------
+ * Each Export pulls the platform's current feedback + submission ZIP into the
+ * next round folder vN/ (report, prompt, payload, <slug>-source.zip, extracted
+ * <slug>/). Local repairs are packed as revisions/<slug>-revM.zip, numbered
+ * across rounds. An export from before rounds existed (flat <uuid>.md at the
+ * task root, source in revisions/) counts as v1. */
+
+async function scanRounds(taskId, create) {
+  var empty = { taskDir: null, latest: 0, legacy: false, nextRev: 1 };
+  if (!dirHandle || !taskId) return empty;
+  if ((await dirHandle.queryPermission({ mode: "readwrite" })) !== "granted") return empty;
+  var taskDir;
+  try {
+    var revisionDir = await dirHandle.getDirectoryHandle("revision", { create: !!create });
+    taskDir = await revisionDir.getDirectoryHandle(taskId, { create: !!create });
   } catch (e) {
-    if (e && e.name === "NotFoundError") return false;
+    if (e && e.name === "NotFoundError") return empty;
     throw e;
   }
+  var latest = 0, legacy = false, maxRev = 0;
+  for await (var entry of taskDir.entries()) {
+    var name = entry[0], h = entry[1];
+    var m = /^v(\d+)$/.exec(name);
+    if (m && h.kind === "directory") {
+      try { await h.getFileHandle(taskId + ".md"); latest = Math.max(latest, +m[1]); } catch (e) {}
+    }
+    if (name === taskId + ".md" && h.kind === "file") legacy = true;
+  }
+  if (legacy) latest = Math.max(latest, 1);
+  try {
+    var revs = await taskDir.getDirectoryHandle("revisions");
+    for await (var r of revs.keys()) {
+      var rm = /-rev(\d+)\.zip$/i.exec(r);
+      if (rm) maxRev = Math.max(maxRev, +rm[1]);
+    }
+  } catch (e) {}
+  return { taskDir: taskDir, latest: latest, legacy: legacy, nextRev: maxRev + 1 };
+}
+
+// Folder of round N relative to revision/<uuid>/ ("" = legacy flat v1).
+function roundDir(scan, round) {
+  return (round === 1 && scan.legacy) ? "" : "v" + round;
+}
+
+function sourceZipRel(scan, round, slug) {
+  var d = roundDir(scan, round);
+  return d ? d + "/" + slug + "-source.zip" : "revisions/" + slug + "-source.zip";
+}
+
+async function dirAt(taskDir, rel) {
+  var dir = taskDir;
+  var parts = rel ? rel.split("/") : [];
+  for (var i = 0; i < parts.length; i++) dir = await dir.getDirectoryHandle(parts[i]);
+  return dir;
+}
+
+async function readText(dir, name) {
+  try { return await (await (await dir.getFileHandle(name)).getFile()).text(); }
+  catch (e) { return null; }
+}
+
+async function readBytes(taskDir, rel) {
+  var parts = rel.split("/");
+  var name = parts.pop();
+  try {
+    var dir = await dirAt(taskDir, parts.join("/"));
+    return new Uint8Array(await (await (await dir.getFileHandle(name)).getFile()).arrayBuffer());
+  } catch (e) { return null; }
+}
+
+function sameBytes(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 // Write `bytes` (string or Uint8Array) to a relative path under `rootDir`,
@@ -292,16 +407,17 @@ async function resolveZipUrl() {
   throw new Error("Hết thời gian chờ liên kết tải .zip (30s).");
 }
 
-// Full bundle: <workspace>/revision/<uuid>/ with the report, immutable source
-// ZIP, and extracted task contents.
+// One round: pull the platform's current feedback + submission ZIP into
+// revision/<uuid>/vN/. Earlier rounds and revisions/ are never touched.
 async function exportBundle(taskId) {
   var ok = await ensurePermission(dirHandle);
   if (!ok) throw new Error("permission-denied");
-  if (await completeExportExists(taskId)) {
-    return "Task đã có sẵn trong “" + dirHandle.name + "/revision/" + taskId + "/”.";
-  }
 
   var t = state.current.task;
+  if (!hasAnswers(t)) {
+    throw new Error("dữ liệu bắt được không có câu trả lời/feedback nào (API: " +
+      (state.current.sourceUrl || "?") + "). Hãy tải lại trang (F5) rồi bấm Làm mới ⟳.");
+  }
   var zipName = submissionZipName() || (taskId + "_submission.zip");
   var slug = submissionSlug();
   var url;
@@ -316,46 +432,52 @@ async function exportBundle(taskId) {
   var res = await fetch(url);
   if (!res.ok) throw new Error("Tải ZIP nguồn thất bại (HTTP " + res.status + ").");
   var buf = await res.arrayBuffer();
+  var bytes = new Uint8Array(buf);
   var mb = (buf.byteLength / 1048576).toFixed(1);
+  var report = TBGen.generateMarkdown(t);
 
-  // Create the destination only after the complete source ZIP is in memory.
-  // Existing directories are never reused, so local remediation work cannot
-  // be overwritten if extension storage is cleared.
-  var revisionDir = await dirHandle.getDirectoryHandle("revision", { create: true });
-  try {
-    await revisionDir.getDirectoryHandle(taskId);
-    throw new Error("workspace/revision/" + taskId +
-      " đã tồn tại nhưng chưa hoàn chỉnh; không ghi đè working tree.");
-  } catch (e) {
-    if (!e || e.name !== "NotFoundError") throw e;
+  // Touch the disk only after the complete source ZIP is in memory.
+  var scan = await scanRounds(taskId, true);
+  var taskDir = scan.taskDir;
+  var where = dirHandle.name + "/revision/" + taskId + "/";
+
+  // Same ZIP and same feedback as the latest round: nothing new to pull.
+  if (scan.latest) {
+    var lastDir = await dirAt(taskDir, roundDir(scan, scan.latest));
+    if (sameBytes(bytes, await readBytes(taskDir, sourceZipRel(scan, scan.latest, slug))) &&
+        (await readText(lastDir, taskId + ".md")) === report) {
+      return { round: scan.latest, msg: "Platform chưa có gì mới so với v" + scan.latest +
+        " — giữ nguyên “" + where + (roundDir(scan, scan.latest) || "") + "”." };
+    }
   }
-  var taskDir = await revisionDir.getDirectoryHandle(taskId, { create: true });
-  var sourceZipName = slug + "-source.zip";
-  var summary = "Đã ghi " + taskId + ".md + revise-prompt.md";
-  try {
-    setStatus("Đang ghi báo cáo và ZIP nguồn…");
-    await writeFileInto(taskDir, taskId + ".md", TBGen.generateMarkdown(t));
-    await writeFileInto(taskDir, "revise-prompt.md", TBGen.generateRevisePrompt(t, {
-      exportRoot: dirHandle.name + "/revision",
-      submissionRoot: dirHandle.name + "/submissions",
-      exportReady: true
-    }));
-    var revisionsDir = await taskDir.getDirectoryHandle("revisions", { create: true });
-    await writeFileInto(revisionsDir, sourceZipName, new Uint8Array(buf));
 
-    setStatus("Đang giải nén vào " + slug + "/…");
+  var round = scan.latest + 1;
+  var rel = "v" + round;
+  var dir = await taskDir.getDirectoryHandle(rel, { create: true });
+  var opts = promptOptions(scan, round, slug);
+  try {
+    setStatus("Đang ghi v" + round + ": báo cáo và ZIP nguồn…");
+    await writeFileInto(dir, "task-payload.json", JSON.stringify(
+      Object.assign({ _captured_from: state.current.sourceUrl || "" }, t), null, 2));
+    await writeFileInto(dir, "revise-prompt.md", TBGen.generateRevisePrompt(t, opts));
+    await writeFileInto(dir, slug + "-source.zip", bytes);
+
+    setStatus("Đang giải nén vào " + rel + "/" + slug + "/…");
     var n = await TBUnzip.forEach(buf, function (name, data) {
-      return writeFileInto(taskDir, slug + "/" + name, data);
+      return writeFileInto(dir, slug + "/" + name, data);
     }, function (done, total) {
       setStatus("Đang giải nén… " + done + "/" + total);
     });
-    summary += ", lưu revisions/" + sourceZipName + " và giải nén " + n +
-      " tệp → " + slug + "/ (" + mb + "MB)";
+    // The report goes last: scanRounds only counts a vN that has it, so a
+    // round interrupted before this point is never picked up as complete.
+    await writeFileInto(dir, taskId + ".md", report);
+    return { round: round, msg: "Đã tạo v" + round + ": " + taskId + ".md, revise-prompt.md, " +
+      slug + "-source.zip và giải nén " + n + " tệp → " + slug + "/ (" + mb + "MB) → “" +
+      where + rel + "/”" };
   } catch (e) {
-    try { await revisionDir.removeEntry(taskId, { recursive: true }); } catch (cleanupError) {}
-    throw new Error("Không thể hoàn tất bundle: " + e.message + ". Đã dọn thư mục xuất dở.");
+    try { await taskDir.removeEntry(rel, { recursive: true }); } catch (cleanupError) {}
+    throw new Error("Không thể hoàn tất v" + round + ": " + e.message + ". Đã dọn thư mục dở.");
   }
-  return summary + " → “" + dirHandle.name + "/revision/" + taskId + "/”";
 }
 
 /* ---------- difficulty-check artifact (separate button) ---------- */
@@ -414,8 +536,11 @@ async function downloadDifficultyArtifact() {
 
   var ok = await ensurePermission(dirHandle);
   if (!ok) throw new Error("permission-denied");
-  var revisionDir = await dirHandle.getDirectoryHandle("revision");
-  var taskDir = await revisionDir.getDirectoryHandle(taskId);
+  var scan = await scanRounds(taskId, false);
+  if (!scan.latest) throw new Error("Hãy xuất task vào workspace trước.");
+  var rd = roundDir(scan, scan.latest);
+  var taskDir = await dirAt(scan.taskDir, rd);
+  var shown = dirHandle.name + "/revision/" + taskId + "/" + (rd ? rd + "/" : "");
 
   setStatus("Đang tải " + name + "…");
   var res = await fetch(url);
@@ -431,8 +556,7 @@ async function downloadDifficultyArtifact() {
       }, function (done, total) {
         setStatus("Đang giải nén… " + done + "/" + total);
       });
-      return "Đã giải nén " + n + " tệp → “" + dirHandle.name + "/revision/" + taskId +
-             "/difficulty-check/” (" + mb + "MB)";
+      return "Đã giải nén " + n + " tệp → “" + shown + "difficulty-check/” (" + mb + "MB)";
     } catch (e) {
       await writeFileInto(taskDir, name, new Uint8Array(buf));
       return "Giải nén lỗi: " + e.message + " — đã giữ " + name + " (" + mb + "MB)";
@@ -440,25 +564,18 @@ async function downloadDifficultyArtifact() {
   }
 
   await writeFileInto(taskDir, name, new Uint8Array(buf));
-  return "Đã ghi " + name + " → “" + dirHandle.name + "/revision/" + taskId +
-    "/” (" + mb + "MB)";
+  return "Đã ghi " + name + " → “" + shown + "” (" + mb + "MB)";
 }
 
 async function exportCurrent() {
   var taskId = currentTaskId();
   if (!taskId) throw new Error("Chưa có task đang mở.");
   if (!dirHandle) throw new Error("Hãy chọn thư mục workspace trước.");
-  if (await completeExportExists(taskId)) {
-    state.exportedTasks[taskId] = true;
-    await saveExportedTasks();
-    setExportEnabled(true);
-    return "Task đã có sẵn trong “" + dirHandle.name + "/revision/" + taskId + "/”.";
-  }
   var result = await exportBundle(taskId);
-  state.exportedTasks[taskId] = true;
+  state.exportedTasks[taskId] = result.round;
   await saveExportedTasks();
   setExportEnabled(true);
-  return result;
+  return result.msg;
 }
 
 /* ---------- events ---------- */
@@ -490,8 +607,8 @@ els.exportBtn.addEventListener("click", async function () {
 els.copyBtn.addEventListener("click", async function () {
   if (!currentTaskId()) return;
   try {
-    await navigator.clipboard.writeText(buildRevisePrompt());
-    setStatus("Đã sao chép prompt Revise vào clipboard.", "ok");
+    await navigator.clipboard.writeText(await buildRevisePrompt());
+    setStatus("Đã sao chép prompt Revise v" + (state.exportedTasks[currentTaskId()] || "") + " vào clipboard.", "ok");
   } catch (e) {
     setStatus("Sao chép thất bại: " + e.message, "err");
   }
