@@ -26,16 +26,64 @@
     return [];
   }
 
+  // The task UUID, whichever shape the route used: {task_id:{id}} (TB2 review
+  // queue), a plain task_id string, or an id/task_uuid field. "" when absent.
+  function rawTaskId(task) {
+    if (!task || typeof task !== "object") return "";
+    var tid = task.task_id;
+    if (tid && typeof tid === "object" && tid.id) return String(tid.id);
+    if (typeof tid === "string" && tid) return tid;
+    var keys = ["task_uuid", "uuid", "id"];
+    for (var i = 0; i < keys.length; i++) {
+      var v = task[keys[i]];
+      if (typeof v === "string" && v) return v;
+      if (v && typeof v === "object" && v.id) return String(v.id);
+    }
+    return "";
+  }
+
+  // Platform ids arrive either as plain strings or as {id: "..."}.
+  function idOf(v) {
+    if (v && typeof v === "object") return v.id || "";
+    return v == null ? "" : v;
+  }
+
   function taskId(task) {
-    return (task && task.task_id && task.task_id.id) || "unknown-task";
+    return rawTaskId(task) || "unknown-task";
+  }
+
+  // FormBlocks documents wrap each answer ({value: ...}); legacy ones don't.
+  function unwrapField(v) {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      var keys = ["value", "answer", "data"];
+      for (var i = 0; i < keys.length; i++) {
+        if (Object.prototype.hasOwnProperty.call(v, keys[i])) return v[keys[i]];
+      }
+    }
+    return v;
   }
 
   function submissionDoc(task) {
+    var sd;
     try {
-      return task.task_documents[0].submission_document || {};
+      sd = task.task_documents[0].submission_document || {};
     } catch (e) {
       return {};
     }
+    var out = {};
+    for (var k in sd) out[k] = k === "upload_a_zip_file" ? sd[k] : unwrapField(sd[k]);
+    // The upload field itself may be wrapped too; keep its filename reachable.
+    var up = sd.upload_a_zip_file;
+    if (up && typeof up === "object" && !up.filename) {
+      var inner = unwrapField(up);
+      if (inner && typeof inner === "object") out.upload_a_zip_file = inner;
+    }
+    return out;
+  }
+
+  function show(v) {
+    if (v === undefined || v === null) return "";
+    return typeof v === "object" ? JSON.stringify(v, null, 2) : String(v);
   }
 
   function stripHtml(s) {
@@ -125,12 +173,12 @@
   function fence(lines, title, body, lang) {
     lines.push("### " + title, "");
     lines.push("```" + (lang || ""));
-    lines.push(typeof body === "string" ? body.replace(/\s+$/, "") : String(body));
+    lines.push(typeof body === "string" ? body.replace(/\s+$/, "") : show(body));
     lines.push("```", "");
   }
 
   function code(v) {
-    return "`" + (v === undefined || v === null ? "" : v) + "`";
+    return "`" + (v && typeof v === "object" ? JSON.stringify(v) : show(v)) + "`";
   }
 
   function generateMarkdown(task) {
@@ -159,10 +207,10 @@
     w("| Field | Value |");
     w("|---|---|");
     w("| Project | " + code(t.project) + " |");
-    w("| Project ID | " + code(t.project_id && t.project_id.id) + " |");
-    w("| Assignment ID | " + code(t.assignment_id && t.assignment_id.id) + " |");
-    w("| Task ID | " + code(t.task_id && t.task_id.id) + " |");
-    w("| Submission ID | " + code(t.submission_id && t.submission_id.id) + " |");
+    w("| Project ID | " + code(idOf(t.project_id)) + " |");
+    w("| Assignment ID | " + code(idOf(t.assignment_id)) + " |");
+    w("| Task ID | " + code(rawTaskId(t)) + " |");
+    w("| Submission ID | " + code(idOf(t.submission_id)) + " |");
     w("| Task category (stage) | " + code(t.task_category) + " |");
     w("| Submission task type | " + code(t.submission_task_type) + " |");
     w("| Review task type | " + code(t.task_type) + " |");
@@ -226,9 +274,12 @@
     // -------- 4. Difficulty Check — Agent Simulation Summary --------
     w("## 4. Difficulty Check — Agent Simulation Summary");
     w("");
-    w("Overall: **Difficulty: " + String(g("difficulty", "")).toUpperCase() +
-      " · Status: " + (g("solvable") ? "Solvable" : "Not solvable") +
-      "** (all tests passed by at least one agent run).");
+    if (!g("difficulty") && !Object.keys(g("all_agent_stats", {}) || {}).length) {
+      w("Overall: **difficulty check not run** (see the summary and quality panel below).");
+    } else {
+      w("Overall: **Difficulty: " + String(g("difficulty", "")).toUpperCase() +
+        " · Status: " + (g("solvable") ? "Solvable" : "Not solvable") + "**.");
+    }
     w("");
     w("### Agent Performance");
     w("");
@@ -263,6 +314,21 @@
     w("");
     fence(L, "Quality Check Summary", g("quality_check_summary"), "");
 
+    fence(L, "Quality Check Logs", g("code_quality_check_results"), "");
+
+    // Terminus 3 quality panel (5 axes). This is where the blocking
+    // Sound Verifier / Coherent Contract findings live.
+    w("## 5b. Quality Panel Judge Feedback");
+    w("");
+    var axes = g("quality_panel_degraded_blocking_axes", []) || [];
+    if (axes.length) { w("Degraded blocking axes: " + code(axes)); w(""); }
+    fence(L, "Quality Panel Judge Feedback", g("quality_panel_judge_feedback"), "");
+
+    w("## 5c. Oracle / NOP Validation");
+    w("");
+    fence(L, "Oracle / NOP Validation", g("oracle_nop_validation"), "");
+    fence(L, "Difficulty Check Full Logs", g("difficulty_check_full_logs"), "");
+
     // -------- 6. Test Quality Report --------
     w("## 6. Test Quality Report");
     w("");
@@ -296,6 +362,43 @@
     w("## 10. Evaluation Rubrics");
     w("");
     fence(L, "test_rubrics", g("test_rubrics"), "");
+
+    // -------- 10b. Automated feedback & evaluation history --------
+    w("## 10b. Automated Feedback");
+    w("");
+    w("| Field | Value |");
+    w("|---|---|");
+    w("| Eval revision notes | " + code(t.eval_revision_notes) + " |");
+    w("| Eval revision requested at | " + code(t.eval_revision_requested_at) + " |");
+    w("| Rebuttal notes | " + code(t.rebuttal_notes) + " |");
+    w("");
+    var comments = g("textarea-beca8");
+    if (comments) fence(L, "Comments for Reviewer (submitted)", comments, "");
+    var evals = Array.isArray(t.evaluations) ? t.evaluations.slice() : [];
+    if (evals.length) {
+      evals.sort(function (a, b) { return String(a.created_at || "").localeCompare(String(b.created_at || "")); });
+      w("### Evaluation History (oldest first)");
+      w("");
+      w("| # | Created | Outcome | Blocking stage | Stages |");
+      w("|---|---|---|---|---|");
+      evals.forEach(function (ev, i) {
+        var agent = null;
+        var kids = (ev.overall_evaluation_result || {}).children_results || [];
+        kids.forEach(function (k) {
+          var m = k && k.metadata && k.metadata.agent_result;
+          if (m) agent = m;
+        });
+        var stages = agent && agent.stages ? Object.keys(agent.stages).filter(function (n) {
+          return agent.stages[n] && agent.stages[n].ran;
+        }).map(function (n) {
+          var st = agent.stages[n];
+          return n + "=" + (st.eval_passed === true ? "pass" : st.eval_passed === false ? "FAIL" : "ran");
+        }).join(", ") : "";
+        w("| " + (i + 1) + " | " + code(ev.created_at) + " | " + code(ev.outcome) + " | " +
+          code(agent ? agent.blocking_stage : "") + " | " + stages + " |");
+      });
+      w("");
+    }
 
     // -------- 11. Reviewer Decision --------
     // The review panel shows conditional fields depending on the decision:
@@ -393,26 +496,39 @@
     var submissionRoot = String(opts.submissionRoot || "workspace/submissions").replace(/\/+$/, "");
     var taskRoot = exportRoot + "/" + id;
     var revisionsPath = taskRoot + "/revisions";
+    // Round layout: revision/<uuid>/vN/ ("" = legacy flat export, counts as v1).
+    var round = opts.round || 1;
+    var rd = opts.roundDir == null ? "" : String(opts.roundDir);
+    var base = rd ? taskRoot + "/" + rd : taskRoot;
+    var sourceZip = taskRoot + "/" + (opts.sourceZip || ("revisions/" + slug + "-source.zip"));
+    var nextRev = opts.nextRev || 1;
 
-    return [
-      "2. Revise (Some test not passed và Instruction Sufficiency)",
+    var lines = [
+      "Revise v" + round,
       "Revise task tại:",
+      base + "/" + slug,
+      "Platform feedback (v" + round + "):",
+      base + "/" + id + ".md"
+    ];
+    if (round > 1) {
+      var prev = opts.prevRoundDir ? taskRoot + "/" + opts.prevRoundDir : taskRoot;
+      lines.push(
+        "Feedback vòng trước (v" + (round - 1) + ", để đối chiếu cái đã sửa):",
+        prev + "/" + id + ".md"
+      );
+    }
+    lines.push(
       "",
-      taskRoot + "/" + slug,
-      "",
-      "Platform feedback:",
-      "",
-      taskRoot + "/" + id + ".md",
-      "",
-      "- Sử dụng task-revise-flag-remediation; xác minh feedback bằng code, instruction",
+      "* Sử dụng task-revise-flag-remediation; xác minh feedback bằng code, instruction",
       "và verifier, rồi chạy lại Oracle/NOP và preflight.",
-      "- Không sửa hoặc ghi đè " + revisionsPath + "/" + slug + "-source.zip.",
-      "- Lưu revision kế tiếp tại " + revisionsPath + "/" + slug + "-revN.zip",
-      "(N tăng dần từ rev1, không ghi đè bản cũ).",
-      "- Đồng bộ đúng bytes của revision mới nhất sang " + submissionRoot + "/" +
+      "* Không sửa hoặc ghi đè " + sourceZip + ".",
+      "* Lưu revision kế tiếp tại " + revisionsPath + "/" + slug + "-rev" + nextRev + ".zip",
+      "(không ghi đè các rev cũ).",
+      "* Đồng bộ đúng bytes của revision mới nhất sang " + submissionRoot + "/" +
         slug + ".zip để upload.",
       ""
-    ].join("\n");
+    );
+    return lines.join("\n");
   }
 
   // ---- Markdown -> standalone HTML ----
@@ -529,6 +645,7 @@
     markdownToHtml: markdownToHtml,
     extractTasks: extractTasks,
     taskId: taskId,
+    rawTaskId: rawTaskId,
     taskSlug: taskSlug,
     generateRevisePrompt: generateRevisePrompt
   };

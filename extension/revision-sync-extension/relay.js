@@ -11,6 +11,10 @@
   // The last task/revise payload this tab fetched. The popup reads the task open in
   // THIS tab from here — no accumulated list, no chrome.storage of captures.
   var lastPayload = null;
+  // form_schema from /api/v1/projects/{id}; used for error-category labels.
+  var lastSchema = null;
+  // API route the last capture came from (written into task-payload.json).
+  var lastUrl = "";
   // {n: apiResponsesSniffed, hits: [urlsCarryingTheMarker]} — popup diagnostics.
   var lastSeen = { n: 0, hits: [] };
 
@@ -21,7 +25,13 @@
     if (!d || d.__tbExtractor !== true) return;
     try {
       if (d.kind === "capture") {
-        lastPayload = d.payload || null;
+        var incoming = d.payload || null;
+        if (payloadScore(incoming) >= payloadScore(lastPayload)) {
+          lastPayload = incoming;
+          lastUrl = d.url || "";
+        }
+      } else if (d.kind === "schema") {
+        lastSchema = d.schema || null;
       } else if (d.kind === "seen") {
         lastSeen = d.seen || lastSeen;
       } else if (d.kind === "zipurl") {
@@ -32,6 +42,50 @@
     }
   });
 
+  // Rank captures so a later, emptier response (config schema, list views)
+  // cannot evict the full task payload: 2 = answers + evaluations, 1 = answers,
+  // 0 = shape only.
+  var SCHEMA_KEYS = ["type", "enum", "oneOf", "anyOf", "allOf", "$ref", "items"];
+  function docHasAnswers(sd) {
+    return Object.keys(sd || {}).some(function (k) {
+      if (k === "upload_a_zip_file") return false;
+      var v = sd[k];
+      if (v === null || v === undefined || v === "") return false;
+      if (typeof v === "object" && !Array.isArray(v)) {
+        var ks = Object.keys(v);
+        return ks.length > 0 && !ks.every(function (x) { return SCHEMA_KEYS.indexOf(x) >= 0; });
+      }
+      return true;
+    });
+  }
+  function payloadScore(p) {
+    if (!p || !Array.isArray(p.tasks) || !p.tasks.length) return -1;
+    var best = 0;
+    p.tasks.forEach(function (t) {
+      var sd = {};
+      try { sd = t.task_documents[0].submission_document || {}; } catch (e) {}
+      var sc = docHasAnswers(sd) ? 1 : 0;
+      if (sc && Array.isArray(t.evaluations) && t.evaluations.length) sc = 2;
+      if (sc > best) best = sc;
+    });
+    return best;
+  }
+
+  // Mirrors TBGen.rawTaskId (generate.js is not loaded in content scripts).
+  function taskUuid(t) {
+    if (!t || typeof t !== "object") return "";
+    var tid = t.task_id;
+    if (tid && typeof tid === "object" && tid.id) return String(tid.id);
+    if (typeof tid === "string" && tid) return tid;
+    var keys = ["task_uuid", "uuid", "id"];
+    for (var i = 0; i < keys.length; i++) {
+      var v = t[keys[i]];
+      if (typeof v === "string" && v) return v;
+      if (v && typeof v === "object" && v.id) return String(v.id);
+    }
+    return "";
+  }
+
   // Pick the task matching the UUID shown on the page; fall back to the single
   // task payload returned for this page.
   function pickTask(uuid) {
@@ -40,7 +94,7 @@
     if (uuid) {
       for (var i = 0; i < tasks.length; i++) {
         var t = tasks[i];
-        if (t && t.task_id && t.task_id.id === uuid) return t;
+        if (taskUuid(t) === uuid) return t;
       }
     }
     return tasks[0] || null;
@@ -103,12 +157,18 @@
       var t = (spans[i].textContent || "").trim();
       if (uuidRe.test(t)) return t;
     }
-    // Submitter page: the header shows "UID:" beside a plain span. Take the
-    // first UUID that starts a span's text (a trailing copy button adds markup).
+    // Submitter page: the header shows "UID:" beside a span whose own text is
+    // the UUID followed by a copy <button><span><svg/></span></button>. A
+    // "leaf only" test skips it, so read each element's direct text nodes.
     var all = document.querySelectorAll("span, div");
     for (var j = 0; j < all.length; j++) {
-      if (all[j].querySelector("span, div")) continue;
-      var s2 = (all[j].textContent || "").trim();
+      var s2 = "";
+      var kids = all[j].childNodes;
+      for (var k = 0; k < kids.length; k++) {
+        if (kids[k].nodeType === 3) s2 += kids[k].nodeValue;
+      }
+      s2 = s2.trim();
+      if (!s2) continue;
       if (uuidRe.test(s2)) return s2;
       var m2 = s2.match(loose);
       if (m2 && s2.indexOf(m2[0]) === 0) return m2[0];
@@ -122,7 +182,13 @@
 
     if (msg.type === "tb-get-current-task") {
       var uuid = currentTaskUuid();
-      sendResponse({ ok: true, uuid: uuid, task: pickTask(uuid), seen: lastSeen });
+      var picked = pickTask(uuid);
+      // FormBlocks task payloads omit form_schema; borrow the project's.
+      if (picked && !picked.form_schema && lastSchema) picked.form_schema = lastSchema;
+      sendResponse({
+        ok: true, uuid: uuid, task: picked, seen: lastSeen, sourceUrl: lastUrl,
+        zipName: readZipFilename(findDownloadCard())
+      });
       return;
     }
 

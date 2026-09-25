@@ -27,7 +27,11 @@ if (chrome.downloads && chrome.downloads.onCreated) {
   chrome.downloads.onCreated.addListener(function (item) {
     if (Date.now() > suppressZipUntil) return;
     var name = (item.filename || item.url || "");
-    if (/\.zip(\?|$)/i.test(name)) {
+    var u = item.finalUrl || item.url || "";
+    if (/\.zip(\?|$)/i.test(name) || /[?&]X-Amz-Signature=/i.test(u)) {
+      // The SPA may start the download via <a>/window.open, which the fetch/XHR
+      // interceptor never sees; keep the URL so the popup can still fetch it.
+      if (/^https:/i.test(u)) chrome.storage.local.set({ zipUrl: u, zipUrlAt: Date.now() });
       try { chrome.downloads.cancel(item.id); } catch (e) {}
     }
   });
