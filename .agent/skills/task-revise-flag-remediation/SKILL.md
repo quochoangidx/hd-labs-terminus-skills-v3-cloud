@@ -390,13 +390,15 @@ into a deterministic rule, so it cannot recur in any future task:
    `AGENTS.md` §2 as a known exposure, naming what no script will catch.
 
 Skipping this turns each return into pure cost. Under `builder_certified`, where
-gates stand in for a review panel, it is the only mechanism by which the process
-improves at all.
+gates carry the axes up to a one-round local panel, it is how the gates catch up
+with what the platform panel keeps finding. Findings the creation-mode panel
+retained count too: a class the local panel keeps finding should become a gate
+so the next build does not pay reviewers to rediscover it.
 
 A gate the builder believes is wrong is recorded as a `documented_exception` in
 the manifest with its reason and contract citation. Never silently reshape a task
-to satisfy a rule you think is mistaken: with no panel above the scripts, a wrong
-gate otherwise rewrites correct work without anyone noticing.
+to satisfy a rule you think is mistaken: panel reviewers never see the manifest,
+so a wrong gate otherwise rewrites correct work without anyone noticing.
 
 ## Revision verification
 
@@ -415,9 +417,48 @@ When the input is a five-axis quality-panel report, collect and adjudicate every
 axis before editing. Deduplicate overlapping findings into one dependency-ordered
 repair batch, apply that batch once, and run deterministic validation after all
 edits. Do not alternate between fixing one axis and respawning its reviewer. Run
-one fresh five-axis clearance panel only after the revised snapshot is complete;
-if it remains blocking, report the remainder instead of automatically starting a
-third repair-review cycle.
+one clearance only after the revised snapshot is complete: a fresh five-axis
+panel under `campaign_ready` and `panel_ready`, the axes `panel_gate.py
+clearance-axes` lists under `builder_certified` (below). If it remains blocking,
+report the remainder instead of automatically starting a third repair-review
+cycle.
+
+### Verification under `builder_certified`
+
+A `builder_certified` task never produced V3 fairness reviews,
+`semantic-coverage.json` or `preprobe_check.py` receipts, so do not demand them
+on revision. This path applies both to the repair batch inside creation step 8
+(`../task-batch/references/execution-profiles.md`) and to a platform return of a
+`builder_certified` task.
+
+1. **Baseline.** In creation mode the baseline is the discovery packet manifest.
+   After a platform return, restore the returned artifact, run
+   `task-quality-panel-judgement/scripts/prepare_packets.py` on it, and use that
+   manifest as the baseline; the platform's verdicts for the axes it did not
+   flag are the discovery verdicts for this round.
+2. **Reproduce** each finding on the baseline snapshot (targeted mode of
+   `task-quality-panel-judgement` when reading alone cannot confirm it), then
+   answer every finding in the revision ledger.
+3. **Closure gates** on the repaired snapshot, each as a receipt:
+   `preflight.sh --strict` and `--determinism`, `independence_check.py`,
+   `wrong_path_runner.py` for every affected core obligation plus every step-5b
+   adversarial submission kept from the build (they are a regression suite now),
+   and `panel_precheck.py --full --profile builder_certified`.
+4. **Clearance:** `panel_gate.py clearance-axes <task> --discovery-manifest
+   <baseline> --finding-axis <each flagged axis>` (add `--discovery-report` in
+   creation mode); two fresh reviewers per listed
+   axis on fresh packets. A `tests/` or `instruction.md` edit lists most axes;
+   run them anyway. Blocking clearance stops as `rescope_required`.
+5. **Re-probe** once with a fresh pair, in a new `--output` directory, when the batch removed or narrowed an
+   obligation or changed graded behaviour of the core; 2/2 stops as
+   `rescope_required`. Witness-only or editorial repairs keep the prior signal.
+6. **Receipt:** write `report.json` for the repaired snapshot (carried axes point
+   at the baseline manifest with their platform or discovery verdict, platform
+   ones with `"source": "platform"` and the saved report; cleared axes at the
+   clearance manifest with both raw reviewer files) and pass `panel_gate.py check` before
+   `task-zip-submit`.
+
+### Verification under `campaign_ready` and `panel_ready`
 
 After any content change:
 
@@ -472,6 +513,6 @@ Return a compact table with:
 - retained core, removed obligations, necessary additions and recoverable snapshot;
 - files changed;
 - oracle/NOP and verifier results;
-- V3 inferability verdict;
+- V3 inferability verdict (campaign profiles only);
 - fresh empirical tier signal;
 - remaining uncertainty or platform-only validation need.

@@ -1,0 +1,149 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+
+SCRIPTS = Path(__file__).parents[1] / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+SPEC = importlib.util.spec_from_file_location("panel_gate", SCRIPTS / "panel_gate.py")
+assert SPEC and SPEC.loader
+GATE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(GATE)
+
+from prepare_packets import AXIS_SURFACES, build_packets  # noqa: E402
+
+
+def make_task(root: Path) -> Path:
+    task = root / "tbrain-gate-fixture"
+    task.mkdir()
+    (task / "instruction.md").write_text("Implement the requested behavior.\n")
+    (task / "task.toml").write_text('version = "1.0"\n')
+    for directory in ("environment", "solution", "tests"):
+        (task / directory).mkdir()
+        (task / directory / f"{directory}.txt").write_text(f"{directory}\n")
+    return task
+
+
+def reviewer_files(root: Path, manifest: Path, axis: str) -> list[str]:
+    snapshot = json.loads(manifest.read_text())["snapshot_sha256"]
+    paths = []
+    for side in "AB":
+        path = root / "reviewers" / f"{axis}-{side}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"axis": axis, "snapshot_sha256": snapshot, "severity": "None",
+                                    "input_completeness": {"status": "complete"}}))
+        paths.append(str(path))
+    return paths
+
+
+def report(path: Path, task: Path, manifest: Path, verdicts: dict[str, str] | None = None) -> Path:
+    verdicts = verdicts or {}
+    data = {
+        "snapshot_sha256": GATE.sha256_tree(task),
+        "axes": {
+            axis: {"verdict": verdicts.get(axis, "None"), "complete": True, "packet_manifest": str(manifest),
+                   "reviewers": reviewer_files(path.parent, manifest, axis)}
+            for axis in AXIS_SURFACES
+        },
+    }
+    path.write_text(json.dumps(data))
+    return path
+
+
+def test_unchanged_task_reruns_only_finding_axes(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    result = GATE.clearance_axes(task, manifest, ["sound_verifier"])
+    assert result["clearance_axes"] == ["sound_verifier"]
+    assert "coherent_contract" in result["carried_axes"]
+
+
+def test_tests_edit_reruns_every_axis_that_sees_tests(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    (task / "tests" / "test_new.py").write_text("def test_x():\n    pass\n")
+    result = GATE.clearance_axes(task, manifest, [])
+    assert result["clearance_axes"] == [
+        "coherent_contract", "protected_ground_truth", "sound_verifier", "deterministic_execution",
+    ]
+    assert result["carried_axes"] == ["correct_reference_solution"]
+
+
+def test_solution_edit_reruns_reference_and_determinism(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    (task / "solution" / "solution.txt").write_text("changed\n")
+    result = GATE.clearance_axes(task, manifest, [])
+    assert result["clearance_axes"] == ["correct_reference_solution", "deterministic_execution"]
+
+
+def test_check_passes_clean_panel_and_accepts_ground_truth_minor(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = report(tmp_path / "report.json", task, manifest, {"protected_ground_truth": "Minor"})
+    assert GATE.check(task, path)["passed"]
+
+
+def test_check_rejects_blocking_and_undecided_verdicts(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = report(tmp_path / "report.json", task, manifest,
+                  {"sound_verifier": "Minor", "coherent_contract": "Unsure"})
+    errors = GATE.check(task, path)["errors"]
+    assert any(error.startswith("sound_verifier") for error in errors)
+    assert any(error.startswith("coherent_contract") for error in errors)
+
+
+def test_check_rejects_verdict_carried_across_a_visible_change(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    (task / "tests" / "tests.txt").write_text("changed\n")
+    path = report(tmp_path / "report.json", task, manifest)
+    errors = GATE.check(task, path)["errors"]
+    assert any("stale" in error and error.startswith("sound_verifier") for error in errors)
+    assert not any(error.startswith("correct_reference_solution") for error in errors)
+
+
+def test_check_rejects_report_for_another_snapshot(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = report(tmp_path / "report.json", task, manifest)
+    (task / "task.toml").write_text('version = "2.0"\n')
+    errors = GATE.check(task, path)["errors"]
+    assert any("is not the task snapshot" in error for error in errors)
+
+
+def test_discovery_report_reruns_undecided_axes(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = report(tmp_path / "report.json", task, manifest, {"coherent_contract": "Unsure"})
+    result = GATE.clearance_axes(task, manifest, [], path)
+    assert result["clearance_axes"] == ["coherent_contract"]
+
+
+def test_check_requires_raw_reviews_or_platform_source(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = report(tmp_path / "report.json", task, manifest)
+    data = json.loads(path.read_text())
+    data["axes"]["sound_verifier"]["reviewers"] = []
+    platform = tmp_path / "platform-report.txt"
+    platform.write_text("[coherent_contract] None\n")
+    data["axes"]["coherent_contract"] = {"verdict": "None", "complete": True, "packet_manifest": str(manifest),
+                                         "source": "platform", "platform_report": str(platform)}
+    path.write_text(json.dumps(data))
+    errors = GATE.check(task, path)["errors"]
+    assert errors == ["sound_verifier: expected two raw reviewer responses, found 0"]
+
+
+def test_check_rejects_review_of_another_snapshot(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = report(tmp_path / "report.json", task, manifest)
+    raw = tmp_path / "reviewers" / "sound_verifier-A.json"
+    raw.write_text(json.dumps({"axis": "sound_verifier", "snapshot_sha256": "0" * 64,
+                               "input_completeness": {"status": "complete"}}))
+    assert any("is not a review" in error for error in GATE.check(task, path)["errors"])

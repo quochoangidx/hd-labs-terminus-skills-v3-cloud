@@ -1,7 +1,8 @@
 # Single-Reviewer Workflow
 
-This is the default review geometry for new `task-batch` runs, and the entire model
-review under `builder_certified`.
+This is the default review geometry for new `task-batch` runs. Under
+`builder_certified` it is followed by the adversarial verifier pass (step 5b) and
+the blind probe and the pre-submission quality panel (steps 7–8).
 
 ## What the one reviewer is for
 
@@ -16,8 +17,9 @@ solution, which is exactly the `contract_review` visibility below. Protect that
 blindness: a reviewer who has read the answer resolves ambiguity without noticing
 it, and then cannot see the ambiguity at all.
 
-Under `builder_certified` the reviewer's turns are the only semantic judgement in
-the build, so do not skip the second turn or fold it into the first.
+Under `builder_certified` the reviewer's turns are the only semantic judgement
+before closure, and the pre-submission panel (step 8) reads a snapshot they have
+already cleaned, so do not skip the second turn or fold it into the first.
 
 ## Default role
 
@@ -35,7 +37,11 @@ verifier is written (`builder_certified` step 3). Its packet is `instruction.md`
 plus `environment/`, so its findings are repaired while repairs are cheap. It
 reviews the task-visible goal, schemas, evidence, arbitrary
 conventions, preservation promises, and 6--10 grounded witnesses that the
-reviewer works out by hand from the contract (no verifier exists yet). The second
+reviewer works out by hand from the contract (no verifier exists yet). It also
+returns the [solver-path screen](../../task-miner/solver_path_screen.md): a
+pre-mortem of how a strong solver would solve and self-check the task, the five
+scores and `self_verification_resistance`. The screen was calibrated on exactly
+this visibility. The second
 turn reviews the stable task snapshot, assertion-to-source coverage,
 multi-entry/stateful boundaries, semantic-equivalence policy, mutation
 geometry, preservation, isolation, folder quality, and task-visible style.

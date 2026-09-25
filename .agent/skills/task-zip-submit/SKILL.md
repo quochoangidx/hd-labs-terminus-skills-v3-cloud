@@ -14,7 +14,7 @@ before every zip — it machine-checks the mechanical gates (layout,
 arcnames/CRLF, rubric format, docker oracle=1/nop=0, noexec-/tmp repro). Zero
 FAIL rows required.
 
-**Judgment gate (`campaign_ready` and `panel_ready`; `builder_certified` runs no panel and packages on its receipts):** the exact snapshot must also clear the quality
+**Judgment gate (`campaign_ready` and `panel_ready`; `builder_certified` requires its creation-mode panel, proven by a passing `task-quality-panel-judgement/scripts/panel_gate.py check <task-dir> --report <report.json>` on the exact snapshot being zipped):** the exact snapshot must also clear the quality
 panel's `coherent_contract`, `correct_reference_solution`,
 `protected_ground_truth`, `sound_verifier`, and `deterministic_execution` axes.
 `Minor` and `Major` block on `coherent_contract`,
@@ -28,7 +28,7 @@ dual `/bin/bash` + `/usr/bin/bash` permission-restore shapes, but it does not
 replace the semantic five-axis review.
 
 For a new `campaign_ready` candidate, do not create a handoff ZIP before the counted
-difficulty gate (`builder_certified` packages after its exploratory probe). The pre-probe strict run writes receipts and raw Docker evidence
+difficulty gate (`builder_certified` packages only after its step-9 `panel_gate.py check` passes; save that JSON beside the ZIP). The pre-probe strict run writes receipts and raw Docker evidence
 without `--emit-zip`; only a shortlisted, submission-audited task receives the
 final ZIP. Returned-task remediation may keep its versioned revision archives as
 described below.

@@ -1,6 +1,6 @@
 ---
 name: task-batch
-description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new Terminus 3 tasks. Defaults to builder-certified: no quality panel, no fairness reviewer, no auditor, one reviewer plus a two-solver blind probe at a CORE+ bar. Supports explicit campaign-ready and panel-ready. Do not use for ports or returned-task remediation."
+description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new Terminus 3 tasks. Defaults to builder-certified: one reviewer, an adversarial verifier pass, a two-solver blind probe at a CORE+ bar, then a pre-submission quality panel (five-axis discovery, clearance on changed axes); no fairness reviewer, no auditor. Supports explicit campaign-ready and panel-ready. Do not use for ports or returned-task remediation."
 ---
 
 # Task Batch Router
@@ -14,12 +14,13 @@ Read [execution profiles](references/execution-profiles.md), record the selected
 profile in the batch index and never mix receipts or result labels between
 profiles.
 
-- **Default to `builder_certified`.** A bare `task-batch N` selects it: no quality
-  panel, no fairness reviewer, no auditor. Read this router,
+- **Default to `builder_certified`.** A bare `task-batch N` selects it: one
+  reviewer, an adversarial verifier pass, the blind probe, then a pre-submission
+  quality panel; no fairness reviewer, no auditor. Read this router,
   `references/execution-profiles.md`, `references/single-reviewer-workflow.md`,
-  the bounded-design and contract-closure references, and
-  `task-local-solve-probe`. Do not load the campaign workflow, quota hooks,
-  fairness workflow or the quality-panel skill.
+  the bounded-design and contract-closure references,
+  `task-quality-panel-judgement` (creation mode) and `task-local-solve-probe`.
+  Do not load the campaign workflow, quota hooks or fairness workflow.
 - Select `campaign_ready` only when the user explicitly asks for the full
   campaign, measured difficulty beyond CORE+, or `candidate_ready`. Read
   [the complete campaign workflow](references/campaign-ready.md) before acting.
@@ -109,6 +110,7 @@ quality-axis `None`; the semantic panel remains mandatory.
 ## `builder_certified` route
 
 Use `task-miner`, `task-clone`, `terminus-regular-task-authoring`,
+`task-quality-panel-judgement`, `task-revise-flag-remediation`,
 `task-local-solve-probe`, deterministic `task-client-feedback-review`,
 `task-harbor-runner` and `task-zip-submit` as their stages become relevant.
 
@@ -116,9 +118,9 @@ Build to [what the platform actually checks](../terminus-regular-task-authoring/
 any other gate is internal hygiene. Answer the five axes while scaffolding, not only at closure: follow the
 [scaffold checklist](../terminus-regular-task-authoring/references/scaffold-five-axis-checklist.md),
 and run `contract_review` before any verifier exists. At closure the five
-quality axes are carried by executable receipts, not by reviewers:
+quality axes are first carried by executable receipts:
 
-| Axis | What stands in for a reviewer |
+| Axis | Receipt carried before the panel |
 |---|---|
 | `coherent_contract` | closure clauses present and anchored; every exact convention cites a visible authority sentence; the blind solver's failures read for cause |
 | `correct_reference_solution` | the expectation model is derived from the authority independently of the Oracle, so Oracle=1 is a non-circular agreement; `solve.sh` carries a contract header |
@@ -126,14 +128,21 @@ quality axes are carried by executable receipts, not by reviewers:
 | `protected_ground_truth` | isolation run and recorded: unprivileged candidate, closed source tree, restricted `/tests` and `/logs/verifier`, and no reachable way for demoted code to regain privilege (`--no-new-privs` unless nothing setuid or capability-bearing exists) |
 | `deterministic_execution` | repeat and shuffled runs agree; no network, no clock or ordering dependence |
 
+Then, once the probe clears CORE+, the pre-submission quality panel
+(execution-profiles step 8) judges the same five axes with fresh reviewers:
+full ten-reviewer discovery, one consolidated remediation batch, clearance on
+every axis `panel_gate.py clearance-axes` lists, and one re-probe when the batch
+narrowed the core. `panel_gate.py check` is the packaging receipt. The receipts
+make the panel cheap; the panel catches what the builder never conceived.
+
 Follow the numbered path in `references/execution-profiles.md`. Two rules govern
 the whole route:
 
 - **Receipts, not claims.** The builder reports only what a receipt file bound to
   the snapshot hash shows. A gate with no receipt did not run, and saying it
   passed is a fabrication.
-- **A disputed gate is recorded, never worked around.** With no panel above the
-  scripts, silently editing the task to satisfy a rule the builder believes is
+- **A disputed gate is recorded, never worked around.** The panel never sees the
+  manifest, so silently editing the task to satisfy a rule the builder believes is
   wrong turns a correct task into a broken one. Write a `documented_exception`.
 
 ## Result labels and stopping
@@ -145,9 +154,11 @@ the whole route:
   to reach `advanced` or `frontier`, and do not reject one that lands at CORE.
 - `panel_ready` stops at `local_panel_cleared`; difficulty is `not measured` and
   platform acceptance is not guaranteed.
-- `builder_certified` stops at `builder_certified`. Report it with the reviewer
-  and probe evidence actually collected, and state plainly that no quality panel
-  ran. Never upgrade it to `local_panel_cleared`.
+- `builder_certified` stops at `builder_certified`. Report it with the reviewer,
+  panel (each axis verdict with the snapshot it was reviewed on, plus the
+  `panel_gate.py check` receipt) and probe evidence actually collected. Carried
+  axes are not a fresh five-axis clearance, so never upgrade it to
+  `local_panel_cleared`.
 - Stop when the profile-specific accepted count reaches `N`, the explicit
   attempt budget is exhausted, the user stops, or a concrete external blocker
   prevents all useful progress. Never count a rejected, merely packaged or

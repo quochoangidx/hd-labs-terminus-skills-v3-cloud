@@ -1,17 +1,20 @@
 ---
 name: task-quality-panel-judgement
-description: Run a review-only Terminus 3 quality-panel audit with fresh-context subagents, isolated per-axis file visibility, and evidence-based consolidation. Primary use is after a platform quality-panel return, reviewing only the returned axis with two reviewers. The full five-axis ten-reviewer panel is an explicit opt-in. Does not authorize repairs or replace deterministic gates or difficulty measurement.
+description: Run a review-only Terminus 3 quality-panel audit with fresh-context subagents, isolated per-axis file visibility, and evidence-based consolidation. Runs as the pre-submission panel of the default builder_certified task-creation route (five-axis discovery, clearance on changed axes, panel_gate.py packaging receipt), and after a platform quality-panel return (two reviewers on the returned axis). Does not itself authorize repairs or replace deterministic gates or difficulty measurement.
 ---
 
 # Terminus Quality Panel Judgement
 
 Reviewers are the expensive instrument here. Point them at a known target.
 
-Since `builder_certified` became the default creation profile, tasks are built
-without a panel: the five axes are carried by executable receipts plus one
-reviewer. This skill's main job is now **diagnosis after a platform return** —
-reproduce the reported finding locally on the axis it names, and prove the repair
-closes it, rather than resubmitting and waiting.
+This skill has two jobs. During task creation under the default
+`builder_certified` profile it is the **pre-submission panel**: the builder's
+receipts show the task agrees with itself, and this panel finds what the
+platform panel would return before upload (the two `builder_certified` tasks
+submitted on 2026-09-24 without it came back with 37 findings each). After a
+platform return it is **diagnosis**: reproduce the reported finding locally on
+the axis it names, and prove the repair closes it, rather than resubmitting and
+waiting.
 
 Audit one frozen Terminus task snapshot with fresh reviewers, two independently
 reviewing the full scope of an axis, across these five:
@@ -29,8 +32,35 @@ serial fix-review loops.
 
 ## Select the operating mode
 
-Use **targeted mode** by default, after a platform return. Run **only the
-returned axis**, two reviewers, on the exact returned snapshot. Read the platform
+Use **creation mode** when `task-batch` reaches `builder_certified` step 8
+(`../task-batch/references/execution-profiles.md`), after the probe cleared
+CORE+. Run the full five-axis discovery panel below (ten reviewers) on the
+probed snapshot, consolidate once, and repair in one batch. Choose clearance
+axes mechanically, never by judgement:
+
+```bash
+python3 .agent/skills/task-quality-panel-judgement/scripts/panel_gate.py \
+  clearance-axes <task-dir> \
+  --discovery-manifest <discovery packet-manifest.json> \
+  --finding-axis <axis-with-retained-blocking-finding>   # repeat
+```
+
+Spawn two new reviewers on fresh packets for every axis in `clearance_axes`: the
+axes with findings plus every axis whose visible files the repair changed. An
+axis in `carried_axes` keeps its discovery verdict because its reviewers would
+see identical bytes. Skip clearance when discovery is five-axis non-blocking. A
+blocking clearance stops as `rescope_required`, as in orchestrator mode. Before
+packaging, `panel_gate.py check <task-dir> --report <report.json>` must pass on
+the exact snapshot; see *Record the result* for the fields it reads. Report the
+result as a creation-mode panel, not `local_panel_cleared`.
+
+Use **targeted mode** after a platform return. Run **only the
+returned axis**, two reviewers, on the exact returned snapshot. For a
+`builder_certified` task the resubmission then follows
+`../task-revise-flag-remediation/SKILL.md` *Verification under
+`builder_certified`*: the returned snapshot's packets are the baseline for
+`panel_gate.py clearance-axes`, and `panel_gate.py check` must pass before
+upload. Read the platform
 report first and classify its findings with
 `../task-revise-flag-remediation/SKILL.md`; use this skill to reproduce a finding
 you could not confirm by reading, or to show a repair closed it. Two sessions,
@@ -155,9 +185,12 @@ both reviewers of an axis receive the same packet bytes and the same full brief,
 not complementary checklist halves. Record unique IDs `<axis>-A` and `<axis>-B`.
 Use:
 
-- `fork_turns="none"`
-- model `gpt-5.6-sol`
-- reasoning effort `medium`
+- `fork_turns="none"` (Codex) or a fresh `Agent` subagent with no conversation
+  context (Claude Code)
+- model `gpt-5.6-sol` on Codex, Opus 5 on Claude Code (`model: "opus"`); never
+  mix runtimes within one axis pair
+- reasoning effort `medium` (on Claude Code use the `terminus-panel-reviewer`
+  agent profile, which pins Opus and medium effort)
 - schedule within available slots; with four total slots, use five waves of two
   reviewers (one axis pair per wave), keeping the orchestrator outside the pair
 
@@ -261,7 +294,8 @@ finding belongs to a complete root-invariant map.
 ## Repair in one batch when requested
 
 If the user asked only for review, stop after the consolidated report. If the
-user also asked to fix the task, hand the complete batch to one persistent
+user also asked to fix the task, or the panel runs in creation mode (a
+`task-batch` run authorizes its own repairs), hand the complete batch to one persistent
 builder using `task-revise-flag-remediation`. The builder may inspect the whole
 task, but must not receive reviewer identities or use reviewers interactively.
 
@@ -283,9 +317,13 @@ appropriate user scope. Preserve retired artifacts; do not package or probe a
 retired task as if repaired. Add only discriminating witnesses needed for the
 retained independent branches and interactions.
 
-Any edit creates a new snapshot and invalidates the discovery verdict. After the
+Any edit creates a new snapshot and invalidates the discovery verdict. Outside
+creation mode, after the
 batch passes deterministic validation, run exactly one fresh five-axis clearance
-panel with ten new reviewers (two per axis) on the new snapshot. This is 20
+panel with ten new reviewers (two per axis) on the new snapshot. In creation mode
+the clearance covers only the axes `panel_gate.py clearance-axes` lists (see
+*Select the operating mode*): new packets on the new snapshot, two fresh
+reviewers per listed axis. This is 20
 reviewer responses across discovery and clearance, not 20 on one snapshot.
 If clearance is still blocking, stop and report the
 remaining defect; do not automatically enter a third repair-review cycle.
@@ -307,8 +345,24 @@ Write `report.md` and `report.json` under:
 workspace/reports/<slug>/quality-panel/<snapshot-sha256>/
 ```
 
+`report.json` must carry the fields `panel_gate.py check` reads: top-level
+`snapshot_sha256` (the snapshot the report certifies) and `axes`, one entry per
+axis with `verdict` (`None`, `Minor`, `Major`, `Advisory` or `Unsure`),
+`complete` (true only when both reviews finished), and `packet_manifest` (the
+root `packet-manifest.json` whose packet that axis's deciding pair reviewed). A
+carried axis points at the discovery manifest; a cleared axis at the clearance
+manifest. The check fails a stale verdict whenever the task's files for that
+axis differ from the reviewed packet, so write the creation-mode report for the
+final snapshot, not the discovery one.
+
 Preserve the ten raw responses separately as `reviewers/<axis>-A.json` and
-`reviewers/<axis>-B.json`; never overwrite them with merged verdicts. Record
+`reviewers/<axis>-B.json`; never overwrite them with merged verdicts. In
+`report.json`, each axis's `reviewers` lists the two raw files of the pair that
+decided it, and `verdict` is the adjudicated merge of their `severity` fields
+(the raw schema calls it `severity`). An axis carried from a platform report
+instead sets `"source": "platform"` and `platform_report` to the saved report;
+`panel_gate.py check` rejects any other verdict without two raw reviews of that
+exact packet. Record
 per-reviewer model/effort, packet hash, coverage and completion status. In the
 combined report, include each pair's raw verdicts, union finding IDs, per-claim
 disposition (`retained`, `rejected`, or `unresolved`) and supporting evidence,
@@ -342,4 +396,6 @@ review, not exhaustive correctness or guaranteed platform acceptance. More
 reviewers or higher effort are not automatic remedies for incomplete evidence.
 Do not run difficulty after a
 blocking result. Any task, verifier, solution, metadata, or environment change
-invalidates the report and requires new packets and fresh reviewers.
+invalidates the report and requires new packets and fresh reviewers for every
+axis whose packet files changed; in creation mode `panel_gate.py` decides which
+axes those are, and the unchanged ones carry.
