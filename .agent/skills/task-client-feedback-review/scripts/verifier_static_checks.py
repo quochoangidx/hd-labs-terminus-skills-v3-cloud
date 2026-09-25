@@ -187,6 +187,29 @@ def unit_test_alignment_issue(contract_text: str, verifier_source: str) -> bool:
     )
 
 
+DOCUMENTED_MODULE_RE = re.compile(r"\bpython3?\s+-m\s+([A-Za-z_][\w.]*)")
+TOOLING_MODULES = frozenset({"pytest", "pip", "venv", "http.server", "json.tool", "unittest"})
+
+
+def documented_module_unexecuted(instruction_text: str, verifier_source: str) -> list[str]:
+    """Modules the instruction runs with `python -m` that the verifier never launches.
+
+    Grading an entry point by importing the function behind it leaves the documented
+    command itself unexercised, so a broken `__main__` still earns reward.
+    """
+    missing = []
+    for module in sorted(set(DOCUMENTED_MODULE_RE.findall(instruction_text)) - TOOLING_MODULES):
+        quoted = re.escape(module)
+        launched = (
+            re.search(rf"[\"']-m[\"']\s*,\s*[\"']{quoted}[\"']", verifier_source)
+            or re.search(rf"\bpython3?\s+-m\s+{quoted}\b", verifier_source)
+            or re.search(rf"run_module\(\s*[\"']{quoted}[\"']", verifier_source)
+        )
+        if not launched:
+            missing.append(module)
+    return missing
+
+
 # Making a candidate artifact setuid/setgid, or granting it capabilities, is what turns
 # a missing no-new-privs guard into a real escalation path.
 PRIVILEGE_ACQUIRABLE_RE = re.compile(
@@ -278,7 +301,13 @@ def main() -> int:
 
     verifier, contract = _task_sources(args.task_dir)
     candidate_count, unsafe = analyze_candidate_privileges(verifier)
-    alignment_issue = unit_test_alignment_issue(contract, verifier)
+    instruction_path = args.task_dir / "instruction.md"
+    instruction = instruction_path.read_text(encoding="utf-8", errors="replace") if instruction_path.is_file() else ""
+    shipped = "\n".join(
+        path.read_text(encoding="utf-8", errors="replace") for path in sorted((args.task_dir / "tests").rglob("*.py"))
+    )
+    unexecuted_modules = documented_module_unexecuted(instruction, shipped)
+    alignment_issue = unit_test_alignment_issue(contract, verifier) or bool(unexecuted_modules)
     setpriv_issue = setpriv_missing_no_new_privs(verifier)
     escalation_reachable = setpriv_issue and privilege_acquirable(verifier)
     identity_issue = test_identity_leak(verifier)
@@ -300,7 +329,8 @@ def main() -> int:
         "test_identity_leak": identity_issue,
         "interpreter_permission_alias_issues": interpreter_issues,
         "interpreter_parse_warnings": interpreter_parse_warnings,
-        "unit_test_alignment_issue": alignment_issue,
+        "unit_test_alignment_issue": unit_test_alignment_issue(contract, verifier),
+        "documented_module_unexecuted": unexecuted_modules,
     }
     print(json.dumps(payload, sort_keys=True))
     # Keep the advisory in the payload either way, but only block when the escalation
