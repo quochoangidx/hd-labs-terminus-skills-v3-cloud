@@ -5,6 +5,7 @@
 #
 # Usage: scripts/preflight.sh <task-dir> [--no-docker] [--strict]
 #        [--determinism] [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]
+#        [--panel-report <path>]
 #   <task-dir>   folder containing task.toml, instruction.md, environment/,
 #                solution/, tests/
 #   --no-docker  skip the docker build + oracle/nop + noexec-/tmp reruns
@@ -14,6 +15,9 @@
 #   --report-json write a machine-readable evidence report
 #   --evidence-dir retain raw build, solve, verifier, CTRF, and reward artifacts
 #   --emit-zip   write the submission zip only after every check passes
+#   --panel-report run task-quality-panel-judgement/scripts/panel_gate.py check on
+#                this report.json; a failing panel receipt is a FAIL row, so no zip.
+#                Required when packaging a builder_certified task.
 #
 # Exit 0 = no FAIL rows (WARNs allowed). Docker checks need a running daemon.
 set -uo pipefail
@@ -30,8 +34,9 @@ DETERMINISM=0
 REPORT_JSON=""
 EVIDENCE_DIR=""
 EMIT_ZIP=""
+PANEL_REPORT=""
 usage() {
-  echo "usage: preflight.sh <task-dir> [--no-docker] [--strict] [--determinism] [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>]"
+  echo "usage: preflight.sh <task-dir> [--no-docker] [--strict] [--determinism] [--report-json <path>] [--evidence-dir <path>] [--emit-zip <path>] [--panel-report <path>]"
 }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -42,6 +47,7 @@ while [ $# -gt 0 ]; do
     --report-json) shift; REPORT_JSON="${1:?--report-json needs a path}" ;;
     --evidence-dir) shift; EVIDENCE_DIR="${1:?--evidence-dir needs a path}" ;;
     --emit-zip) shift; EMIT_ZIP="${1:?--emit-zip needs a path}" ;;
+    --panel-report) shift; PANEL_REPORT="${1:?--panel-report needs a path}" ;;
     --*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     *)
       [ -z "$TASK_DIR" ] || { echo "only one task directory may be provided" >&2; usage >&2; exit 2; }
@@ -493,6 +499,23 @@ PYEOF
   fi
 else
   report WARN "docker" "skipped (--no-docker)"
+fi
+
+if [ -n "$PANEL_REPORT" ]; then
+  PANEL_GATE="$REPO_ROOT/.agent/skills/task-quality-panel-judgement/scripts/panel_gate.py"
+  if [ -n "$EVIDENCE_DIR" ]; then PANEL_RECEIPT="$EVIDENCE_DIR/panel-gate.json"
+  else PANEL_RECEIPT="$(dirname "$PANEL_REPORT")/panel-gate.json"; fi
+  if PANEL_OUT="$("$PYTHON_BIN" "$PANEL_GATE" check "$TASK_DIR" --report "$PANEL_REPORT" --output "$PANEL_RECEIPT" 2>&1)"; then
+    report PASS "panel:receipt" "every axis cleared on this snapshot ($PANEL_RECEIPT)"
+  else
+    PANEL_ERR="$("$PYTHON_BIN" -c 'import json,sys
+text = sys.argv[1]
+try: print("; ".join(json.loads(text)["errors"][:3]))
+except Exception: print(text.strip().splitlines()[-1] if text.strip() else "panel_gate.py failed")' "$PANEL_OUT")"
+    report FAIL "panel:receipt" "${PANEL_ERR:-panel_gate check failed} ($PANEL_RECEIPT)"
+  fi
+elif [ -n "$EMIT_ZIP" ]; then
+  echo "NOTE | panel:receipt                | no --panel-report given; builder_certified packaging requires one"
 fi
 
 echo "----"

@@ -57,14 +57,21 @@ tier, submit-ready certification, or guaranteed platform acceptance.
 
 ## `builder_certified` (default)
 
-Selected by a bare `task-batch N`. Task creation without a quality panel. One persistent
-builder, **one** reviewer, and the blind solve probe; no ten-reviewer panel, no
-fairness reviewer, no consolidated auditor.
+Selected by a bare `task-batch N`. One persistent builder, **one** reviewer, one
+adversarial verifier reviewer, the blind solve probe, and a pre-submission
+quality panel (full five-axis discovery, clearance on changed axes); no fairness
+reviewer, no consolidated auditor.
 
-The trade is deliberate and must be stated in every report: the five axes are
-covered by executable receipts plus one reviewer, not by ten isolated reviewers.
-This lowers cost by roughly an order of magnitude and raises the chance of a
-platform return. It is not a claim that the panel was satisfied.
+The five axes are covered first by executable receipts plus one reviewer, then,
+once the probe has shown the task clears CORE+, by a ten-reviewer discovery
+panel, so the findings the platform panel would return are found and repaired
+before upload. The probe runs first because it is the cheaper filter: in
+task-batch 3 all four first probes came back 2/2, and a panel spent before
+hardening is spent on a snapshot about to change. Clearance re-runs every axis
+that had a finding or whose visible files the repair changed; a repair touching
+`tests/` or `instruction.md` therefore re-runs most or all of them, so budget
+10–20 panel reviewers per task. The panel is local and bounded; it is not a
+claim that the platform panel will be satisfied.
 
 A return is not cheap either. Both `builder_certified` tasks submitted on
 2026-09-24 (`tbrain-health-claim-cost-sharing`, `tbrain-intermittent-infusion-regimen`)
@@ -72,7 +79,7 @@ came back from the quality panel with 37 findings each, 32–34 of them
 `sound_verifier`, before difficulty was measured. Every gate below had been
 green. The builder's receipts show that the task agrees with itself; they do not
 show that the verifier rejects wrong work the builder did not think of. Step 5b
-exists for that gap.
+exists for that gap, and step 8 runs the platform's own five axes before upload.
 
 Required path:
 
@@ -86,7 +93,13 @@ Required path:
    formula domains, the state table, the global-claim check, and the exact
    conventions. Then run the reviewer's `contract_review` turn
    ([single-reviewer-workflow.md](single-reviewer-workflow.md)), blind to tests
-   and solution, and repair the contract **before any verifier exists**. A
+   and solution, and repair the contract **before any verifier exists**. The
+   same turn scores the
+   [solver-path screen](../../task-miner/solver_path_screen.md) on the written
+   instruction; `self_verification_resistance` of 2 or lower stops here to
+   redesign the causal core or replace the candidate, the cheapest point to
+   catch a task that will come back 2/2. One redesign is allowed; a second score
+   of 2 or lower replaces the candidate. A
    contract finding after the receipts forces the whole wrong-path matrix to
    rerun.
 4. Build the independent expectation model, then the Oracle, **in that order**.
@@ -110,7 +123,9 @@ Required path:
    plausible wrong submissions, each contract-valid except for one rule, and aims
    them at the shapes the scaffold checklist §1 and §4 list: undeclared regions,
    job shapes, loose comparators, promised helpers. It also writes one or two
-   contract-valid alternatives. The builder runs each through
+   contract-valid alternatives. Save each submission with its receipt under
+   `workspace/reports/<slug>/adversarial/`; revisions rerun them as a regression
+   suite. The builder runs each through
    `wrong_path_runner.py`. A wrong submission scoring reward 1, or a valid
    alternative scoring 0, is a finding, and it is answered the §11 way: back the
    rule with a witness, or narrow the promise. Then rerun the affected closure
@@ -134,19 +149,66 @@ Required path:
    even when the count already clears the bar; neither counts as difficulty.
 
    If both solvers succeed, the task is under the bar. Deepen the causal coupling
-   of the existing core rather than bolting on unrelated surface.
-8. Package as `builder_certified`.
+   of the existing core rather than bolting on unrelated surface, rerun steps 5–6
+   on the new snapshot, and probe again with a fresh pair. This strengthening
+   happens **once**: a second 2/2 rejects the candidate (as in
+   `task-local-solve-probe`). No panel runs until a probe clears CORE+.
+
+   Every probe pair gets its own output directory: archive the prior pair and
+   pass `--output workspace/local-solve-probes/<slug>-cycle-<N>`, because
+   `probe.py` refuses a directory that holds another snapshot.
+
+   Freeze `task.toml` submission prose (`difficulty_explanation` and the other
+   explanation fields) before step 8. The `coherent_contract` and
+   `deterministic_execution` packets include it, so a prose edit after the panel
+   invalidates those verdicts.
+8. **Pre-submission quality panel**, in `task-quality-panel-judgement` creation
+   mode, on the snapshot after any step-7 repairs, once a fresh
+   `panel_precheck.py --full --manifest workspace/reports/<slug>/panel-precheck-manifest.json --profile builder_certified`
+   passes on it.
+   - Discovery: all five axes, two fresh reviewers each, ten responses collected
+     before any edit.
+   - Repair: deduplicate retained findings by root cause and answer them in
+     **one** consolidated batch through `task-revise-flag-remediation` (back the
+     promise or stop promising it), then rerun the affected closure gates.
+   - Clearance: run `panel_gate.py clearance-axes` against the discovery packet
+     manifest, passing each axis with a retained blocking finding and
+     `--discovery-report` so `Unsure` or incomplete discovery axes are re-run
+     too. Spawn two new
+     reviewers for every axis it lists; the axes it carries keep their discovery
+     verdict because none of their visible files changed. Skip clearance when
+     discovery is five-axis non-blocking. A blocking clearance stops with
+     `rescope_required`; there is no third round.
+   - Re-probe: if the batch removed or narrowed an obligation, or changed graded
+     behaviour of the core, the step-7 signal no longer describes the task. Probe
+     once more with a fresh pair on the cleared snapshot. A 2/2 here means the
+     cut took the hard thing: stop with `rescope_required` rather than harden a
+     panel-cleared snapshot. Editorial or witness-only repairs keep the step-7
+     signal. A defect found by reading a re-probe failure for cause also stops
+     with `rescope_required`: fixing it would need a third panel round.
+9. Build the panel receipt with `panel_gate.py write-report <task>
+   --adjudication <adjudication.json> --report <report.json>`: it reads the raw
+   reviewer files, computes completeness and the snapshot hash, refuses a verdict
+   below a raw severity without a `downgrade_reason`, and then runs `check`.
+   Never write `report.json` by hand. Package through
+   `scripts/preflight.sh <task> --strict --emit-zip <zip> --panel-report <report.json>`,
+   where a failing `panel:receipt` row blocks the ZIP. Then report it
+   as `builder_certified`, reporting each axis verdict with the snapshot it was
+   reviewed on. Any later semantic edit makes that check fail until the changed
+   axes are cleared again.
 
 The builder never asserts a gate result. Every claim in the report must name a
 receipt file bound to the snapshot hash; a gate with no receipt is not run.
 
 When a gate fails and the builder believes the gate is wrong, record a
 `documented_exception` in the manifest with the reason and the contract citation.
-Never quietly edit the task to satisfy a rule you think is mistaken — with no
-panel above it, a wrong gate silently rewrites correct work.
+Never quietly edit the task to satisfy a rule you think is mistaken — a wrong
+gate silently rewrites correct work, and the panel reviewers never see the
+manifest to notice it.
 
-`builder_certified` is not `local_panel_cleared`, `candidate_ready`, a measured
-tier, or guaranteed platform acceptance.
+`builder_certified` is not `local_panel_cleared` (its clearance covers only
+changed axes, not a fresh five-axis panel), `candidate_ready`, a measured tier, or guaranteed
+platform acceptance.
 
 ## Validation and revision accounting
 

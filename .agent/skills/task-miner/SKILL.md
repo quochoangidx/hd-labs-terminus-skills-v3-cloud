@@ -619,6 +619,19 @@ Reject ambiguity, unobtainable knowledge, arbitrary hidden constants/strings,
 and cosmetic domain labels. Do not reject a discoverable hidden requirement
 merely because its final rule is absent from `instruction.md`.
 
+### Solver-path screen — RUN ON EVERY CANDIDATE
+
+Before scoring, apply [solver_path_screen.md](solver_path_screen.md) to the
+candidate design. Write the pre-mortem first (how a strong solver would solve
+it and how it would check itself), then score the five questions and record
+`solver_path_screen` in the artifact. This is the one screen calibrated against
+real probe outcomes: blind retro-scoring of 24 probed tasks separated 2/2
+collapses from resisting tasks at AUC 0.74. Every task scored 1 had collapsed.
+`self_verification_resistance` 1 rejects; 2 deprioritizes. The same screen runs
+again at `contract_review` on the written instruction, where a score of 2 or
+lower stops the build before any verifier exists. Do not raise a score for
+ambiguity: an uninferable requirement is a fairness defect, not difficulty.
+
 ### Conformance/transcription collapse screen — lane-specific
 
 The 2026-07-12 batch remains a strong prior for tasks whose whole job is to
@@ -855,6 +868,9 @@ Score each axis from 1 to 5:
 - `runtime_viability`: dependencies are baked in and required services are
   deterministic; public network access is not used as a tooling substitute
 - `anti_shortcut_hardness`: hard to satisfy with a narrow hardcode
+- `self_verification_resistance`: from the solver-path screen; 1 means a solver
+  can write a complete reference from the authority and differential-test to
+  convergence, 5 means it cannot confirm the graded behaviour by self-testing
 - `verifier_complexity`: can be tested behaviorally from declared artifacts
 - `runtime_cost`: 5 is lightweight, 1 is too heavy
 - `leakage_risk`: 5 is low leakage, 1 exposes exact patch/test names
@@ -868,6 +884,8 @@ Reject if:
   still hard for semantic reasons
 - `deterministic_reproducibility < 4`
 - `anti_shortcut_hardness < 3`
+- `self_verification_resistance < 2`; rank `2` below every viable `3+`
+  candidate
 - `runtime_viability < 4`
 - the agent's edit→build→test cycle cannot be made fast. If testing a change
   requires a long cold rebuild that cannot be warmed to an incremental per-edit
@@ -1037,12 +1055,14 @@ candidate:
     deterministic_reproducibility:
     runtime_viability:
     anti_shortcut_hardness:
+    self_verification_resistance:
     verifier_complexity:
     runtime_cost:
     leakage_risk:
   patch_shape_gate:        # pass | fail — historical hard-shape calibration
   patch_shape_evidence:
   v3_shape_screen:         # pass | fail — clear goal, inferable model, interacting axes, semantic deliverable
+  solver_path_screen:      # solver_path_screen.md: premortem, five 1–5 scores, self_verification_resistance, prediction, confidence, decisive_reason
   conformance_collapse_screen: # pass | fail | not_applicable
   family_key:              # library + bug_family, checked against the family ledger
   agent_probe:             # model, run count, pass count, trial-analysis flags

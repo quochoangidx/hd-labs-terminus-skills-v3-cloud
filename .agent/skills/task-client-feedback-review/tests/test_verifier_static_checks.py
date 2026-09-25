@@ -147,3 +147,15 @@ def test_disassembling_a_candidate_class_is_not_candidate_execution() -> None:
 
     assert unsafe == []
     assert count == 0
+
+
+def test_flags_documented_module_command_the_verifier_never_launches() -> None:
+    instruction = "Running `python -m quic_receive receive --config /app/c.json` must write the report."
+    imported = "from quic_receive.cli import receive_file\nreceive_file(a, b, c)"
+    assert MODULE.documented_module_unexecuted(instruction, imported) == ["quic_receive"]
+    launched = 'command = ["python3", "-m", "quic_receive", "receive"]'
+    assert MODULE.documented_module_unexecuted(instruction, launched) == []
+    assert MODULE.documented_module_unexecuted("Run `python -m pytest`.", imported) == []
+    run_module = "runpy.run_module('quic_receive', run_name='__main__')"
+    assert MODULE.documented_module_unexecuted(instruction, run_module) == []
+
