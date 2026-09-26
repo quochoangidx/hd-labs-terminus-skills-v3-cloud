@@ -520,12 +520,17 @@ on revision. This path applies both to the repair batch inside creation step 8
    `solution/` adds reference and determinism; `instruction.md` or
    `environment/` re-run every axis. After a platform return, re-running only the
    returned axis is the default. Blocking clearance stops as `rescope_required`.
-5. **Re-probe** once with a fresh pair, in a new `--output` directory, when the batch removed or narrowed an
+5. **Re-probe** once with a fresh pair (`terminus-probe` on `claude-opus-5`,
+   launched without a `model` argument; `probe.py record` verifies the served
+   model), in a new `--output` directory, when the batch removed or narrowed an
    obligation or changed graded behaviour of the core; 2/2 stops as
-   `rescope_required`. Witness-only or editorial repairs keep the prior signal.
+   `rescope_required`. Witness-only or editorial repairs keep the prior signal,
+   and so does a tests-only revision of a task the platform already measured,
+   while the instruction, `environment/` and `solution/` stay byte-identical.
 6. **Receipt:** write the adjudication for the repaired snapshot (carried axes
    point at the baseline manifest with their platform or discovery verdict,
-   platform ones with `"source": "platform"` and the saved report; cleared axes
+   platform ones with `"source": "platform"` and the saved report, gate-carried
+   ones with `"source": "gate"` and refreshed `gate_receipts`; cleared axes
    at the clearance manifest with both raw reviewer files), build `report.json`
    with `panel_gate.py write-report`, and package with `scripts/preflight.sh
    --panel-report <report.json>`.

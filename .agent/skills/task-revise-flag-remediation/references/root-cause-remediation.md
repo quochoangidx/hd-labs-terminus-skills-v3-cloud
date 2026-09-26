@@ -1,6 +1,6 @@
 # Root-cause remediation
 
-Use this only after the five-axis discovery pass has finished and the user asked
+Use this only after the discovery pass has finished on every axis in the panel's scope (the two reviewer axes plus gate-carried receipts under the lean `builder_certified` route, all five in a full panel) and the user asked
 to update the task, or to interpret the root-invariant map when consolidating
 a review-only report (without authorization to edit). The goal is to close each violated semantic invariant, not to
 make the reported example pass.
