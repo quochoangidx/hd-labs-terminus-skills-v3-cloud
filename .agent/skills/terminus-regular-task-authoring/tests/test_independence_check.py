@@ -70,3 +70,101 @@ def test_an_unrelated_subprocess_call_is_reported_but_not_blocking(task: Path) -
 def test_package_names_are_read_from_the_environment_tree(task: Path) -> None:
     assert "cairnlift" in MODULE.package_names(task)
     assert "scale" in MODULE.package_names(task)
+
+
+INDEPENDENT_MODEL = "def depth(width, height):\n    return max(0, min(width, height) // 2)\n"
+
+
+def run_main(monkeypatch, capsys, *argv: str) -> tuple[int, str]:
+    monkeypatch.setattr("sys.argv", ["independence_check.py", *argv])
+    code = MODULE.main()
+    return code, capsys.readouterr().out
+
+
+def test_a_model_under_tests_is_blocking_even_when_independent(
+    task, tmp_path, monkeypatch, capsys
+) -> None:
+    """writing-tests.md: no end-to-end solver in tests/ (crop-water v3, royalty v3 returns)."""
+    (task / "tests/model.py").write_text(INDEPENDENT_MODEL)
+    report = tmp_path / "report.json"
+
+    code, out = run_main(
+        monkeypatch,
+        capsys,
+        str(task),
+        "--model",
+        "tests/model.py",
+        "--report-json",
+        str(report),
+    )
+
+    assert code == 1
+    assert "model_in_tests" in out
+    data = MODULE.json.loads(report.read_text())
+    assert data["status"] == "fail"
+    assert data["models"][0]["status"] == "model_in_tests"
+    # The declared model is already blocking, so it is not repeated as an advisory.
+    assert data["advisories"] == []
+
+
+def test_a_model_in_solution_still_gets_the_independence_check(task, monkeypatch, capsys) -> None:
+    (task / "solution").mkdir()
+    (task / "solution/model.py").write_text(INDEPENDENT_MODEL)
+    assert run_main(monkeypatch, capsys, str(task), "--model", "solution/model.py")[0] == 0
+
+    (task / "solution/model.py").write_text("from cairnlift.scale import depth\n")
+    code, out = run_main(monkeypatch, capsys, str(task), "--model", "solution/model.py")
+    assert code == 1
+    assert "contaminated" in out and "line 0: model_in_tests" not in out
+
+
+def test_a_dotted_path_that_escapes_tests_is_not_under_tests(task: Path) -> None:
+    assert MODULE.under_tests(task, "tests/model.py")
+    assert MODULE.under_tests(task, "./tests/sub/../model.py")
+    assert not MODULE.under_tests(task, "tests/../solution/model.py")
+
+
+def test_the_scan_flags_an_imported_model_module(task: Path) -> None:
+    (task / "tests/model.py").write_text(INDEPENDENT_MODEL)
+    (task / "tests/test_outputs.py").write_text("import model\n")
+
+    found = MODULE.scan_tests_for_models(task)
+
+    assert [(f["path"], f["kind"]) for f in found] == [
+        ("tests/model.py", "model_in_tests_suspected")
+    ]
+
+
+def test_the_scan_ignores_a_model_named_module_no_test_imports(task: Path) -> None:
+    (task / "tests/model.py").write_text(INDEPENDENT_MODEL)
+    (task / "tests/test_outputs.py").write_text("import json\n")
+
+    assert MODULE.scan_tests_for_models(task) == []
+
+
+def test_the_scan_flags_an_expected_maker_under_another_name(task: Path) -> None:
+    (task / "tests/ledger.py").write_text("def compute_expected(job):\n    return [job]\n")
+    (task / "tests/test_outputs.py").write_text("from ledger import compute_expected\n")
+
+    assert [f["path"] for f in MODULE.scan_tests_for_models(task)] == ["tests/ledger.py"]
+
+
+def test_the_scan_leaves_a_loader_of_sealed_expectations_alone(task: Path) -> None:
+    (task / "tests/runs.py").write_text(
+        "import json\nfrom pathlib import Path\n\n\ndef expected(name):\n"
+        "    return json.loads((Path(__file__).parent / 'expected' / name).read_text())\n"
+    )
+    (task / "tests/jobgen.py").write_text("def sweep(seed):\n    return {'seed': seed}\n")
+    (task / "tests/test_outputs.py").write_text("import jobgen\nimport runs\n")
+
+    assert MODULE.scan_tests_for_models(task) == []
+
+
+def test_the_scan_alone_advises_but_does_not_fail(task, monkeypatch, capsys) -> None:
+    (task / "tests/oracle.py").write_text(INDEPENDENT_MODEL)
+    (task / "tests/test_outputs.py").write_text("import oracle\n")
+
+    code, out = run_main(monkeypatch, capsys, str(task))
+
+    assert code == 0
+    assert "model_in_tests_suspected" in out and "independence was not checked" in out

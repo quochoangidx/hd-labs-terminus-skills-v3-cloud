@@ -270,6 +270,324 @@ def interpreter_permission_alias_issue(source: str) -> bool | None:
     return len(chmod_calls) >= 2 and has_mode_capture and not has_resolve
 
 
+TREE_WALK_RE = re.compile(r"\.iterdir\(|\.rglob\(|\bos\.walk\(|\.glob\(\s*[\"']\*\*")
+SEED_USE_RE = re.compile(r"(?i)seed|default_rng\(|random\.Random\(")
+BUILD_METADATA_LITERALS = (".git", "__pycache__")
+
+
+CANDIDATE_ROOTS = ("/app",)
+SEED_NAME_RE = re.compile(r"(?i)seed")
+SEED_CALL_RE = r"(?:\bRandom|\bdefault_rng|\.seed)\([^)\n]*\b{name}\b"
+SEALED_SEED_FIX = (
+    "preferred fix: a sealed constant seed kept in the verifier (tests/), so the graded "
+    "draw cannot depend on any byte the candidate controls; if a candidate digest is kept, "
+    "it must hash every regular file the candidate runs with and skip .git and __pycache__"
+)
+
+
+def _candidate_names(tree: ast.AST, roots: tuple[str, ...]) -> set[str]:
+    """Module names bound to a candidate path, e.g. `SOURCE_ROOT = Path("/app/src")`."""
+    names: set[str] = set()
+    assigns = [node for node in getattr(tree, "body", []) if isinstance(node, (ast.Assign, ast.AnnAssign))]
+    changed = True
+    while changed:
+        changed = False
+        for node in assigns:
+            if node.value is None:
+                continue
+            if not (_mentions_candidate_path(node.value, roots) or any(
+                isinstance(sub, ast.Name) and sub.id in names for sub in ast.walk(node.value)
+            )):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id not in names:
+                    names.add(target.id)
+                    changed = True
+    return names
+
+
+def _mentions_candidate_path(node: ast.AST, roots: tuple[str, ...]) -> bool:
+    return any(
+        isinstance(sub, ast.Constant)
+        and isinstance(sub.value, str)
+        and any(sub.value == root or sub.value.startswith(root.rstrip("/") + "/") for root in roots)
+        for sub in ast.walk(node)
+    )
+
+
+def _without_docstring(function: ast.FunctionDef) -> list[ast.stmt]:
+    body = list(function.body)
+    if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
+        body = body[1:]
+    return body
+
+
+def _unfiltered_walk(nodes: list[ast.stmt]) -> bool:
+    """A walk that visits every entry, not only one source suffix."""
+    for statement in nodes:
+        for node in ast.walk(statement):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            attr = node.func.attr
+            if attr in {"iterdir", "walk", "scandir"}:
+                return True
+            if attr in {"rglob", "glob"}:
+                pattern = node.args[0].value if node.args and isinstance(node.args[0], ast.Constant) else "*"
+                if isinstance(pattern, str) and re.fullmatch(r"(?:\*\*/)?\*", pattern):
+                    return True
+    return False
+
+
+def candidate_seeded_draw_sites(source: str, roots: tuple[str, ...] = CANDIDATE_ROOTS) -> list[dict]:
+    """Functions that hash candidate files into a seed for the graded draw.
+
+    Anything the candidate writes then chooses which scenarios are graded: an inert
+    nonce file beside the package can steer the draw to the cases it already passes.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    names = _candidate_names(tree, roots)
+    sites = []
+    for function in (node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))):
+        body = _without_docstring(function)
+        nodes = [sub for statement in body for sub in ast.walk(statement)]
+        hashes = any(isinstance(node, ast.Call) and _call_name(node).startswith("hashlib.") for node in nodes)
+        candidate = any(_mentions_candidate_path(statement, roots) for statement in body) or any(
+            isinstance(node, ast.Name) and node.id in names for node in nodes
+        )
+        if not (hashes and candidate):
+            continue
+        docstring = ast.get_docstring(function) or ""
+        seeded = (
+            SEED_NAME_RE.search(function.name)
+            or SEED_NAME_RE.search(docstring)
+            or re.search(SEED_CALL_RE.format(name=re.escape(function.name)), source)
+        )
+        if seeded:
+            sites.append({
+                "function": function.name,
+                "line": function.lineno,
+                "unfiltered_walk": _unfiltered_walk(body),
+            })
+    return sites
+
+
+def candidate_digest_metadata_issue(source: str) -> list[str]:
+    """Metadata directories a candidate-tree seed digest would still include.
+
+    Hashing every file under /app into a held-out seed also hashes the build's Git
+    commit (dates, index stat data) and interpreter bytecode caches (source mtimes),
+    so two clean builds of identical code grade different scenarios. The digest must
+    skip both, and the verifier must keep them out of the candidate's reach. A digest
+    over one source suffix (``rglob("*.java")``) cannot reach either directory, and
+    a digest of generated inputs is not a candidate digest at all. The preferred fix
+    for any candidate-seeded draw is still a sealed constant seed (SEALED_SEED_FIX).
+    """
+    if not (
+        "hashlib" in source
+        and re.search(r"[\"']/app[\"'/]", source)
+        and TREE_WALK_RE.search(source)
+        and SEED_USE_RE.search(source)
+    ):
+        return []
+    if not any(site["unfiltered_walk"] for site in candidate_seeded_draw_sites(source)):
+        return []
+    return [
+        name for name in BUILD_METADATA_LITERALS
+        if not re.search(rf"[\"']{re.escape(name)}[\"']", source)
+    ]
+
+
+WALK_ATTRS = frozenset({"iterdir", "rglob", "walk", "scandir"})
+STAGING_NAME_RE = re.compile(r"(?i)copy|stag|digest|seed|hash|fingerprint")
+ENTRY_TYPE_TOKENS = ("S_ISREG", "S_ISDIR", "S_ISFIFO", "S_ISSOCK", "is_symlink", "ancestors")
+
+
+def staging_hard_fail_sites(source: str) -> list[int]:
+    """Lines where a walk over the candidate tree fails on an entry instead of skipping it.
+
+    A verifier that copies or hashes all of /app and asserts on each entry's type
+    or link target rejects a correct package that merely left a virtualenv link,
+    a dangling link or a FIFO beside it. Unusable entries should be skipped without
+    being dereferenced; the contract never restricts incidental /app layout.
+    """
+    if not re.search(r"[\"']/app[\"'/]", source):
+        return []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    sites: list[int] = []
+    for function in (node for node in tree.body if isinstance(node, ast.FunctionDef)):
+        # Only helpers that stage or fingerprint the candidate tree; validating the
+        # candidate's own output tree is a different, legitimate check.
+        if not STAGING_NAME_RE.search(function.name):
+            continue
+        walks = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in WALK_ATTRS
+            for node in ast.walk(function)
+        )
+        if not walks:
+            continue
+        # Per-entry scope: loop bodies and nested (recursive) helpers. A single
+        # assertion that the root itself is a directory is a precondition, not this.
+        scopes = [
+            statement
+            for node in ast.walk(function)
+            if isinstance(node, (ast.For, ast.While, ast.FunctionDef)) and node is not function
+            for statement in node.body
+        ]
+        for scope in scopes:
+            for node in ast.walk(scope):
+                if isinstance(node, ast.Assert) and any(
+                    token in ast.unparse(node.test) for token in ENTRY_TYPE_TOKENS
+                ):
+                    sites.append(node.lineno)
+                elif isinstance(node, ast.Try) and "relative_to(" in "".join(
+                    ast.unparse(statement) for statement in node.body
+                ):
+                    sites.extend(
+                        raised.lineno
+                        for handler in node.handlers
+                        for raised in ast.walk(handler)
+                        if isinstance(raised, ast.Raise)
+                    )
+    return sorted(set(sites))
+
+
+ABSOLUTE_GRADIENT_RE = re.compile(
+    r"\.grad\b[^\n]{0,60}?(?:<=?|>=?)\s*[0-9][0-9.eE+-]*"
+    r"|(?:<=?|>=?)\s*[0-9][0-9.eE+-]*[^\n]{0,20}\.grad\b"
+)
+
+
+def absolute_gradient_guard_sites(sources: dict[str, str]) -> list[str]:
+    """Convergence accepted or rejected by comparing a raw gradient to a constant.
+
+    The gradient scales with the information weights, so an absolute bound that
+    holds for unit covariance rejects a reached optimum once the contract allows
+    large weights. Judge convergence in objective units instead.
+    """
+    return [
+        f"{name}:{number}"
+        for name, text in sources.items()
+        for number, line in enumerate(text.splitlines(), start=1)
+        if ABSOLUTE_GRADIENT_RE.search(line)
+    ]
+
+
+DATA_SUFFIXES = frozenset({
+    ".json", ".jsonl", ".ndjson", ".csv", ".tsv", ".txt", ".dat", ".in", ".xml", ".yaml", ".yml",
+    ".sam", ".fa", ".fasta", ".fna", ".fq", ".fastq", ".gff", ".gff3", ".gtf", ".bed", ".vcf",
+    ".mid", ".midi", ".wav", ".log", ".ics", ".geojson", ".parquet", ".bin",
+})
+MANIFEST_NAMES = frozenset({
+    "package.json", "package-lock.json", "tsconfig.json", "jsconfig.json", "composer.json",
+    "go.mod", "go.sum", "pom.xml", "cargo.toml", "cargo.lock", "requirements.txt",
+    "pyproject.toml", "yarn.lock", "pnpm-lock.yaml", "readme.txt", "license.txt",
+    "cmakelists.txt", ".eslintrc.json", ".prettierrc.json", "deno.json",
+})
+
+
+def _data_files(root: Path, skip: Path | None = None) -> list[Path]:
+    if not root.is_dir():
+        return []
+    return [
+        path for path in sorted(root.rglob("*"))
+        if path.is_file()
+        and not path.is_symlink()
+        and path.suffix.lower() in DATA_SUFFIXES
+        and path.name.lower() not in MANIFEST_NAMES
+        and not (skip and skip in path.parents)
+        and path.stat().st_size > 0
+    ]
+
+
+def visible_fixture_graded(task_dir: Path) -> list[str]:
+    """Verifier data files that are byte-for-byte copies of a visible environment input.
+
+    A graded job the candidate can read under /app is ground truth in plain sight: a
+    package special-cased to the visible sample earns credit for it. tests/shipped/ is
+    the deliberate pristine copy of the delivered tree and is not graded input.
+    """
+    import hashlib
+
+    visible: dict[str, str] = {}
+    for path in _data_files(task_dir / "environment"):
+        visible.setdefault(hashlib.sha256(path.read_bytes()).hexdigest(), str(path.relative_to(task_dir)))
+    matches = []
+    tests = task_dir / "tests"
+    for path in _data_files(tests, skip=tests / "shipped"):
+        twin = visible.get(hashlib.sha256(path.read_bytes()).hexdigest())
+        if twin:
+            matches.append(f"{path.relative_to(task_dir)} == {twin}")
+    return matches
+
+
+DOCUMENTED_SCRIPT_RE = re.compile(
+    r"\b(?:python3?|node|tsx|ts-node|bun|deno\s+run|java|ruby|perl|bash|sh)\s+"
+    r"(/app/[\w./-]+\.(?:py|js|mjs|cjs|ts|java|rb|pl|sh))\b"
+)
+APP_SYMLINK_RE = re.compile(
+    r"\bln\s+-[A-Za-z]*s[A-Za-z]*\s+[\"']?/app\b"
+    r"|\bos\.symlink\(\s*[\"']/app\b"
+    r"|\.symlink_to\(\s*[\"']/app\b"
+)
+
+
+def documented_script_relocated(contract_text: str, tests_text: str) -> list[dict]:
+    """Documented `/app` scripts the verifier runs from a relocated copy instead.
+
+    A driver copy under another directory whose tree is symlinked back into /app runs
+    with a different argv[0] and __file__, so code that behaves only when started from
+    the documented path is never observed. Prefer os.replace-ing the shipped driver onto
+    the documented path and running exactly the documented command.
+    """
+    if not APP_SYMLINK_RE.search(tests_text):
+        return []
+    findings = []
+    for documented in sorted(set(DOCUMENTED_SCRIPT_RE.findall(contract_text))):
+        basename = re.escape(documented.rsplit("/", 1)[-1])
+        relocated = sorted(set(re.findall(rf"(?<![\w./-])(/(?!app/|tests/)[\w.-][\w./-]*/{basename})\b", tests_text)))
+        if relocated:
+            findings.append({"documented": documented, "relocated": relocated})
+    return findings
+
+
+ADVISORY_CHECKS = ("seed", "relocated", "seeded_draw")
+ADVISORY_FIXES = {
+    "seed_digest_includes_build_metadata": (
+        "the /app seed digest walks every entry but never names .git and __pycache__, so two "
+        "clean builds can draw different scenarios; " + SEALED_SEED_FIX
+    ),
+    "candidate_seeded_draw": (
+        "the graded draw is seeded from a hash of candidate files, so an inert file in the "
+        "submission can choose which cases are graded; " + SEALED_SEED_FIX
+    ),
+    "documented_script_relocated": (
+        "the verifier runs a relocated copy of a documented /app script through a symlinked "
+        "tree, so argv[0], __file__ and cwd differ from the documented invocation; "
+        "os.replace the shipped driver onto the documented path and run exactly the documented command"
+    ),
+}
+
+
+def _candidate_roots(task_dir: Path) -> tuple[str, ...]:
+    """/app plus any artifact path task.toml declares."""
+    roots = list(CANDIDATE_ROOTS)
+    toml = task_dir / "task.toml"
+    if toml.is_file():
+        match = re.search(r"(?m)^\s*artifacts\s*=\s*\[([^\]]*)\]", toml.read_text(encoding="utf-8", errors="replace"))
+        if match:
+            roots.extend(path.rstrip("/") or "/" for path in re.findall(r"[\"']([^\"']+)[\"']", match.group(1)))
+    return tuple(dict.fromkeys(roots))
+
+
 def _task_sources(task_dir: Path) -> tuple[str, str]:
     verifier = "\n".join(
         path.read_text(encoding="utf-8", errors="replace")
@@ -290,11 +608,19 @@ def _task_sources(task_dir: Path) -> tuple[str, str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        epilog=(
+            "Exit 1: a blocking check failed. Exit 2: an advisory check named with --check "
+            f"found something ({', '.join(ADVISORY_CHECKS)}); advisories never affect --check all."
+        )
+    )
     parser.add_argument("task_dir", type=Path)
     parser.add_argument(
         "--check",
-        choices=("privilege", "alignment", "identity", "interpreter", "all"),
+        choices=(
+            "privilege", "alignment", "identity", "interpreter", "staging", "gradient", "fixture",
+            *ADVISORY_CHECKS, "all",
+        ),
         default="all",
     )
     args = parser.parse_args()
@@ -311,6 +637,31 @@ def main() -> int:
     setpriv_issue = setpriv_missing_no_new_privs(verifier)
     escalation_reachable = setpriv_issue and privilege_acquirable(verifier)
     identity_issue = test_identity_leak(verifier)
+    seed_metadata = candidate_digest_metadata_issue(verifier)
+    tests_dir = args.task_dir / "tests"
+    seeded_draws = [
+        {"file": str(path.relative_to(args.task_dir)), **site}
+        for path in sorted(tests_dir.rglob("*.py"))
+        if tests_dir / "shipped" not in path.parents
+        for site in candidate_seeded_draw_sites(
+            path.read_text(encoding="utf-8", errors="replace"), _candidate_roots(args.task_dir)
+        )
+    ]
+    fixture_copies = visible_fixture_graded(args.task_dir)
+    tests_text = "\n".join(
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in sorted(tests_dir.rglob("*"))
+        if path.is_file()
+        and tests_dir / "shipped" not in path.parents
+        and (path.suffix in {".py", ".sh"} or path.name == "Dockerfile")
+    )
+    relocated_scripts = documented_script_relocated(contract, tests_text)
+    staging_sites = staging_hard_fail_sites(verifier)
+    gradient_sites = absolute_gradient_guard_sites({
+        str(path.relative_to(args.task_dir)): path.read_text(encoding="utf-8", errors="replace")
+        for folder in ("solution", "tests")
+        for path in sorted((args.task_dir / folder).rglob("*.py"))
+    })
     interpreter_issues = []
     interpreter_parse_warnings = []
     for path in sorted((args.task_dir / "tests").rglob("*.py")):
@@ -331,6 +682,20 @@ def main() -> int:
         "interpreter_parse_warnings": interpreter_parse_warnings,
         "unit_test_alignment_issue": unit_test_alignment_issue(contract, verifier),
         "documented_module_unexecuted": unexecuted_modules,
+        "seed_digest_includes_build_metadata": seed_metadata,
+        "staging_hard_fail_lines": staging_sites,
+        "absolute_gradient_guards": gradient_sites,
+        "visible_fixture_graded": fixture_copies,
+        "documented_script_relocated": relocated_scripts,
+        "candidate_seeded_draw": seeded_draws,
+    }
+    advisories = {
+        "seed_digest_includes_build_metadata": bool(seed_metadata),
+        "documented_script_relocated": bool(relocated_scripts),
+        "candidate_seeded_draw": bool(seeded_draws),
+    }
+    payload["advisories"] = {
+        name: ADVISORY_FIXES[name] for name, fired in advisories.items() if fired
     }
     print(json.dumps(payload, sort_keys=True))
     # Keep the advisory in the payload either way, but only block when the escalation
@@ -344,6 +709,23 @@ def main() -> int:
         return 1
     if args.check in {"interpreter", "all"} and interpreter_issues:
         return 1
+    if args.check in {"staging", "all"} and staging_sites:
+        return 1
+    if args.check in {"gradient", "all"} and gradient_sites:
+        return 1
+    # Blocking: reproduces returned Protected-Ground-Truth / finding-18 reports, where a
+    # graded job was a copy of the visible sample.
+    if args.check in {"fixture", "all"} and fixture_copies:
+        return 1
+    # Advisory only: stricter than the documented platform contract, and each has fired
+    # on a tree the platform accepted. Reported with exit 2 when named explicitly.
+    advisory_hits = {
+        "seed": advisories["seed_digest_includes_build_metadata"],
+        "relocated": advisories["documented_script_relocated"],
+        "seeded_draw": advisories["candidate_seeded_draw"],
+    }
+    if advisory_hits.get(args.check):
+        return 2
     return 0
 
 

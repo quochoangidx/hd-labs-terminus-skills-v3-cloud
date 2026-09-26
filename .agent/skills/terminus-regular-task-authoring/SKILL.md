@@ -52,6 +52,12 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
 > oracle-under-`--tmpfs /tmp:noexec` repro) in one command — run it before
 > zipping, every time.
 
+0. For a seeded-departure repair task (the only shape that has produced
+   accepted CORE+ tasks so far), start from the
+   [accepted-task blueprint](references/accepted-task-blueprint.md): the anatomy
+   shared by six platform-accepted tasks, where their measured difficulty came
+   from (restraint traps; departures are table stakes), the 0/8 "unsolvable"
+   screen, and the Sound Verifier class ladder to sweep before the first upload.
 1. Pick a domain that maps honestly to one exact Terminus 3
    category/subcategory pair. A training-loop repair is `ML / Training`; a
    compiler repair is `Software / Languages`. Do not classify by the repair
@@ -80,6 +86,11 @@ the agent image; `tests/Dockerfile` builds a separate verifier image.
    repair: cover retained obligations, not numerical test/cluster/shape quotas.
    A failed integrity gate returns to design; passing is not semantic proof.
 9. Write deterministic `solution/solve.sh`; prefer `fix.patch` for large codebases.
+   Keep the expectation model and any job generator in `solution/` and seal their
+   output into `tests/expected/` with a SHA manifest; `tests/` loads and compares
+   and never computes the complete expected output
+   (`independence_check.py --model solution/model.py` blocks a model under
+   `tests/` as `model_in_tests`).
 10. Run Oracle/NOP and bind the Oracle CTRF to the verifier matrix. Then follow
     the selected execution profile: `campaign_ready` adds V3 inferability,
     mutation-backed semantic coverage and real-agent trials; explicit
@@ -882,9 +893,15 @@ Quality preflight:
 - for any corpus-graded verifier, the per-case pass-table pre-audit has run
   before zipping (see `task-clone` Quality Preflight / `task-local-solve-probe`):
   re-score the stored blind-probe diffs per-case and confirm (1) every case has
-  ≥1 probe passer or a documented reason (a CORE+ restraint trap missed by both
-  solvers is legitimate; see `contract-closure.md` §15), (2) the best union still fails >0 cases, (3) every feature
-  cluster keeps a soft representative a majority of runs pass
+  ≥1 probe passer or a documented reason, (2) the best union still fails >0 cases, (3) every feature
+  cluster keeps a soft representative a majority of runs pass.
+  A restraint trap that **every** local solver misses is not a documented reason:
+  it predicts a platform 0/8 "not passed by any agent run" return (royalty's 4/4
+  local misses became 8/8; see `accepted-task-blueprint.md` §4.3). Run the 0/8
+  screen on it (competing positive enumeration, missing definitional chain,
+  contrary expert instinct, unnamed shared step, trap spread across several
+  tests) and resolve it before upload; split misses across two or more traps are
+  the healthy shape.
 
 If the platform returns the task with `❌ Some tests not passed by any agent
 run` (blocking 0/N coverage flag), do not improvise — follow the decision tree

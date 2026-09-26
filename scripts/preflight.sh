@@ -229,6 +229,9 @@ with zipfile.ZipFile(zip_out, "w", zipfile.ZIP_DEFLATED) as z:
                     arc = os.path.relpath(full, task_dir).replace(os.sep, "/")
                     info = zipfile.ZipInfo.from_file(full, arc)
                     info.external_attr = (0o755 if os.access(full, os.X_OK) else 0o644) << 16
+                    # A ZipInfo passed to writestr keeps its own compress_type (STORED from
+                    # from_file); the ZipFile default only applies to plain names.
+                    info.compress_type = zipfile.ZIP_DEFLATED
                     with open(full, "rb") as f:
                         z.writestr(info, f.read())
 names = zipfile.ZipFile(zip_out).namelist()
@@ -268,34 +271,72 @@ fi
 
 # 7c. Candidate-controlled build/runtime code must not share the verifier owner.
 STATIC_VERIFIER_CHECK="$REPO_ROOT/.agent/skills/task-client-feedback-review/scripts/verifier_static_checks.py"
-PRIVILEGE_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check privilege 2>&1)"
+PRIVILEGE_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check privilege 2>&1)"
 PRIVILEGE_RC=$?
 if [ "$PRIVILEGE_RC" -eq 0 ]; then
   report PASS "verifier:unprivileged-candidate" "candidate-controlled subprocesses are demoted"
 else
   report FAIL "verifier:unprivileged-candidate" "$PRIVILEGE_OUTPUT"
 fi
-ALIGNMENT_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check alignment 2>&1)"
+ALIGNMENT_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check alignment 2>&1)"
 ALIGNMENT_RC=$?
 if [ "$ALIGNMENT_RC" -eq 0 ]; then
   report PASS "verifier:explicit-promise-alignment" "mechanical preservation-promise checks pass"
 else
   report FAIL "verifier:explicit-promise-alignment" "$ALIGNMENT_OUTPUT"
 fi
-IDENTITY_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check identity 2>&1)"
+IDENTITY_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check identity 2>&1)"
 IDENTITY_RC=$?
 if [ "$IDENTITY_RC" -eq 0 ]; then
   report PASS "verifier:test-identity" "no request.node.name leak detected"
 else
   report FAIL "verifier:test-identity" "$IDENTITY_OUTPUT"
 fi
-INTERPRETER_OUTPUT="$(python3 "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check interpreter 2>&1)"
+INTERPRETER_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check interpreter 2>&1)"
 INTERPRETER_RC=$?
 if [ "$INTERPRETER_RC" -eq 0 ]; then
   report PASS "verifier:interpreter-permissions" "no unsafe dual Bash-path restore pattern detected"
 else
   report FAIL "verifier:interpreter-permissions" "$INTERPRETER_OUTPUT"
 fi
+# Advisory (exit 2): three platform-accepted tasks seed from candidate files. The
+# preferred fix is a sealed constant seed; a kept /app digest must skip .git and
+# __pycache__.
+SEED_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check seed 2>&1)"
+SEED_RC=$?
+if [ "$SEED_RC" -eq 0 ]; then
+  report PASS "verifier:seed-digest-metadata" "no candidate-tree seed digest over build metadata"
+elif [ "$SEED_RC" -eq 2 ]; then
+  report WARN "verifier:seed-digest-metadata" "prefer a sealed constant seed; a kept /app digest must skip .git and __pycache__: $SEED_OUTPUT"
+else
+  report FAIL "verifier:seed-digest-metadata" "static check error: $SEED_OUTPUT"
+fi
+STAGING_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check staging 2>&1)"
+if [ $? -eq 0 ]; then
+  report PASS "verifier:staging-skips-unusable-entries" "candidate-tree staging never fails on an unrelated /app entry"
+else
+  report FAIL "verifier:staging-skips-unusable-entries" "skip escaping/dangling links and special files instead of failing: $STAGING_OUTPUT"
+fi
+GRADIENT_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check gradient 2>&1)"
+if [ $? -eq 0 ]; then
+  report PASS "reference:scale-aware-convergence" "no raw-gradient convergence threshold"
+else
+  report FAIL "reference:scale-aware-convergence" "judge convergence in objective units, not a raw gradient bound: $GRADIENT_OUTPUT"
+fi
+FIXTURE_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check fixture 2>&1)"
+if [ $? -eq 0 ]; then
+  report PASS "verifier:visible-fixture-graded" "no graded data file copies a visible environment input"
+else
+  report FAIL "verifier:visible-fixture-graded" "a graded job is a byte copy of a visible sample: $FIXTURE_OUTPUT"
+fi
+for ADV in relocated:documented-script-relocated seeded_draw:candidate-seeded-draw; do
+  ADV_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check "${ADV%%:*}" 2>&1)"
+  case $? in
+    0) report PASS "verifier:${ADV#*:}" "clean" ;;
+    2) report WARN "verifier:${ADV#*:}" "${ADV_OUTPUT:0:400}" ;;
+    *) report FAIL "verifier:${ADV#*:}" "static check error: $ADV_OUTPUT" ;;
+  esac
+done
 
 # 8. Rubric format (workspace/submissions/SUBMISSION-<slug>.md, if present)
 SUB_MD="$REPO_ROOT/workspace/submissions/SUBMISSION-$SLUG.md"
@@ -479,12 +520,15 @@ PYEOF
     # suite that depends on the clock, an unseeded source of randomness, or the order it
     # happens to collect in. Repeating the Oracle is the cheapest way to see it.
     if [ "$DETERMINISM" -eq 1 ]; then
+      # Agreement alone is not enough: three ERR or three 0 runs "agree" too. Every
+      # Oracle run must score reward 1.
       DET_FAIL=0
+      [ "$R_ORACLE" = "1" ] || { DET_FAIL=1; report FAIL "determinism:repeat-1" "first Oracle run scored '$R_ORACLE' (expected 1); repeats cannot show determinism"; }
       for attempt in 2 3; do
         R_REPEAT="$(run_reward oracle 1 0 || echo ERR)"
-        [ "$R_REPEAT" = "$R_ORACLE" ] || { DET_FAIL=1; report FAIL "determinism:repeat-$attempt" "reward '$R_REPEAT' after '$R_ORACLE' on the same snapshot"; }
+        [ "$R_REPEAT" = "1" ] || { DET_FAIL=1; report FAIL "determinism:repeat-$attempt" "reward '$R_REPEAT' (expected 1) after '$R_ORACLE' on the same snapshot"; }
       done
-      [ "$DET_FAIL" -eq 0 ] && report PASS "determinism:repeat" "three Oracle runs agree"
+      [ "$DET_FAIL" -eq 0 ] && report PASS "determinism:repeat" "three Oracle runs all scored reward 1"
       if [ -f "$TASK_DIR/tests/test.sh" ]; then
         if grep -Eq '(-p no:randomly|PYTHONHASHSEED|--randomly-seed)' "$TASK_DIR/tests/test.sh"; then
           report PASS "determinism:ordering" "collection order is pinned or explicitly randomized"

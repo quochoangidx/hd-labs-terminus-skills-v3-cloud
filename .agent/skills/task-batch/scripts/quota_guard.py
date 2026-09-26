@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -365,6 +366,14 @@ def validate(data: dict[str, Any], path: Path, phase: str) -> tuple[list[str], d
                 errors.append(
                     f"{label}: every role must use gpt-5.6-sol medium on Codex or Opus 5 medium on Claude"
                 )
+            elif (
+                role == "blind_solver"
+                and "claude" in runtime_name
+                and not re.match(r"^claude-opus-5(?:-\d{8})?$", str(turn.get("model", "")))
+            ):
+                # The `opus` alias and claude-opus-5-5 pass the role check above but are
+                # stronger than the platform's Opus 5 (user decision, 2026-09-26).
+                errors.append(f"{label}: a Claude blind solver must run exactly claude-opus-5")
             if turn.get("reasoning_effort") != "medium":
                 errors.append(f"{label}.reasoning_effort must be medium")
             expected_surface = "collaboration_subagent"

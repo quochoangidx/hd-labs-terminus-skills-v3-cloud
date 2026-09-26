@@ -1,7 +1,7 @@
 ---
 name: terminus-probe
 description: Use for a fresh blind local solve attempt against a sanitized Terminus task copy. Do not use for task authoring, verifier repair, or retries with hidden feedback.
-model: opus
+model: claude-opus-5
 effort: medium
 tools:
   - Bash

@@ -17,6 +17,14 @@ code does not automatically make a task `Software`.
 Values are case-sensitive. Every task has exactly one category and one
 subcategory.
 
+When a subcategory fits through its taxonomy gloss rather than its bare name,
+echo the gloss words in the instruction, `difficulty_explanation`,
+`relevant_experience` and one tag. The `category_and_tags` judge read `Claims` as
+insurance only and returned `tbrain-utility-rebill-true-up`, although the gloss
+is "Insurance/utility claims, billing rules, adjudication"; calling the
+escalations "customer billing claims" cleared it. Never switch to an invented
+subcategory the judge suggests (`Billing`, `Utilities` are not in the taxonomy).
+
 For `Hardware / CAD`, also apply
 `docs/creating-tasks/cad-task-guidelines.md` before accepting the category
 screen: the selected engine and verifier plan must be able to measure every

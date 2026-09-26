@@ -635,11 +635,15 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
             "LF only" if b"\r\n" not in raw else "CRLF is not accepted",
         )
     )
+    # Advisory: docs/ never require the bit, and two platform-accepted ZIPs
+    # (crop-water-balance, mechanical-royalty, 2026-09-26) shipped test.sh as 0600.
     checks.append(
-        result(
+        advisory(
             "test.sh:mode",
             os.access(test_sh, os.X_OK),
-            "executable" if os.access(test_sh, os.X_OK) else "missing executable bit",
+            "executable"
+            if os.access(test_sh, os.X_OK)
+            else "missing executable bit (stricter than docs/; accepted tasks shipped without it)",
         )
     )
     syntax = subprocess.run(

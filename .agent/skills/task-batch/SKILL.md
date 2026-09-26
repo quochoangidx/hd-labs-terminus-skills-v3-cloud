@@ -1,6 +1,6 @@
 ---
 name: task-batch
-description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new Terminus 3 tasks. Defaults to builder-certified: one reviewer, an adversarial verifier pass, a two-solver blind probe at a CORE+ bar, then a pre-submission quality panel (five-axis discovery, clearance on changed axes); no fairness reviewer, no auditor. Supports explicit campaign-ready and panel-ready. Do not use for ports or returned-task remediation."
+description: "Use when the user sends `task-batch N` or `/task-batch N`, where N is a positive integer, to autonomously create exactly N brand-new Terminus 3 tasks. Defaults to builder-certified (lean): one reviewer, an early two-solver skeleton probe on Opus 5 at a CORE+ bar, a scripted Sound Verifier sweep, then a narrow pre-submission panel (sound_verifier and correct_reference reviewers, other axes carried by receipts, clearance only on axes whose judged files changed); no fairness reviewer, no auditor. Supports explicit campaign-ready and panel-ready. Do not use for ports or returned-task remediation."
 ---
 
 # Task Batch Router
@@ -15,8 +15,9 @@ profile in the batch index and never mix receipts or result labels between
 profiles.
 
 - **Default to `builder_certified`.** A bare `task-batch N` selects it: one
-  reviewer, an adversarial verifier pass, the blind probe, then a pre-submission
-  quality panel; no fairness reviewer, no auditor. Read this router,
+  reviewer, an early skeleton probe, the scripted Sound Verifier sweep, then a
+  narrow pre-submission panel (about 7–10 model sessions per task); no fairness
+  reviewer, no auditor. Read this router,
   `references/execution-profiles.md`, `references/single-reviewer-workflow.md`,
   the bounded-design and contract-closure references,
   `task-quality-panel-judgement` (creation mode) and `task-local-solve-probe`.
@@ -38,6 +39,14 @@ reference is mandatory reading on this route, not something the user has to ask
 for in the prompt. Its sections 1–14 make the task fair; section 15 is where the
 difficulty comes from. Departures alone are self-verifiable and collapse at 2/2,
 so design the preservation-under-repair traps before seeding a single departure.
+The [accepted-task blueprint](../terminus-regular-task-authoring/references/accepted-task-blueprint.md)
+is equally mandatory: it is the shape six platform-accepted tasks share, the trap
+properties that held on the platform (and the 0/8 screen for the ones that went
+"unsolvable"), and the Sound Verifier class ladder to sweep before upload, which
+is what every one of their panel returns was about. Those tasks are reference
+only: no new task may reuse their domain setting, authority, departures, trap
+instances, data or wording, and a batch should vary instruction shape, size and
+trap pairing rather than clone the accepted form.
 
 User-specified category, language, attempt and time budgets override profile
 defaults. Record an attempt when the user's definition says it begins. Keep one
@@ -124,15 +133,16 @@ quality axes are first carried by executable receipts:
 |---|---|
 | `coherent_contract` | closure clauses present and anchored; every exact convention cites a visible authority sentence; the blind solver's failures read for cause |
 | `correct_reference_solution` | the expectation model is derived from the authority independently of the Oracle, so Oracle=1 is a non-circular agreement; `solve.sh` carries a contract header |
-| `sound_verifier` | the adversarial verifier pass (step 5b): an outside reviewer's wrong submissions, each rejected; plus no orphan test and no witnessless obligation; a wrong-path receipt per core obligation; differential preservation for untouched behavior |
+| `sound_verifier` | the scripted Sound Verifier sweep (step 5b, blueprint C1–C18): every mutant rejected on its own test, contract-valid alternatives accepted; plus no orphan test and no witnessless obligation; a wrong-path receipt per core obligation; differential preservation for untouched behavior |
 | `protected_ground_truth` | isolation run and recorded: unprivileged candidate, closed source tree, restricted `/tests` and `/logs/verifier`, and no reachable way for demoted code to regain privilege (`--no-new-privs` unless nothing setuid or capability-bearing exists) |
 | `deterministic_execution` | repeat and shuffled runs agree; no network, no clock or ordering dependence |
 
 Then, once the probe clears CORE+, the pre-submission quality panel
-(execution-profiles step 8) judges the same five axes with fresh reviewers:
-full ten-reviewer discovery, one consolidated remediation batch, clearance on
-every axis `panel_gate.py clearance-axes` lists, and one re-probe when the batch
-narrowed the core. `panel_gate.py check` is the packaging receipt. The receipts
+(execution-profiles step 8) spawns fresh reviewers for `sound_verifier` and
+`correct_reference_solution` and carries the other three axes on the receipts
+above (`source: "gate"`): one consolidated remediation batch, clearance on every
+axis `panel_gate.py clearance-axes` lists (by the files each axis judges), and
+one re-probe when the batch narrowed the core. `panel_gate.py check` is the packaging receipt. The receipts
 make the panel cheap; the panel catches what the builder never conceived.
 
 Follow the numbered path in `references/execution-profiles.md`. Two rules govern

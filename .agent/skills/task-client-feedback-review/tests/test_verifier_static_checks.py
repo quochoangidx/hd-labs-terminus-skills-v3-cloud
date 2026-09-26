@@ -159,3 +159,268 @@ def test_flags_documented_module_command_the_verifier_never_launches() -> None:
     run_module = "runpy.run_module('quic_receive', run_name='__main__')"
     assert MODULE.documented_module_unexecuted(instruction, run_module) == []
 
+
+
+SEEDED_DIGEST = '''
+import hashlib
+from pathlib import Path
+
+def _candidate_source_seed():
+    digest = hashlib.sha256()
+    def visit(current):
+        if current.is_dir():
+            for child in sorted(current.iterdir()):
+                {skip}visit(child)
+        else:
+            digest.update(current.read_bytes())
+    visit(Path("/app"))
+    return int.from_bytes(digest.digest()[:8], "big")
+
+spec = generated_scenario(_candidate_source_seed())
+'''
+
+
+def test_flags_a_seed_digest_that_hashes_git_and_bytecode_caches() -> None:
+    source = SEEDED_DIGEST.format(skip="")
+    assert MODULE.candidate_digest_metadata_issue(source) == [".git", "__pycache__"]
+
+
+def test_accepts_a_seed_digest_that_skips_build_metadata() -> None:
+    skip = 'if child.name in {".git", "__pycache__"}: continue\n                '
+    assert MODULE.candidate_digest_metadata_issue(SEEDED_DIGEST.format(skip=skip)) == []
+
+
+def test_a_fixture_digest_without_a_seed_is_not_a_seed_digest() -> None:
+    source = '''
+import hashlib
+from pathlib import Path
+EXPECTED = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in Path("/app").rglob("*.py")}
+'''
+    assert MODULE.candidate_digest_metadata_issue(source) == []
+
+
+STAGING_HARD_FAIL = '''
+from pathlib import Path
+import stat
+
+def _copy_candidate_tree(source, destination):
+    def copy_entry(current, target, ancestors):
+        resolved = current.resolve(strict=True)
+        try:
+            resolved.relative_to(Path("/app"))
+        except ValueError:
+            raise AssertionError("package links must remain inside /app") from None
+        mode = resolved.stat().st_mode
+        assert stat.S_ISDIR(mode) or stat.S_ISREG(mode), "special files are not accepted"
+        for child in resolved.iterdir():
+            copy_entry(child, target / child.name, ancestors)
+    copy_entry(source, destination, frozenset())
+'''
+
+
+def test_flags_candidate_staging_that_fails_on_an_unrelated_entry() -> None:
+    assert len(MODULE.staging_hard_fail_sites(STAGING_HARD_FAIL)) == 2
+
+
+def test_accepts_staging_that_skips_unusable_entries() -> None:
+    source = '''
+from pathlib import Path
+import stat
+
+def _copy_candidate_tree(source, destination):
+    def copy_entry(current, target):
+        try:
+            resolved = current.resolve(strict=True)
+            resolved.relative_to(Path("/app"))
+        except (OSError, ValueError):
+            return
+        if not (stat.S_ISDIR(resolved.stat().st_mode) or stat.S_ISREG(resolved.stat().st_mode)):
+            return
+        for child in resolved.iterdir():
+            copy_entry(child, target / child.name)
+    copy_entry(source, destination)
+'''
+    assert MODULE.staging_hard_fail_sites(source) == []
+
+
+def test_root_precondition_and_output_validation_are_not_staging_failures() -> None:
+    source = '''
+import os, stat
+
+def _copy_tree_checked(src, dst):
+    root = os.lstat(src)
+    assert stat.S_ISDIR(root.st_mode), "/app root must be a directory"
+    for entry in os.scandir(src):
+        pass
+
+def _validate_consumer_tree(root):
+    for path in root.rglob("*"):
+        assert stat.S_ISREG(path.stat().st_mode)
+'''
+    assert MODULE.staging_hard_fail_sites(source) == []
+
+
+def test_flags_an_absolute_gradient_convergence_guard() -> None:
+    guarded = {"solution/optimize.py": "if np.linalg.norm(solved.grad, ord=np.inf) >= 1e-4:\n    raise RuntimeError\n"}
+    assert MODULE.absolute_gradient_guard_sites(guarded) == ["solution/optimize.py:1"]
+
+
+def test_accepts_an_objective_scale_convergence_test() -> None:
+    relative = {"solution/optimize.py": "gradient = rows.T @ terms\nif float(-gradient @ step) > 1e-8:\n    raise RuntimeError\n"}
+    assert MODULE.absolute_gradient_guard_sites(relative) == []
+
+
+def _write(root: Path, files: dict[str, str]) -> None:
+    for name, text in files.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+
+SAMPLE_JOB = '{"period": "2026Q1", "entries": [{"state": "OR", "miles": 120}]}\n'
+
+
+def test_flags_a_graded_job_that_copies_the_visible_sample(tmp_path: Path) -> None:
+    _write(tmp_path, {
+        "environment/app/examples/job1/job.json": SAMPLE_JOB,
+        "environment/app/examples/job1/calls.tsv": "chr1\t10\tA\tG\n",
+        "tests/jobs/example/job.json": SAMPLE_JOB,
+        "tests/jobs/example/calls.tsv": "chr1\t10\tA\tG\n",
+        "tests/jobs/held/job.json": '{"period": "2026Q2"}\n',
+    })
+    assert MODULE.visible_fixture_graded(tmp_path) == [
+        "tests/jobs/example/calls.tsv == environment/app/examples/job1/calls.tsv",
+        "tests/jobs/example/job.json == environment/app/examples/job1/job.json",
+    ]
+
+
+def test_shipped_copies_manifests_and_source_are_not_graded_fixtures(tmp_path: Path) -> None:
+    _write(tmp_path, {
+        "environment/app/samples/job.json": SAMPLE_JOB,
+        "environment/app/package.json": '{"name": "ifta", "type": "module"}\n',
+        "environment/app/src/money.ts": "export const cents = 100;\n",
+        "tests/shipped/samples/job.json": SAMPLE_JOB,
+        "tests/shipped/package.json": '{"name": "ifta", "type": "module"}\n',
+        "tests/driver/package.json": '{"name": "ifta", "type": "module"}\n',
+        "tests/shipped/src/money.ts": "export const cents = 100;\n",
+        "tests/reference/money.ts": "export const cents = 100;\n",
+    })
+    assert MODULE.visible_fixture_graded(tmp_path) == []
+
+
+RELOCATING_DOCKERFILE = """
+RUN install -m 0644 /tests/shipped/tools/locuskit_run.py /opt/driver/tools/locuskit_run.py \\
+    && ln -s /app/src /opt/driver/src
+"""
+
+
+def test_flags_a_documented_script_run_from_a_symlinked_copy() -> None:
+    contract = "You run it with `python3 /app/tools/locuskit_run.py <job.json> <outdir>`."
+    tests = RELOCATING_DOCKERFILE + 'DRIVER = Path("/opt/driver/tools/locuskit_run.py")\n'
+    assert MODULE.documented_script_relocated(contract, tests) == [
+        {"documented": "/app/tools/locuskit_run.py", "relocated": ["/opt/driver/tools/locuskit_run.py"]}
+    ]
+    python_link = 'os.symlink("/app/src", root / "src")\nrun(["node", "/srv/drv/tools/ifta_return.ts"])'
+    node_contract = "The return is written by `node /app/tools/ifta_return.ts <job.json> <out>`."
+    assert MODULE.documented_script_relocated(node_contract, python_link)[0]["relocated"] == [
+        "/srv/drv/tools/ifta_return.ts"
+    ]
+
+
+def test_running_the_documented_path_is_not_a_relocation() -> None:
+    contract = "You run it with `python3 /app/tools/locuskit_run.py <job.json> <outdir>`."
+    replaced = (
+        'os.replace("/opt/shipped/locuskit_run.py.new", "/app/tools/locuskit_run.py")\n'
+        'run(["python3", "/app/tools/locuskit_run.py", job, out])\n'
+    )
+    assert MODULE.documented_script_relocated(contract, replaced) == []
+    # A copy elsewhere without any link back into /app runs verifier code, not a relocation.
+    assert MODULE.documented_script_relocated(contract, 'DRIVER = "/opt/driver/tools/locuskit_run.py"') == []
+
+
+CANDIDATE_SEEDED = '''
+import hashlib
+from pathlib import Path
+
+SOURCE_ROOT = Path("/app/src/main/java")
+
+@pytest.fixture(scope="session")
+def source_digest():
+    """A digest of the graded sources: the seed of the drawn periods."""
+    digest = hashlib.sha256()
+    for path in sorted(SOURCE_ROOT.rglob("*.java")):
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+'''
+
+
+def test_flags_a_draw_seeded_from_candidate_sources() -> None:
+    sites = MODULE.candidate_seeded_draw_sites(CANDIDATE_SEEDED)
+    assert [(site["function"], site["unfiltered_walk"]) for site in sites] == [("source_digest", False)]
+    # A suffix-filtered digest cannot reach .git or __pycache__: advisory, not metadata.
+    assert MODULE.candidate_digest_metadata_issue(CANDIDATE_SEEDED) == []
+
+
+def test_a_seed_named_by_its_use_is_found_through_the_call_site() -> None:
+    source = '''
+import hashlib, random
+
+def fingerprint():
+    return hashlib.sha256(open("/app/answers.nonce", "rb").read()).hexdigest()
+
+rng = random.Random(fingerprint())
+'''
+    assert [site["function"] for site in MODULE.candidate_seeded_draw_sites(source)] == ["fingerprint"]
+    artifact = source.replace("/app/answers.nonce", "/srv/out/answers.nonce")
+    assert MODULE.candidate_seeded_draw_sites(artifact) == []
+    assert [s["function"] for s in MODULE.candidate_seeded_draw_sites(artifact, ("/app", "/srv/out"))] == [
+        "fingerprint"
+    ]
+
+
+def test_hashing_generated_inputs_or_pinning_a_driver_is_not_a_seeded_draw() -> None:
+    source = '''
+import hashlib, random
+SUBMITTED = Path("/app/tools/statement_run.py")
+
+def input_digest(run):
+    """The run folder files described in /app/README.md, seeded from a fixed tag."""
+    return hashlib.sha256(repr(run).encode()).hexdigest()
+
+def test_driver_is_unchanged():
+    assert hashlib.sha256(SUBMITTED.read_bytes()).hexdigest() == PINNED
+
+RNG = random.Random("sweep-1001")
+'''
+    assert MODULE.candidate_seeded_draw_sites(source) == []
+    assert MODULE.candidate_digest_metadata_issue(source) == []
+
+
+def test_advisories_share_the_sealed_seed_fix() -> None:
+    assert MODULE.SEALED_SEED_FIX in MODULE.ADVISORY_FIXES["candidate_seeded_draw"]
+    assert MODULE.SEALED_SEED_FIX in MODULE.ADVISORY_FIXES["seed_digest_includes_build_metadata"]
+    assert set(MODULE.ADVISORY_CHECKS) == {"seed", "relocated", "seeded_draw"}
+
+
+def test_advisories_exit_two_only_when_named_and_never_fail_all(tmp_path: Path) -> None:
+    import subprocess
+
+    _write(tmp_path, {
+        "instruction.md": "Fix the package.\n",
+        "tests/test_outputs.py": CANDIDATE_SEEDED,
+    })
+
+    def rc(check: str) -> int:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), str(tmp_path), "--check", check], capture_output=True
+        ).returncode
+
+    assert rc("seeded_draw") == 2
+    assert rc("all") == 0
+    assert rc("fixture") == 0
+    _write(tmp_path, {
+        "environment/app/samples/job.json": SAMPLE_JOB,
+        "tests/jobs/sample/job.json": SAMPLE_JOB,
+    })
+    assert rc("fixture") == 1
+    assert rc("all") == 1

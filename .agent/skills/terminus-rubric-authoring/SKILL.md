@@ -71,6 +71,30 @@ of positive or negative lines. The rubric is a platform UI artifact stored local
     - `rubric-ready, task-blocked`: the prose is valid but task/verifier gaps remain;
     - `not ready`: rubric format, leakage, scoring, overlap, or coverage still fails.
 
+## Seeded-departure repair tasks (accepted shape)
+
+Six platform-accepted repair tasks used 12–16 lines with one shape, adapted per
+task rather than copied:
+
+- one positive line per departure group (usually `+2`), naming the book's rule and
+  the behaviour, not the file;
+- one line per counted restraint trap (usually `+3`), naming the silent input in
+  the book's domain words and the shipped behaviour kept;
+- one line for code already right under the book that an expert might "improve"
+  (a rounding rule, a remembered textbook formula) when a wrong path tests it;
+- `+1` for the frozen surface when it is graded;
+- one negative line per **named natural over-repair** (`-3`), phrased as the
+  concrete wrong fix ("takes the whole turnout log out of the water tested against
+  the intake limit"), not "breaks X";
+- `-5` for editing the authority or hardcoding figures.
+
+**Regenerate the rubric whenever a trap is dropped, flipped or moved to the
+"left entirely open" tier.** A line rewarding behaviour on an input the
+instruction now leaves open contradicts the contract: royalty's human reviewer had
+to fix two such lines by hand, and rebill's and moving-average's submission notes
+still carried rubric lines for dropped traps. Diff every trap line against the
+current `fix.patch` and silence clause before each upload.
+
 ## Non-negotiable Boundaries
 
 - Rubric prose cannot repair a verifier blind spot.

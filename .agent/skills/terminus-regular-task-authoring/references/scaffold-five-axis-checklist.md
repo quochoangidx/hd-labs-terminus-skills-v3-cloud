@@ -14,7 +14,8 @@ or from the two platform panel returns of 2026-09-24
 None of them was caught by a gate.
 
 This list is a floor, not the review. It names defects already seen. The
-adversarial verifier pass (§4, last item) is what finds the ones not yet seen.
+scripted Sound Verifier sweep (§4, blueprint C1–C18) and the narrow panel are
+what find the ones not yet seen.
 
 Keep the artifacts under `workspace/reports/<slug>/`, never in the task.
 
@@ -80,6 +81,10 @@ Write the authority and the instruction first. Then:
 ## 2. Correct reference: does the reference satisfy the documented task?
 
 - Model before Oracle, never importing the package (`contract-closure.md` §5).
+  Put it in `solution/model.py` and let its `__main__` seal expectations (and
+  generated inputs) into `tests/expected/` with a SHA manifest. A model or
+  generator that runs inside `tests/` is the "no end-to-end solver in tests"
+  human-review return that hit crop-water and royalty after clean platform runs.
 - **Fuzz the model against the Oracle as soon as both exist**, and before any test:
   a few hundred random inputs and sessions compared exactly. A disagreement is a
   bug in one of the two readings, and it is far cheaper to find now.
@@ -120,13 +125,38 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 - **Make `/app` readable to the demoted user** (`chmod -R a+rX /app` in `test.sh`).
   *Missed:* a file the agent leaves 0600 would fail every job for a reason that
   has nothing to do with the code.
-- A shipped copy used for differentials is readable and not writable.
-- **Run a verifier-owned copy of any fixed driver, pointed at `/app/src`.** If the
-  instruction fixes a driver the tests go through, stage `/opt/driver/tools/<pkg>_run.py`
-  from `tests/shipped/tools/` with `/opt/driver/src -> /app/src`. *Missed:* grading
-  through `/app/tools/<pkg>_run.py` let a driver-side shim score reward 1 with the
-  package unfixed, in three tasks. `review_task.py` blocks it as
-  `verifier-trusts-candidate-driver`.
+- A shipped copy used for differentials is owned by **its own uid, mode 0700**, and
+  run as that uid. *Missed:* a world-readable shipped copy let a candidate delegate
+  to it (moving-average, escrow: Major). "Readable, not writable" is not enough.
+- **Run a verifier-owned copy of any fixed driver, and check the submitted one.** If
+  the instruction fixes a driver the tests go through, never execute the agent's
+  `/app/tools/<pkg>_run.py`. *Missed:* grading through it let a driver-side shim
+  score reward 1 with the package unfixed, in three tasks (`review_task.py` blocks
+  it as `verifier-trusts-candidate-driver`). Three refinements from later returns:
+  - add a test that the submitted driver is byte-identical to
+    `tests/shipped/tools/`, or a broken submitted driver passes (midi v1, Major);
+    say why in the instruction ("we file with our own copy");
+  - run that byte check **after** candidate code too (a last test, or in `test.sh`
+    after pytest): a submission rewrote the driver on import and still scored 1
+    (retail-inventory human review);
+  - run the documented command at the documented path and cwd. A copy under
+    `/opt/driver` beside `/opt/driver/src -> /app/src` changes `argv[0]`, and a
+    package that misbehaved only when `argv[0]` was the `/app` path scored reward 1
+    (groundwater v2). For interpreted drivers, `os.replace` the shipped copy onto
+    `/app/tools/<pkg>_run.py` after recording the submitted bytes, then run exactly
+    the documented command from the verifier's copy of `/app`.
+- **Prove the boundary.** A test runs `ls`/`cat` as the sandbox uid on `/tests`,
+  the expectations, the shipped copy and `/logs/verifier` and asserts each fails;
+  check it once with `/tests` world-readable to see it go red. Make `/tests` 0700
+  in `tests/Dockerfile`, not only in `test.sh`.
+- **No case label reaches the candidate.** Stage each job in a prefix-less
+  `mkdtemp()` under a content-digest name; vary input file names per job. A
+  `mkdtemp(prefix=name)` or a run file named after the case let a package key on it
+  (genomic, retail-inventory).
+- **Never grade a byte copy of a visible sample** (moving-average v0, Protected
+  Ground Truth Major; transformer-metering v1).
+- Seed generated inputs from a constant in the sealing code, never from a hash of
+  candidate files (an inert nonce file steered the graded cases in overtime v4).
 - Plan the harness-bypass wrong paths now: a wrong solution that tries to write
   the reward and read the model, and one that fixes the driver instead of the package.
 - Compiled languages: follow [compiled verifier hardening](compiled-verifier-hardening.md).
@@ -185,6 +215,23 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   extra fields and check key order only where the contract fixes them (C-13). A
   named input class is checked on its full result, not one field. Every promised
   error output has a witness.
+- **Run the Sound Verifier class ladder before the first upload**
+  ([accepted-task blueprint](accepted-task-blueprint.md) §5, classes C1–C18): every
+  visible sentence backed or deleted, ceilings and floors, every bound reached in
+  every position and sum, zeros and empties, counts past 1,024 and 65,536,
+  cardinalities at their bounds, parameters past 512/2048/4096, field lengths past
+  8/64/1024, accumulators past 2^31, exact halves on both signs, the whole
+  categorical syntax, two entries per separated accumulator, envelope
+  cross-products. Each as an Oracle mutant that must fail its own test. The
+  platform found these one class per round in every accepted task (genomic took
+  six rounds); a PASS on one round does not clear the next class.
+- **Assert the limits on every graded job.** An executable form of the
+  instruction's limits sentence runs over every generated **and named** fixture and
+  checks which trap inputs each carries. Moving-average's fifth return was one
+  hand-built fixture still holding a dropped input class.
+- **Keep trap inputs in their own named tests.** Sweeps, whole-run tests and shared
+  fixtures stay trap-free, so one over-repair costs one test (rebill: a trap inside
+  seven tests turned all seven 0/8 and returned the task as unsolvable).
 - **Run one or two alternative correct implementations through the suite** (a
   different loop shape, an algebraically equal but still note-faithful form, a
   different buffer). Include harmless diagnostics, resolving package/artifact
@@ -198,6 +245,9 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   library signal generators whose output could move.
 - The model and the candidate run on the same interpreter and libm, in a
   digest-pinned image.
+- `python -I` ignores `PYTHONHASHSEED`, so sort anything built from a set before
+  it reaches output, a seal or a digest; check the sealed expectations under two
+  hash seeds.
 - Collection order is pinned (`-p no:randomly`), every job has a timeout, and each
   job runs in its own process.
 - **Run `preflight.sh --determinism` as soon as the first named tests pass on
@@ -210,10 +260,12 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 
 1. Authority, instruction, domains, state table, global-claim check, then
    `contract_review`. Repair the contract.
-2. Model, Oracle, then the model-versus-Oracle fuzz.
+2. Model, Oracle, then the model-versus-Oracle fuzz, then the skeleton probe
+   (a 2/2 stops here, before any verifier work).
 3. Harness shape (§3). Then named tests, with each witness in a revealing state,
    and a first `preflight.sh --determinism` once they pass on the Oracle.
 4. Local wrong paths, then alternative implementations.
 5. Deterministic closure: preflight strict and determinism, Docker receipts,
    `panel_precheck.py --full`.
-6. `final_review`, the adversarial verifier pass, then the blind probe.
+6. The Sound Verifier sweep (C1–C18 mutants), `final_review`, then the
+   difficulty rescore of the skeleton diffs against the finished verifier.

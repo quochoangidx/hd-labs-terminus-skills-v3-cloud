@@ -1,8 +1,10 @@
 # Single-Reviewer Workflow
 
 This is the default review geometry for new `task-batch` runs. Under
-`builder_certified` it is followed by the adversarial verifier pass (step 5b) and
-the blind probe and the pre-submission quality panel (steps 7–8).
+`builder_certified` the skeleton probe (step 4a) runs between `contract_review`
+and the verifier build, the builder's scripted Sound Verifier sweep (step 5b)
+follows the closure gates, and the difficulty rescore and narrow pre-submission
+panel close the route (steps 7–8).
 
 ## What the one reviewer is for
 
@@ -65,12 +67,10 @@ the affected full gates, and a recheck by the same reviewer when semantic
 judgment is involved. Do not launch a second reviewer identity merely to obtain
 a different opinion.
 
-The one exception is the **adversarial verifier pass**
-(`execution-profiles.md`, `builder_certified` step 5b). It is a separate role,
-not a second opinion. It sees the tests and not the builder's wrong paths, and it
-produces executable wrong submissions rather than prose. It uses the same model
-pin as the reviewer. Its findings go through the same builder disposition and
-orchestrator adjudication as above.
+There is no second reviewer identity under `builder_certified`. The former
+adversarial verifier pass was replaced on 2026-09-26 by the builder's scripted
+Sound Verifier sweep (`execution-profiles.md` step 5b), which covers the classes
+every accepted task's panel returns were about at no session cost.
 
 ## Auditor
 

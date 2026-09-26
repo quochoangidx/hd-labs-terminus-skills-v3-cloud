@@ -160,3 +160,94 @@ def test_review_allows_a_verifier_owned_driver(tmp_path: Path) -> None:
     result = MODULE.review(task, include_external_evidence=False)
 
     assert not any(f["check"] == "verifier-trusts-candidate-driver" for f in result["findings"])
+
+
+def test_review_allows_byte_comparing_the_submitted_driver(tmp_path: Path) -> None:
+    task = _driver_task(
+        tmp_path,
+        'DRIVER = Path("/opt/driver/tools/pkg_run.py")\n'
+        'SUBMITTED = Path("/app/tools/pkg_run.py")\n'
+        "def run_job(job):\n"
+        '    return subprocess.run([sys.executable, "-I", str(DRIVER), job])\n'
+        "def test_job():\n"
+        '    run_job("a")\n'
+        "def test_driver_unchanged():\n"
+        '    assert SUBMITTED.read_bytes() == Path("/tests/shipped/tools/pkg_run.py").read_bytes()\n',
+    )
+
+    result = MODULE.review(task, include_external_evidence=False)
+
+    checks = {f["check"] for f in result["findings"]}
+    assert "verifier-trusts-candidate-driver" not in checks
+    assert "protected_file_checked_before_run" not in checks
+
+
+def test_review_blocks_executing_an_aliased_candidate_driver(tmp_path: Path) -> None:
+    task = _driver_task(
+        tmp_path,
+        'SUBMITTED = Path("/app/tools/pkg_run.py")\n'
+        "def run_job(job):\n"
+        '    return subprocess.run(\n'
+        '        ["python3", str(SUBMITTED), job],\n'
+        "        check=True,\n"
+        "    )\n",
+    )
+
+    result = MODULE.review(task, include_external_evidence=False)
+
+    assert any(f["check"] == "verifier-trusts-candidate-driver" for f in result["findings"])
+
+
+def test_review_blocks_a_test_sh_that_runs_the_candidate_driver(tmp_path: Path) -> None:
+    task = _driver_task(tmp_path, "def test_nothing():\n    pass\n")
+    (task / "tests" / "test.sh").write_text("python3 /app/tools/pkg_run.py job.json out\n")
+
+    assert MODULE.candidate_driver_trusted(
+        MODULE.TaskView(task).files(), {}, (task / "tests" / "test.sh").read_text()
+    ) == ["pkg_run.py"]
+
+
+def test_driver_checked_only_before_the_job_tests_is_advisory(tmp_path: Path) -> None:
+    task = _driver_task(
+        tmp_path,
+        'SUBMITTED = Path("/app/tools/pkg_run.py")\n'
+        "def test_driver_unchanged():\n"
+        '    assert SUBMITTED.read_bytes() == Path("/tests/shipped/tools/pkg_run.py").read_bytes()\n'
+        "def test_job():\n"
+        "    pass\n",
+    )
+
+    result = MODULE.review(task, include_external_evidence=False)
+
+    found = [f for f in result["findings"] if f["check"] == "protected_file_checked_before_run"]
+    assert found and all(f["severity"] != "blocker" for f in found)
+    assert not any(f["check"] == "verifier-trusts-candidate-driver" for f in result["findings"])
+
+    (task / "tests" / "test.sh").write_text(
+        "python3 -m pytest /tests/test_outputs.py\ncmp /app/tools/pkg_run.py /tests/shipped/tools/pkg_run.py || echo 0 > /logs/verifier/reward.txt\n"
+    )
+    result = MODULE.review(task, include_external_evidence=False)
+    assert not any(f["check"] == "protected_file_checked_before_run" for f in result["findings"])
+
+
+def _toml_task(tmp_path: Path, explanation: str) -> Path:
+    (tmp_path / "task.toml").write_text(
+        '[metadata]\ndifficulty = "core"\ncategory = "Operations"\nsubcategory = "Finance"\n'
+        'tags = ["a", "b", "c"]\n'
+        f'difficulty_explanation = "{explanation}"\n'
+    )
+    return tmp_path
+
+
+def test_difficulty_role_accepts_any_domain_role(tmp_path: Path) -> None:
+    for role in ("retail controller", "rates analyst", "hydrologist", "cost accountant"):
+        task = _toml_task(tmp_path, f"A {role} has to reconcile interacting rounding rules by hand.")
+        result = MODULE.review(task, include_external_evidence=False)
+        assert not any(f["check"] == "difficulty-explanation-role" for f in result["findings"]), role
+
+
+def test_difficulty_role_missing_is_never_a_blocker(tmp_path: Path) -> None:
+    task = _toml_task(tmp_path, "Interacting rounding rules must be reconciled by hand.")
+    result = MODULE.review(task, include_external_evidence=False)
+    found = [f for f in result["findings"] if f["check"] == "difficulty-explanation-role"]
+    assert found and all(f["severity"] != "blocker" for f in found)
