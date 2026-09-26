@@ -139,6 +139,13 @@ Ghi chú:
   revision kế tiếp và ZIP upload ổn định. Agent tự đọc feedback từ báo
   cáo thay vì nhận hàng trăm dòng trong clipboard. Bản xuất cũng ghi kèm
   `revision/<uuid>/revise-prompt.md`.
+- Dòng đầu prompt tự tóm tắt lý do trả về từ payload (`returnReason` trong
+  `generate.js`): blocking của quality panel theo trục và mức độ (ví dụ
+  `Sound Verifier 3 Major`), quality check fail, số test 0/N, `BASE`, và
+  human review `Needs Revision`. Khi payload chưa có kết quả chấm, dòng này giữ
+  placeholder `<tóm tắt lý do trả về>`. Phần còn lại là quy trình revise theo
+  grading flow (panel/quality check, test 0/8, BASE, human review), yêu cầu
+  receipt tái hiện/đóng, và mẫu báo cáo ngắn.
 
 ## Cách tải và giải nén `.zip`
 

@@ -485,6 +485,58 @@
     return taskId(task);
   }
 
+  // One-line summary of why the platform returned this round, read from the
+  // same payload fields the report renders: blocking quality-panel findings by
+  // axis and severity, failed quality checks, tests no run passed, a BASE tier
+  // and a human "Needs Revision". Empty when nothing is recognised.
+  function returnReason(task) {
+    var t = task || {};
+    var sd = submissionDoc(t);
+    var text = [sd.text_summary, sd.quality_check_summary].filter(Boolean).join("\n");
+    var parts = [];
+
+    var byAxis = {};
+    var order = [];
+    var re = /^\s*\d+\.\s*\[([^\]]+)\]\s*(MAJOR|MINOR)\s*:/gm;
+    var m;
+    while ((m = re.exec(String(sd.text_summary || "")))) {
+      var axis = m[1].trim();
+      var sev = m[2].charAt(0) + m[2].slice(1).toLowerCase();
+      if (!byAxis[axis]) { byAxis[axis] = {}; order.push(axis); }
+      byAxis[axis][sev] = (byAxis[axis][sev] || 0) + 1;
+    }
+    order.forEach(function (axis) {
+      var s = byAxis[axis];
+      var counts = ["Major", "Minor"].filter(function (k) { return s[k]; })
+        .map(function (k) { return s[k] + " " + k; });
+      parts.push(axis + " " + counts.join(", "));
+    });
+
+    var failed = [];
+    var fre = /❌\s*fail\s*-\s*([A-Za-z0-9_]+)/g;
+    while ((m = fre.exec(text))) {
+      if (failed.indexOf(m[1]) < 0) failed.push(m[1]);
+    }
+    if (failed.length) parts.push("quality check fail: " + failed.join(", "));
+
+    var tr = sd.test_results || {};
+    var zero = 0, runs = 0;
+    Object.keys(tr).forEach(function (name) {
+      var results = tr[name] || [];
+      runs = Math.max(runs, results.length);
+      if (results.length && !results.some(function (r) { return r === "passed"; })) zero++;
+    });
+    if (zero) parts.push("Some tests not passed (" + zero + " test 0/" + runs + ")");
+
+    if (String(sd.difficulty || "").toLowerCase() === "base") parts.push("BASE");
+
+    var docs = collectAnswerDocs(t, sd);
+    var decision = String(pickField(docs, ["radio-9552f", "review_decision", "submission_review_decision"]) || "").toLowerCase();
+    if (decision === "needs_revision" || decision === "revision") parts.push("human review: Needs Revision");
+
+    return parts.join(" / ");
+  }
+
   // Keep the clipboard prompt compact: the detailed platform feedback already
   // lives in <task_id>.md beside the extracted task.
   function generateRevisePrompt(task, options) {
@@ -503,29 +555,44 @@
     var sourceZip = taskRoot + "/" + (opts.sourceZip || ("revisions/" + slug + "-source.zip"));
     var nextRev = opts.nextRev || 1;
 
+    var reason = returnReason(t) || "<tóm tắt lý do trả về>";
+
     var lines = [
-      "Revise v" + round,
-      "Revise task tại:",
-      base + "/" + slug,
-      "Platform feedback (v" + round + "):",
-      base + "/" + id + ".md"
+      "Revise v" + round + " (" + reason + ")",
+      "Task: " + base + "/" + slug,
+      "Platform feedback v" + round + ": " + base + "/" + id + ".md"
     ];
     if (round > 1) {
       var prev = opts.prevRoundDir ? taskRoot + "/" + opts.prevRoundDir : taskRoot;
-      lines.push(
-        "Feedback vòng trước (v" + (round - 1) + ", để đối chiếu cái đã sửa):",
-        prev + "/" + id + ".md"
-      );
+      lines.push("Feedback vòng trước: " + prev + "/" + id + ".md");
     }
     lines.push(
+      "Yêu cầu:",
       "",
-      "* Sử dụng task-revise-flag-remediation; xác minh feedback bằng code, instruction",
-      "và verifier, rồi chạy lại Oracle/NOP và preflight.",
-      "* Không sửa hoặc ghi đè " + sourceZip + ".",
-      "* Lưu revision kế tiếp tại " + revisionsPath + "/" + slug + "-rev" + nextRev + ".zip",
-      "(không ghi đè các rev cũ).",
-      "* Đồng bộ đúng bytes của revision mới nhất sang " + submissionRoot + "/" +
-        slug + ".zip để upload.",
+      "* Dùng task-revise-flag-remediation. Đọc \"Blocking stage\" trước và xử lý theo",
+      "grading flow:",
+      "   * panel/quality check: sửa theo ledger, quét cả nhóm lỗi (blueprint §5), không chỉ đúng ca được nêu;",
+      "   * test 0/8: chạy bộ lọc 0/8, bỏ trap chứ không tiết lộ, dọn khắp fixtures/explanations/rubric;",
+      "   * BASE: dừng lại và đề xuất task thay thế, không làm khó thêm;",
+      "   * human review: sửa đúng từng note.",
+      "* Khôi phục từ đúng source zip platform đã chấm; mỗi finding phải có receipt tái hiện",
+      "trên bản cũ và receipt đóng trên bản mới. Finding không tái hiện được thì dispute kèm receipt.",
+      "* Ưu tiên \"stop promising\" với promise không thuộc core; giữ nguyên phần khó.",
+      "* Nếu chỉ sửa tests: giữ instruction, environment, solution byte-identical;",
+      "clearance chỉ trục sound_verifier; không re-probe.",
+      "* Nếu thu hẹp core: re-probe 1 cặp trên claude-opus-5 (dừng nếu không gọi được Opus 5).",
+      "* Tự chạy hết các bước bắt buộc (closure gates, clearance, panel receipt,",
+      "preflight --emit-zip --panel-report), không hỏi lại.",
+      "* Cập nhật 3 explanation, difficulty, rubric và SUBMISSION note khớp bản mới.",
+      "",
+      "Lưu file:",
+      "",
+      "* Không sửa/ghi đè " + sourceZip + ".",
+      "* Lưu bản mới tại " + revisionsPath + "/" + slug + "-rev" + nextRev + ".zip (không ghi đè rev cũ).",
+      "* Đồng bộ đúng bytes sang " + submissionRoot + "/" + slug + ".zip để upload.",
+      "",
+      "Báo cáo ngắn: stage bị chặn, bảng finding → quyết định (backed/dropped/disputed),",
+      "trục đã clearance, có re-probe không, đường dẫn ZIP.",
       ""
     );
     return lines.join("\n");
@@ -647,6 +714,7 @@
     taskId: taskId,
     rawTaskId: rawTaskId,
     taskSlug: taskSlug,
+    returnReason: returnReason,
     generateRevisePrompt: generateRevisePrompt
   };
 });
