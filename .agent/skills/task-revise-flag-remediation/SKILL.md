@@ -32,6 +32,33 @@ For Hardware / CAD, also read
 Do not infer a defect from a single summary label. Preserve the original task,
 reports, and probe artifacts before editing.
 
+## Grading flow: read the blocking stage first
+
+The platform grades in three stages (team lead's note, 2026-09-24; matches every
+revise report of the six accepted tasks). Before anything else, read the report's
+"Blocking stage" column, the "Pre-Difficulty Gate Failed" line and the evaluation
+history, and answer the stage that blocked:
+
+| Stage | Blocked by | Answer |
+|---|---|---|
+| 1. Quality panel + quality checks | panel findings, or a gate such as `category_and_tags`, `test_instruction_alignment`, `verification_explanation_quality` | the ledger flow below (`## Platform quality-panel returns`) |
+| 2. Difficulty check | a test no run passed ("Some tests not passed by any agent run") | `## 0/N solvability returns`; for a restraint trap, *Restraint trap at 0/N* |
+| 2. Difficulty check | **BASE** (fewer than 3 of 8 runs failed) | do not keep hardening the same task: propose a replacement task to the user. Recorded evidence: midi-tempo-map went BASE 7/8 and was retired |
+| 3. Human review | reviewer notes (for example "no end-to-end solver in tests", a stale rubric line) | one targeted fix per note, then re-verify; keep the agent-facing contract byte-identical so the measured tier still applies |
+
+A task that passes stage 2 with CORE, ADVANCED or FRONTIER keeps that
+measurement across later tests-only or human-review revisions only while the
+instruction, `environment/` and `solution/` stay byte-identical and every sealed
+expectation equals what the measured snapshot computed.
+
+**Run every mandated step without asking.** When this skill (or the execution
+profile) requires a step — ledger, reproduction, closure gates, targeted review of
+the returned axis, re-probe after a scope change, packaging last — do it, even if
+the user's message listed fewer steps, and never report "done" with a mandated step
+outstanding. Ask only for decisions the user owns: retire or redesign, posting a
+dispute, a budget override. (Recorded twice: moving-average rev1 was packaged after
+Oracle/NOP/preflight only; midi rev1 stopped to ask "run the remaining steps?".)
+
 ## First classification
 
 Classify each failure before changing prose or tests. Every row below has an
@@ -113,6 +140,19 @@ promise what the task is actually about.
 **Do not cut into difficulty.** The task must still clear the bar — since
 2026-09-15 at least 3 of the 8 platform runs must fail. Trimming until the task
 is easy swaps one failure for another. **Cut breadth, keep the hard thing.**
+
+### Sweep the class, not the instance
+
+Every accepted task's panel returns climbed one ladder, one class per round:
+stated rules → range edges → rules shared by two consumers → counts → numeric
+parameters → field lengths (genomic 20 → 12 → 6 → 1 → 1 → 1; rebill 38 → 17 → 11
+→ 5). A PASS on one round did not mean the next class was covered (crop's v4 gaps
+were latent from v1). So when a finding names one corner of a class, close the
+whole class in the same batch: run the blueprint §5 ladder
+(`../terminus-regular-task-authoring/references/accepted-task-blueprint.md`,
+C1–C18) as Oracle mutants on the repaired snapshot, not only the case the report
+named. Draw new fixture entries after all existing seeded draws so the sealed
+expectations of untouched runs do not move.
 
 ### Signs you are already in the loop
 
@@ -345,6 +385,37 @@ least one run. A 0/N test is blocking, but the repair depends on its cause.
    uncovered inference.
 5. Apply the smallest valid repair below and re-run fresh trials.
 
+### Restraint trap at 0/N
+
+Three of the six accepted seeded-departure tasks came back once with one trap at
+0/8 (rebill credit lines, royalty take-back, moving-average credit note). All
+three were accepted after the same repair, and it is the default:
+
+1. **Diagnose the cause** with the blueprint's 0/8 screen
+   (`../terminus-regular-task-authoring/references/accepted-task-blueprint.md`
+   §4.3): a positive enumeration in the authority that also governs the entry; a
+   kept step with no chain of definitions behind it (a bare quirk of today's code);
+   a strong contrary expert instinct; an unnamed "step" shared by governed and
+   silent inputs; or the trap spread across several tests and sweeps. The
+   platform's Instruction Sufficiency judges usually still pass the text; a
+   unanimous miss is a contract gap anyway.
+2. **Stop promising the trap; do not disclose it.** Either rewrite the authority so
+   the case becomes governed (royalty 6.3 now counts a take-back as an adjustment,
+   and the test became a governed-rule test) or move the input to the silence
+   clause's "left entirely open" tier and grade it nowhere (rebill). Record it
+   under `removed_obligations`. Disclosing the rule only because every run missed
+   it kills the trap and adds nothing (see *Disallowed repairs*).
+3. **Scrub the class everywhere it appears:** instruction, README, visible sample,
+   every named fixture and generator draw (run the limits predicate over all of
+   them), model comments, `solve.sh` header, the three explanations, the rubric and
+   the submission note. Moving-average's next upload failed
+   `test_instruction_alignment` on one hand-built fixture that still held the
+   dropped input; royalty's reviewer had to fix two rubric lines by hand.
+4. **Check what carries the tier afterwards.** Rescore the platform's per-run
+   breakdown without the dropped trap (rebill projected 4/8 from its v4 runs). If no
+   independent trap remains that some but not all runs fail, the fix will land at
+   BASE: say so and propose a replacement rather than resubmitting.
+
 ### Allowed repairs
 
 - Fix an oracle, fixture, tolerance, artifact, or verifier defect.
@@ -370,30 +441,25 @@ least one run. A 0/N test is blocking, but the repair depends on its cause.
 - Do not replace semantic verification with source-shape assertions.
 - Do not keep a historical tier after the task changes; re-measure it.
 
-## Every finding buys a permanent gate
+## Turn recurring findings into gates, in batches
 
-A return is expensive. Spend it once.
+A return is expensive; a class that keeps coming back should become a
+deterministic rule. But writing a gate and re-running the corpus is tooling work
+that does not improve the task in hand, so it no longer happens inside each
+revision (user decision, 2026-09-26, to cut revision cost):
 
-After a platform finding is repaired and verified, convert the *class* of defect
-into a deterministic rule, so it cannot recur in any future task:
-
-1. Name the class, not the instance. "This task's rounding convention had no
-   visible sentence" is an instance; "an exact convention with no authority
-   anchor" is the class.
-2. Add the rule to `panel_precheck.py` (or the relevant gate script) with a test
-   that fails on the shape you just fixed and passes on the repaired snapshot.
-3. Run the new rule over the existing corpus before committing it. **Any failure
-   on a task that already passed the platform is a bug in the rule until proven
-   otherwise** — roughly four in five such rows have been. Fix the rule to judge
-   the property rather than one spelling; do not edit the passing tasks.
-4. If the class cannot be mechanised — it needs semantic judgement — record it in
-   `AGENTS.md` §2 as a known exposure, naming what no script will catch.
-
-Skipping this turns each return into pure cost. Under `builder_certified`, where
-gates carry the axes up to a one-round local panel, it is how the gates catch up
-with what the platform panel keeps finding. Findings the creation-mode panel
-retained count too: a class the local panel keeps finding should become a gate
-so the next build does not pay reviewers to rediscover it.
+1. During the revision, record each finding's class (not the instance) in the
+   revision ledger's `gate` field, or `not_mechanizable` with a reason.
+2. Periodically, or once a class has recurred in two or more tasks, add the rule
+   to `panel_precheck.py` (or the relevant gate script) with a test that fails on
+   the shape and passes on the repaired snapshot, and add the class to the
+   blueprint §5 sweep if it is a Sound Verifier class.
+3. Run the new rule over the existing corpus, including the accepted references
+   in `mined-candidates/index.jsonl`. **Any failure on a task that already passed
+   the platform is a bug in the rule until proven otherwise**; fix the rule to
+   judge the property, do not edit the passing tasks.
+4. A class that cannot be mechanised goes into `AGENTS.md` §2 as a one-line known
+   exposure.
 
 A gate the builder believes is wrong is recorded as a `documented_exception` in
 the manifest with its reason and contract citation. Never silently reshape a task
@@ -442,13 +508,18 @@ on revision. This path applies both to the repair batch inside creation step 8
 3. **Closure gates** on the repaired snapshot, each as a receipt:
    `preflight.sh --strict` and `--determinism`, `independence_check.py`,
    `wrong_path_runner.py` for every affected core obligation plus every step-5b
-   adversarial submission kept from the build (they are a regression suite now),
+   Sound Verifier sweep mutant kept from the build (they are a regression suite now),
    and `panel_precheck.py --full --profile builder_certified`.
 4. **Clearance:** `panel_gate.py clearance-axes <task> --discovery-manifest
    <baseline> --finding-axis <each flagged axis>` (add `--discovery-report` in
-   creation mode); two fresh reviewers per listed
-   axis on fresh packets. A `tests/` or `instruction.md` edit lists most axes;
-   run them anyway. Blocking clearance stops as `rescope_required`.
+   creation mode); two fresh reviewers per listed reviewer axis on fresh
+   packets, fresh gate receipts for a listed gate-carried axis. Since 2026-09-26
+   the list follows the files each axis judges: a tests-only repair (the usual
+   Sound Verifier return) re-runs `sound_verifier` alone, two reviewers;
+   `tests/Dockerfile`/`tests/test.sh` add ground truth and determinism;
+   `solution/` adds reference and determinism; `instruction.md` or
+   `environment/` re-run every axis. After a platform return, re-running only the
+   returned axis is the default. Blocking clearance stops as `rescope_required`.
 5. **Re-probe** once with a fresh pair, in a new `--output` directory, when the batch removed or narrowed an
    obligation or changed graded behaviour of the core; 2/2 stops as
    `rescope_required`. Witness-only or editorial repairs keep the prior signal.
@@ -517,3 +588,11 @@ Return a compact table with:
 - V3 inferability verdict (campaign profiles only);
 - fresh empirical tier signal;
 - remaining uncertainty or platform-only validation need.
+
+Before repackaging, bring every out-of-ZIP artifact in line with the repaired
+snapshot: the three `task.toml` explanations (counts in
+`verification_explanation` must match the files; the quality gate checks them),
+`difficulty` (the measured tier once one exists), the platform rubric, and
+`SUBMISSION-<slug>.md`. In the accepted corpus, four of six submission notes and
+two rubrics were left describing a trap that had already been dropped; one needed
+a reviewer to fix it by hand.

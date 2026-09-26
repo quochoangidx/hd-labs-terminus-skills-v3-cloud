@@ -58,28 +58,46 @@ tier, submit-ready certification, or guaranteed platform acceptance.
 ## `builder_certified` (default)
 
 Selected by a bare `task-batch N`. One persistent builder, **one** reviewer, one
-adversarial verifier reviewer, the blind solve probe, and a pre-submission
-quality panel (full five-axis discovery, clearance on changed axes); no fairness
-reviewer, no consolidated auditor.
+early skeleton probe pair, and a narrow pre-submission panel; no fairness reviewer,
+no consolidated auditor, no separate adversarial reviewer.
 
-The five axes are covered first by executable receipts plus one reviewer, then,
-once the probe has shown the task clears CORE+, by a ten-reviewer discovery
-panel, so the findings the platform panel would return are found and repaired
-before upload. The probe runs first because it is the cheaper filter: in
-task-batch 3 all four first probes came back 2/2, and a panel spent before
-hardening is spent on a snapshot about to change. Clearance re-runs every axis
-that had a finding or whose visible files the repair changed; a repair touching
-`tests/` or `instruction.md` therefore re-runs most or all of them, so budget
-10–20 panel reviewers per task. The panel is local and bounded; it is not a
-claim that the platform panel will be satisfied.
+**Lean route (user decision, 2026-09-26: cut model sessions without losing what
+catches returns).** A task costs about 7–10 model sessions instead of 15–27:
+builder, reviewer, two skeleton solvers, four panel reviewers, and two clearance
+reviewers on a tests-only repair. Where each cut comes from, and why it is safe:
 
-A return is not cheap either. Both `builder_certified` tasks submitted on
-2026-09-24 (`tbrain-health-claim-cost-sharing`, `tbrain-intermittent-infusion-regimen`)
-came back from the quality panel with 37 findings each, 32–34 of them
-`sound_verifier`, before difficulty was measured. Every gate below had been
-green. The builder's receipts show that the task agrees with itself; they do not
-show that the verifier rejects wrong work the builder did not think of. Step 5b
-exists for that gap, and step 8 runs the platform's own five axes before upload.
+- **Probe early, not late.** Most candidates fail by collapsing at 2/2 (all four
+  task-batch-3 first probes), so the pair runs on a skeleton right after the model
+  and Oracle exist (step 4), before the verifier and gates are built. The final
+  difficulty check (step 7) rescores the preserved skeleton diffs against the
+  finished verifier instead of spawning a new pair; a fresh pair runs only when
+  the agent-visible contract changed after the skeleton. The skeleton screen
+  predicted the platform result for crop-water, IFTA and royalty.
+- **No separate adversarial reviewer.** The builder runs the Sound Verifier class
+  ladder (blueprint §5, C1–C18) as scripted Oracle mutants plus one or two
+  contract-valid alternatives. Those classes are what every accepted task's panel
+  returns were about.
+- **Panel on the two axes that fail.** Discovery spawns reviewers for
+  `sound_verifier` and `correct_reference_solution` only. The other three axes are
+  carried by receipts (`panel_gate.py` `source: "gate"`): `coherent_contract` by
+  the blind `contract_review`/`final_review` adjudication, `protected_ground_truth`
+  by the strict preflight static gates plus the candidate-read test,
+  `deterministic_execution` by `preflight.sh --determinism`. In the six accepted
+  tasks those three axes were clean in almost every return; the one ground-truth
+  Major (a graded visible sample) and the correct-reference overflow class are now
+  gates. Run a full five-axis panel only when the user asks, or when the task's
+  contract shape is new to the team (a first task in a new category/work surface).
+- **Clearance by what changed.** `panel_gate.py clearance-axes` now re-runs an
+  axis only when a file that axis judges changed: a tests-only repair re-runs
+  `sound_verifier` alone; `tests/Dockerfile`/`tests/test.sh` add ground truth and
+  determinism; `solution/` adds reference and determinism; `instruction.md` or
+  `environment/` re-run everything. Genomic (6 rounds), crop (4) and rebill (4)
+  repaired tests only and never broke another axis. `--strict-visibility`
+  restores the old rule.
+
+The panel is local and bounded; it is not a claim that the platform panel will be
+satisfied. If Sound Verifier returns start rising again, go back to the full
+five-axis panel and the adversarial reviewer.
 
 Required path:
 
@@ -104,41 +122,54 @@ Required path:
    rerun.
 4. Build the independent expectation model, then the Oracle, **in that order**.
    An expectation written after the reference tends to copy it. Fuzz the model
-   against the Oracle before writing tests, fix the harness shape, and write one
-   named test per rule, each run in a state where its violation shows. Score every
-   wrong path and one or two alternative correct implementations locally.
+   against the Oracle.
+
+   4a. **Skeleton probe (mandatory, before any verifier).** Prepare two solve
+   copies with `probe.py prepare --exploratory` from `instruction.md`,
+   `environment/` and the shipped package, run two fresh `terminus-probe` solvers
+   (Opus 5, launched without a `model` argument), and score each diff with the
+   model on generated inputs (`task-local-solve-probe` *Exploratory skeleton
+   mode*). **2/2 → redesign the causal core or replace the candidate** before
+   building anything else; one redesign, a second 2/2 replaces it. 0/2 or 1/2
+   with semantic failures → continue. A trap every solver misses goes through
+   the blueprint §4.3 0/8 screen now, while fixing the contract is still cheap.
+   Keep both solver diffs: step 7 rescores them.
+
+   Then fix the harness shape and write one named test per rule, each run in a
+   state where its violation shows. Score every wrong path and one or two
+   alternative correct implementations locally.
 5. Deterministic closure, every result written as a receipt:
    - `preflight.sh --strict` (layout, Docker, isolation, Oracle=1, NOP=0, noexec)
    - `preflight.sh --determinism` (repeat runs agree)
-   - `independence_check.py` (the expectation model does not import the package)
+   - `independence_check.py --model solution/model.py` (the expectation model
+     does not import the package, and it lives in `solution/`, sealing its output
+     into `tests/expected/`; a model under `tests/` blocks as `model_in_tests`)
    - `wrong_path_runner.py` for every core obligation (reward 0, its own witness
      fails, controls pass)
    - `panel_precheck.py --full --profile builder_certified` on the exact snapshot
      (bookkeeping rows such as graph shape and matrix labels report as warnings;
      closure, named silent cases, cited conventions and wrong paths still block)
-   5b. **Adversarial verifier pass**, on the closure snapshot. A fresh reviewer
-   session, separate from the contract/final reviewer and the builder, gets
-   `instruction.md`, `environment/` and `tests/`. It does not see `solution/`,
-   the builder's wrong paths, the manifest or the reports. It writes 10–15
-   plausible wrong submissions, each contract-valid except for one rule, and aims
-   them at the shapes the scaffold checklist §1 and §4 list: undeclared regions,
-   job shapes, loose comparators, promised helpers. It also writes one or two
-   contract-valid alternatives. Save each submission with its receipt under
-   `workspace/reports/<slug>/adversarial/`; revisions rerun them as a regression
-   suite. The builder runs each through
-   `wrong_path_runner.py`. A wrong submission scoring reward 1, or a valid
-   alternative scoring 0, is a finding, and it is answered the §11 way: back the
-   rule with a witness, or narrow the promise. Then rerun the affected closure
-   gates. This mirrors the panel's own "confirmed by running the grader" step
-   (`docs/testing-and-validation/quality-panel-judge-guide.md`) and the docs'
-   pre-submission rule that a deliberately wrong solution must fail
-   (`docs/understanding-tasks/what-makes-a-good-task.md`).
+   5b. **Sound Verifier sweep (builder, no extra session).** Run the class ladder
+   ([accepted-task blueprint](../../terminus-regular-task-authoring/references/accepted-task-blueprint.md)
+   §5, C1–C18) as scripted Oracle mutants through `wrong_path_runner.py`: caps,
+   cardinalities, floors, integer widths, signs and halves, categorical syntax,
+   separated accumulators, envelope cross-products and harness shapes. Each must
+   score reward 0 on its own named test; also run one or two contract-valid
+   alternatives, which must score 1. A surviving mutant or a rejected alternative
+   is answered the §11 way (back the rule with a witness, or narrow the promise),
+   then the affected closure gates rerun. Save the mutants under
+   `workspace/reports/<slug>/sweep/`; revisions rerun them as a regression suite.
 6. The same reviewer's `final_review` on the frozen snapshot, with full task
    visibility. A repair after it reruns the affected gates and gets a targeted
    recheck in the same session.
-7. Blind solve probe, two valid solvers, prepared with `probe.py prepare --exploratory`
-   (a counted prepare demands campaign receipts this profile never produces). **The bar is CORE+: at most one of the
-   two succeeds.** One success and one failure is accepted; do not keep hardening
+7. **Difficulty check.** Rescore the two step-4a skeleton diffs against the
+   finished verifier (`probe.py materialize`/`apply` on each run, then the
+   verifier); this costs no model session. Run a **fresh** pair (`probe.py
+   prepare --exploratory`, new `--output`) only when `instruction.md`,
+   `environment/` or the shipped package changed after the skeleton, or when a
+   rescored diff is rejected on a point the contract allows (a verifier defect to
+   repair first). **The bar is CORE+: at most one of the two succeeds.** One
+   success and one failure is accepted; do not keep hardening
    a task to chase `advanced` or `frontier`, and do not reject a candidate for
    landing at CORE. Difficulty stays unmeasured either way — this is a local
    signal, not a tier.
@@ -147,6 +178,18 @@ Required path:
    not infer a convention is contract evidence, and a solver rejected while
    contract-valid is verifier evidence. Both are defects that must be repaired
    even when the count already clears the bar; neither counts as difficulty.
+
+   A single trap missed by **both** solvers (and by every earlier pair) is a
+   0/8 risk, not a strong signal: royalty's 4/4 local common miss became a platform
+   "not passed by any agent run" return, and rebill's and moving-average's did the
+   same. Run the blueprint §4.3 screen on it (competing positive enumeration, no
+   definitional chain, contrary expert instinct, unnamed shared step, the trap
+   inside several tests). Accept when the misses split across two or more
+   independent traps, or when the screen is clean and the trap is isolated in its
+   own test. Probes run on the `opus` alias (Opus 5.5, all probes before
+   2026-09-26) did not predict the platform's per-model split or its tier: a local
+   1/2 on a one-trap shape came back BASE 7/8. `terminus-probe` is now pinned to
+   `claude-opus-5`, the platform's model; launch it without a `model` argument.
 
    If both solvers succeed, the task is under the bar. Deepen the causal coupling
    of the existing core rather than bolting on unrelated surface, rerun steps 5–6
@@ -166,8 +209,12 @@ Required path:
    mode, on the snapshot after any step-7 repairs, once a fresh
    `panel_precheck.py --full --manifest workspace/reports/<slug>/panel-precheck-manifest.json --profile builder_certified`
    passes on it.
-   - Discovery: all five axes, two fresh reviewers each, ten responses collected
-     before any edit.
+   - Discovery: `sound_verifier` and `correct_reference_solution`, two fresh
+     reviewers each, four responses collected before any edit. The other three
+     axes enter the adjudication as `"source": "gate"` with their
+     `gate_receipts` (contract/final review adjudication; strict preflight static
+     rows and the candidate-read test; `preflight.sh --determinism`). Prepare all
+     five packets anyway, so every carried verdict is hash-bound to a snapshot.
    - Repair: deduplicate retained findings by root cause and answer them in
      **one** consolidated batch through `task-revise-flag-remediation` (back the
      promise or stop promising it), then rerun the affected closure gates.
@@ -175,9 +222,10 @@ Required path:
      manifest, passing each axis with a retained blocking finding and
      `--discovery-report` so `Unsure` or incomplete discovery axes are re-run
      too. Spawn two new
-     reviewers for every axis it lists; the axes it carries keep their discovery
-     verdict because none of their visible files changed. Skip clearance when
-     discovery is five-axis non-blocking. A blocking clearance stops with
+     reviewers for every reviewer axis it lists, and refresh the gate receipts for
+     any gate-carried axis it lists; the axes it carries keep their verdict because
+     none of the files they judge changed. Skip clearance when discovery is
+     non-blocking. A blocking clearance stops with
      `rescope_required`; there is no third round.
    - Re-probe: if the batch removed or narrowed an obligation, or changed graded
      behaviour of the core, the step-7 signal no longer describes the task. Probe

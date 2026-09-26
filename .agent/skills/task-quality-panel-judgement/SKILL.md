@@ -1,6 +1,6 @@
 ---
 name: task-quality-panel-judgement
-description: Run a review-only Terminus 3 quality-panel audit with fresh-context subagents, isolated per-axis file visibility, and evidence-based consolidation. Runs as the pre-submission panel of the default builder_certified task-creation route (five-axis discovery, clearance on changed axes, panel_gate.py packaging receipt), and after a platform quality-panel return (two reviewers on the returned axis). Does not itself authorize repairs or replace deterministic gates or difficulty measurement.
+description: Run a review-only Terminus 3 quality-panel audit with fresh-context subagents, isolated per-axis file visibility, and evidence-based consolidation. Runs as the narrow pre-submission panel of the default builder_certified route (reviewers on sound_verifier and correct_reference, other axes carried by gate receipts, clearance on axes whose judged files changed, panel_gate.py packaging receipt), and after a platform quality-panel return (two reviewers on the returned axis). Does not itself authorize repairs or replace deterministic gates or difficulty measurement.
 ---
 
 # Terminus Quality Panel Judgement
@@ -34,9 +34,16 @@ serial fix-review loops.
 
 Use **creation mode** when `task-batch` reaches `builder_certified` step 8
 (`../task-batch/references/execution-profiles.md`), after the probe cleared
-CORE+. Run the full five-axis discovery panel below (ten reviewers) on the
-probed snapshot, consolidate once, and repair in one batch. Choose clearance
-axes mechanically, never by judgement:
+CORE+. Prepare all five packets, but spawn reviewers only for `sound_verifier`
+and `correct_reference_solution` (four reviewers); record the other three axes
+in the adjudication as `"source": "gate"` with their `gate_receipts`
+(`coherent_contract`: the blind contract/final review adjudication;
+`protected_ground_truth`: the strict preflight static rows and the candidate-read
+test; `deterministic_execution`: `preflight.sh --determinism`). `panel_gate.py`
+refuses a gate source on the two reviewer axes. Run a full five-axis discovery
+only when the user asks, or for a contract shape new to the team. Consolidate
+once and repair in one batch. Choose clearance axes mechanically, never by
+judgement:
 
 ```bash
 python3 .agent/skills/task-quality-panel-judgement/scripts/panel_gate.py \
@@ -45,10 +52,12 @@ python3 .agent/skills/task-quality-panel-judgement/scripts/panel_gate.py \
   --finding-axis <axis-with-retained-blocking-finding>   # repeat
 ```
 
-Spawn two new reviewers on fresh packets for every axis in `clearance_axes`: the
-axes with findings plus every axis whose visible files the repair changed. An
-axis in `carried_axes` keeps its discovery verdict because its reviewers would
-see identical bytes. Skip clearance when discovery is five-axis non-blocking. A
+Spawn two new reviewers on fresh packets for every reviewer axis in
+`clearance_axes`, and refresh the receipts of any gate-carried axis it lists:
+the axes with findings plus every axis whose **judged** files the repair changed
+(`AXIS_TRIGGERS` in `panel_gate.py`; a tests-only repair lists `sound_verifier`
+alone, `--strict-visibility` restores the older visible-file rule). An axis in
+`carried_axes` keeps its verdict. Skip clearance when discovery is non-blocking. A
 blocking clearance stops as `rescope_required`, as in orchestrator mode. Before
 packaging, `panel_gate.py check <task-dir> --report <report.json>` must pass on
 the exact snapshot; see *Record the result* for the fields it reads. Report the
@@ -197,7 +206,8 @@ Use:
 The orchestrator does not take an axis. Each reviewer receives only:
 
 - its assigned axis and reviewer ID;
-- its isolated packet path;
+- its isolated packet path and the packet's snapshot hash (reviewers that report a
+  different `snapshot_sha256` are rejected by `panel_gate.py write-report`);
 - the matching brief from `references/axis-prompts.md`;
 - instructions to stay read-only, packet-only, and return the required JSON.
 
@@ -214,6 +224,14 @@ results, or another reviewer's output. Fresh context means no conversation fork
 and no cross-reviewer contamination, including within an axis, not merely a new
 agent name. Do not reuse a discovery reviewer for clearance. Independence means
 separate fresh sessions, not necessarily different model families.
+
+The `terminus-panel-reviewer` profile has no shell, so it cannot open `.json.gz`
+or binary fixtures; a reviewer that cannot read mandatory evidence returns an
+incomplete axis and forces a clearance round (teammate batch 7, ltl clearance
+"PANEL INCOMPLETE"). Seal expectations and inputs as readable indented JSON or
+CSV and gzip only a file too large to read, or list the unreadable files in the
+brief as evidence the reviewer may treat as opaque. Name `task.toml` and
+`tests/Dockerfile` in the brief; Glob has missed them.
 
 Do not stop after the first blocking or undecided verdict. Collect all ten
 responses before adjudication or editing. A crashed, missing, or malformed

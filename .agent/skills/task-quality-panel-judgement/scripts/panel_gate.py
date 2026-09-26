@@ -26,6 +26,36 @@ CLEARING = {"None", "Advisory"}
 CLEARING_BY_AXIS = {"protected_ground_truth": {"None", "Advisory", "Minor"}}
 SEVERITY_RANK = {"None": 0, "Advisory": 1, "Minor": 2, "Unsure": 2, "Major": 3}
 
+# Which changed files make an axis's verdict stale (user decision, 2026-09-26, to
+# cut panel cost). Visibility is wider than this: `tests/` sits in four packets,
+# so under the visibility rule one new test re-ran eight reviewers. In the six
+# accepted tasks, every tests-only revision (genomic 6 rounds, crop 4, rebill 4)
+# changed only the sound_verifier verdict; the harness files (tests/Dockerfile,
+# tests/test.sh) are what the ground-truth and determinism axes judge in tests/,
+# and the static gates plus `preflight.sh --determinism` re-check those
+# mechanically. `--strict-visibility` restores the old rule.
+HARNESS_FILES = ("tests/Dockerfile", "tests/test.sh")
+AXIS_TRIGGERS = {
+    "coherent_contract": ("instruction.md", "task.toml", "environment/"),
+    "correct_reference_solution": ("instruction.md", "environment/", "solution/"),
+    "protected_ground_truth": ("instruction.md", "environment/", *HARNESS_FILES),
+    "sound_verifier": ("instruction.md", "environment/", "tests/"),
+    "deterministic_execution": ("instruction.md", "task.toml", "environment/", "solution/", *HARNESS_FILES),
+}
+# Axes whose verdict may rest on deterministic receipts instead of two panel
+# reviewers: coherent_contract on the blind contract_review/final_review
+# adjudication, protected_ground_truth on the static privilege/fixture gates and
+# the candidate-read test, deterministic_execution on `preflight.sh --determinism`.
+# sound_verifier and correct_reference_solution always need reviewers.
+GATE_ELIGIBLE_AXES = {"coherent_contract", "protected_ground_truth", "deterministic_execution"}
+
+
+def triggers(axis: str, path: str, strict: bool = False) -> bool:
+    if strict:
+        return True
+    return any(path == prefix or (prefix.endswith("/") and path.startswith(prefix))
+               for prefix in AXIS_TRIGGERS[axis])
+
 
 def surface_files(task: Path, axis: str) -> dict[str, str]:
     files: dict[str, str] = {}
@@ -62,7 +92,7 @@ def clears(axis: str, entry: dict) -> bool:
 
 
 def clearance_axes(task: Path, discovery_manifest: Path, finding_axes: list[str],
-                   discovery_report: Path | None = None) -> dict:
+                   discovery_report: Path | None = None, strict: bool = False) -> dict:
     unknown = sorted(set(finding_axes) - set(AXIS_SURFACES))
     if unknown:
         raise ValueError(f"unknown axis: {', '.join(unknown)}")
@@ -74,7 +104,9 @@ def clearance_axes(task: Path, discovery_manifest: Path, finding_axes: list[str]
         finding_axes += [axis for axis in AXIS_SURFACES if not clears(axis, axes.get(axis, {}))]
     rerun, carried, changes = [], [], {}
     for axis in AXIS_SURFACES:
-        changed = changed_paths(reviewed_files(discovery_manifest, axis), surface_files(task, axis))
+        changed = [path for path in changed_paths(reviewed_files(discovery_manifest, axis),
+                                                  surface_files(task, axis))
+                   if triggers(axis, path, strict)]
         changes[axis] = changed
         (rerun if changed or axis in finding_axes else carried).append(axis)
     return {
@@ -92,6 +124,13 @@ def evidence_errors(axis: str, entry: dict, manifest: Path) -> list[str]:
     """A verdict must rest on raw reviews of that very packet, or on a cited
     platform report for an axis the platform did not flag."""
     reviewed = json.loads(manifest.read_text())["snapshot_sha256"]
+    if entry.get("source") == "gate":
+        if axis not in GATE_ELIGIBLE_AXES:
+            return [f"{axis}: needs two panel reviewers; gate receipts cannot carry it"]
+        receipts = entry.get("gate_receipts") or []
+        if not receipts:
+            return [f"{axis}: gate verdict without gate_receipts"]
+        return [f"{axis}: gate receipt missing: {path}" for path in receipts if not Path(path).is_file()]
     if entry.get("source") == "platform":
         platform = entry.get("platform_report")
         if not platform or not Path(platform).is_file():
@@ -113,7 +152,7 @@ def evidence_errors(axis: str, entry: dict, manifest: Path) -> list[str]:
     return errors
 
 
-def check(task: Path, report: Path) -> dict:
+def check(task: Path, report: Path, strict: bool = False) -> dict:
     data = json.loads(report.read_text())
     snapshot = sha256_tree(task)
     errors: list[str] = []
@@ -135,14 +174,17 @@ def check(task: Path, report: Path) -> dict:
             errors.append(f"{axis}: packet_manifest missing: {manifest!r}")
             continue
         errors.extend(evidence_errors(axis, entry, Path(manifest)))
-        changed = changed_paths(reviewed_files(Path(manifest), axis), surface_files(task, axis))
+        changed = [path for path in changed_paths(reviewed_files(Path(manifest), axis), surface_files(task, axis))
+                   if triggers(axis, path, strict)]
         if changed:
             errors.append(f"{axis}: verdict is stale, {len(changed)} visible file(s) changed since review: "
                           + ", ".join(changed[:5]))
-    return {"snapshot_sha256": snapshot, "report": str(report), "passed": not errors, "errors": errors}
+    gate_axes = sorted(axis for axis, entry in axes.items() if (entry or {}).get("source") == "gate")
+    return {"snapshot_sha256": snapshot, "report": str(report), "passed": not errors, "errors": errors,
+            "gate_carried_axes": gate_axes}
 
 
-def write_report(task: Path, adjudication: Path, output: Path) -> dict:
+def write_report(task: Path, adjudication: Path, output: Path, strict: bool = False) -> dict:
     """Assemble report.json from raw reviewer files and the orchestrator's
     adjudication, so no verdict, completeness flag or hash is typed by hand.
 
@@ -151,7 +193,8 @@ def write_report(task: Path, adjudication: Path, output: Path) -> dict:
        "reviewers_dir": <default dir holding <axis>-A.json and <axis>-B.json>,
        "axes": {<axis>: {"verdict": ..., "downgrade_reason": ...,
                          "packet_manifest"?: ..., "reviewers"?: [a, b],
-                         "source"?: "platform", "platform_report"?: ...}}}
+                         "source"?: "platform", "platform_report"?: ...,
+                         "source"?: "gate", "gate_receipts"?: [...]}}}
     """
     data = json.loads(adjudication.read_text())
     base = adjudication.parent
@@ -167,6 +210,9 @@ def write_report(task: Path, adjudication: Path, output: Path) -> dict:
                  "packet_manifest": resolve(given.get("packet_manifest") or data.get("packet_manifest"))}
         if given.get("source") == "platform":
             entry.update(source="platform", platform_report=resolve(given.get("platform_report")), complete=True)
+        elif given.get("source") == "gate":
+            entry.update(source="gate", complete=True,
+                         gate_receipts=[resolve(path) for path in given.get("gate_receipts") or []])
         else:
             reviewers = given.get("reviewers") or [
                 str(Path(data.get("reviewers_dir", "reviewers")) / f"{axis}-{side}.json") for side in "AB"]
@@ -190,7 +236,7 @@ def write_report(task: Path, adjudication: Path, output: Path) -> dict:
     report = {"snapshot_sha256": sha256_tree(task), "axes": axes, "adjudication": str(adjudication.resolve())}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    return check(task, output)
+    return check(task, output, strict)
 
 
 def parse_args() -> argparse.Namespace:
@@ -213,6 +259,8 @@ def parse_args() -> argparse.Namespace:
     write.add_argument("--report", required=True, type=Path, help="report.json to write")
     for command in (axes, gate, write):
         command.add_argument("--output", type=Path, help="also write the JSON receipt here")
+        command.add_argument("--strict-visibility", action="store_true",
+                             help="treat any visible-file change as stale (pre-2026-09-26 rule)")
     return parser.parse_args()
 
 
@@ -221,11 +269,12 @@ def main() -> int:
     task = args.task_dir.resolve()
     try:
         if args.command == "clearance-axes":
-            result = clearance_axes(task, args.discovery_manifest, args.finding_axis, args.discovery_report)
+            result = clearance_axes(task, args.discovery_manifest, args.finding_axis, args.discovery_report,
+                                    args.strict_visibility)
         elif args.command == "write-report":
-            result = write_report(task, args.adjudication, args.report)
+            result = write_report(task, args.adjudication, args.report, args.strict_visibility)
         else:
-            result = check(task, args.report)
+            result = check(task, args.report, args.strict_visibility)
     except (OSError, KeyError, ValueError, json.JSONDecodeError) as error:
         raise SystemExit(f"error: {error}") from error
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"

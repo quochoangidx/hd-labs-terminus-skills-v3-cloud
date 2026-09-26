@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,12 @@ VALID_RESULTS = {"pass", "fail"}
 VALID_TYPES = {"semantic", "compile", "setup", "timeout", "unknown"}
 VALID_RUNNERS = {"codex-subagent", "claude-agent"}
 VALID_RUNTIMES = {"codex", "claude-code"}
+# Claude probes must run on the platform's difficulty model (user decision,
+# 2026-09-26). The `opus` alias resolves to Opus 5.5, which is stronger than the
+# platform's Opus 5 and read silence clauses differently, so the model a run was
+# actually served is read from the subagent's JSONL transcript, not trusted from a flag.
+PLATFORM_CLAUDE_PROBE_MODEL = "claude-opus-5"
+PLATFORM_CLAUDE_PROBE_MODEL_RE = re.compile(r"^claude-opus-5(?:-\d{8})?$")
 
 
 def should_ignore(path: Path, root: Path | None = None) -> bool:
@@ -526,6 +533,43 @@ def apply_run(args: argparse.Namespace) -> None:
     print(run_dir / "apply.log")
 
 
+def served_models(jsonl_path: Path) -> list[str]:
+    """Models that actually answered in a Claude Code subagent JSONL transcript."""
+    models: list[str] = []
+    for line in jsonl_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        message = entry.get("message") if isinstance(entry, dict) else None
+        if entry.get("type") == "assistant" and isinstance(message, dict):
+            model = message.get("model")
+            if isinstance(model, str) and model and model != "<synthetic>":
+                models.append(model)
+    return models
+
+
+def claude_probe_model_errors(declared: str, served: list[str]) -> list[str]:
+    errors = []
+    if not PLATFORM_CLAUDE_PROBE_MODEL_RE.match(declared):
+        errors.append(
+            f"--model must be {PLATFORM_CLAUDE_PROBE_MODEL} for a Claude probe (got {declared!r}); "
+            "the `opus` alias resolves to Opus 5.5"
+        )
+    if not served:
+        errors.append("the agent JSONL transcript shows no assistant model; cannot prove the probe ran on Opus 5")
+    wrong = sorted({model for model in served if not PLATFORM_CLAUDE_PROBE_MODEL_RE.match(model)})
+    if wrong:
+        errors.append(
+            f"the probe was served by {', '.join(wrong)}, not {PLATFORM_CLAUDE_PROBE_MODEL}; "
+            "discard this run, launch terminus-probe without a model argument, and re-run"
+        )
+    return errors
+
+
 def record(args: argparse.Namespace) -> None:
     run_dir = Path(args.run_dir).resolve()
     if args.result not in VALID_RESULTS:
@@ -542,6 +586,21 @@ def record(args: argparse.Namespace) -> None:
         raise SystemExit("--model must be non-empty")
     if args.reasoning_effort != "medium":
         raise SystemExit("--reasoning-effort must be medium for task-batch evidence")
+    jsonl_source: Path | None = None
+    models_served: list[str] = []
+    if args.runtime == "claude-code":
+        if not args.agent_jsonl:
+            raise SystemExit(
+                "--agent-jsonl (the subagent's .jsonl transcript under ~/.claude/projects/.../subagents/) "
+                "is required for a Claude probe, to prove it ran on Opus 5"
+            )
+        jsonl_source = Path(args.agent_jsonl).resolve()
+        if not jsonl_source.is_file() or jsonl_source.stat().st_size == 0:
+            raise SystemExit(f"Missing or empty agent JSONL transcript: {jsonl_source}")
+        models_served = served_models(jsonl_source)
+        model_errors = claude_probe_model_errors(args.model, models_served)
+        if model_errors:
+            raise SystemExit("; ".join(model_errors))
     forbidden_launch = ("stb ", "terminus-2", "@openai/", "@anthropic/")
     launch_lower = args.launch_command.lower()
     if any(token in launch_lower for token in forbidden_launch):
@@ -593,6 +652,9 @@ def record(args: argparse.Namespace) -> None:
         shutil.copy2(ctrf_source, ctrf_path)
     if transcript_source != transcript_path:
         shutil.copy2(transcript_source, transcript_path)
+    jsonl_path = run_dir / "agent-transcript.jsonl"
+    if jsonl_source is not None and jsonl_source != jsonl_path:
+        shutil.copy2(jsonl_source, jsonl_path)
 
     result_path = run_dir / "result.json"
     data = {}
@@ -610,6 +672,7 @@ def record(args: argparse.Namespace) -> None:
                 "runner": args.runner,
                 "runtime": args.runtime,
                 "model": args.model,
+                "served_models": sorted(set(models_served)),
                 "reasoning_effort": args.reasoning_effort,
                 "session_id": args.agent_session_id,
                 "fresh_context": True,
@@ -633,6 +696,14 @@ def record(args: argparse.Namespace) -> None:
                 "verification_ctrf_sha256": sha256(ctrf_path),
                 "agent_transcript": "agent-transcript.md",
                 "agent_transcript_sha256": sha256(transcript_path),
+                **(
+                    {
+                        "agent_jsonl": "agent-transcript.jsonl",
+                        "agent_jsonl_sha256": sha256(jsonl_path),
+                    }
+                    if jsonl_source is not None
+                    else {}
+                ),
             },
         }
     )
@@ -671,6 +742,15 @@ def summarize(args: argparse.Namespace) -> None:
     total = len(records)
     passed = sum(1 for item in records if item.get("result") == "pass")
     evidence_complete = all(item.get("evidence_complete") is True for item in records)
+    model_violations = []
+    for item in records:
+        agent = item.get("agent") or {}
+        if agent.get("runtime") == "claude-code":
+            served = agent.get("served_models")
+            if not isinstance(served, list) or claude_probe_model_errors(str(agent.get("model", "")), served):
+                model_violations.append(f"{item.get('task')}:{agent.get('session_id')}:{served}")
+    if model_violations:
+        evidence_complete = False
     failures: dict[str, int] = {}
     for item in records:
         if item.get("result") != "pass":
@@ -732,6 +812,7 @@ def summarize(args: argparse.Namespace) -> None:
         "failed": total - passed,
         "failure_types": failures,
         "evidence_complete": evidence_complete,
+        "claude_model_violations": model_violations,
         "union_coverage": union_coverage,
         "common_miss_count": len(common_misses),
         "local_accuracy": accuracy,
@@ -751,6 +832,7 @@ def summarize(args: argparse.Namespace) -> None:
         f"- Failed: {total - passed}\n"
         f"- Failure types: {json.dumps(failures, sort_keys=True)}\n"
         f"- Evidence complete: {evidence_complete}\n"
+        f"- Claude runs not served by {PLATFORM_CLAUDE_PROBE_MODEL}: {len(model_violations)}\n"
         f"- Union coverage: {union_coverage:.6f}\n"
         f"- Common misses: {len(common_misses)}\n"
         f"- Local accuracy: {accuracy:.6f}\n"
@@ -808,6 +890,10 @@ def main() -> int:
     p.add_argument("--verifier-log", required=True)
     p.add_argument("--verification-ctrf", required=True)
     p.add_argument("--agent-transcript", required=True)
+    p.add_argument(
+        "--agent-jsonl",
+        help="Claude Code subagent .jsonl transcript; required for --runtime claude-code",
+    )
     p.add_argument("--verification-command", required=True)
     p.add_argument("--verification-exit-code", type=int, required=True)
     p.add_argument("--reward", type=float, required=True)

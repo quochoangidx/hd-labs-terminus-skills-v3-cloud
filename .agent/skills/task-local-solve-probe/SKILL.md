@@ -67,9 +67,14 @@ candidate belongs on a Core/Advanced/Frontier shortlist.
   mechanically, do not rely on inheritance:
   - Codex: use `gpt-5.6-sol` with `reasoning_effort: medium` for every subagent:
     builder, fairness reviewer, both blind solvers, and auditor.
-  - Claude Code: launch the checked-in `terminus-probe` project agent with
-    `model: opus`. Its profile pins `effort: medium`; Claude's Agent call has no
+  - Claude Code: launch the checked-in `terminus-probe` project agent **without**
+    a `model` argument. Its profile pins `model: claude-opus-5` (the platform's
+    difficulty model, user decision 2026-09-26) and `effort: medium`; an Agent-call
+    `model` value overrides the profile, and the `opus` alias resolves to Opus 5.5,
+    which is stronger than the platform's Opus 5. Claude's Agent call has no
     per-call effort field. Run it from the isolated `run_N/solve/` directory.
+    Record the model the run actually used; if a runtime cannot serve
+    `claude-opus-5`, stop and report rather than silently falling back to 5.5.
   Do not silently substitute a cheaper OR stronger model across runtimes. Use a
   different model or higher reasoning effort only when the user explicitly asks
   for it.
@@ -168,6 +173,18 @@ scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py record \
 scripts/python3 .agent/skills/task-local-solve-probe/scripts/probe.py summarize workspace/local-solve-probes/tbrain-example
 ```
 
+**Claude probes must run on Opus 5, and `record` proves it.** For
+`--runtime claude-code`, pass `--runner claude-agent --model claude-opus-5` and
+`--agent-jsonl` pointing at the subagent's own transcript,
+`~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl`. `record`
+reads the model of every assistant reply there and refuses the run if any reply
+came from another model (the `opus` alias and `claude-opus-5-5` included). It
+stores `served_models` in `result.json`, and `summarize` marks the bundle
+`incomplete_evidence` when a Claude run lacks that proof or was served by another
+model. A refused run is discarded and re-run; it is never recorded under a
+different label. If the account cannot serve `claude-opus-5`, stop and tell the
+user; do not fall back to 5.5.
+
 For the current CORE+ campaign, summarize with the profile used at preparation:
 
 ```bash
@@ -195,10 +212,14 @@ that `verify/` is the current full task plus that exact solver delta.
 
 ## Exploratory skeleton mode
 
-Use `probe.py prepare --exploratory` when a cheap early screen is worthwhile.
-This is optional cost control, not a difficulty gate. Never report its pass
-fraction as Core/Advanced/Frontier and never reuse its runs after the full verifier
-or contract changes.
+Use `probe.py prepare --exploratory` for a cheap early screen. Under
+`builder_certified` it is **mandatory** and is the route's only solver pair
+(execution-profiles step 4a, user decision 2026-09-26): it runs right after the
+model and Oracle exist, before any verifier work, and a 2/2 stops the build.
+Never report its pass fraction as Core/Advanced/Frontier. Its runs may be
+**rescored** against the finished verifier (step 7) while `instruction.md`,
+`environment/` and the shipped package are byte-identical to what the solvers
+saw; after any change to those, the runs are stale and a fresh pair is needed.
 
 - **Minimum input:** a buildable `environment/` + `instruction.md` + the stub.
   No polished oracle, no hidden suite, no Dockerfile hardening, no packaging.
@@ -226,6 +247,19 @@ Default probe (exactly 2 runs):
   iteration.
 - Any band where failures are setup, missing dependency, unclear instruction,
   or verifier construction: fix the task, not the difficulty label.
+
+**Platform calibration (2026-09-26, six accepted tasks):** the probes behind the
+evidence below ran on the `opus` alias, which resolves to Opus 5.5, stronger than
+the platform's Opus 5, and the two read a silence clause differently (the profile
+is now pinned to `claude-opus-5`). Royalty's local pair kept a trap that
+platform Opus failed 8/8; a local 1/2 on a one-trap shape went BASE 7/8 (midi).
+Treat a local failure as hold evidence and a local pass as no tier evidence. The
+local result that did predict the platform was the **unanimous** miss: every
+local solver missing one trap (royalty 4/4) became a platform 0/8 "not passed by
+any agent run" return. A 0/2 whose two failures are the same single test is a
+contract risk to screen (`../terminus-regular-task-authoring/references/accepted-task-blueprint.md`
+§4.3), not a stronger signal than 1/2; misses split across two traps are the
+healthy shape.
 
 Map failures to the mechanism/interaction nodes in `semantic-coverage.json`
 for diagnosis, not acceptance. Common misses or concentrated geometry should

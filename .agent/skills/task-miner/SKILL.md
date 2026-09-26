@@ -496,6 +496,14 @@ the snapshot from a public fork of `snorkel-tb-tasks` when it is stale (see the 
 header). If the team has a shared registry path or URL, check that too before
 claiming a candidate.
 
+**Accepted reference tasks are off-limits as sources.** Rows with
+`"status": "accepted_reference"` (the six platform-accepted tasks audited on
+2026-09-26) exist for lessons only. Reject any candidate that shares their domain
+setting, authority, departures, trap instance, data shape or wording, and do not
+count a reskin, language port or "same mechanism in another industry with the same
+list-and-sign trap" as novel. Reuse only the abstract properties recorded in
+`../terminus-regular-task-authoring/references/accepted-task-blueprint.md`.
+
 Registry identity keys:
 
 - `category + source + task_slug`
@@ -627,7 +635,11 @@ it and how it would check itself), then score the five questions and record
 `solver_path_screen` in the artifact. This is the one screen calibrated against
 real probe outcomes: blind retro-scoring of 24 probed tasks separated 2/2
 collapses from resisting tasks at AUC 0.74. Every task scored 1 had collapsed.
-`self_verification_resistance` 1 rejects; 2 deprioritizes. The same screen runs
+`self_verification_resistance` 1 rejects; 2 deprioritizes. For a seeded-departure
+candidate, design the restraint traps first and check them against the
+accepted-task blueprint (`../terminus-regular-task-authoring/references/accepted-task-blueprint.md`
+§4): on the platform every run repaired every departure, so departure count and
+domain niche earn no score. The same screen runs
 again at `contract_review` on the written instruction, where a score of 2 or
 lower stops the build before any verifier exists. Do not raise a score for
 ambiguity: an uninferable requirement is a fairness defect, not difficulty.

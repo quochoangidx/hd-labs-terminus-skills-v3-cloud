@@ -43,7 +43,15 @@ write, the self-check it would run, and where it would go wrong, if anywhere.
    spec-silent sub-domain in the same function as a defect, a qualifier on a
    different parameter, shipped behaviour that must be preserved though it looks
    wrong). 1 = none; 3 = one; 5 = three or more, not all disarmed by one
-   instruction sentence. See contract-closure §15.
+   instruction sentence. See contract-closure §15. Count a trap only when it has
+   the shape that held on the platform (blueprint §4.1): inside an aggregate a
+   departure forces the solver to rebuild; a bare unlabelled subtype excluded only
+   by a domain-word definition (two hops); one routing decision kept; derivable from
+   a chain of definitions. Score a trap that fails the 0/8 screen (blueprint §4.3:
+   competing positive enumeration, no definitional chain, contrary expert instinct)
+   as a contract defect, not a point. Garbage-input guards, labelled type codes,
+   conditions written into the rule sentence and shared-helper coupling count as
+   zero.
 5. `fuzz_blind_spot`: 1 = self-generated tests naturally cover the graded
    boundaries; 5 = graded cases sit in input shapes self-fuzzing under-generates.
 
@@ -106,3 +114,27 @@ per-question scores were higher for hard tasks on every question, most for
 
 Recalibrate when 10 or more new probe outcomes exist: rerun this blind protocol,
 update the table, and adjust the thresholds only when the evidence moves.
+
+## Platform calibration (2026-09-26, six accepted tasks)
+
+The first platform measurements of tasks screened this way (see
+`../terminus-regular-task-authoring/references/accepted-task-blueprint.md`):
+
+- In every recorded 8-run check, every run repaired every departure, including
+  departures against remembered textbook practice. Departure count and domain
+  niche add nothing to `self_verification_resistance`; only `restraint_traps` and
+  its interaction with a rebuilt aggregate moved a platform result.
+- Measured outcomes: crop-water ADVANCED 3/8 (two independent traps, split
+  misses); royalty CORE 4/8 (one trap, a clean GPT-pass / Opus-fail split); three
+  0/8 "unsolvable" returns, each from one trap every run missed. A high
+  `restraint_traps` score is therefore not enough: count only traps that pass the
+  0/8 screen, and prefer two independent traps of different kinds.
+- Local Opus 5.5 probes are stronger than the platform's Opus 5 and read the
+  silence clause differently: royalty's local pair kept a trap that platform Opus
+  failed 8/8, and a local 1/2 one-trap shape went BASE 7/8 (midi). Use local
+  probes to find unanimous misses (contract gaps) and collapses, not to forecast
+  the tier.
+- Across 12 non-trap designs (stateful coupling, evidence reverse-engineering,
+  provable optimum, scale, preservation, symptom-to-root), Opus 5.5 solvers passed
+  30 of 30 runs. Score such designs `svr ≤ 2` unless a concrete trap or blind spot
+  is named.

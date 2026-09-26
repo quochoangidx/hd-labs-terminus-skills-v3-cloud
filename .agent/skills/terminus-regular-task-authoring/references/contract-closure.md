@@ -32,6 +32,17 @@ it with two sentences in the instruction:
   nought or less, a key or a value of nothing, a setting read back that asking
   for would have been refused."*
 
+Every accepted seeded-departure task uses the same three-tier form: governed
+inputs; a **closed** list of silent inputs where the shipped step is kept, plus
+the composition sentence *"for such an input, keep the step the code takes for it
+today; every other step it passes through still follows the book"*; and inputs
+**left entirely open** (past a ceiling, unanswerable by the frozen types) that are
+never graded. Without the composition sentence, "keep shipped" contradicts "fix
+the rule" wherever a silent input flows through a repaired expression. Template and
+filling rules: [accepted-task blueprint](accepted-task-blueprint.md) §3. Never
+end the list with "anything else outside the range the book gives": no verifier
+can back it, and it drew a finding in four returns.
+
 **Declare the input domain, then give every stated rule its own.** The authority
 states what a job or call may carry: types, and which fields may be absent,
 null, nought, negative or unbounded. The panel checks an allegedly missed input
@@ -142,18 +153,42 @@ This is the rule that lets a task stand without a reference reviewer.
 The usual chain is circular: the reference defines the behavior, the verifier
 records what the reference does, the reference passes. That proves nothing.
 
-Instead, re-derive the expected answers from the authority in the test code,
-without importing or invoking the implementation under repair. Oracle=1 then
-means two independent derivations of the same authority agree — evidence, not
-tautology. The verified task says so in its own words: the plan and the count are
-worked out from the note, not recorded from a run, *so the verifier cannot
+Instead, re-derive the expected answers from the authority in an independent
+model, without importing or invoking the implementation under repair. Oracle=1
+then means two independent derivations of the same authority agree — evidence,
+not tautology. The verified task says so in its own words: the plan and the count
+are worked out from the note, not recorded from a run, *so the verifier cannot
 inherit a mistake the reference made*.
+
+**The model lives in `solution/`, not in `tests/`.** A callable function in
+`tests/` that maps task inputs to the complete expected output is the docs'
+"Reimplementing the Solution in Tests" anti-pattern
+(`docs/creating-tasks/writing-tests.md`) and the High human-review row "no
+end-to-end solver in tests". Two tasks with clean platform runs (crop-water at
+ADVANCED, royalty at CORE) were returned by human review for exactly this; escrow's
+reviewer also named the job generator. The accepted form:
+
+- `solution/model.py` re-derives every figure and its `__main__` seals the
+  expectations into `tests/expected/` (readable JSON or CSV; gzip with `mtime=0`
+  only when a file is too large to read), with `manifest.json` binding each
+  expectation to the SHA-256 of its input;
+- inputs are sealed too (generators live in `solution/`; `tests/` only loads);
+- at grading time a test checks each input digest against the manifest, runs the
+  candidate, and compares;
+- `/tests` is `chmod 700` at image build and a test proves the sandbox uid cannot
+  read the expectations;
+- when resealing a returned task, prove every sealed expectation equals what the
+  previous live model computed, so the measured tier carries over.
+
+Seed any generated inputs from a constant in the sealing code, never from a hash
+of candidate files: a candidate that can steer its own cases (an inert nonce file)
+was a panel finding.
 
 Declare where each expectation comes from:
 
 | `expected_source` | Use when |
 |---|---|
-| `independent_model` | the test re-derives the answer from the authority |
+| `independent_model` | `solution/model.py` re-derives the answer from the authority and the test compares against its sealed output |
 | `authority_text` | the authority fixes the exact bytes |
 | `shipped_differential` | the expectation is the untouched behavior, read from both the shipped and the repaired tree |
 | `invariant` | a global claim checked without any expected value |
@@ -181,6 +216,13 @@ non-finite values.
 This is the only thing that catches over-repair, where a candidate tidies past
 the contract and adds a guard the authority never asked for. An ordinary test
 suite never notices.
+
+Install the shipped copy under **its own uid, mode 0700**, and run it as that uid.
+A shipped copy the candidate can read is one it can run, and delegating to it was
+a Major (moving-average, escrow). Compare only the column the kept step decides,
+after neutralising any other departure that would confound the comparison (crop
+feeds the shipped package readings already moved a day, so only the runoff routing
+differs).
 
 ## 8. One skeleton, four views
 
@@ -376,8 +418,56 @@ Design rules that follow:
    rules with deeper traps survive both gates; more rules only enlarge the
    surface (rule 6).
 
-The evidence is one exploratory two-solver sample. Treat it as a local signal and
-never as a tier.
+The evidence above is one exploratory two-solver sample. The platform measurements
+that followed (2026-09-26) confirm the lever and sharpen the rules; they are the
+stronger evidence where the two differ.
+
+### Platform-measured refinement (six accepted tasks)
+
+Across every recorded 8-run difficulty check (crop ADVANCED 3/8, royalty CORE
+4/8, and the 0/8 returns of rebill, royalty and moving-average), every run repaired
+every departure. **All measured difficulty came from restraint traps.** What held,
+what collapsed and what went 0/8 "unsolvable":
+
+9. **Put the trap inside an aggregate a departure forces the solver to rebuild,**
+   not at the definition site. Solvers keep a silent step wherever a definition
+   applies directly and break it inside the rebuilt expression: crop's tailwater
+   (`surface = rain + brought` rebuilt for the intake rule; all four Opus runs wrote
+   `max(0, rain − intake)`), royalty's repayment (`brought_forward + sum(advances)`
+   rebuilt), IFTA's non-member correction (total miles broadened).
+10. **Make the hop two-deep.** The subtype is a bare sign or value in one
+    unlabelled list whose field name is the rule's own term, excluded only by a
+    domain-word definition with a threshold ("a charge of one cent or more"). A
+    labelled encoding or type code is one hop and catches nobody (genomic's
+    README-labelled traps, hplc 2/2 twice).
+11. **Keep the kept step to one routing decision** (side of a cut-off, bucket, in
+    or out). Traps that keep arithmetic need a scope sentence that gives them away.
+12. **Ground the kept step in a chain of definitions.** Moving-average's late
+    returns escape the cut-off because 1.1/1.2 define receipt and issue narrowly and
+    2.1 speaks only of those: accepted, passed by 2/8. Its credit note had only
+    today's code behind it: 0/8 even when named, so the task was returned
+    unsolvable.
+13. **Screen every trap for a competing positive enumeration.** Royalty's take-back
+    went 0/8 because rule 8.2 ("royalty on physical units carries a reserve")
+    plausibly governed it despite the definition. Trace each trap's destination
+    aggregate through every sentence that could govern it.
+14. **Isolate each trap in its own named test**; keep sweeps, whole-run tests and
+    shared fixtures trap-free. Rebill's credit-line trap sat in seven tests and one
+    shared over-repair made all seven 0/8.
+15. **Two independent traps of mixed kind.** GPT-5.6 fell for definition hops,
+    Opus 5 for "apply the formula everywhere" edges and for reading "keep" as "don't
+    special-case". Crop's two traps split the runs (4/8 and 3/8 failed) and measured
+    ADVANCED; royalty was left on the CORE boundary with one.
+16. **A unanimous local miss predicts 0/N, not difficulty.** Royalty's 4/4 local
+    misses became 8/8. Resolve such a trap before upload. When a trap does go 0/8,
+    drop it (make the case governed or left open) rather than disclose it, and scrub
+    it from fixtures, explanations and rubric.
+17. **Name the silent inputs, not the trap.** Crop named both silent inputs in
+    domain words and still bit 5/8; the one trap rebill's instruction named
+    explicitly (limits past 60 days) caught nobody.
+
+Full evidence, the 0/8 screen and the corpus table:
+[accepted-task blueprint](accepted-task-blueprint.md) §4.
 
 **Where the platform docs stand.** `docs/` neither describes nor forbids
 restraint traps. They define difficulty as domain reasoning: choosing between
@@ -388,3 +478,8 @@ requirements" under what does not work. A task whose only difficulty is knowing
 where to stop is therefore a local technique with no documentary backing. Pair
 it with at least one crux of interacting domain constraints, so the
 `difficult` check and a human reviewer have something the docs recognise.
+In practice the six accepted tasks passed the `difficult` check and
+`difficulty_explanation_quality` by framing the departures as real professional
+slips and the traps as expert judgement about scope ("reading each definition as
+the boundary of its rule rather than as a description of the common case"), and by
+naming each natural over-repair in code-level terms.

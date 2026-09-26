@@ -61,15 +61,57 @@ def test_unchanged_task_reruns_only_finding_axes(tmp_path: Path) -> None:
     assert "coherent_contract" in result["carried_axes"]
 
 
-def test_tests_edit_reruns_every_axis_that_sees_tests(tmp_path: Path) -> None:
+def test_tests_edit_reruns_only_sound_verifier(tmp_path: Path) -> None:
     task = make_task(tmp_path)
     manifest = build_packets(task, tmp_path / "packets")
     (task / "tests" / "test_new.py").write_text("def test_x():\n    pass\n")
     result = GATE.clearance_axes(task, manifest, [])
+    assert result["clearance_axes"] == ["sound_verifier"]
+
+
+def test_strict_visibility_restores_every_axis_that_sees_tests(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    (task / "tests" / "test_new.py").write_text("def test_x():\n    pass\n")
+    result = GATE.clearance_axes(task, manifest, [], strict=True)
     assert result["clearance_axes"] == [
         "coherent_contract", "protected_ground_truth", "sound_verifier", "deterministic_execution",
     ]
     assert result["carried_axes"] == ["correct_reference_solution"]
+
+
+def test_harness_edit_reruns_ground_truth_and_determinism(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    (task / "tests" / "test.sh").write_text("#!/bin/bash\n")
+    result = GATE.clearance_axes(task, manifest, [])
+    assert result["clearance_axes"] == ["protected_ground_truth", "sound_verifier", "deterministic_execution"]
+
+
+def test_instruction_edit_reruns_every_axis(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    (task / "instruction.md").write_text("Changed.\n")
+    assert GATE.clearance_axes(task, manifest, [])["carried_axes"] == []
+
+
+def test_gate_receipts_carry_only_eligible_axes(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    manifest = build_packets(task, tmp_path / "packets")
+    path = report(tmp_path / "report.json", task, manifest)
+    data = json.loads(path.read_text())
+    receipt = tmp_path / "determinism.json"
+    receipt.write_text("{}")
+    data["axes"]["deterministic_execution"] = {"verdict": "None", "complete": True, "source": "gate",
+                                               "packet_manifest": str(manifest), "gate_receipts": [str(receipt)]}
+    path.write_text(json.dumps(data))
+    result = GATE.check(task, path)
+    assert result["passed"] and result["gate_carried_axes"] == ["deterministic_execution"]
+    data["axes"]["sound_verifier"] = {"verdict": "None", "complete": True, "source": "gate",
+                                      "packet_manifest": str(manifest), "gate_receipts": [str(receipt)]}
+    path.write_text(json.dumps(data))
+    assert any(error.startswith("sound_verifier: needs two panel reviewers")
+               for error in GATE.check(task, path)["errors"])
 
 
 def test_solution_edit_reruns_reference_and_determinism(tmp_path: Path) -> None:

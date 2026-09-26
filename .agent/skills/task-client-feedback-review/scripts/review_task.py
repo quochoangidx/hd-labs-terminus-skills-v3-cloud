@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -63,23 +64,205 @@ PIP_INSTALL_RE = re.compile(r"\bpip3?\b.*\binstall\b")
 VERIFIER_DEP_RE = re.compile(r"(?<![\w-])(pytest(?:-json-ctrf)?)(?![\w-])")
 
 
-def candidate_driver_trusted(files: list[str], verifier_python: str) -> list[str]:
+EXEC_CALL_RE = re.compile(
+    r"(?i)(^|\.)(run|popen|call|check_call|check_output|system|spawn\w*|exec\w*|"
+    r"run_path|run_module|getstatusoutput|getoutput)$|(^|_)(run|exec|spawn|invoke|launch)(_|$)"
+)
+READ_ATTRS = {
+    "read_bytes", "read_text", "open", "is_file", "exists", "is_symlink", "stat", "lstat",
+    "resolve", "samefile", "readlink", "name", "parent", "suffix",
+}
+READ_CALL_RE = re.compile(r"(?i)(^|\.)(open|sha\d+|md5|blake\w*|new|file_digest|cmp|read\w*|getsize|stat|lstat|exists|isfile|islink)$")
+INTERPRETER_RE = re.compile(
+    r"(?i)(^|[\s/\"'])(python[\d.]*|sys\.executable|java|javac|node|npx|tsx|ts-node|deno|bun|"
+    r"ruby|perl|bash|sh|go|cargo|dotnet|php|Rscript)(\s|$)"
+)
+
+
+def _call_name(node: ast.AST) -> str:
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def _driver_ref(node: ast.AST, name: str, aliases: set[str], app_default: bool) -> bool:
+    """True when the expression names /app/tools/<name> (a literal, f-string, alias, or str()/Path() of one)."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return f"/app/tools/{name}" in node.value
+    if isinstance(node, ast.JoinedStr):
+        text = "".join(v.value for v in node.values if isinstance(v, ast.Constant) and isinstance(v.value, str))
+        return f"/app/tools/{name}" in text or (app_default and f"/tools/{name}" in text)
+    if isinstance(node, ast.Name):
+        return node.id in aliases
+    if isinstance(node, ast.Call) and _call_name(node.func) in {"str", "Path", "os.fspath", "pathlib.Path", "os.path.join"}:
+        return any(_driver_ref(a, name, aliases, app_default) for a in node.args)
+    if isinstance(node, ast.BinOp):
+        return _driver_ref(node.left, name, aliases, app_default) or _driver_ref(node.right, name, aliases, app_default)
+    return False
+
+
+def _driver_aliases(tree: ast.AST, name: str, app_default: bool) -> set[str]:
+    aliases: set[str] = set()
+    for _ in range(3):
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if _driver_ref(node.value, name, aliases, app_default):
+                    aliases.update(t.id for t in targets if isinstance(t, ast.Name))
+    return aliases
+
+
+def driver_execution_sites(source: str, name: str, *, app_default: bool = False) -> list[int]:
+    """Line numbers where the candidate copy /app/tools/<name> reaches an execution site.
+
+    An argv list/tuple, a subprocess/os/runpy/exec call, or a run/exec-style helper that
+    receives the path counts; reading, hashing, stat-ing or comparing the file does not.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return [
+            i for i, line in enumerate(source.splitlines(), 1)
+            if f"/app/tools/{name}" in line and INTERPRETER_RE.search(line)
+            and not re.search(r"read_bytes|read_text|hashlib|open\(|filecmp|==", line)
+        ]
+    aliases = _driver_aliases(tree, name, app_default)
+    ref = lambda n: _driver_ref(n, name, aliases, app_default)  # noqa: E731
+    sites: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.List, ast.Tuple)) and any(ref(e) for e in node.elts):
+            # An argv shape: the path next to an interpreter, or the path as argv[0].
+            others = [e for e in node.elts if not ref(e)]
+            first = node.elts[0] if node.elts else None
+            interp = any(
+                (isinstance(e, ast.Constant) and isinstance(e.value, str) and INTERPRETER_RE.search(f" {e.value} "))
+                or (isinstance(e, (ast.Name, ast.Attribute)) and INTERPRETER_RE.search(f" {_call_name(e)} ")
+                    or (isinstance(e, ast.Name) and re.search(r"(?i)python|java|node|interp|exe", e.id)))
+                for e in others
+            )
+            if interp or (first is not None and ref(first) and len(node.elts) > 1):
+                sites.add(node.lineno)
+        elif isinstance(node, ast.Call):
+            fname = _call_name(node.func)
+            args = list(node.args) + [k.value for k in node.keywords]
+            if isinstance(node.func, ast.Attribute) and ref(node.func.value):
+                continue  # DRIVER.read_bytes(), DRIVER.is_file(), ...
+            if READ_CALL_RE.search(fname) or fname.startswith("hashlib"):
+                continue
+            if fname and EXEC_CALL_RE.search(fname.split(".")[-1] if "." in fname else fname) and any(ref(a) for a in args):
+                sites.add(node.lineno)
+        elif isinstance(node, (ast.Constant, ast.JoinedStr)) and ref(node):
+            text = node.value if isinstance(node, ast.Constant) else "".join(
+                v.value for v in node.values if isinstance(v, ast.Constant) and isinstance(v.value, str))
+            if re.search(r"(?i)\b(python[\d.]*|java|node|npx|tsx|bash|sh)\s+(-\S+\s+)*\S*/tools/" + re.escape(name), text):
+                sites.add(node.lineno)
+    return sorted(sites)
+
+
+def _shipped_driver_pairs(files: list[str]) -> list[str]:
+    shipped = {Path(n).name for n in files if n.startswith("tests/shipped/tools/")}
+    offered = {Path(n).name for n in files if n.startswith("environment/app/tools/")}
+    return sorted(shipped & offered)
+
+
+def _app_default(source: str) -> bool:
+    return bool(
+        re.search(r"""(?m)^\s*APP_ROOT\s*=.*["']/app["']""", source)
+        and re.search(r"root\s*:\s*str\s*=\s*APP_ROOT", source)
+    )
+
+
+def candidate_driver_trusted(
+    files: list[str],
+    verifier_python: str | dict[str, str],
+    test_sh: str = "",
+) -> list[str]:
     """Fixed drivers the verifier ships a pristine copy of but still runs from /app.
 
     When the instruction fixes a driver and the verifier keeps its own copy under
-    tests/shipped/tools/, grading through /app/tools/<driver> trusts a file the agent
-    can edit: a driver that carries its own arithmetic passes with the package unfixed.
-    A task whose deliverable is the tool itself ships no such copy and is not flagged.
+    tests/shipped/tools/, executing /app/tools/<driver> trusts a file the agent can
+    edit: a driver that carries its own arithmetic passes with the package unfixed.
+    Reading, hashing or byte-comparing the submitted copy against tests/shipped/tools/
+    is the accepted pattern (IFTA, genomic, crop) and is not flagged. A task whose
+    deliverable is the tool itself ships no such copy and is not flagged.
     """
-    shipped = {Path(n).name for n in files if n.startswith("tests/shipped/tools/") and n.endswith(".py")}
-    offered = {Path(n).name for n in files if n.startswith("environment/app/tools/") and n.endswith(".py")}
-    app_default = bool(
-        re.search(r"""(?m)^\s*APP_ROOT\s*=.*["']/app["']""", verifier_python)
-        and re.search(r"root\s*:\s*str\s*=\s*APP_ROOT", verifier_python)
-    )
+    sources = verifier_python if isinstance(verifier_python, dict) else {"tests/test_outputs.py": verifier_python}
     flagged = []
-    for name in sorted(shipped & offered):
-        if f"/app/tools/{name}" in verifier_python or (app_default and f"/tools/{name}" in verifier_python):
+    for name in _shipped_driver_pairs(files):
+        hit = any(
+            driver_execution_sites(src, name, app_default=_app_default(src))
+            for src in sources.values()
+        )
+        shell_exec = re.compile(
+            r"(^\s*|\b(python[\d.]*|java|node|npx|tsx|bash|sh|exec)\s+(-\S+\s+)*)/app/tools/"
+            + re.escape(name) + r"(\s|$|;)"
+        )
+        for line in test_sh.splitlines():
+            if not line.lstrip().startswith("#") and shell_exec.search(line):
+                hit = True
+        if hit:
+            flagged.append(name)
+    return flagged
+
+
+_BYTE_CHECK_RE = re.compile(r"read_bytes|hashlib|filecmp|\bcmp\b|sha\d+|md5|file_digest|read_text|==")
+
+
+def _byte_check_tests(source: str, name: str) -> tuple[list[str], list[int]]:
+    """(test names in file order, indexes of tests that compare /app/tools/<name> to a pristine copy)."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return [], []
+    aliases = _driver_aliases(tree, name, _app_default(source))
+    tests = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name.startswith("test")]
+    for cls in (n for n in tree.body if isinstance(n, ast.ClassDef) and n.name.startswith("Test")):
+        tests.extend(n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name.startswith("test"))
+    tests.sort(key=lambda n: n.lineno)
+    checks = []
+    for i, fn in enumerate(tests):
+        body = ast.get_source_segment(source, fn) or ""
+        refs = any(
+            _driver_ref(n, name, aliases, False) for n in ast.walk(fn)
+        )
+        if refs and _BYTE_CHECK_RE.search(body):
+            checks.append(i)
+    return [t.name for t in tests], checks
+
+
+def protected_file_checked_before_run(
+    files: list[str], sources: dict[str, str], test_sh: str = ""
+) -> list[str]:
+    """Drivers whose only byte-identity check is a test that runs before later tests.
+
+    retail-inventory v6 human review: test_driver_is_unchanged ran first, the submission
+    rewrote /app/tools/<driver> on import and still scored 1. A check that also runs
+    last (final test in the file, a conftest hook, or test.sh after pytest) is accepted.
+    Advisory only: the platform docs do not require the check's position.
+    """
+    flagged = []
+    for name in _shipped_driver_pairs(files):
+        any_check = False
+        late = False
+        for rel, src in sources.items():
+            if Path(rel).name == "conftest.py" and f"/tools/{name}" in src:
+                late = True
+                continue
+            tests, checks = _byte_check_tests(src, name)
+            if checks:
+                any_check = True
+                if checks[-1] == len(tests) - 1:
+                    late = True
+        pytest_at = test_sh.find("pytest")
+        if pytest_at >= 0 and re.search(
+            r"(?m)^(?!\s*#).*(cmp|diff|sha\d+sum|md5sum).*" + re.escape(name), test_sh[pytest_at:]
+        ):
+            any_check = late = True
+        if any_check and not late:
             flagged.append(name)
     return flagged
 
@@ -718,9 +901,24 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
             token in "\n".join(files).lower()
             for token in ("corpus", "fixture", "dataset", "capture", "trace", "archive")
         )
+        # docs/understanding-tasks/task-components.md and difficulty-guidelines.md ask only
+        # why the task is a challenge for a human expert; no role vocabulary is fixed, so a
+        # missing expert/role phrase is advisory ("retail controller", "hydrologist" pass).
         role_re = re.compile(
-            r"(?i)\b(engineer|developer|maintainer|operator|analyst|administrator|"
-            r"researcher|specialist|team)\b"
+            r"(?i)\b(?:expert|expertise|professional|practitioner|specialist|team|staff)s?\b"
+            r"|\b(?!(?:after|under|other|order|water|number|error|either|neither|never|over|"
+            r"rather|whether|together|later|per|ever|however|higher|lower|larger|smaller|"
+            r"greater|fewer|longer|border|header|register|filter|parameter|counter|chapter|"
+            r"letter|matter|master|meter|member|minor|major|prior|factor|sector|vector|"
+            r"floor|door|color|colour|behavior|behaviour|calendar|dollar|similar|regular|"
+            r"particular|summary|constant|important|relevant|significant|different|"
+            r"current|recent|present|percent|consistent|dependent|equivalent|amount|"
+            r"account|event|content|extent|intent|moment|payment|statement|document|"
+            r"component|segment|element|adjustment|requirement|treatment|client|"
+            r"incident|coefficient|agent|list|exist|against|first|least|most|best|"
+            r"last|past|must|just|median|meridian|guardian)s?\b)"
+            r"[a-z][\w-]*(?:er|or|ist|ian|ant|ent|yst|eer)s?\b"
+            r"|\btakes?\s+(?:an?\s+)?[\w-]+(?:\s+[\w-]+){0,3}?['\u2019]s\b"
         )
         origin_re = re.compile(
             r"(?i)\b(corpus|capture|trace|dataset|archive|fixture|generated|collected|"
@@ -729,9 +927,9 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
         if difficulty_text and not role_re.search(difficulty_text):
             add(
                 findings,
-                "blocker",
+                "polish",
                 "difficulty-explanation-role",
-                "difficulty_explanation must name the professional role that performs this work.",
+                "difficulty_explanation should say whose expertise the task needs (for example the practitioner who does this work); the docs ask why it is a challenge for a human expert and fix no role vocabulary.",
                 "task.toml",
                 "terminus-regular-task-authoring",
             )
@@ -890,14 +1088,30 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
                 "tests/test_outputs.py",
                 "terminus-regular-task-authoring",
             )
-        for driver in candidate_driver_trusted(files, verifier_python):
+        verifier_sources = {
+            name: view.read_text(name)
+            for name in files
+            if name.startswith("tests/") and name.endswith(".py")
+        }
+        verifier_test_sh = view.read_text("tests/test.sh")
+        for driver in candidate_driver_trusted(files, verifier_sources, verifier_test_sh):
             add(
                 findings,
                 "blocker",
                 "verifier-trusts-candidate-driver",
-                f"Tests run /app/tools/{driver}, which the agent can edit, although tests/shipped/tools/{driver} holds the fixed copy. Run a verifier-owned copy of the driver against /app/src (quality panel sound_verifier: a driver-side shim passes with the package unfixed).",
+                f"Tests execute /app/tools/{driver}, which the agent can edit, although tests/shipped/tools/{driver} holds the fixed copy. Run a verifier-owned copy of the driver against /app/src and only byte-compare the submitted copy (quality panel sound_verifier: a driver-side shim passes with the package unfixed).",
                 "tests/test_outputs.py",
                 "terminus-regular-task-authoring",
+            )
+        for driver in protected_file_checked_before_run(files, verifier_sources, verifier_test_sh):
+            # Human review (retail-inventory v6), not a documented platform rule: advisory.
+            add(
+                findings,
+                "should_fix",
+                "protected_file_checked_before_run",
+                f"The only byte-identity check of /app/tools/{driver} is a test that runs before later tests; candidate code can rewrite the driver on import after it passes. Repeat the check in the last test or in tests/test.sh after pytest.",
+                "tests/test_outputs.py",
+                "terminus-hard-python-verifier",
             )
         if test_identity_leak(verifier_python):
             add(

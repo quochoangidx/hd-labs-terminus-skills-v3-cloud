@@ -237,7 +237,7 @@ Avoid tasks where the fix is a single obvious if-statement unless the surroundin
 Use verifier inputs that make hardcoding practically impossible for AI agents:
 
 - generate temp projects under `tmp_path` and use complex topologies (symlinks, nested folders)
-- use dynamically varied inputs (for example `uuid`-based names) for package names, strings, and data structures so agents cannot guess expected outputs from test traces; compute expectations from the generated values so tests stay deterministic and non-flaky
+- vary names, strings and data structures across jobs (not one file name or id reused everywhere) so agents cannot guess expected outputs from test traces; draw them from a constant seed, never `uuid`, a clock or a hash of candidate files, and seal the drawn inputs with their expectations from `solution/` so grading is deterministic and `tests/` holds no end-to-end solver (see `terminus-regular-task-authoring/references/contract-closure.md` §5)
 - use at least one unseen variant that the oracle patch must generalize to
 - parse structured output instead of matching a whole file
 - assert both positive and negative behavior where possible (e.g., asserting that unintended files were NOT created, processes did NOT leak)
