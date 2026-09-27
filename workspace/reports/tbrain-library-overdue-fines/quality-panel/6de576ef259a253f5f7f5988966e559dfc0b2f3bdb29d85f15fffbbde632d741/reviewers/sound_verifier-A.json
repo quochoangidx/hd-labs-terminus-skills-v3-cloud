@@ -1,0 +1,194 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "6de576ef259a253f5f7f5988966e559dfc0b2f3bdb29d85f15fffbbde632d741",
+  "severity": "None",
+  "summary": "The verifier runs the documented driver (restored from the verifier's own copy) against the candidate's /app/src on sealed, rule-isolated return files. It compares every README key with strict types, plus loan order and total. Each named rule (2.1 periods, 2.2 Sunday exclusion, 3.1 cap, 3.2 total/order) and both figures the policy leaves to today's code (journal period 14; negative late/fine for loans that are not late) has a case that fails a plausible wrong implementation. All three sign partitions of late days and fines are discriminated. No confirmed defect.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/overdue-fines-policy.md",
+      "environment/app/examples/eastgate-0314.json",
+      "environment/app/src/finebook/__init__.py",
+      "environment/app/src/finebook/dates.py",
+      "environment/app/src/finebook/fines.py",
+      "environment/app/src/finebook/statement.py",
+      "environment/app/tools/finebook_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-loan_period.jsonl",
+      "tests/expected/02-sundays.jsonl",
+      "tests/expected/03-cap.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-journal.jsonl",
+      "tests/expected/06-not_late.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/shipped/app/** was not opened separately. packet-manifest.json:29-33 gives each shipped file the same SHA-256 as its environment/app counterpart (manifest lines 12-16), and those counterparts were read in full."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced the grading path: tests/test_outputs.py:58-91 records the delivered driver's bytes, os.replace-s the verifier copy onto /app/tools/finebook_run.py and seals /app. run() at :130-147 runs that driver with python3 -I -S as uid 65534. The driver adds /app/src to sys.path (environment/app/tools/finebook_run.py:7), so the candidate's current package is graded, not a stale or Oracle binary.",
+    "compare() at tests/test_outputs.py:189-203 checks branch, total, list length, file order and id/due/late/fine using type(actual) is type(expected). This rejects floats, bools and strings in place of integers. Extra keys are ignored, which is allowed because the contract grades only the keys the README lists.",
+    "Statically recomputed every row of 01-07 from policy LF-5 (Sunday = day%7==6; BOOK 21, DVD 7, JOURNAL 14 from today's dates.py:3; cap on late loans only; today's returned-due and late*daily_fine for loans that are not late). All due, late, fine and total values agree, e.g. S6 late 59/fine 177, C4 late 136 capped at 100, J4 late 142 capped at 20000, N-family total -2770, X-family total 900.",
+    "Spot-checked limits rows (ABCDEFGHIJ, 9, L17, L73, L119) and generated rows against the policy.",
+    "Plausible wrong implementation, 14-day or swapped periods: fails loan_period P1/P2 and journal J1/J5/J6.",
+    "Plausible wrong implementation, no Sunday exclusion: fails P3 (expected 8, gets 9).",
+    "Plausible wrong implementation, counting Sundays over [due, returned) instead of (due, returned]: fails S1 (gets 0, expected 1) and S2 (gets 1, expected 0).",
+    "Plausible wrong implementation, day%7==0 taken as Sunday: fails S1 (1407%7==0).",
+    "Plausible wrong implementation, moving a due day off a Sunday: fails S1/S4 (expected due 1406, a Sunday).",
+    "Plausible wrong implementation, deciding 'late' after Sunday exclusion (late<=0 falls back to today's code): fails S2 and C6 (expected late 0/fine 0; gets 1/50 and 1/150).",
+    "Plausible wrong implementation, clamping late or fine at 0 for loans that are not late (forbidden by instruction.md:3): fails N1/N4/N5/N6/X1/X4.",
+    "Plausible wrong implementation, applying the Sunday rule to loans that are not late (a signed count of non-Sundays, or a floor-formula Sunday count): fails N1 (-18 instead of -21) and N5 (-13 instead of -15).",
+    "Plausible wrong implementation, fine uncapped: fails C1/C4/J3/X3.",
+    "Plausible wrong implementation, capping late days via replacement//daily_fine: fails C4 (0 instead of 100).",
+    "Plausible wrong implementation, cap using abs() or a symmetric clamp: fails N5 (replacement 100, fine -375).",
+    "Plausible wrong implementation, journal given the BOOK or DVD period: fails J1/J2/X1/X2.",
+    "Plausible wrong implementation, loans sorted by id: fails LF5-0004 (ids ZZZZZZZZZZ, 0, A1 in file order) and relabelled shuffles.",
+    "Plausible wrong implementation, total from uncapped or raw fines: fails every capped family.",
+    "Checked relabel() at tests/test_outputs.py:252-269. It shifts by whole weeks, which keeps day%7 and so late and fine; due is shifted by the same amount and ids are unique. Every relabelled file still passes within_limits. This defeats id- or branch-keyed memorisation without changing the correct answer.",
+    "Checked load() and silent() at tests/test_outputs.py:150-186: loans carrying a figure left to today's code appear only in the journal, not_late and together families, so failures stay localised.",
+    "Checked the 'reach it exactly' boundary: no sealed late row has daily_fine*late exactly equal to replacement (C6 falls on a Sunday). min(), '>' and '>=' cap forms give the same result at equality, so no plausible wrong implementation is accepted because the case is missing. This is not a finding.",
+    "Checked that run(shipped=True) is never invoked; the shipped copy is used only by the read-access probe, which does not affect graded values.",
+    "Checked test.sh: reward 1 only if pytest passes and the driver still matches the shipped copy byte for byte. Checked the driver byte-equality test at tests/test_outputs.py:299-305."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behaviour to an assertion that fails if it is missing or reversed",
+      "status": "checked",
+      "reason": "Rules 2.1, 2.2, 3.1 and 3.2, the journal period left to today's code, and the late/fine of loans that are not late each have a dedicated family and test. Each family has rows whose values change under the missing or reversed rule (see checks_performed).",
+      "evidence": ["tests/test_outputs.py:211-249", "tests/expected/01-loan_period.jsonl:1", "tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1", "tests/expected/05-journal.jsonl:1", "tests/expected/06-not_late.jsonl:1", "environment/app/docs/overdue-fines-policy.md:28-42"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result (values, membership, order, required outputs)",
+      "status": "checked",
+      "reason": "compare() checks branch, total, list length, order and all four per-loan keys with strict types, not only key presence.",
+      "evidence": ["tests/test_outputs.py:189-203", "environment/app/README.md:24-31", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case per named domain rule (general variation not the only check)",
+      "status": "checked",
+      "reason": "Sunday cases include a due day on a Sunday, a return on a Sunday, a late span that is only a Sunday, and many Sundays. Cap cases fall below, above and far above the cap. Period cases are one day late for each kind. Generated and limits files are extra, not the only check.",
+      "evidence": ["tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1", "tests/expected/01-loan_period.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Traced thirteen plausible wrong implementations (checks_performed); each fails at least one sealed row.",
+      "evidence": ["tests/expected/02-sundays.jsonl:1", "tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, key order, extra keys, implementation choice)",
+      "status": "checked",
+      "reason": "The output is parsed as JSON, so whitespace and key order are free and extra keys are ignored. Any implementation inside /app/src is run through the fixed driver. python3 -I -S excludes site-packages, but the environment image installs no third-party packages, so no contract-valid stdlib solution is rejected.",
+      "evidence": ["tests/test_outputs.py:143-147", "tests/test_outputs.py:193-203", "environment/Dockerfile:1-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions enforced (driver unchanged byte for byte; no added clamp or guard)",
+      "status": "checked",
+      "reason": "The byte equality of the delivered driver is asserted, and test.sh repeats the check with cmp. A forbidden clamp or guard is caught by the not_late and together families.",
+      "evidence": ["tests/test_outputs.py:299-305", "tests/test.sh:23-27", "instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: each legal sign partition discriminated",
+      "status": "checked",
+      "reason": "Late/fine > 0 (most rows). Late = 0 for a loan that is late but whose span is only a Sunday (S2, C6). Late = 0 for a return on the due day (N2, N3, X2). Late < 0 for early returns, including on the day of borrowing (N1, N4, N5, N6, X1, X4). Totals are positive, negative (-2770) and mixed-sign positive (900).",
+      "evidence": ["tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1", "tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behaviour, Oracle-specific representation, stale binaries, self-controlled comparisons",
+      "status": "checked",
+      "reason": "Expectations are sealed JSONL hash-pinned in ROSTER, not produced by candidate code. The driver is the verifier's copy; the candidate's current /app/src is imported at run time. Nothing Oracle-specific is required beyond the README keys.",
+      "evidence": ["tests/test_outputs.py:46-55", "tests/test_outputs.py:174-186", "tests/expected/ROSTER:1-9", "environment/app/tools/finebook_run.py:7-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable or out-of-domain test cases",
+      "status": "checked",
+      "reason": "within_limits() asserts rule 1.2 on every sealed and relabelled file. Loans with figures left to today's code are confined to the families that grade them.",
+      "evidence": ["tests/test_outputs.py:150-186", "tests/test_outputs.py:276-279", "environment/app/docs/overdue-fines-policy.md:15-24"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localisation",
+      "status": "checked",
+      "reason": "There is one test per rule, and failure messages carry the family, branch, loan index, id and key. Sunday errors also surface in loan_period P3/P4, but each rule still has its own isolating test.",
+      "evidence": ["tests/test_outputs.py:189-208", "tests/test_outputs.py:211-249"],
+      "finding_ids": []
+    },
+    {
+      "category": "Lifecycle, failure handling, cleanup, recovery",
+      "status": "not_applicable",
+      "reason": "The contract promises no error handling, recovery or lifecycle behaviour; inputs outside rule 1.2 are explicitly left open (instruction.md:3).",
+      "evidence": ["instruction.md:3"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2 Sunday exclusion", "not-late figures left to today's code"],
+      "case_or_path": "N1 BOOK 1400 returned 1400, due 1421 (span holds Sundays 1406/1413/1420): expected -21. A Sunday-adjusted negative count gives -18 and fails.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_late.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2 definition of late (returned after due)", "2.2 Sunday exclusion"],
+      "case_or_path": "S2 DVD due 1405, returned on Sunday 1406: late 0, fine 0. An implementation that treats late<=0 after exclusion as not late gives 1/50 and fails.",
+      "status": "checked",
+      "evidence": ["tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.1 cap", "not-late fine left to today's code"],
+      "case_or_path": "N5 replacement 100, fine -375 must stay -375. An abs- or clamp-based cap fails.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_late.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["journal period left to today's code", "2.2 Sunday exclusion and 3.1 cap"],
+      "case_or_path": "J3 and J4 are late journals crossing Sundays and capped. X1 is an early journal (-14/-560); X2 is a journal returned on its due day.",
+      "status": "checked",
+      "evidence": ["tests/expected/05-journal.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 total", "not-late negative fines"],
+      "case_or_path": "Totals -2770 and 900 require summing negative fines; a total over only positive fines fails.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["loan order in file", "relabelled generated files"],
+      "case_or_path": "relabel() shuffles loans and shifts by whole weeks. Expected lines follow the same permutation and shift, so sorting or memorisation fails while a correct implementation passes.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:252-279"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

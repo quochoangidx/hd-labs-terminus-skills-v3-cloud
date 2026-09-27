@@ -1,0 +1,187 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "7bd1664e43d7c2fd63b13be94ba63cbe3c73e1f316b9df1bb94319cf43ce0b8f",
+  "severity": "None",
+  "summary": "The verifier compares every README key and the loan order, typed exactly, against sealed expectations. It has a case that isolates each policy rule (2.1, 2.2, 3.1, 3.2, 1.2 limits) and each figure the policy leaves to today's code (journal 14-day period; signed late/fine of loans that are not late). I traced plausible wrong implementations and each one fails a named sealed case. I found no false rejection of contract-valid output.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/overdue-fines-policy.md",
+      "environment/app/examples/eastgate-0314.json",
+      "environment/app/src/finebook/__init__.py",
+      "environment/app/src/finebook/dates.py",
+      "environment/app/src/finebook/fines.py",
+      "environment/app/src/finebook/statement.py",
+      "environment/app/tools/finebook_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-loan_period.jsonl",
+      "tests/expected/02-sundays.jsonl",
+      "tests/expected/03-cap.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-journal.jsonl",
+      "tests/expected/06-not_late.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl",
+      "tests/shipped/app/** (the manifest SHA-256 values match environment/app/src/finebook/*.py and environment/app/tools/finebook_run.py byte for byte, so the environment copies I read stand for them)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Went through the policy (LF-5 rules 1.1-3.2), the README keys and instruction.md paragraph 2 to list the graded behaviours: BOOK 21 days, DVD 7 days; the JOURNAL period stays at today's 14; Sunday = day%7==6 is never a late day; the fine is daily_fine per late day, capped at replacement for late loans; the total is the sum of fines; loans keep file order; late/fine for loans that are not late stay returned-due and late*daily_fine, with no clamp.",
+    "Recomputed by hand the sealed expectations for every row of 01, 02, 03, 04, 05, 06 and 07, plus sample rows of 08 and 09 (e.g. 9, L17, 3NI0). All matched an independent reading of the policy.",
+    "Traced these wrong implementations to the sealed case that fails each one. Wrong Sunday residue (%7==0): S1 and S2. Return day always counted: S7. Late days computed as diff - diff//7: S2. Deciding lateness after the Sunday exclusion: S2 expects late 0/fine 0. Cap missing, or cap applied to late days: C1 and C3/C1 late. Total summed from uncapped fines: 03 total. Loans sorted: 04. Journal given 21, 7, or a KeyError: J1/J2. Journal skipping the Sunday rule or the cap: X3. Clamping not-late loans to 0: N1, N4, N5, N6, X1, X4. Signed Sunday-aware count for not-late loans: N1 gives -18 against the expected -21, N4 gives -3 against -4. Symmetric abs clamp: N5, fine -375 against replacement 100. Total that drops negative fines: 06 (-2770) and 07.",
+    "Checked the signed partitions. late: negative (N1, N4, N5, N6, X1, X4), zero on the due day (N2, N3, X2), zero on a late loan whose late days are all Sundays (S2), positive. fine: negative with |fine| above replacement (N5), negative, zero, positive, capped, exactly equal to replacement (C2, C6). total: negative (06), positive.",
+    "Checked the comparator. The comparison parses JSON, applies type() identity (a bool cannot stand in for an int), ignores extra keys, and holds the loan order. This matches README and instruction.md:5.",
+    "Checked relabel() in test_generated_return_files. Shifts are whole weeks, so the Sunday residue is kept; due is shifted to match; the total is unchanged; ids are unique and 1-10 characters; bounds stay within rule 1.2. within_limits is asserted on each relabelled file.",
+    "Checked that load() enforces the roster digests, the row counts, rule 1.2 limits, and the rule that a loan carrying a silent figure appears only in a family that grades it. Scanned 02, 03, 04, 08 and 09 for BOOK spans of 21 days or less and DVD spans of 7 or less and found none.",
+    "Checked the driver-integrity path. _install_driver keeps the delivered bytes and then os.replace-s the verifier copy; test_submitted_driver_unchanged and the cmp at tests/test.sh:23 enforce the byte-identical rule in instruction.md:1.",
+    "Checked the execution path. The run is python3 -I -S, as uid 65534, on a neutral loans.json, against a sealed /app. The driver does its own sys.path insertion, so a stdlib-only candidate package imports as it would under the documented command. There are no compiled artifacts or self-generated expectations. The shipped copy (run(shipped=True)) is never used as the expected source.",
+    "Checked tests/Dockerfile. The base is pinned python:3.13-slim-bookworm, matching environment/Dockerfile; pytest and ctrf are pinned; /tests is mode 700; WORKDIR is /tests, so the PWD guard in test.sh passes."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behaviour to an assertion that fails if it is missing or reversed",
+      "status": "checked",
+      "reason": "Each policy rule and each figure left to today's code has its own test_* over a sealed family, and compare() checks every README key on every loan.",
+      "evidence": ["tests/test_outputs.py:211-249", "tests/test_outputs.py:193-208", "environment/app/docs/overdue-fines-policy.md:28-42"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result (values, membership, order, required outputs)",
+      "status": "checked",
+      "reason": "branch, total, the loan count, and id/due/late/fine per index are all compared with type identity. A list of the wrong length fails.",
+      "evidence": ["tests/test_outputs.py:189-203", "environment/app/README.md:24-31", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case for each named domain rule",
+      "status": "checked",
+      "reason": "Rule 2.1: P1-P6. Rule 2.2: S1-S8, including an all-Sunday late span, a Sunday due day and a Sunday return day. Rule 3.1: C1-C6, covering below, equal and above the cap. Rule 3.2 and order: 04. Journal period: J1/J2. Not-late signed figures: N1-N7. Journal with Sunday and cap interaction: X3.",
+      "evidence": ["tests/expected/01-loan_period.jsonl:1", "tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1", "tests/expected/04-order_and_total.jsonl:1-2", "tests/expected/05-journal.jsonl:1", "tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected",
+      "status": "checked",
+      "reason": "Every traced mutant (wrong Sunday residue, return day always counted, approximate Sunday formula, lateness decided after exclusion, no cap or a misapplied cap, sorted loans, wrong journal period, journal exempt from Sunday/cap, zero clamp, signed Sunday-aware early count, abs clamp, positive-only total) fails at least one sealed row.",
+      "evidence": ["tests/expected/02-sundays.jsonl:1", "tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1", "tests/expected/03-cap.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, extra keys, implementation choices)",
+      "status": "checked",
+      "reason": "Output is parsed as JSON, extra keys are ignored, and whitespace and key order are free. Treating on-due returns as 'late with zero days' gives the same output, and so does rolling a Sunday due day forward internally without reporting it. Inputs outside the limits, which the instruction leaves open, are never graded.",
+      "evidence": ["tests/test_outputs.py:193-203", "tests/test_outputs.py:160-171", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced",
+      "status": "checked",
+      "reason": "The byte-identical driver is enforced by test_submitted_driver_unchanged and by the cmp in test.sh. 'No clamp or guard the policy does not give' and 'only change what the policy governs' are enforced inside the limits by the not_late, journal and together families.",
+      "evidence": ["tests/test_outputs.py:58-66", "tests/test_outputs.py:299-305", "tests/test.sh:23-27", "instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behaviour / Oracle-specific representation / self-controlled comparison",
+      "status": "checked",
+      "reason": "Expectations are sealed JSONL pinned by ROSTER digests and match my hand recomputation from the policy. No test compares candidate output with a candidate-controlled or shipped-code result, and there is no representation beyond the README keys.",
+      "evidence": ["tests/expected/ROSTER:1-9", "tests/test_outputs.py:174-186", "tests/test_outputs.py:130-147"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries / execution path fidelity",
+      "status": "checked",
+      "reason": "Each run executes the candidate's current /app/src through the verifier's own driver copy. No built artifact is cached. Candidate-written __pycache__ would be validated by source mtime, and /app is not writable by the job uid, so a run cannot poison later runs.",
+      "evidence": ["tests/test_outputs.py:79-90", "tests/test_outputs.py:105-147", "tests/Dockerfile:1-8", "tests/test.sh:15-20"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases",
+      "status": "checked",
+      "reason": "within_limits asserts rule 1.2 on every sealed and relabelled file. The silent-figure guard keeps each family inside the domain it grades. All cases lie within the stated input domain.",
+      "evidence": ["tests/test_outputs.py:150-186", "tests/test_outputs.py:252-279"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantity partitions",
+      "status": "checked",
+      "reason": "late has negative, zero-on-due, zero-all-Sunday-late and positive cases. fine has negative (including |fine| above replacement), zero, positive, capped and exactly-at-cap cases. total has negative and positive cases. Journals cover negative, zero and positive late.",
+      "evidence": ["tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1", "tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localisation",
+      "status": "checked",
+      "reason": "There is one test per rule or silent figure. Loans carrying silent figures are confined to the tests that grade them (GRADES/silent). Failure messages name the family, branch, loan index, id and key; relabelled failures print the seed.",
+      "evidence": ["tests/test_outputs.py:41-43", "tests/test_outputs.py:184-185", "tests/test_outputs.py:203", "tests/test_outputs.py:279"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hard-coding resistance (instruction: not only files like the example)",
+      "status": "checked",
+      "reason": "The hidden sealed inputs differ from examples/. The generated family is also re-run under fresh ids, shuffled order and whole-week shifts, with correspondingly transformed expectations.",
+      "evidence": ["tests/test_outputs.py:252-279", "environment/app/examples/eastgate-0314.json:1-8"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2 Sunday exclusion", "2.2 definition of late (returned after due day)"],
+      "case_or_path": "S2: DVD due 1405, returned 1406 (a Sunday). The loan is late with zero late days, giving fine 0. This separates deciding lateness before the exclusion from deciding it after (which yields late 1/fine 50 through today's path).",
+      "status": "checked",
+      "evidence": ["tests/expected/02-sundays.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["instruction.md:3 today's step for not-late loans", "2.2 Sunday exclusion / 3.1 cap"],
+      "case_or_path": "N1/N4/N5/N6/X1/X4 have Sundays between return and due, so a Sunday-aware or clamped early count differs. N5 has |fine| above replacement, so an abs cap differs.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["journal period left to today's code (14)", "2.2 Sundays and 3.1 cap apply to every late loan"],
+      "case_or_path": "X3: journal due 84, returned 100, crossing Sundays 90 and 97 (late 14, not 16), fine 560 capped to 300. J3/J4 are capped. J1/J2 separate 14 from 7 and 21.",
+      "status": "checked",
+      "evidence": ["tests/expected/07-together.jsonl:1", "tests/expected/05-journal.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.1 cap", "3.2 total"],
+      "case_or_path": "The 03 and 04 totals are sums of capped fines (5986, 5322). The 06 and 07 totals mix negative and positive fines (-2770, 900).",
+      "status": "checked",
+      "evidence": ["tests/expected/03-cap.jsonl:1", "tests/expected/04-order_and_total.jsonl:1", "tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.1 Sunday residue", "relabel whole-week shift"],
+      "case_or_path": "relabel shifts by 7*k, which keeps day%7. Expected due shifts by the same amount, while late, fine and total do not change.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:252-269"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["driver must stay byte-identical", "candidate package executed under verifier's driver"],
+      "case_or_path": "A modified delivered driver is recorded and then replaced. Grading uses the verifier copy, but test_submitted_driver_unchanged and the test.sh cmp both zero the reward.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:58-66", "tests/test_outputs.py:299-305", "tests/test.sh:22-27"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

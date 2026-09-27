@@ -1,0 +1,182 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "6de576ef259a253f5f7f5988966e559dfc0b2f3bdb29d85f15fffbbde632d741",
+  "severity": "None",
+  "summary": "The verifier compares every README key and the loan order exactly against sealed statements. It has an isolating family for each policy rule and for each figure the policy leaves to today's code. Every legal sign partition of late/fine is covered (negative, zero on-time, zero late-only-Sundays, positive uncapped, positive capped). The fixed driver is replaced and checked byte-for-byte. No accepted-wrong or rejected-valid path was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/overdue-fines-policy.md",
+      "environment/app/examples/eastgate-0314.json",
+      "environment/app/src/finebook/__init__.py",
+      "environment/app/src/finebook/dates.py",
+      "environment/app/src/finebook/fines.py",
+      "environment/app/src/finebook/statement.py",
+      "environment/app/tools/finebook_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-loan_period.jsonl",
+      "tests/expected/02-sundays.jsonl",
+      "tests/expected/03-cap.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-journal.jsonl",
+      "tests/expected/06-not_late.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/shipped/app/** not opened separately: packet-manifest.json:29-33 gives SHA-256 values identical to environment/app/src/finebook/*.py and environment/app/tools/finebook_run.py (manifest lines 12-16), which were read in full"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Recomputed static expected statements from policy LF-5 (Sunday = day%7==6, BOOK 21, DVD 7, JOURNAL keeps today's 14, cap = min(daily*late, replacement) for late loans, non-late loans keep returned-due and late*daily_fine). Covered all rows of 01, 02, 03, 04, 05, 06 and 07, plus spot rows of 08 (5O9X10, 019) and 09 (id '9'). Every recomputed value matched.",
+    "Mutant: old 14-day period for BOOK/DVD -> fails 01 P1..P6 due/late.",
+    "Mutant: BOOK/DVD periods swapped or JOURNAL mapped to 21/7 or KeyError -> fails 01 and 05 (J1 due 1014).",
+    "Mutant: Sundays counted over [due, returned] (due-day inclusive) -> fails 02 S1 (due 1406 is Sunday; expected late 1).",
+    "Mutant: return day excluded -> fails 02 S7 (expected 6) and S2.",
+    "Mutant: approximation late=(r-d)-(r-d)//7 -> fails 02 S2 (0 expected) and S6 (59 expected, mutant gives 60).",
+    "Mutant: wrong Sunday residue (day%7==0) -> fails 02 S2.",
+    "Mutant: clamp late/fine at 0 for non-late loans (forbidden by instruction.md:3) -> fails 06 N1/N4/N5/N6 and 07 X1/X4 (negative late and fine) and totals -2770/900.",
+    "Mutant: a single non-Sunday-count function also used for non-late loans (count yields 0 or signed Sunday correction) -> fails 06 N1 (-21 expected; signed-floor formula gives -18) and N4, N6.",
+    "Mutant: treat a late loan with only Sunday late days as 'not late' and fall back to returned-due -> fails 02 S2 (late 0, fine 0) and 03 C6.",
+    "Mutant: cap applied as capped late days (replacement//daily) -> fails 07 X3 (300 expected, 280 produced) and 08 5O9X10.",
+    "Mutant: no cap -> fails 03 C1, 05 J3/J4, 04 id '0'.",
+    "Mutant: fine clamped via max(0, min(...)) -> fails 06 N1 etc.; plain min() on non-late loans gives identical values, so it is correctly accepted.",
+    "Mutant: Sunday exclusion skipped for JOURNAL late loans -> fails 05 J3 (23 expected, 26 produced).",
+    "Mutant: loan reordering or total drift -> compare() checks len, per-index keys, and total (test_outputs.py:193-203).",
+    "Checked that the relabel transform shifts only by whole weeks within [0,3650], preserving Sunday alignment and the expected late/fine values; within_limits is re-asserted (test_outputs.py:252-279).",
+    "Checked that the driver byte-equality requirement is enforced before the run, after it, and in test.sh (test_outputs.py:58-66, 299-305; test.sh:23).",
+    "Checked that the load() guard puts journal and not-late loans only in the families that grade them, for failure localisation (test_outputs.py:41-43, 150-186)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "One family per rule: 2.1 loan_period, 2.2 sundays, 3.1 cap, 3.2 order_and_total, journal period, not-late figures, together, limits, generated. Each family is compared on due/late/fine/total/branch/order.",
+      "evidence": ["tests/test_outputs.py:211-249", "environment/app/docs/overdue-fines-policy.md:28-42", "instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result (values, membership, order), not existence/keys",
+      "status": "checked",
+      "reason": "compare() checks branch, total, loan count and every README key per index with exact type and value. Extra keys are ignored, as the README key list permits.",
+      "evidence": ["tests/test_outputs.py:189-203", "environment/app/README.md:24-31", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case per named domain rule",
+      "status": "checked",
+      "reason": "BOOK/DVD period (01), Sunday due/return/span (02 S1-S8), cap below/above (03, 04, 05, 07), journal period (05), not-late raw figures (06), and late-with-zero-late-days (02 S2, 03 C6) each have isolating rows. They are not left to generated variation.",
+      "evidence": ["tests/expected/01-loan_period.jsonl:1", "tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1", "tests/expected/05-journal.jsonl:1", "tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantity: each legal sign partition discriminated",
+      "status": "checked",
+      "reason": "late/fine < 0 (N1, N4, N5, N6, X1, X4); = 0 on due day (N2, N3, X2); = 0 for a late loan whose span is only Sundays (S2, C6); > 0 uncapped; > 0 capped. The totals are negative (-2770) and positive. Clamp and signed-formula mutants fail.",
+      "evidence": ["tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1", "tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected",
+      "status": "checked",
+      "reason": "See the mutant list in checks_performed. Each plausible wrong implementation traced fails at least one sealed row.",
+      "evidence": ["tests/test_outputs.py:206-208"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "Output is parsed JSON from the verifier's own driver, so serialization is fixed. Extra keys are ignored. Only README-listed integer/string types are required. Plain min() capping on non-late loans gives identical values. No undocumented format or order is enforced beyond the file order that README requires.",
+      "evidence": ["tests/test_outputs.py:193-203", "environment/app/README.md:28-31", "environment/app/tools/finebook_run.py:16-19"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions enforced (driver byte-identical, only policy-governed change)",
+      "status": "checked",
+      "reason": "The delivered driver's bytes are compared with the shipped copy, and the verifier's copy is used for every run and re-checked after the runs and in test.sh. 'No clamp/guard' is enforced behaviourally by the not-late rows.",
+      "evidence": ["tests/test_outputs.py:58-66", "tests/test_outputs.py:299-305", "tests/test.sh:23-27", "instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable or out-of-domain test cases",
+      "status": "checked",
+      "reason": "within_limits asserts rule 1.2 on every sealed and relabelled file. The relabel shift keeps borrowed within [0,3650] and the return offset unchanged.",
+      "evidence": ["tests/test_outputs.py:160-171", "tests/test_outputs.py:265-267", "environment/app/docs/overdue-fines-policy.md:15-24"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behaviour, Oracle-specific representation, stale binaries, self-controlled comparisons",
+      "status": "checked",
+      "reason": "Expectations are sealed, hash-pinned JSONL, not produced from candidate or shipped code at grade time. The shipped copy is installed but no graded comparison uses it. The candidate runs under -I -S with PYTHONDONTWRITEBYTECODE. There is no candidate-controlled comparand.",
+      "evidence": ["tests/test_outputs.py:1-13", "tests/test_outputs.py:46-55", "tests/test_outputs.py:130-147", "tests/expected/ROSTER:1-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localisation",
+      "status": "checked",
+      "reason": "One test per rule. load() prevents journal/not-late loans from leaking into families that do not grade them, so a failure names the rule, branch, loan index, id and key.",
+      "evidence": ["tests/test_outputs.py:41-43", "tests/test_outputs.py:150-157", "tests/test_outputs.py:184-185", "tests/test_outputs.py:189-203"],
+      "finding_ids": []
+    },
+    {
+      "category": "Input-dependent processing (fixed answer defeated)",
+      "status": "checked",
+      "reason": "There are 9 distinct sealed families plus a relabelled, shuffled, week-shifted copy of the generated files with fresh ids and branch names. A fixed or lookup-table answer fails.",
+      "evidence": ["tests/test_outputs.py:252-279"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2 Sunday exclusion", "2.2 'late' defined by return after due day"],
+      "case_or_path": "A loan returned the day after a due day that is only a Sunday: S2 (due 1405, return 1406 Sunday) expects late 0 and fine 0, not today's returned-due=1. C6 likewise with replacement 150.",
+      "status": "checked",
+      "evidence": ["tests/expected/02-sundays.jsonl:1", "tests/expected/03-cap.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["journal period left to today's code (14)", "2.2 Sunday exclusion and 3.1 cap for late journals"],
+      "case_or_path": "J3: journal due 1015, 26-day span with 3 Sundays, late 23, fine capped at 900. X3: late 14, capped at 300.",
+      "status": "checked",
+      "evidence": ["tests/expected/05-journal.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["not-late figures left to today's code", "3.1 cap and no-added-clamp instruction"],
+      "case_or_path": "N5: early BOOK with replacement 100 expects fine -375, so neither a floor at 0 nor an absolute-value cap is accepted. N1 with a 21-day early span that crosses Sundays distinguishes a signed Sunday-correcting formula.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_late.jsonl:1", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 total", "not-late negative fines"],
+      "case_or_path": "The total over mixed negative and positive fines: -2770 (06) and 900 (07).",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_late.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.1 Sunday numbering", "relabel whole-week shift"],
+      "case_or_path": "relabel shifts borrowed and returned by 7k, so the Sunday positions and the expected late/fine are unchanged and only due moves by the shift.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:265-268"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

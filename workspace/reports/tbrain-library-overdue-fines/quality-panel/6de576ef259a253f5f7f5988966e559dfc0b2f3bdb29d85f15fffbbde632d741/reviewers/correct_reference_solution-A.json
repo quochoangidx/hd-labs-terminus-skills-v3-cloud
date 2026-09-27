@@ -1,0 +1,130 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "6de576ef259a253f5f7f5988966e559dfc0b2f3bdb29d85f15fffbbde632d741",
+  "severity": "None",
+  "summary": "fix.patch applies cleanly via solve.sh and implements LF-5 rules 1.1, 2.1, 2.2, 3.1 and 3.2. It keeps today's step for the figures the policy leaves open (a journal's loan period, and the late days and fine of a loan that is not late), leaves the driver untouched and preserves the output types and order. No concrete incorrect behaviour was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/overdue-fines-policy.md",
+      "environment/app/examples/eastgate-0314.json",
+      "environment/app/src/finebook/__init__.py",
+      "environment/app/src/finebook/dates.py",
+      "environment/app/src/finebook/fines.py",
+      "environment/app/src/finebook/statement.py",
+      "environment/app/tools/finebook_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked the fix.patch hunk headers against the shipped files. dates.py @@ -1,11 +1,19 has 11 old and 19 new lines, and fines.py @@ -2,4 +2,6 has 4 old and 6 new lines, so the context matches the environment sources byte for byte.",
+    "Checked the patch path resolution. solve.sh runs cd / and then patch -p1, which maps a/app/src/... to /app/src/.... The Dockerfile installs patch and copies app/ to /app.",
+    "Rule 2.1: BOOK due = borrowed+21 and DVD due = borrowed+7. JOURNAL falls back to LOAN_DAYS=14 (today's step), which follows instruction.md:3.",
+    "Rule 1.1/2.2: closed(day) is day%7==6. For a late loan, late days are the non-Sunday days in range(due+1, returned+1), which includes the return day and excludes the due day.",
+    "Rule 3.1: a late loan's fine is min(late*daily_fine, replacement). Checked the cases below, at and above the cap (for example 30-day DVD spans against replacements of 1800, 2000 and 2100).",
+    "Traced the case of a loan that is late with zero late days, for example a DVD returned the day after its due day when that day is a Sunday. late_days returns 0, and fine takes the late<=0 branch, giving 0 = min(0, replacement), which follows the policy.",
+    "Traced a loan that is not late (returned <= due). late = returned - due, which is <= 0, and fine = late*daily_fine. Both are unchanged package steps fed by the policy due day (instruction.md:3 forbids adding a clamp).",
+    "Traced a late journal. It uses the 14-day due day from today's step, then policy 2.2 Sunday exclusion and the 3.1 cap.",
+    "Rule 3.2 and README output: statement.py is unchanged. It keeps file order and sums the fines into total, and every value is a Python int or str. The driver finebook_run.py is not modified.",
+    "Worked the example file by hand. B0041172: BOOK 1400 is due 1421 and returned 1428; the Sundays in 1422..1428 are {1427}, giving late 6 and fine 150. D0007719: DVD 1402 is due 1409 and returned 1413; 1410..1413 contains Sunday 1413, giving late 3 and fine 300. B0055010: due 1426, returned 1411, giving late -15 and fine -375. Total 75.",
+    "Cross-checked solution/model.py against the patched package. For every branch (late or not, BOOK/DVD/JOURNAL) it computes the same due, late and fine."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced these through dates.py, fines.py and statement.py as patched: a loan returned on its borrowing day, before its due day, on it and one day after it; due and return days on Sundays; spans over one Sunday and many; and fines below, at and above the cap.",
+      "evidence": ["solution/fix.patch:12-26", "solution/fix.patch:34-38", "environment/app/docs/overdue-fines-policy.md:11-12", "environment/app/docs/overdue-fines-policy.md:28-40", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, types, delimiters, paths",
+      "status": "checked",
+      "reason": "The driver is unchanged and writes json.dump plus a newline. All figures are ints: integer arithmetic, with min over ints. Keys are id, due, late and fine, plus branch, loans and total, as the README requires.",
+      "evidence": ["environment/app/tools/finebook_run.py:16-20", "environment/app/src/finebook/statement.py:7-15", "environment/app/README.md:26-31"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches (deletion, expiry, replacement, identifier reuse)",
+      "status": "not_applicable",
+      "reason": "The package is a stateless per-loan computation. Duplicate ids are outside the contract, which leaves them open (instruction.md:3).",
+      "evidence": ["instruction.md:3", "environment/app/src/finebook/statement.py:13-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability at interruption points",
+      "status": "not_applicable",
+      "reason": "No recovery or durability behaviour is promised.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Policy-silent figures keep today's step without added guards",
+      "status": "checked",
+      "reason": "The journal loan period falls back to 14. A loan that is not late keeps returned-due and late*daily_fine with no clamp. No guard was added outside the policy.",
+      "evidence": ["solution/fix.patch:14", "solution/fix.patch:24-25", "solution/fix.patch:36-37", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reference applies and driver untouched",
+      "status": "checked",
+      "reason": "The patch context and counts match the shipped sources. The patch touches only dates.py and fines.py.",
+      "evidence": ["solution/solve.sh:17-19", "environment/Dockerfile:4-9", "environment/app/src/finebook/dates.py:1-11", "environment/app/src/finebook/fines.py:1-5"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2 Sunday exclusion", "3.1 replacement cap"],
+      "case_or_path": "A long late span with many Sundays and a cap. The late days exclude Sundays first, then late*daily_fine is compared with replacement. A late loan with 0 non-Sunday late days gets fine 0.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:24-26", "solution/fix.patch:36-38"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 due day (journal unspecified)", "2.2 late days / 3.1 cap"],
+      "case_or_path": "A late JOURNAL. The due day is borrowed+14 (today's step), and Sunday exclusion and the cap still apply.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:14", "solution/fix.patch:24-26", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 kind-specific due day", "non-late today's step"],
+      "case_or_path": "A BOOK returned 15 days after borrowing, which is late under the old 14-day rule but not under the 21-day rule. late = -6 and fine = -6*daily, fed by the policy due day.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:14", "solution/fix.patch:24-25", "solution/fix.patch:36-37"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["due day on Sunday", "late-day counting start"],
+      "case_or_path": "The due day falls on a Sunday. Counting starts at due+1, so the Sunday due day is never counted, and a return on a Sunday is excluded.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:17-19", "solution/fix.patch:26"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 total", "non-late credit fines"],
+      "case_or_path": "The total sums negative fines from loans that are not late together with capped late fines, as the unchanged statement.py sum does.",
+      "status": "checked",
+      "evidence": ["environment/app/src/finebook/statement.py:13-15"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}
