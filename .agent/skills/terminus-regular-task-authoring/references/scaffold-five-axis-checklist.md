@@ -105,6 +105,14 @@ Write the authority and the instruction first. Then:
   *Missed:* `floor(x + 0.5)` rounds the float just below one half up; an
   intermediate quotient overflowed for an exact multiple; a rate the contract
   allowed decoded to `0.0`.
+- **Exact comparisons against limits need a stated margin.** For every `<`/`>=`
+  on a computed float, build one on-limit batch from ordinary decimals (limit
+  0.2, blanks 0.1 and 0.2, sample 0.35) and compare the reference's discrete
+  outcome with exact arithmetic. If it can flip, do not promise on-limit
+  behaviour: add a margin and a magnitude bound to the authority, assert both at
+  seal time over every fixture, and put fixtures a power-of-two hair each side.
+  *Missed:* trace-metal v9, Correct Reference Major; five fixtures already sat
+  exactly on a limit when the seal-time check was added.
 - Head `solve.sh` with the contract-topic to change table (`contract-closure.md` §9).
 
 ## 3. Protected ground truth: can candidate code obtain or control the answer?
@@ -113,6 +121,18 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 
 - Separate verifier. Expected values exist only in the verifier image, or only in
   pytest's memory.
+- **No end-to-end solver in `tests/`.** Human review returns a verifier that works
+  out every expected answer at grading time (`tests/model.py`), and one that draws
+  its graded jobs there (`tests/jobgen.py`), because the complete answer then ships
+  in `tests/`. Keep the model and the generator under `solution/`, have them write
+  every graded job's inputs and outputs into `tests/expected/` (plain text
+  the panel can open, not gzip, SHA-256-pinned in a manifest), and grade against those.
+  `independence_check.py` blocks a `--model` under `tests/` as `model_in_tests`.
+  Add a test that the candidate uid cannot list or read `/tests`, the saved
+  expectations or `/logs/verifier`. The same holds for a reimplementation task's
+  authority binary: freeze its results with `freeze_reference_goldens.py` rather
+  than running it at grading time (`review_task.py` `verifier-runs-reference-solver`). *Returned three times in one day* on otherwise
+  clean platform runs (panel PASS, CORE/ADVANCED measured).
 - Every candidate process drops privilege
   (`setpriv --no-new-privs --reuid --regid --clear-groups`) in its own session, with
   a fixed small environment.
@@ -152,7 +172,7 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 - **No case label reaches the candidate.** Stage each job in a prefix-less
   `mkdtemp()` under a content-digest name; vary input file names per job. A
   `mkdtemp(prefix=name)` or a run file named after the case let a package key on it
-  (genomic, retail-inventory).
+  (genomic, retail-inventory); cobol v4 Major). `review_task.py` blocks it as `case-label-staged`.
 - **Never grade a byte copy of a visible sample** (moving-average v0, Protected
   Ground Truth Major; transformer-metering v1).
 - Seed generated inputs from a constant in the sealing code, never from a hash of
@@ -193,7 +213,18 @@ Fix the harness shape at scaffold time. Do not retrofit it.
   promises three-channel blocks, run a three-channel session.
 - **Put one fixture exactly on the accepting edge of every strict boundary** ("below",
   "above nought", "from 0 up to 1"). *Missed:* `charged <= minimum` and a ratio check
-  that refused `0.0` both scored reward 1, because every case sat off the edge.
+  that refused `0.0` both scored reward 1, because every case sat off the edge. On a
+  float path the edge value must be exact in binary and the contract must say how
+  close inputs may come (§2, stated margin); otherwise fixture the hair each side.
+- **Fixture every lower end and every derived extreme, not only the ceilings**: a
+  stated minimum count, the smallest legal "above nought" magnitude, the product of
+  range tops (largest reading × largest dilution), and each run kind's own copy of
+  a shared range. For each, add a cap/floor/guard mutant to the sweep catalog.
+  *Missed:* trace-metal v9, five Sound Verifier findings in one return; v10 seven more,
+  all on ends the authority had left open ("above nought", "at least" with no ceiling).
+  State every range closed, then list each range with the extremes the sealed fixtures
+  reach (`scripts/fixture_bounds_check.py --spec ranges.json --adapter observe.py`) and
+  clear every gap before upload.
 - For each *not described* cell of the state table, decide now: witness it with a
   shipped differential, or narrow the prose so it is not promised
   (`contract-closure.md` §11).
@@ -218,7 +249,8 @@ Fix the harness shape at scaffold time. Do not retrofit it.
 - **Run the Sound Verifier class ladder before the first upload**
   ([accepted-task blueprint](accepted-task-blueprint.md) §5, classes C1–C18): every
   visible sentence backed or deleted, ceilings and floors, every bound reached in
-  every position and sum, zeros and empties, counts past 1,024 and 65,536,
+  every position and sum (lower ends, stated minimum counts and derived extremes
+  included), zeros and empties, counts past 1,024 and 65,536,
   cardinalities at their bounds, parameters past 512/2048/4096, field lengths past
   8/64/1024, accumulators past 2^31, exact halves on both signs, the whole
   categorical syntax, two entries per separated accumulator, envelope

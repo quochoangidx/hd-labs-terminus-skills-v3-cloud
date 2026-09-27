@@ -68,3 +68,10 @@ def test_a_ctrf_report_separates_failures_from_controls(tmp_path: Path) -> None:
 
     assert failed == {"t::a"}
     assert passed == {"t::b"}
+
+
+def test_witness_ids_match_whatever_prefix_they_were_written_with() -> None:
+    for spelling in ("tests/test_outputs.py::test_x", "test_outputs.py::test_x",
+                     "../../tests/test_outputs.py::test_x"):
+        assert MODULE.test_id(spelling) == "test_outputs.py::test_x"
+    assert MODULE.test_id("test_x") == "test_x"

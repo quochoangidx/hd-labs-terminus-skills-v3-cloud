@@ -457,3 +457,27 @@ def test_rubric_check_rejects_stale_submission_hash(tmp_path: Path) -> None:
     MODULE.validate_rubric_check(receipt, submission, report, {}, errors)
 
     assert any("current submission result" in error for error in errors)
+
+
+def test_a_metadata_and_rubrics_packet_takes_explanations_from_task_toml(tmp_path: Path) -> None:
+    """Since 2026-09-26 the packet no longer repeats what task.toml already holds."""
+    task = tmp_path / "task"
+    task.mkdir()
+    (task / "task.toml").write_text(
+        "[metadata]\n"
+        'difficulty_explanation = "A systems engineer must reconcile the state transitions. No external data is used."\n'
+        'solution_explanation = "Repair the transition ordering while preserving replay behavior."\n'
+        'verification_explanation = "The behavioral cases cover recovery and preservation."\n'
+        'relevant_experience = "Experience with state machines and deterministic recovery testing."\n',
+        encoding="utf-8",
+    )
+    submission = tmp_path / "SUBMISSION-task.md"
+    submission.write_text(
+        "# Metadata\n\nCanonical image: Yes.\n\n# Rubrics\n\nAgent preserves replay behavior, +5\n",
+        encoding="utf-8",
+    )
+    errors: list[str] = []
+
+    MODULE.validate_submission(submission, task, errors)
+
+    assert not [e for e in errors if "missing/empty sections" in e], errors

@@ -75,10 +75,14 @@ REPORT_ROWS="$(mktemp)"
 trap 'rm -f "$REPORT_ROWS"' EXIT
 
 FAILS=0
-report() { # report <PASS|WARN|FAIL> <check> <detail>
+report() { # report <PASS|WARN|FAIL> <check> <detail> [advisory]
   STATUS="$1"
   DETAIL="$(printf '%s' "$3" | tr '\t\r\n' '   ')"
-  if [ "$STRICT" -eq 1 ] && [ "$STATUS" = "WARN" ]; then
+  # An advisory row mirrors no platform check (AGENTS.md: a blocking rule must
+  # reproduce one), so --strict reports it but never promotes it to FAIL.
+  if [ "${4:-}" = "advisory" ]; then
+    DETAIL="advisory: $DETAIL"
+  elif [ "$STRICT" -eq 1 ] && [ "$STATUS" = "WARN" ]; then
     STATUS="FAIL"
     DETAIL="strict mode: $DETAIL"
   fi
@@ -333,7 +337,7 @@ for ADV in relocated:documented-script-relocated seeded_draw:candidate-seeded-dr
   ADV_OUTPUT="$("$PYTHON_BIN" "$STATIC_VERIFIER_CHECK" "$TASK_DIR" --check "${ADV%%:*}" 2>&1)"
   case $? in
     0) report PASS "verifier:${ADV#*:}" "clean" ;;
-    2) report WARN "verifier:${ADV#*:}" "${ADV_OUTPUT:0:400}" ;;
+    2) report WARN "verifier:${ADV#*:}" "${ADV_OUTPUT:0:400}" advisory ;;
     *) report FAIL "verifier:${ADV#*:}" "static check error: $ADV_OUTPUT" ;;
   esac
 done
@@ -583,6 +587,10 @@ def tree_hash(root):
         if any(part in volatile for part in rel.parts):
             continue
         if path.is_dir() or path.is_symlink():
+            continue
+        # Finder junk never enters the ZIP, so it must not enter the snapshot either: a
+        # .DS_Store that appeared mid-run made every receipt of a round unbindable
+        if path.name == ".DS_Store" or path.name.startswith("._"):
             continue
         digest.update(rel.as_posix().encode("utf-8"))
         digest.update(b"\0")

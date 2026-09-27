@@ -27,7 +27,10 @@ def make_fixture(tmp_path: Path) -> tuple[Path, Path, dict]:
     (task / "task.toml").write_text('version = "1.0"\n')
     (task / "environment/repo/core.py").write_text("def run():\n    return True\n")
     (task / "environment/repo/parser.py").write_text("def parse(x):\n    return x\n")
-    (task / "tests/test_outputs.py").write_text("def test_authority(): pass\ndef test_interaction(): pass\ndef test_parser(): pass\n")
+    (task / "tests/test_outputs.py").write_text(
+        "def test_authority(): pass\ndef test_interaction(): pass\n"
+        "def test_parser(): pass\ndef test_construction(): pass\n"
+    )
     (task / "solution/solve.sh").write_text(
         "#!/bin/sh\n"
         "# AUTHORITY  core.py  select the authority valid at the action\n"
@@ -401,7 +404,7 @@ def test_a_runtime_restriction_audited_only_at_source_is_unenforced(tmp_path: Pa
         {
             "id": "X-no-reflection",
             "statement": "the package uses no reflection and no native methods",
-            "enforced_by": ["test_outputs.py::test_authority"],
+            "enforced_by": ["test_outputs.py::test_construction"],
             "enforcement_level": "source",
             "allowed_exceptions_disclosed": True,
         }
@@ -419,7 +422,7 @@ def test_a_source_level_restriction_about_source_is_fine(tmp_path: Path) -> None
         {
             "id": "X-file-layout",
             "statement": "every source file stays under src/main/java/cairnlift/",
-            "enforced_by": ["test_outputs.py::test_authority"],
+            "enforced_by": ["test_outputs.py::test_construction"],
             "enforcement_level": "source",
             "allowed_exceptions_disclosed": True,
         }
@@ -434,7 +437,7 @@ def test_a_restriction_must_name_its_legal_exceptions(tmp_path: Path) -> None:
         {
             "id": "X-no-reflection",
             "statement": "the package uses no reflection",
-            "enforced_by": ["test_outputs.py::test_authority"],
+            "enforced_by": ["test_outputs.py::test_construction"],
             "enforcement_level": "both",
         }
     ]
@@ -494,3 +497,117 @@ def test_a_removed_obligation_cannot_still_be_declared(tmp_path: Path) -> None:
     ]
 
     assert "removed_obligation" in codes(task, manifest_path, manifest, full=False)
+
+
+def test_a_grader_file_the_panel_cannot_read_whole_blocks(tmp_path: Path) -> None:
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    (task / "tests/cases.json").write_text("[" + ",".join(['{"script": "s/a/b/"}'] * 4000) + "]\n")
+    result = CHECK.validate(task, manifest_path, full=False)
+    assert "panel_truncated_file" in {error["code"] for error in result["blockers"]}
+
+
+def test_split_grader_files_and_binary_fixtures_pass_the_read_limit(tmp_path: Path) -> None:
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    (task / "tests/cases").mkdir()
+    for name in ("a.json", "b.json", "c.json"):
+        (task / "tests/cases" / name).write_text("x" * 30_000 + "\n")
+    (task / "tests/blob.bin").write_bytes(bytes([0xFF, 0xFE]) * 50_000)
+    result = CHECK.validate(task, manifest_path, full=False)
+    assert "panel_truncated_file" not in {error["code"] for error in result["blockers"]}
+
+
+def test_a_packet_past_the_panel_total_budget_blocks_even_when_every_file_is_small(tmp_path: Path) -> None:
+    """Four case files of the ed corpus were each under the per-file limit and were still
+    reported NOT SHOWN, because the packet as a whole was about 300 KB."""
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    (task / "tests/cases").mkdir()
+    for n in range(6):
+        (task / "tests/cases" / f"family_{n}.jsonl").write_text(("x" * 99 + "\n") * 400)
+    result = CHECK.validate(task, manifest_path, full=False)
+    codes_seen = {error["code"] for error in result["blockers"]}
+    assert "panel_unread_budget" in codes_seen
+    assert "panel_truncated_file" not in codes_seen
+
+
+def test_a_packet_under_the_total_budget_passes(tmp_path: Path) -> None:
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    (task / "tests/cases").mkdir()
+    for n in range(3):
+        (task / "tests/cases" / f"family_{n}.jsonl").write_text(("x" * 99 + "\n") * 400)
+    (task / "tests/blob.bin").write_bytes(bytes([0xFF, 0xFE]) * 100_000)
+    result = CHECK.validate(task, manifest_path, full=False)
+    assert "panel_unread_budget" not in {error["code"] for error in result["blockers"]}
+
+
+def test_a_restriction_enforced_only_by_an_obligation_witness_is_unenforced(tmp_path: Path) -> None:
+    """A behavioural comparison cannot see how the candidate was built.
+
+    Found by a platform quality panel on tbrain-gnu-ed-reimplementation: the manifest said
+    "use only the standard library and start no other program" was enforced by a test that
+    compares produced output, and a candidate that merely exec'd the real program scored
+    reward 1 on that verifier.
+    """
+    task, manifest_path, manifest = make_fixture(tmp_path)
+    manifest["restrictions"] = [
+        {
+            "id": "X-stdlib-only",
+            "statement": "use only the standard library and do not start other programs",
+            "enforced_by": ["test_outputs.py::test_authority"],
+            "enforcement_level": "both",
+            "allowed_exceptions_disclosed": True,
+        }
+    ]
+
+    assert "unenforced_restriction" in codes(task, manifest_path, manifest, full=False)
+
+    manifest["restrictions"][0]["enforced_by"] = ["test_outputs.py::test_construction"]
+    assert "unenforced_restriction" not in codes(task, manifest_path, manifest, full=False)
+
+
+def test_finder_junk_does_not_change_the_snapshot_hash(tmp_path: Path) -> None:
+    """A .DS_Store that Finder drops into the tree mid-run must not unbind every receipt."""
+    task, _manifest_path, _manifest = make_fixture(tmp_path)
+    before = CHECK.tree_hash(task)
+    (task / "tests" / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1")
+    (task / "._instruction.md").write_bytes(b"\x00\x05\x16\x07")
+    assert CHECK.tree_hash(task) == before
+
+
+def test_packet_budget_counts_environment_and_is_advisory(tmp_path: Path) -> None:
+    """icpms v12: tests/ at 135 KB passed the blocking limit, but with environment/ and the
+    instruction the packet passed 150 KB and the last two case files went unread."""
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    (task / "tests/cases").mkdir()
+    for n in range(3):
+        (task / "tests/cases" / f"family_{n}.jsonl").write_text(("x" * 99 + "\n") * 400)
+    (task / "environment/repo/docs.md").write_text("y" * 40_000)
+    result = CHECK.validate(task, manifest_path, full=False)
+    assert "panel_packet_budget" in {w["code"] for w in result["warnings"]}
+    assert "panel_packet_budget" not in {e["code"] for e in result["blockers"]}
+    assert "panel_unread_budget" not in {e["code"] for e in result["blockers"]}
+
+
+def test_small_packet_has_no_budget_advisory(tmp_path: Path) -> None:
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    result = CHECK.validate(task, manifest_path, full=False)
+    assert "panel_packet_budget" not in {w["code"] for w in result["warnings"]}
+
+
+def test_ids_sharing_an_id_like_stem_are_flagged(tmp_path: Path) -> None:
+    """icpms v11: R507-6 and R507-17 were read as a duplicated id R507."""
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    (task / "tests/expected").mkdir()
+    row = {"batch": {"runs": [{"id": "R507-6"}, {"id": "R124-12"}, {"id": "R507-17"}]}}
+    (task / "tests/expected/generated.jsonl").write_text(json.dumps(row) + "\n")
+    result = CHECK.validate(task, manifest_path, full=False)
+    assert "shared_id_stem" in {w["code"] for w in result["warnings"]}
+
+
+def test_plain_prefixes_and_opaque_ids_are_not_flagged(tmp_path: Path) -> None:
+    task, manifest_path, _manifest = make_fixture(tmp_path)
+    (task / "tests/expected").mkdir()
+    rows = [{"batch": {"runs": [{"id": "W-11"}, {"id": "W-12"}, {"id": "MB-1"}, {"id": "MB-2"}]}},
+            {"batch": {"runs": [{"id": "L2601"}, {"id": "L2602"}]}}]
+    (task / "tests/expected/named.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    result = CHECK.validate(task, manifest_path, full=False)
+    assert "shared_id_stem" not in {w["code"] for w in result["warnings"]}

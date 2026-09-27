@@ -79,6 +79,94 @@ RUNTIME_CAPABILITY_RE = re.compile(
 VOLATILE_DIRS = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", "reports", "submissions"}
 
 
+PANEL_READ_LIMIT = 60_000
+# The panel also stops reading a packet after roughly this much text in total: with 300 KB
+# under tests/ (every file under the per-file limit) it left four case files unread and
+# raised coverage findings for behaviour those files exercised (ed, 2026-09-25, v4 and v5).
+PANEL_TOTAL_READ_LIMIT = 150_000
+
+
+def _text_size(path: Path) -> int | None:
+    try:
+        path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return path.stat().st_size
+
+
+# An id made of an id-like stem, a hyphen and an index (R507-6, R507-17) reads as a
+# repeated id R507: three panel reviewers raised it against a distinct-id rule although
+# every id was distinct (icpms v11). Plain prefixes (W-11, MB-3) are not flagged.
+_STEM_ID = re.compile(r"^([A-Za-z]+\d+)-\d+$")
+
+
+def _shared_stems(node, found: set[str]) -> None:
+    if isinstance(node, dict):
+        for value in node.values():
+            _shared_stems(value, found)
+    elif isinstance(node, list):
+        ids = [item["id"] for item in node if isinstance(item, dict) and isinstance(item.get("id"), str)]
+        stems: dict[str, int] = {}
+        for value in ids:
+            match = _STEM_ID.match(value)
+            if match:
+                stems[match.group(1)] = stems.get(match.group(1), 0) + 1
+        found.update(stem for stem, count in stems.items() if count > 1)
+        for item in node:
+            _shared_stems(item, found)
+
+
+def packet_advisories(task_dir: Path) -> list[dict]:
+    """Advisory rows about how the platform panel reads the packet; never blocking."""
+    out: list[dict] = []
+    # The sound_verifier packet carries the instruction, task.toml, environment/ and tests/,
+    # and the reviewer stops at roughly PANEL_TOTAL_READ_LIMIT across all of it. With tests/
+    # at 135 KB (under the blocking limit) the icpms v12 reviewer never read the two last
+    # case files and reported their coverage missing. Advisory, because a task that ships an
+    # upstream repository under environment/ exceeds it by design and is read selectively.
+    total = 0
+    for part in ("instruction.md", "task.toml", "environment", "tests"):
+        root = task_dir / part
+        paths = [root] if root.is_file() else sorted(root.rglob("*")) if root.is_dir() else []
+        for path in paths:
+            if not path.is_file() or any(p in VOLATILE_DIRS for p in path.relative_to(task_dir).parts):
+                continue
+            if path.name == ".DS_Store" or path.name.startswith("._"):
+                continue
+            size = _text_size(path)
+            if size is not None:
+                total += min(size, PANEL_READ_LIMIT)
+    if total > PANEL_TOTAL_READ_LIMIT:
+        out.append({
+            "axis": "sound_verifier",
+            "code": "panel_packet_budget",
+            "message": f"the sound_verifier packet (instruction, task.toml, environment/, tests/) holds about {total} "
+            f"bytes of text; the panel stops near {PANEL_TOTAL_READ_LIMIT} and reports the coverage of files it "
+            "never reached (the alphabetically last case files) as missing. Fold or drop broad cases, or confirm "
+            "the excess is an upstream tree the reviewer does not need to read",
+        })
+    found: set[str] = set()
+    tests = task_dir / "tests"
+    for path in sorted(tests.rglob("*")) if tests.is_dir() else []:
+        if path.suffix not in (".json", ".jsonl") or not path.is_file() or path.stat().st_size > 5_000_000:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+            docs = [json.loads(line) for line in text.splitlines() if line.strip()] if path.suffix == ".jsonl" else [json.loads(text)]
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        for doc in docs:
+            _shared_stems(doc, found)
+    if found:
+        out.append({
+            "axis": "coherent_contract",
+            "code": "shared_id_stem",
+            "message": "graded ids share an id-like stem before a hyphen (" + ", ".join(sorted(found)[:5])
+            + "); reviewers read such ids as duplicates of the stem. Number runs with one opaque id each",
+        })
+    return out
+
+
 def tree_hash(root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
@@ -86,6 +174,10 @@ def tree_hash(root: Path) -> str:
         if any(part in VOLATILE_DIRS for part in rel.parts):
             continue
         if path.is_dir() or path.is_symlink():
+            continue
+        # Finder junk never enters the ZIP, so it must not enter the snapshot either: a
+        # .DS_Store that appeared mid-run made every receipt of a round unbindable
+        if path.name == ".DS_Store" or path.name.startswith("._"):
             continue
         digest.update(rel.as_posix().encode("utf-8"))
         digest.update(b"\0")
@@ -187,6 +279,42 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool, profile: str = 
     if not nonempty(manifest.get("primary_outcome")):
         errors.append({"axis": "coherent_contract", "code": "primary_outcome", "message": "primary_outcome is required"})
 
+    # The platform panel reads each file only up to about 64 KB (a 145 KB cases.json was
+    # cut at line 2966). A grader or reference text file past that is judged half-read,
+    # and the unseen half's coverage is reported missing. Split it instead.
+    if task_dir.is_dir():
+        for part in ("tests", "solution"):
+            text_total = 0
+            for path in sorted((task_dir / part).rglob("*")):
+                if not path.is_file() or any(p in VOLATILE_DIRS for p in path.relative_to(task_dir).parts):
+                    continue
+                size = path.stat().st_size
+                try:
+                    path.read_bytes().decode("utf-8")
+                except UnicodeDecodeError:
+                    continue  # binary fixtures are not read as text
+                text_total += size
+                if size <= PANEL_READ_LIMIT:
+                    continue
+                errors.append({
+                    "axis": "sound_verifier",
+                    "code": "panel_truncated_file",
+                    "message": f"{path.relative_to(task_dir).as_posix()} is {size} bytes; the panel reads about "
+                    f"{PANEL_READ_LIMIT} per file, so split it (one case per line, shared data in a named table) "
+                    "and pin the roster with counts the verifier checks",
+                })
+            if text_total > PANEL_TOTAL_READ_LIMIT:
+                errors.append({
+                    "axis": "sound_verifier",
+                    "code": "panel_unread_budget",
+                    "message": f"{part}/ holds {text_total} bytes of text; the panel stops reading a packet at roughly "
+                    f"{PANEL_TOTAL_READ_LIMIT} in total and reports the unread files' coverage as missing, so cut "
+                    "or fold the corpus (keep the cases that discriminate wrong paths) rather than adding to it",
+                })
+
+    if task_dir.is_dir():
+        warnings.extend(packet_advisories(task_dir))
+
     obligations = manifest.get("obligations")
     if not isinstance(obligations, list) or not obligations:
         errors.append({"axis": "coherent_contract", "code": "obligations", "message": "obligations must be a non-empty list"})
@@ -195,6 +323,7 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool, profile: str = 
     obligation_ids: set[str] = set()
     core_ids: set[str] = set()
     witness_ids: set[str] = set()
+    obligation_witness_ids: set[str] = set()
     for index, row in enumerate(obligations):
         label = f"obligations[{index}]"
         if not isinstance(row, dict):
@@ -256,6 +385,8 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool, profile: str = 
                     errors.append({"axis": "sound_verifier", "code": "boundary_witness", "message": f"{label} needs boundary witnesses or boundary_not_applicable"})
                 witness_ids.update(positive)
                 witness_ids.update(boundary)
+                obligation_witness_ids.update(positive)
+                obligation_witness_ids.update(boundary)
 
             # Where the expected values come from decides whether Oracle=1 is evidence
             # or a tautology. A verifier that records the reference's answers agrees
@@ -378,6 +509,22 @@ def validate(task_dir: Path, manifest_path: Path, *, full: bool, profile: str = 
                 "the verifier cannot see is decoration, so enforce it or drop the sentence",
             })
         witness_ids.update(enforced_by)
+        # A restriction is about how the candidate was built, and an obligation witness
+        # judges what it produced. When the only named enforcer is also an obligation
+        # witness, nothing in the suite can see the restriction: a submission that
+        # breaks it still produces the required output and passes. Found by a platform
+        # quality panel on tbrain-gnu-ed-reimplementation, where "do not start other
+        # programs" was listed as enforced by a behavioural comparison and a candidate
+        # that merely exec'd the real program scored reward 1.
+        if enforced_by and not set(enforced_by) - obligation_witness_ids:
+            errors.append({
+                "axis": "sound_verifier",
+                "code": "unenforced_restriction",
+                "message": f"{label} names only obligation witnesses ("
+                + ", ".join(sorted(set(enforced_by)))
+                + "); a test that grades the produced output cannot see how the program was "
+                "built, so give the restriction a check of its own or drop the sentence",
+            })
         level = row.get("enforcement_level")
         if level not in ENFORCEMENT_LEVELS:
             errors.append({"axis": "sound_verifier", "code": "enforcement_level", "message": f"{label}.enforcement_level must be one of {sorted(ENFORCEMENT_LEVELS)}"})

@@ -199,17 +199,10 @@ do not substitute for this review.
 
 3. Review the four Terminus 3 submission explanations under `[metadata]` in
    `task.toml`: `difficulty_explanation`, `solution_explanation`,
-   `verification_explanation`, and `relevant_experience`. Older external drafts
-   may exist at:
-
-```text
-workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
-workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready platform packet)
-```
-
-   These files are optional authoring notes and must remain outside the submitted
-   task and ZIP; the authoritative submitted values are in `task.toml`, from
-   which Snorkel assembles `README.md`.
+   `verification_explanation`, and `relevant_experience`. They live only in
+   `task.toml`, from which Snorkel assembles `README.md`; the packet
+   `workspace/submissions/SUBMISSION-<task-slug>.md` holds only the title `# SUBMISSION — <slug>` with one-line Task, Category and ZIP entries, then `# Metadata` and `# Rubrics` and must stay outside the submitted task and ZIP. An older
+   `submission-explanations-source.md` draft may exist; it is not produced any more.
 
    Review each field separately:
 

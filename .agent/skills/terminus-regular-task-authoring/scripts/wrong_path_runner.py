@@ -58,6 +58,10 @@ def tree_hash(root: Path) -> str:
             continue
         if path.is_dir() or path.is_symlink():
             continue
+        # Finder junk never enters the ZIP, so it must not enter the snapshot either: a
+        # .DS_Store that appeared mid-run made every receipt of a round unbindable
+        if path.name == ".DS_Store" or path.name.startswith("._"):
+            continue
         digest.update(rel.as_posix().encode("utf-8"))
         digest.update(b"\0")
         digest.update(path.read_bytes())
@@ -119,11 +123,24 @@ def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
 
 
+def test_id(name: str) -> str:
+    """One spelling for a test id, whatever path prefix it was written with.
+
+    CTRF names a test `test_outputs.py::test_x`, pytest's own output uses
+    `../../tests/test_outputs.py::test_x`, and builders naturally write
+    `tests/test_outputs.py::test_x`. Comparing the raw strings reported every wrong
+    path as "rejected, but the witness still passed" (two sessions on 2026-09-26),
+    so every id is reduced to `<file name>::<test>` before comparing.
+    """
+    path, sep, rest = name.partition("::")
+    return Path(path).name + sep + rest if sep else name
+
+
 def failing_from_ctrf(ctrf_path: Path) -> tuple[set[str], set[str]]:
     data = json.loads(ctrf_path.read_text(encoding="utf-8"))
     tests = data.get("results", {}).get("tests", [])
-    failed = {t["name"] for t in tests if t.get("status") not in {"passed", "skipped"}}
-    passed = {t["name"] for t in tests if t.get("status") == "passed"}
+    failed = {test_id(t["name"]) for t in tests if t.get("status") not in {"passed", "skipped"}}
+    passed = {test_id(t["name"]) for t in tests if t.get("status") == "passed"}
     return failed, passed
 
 
@@ -190,14 +207,19 @@ def main() -> int:
         print(f"could not apply the wrong-path patch:\n{applied.stderr.strip()}")
         return 2
 
-    scored = run([args.verifier, str(variant)], cwd=Path.cwd())
     ctrf_path = args.ctrf if args.ctrf else None
+    # a report left by an earlier run would be read as this variant's result when the
+    # verifier writes somewhere else or fails before writing; it happened on the ed v6
+    # revision, where two mutants were "rejected" by a previous mutant's CTRF
+    if ctrf_path and ctrf_path.is_file():
+        ctrf_path.unlink()
+    scored = run([args.verifier, str(variant)], cwd=Path.cwd())
     failed: set[str] = set()
     passed: set[str] = set()
     if ctrf_path and ctrf_path.is_file():
         failed, passed = failing_from_ctrf(ctrf_path)
 
-    expected = set(args.expect_failing)
+    expected = {test_id(name) for name in args.expect_failing}
     missing = sorted(expected - failed)
     rejected = scored.returncode != 0 or bool(failed)
     ok = rejected and not missing

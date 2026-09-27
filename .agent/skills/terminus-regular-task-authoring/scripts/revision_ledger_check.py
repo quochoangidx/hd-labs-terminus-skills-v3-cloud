@@ -58,6 +58,10 @@ def tree_hash(root: Path) -> str:
             continue
         if path.is_dir() or path.is_symlink():
             continue
+        # Finder junk never enters the ZIP, so it must not enter the snapshot either: a
+        # .DS_Store that appeared mid-run made every receipt of a round unbindable
+        if path.name == ".DS_Store" or path.name.startswith("._"):
+            continue
         digest.update(rel.as_posix().encode("utf-8"))
         digest.update(b"\0")
         digest.update(path.read_bytes())

@@ -949,30 +949,25 @@ Create one file per accepted task:
 workspace/submissions/SUBMISSION-<slug>.md
 ```
 
-Use this exact structure:
+The four explanations (`difficulty_explanation`, `solution_explanation`,
+`verification_explanation`, `relevant_experience`) are written only into
+`task.toml` `[metadata]`, which the platform reads from the ZIP: name the
+professional role, state where any corpus or fixtures came from (or that no
+external data is used), base difficulty on the actual design and observed probe
+failures, and never copy the Oracle or hidden fixture values. Do not repeat them in
+the packet (user decision 2026-09-26). Use this exact structure:
 
 ```markdown
-# Difficulty Explanation
+# SUBMISSION — <slug>
 
-Describe in original language why the task is challenging for humans and coding agents. Base the explanation on the actual task design and observed probe failures. Name the professional role that would perform this work and why it is relevant. State where any corpus, fixtures, captures, traces, or dataset came from and why they are realistic; if the task uses no external data, say that explicitly. Do not claim unsupported platform difficulty.
-
-# Solution Explanation
-
-Describe the high-level solution approach and the key implementation insights. Do not copy the full Oracle or expose hidden fixture values.
-
-# Verification Explanation
-
-Explain how the tests verify correctness, including the major behavior clusters, preservation checks, edge cases, and anti-shortcut coverage.
-
-# Relevant Experience
-
-State the concrete domain, toolchain, or repository experience that supports the task design. Keep it factual and do not invent personal credentials.
+- Task: <one sentence: what the agent must produce, in domain words>
+- Category: <Category> / <Subcategory>
+- ZIP: `workspace/submissions/<slug>.zip`
 
 # Metadata
 
 - Does this task use an approved canonical base image? Yes — `<exact image reference>` / No — `<reason>`
-- Did you use a Task Inspiration from the Task Gallery for this submission? Yes / No
-- Task Inspiration ID: `<ID or N/A>`
+- Did you use a Task Inspiration from the Task Gallery? Yes — `<Inspiration ID>` / No
 
 # Rubrics
 
@@ -992,7 +987,7 @@ Rubrics must:
 - pass `terminus-rubric-authoring/scripts/check_rubric.py` against the current
   packet and active portfolio, with a complete contract-witness matrix.
 
-Run the style audit on the completed submission file.
+Run the style audit on the `task.toml` explanations and the completed submission file.
 
 ## Acceptance Gate (`campaign_ready` only)
 

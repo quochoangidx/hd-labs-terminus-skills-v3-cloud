@@ -20,6 +20,8 @@ from typing import Iterable
 from verifier_static_checks import (
     analyze_candidate_privileges,
     interpreter_permission_alias_issue,
+    live_reference_binaries,
+    staged_case_labels,
     privilege_acquirable,
     setpriv_missing_no_new_privs,
     test_identity_leak,
@@ -1112,6 +1114,31 @@ def review(path: Path, *, include_external_evidence: bool = True) -> dict:
                 f"The only byte-identity check of /app/tools/{driver} is a test that runs before later tests; candidate code can rewrite the driver on import after it passes. Repeat the check in the last test or in tests/test.sh after pytest.",
                 "tests/test_outputs.py",
                 "terminus-hard-python-verifier",
+            )
+        # only the graded modules: launcher probes under tests/ run the tool on purpose
+        graded_python = "\n".join(
+            view.read_text(name)
+            for name in files
+            if name.startswith("tests/") and Path(name).name.startswith(("test_", "conftest"))
+            and name.endswith(".py")
+        )
+        for binary in live_reference_binaries(graded_python, view.name):
+            add(
+                findings,
+                "blocker",
+                "verifier-runs-reference-solver",
+                f"The verifier runs {binary}, the tool this task reimplements, to produce expected results at grading time: a callable end-to-end solver in tests/ (human-review High row). Freeze the results with terminus-regular-task-authoring/scripts/freeze_reference_goldens.py and compare against tests/expected.json.",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
+            )
+        for where in staged_case_labels(graded_python):
+            add(
+                findings,
+                "blocker",
+                "case-label-staged",
+                f"A candidate-visible path is named after the graded case ({where}): the program can read the hidden scenario label from argv or cwd. Stage every case under the same neutral names in a fresh random directory (quality panel protected_ground_truth Major, tbrain-cobol-statement-port v4).",
+                "tests/test_outputs.py",
+                "terminus-regular-task-authoring",
             )
         if test_identity_leak(verifier_python):
             add(

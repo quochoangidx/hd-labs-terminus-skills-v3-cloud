@@ -80,6 +80,23 @@ class DockerPolicyTests(unittest.TestCase):
 
         self.assertEqual(statuses(checks)["agent-dockerfile:harness-tools"], "fail")
 
+    def test_agent_image_must_keep_harness_binaries(self):
+        for line in ("RUN rm -f /bin/sed /usr/bin/sed", "RUN rm -f /bin/grep /usr/bin/grep",
+                     "RUN apt-get purge -y sed"):
+            with self.subTest(line=line):
+                self.dockerfile.write_text(f"FROM {PYTHON_IMAGE}\nRUN apt-get install -y tmux asciinema\n{line}\n")
+                checks = statuses(POLICY.validate_dockerfile(self.dockerfile, "agent"))
+                self.assertEqual(checks["agent-dockerfile:harness-binaries-kept"], "fail")
+
+    def test_removing_other_binaries_keeps_the_harness_check_green(self):
+        self.dockerfile.write_text(
+            f"FROM {PYTHON_IMAGE}\nRUN apt-get install -y tmux asciinema\n"
+            "RUN rm -f /usr/bin/sort /usr/bin/join /bin/date && rm -rf /var/lib/apt/lists/*\n"
+            "# RUN rm -f /bin/sed (comment only)\n"
+        )
+        checks = statuses(POLICY.validate_dockerfile(self.dockerfile, "agent"))
+        self.assertEqual(checks["agent-dockerfile:harness-binaries-kept"], "pass")
+
     def test_cloud_builder_accepts_named_copy_chown(self):
         """The builder resolves --chown names through /etc/passwd (portal 2026-09-17)."""
         self.dockerfile.write_text(
@@ -353,3 +370,146 @@ class TestSheCalibration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GradedDisclosedFixtureTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.task = Path(self.temp_dir.name)
+        (self.task / "environment" / "app" / "samples").mkdir(parents=True)
+        (self.task / "tests" / "samples").mkdir(parents=True)
+        (self.task / "tests" / "legacy").mkdir(parents=True)
+        (self.task / "environment" / "app" / "samples" / "north.stmt").write_bytes(b"TOTAL 1\n")
+        (self.task / "tests" / "samples" / "north.stmt").write_bytes(b"TOTAL 1\n")
+        (self.task / "environment" / "app" / "prog.cbl").write_bytes(b"PROGRAM\n")
+        (self.task / "tests" / "legacy" / "prog.cbl").write_bytes(b"PROGRAM\n")
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_a_test_function_that_grades_a_shipped_sample_fails(self):
+        (self.task / "tests" / "test_outputs.py").write_text(
+            '"""Builds legacy/prog.cbl at image build time."""\n'
+            "def test_sample():\n"
+            "    assert open('samples/north.stmt', 'rb').read() == run()\n"
+        )
+        hits = POLICY.graded_disclosed_fixtures(self.task)
+        self.assertEqual(hits, ["tests/test_outputs.py::test_sample names tests/samples/north.stmt"])
+
+    def test_a_build_stage_only_use_of_the_shipped_sample_passes(self):
+        (self.task / "tests" / "test_outputs.py").write_text(
+            '"""Builds legacy/prog.cbl and checks samples/north.stmt at image build time."""\n'
+            "SAMPLE = 'samples/north.stmt'\n"
+            "def test_hidden():\n"
+            "    assert run('cases/a.dat') == open('expected/a.stmt', 'rb').read()\n"
+        )
+        self.assertEqual(POLICY.graded_disclosed_fixtures(self.task), [])
+
+
+class UndisclosedSizeCapTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.task = Path(self.temp_dir.name)
+        (self.task / "tests").mkdir()
+        (self.task / "environment" / "docs").mkdir(parents=True)
+        (self.task / "instruction.md").write_text("Write the plan to /app/plans/a.json.\n")
+        (self.task / "environment" / "docs" / "rules.md").write_text("Other keys are ignored.\n")
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def write_test(self, body):
+        (self.task / "tests" / "test_outputs.py").write_text("import os\n\ndef test_plan():\n" + body)
+
+    def test_an_undisclosed_upper_bound_fails(self):
+        self.write_test("    assert os.path.getsize('/app/plans/a.json') <= 5_000_000\n")
+        self.assertEqual(POLICY.undisclosed_size_caps(self.task), ["tests/test_outputs.py:4"])
+
+    def test_a_reversed_bound_through_stat_fails(self):
+        self.write_test("    assert 2_000_000 >= os.stat('/app/out').st_size\n")
+        self.assertEqual(len(POLICY.undisclosed_size_caps(self.task)), 1)
+
+    def test_a_non_empty_check_passes(self):
+        self.write_test("    assert os.path.getsize('/app/plans/a.json') > 0\n")
+        self.assertEqual(POLICY.undisclosed_size_caps(self.task), [])
+
+    def test_a_stated_limit_passes(self):
+        self.write_test("    assert os.path.getsize('/app/plans/a.json') <= 1_000_000\n")
+        (self.task / "environment" / "docs" / "rules.md").write_text("A plan file is at most 1 MB.\n")
+        self.assertEqual(POLICY.undisclosed_size_caps(self.task), [])
+
+
+class ExpertHoursBoundTests(unittest.TestCase):
+    """The platform's `solvable` check treats a large expert-hour estimate as evidence of an
+    unreasonable amount of work (sed rev1: 12 h returned). The bound is a property of the
+    number, not of any spelling."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.task_dir = Path(self.temp_dir.name) / "tbrain-hours"
+        (self.task_dir / "tests").mkdir(parents=True)
+
+    def run_checks(self, hours):
+        (self.task_dir / "task.toml").write_text(
+            'name = "tbrain-hours"\nartifacts = ["/app/"]\n[metadata]\n'
+            f"expert_time_estimate_hours = {hours}\n"
+        )
+        return statuses(POLICY.validate_task(self.task_dir))
+
+    def test_a_few_hours_passes(self):
+        self.assertEqual(self.run_checks(5)["task.toml:expert-hours-bound"], "pass")
+        self.assertEqual(self.run_checks(8)["task.toml:expert-hours-bound"], "pass")
+
+    def test_twelve_hours_warns(self):
+        checks = self.run_checks(12)
+        self.assertEqual(checks["task.toml:expert-hours"], "pass")
+        self.assertEqual(checks["task.toml:expert-hours-bound"], "warn")
+
+
+class AuditHookProcessGapTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.task = Path(self.temp_dir.name)
+        (self.task / "tests").mkdir()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def write_guard(self, text):
+        (self.task / "tests" / "guard.py").write_text(text)
+
+    def test_a_module_level_hook_without_fork_exec_fails_twice(self):
+        self.write_guard(
+            "import sys\nBLOCKED = ('subprocess.', 'os.exec')\n\n"
+            "def hook(event, args):\n    if event.startswith(BLOCKED):\n        raise SystemExit(120)\n\n"
+            "sys.addaudithook(hook)\n"
+        )
+        gaps = POLICY.audit_hook_process_gaps(self.task)
+        self.assertEqual(len(gaps), 2)
+        self.assertIn("fork_exec", gaps[0])
+        self.assertIn("module-level", gaps[1])
+
+    def test_a_closure_hook_that_replaces_fork_exec_passes(self):
+        self.write_guard(
+            "import sys\n\ndef install():\n    blocked = ('subprocess.', 'os.exec')\n\n"
+            "    def hook(event, args):\n        if event.startswith(blocked):\n            raise SystemExit(120)\n\n"
+            "    import _posixsubprocess\n    _posixsubprocess.fork_exec = None\n    sys.addaudithook(hook)\n\ninstall()\n"
+        )
+        self.assertEqual(POLICY.audit_hook_process_gaps(self.task), [])
+
+    def test_a_native_code_hook_without_sqlite_extension_loading_fails(self):
+        closure = ("import sys\n\ndef install():\n    blocked = ('subprocess.', 'os.exec', 'ctypes.'%s)\n\n"
+                   "    def hook(event, args):\n        if event.startswith(blocked):\n            raise SystemExit(120)\n\n"
+                   "    import _posixsubprocess\n    _posixsubprocess.fork_exec = None\n    sys.addaudithook(hook)\n\ninstall()\n")
+        self.write_guard(closure % "")
+        gaps = POLICY.audit_hook_process_gaps(self.task)
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("sqlite3", gaps[0])
+        self.write_guard(closure % ", 'sqlite3.enable_load_extension', 'sqlite3.load_extension'")
+        self.assertEqual(POLICY.audit_hook_process_gaps(self.task), [])
+
+    def test_a_hook_that_does_not_police_processes_is_ignored(self):
+        self.write_guard("import sys\n\ndef hook(event, args):\n    pass\n\nsys.addaudithook(hook)\n")
+        self.assertEqual(POLICY.audit_hook_process_gaps(self.task), [])
+

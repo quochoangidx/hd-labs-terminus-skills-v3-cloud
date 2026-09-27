@@ -240,6 +240,159 @@ def test_identity_leak(source: str) -> bool:
     return bool(re.search(r"\brequest\s*\.\s*node\s*\.\s*name\b", source))
 
 
+def live_reference_binaries(source: str, slug: str) -> list[str]:
+    """System binaries the verifier runs that are the tool the task reimplements.
+
+    A verifier that runs GNU ed on every case at grading time ships a callable
+    end-to-end solver with its tests, which human review treats as a High finding
+    (docs/creating-tasks/writing-tests.md, "don't put a callable end-to-end solver in
+    tests/"). The same docs allow precomputed goldens or hashes, which is what
+    freeze_reference_goldens.py writes. Only a binary named like a word of the task
+    slug counts, so the interpreter, shells and build tools are never flagged.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    words = set(re.split(r"[^a-z0-9]+", slug.lower()))
+    paths: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)):
+            match = re.fullmatch(r"/(?:usr/(?:local/)?)?s?bin/([A-Za-z0-9_.+-]+)", node.value.value)
+            if match and match.group(1).lower() in words:
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        paths[target.id] = node.value.value
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.List) and node.elts:
+            head = node.elts[0]
+            if isinstance(head, ast.Name) and head.id in paths:
+                found.add(paths[head.id])
+            elif isinstance(head, ast.Constant) and isinstance(head.value, str):
+                match = re.fullmatch(r"/(?:usr/(?:local/)?)?s?bin/([A-Za-z0-9_.+-]+)", head.value)
+                if match and match.group(1).lower() in words:
+                    found.add(head.value)
+    return sorted(found)
+
+
+CASE_LABEL_KEYS = frozenset({
+    "id", "name", "label", "case", "case_id", "case_name", "scenario", "slug", "family",
+    "title", "job", "job_id", "run_id", "seed",
+})
+TEMP_CALLS = frozenset({
+    "tempfile.mkdtemp", "mkdtemp", "tempfile.TemporaryDirectory", "TemporaryDirectory",
+    "tempfile.NamedTemporaryFile", "NamedTemporaryFile", "tempfile.mkstemp", "mkstemp",
+})
+
+
+LABEL_PARAMS = frozenset({
+    "tag", "name", "label", "case", "case_id", "case_name", "scenario", "slug", "family",
+    "title", "job", "job_id", "job_name", "run_id", "seed", "key",
+})
+
+
+def _label_part(node: ast.AST, label_params: frozenset[str] = frozenset()) -> str | None:
+    """The case label an expression carries, if it reads one: case["id"], job.name, or a
+    function parameter that callers fill with the case (``tag``, ``name``)."""
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Subscript) and isinstance(sub.slice, ast.Constant):
+            if str(sub.slice.value).lower() in CASE_LABEL_KEYS:
+                return ast.unparse(sub)
+        if isinstance(sub, ast.Attribute) and sub.attr.lower() in CASE_LABEL_KEYS:
+            if not (isinstance(sub.value, ast.Name) and sub.value.id in {"os", "sys", "Path", "self"}):
+                return ast.unparse(sub)
+        if isinstance(sub, ast.Name) and sub.id in label_params:
+            return sub.id
+    return None
+
+
+def _assigned_bases(target: ast.AST) -> list[str]:
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Subscript, ast.Attribute)) and isinstance(target.value, ast.Name):
+        return [target.value.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [n for elt in target.elts for n in _assigned_bases(elt)]
+    return []
+
+
+def staged_case_labels(source: str) -> list[str]:
+    """Places where the verifier names a candidate-visible path after the graded case.
+
+    A file, directory or temp prefix called after the case (``empty_file.readings``,
+    ``cwd-empty_file``, ``drawn-run-1003.json``, ``mkdtemp(prefix=case["id"])``) hands
+    the candidate the hidden scenario label through argv or cwd, so a program can
+    branch on the name instead of the content (quality panel protected_ground_truth
+    Major, tbrain-cobol-statement-port v4; the sister repo's case_label_staged gate).
+    Stage every case under the same neutral names inside a fresh random directory.
+
+    A label is a case field or attribute (``case["id"]``, ``job.seed``) or a parameter
+    of the enclosing function with a label-like name (``tag``, ``name``). A loop
+    variable over the case's own input files is content, not a label, and is not
+    flagged. Paths count when they sit under a temp directory, followed through
+    assignments (``dirs[role] = os.path.join(scratch, ...)``).
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    found: set[str] = set()
+    functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    for scope in functions or [tree]:
+        params: frozenset[str] = frozenset()
+        if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = scope.args
+            names = [a.arg for a in args.posonlyargs + args.args + args.kwonlyargs]
+            params = frozenset(n for n in names if n.lower() in LABEL_PARAMS)
+        temp: set[str] = {"tmp_path", "tmpdir"}
+        body = list(ast.walk(scope))
+        changed = True
+        while changed:
+            changed = False
+            for node in body:
+                value, targets = None, []
+                if isinstance(node, ast.Assign):
+                    value, targets = node.value, node.targets
+                elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                    value, targets = node.value, [node.target]
+                elif isinstance(node, ast.withitem) and node.optional_vars is not None:
+                    value, targets = node.context_expr, [node.optional_vars]
+                if value is None:
+                    continue
+                is_temp = (isinstance(value, ast.Call) and _call_name(value) in TEMP_CALLS) or any(
+                    isinstance(n, ast.Name) and n.id in temp for n in ast.walk(value))
+                if is_temp:
+                    for base in (b for t in targets for b in _assigned_bases(t)):
+                        if base not in temp:
+                            temp.add(base)
+                            changed = True
+
+        def under_temp(node: ast.AST) -> bool:
+            return any(isinstance(n, ast.Name) and n.id in temp for n in ast.walk(node))
+
+        for node in body:
+            if isinstance(node, ast.Call):
+                name = _call_name(node)
+                if name in TEMP_CALLS:
+                    for keyword in node.keywords:
+                        if keyword.arg in {"prefix", "suffix", "dir"} and not isinstance(keyword.value, ast.Constant):
+                            label = _label_part(keyword.value, params)
+                            if label:
+                                found.add(f"line {node.lineno}: {name}({keyword.arg}=... {label})")
+                elif name in {"os.path.join", "path.join", "join"} and node.args and under_temp(node.args[0]):
+                    for part in node.args[1:]:
+                        if _label_part(part, params):
+                            found.add(f"line {node.lineno}: {ast.unparse(node)[:120]}")
+                            break
+            elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div) and under_temp(node.left):
+                if _label_part(node.right, params):
+                    found.add(f"line {node.lineno}: {ast.unparse(node)[:120]}")
+    return sorted(found)
+
+
 def interpreter_permission_alias_issue(source: str) -> bool | None:
     """Detect the platform's unsafe dual Bash-path permission-restore shape.
 

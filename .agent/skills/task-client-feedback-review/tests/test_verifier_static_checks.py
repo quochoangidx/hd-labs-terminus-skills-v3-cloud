@@ -424,3 +424,80 @@ def test_advisories_exit_two_only_when_named_and_never_fail_all(tmp_path: Path) 
     })
     assert rc("fixture") == 1
     assert rc("all") == 1
+def test_flags_the_reimplemented_tool_run_as_the_reference() -> None:
+    source = '''
+GNU_ED = "/usr/bin/ed"
+PYTHON = "/usr/local/bin/python3"
+
+def check(case):
+    want = run([GNU_ED], case)
+    got = run([PYTHON, "/opt/guard.py", "/app/pyed/ed.py"], case)
+'''
+    assert MODULE.live_reference_binaries(source, "tbrain-gnu-ed-reimplementation") == ["/usr/bin/ed"]
+
+
+def test_frozen_goldens_and_unrelated_binaries_are_not_flagged() -> None:
+    source = '''
+PYTHON = "/usr/local/bin/python3"
+SH = "/bin/sh"
+
+def check(case):
+    got = run([PYTHON, "/app/pyed/ed.py"], case)
+    subprocess.run([SH, "-c", "true"])
+'''
+    assert MODULE.live_reference_binaries(source, "tbrain-gnu-ed-reimplementation") == []
+
+
+def test_flags_a_staged_path_named_after_the_case() -> None:
+    source = '''
+import os, tempfile
+
+def run(case):
+    work = tempfile.mkdtemp(prefix="cwd-" + case["name"])
+    target = os.path.join(work, case["name"] + ".readings")
+    return target
+'''
+    found = MODULE.staged_case_labels(source)
+    assert len(found) == 2
+
+
+def test_flags_a_pathlib_run_file_named_after_the_job() -> None:
+    source = '''
+def stage(job, tmp_path):
+    run_file = tmp_path / f"drawn-run-{job.seed}.json"
+    return run_file
+'''
+    assert MODULE.staged_case_labels(source)
+
+
+def test_neutral_names_and_the_cases_own_file_names_pass() -> None:
+    source = '''
+import os, tempfile
+
+HERE = os.path.dirname(__file__)
+
+def load(family):
+    return os.path.join(HERE, "cases", family["name"] + ".jsonl")
+
+def run(case):
+    path = tempfile.mkdtemp()
+    for name, text in case["files"]:
+        open(os.path.join(path, name), "w").write(text)
+    return os.path.join(path, "input.readings")
+'''
+    assert MODULE.staged_case_labels(source) == []
+
+
+def test_flags_a_label_passed_in_as_a_parameter_through_a_dict_of_dirs() -> None:
+    """The tbrain-cobol-statement-port v4 shape: tag carries the case name."""
+    source = '''
+import os, tempfile
+
+def run_port(readings_source, tag="run"):
+    scratch = tempfile.mkdtemp(prefix="wbill-")
+    dirs = {}
+    for role in ("extract", "cwd"):
+        dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+    return os.path.join(dirs["extract"], f"{tag}.readings")
+'''
+    assert len(MODULE.staged_case_labels(source)) == 2

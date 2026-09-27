@@ -42,3 +42,11 @@ def test_alias_declaration_is_rejected() -> None:
 
 def test_transcript_without_model_is_rejected() -> None:
     assert MODULE.claude_probe_model_errors("claude-opus-5", [])
+
+
+def test_record_accepts_a_cycle_folder_of_the_same_slug() -> None:
+    assert MODULE.probe_dir_matches("tbrain-x", "tbrain-x")
+    assert MODULE.probe_dir_matches("tbrain-x", "tbrain-x-cycle-2")
+    assert MODULE.probe_dir_matches("tbrain-x", "tbrain-x-skeleton")
+    assert not MODULE.probe_dir_matches("tbrain-x", "tbrain-xy-cycle-1")
+    assert not MODULE.probe_dir_matches("", "tbrain-x")

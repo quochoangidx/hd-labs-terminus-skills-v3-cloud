@@ -46,6 +46,10 @@ def should_ignore(path: Path, root: Path | None = None) -> bool:
     name = path.name
     if name in EXCLUDE_FILES:
         return True
+    # Finder writes .DS_Store and ._* whenever a folder is browsed; one appearing after
+    # prepare made a finished pair unrecordable (trace-metal cycle 3, 2026-09-26)
+    if name == ".DS_Store" or name.startswith("._"):
+        return True
     if path.is_dir():
         if name in GLOBAL_EXCLUDE_DIRS:
             return True
@@ -570,6 +574,16 @@ def claude_probe_model_errors(declared: str, served: list[str]) -> list[str]:
     return errors
 
 
+def probe_dir_matches(slug: str, name: str) -> bool:
+    """A probe folder is the slug itself or the slug plus a suffix.
+
+    The builder_certified route keeps one folder per probe cycle
+    (`<slug>-skeleton`, `<slug>-cycle-2`) so earlier pairs survive, and requiring
+    the bare slug forced sessions to rename folders around every `record` call.
+    """
+    return bool(slug) and (name == slug or name.startswith(slug + "-"))
+
+
 def record(args: argparse.Namespace) -> None:
     run_dir = Path(args.run_dir).resolve()
     if args.result not in VALID_RESULTS:
@@ -608,7 +622,7 @@ def record(args: argparse.Namespace) -> None:
 
     probe_dir = run_dir.parent
     manifest = load_manifest(probe_dir)
-    if manifest.get("task_slug") != run_dir.parent.name:
+    if not probe_dir_matches(manifest.get("task_slug", ""), run_dir.parent.name):
         raise SystemExit("Probe manifest/task directory mismatch")
     source_task = Path(manifest["source_task"]).resolve()
     if not source_task.is_dir():

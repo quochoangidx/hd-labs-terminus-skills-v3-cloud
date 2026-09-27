@@ -972,6 +972,23 @@ def validate_submission(
             "Rubrics",
         )
     }
+    # Since 2026-09-26 the packet holds only Metadata and Rubrics: the four
+    # explanations live in task.toml [metadata], which the platform reads from the
+    # ZIP, so they are taken from there when the packet does not repeat them.
+    try:
+        import tomllib
+
+        metadata = tomllib.loads((task_dir / "task.toml").read_text(encoding="utf-8")).get("metadata", {})
+    except (OSError, ValueError):
+        metadata = {}
+    for heading, key in (
+        ("Difficulty Explanation", "difficulty_explanation"),
+        ("Solution Explanation", "solution_explanation"),
+        ("Verification Explanation", "verification_explanation"),
+        ("Relevant Experience", "relevant_experience"),
+    ):
+        if not sections[heading]:
+            sections[heading] = str(metadata.get(key, "")).strip()
     missing = sorted(heading for heading, body in sections.items() if not body)
     if missing:
         errors.append("submission metadata: missing/empty sections: " + ", ".join(missing))

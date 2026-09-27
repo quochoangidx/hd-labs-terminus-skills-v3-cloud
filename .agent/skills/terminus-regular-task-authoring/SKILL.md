@@ -167,24 +167,15 @@ Terminus 3 requires four reviewer-facing metadata fields:
 - `Relevant Experience`
 
 These are submission metadata, not agent-visible task requirements. Store them
-under `[metadata]` in `task.toml`; Snorkel assembles `README.md` from them. Local
-drafts may remain outside the task folder:
+under `[metadata]` in `task.toml`; Snorkel assembles `README.md` from them. The four explanations (`difficulty_explanation`, `solution_explanation`, `verification_explanation`, `relevant_experience`) live only in `task.toml` `[metadata]`, which the platform reads from the ZIP; do not write them again into a source draft or the packet (user decision 2026-09-26: generating text that is never pasted only spends quota).
 
-```text
-workspace/reports/<task-slug>/submission-explanations-source.md
-workspace/submissions/SUBMISSION-<task-slug>.md
-```
-
-Write the source draft only after the task behavior, oracle, verifier, and
-available difficulty probes are stable. The source draft is the factual record;
-`workspace/submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet for
-the platform UI (same name/shape as `task-batch` and `task-clone` produce): the
-four explanation fields PLUS the Metadata answers ("approved canonical base image?"
-Yes/No + exact digest-pinned image; "Task Inspiration from the Task Gallery?"
-Yes/No + Inspiration ID), the full paste-ready Rubrics block (format rules:
-AGENTS.md §9 — `Agent`-prefixed single physical lines, closed score set with
-leading `+`, positive sum 10–40), and the matching zip file name. The packet is
-never shipped inside the ZIP.
+`workspace/submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet
+for the platform UI (same shape as `task-batch` and `task-clone` produce): a
+`# SUBMISSION — <slug>` title with one-line Task, Category and ZIP entries, then the Metadata answers ("approved canonical base image?" Yes/No + exact digest-pinned
+image; "Task Inspiration from the Task Gallery?" Yes/No + Inspiration ID), the
+full paste-ready Rubrics block (AGENTS.md §9: `Agent`-prefixed single physical
+lines, closed score set with leading `+`, positive sum 10–40) and the matching zip
+file name. The packet is never shipped inside the ZIP.
 
 ### Difficulty Explanation
 

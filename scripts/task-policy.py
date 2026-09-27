@@ -9,6 +9,8 @@ import os
 import re
 import subprocess
 import sys
+import ast
+import hashlib
 import tomllib
 from pathlib import Path
 
@@ -188,6 +190,10 @@ def cloud_builder_copy_errors(text: str) -> list[str]:
     return errors
 
 
+# Tools the agent harness runs inside the task container.
+HARNESS_BINARIES = ("sed", "grep", "tail", "awk", "cut", "tr", "bash")
+
+
 def validate_dockerfile(
     path: Path,
     role: str,
@@ -287,6 +293,26 @@ def validate_dockerfile(
                 "agent-dockerfile:harness-tools",
                 not missing,
                 "tmux and asciinema present" if not missing else f"missing={missing}",
+            )
+        )
+        # The agent harness shells out inside the task container (Terminus's
+        # get-asciinema-timestamp.sh runs grep | tail | sed; Harbor's node bootstrap
+        # pipes `node --version` through sed). Deleting one of these tools, e.g. for a
+        # "reimplement sed" premise, killed every trial of tbrain-gnu-sed-reimplementation
+        # v7 with NonZeroAgentExitCodeError while oracle and NOP still passed.
+        removed = sorted(
+            {
+                tool
+                for line in logical
+                for tool in HARNESS_BINARIES
+                if re.search(rf"(?:\brm\b[^;&|]*/{tool}\b|\bapt-get\s+(?:-\S+\s+)*(?:remove|purge)\b[^;&|]*\b{tool}\b)", line)
+            }
+        )
+        checks.append(
+            result(
+                "agent-dockerfile:harness-binaries-kept",
+                not removed,
+                "no harness-used binary is removed" if not removed else f"removes {removed}; the agent harness calls them",
             )
         )
         # Quality panel `environment_hygiene` blocks on this: under a separate
@@ -395,6 +421,158 @@ def compose_network_errors(text: str) -> list[str]:
     return errors
 
 
+def graded_disclosed_fixtures(task_dir: Path) -> list[str]:
+    """Fixtures under tests/ that also ship to the agent and are named by a test function.
+
+    A test whose expected bytes ship under environment/ is satisfiable by replaying the
+    shipped file, so the panel reads it as an answer-replay channel (tbrain-cobol-
+    statement-port v4, Protected Ground Truth Major). The build stage may still use
+    such a file to prove the shipped sample is genuine; the test functions may not
+    name it. Only string constants inside test_* bodies count, so a module docstring
+    that mentions a shared source file, or a build-stage COPY, does not trip this.
+    """
+    environment = task_dir / "environment"
+    tests = task_dir / "tests"
+    if not environment.is_dir() or not tests.is_dir():
+        return []
+
+    def digest(path: Path) -> str | None:
+        try:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            return None
+
+    shipped = {digest(path) for path in environment.rglob("*") if path.is_file() and path.name != ".dockerignore"}
+    shipped.discard(None)
+    shared: dict[str, Path] = {}
+    for path in tests.rglob("*"):
+        if not path.is_file() or path.suffix == ".py" or path.name in ("Dockerfile", "test.sh"):
+            continue
+        if path.stat().st_size and digest(path) in shipped:
+            shared[path.name] = path
+    if not shared:
+        return []
+
+    hits: list[str] = []
+    for source in tests.rglob("*.py"):
+        try:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith("test_"):
+                continue
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                    for name, path in shared.items():
+                        if name in inner.value:
+                            hits.append(f"{source.relative_to(task_dir)}::{node.name} names {path.relative_to(task_dir)}")
+    return sorted(set(hits))
+
+
+SIZE_DISCLOSURE_RE = re.compile(r"\b(?:bytes?|[kKmMgG]i?B|kilobytes?|megabytes?|file size|size limit)\b")
+
+
+def undisclosed_size_caps(task_dir: Path) -> list[str]:
+    """Upper bounds on a candidate file's byte size that no agent-visible text states.
+
+    The platform panel returned this shape as a Major coherent_contract finding twice in
+    one assignment (tbrain-press-shop-scheduling v1, 2 MB; tbrain-bakery-fleet-dispatch
+    v6, 5 MB): padding a valid artifact with whitespace or an ignored key past a cap the
+    verifier added "for safety" flips a passing test. The verifier timeout already bounds
+    pathological inputs. Only upper bounds count, so a non-empty check (size > 0) passes.
+    """
+    tests = task_dir / "tests"
+    if not tests.is_dir():
+        return []
+
+    def is_size(node: ast.AST) -> bool:
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Attribute) and inner.attr in ("getsize", "st_size"):
+                return True
+        return False
+
+    hits: list[str] = []
+    for source in sorted(tests.rglob("*.py")):
+        try:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare):
+                continue
+            operands = [node.left, *node.comparators]
+            for index, op in enumerate(node.ops):
+                left, right = operands[index], operands[index + 1]
+                upper = (isinstance(op, (ast.Lt, ast.LtE)) and is_size(left)) or (
+                    isinstance(op, (ast.Gt, ast.GtE)) and is_size(right)
+                )
+                if upper:
+                    hits.append(f"{source.relative_to(task_dir)}:{node.lineno}")
+    if not hits:
+        return []
+    visible = []
+    for path in [task_dir / "instruction.md", *sorted((task_dir / "environment").rglob("*"))]:
+        if path.is_file() and path.suffix in (".md", ".txt", ".rst", ""):
+            try:
+                visible.append(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                continue
+    if any(SIZE_DISCLOSURE_RE.search(text) for text in visible):
+        return []
+    return sorted(set(hits))
+
+
+PROCESS_EVENT_RE = re.compile(r"subprocess|os\.exec|os\.fork|os\.system|os\.posix_spawn|os\.spawn")
+
+
+def audit_hook_process_gaps(task_dir: Path) -> list[str]:
+    """In-process launchers that try to stop process creation with an audit hook but leave
+    a route open.
+
+    Two routes, both proven by execution on tbrain-gnu-ed-reimplementation (v6 panel
+    return, finding 28): ``_posixsubprocess.fork_exec``, the C helper behind subprocess,
+    forks and executes without raising any audit event, so a hook that watches
+    ``subprocess.*`` / ``os.exec*`` never sees it; and a hook defined at module level reads
+    its policy from module globals the candidate can rebind (the panel's route was
+    ``sys.modules['__main__']``), after which ``os.execv`` of a staged binary passes. A file
+    that installs such a hook must mention ``fork_exec`` (it replaces or blocks the helper)
+    and must build the hook inside a function, so its policy lives in a closure. A hook
+    that also claims to stop native code (it names ``ctypes``) must name
+    ``load_extension``: ``sqlite3.Connection.enable_load_extension`` loads a native
+    library with no ctypes and no import (v8 panel return, finding 14).
+    """
+    tests = task_dir / "tests"
+    if not tests.is_dir():
+        return []
+    hits: list[str] = []
+    for source in sorted(tests.rglob("*.py")):
+        try:
+            text = source.read_text(encoding="utf-8")
+            tree = ast.parse(text)
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        hooks = []
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "addaudithook" and node.args):
+                hooks.append(node.args[0])
+        if not hooks or not PROCESS_EVENT_RE.search(text):
+            continue
+        rel = source.relative_to(task_dir)
+        if "fork_exec" not in text:
+            hits.append(f"{rel}: the hook never sees _posixsubprocess.fork_exec, which raises no audit event")
+        if "ctypes" in text and "load_extension" not in text:
+            hits.append(f"{rel}: the hook stops ctypes but not sqlite3 extension loading, which loads native "
+                        "code without ctypes or an import")
+        top_level = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        for hook in hooks:
+            if isinstance(hook, ast.Name) and hook.id in top_level:
+                hits.append(f"{rel}: the hook {hook.id}() is a module-level function, so its policy is "
+                            "module state the candidate can rebind; build it in a closure")
+    return hits
+
+
 def validate_task(task_dir: Path) -> list[dict[str, object]]:
     checks: list[dict[str, object]] = []
     task_toml = task_dir / "task.toml"
@@ -454,6 +632,16 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
 
     hours = metadata.get("expert_time_estimate_hours")
     checks.append(result("task.toml:expert-hours", isinstance(hours, (int, float)) and hours > 0, f"value={hours!r}"))
+    # The platform's automated `solvable` check reads this estimate against "a few hours at
+    # most": on tbrain-gnu-sed-reimplementation a 12-hour estimate with a 1,400-line reference
+    # passed that check three times and was returned on the fourth as an unreasonable amount
+    # of work. Above eight hours the estimate itself argues the task is too large; cut breadth
+    # and keep the hard thing before uploading.
+    checks.append(advisory(
+        "task.toml:expert-hours-bound",
+        not isinstance(hours, (int, float)) or hours <= 8,
+        f"value={hours!r}; the platform solvable check reads more than 8 hours as an unreasonable amount of work",
+    ))
 
     removed = sorted((set(manifest) | set(metadata) | set(manifest.get("environment", {}))) & REMOVED_FIELDS)
     checks.append(result("task.toml:no-terminus2-fields", not removed, f"obsolete fields={removed}"))
@@ -768,6 +956,38 @@ def validate_task(task_dir: Path) -> list[dict[str, object]]:
                 if footer_ok
                 else "end test.sh by capturing the exit status and writing reward 1 on success, 0 otherwise"
             ),
+        )
+    )
+    disclosed = graded_disclosed_fixtures(task_dir)
+    checks.append(
+        result(
+            "tests:graded-disclosed-fixture",
+            not disclosed,
+            "no test function grades a fixture that also ships under environment/"
+            if not disclosed
+            else "a test grades a fixture the agent can read, so its expected bytes can be replayed: "
+            + "; ".join(disclosed[:4]),
+        )
+    )
+    hook_gaps = audit_hook_process_gaps(task_dir)
+    checks.append(
+        result(
+            "tests:audit-hook-process-gap",
+            not hook_gaps,
+            "no in-process launcher leaves fork_exec or a rebindable module-level hook open"
+            if not hook_gaps
+            else "an audit-hook launcher can be bypassed by the program it runs: " + "; ".join(hook_gaps[:4]),
+        )
+    )
+    size_caps = undisclosed_size_caps(task_dir)
+    checks.append(
+        result(
+            "tests:undisclosed-size-cap",
+            not size_caps,
+            "no verifier caps a candidate file's size without an agent-visible limit"
+            if not size_caps
+            else "the verifier bounds a candidate file's byte size but no agent-visible text states a limit; "
+            "drop the cap (the verifier timeout bounds pathological input) or state it: " + "; ".join(size_caps[:4]),
         )
     )
     return checks

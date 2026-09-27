@@ -570,6 +570,14 @@ Reject false-hard candidates:
 - candidates padded with components, modes or validation domains that do not
   deepen the primary causal challenge
 - bugs whose verifier would need network, credentials, browser, database, or OS-specific services
+- optimisation candidates whose pass condition is a numeric target set by the
+  author's own long search ("cost at most the best plan found by hours of
+  search"): tight targets fail the platform `solvable` quality check, loose ones
+  measure BASE (AGENTS.md §2 "Best-known-target optimisation fails the platform
+  either way"; press-shop v3–v5). Keep an optimisation candidate only when its
+  target is provably reachable within the agent budget and the difficulty is in
+  modelling the constraints, not in search time. Default instead to the
+  seeded-departure lane in the AGENTS.md §1 task-creation standard.
 
 ### Terminus 3 evidence-and-interaction screen — RUN ON EVERY CANDIDATE
 

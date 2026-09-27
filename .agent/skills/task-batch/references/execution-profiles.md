@@ -133,7 +133,10 @@ Required path:
    building anything else; one redesign, a second 2/2 replaces it. 0/2 or 1/2
    with semantic failures → continue. A trap every solver misses goes through
    the blueprint §4.3 0/8 screen now, while fixing the contract is still cheap.
-   Keep both solver diffs: step 7 rescores them.
+   Keep both solver diffs: step 7 rescores them. **A pair discarded as ambiguity
+   evidence does not count:** once `contract_review` repairs the wording, run a
+   fresh skeleton pair before writing the verifier (trace-metal skipped this and
+   first learned how the repaired wording read after the verifier was built).
 
    Then fix the harness shape and write one named test per rule, each run in a
    state where its violation shows. Score every wrong path and one or two
@@ -151,14 +154,28 @@ Required path:
      closure, named silent cases, cited conventions and wrong paths still block)
    5b. **Sound Verifier sweep (builder, no extra session).** Run the class ladder
    ([accepted-task blueprint](../../terminus-regular-task-authoring/references/accepted-task-blueprint.md)
-   §5, C1–C18) as scripted Oracle mutants through `wrong_path_runner.py`: caps,
-   cardinalities, floors, integer widths, signs and halves, categorical syntax,
+   §5, C1–C18) as scripted Oracle mutants with
+   `terminus-regular-task-authoring/scripts/sound_verifier_sweep.py` (a JSON
+   catalog of edits on top of `solution/fix.patch`; it scores each through
+   `wrong_path_runner.py`, checks the alternatives score 1 and lists untouched
+   classes, each of which needs a one-line reason): caps,
+   lower ends and derived extremes (stated minimum counts, the smallest "above
+   nought" value, products of range tops, each run kind's copy of a range),
+   cardinalities, floors, float values on a limit (C8: a stated margin, not an
+   exact-on-limit promise), integer widths, signs and halves, categorical syntax,
    separated accumulators, envelope cross-products and harness shapes. Each must
    score reward 0 on its own named test; also run one or two contract-valid
    alternatives, which must score 1. A surviving mutant or a rejected alternative
    is answered the §11 way (back the rule with a witness, or narrow the promise),
    then the affected closure gates rerun. Save the mutants under
    `workspace/reports/<slug>/sweep/`; revisions rerun them as a regression suite.
+   Before the sweep, run `terminus-regular-task-authoring/scripts/fixture_bounds_check.py`
+   with a `ranges.json` listing every range the authority states (both ends, none left
+   open) and a small `observe.py` adapter; every `GAP` is a missing fixture or an open end
+   to close. Clear the `panel_packet_budget` and `shared_id_stem` warnings of
+   `panel_precheck.py` too: the platform panel skips what it cannot read, and reads
+   `R507-6`/`R507-17` as a repeated id (worked example:
+   `workspace/reports/tbrain-icpms-sop-data-reduction/bounds/`).
 6. The same reviewer's `final_review` on the frozen snapshot, with full task
    visibility. A repair after it reruns the affected gates and gets a targeted
    recheck in the same session.
@@ -184,9 +201,20 @@ Required path:
    "not passed by any agent run" return, and rebill's and moving-average's did the
    same. Run the blueprint §4.3 screen on it (competing positive enumeration, no
    definitional chain, contrary expert instinct, unnamed shared step, the trap
-   inside several tests). Accept when the misses split across two or more
-   independent traps, or when the screen is clean and the trap is isolated in its
-   own test. Probes run on the `opus` alias (Opus 5.5, all probes before
+   inside several tests). Judge each trap on its own, never only the pair's total:
+   - **Isolation is a precondition** (blueprint §4.2 rule 3): named broad,
+     generated and capacity families carry no trap input, checked by a predicate
+     over every broad fixture. A trap that also fails `generated`, `capacity` or
+     `report_order` multiplies a platform 0/8 across tests; move its inputs out
+     before accepting.
+   - A trap missed by every solver on the current contract, or by at least three
+     of four local runs, with **two or more** §4.3 flags (for example contrary
+     expert instinct plus no isolation) is resolved before upload: make the case
+     governed in the authority or reroute it, then rescore. Recording it as a
+     risk is not enough (trace-metal, 2026-09-26: Opus 5 missed the non-detect
+     spike trap 2/2 with both flags, and the task was packaged anyway).
+   - Otherwise accept when the misses split across two or more independent
+     traps, or when the screen is clean and the trap is isolated in its own test. Probes run on the `opus` alias (Opus 5.5, all probes before
    2026-09-26) did not predict the platform's per-model split or its tier: a local
    1/2 on a one-trap shape came back BASE 7/8. `terminus-probe` is now pinned to
    `claude-opus-5`, the platform's model; launch it without a `model` argument.
@@ -244,6 +272,11 @@ Required path:
    as `builder_certified`, reporting each axis verdict with the snapshot it was
    reviewed on. Any later semantic edit makes that check fail until the changed
    axes are cleared again.
+10. **Submission packet (last, once the ZIP is final).** Write the Rubrics block
+   with `terminus-rubric-authoring` against the exact ZIP, and put it with the
+   Metadata answers in `workspace/submissions/SUBMISSION-<slug>.md`, as the title `# SUBMISSION — <slug>` with its Task, Category and ZIP lines, then `# Metadata` and `# Rubrics`, nothing else (layout in `task-clone` *Submission Explanation Workflow*).
+   The four explanations (`difficulty_explanation`, `solution_explanation`, `verification_explanation`, `relevant_experience`) live only in `task.toml` `[metadata]`, which the platform reads from the ZIP; do not write them again into a source draft or the packet (user decision 2026-09-26: generating text that is never pasted only spends quota). Skip this step while the task may still change: a rubric written
+   before the last repair has to be rewritten.
 
 The builder never asserts a gate result. Every claim in the report must name a
 receipt file bound to the snapshot hash; a gate with no receipt is not run.

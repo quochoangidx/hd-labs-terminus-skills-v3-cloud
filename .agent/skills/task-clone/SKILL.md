@@ -499,11 +499,10 @@ For a small app task, `environment/app/` is acceptable, but cloned upstream bug 
 
 Prefer external notes under `workspace/reports/<task-slug>/` when possible so submission zips do not accidentally include them.
 
-For the current platform submission form, create:
+For the current platform submission form, create only:
 
 ```text
-workspace/reports/<task-slug>/submission-explanations-source.md   (factual source notes)
-workspace/submissions/SUBMISSION-<task-slug>.md                   (the UI-ready platform packet — single canonical name)
+workspace/submissions/SUBMISSION-<task-slug>.md                   (title + Task/Category/ZIP, Metadata, Rubrics; explanations stay in task.toml)
 ```
 
 Packet contents and format: the "platform packet" section near the end of
@@ -1402,65 +1401,49 @@ Before packaging or platform upload:
 
 ## Submission Explanation Workflow
 
-Generate submission explanations only after the prompt, oracle, verifier, and
-available solve probes are stable.
+Write the four explanations directly into `task.toml` `[metadata]`, only after the
+prompt, oracle, verifier and available solve probes are stable:
 
-1. Write `submission-explanations-source.md` from task evidence:
-   - Difficulty: interacting concepts, the tempting partial fix, fair semantic
-     failure patterns from solve probes, and why the issue requires reasoning
-     across more than one local symptom.
-   - Solution: root cause, high-level oracle strategy, and preserved behavior.
-   - Verification: requirement-to-test mapping, why cases discriminate, and
-     actual oracle/nop results.
-   - Relevant Experience: concrete domain, toolchain, or repository background
-     that supports the task design, without invented credentials.
-2. Produce the complete platform packet at
-   `workspace/submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
-   `task-batch`) containing, beyond the four explanation fields:
-   - **Metadata**: "Does this task use an approved canonical base image?"
-     Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
-     a Task Inspiration from the Task Gallery?" Yes/No + the Inspiration ID
-     when yes (`mined-candidates/gallery_tasks_snapshot.md`).
-   - **Rubrics**: the full paste-ready block (NOT shipped in the zip) —
-     format rules in the Rubric quality section above and AGENTS.md §9: one
-     physical line per criterion starting with `Agent`, closed score set
-     {+1,+2,+3,+5,-1,-2,-3,-5} with mandatory leading `+`, positive sum
-     10–40, block appears once, behavior-not-work-steps, affirmative
-     penalties, no test paths, fixture values, oracle outputs, root-cause hints,
-     or implementation recipe.
-   - **File zip name**: the matching zip in `workspace/submissions/`.
-3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
-   an editorial pass. Do not add claims, remove thresholds, or change technical
-   meaning.
-4. Compare the final version with `instruction.md`, `solution/fix.patch`,
-   `tests/test_outputs.py`, and validation reports.
-5. Keep the source notes and the packet outside the task ZIP.
+- `difficulty_explanation`: interacting concepts, the tempting partial fix, fair
+  semantic failure patterns from solve probes, and why the issue requires reasoning
+  across more than one local symptom.
+- `solution_explanation`: root cause, high-level oracle strategy, and preserved behavior.
+- `verification_explanation`: requirement-to-test mapping, why cases discriminate,
+  and actual oracle/nop results (counts must match the files).
+- `relevant_experience`: concrete domain, toolchain, or repository background that
+  supports the task design, without invented credentials.
 
-Use this structure in both files:
+The four explanations (`difficulty_explanation`, `solution_explanation`, `verification_explanation`, `relevant_experience`) live only in `task.toml` `[metadata]`, which the platform reads from the ZIP; do not write them again into a source draft or the packet (user decision 2026-09-26: generating text that is never pasted only spends quota).
+
+Then produce the paste-ready packet `workspace/submissions/SUBMISSION-<slug>.md`
+(the single canonical name, shared with `task-batch`), outside the task ZIP, with
+only what the form needs beyond the ZIP:
 
 ```md
-# Difficulty Explanation
+# SUBMISSION — <slug>
 
-...
+- Task: <one sentence: what the agent must produce, in domain words>
+- Category: <Category> / <Subcategory>
+- ZIP: `workspace/submissions/<slug>.zip`
 
-# Solution Explanation
+# Metadata
 
-...
+- Does this task use an approved canonical base image? Yes/No — `<exact digest-pinned image from the Dockerfile>`
+- Did you use a Task Inspiration from the Task Gallery? Yes/No — <Inspiration ID when yes>
 
-# Verification Explanation
+# Rubrics
 
-...
-
-# Relevant Experience
-
+Agent ... , +3
 ...
 ```
 
-The final text must not mention LLMs, AI, models, agents, anti-LLM techniques,
-detection avoidance, submission guidelines, or reviewer criteria. Although the
-form asks why the task is challenging for humans and agents, answer by
-describing the intrinsic technical difficulty rather than speculating about a
-solver type.
+Write the Rubrics block with `terminus-rubric-authoring` (one physical line per criterion starting with `Agent`, closed score set {+1,+2,+3,+5,-1,-2,-3,-5} with mandatory leading `+`, positive sum 10–40, block appears once, behavior-not-work-steps, affirmative penalties, no test paths, fixture values, oracle outputs, root-cause hints or implementation recipe).
+Apply the human-writing rules from `terminus-regular-task-authoring` to the
+`task.toml` explanations only as an editorial pass; never add claims, remove
+thresholds or change technical meaning. The explanations must not mention LLMs,
+AI, models, agents, anti-LLM techniques, detection avoidance, submission
+guidelines or reviewer criteria; describe the intrinsic technical difficulty
+rather than speculating about a solver type.
 
 ## Quota Discipline
 
