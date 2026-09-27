@@ -1,0 +1,227 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "f1-sum-kb": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "return sum(-(-kilobytes // KB_PER_MB) for kilobytes in line[\"sessions\"])",
+     "new": "return sum(line[\"sessions\"]) // KB_PER_MB"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_sessions_in_whole_megabytes"
+   ],
+   "rationale": "2.1"
+  },
+  "f1b-floor-per-session": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "return sum(-(-kilobytes // KB_PER_MB) for kilobytes in line[\"sessions\"])",
+     "new": "return sum(kilobytes // KB_PER_MB for kilobytes in line[\"sessions\"])"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_sessions_in_whole_megabytes"
+   ],
+   "rationale": "part MB counts whole"
+  },
+  "f1c-ceil-total": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "return sum(-(-kilobytes // KB_PER_MB) for kilobytes in line[\"sessions\"])",
+     "new": "return -(-sum(line[\"sessions\"]) // KB_PER_MB)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_sessions_in_whole_megabytes"
+   ],
+   "rationale": "each session on its own"
+  },
+  "f2-basic-5120": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "\"BASIC\": 2048",
+     "new": "\"BASIC\": 5120"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_plan_allowances"
+   ],
+   "rationale": "2.2"
+  },
+  "f2b-plus-10000": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "\"PLUS\": 10240",
+     "new": "\"PLUS\": 10000"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_plan_allowances"
+   ],
+   "rationale": "10,240"
+  },
+  "f3-flat-rate": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/usagebill/charges.py",
+     "old": "later * LATER_RATE",
+     "new": "later * line[\"rate\"]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_one_cent_after_the_first_1024_mb"
+   ],
+   "rationale": "3.1"
+  },
+  "f3b-tier-1000": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/usagebill/charges.py",
+     "old": "FULL_RATE_MB = 1024",
+     "new": "FULL_RATE_MB = 1000"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_one_cent_after_the_first_1024_mb"
+   ],
+   "rationale": "first 1,024"
+  },
+  "f3c-tier-1025": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/usagebill/charges.py",
+     "old": "FULL_RATE_MB = 1024",
+     "new": "FULL_RATE_MB = 1025"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_one_cent_after_the_first_1024_mb"
+   ],
+   "rationale": "first 1,024"
+  },
+  "tx-flex-0": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "PLAN_ALLOWANCE_MB.get(line[\"plan\"], ALLOWANCE_MB)",
+     "new": "PLAN_ALLOWANCE_MB.get(line[\"plan\"], 0)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_flex_line_keeps_todays_allowance"
+   ],
+   "rationale": "kept 5,120"
+  },
+  "tx-flex-basic": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "PLAN_ALLOWANCE_MB.get(line[\"plan\"], ALLOWANCE_MB)",
+     "new": "PLAN_ALLOWANCE_MB.get(line[\"plan\"], 2048)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_flex_line_keeps_todays_allowance"
+   ],
+   "rationale": "kept 5,120"
+  },
+  "ty-charge-floor": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/usagebill/charges.py",
+     "old": "        return over * line[\"rate\"]",
+     "new": "        return 0"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_line_not_over_keeps_todays_overage_and_charge"
+   ],
+   "rationale": "kept credit"
+  },
+  "ty-over-floor": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/usagebill/charges.py",
+     "old": "    return megabytes - included",
+     "new": "    return max(megabytes - included, 0)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_line_not_over_keeps_todays_overage_and_charge"
+   ],
+   "rationale": "kept overage"
+  },
+  "c5-capped-199": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/usagebill/statement.py",
+     "old": "lines = [line(x) for x in usage[\"lines\"]]",
+     "new": "lines = [line(x) for x in usage[\"lines\"][:199]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_limits_reached"
+   ],
+   "rationale": "200 lines"
+  },
+  "c15-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/usagebill/statement.py",
+     "old": "lines = [line(x) for x in usage[\"lines\"]]",
+     "new": "lines = [line(x) for x in sorted(usage[\"lines\"], key=lambda q: q[\"id\"])]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_total_and_line_order"
+   ],
+   "rationale": "file order"
+  },
+  "c7-session-cap": {
+   "class": "C7",
+   "edits": [
+    {
+     "file": "app/src/usagebill/usage.py",
+     "old": "for kilobytes in line[\"sessions\"])",
+     "new": "for kilobytes in line[\"sessions\"][:59])"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_limits_reached"
+   ],
+   "rationale": "60 sessions"
+  }
+ },
+ "alternatives": {
+  "alt-extra-keys": {
+   "edits": [
+    {
+     "file": "app/src/usagebill/statement.py",
+     "old": "return {\"id\": entry[\"id\"],",
+     "new": "return {\"note\": \"x\", \"id\": entry[\"id\"],"
+    }
+   ],
+   "rationale": "extra keys ignored"
+  }
+ }
+}

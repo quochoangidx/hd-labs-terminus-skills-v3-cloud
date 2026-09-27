@@ -1,0 +1,114 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "19d5a02ed830f8d83beb8e489d4bd0ec3b852990326f385fecad5bde8244a5c1",
+  "severity": "None",
+  "summary": "solve.sh applies fix.patch cleanly to /app/src/usagebill. Traced statically, the patched package follows every tariff MD-2 rule: per-session ceiling megabytes (2.1), BASIC/PLUS allowances (2.2), overage (2.3), the full rate on the first 1,024 MB and 1 cent after (3.1), and the total (3.2). It keeps today's steps where the tariff is silent (FLEX allowance of 5,120; overage and charge for lines not over their allowance) and leaves the driver untouched. I found no concrete incorrect behaviour.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/data-usage-tariff.md",
+      "environment/app/examples/fjord-0907.json",
+      "environment/app/tools/usagebill_run.py",
+      "environment/app/src/usagebill/__init__.py",
+      "environment/app/src/usagebill/usage.py",
+      "environment/app/src/usagebill/charges.py",
+      "environment/app/src/usagebill/statement.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked that the fix.patch hunks apply to the shipped files: charges.py @@ -5,5 +5,12 @@ has 5 old / 12 new lines matching charges.py:5-9, and usage.py @@ -2,12 +2,13 @@ has 12 old / 13 new lines matching usage.py:2-13. With -p1 from / they target /app/src/usagebill/*. The patch binary is installed in environment/Dockerfile:4.",
+    "Checked that the patch does not touch tools/usagebill_run.py, so the driver stays byte-identical as instruction.md:1 requires.",
+    "Traced used(): sum(-(-kb // 1024)) gives the per-session ceiling in megabytes (tariff 2.1). Sessions of 1 kB count as 1 MB, 1024 kB as 1 MB, 1025 kB as 2 MB, and a line with no sessions uses 0.",
+    "Traced allowance(): BASIC is 2048 and PLUS is 10240 (tariff 2.2). FLEX falls back to ALLOWANCE_MB 5120, which is today's step because the tariff gives no FLEX allowance (instruction.md:3).",
+    "Traced charge() with rate r. over=1 gives r. over=1023 gives 1023r. over=1024 gives 1024r. over=1025 gives 1024r+1. over=50000 gives 1024r+48976. This matches tariff 3.1.",
+    "Traced charge() for over<=0: it returns over*rate, which is today's step (the tariff defines neither overage nor charge for a line not over its allowance, and instruction.md:3 forbids adding a clamp). The branch gives the same result as the tiered formula when over<=0, so it adds no exception.",
+    "Traced statement(): the lines keep file order and the id/used/allowance/over/charge keys, and total is the sum of charges (tariff 3.2, README Statement section). All values are Python ints.",
+    "Traced the example file by hand: line 4790012231 is BASIC with sessions of 1024+1536+1 MB = 2561 MB, so over=513 and charge=4617.",
+    "Compared solution/model.py with the patched package: the same per-session ceiling, allowance map with 5120 fallback, tier formula and not-over step."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced ordinary over-allowance lines, lines exactly at the allowance (over 0, charge 0), overage of 1023/1024/1025 MB, empty sessions, 1 kB sessions, and 2,000,000 kB sessions. Each gives the result the tariff defines.",
+      "evidence": ["solution/fix.patch:13-18", "solution/fix.patch:30-38", "environment/app/docs/data-usage-tariff.md:26-40"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "All figures are integer arithmetic with no floats or rounding loss. The keys and line order are unchanged from the README-specified statement, and the driver prints the output through json.dump unchanged.",
+      "evidence": ["environment/app/src/usagebill/statement.py:7-16", "environment/app/tools/usagebill_run.py:16-19", "environment/app/README.md:25-31", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches (deletion, expiry, replacement, identifier reuse)",
+      "status": "not_applicable",
+      "reason": "The package is a pure per-line computation with no state carried across lines, and duplicate ids are outside the contract domain (instruction.md:3, tariff 1.2).",
+      "evidence": ["environment/app/src/usagebill/statement.py:14-16", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims",
+      "status": "not_applicable",
+      "reason": "The contract makes no interruption or durability promise.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Tariff-silent figures keep today's step without added guards",
+      "status": "checked",
+      "reason": "The FLEX allowance stays 5120, and a not-over line keeps a negative or zero overage and over*rate as its charge. No clamp is introduced.",
+      "evidence": ["solution/fix.patch:27", "solution/fix.patch:38", "solution/fix.patch:15-16", "instruction.md:3", "environment/app/src/usagebill/charges.py:4-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "solve.sh applies cleanly and the driver is untouched",
+      "status": "checked",
+      "reason": "The hunk line counts and context match the shipped files, the patch path resolves under /app, and the patch touches no driver file.",
+      "evidence": ["solution/solve.sh:17-19", "solution/fix.patch:1-8", "solution/fix.patch:19-23", "environment/app/src/usagebill/usage.py:1-13", "environment/app/src/usagebill/charges.py:1-9"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2 FLEX allowance left to today's step", "3.1 tiered charge for lines over allowance"],
+      "case_or_path": "A FLEX line of 5120+1025 MB: allowance 5120, over 1025, charge 1024*rate + 1. The tier applies because the line is over its (package-given) allowance.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:38", "solution/fix.patch:15-18", "environment/app/docs/data-usage-tariff.md:30-40"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 per-session ceiling", "2.3/3.1 allowance boundary"],
+      "case_or_path": "BASIC sessions of mb(2048)+[1]: summing kilobytes would give 2048 (not over), while the per-session ceiling gives 2049 (over 1, charge = rate). The reference uses the per-session ceiling.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:33", "environment/app/docs/data-usage-tariff.md:26-28"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["not-over lines keep today's step", "3.2 total is the sum of charges"],
+      "case_or_path": "A file mixing a not-over line (negative charge) with an over line: the total sums the charges without a clamp, consistent with instruction.md:3.",
+      "status": "checked",
+      "evidence": ["environment/app/src/usagebill/statement.py:14-16", "solution/fix.patch:15-16", "instruction.md:3"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

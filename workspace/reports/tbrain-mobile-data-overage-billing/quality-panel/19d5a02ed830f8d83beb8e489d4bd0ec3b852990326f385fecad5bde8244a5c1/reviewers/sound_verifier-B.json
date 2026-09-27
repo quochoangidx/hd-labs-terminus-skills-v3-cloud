@@ -1,0 +1,166 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "19d5a02ed830f8d83beb8e489d4bd0ec3b852990326f385fecad5bde8244a5c1",
+  "severity": "None",
+  "summary": "The verifier compares every README key exactly as a JSON integer or string, and compares line order, against sealed per-rule families. Each tariff rule (2.1 per-session ceiling, 2.2 plan allowances, 3.1 tier boundary at 1,024 MB, 3.2 total) and each figure the tariff leaves to today's code (FLEX allowance 5120; negative or zero overage and charge for lines not over) has an isolating case that rejects the plausible wrong implementations. All three sign partitions of overage and charge are graded for BASIC, PLUS and FLEX. The driver is replaced by the verifier's copy and must match byte for byte. No false-rejection path was found for contract-valid alternatives.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/data-usage-tariff.md",
+      "environment/app/examples/fjord-0907.json",
+      "environment/app/src/usagebill/__init__.py",
+      "environment/app/src/usagebill/usage.py",
+      "environment/app/src/usagebill/charges.py",
+      "environment/app/src/usagebill/statement.py",
+      "environment/app/tools/usagebill_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-sessions.jsonl",
+      "tests/expected/02-plans.jsonl",
+      "tests/expected/03-later_rate.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-flex.jsonl",
+      "tests/expected/06-not_over.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl",
+      "tests/shipped/app/src/usagebill/__init__.py",
+      "tests/shipped/app/src/usagebill/usage.py",
+      "tests/shipped/app/src/usagebill/charges.py",
+      "tests/shipped/app/src/usagebill/statement.py",
+      "tests/shipped/app/tools/usagebill_run.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped tariff rules 1.1-3.2 and the instruction's 'today's step stands' clause to test families in tests/test_outputs.py:214-277 and the sealed JSONL rows.",
+    "Hand-recomputed every line and total in 01-sessions, 02-plans, 03-later_rate, 04-order_and_total, 05-flex, 06-not_over and 07-together from the tariff, independently of any reference. All matched.",
+    "Spot-recomputed generated rows (MD2-0009 WF5UR40, 7F6H1, and the MD2-0009 total) and limits rows (L18, L45). All matched. The 200-line limits total was not summed by hand.",
+    "Rule 2.1: an aggregate-ceiling mutant gives S2=2025 (not over), S3=2051 and S5=11719 against the sealed 2050/2052/11724. The shipped aggregate-floor code gives S1=2048. A floor-per-session mutant loses the 1 kB session. A '//1024+1' mutant gives S1=2051. All are rejected.",
+    "Rule 2.2: a swapped allowance or a single allowance is rejected by P1/P2. Omitting FLEX from the allowance map raises KeyError on F1, so the driver exits non-zero and the test fails.",
+    "Rule 3.1 boundary: R1/R2/R3 (over 1023/1024/1025 at rate 40) reject both min(over,1023) and min(over,1025) tiering. A mutant that charges 1 cent on all volume once over 1,024 MB is rejected by R3. R6 checks a large tail at rate 333.",
+    "Signed partitions: over<0, over=0 and over>0 are graded for BASIC (N1/N2/N6, N3, N7), PLUS (N5/X4, N4, P2) and FLEX (X1, X2, F1-F4). Charge<0 always has rate>1, so a clamp, a zero guard, or an unguarded (over-1024) tail term all change the value. Negative totals are graded (06, 07).",
+    "FLEX interaction: F3 and F4 require tiered charges on the retained 5120 allowance, so a mutant that bills FLEX entirely with legacy flat rates is rejected.",
+    "Order and relabel: 04 lists ids ZZZZZZZZZZ, 0, A1 in non-sorted order. The relabel permutes lines and sessions, and the expected rows follow the same permutation (test_outputs.py:255-267). A mutant that sorts lines is rejected.",
+    "Comparator: _same enforces type(actual) is type(expected) and allows extra keys (test_outputs.py:192-206). Float outputs are rejected, which instruction.md:5 discloses as 'as a JSON integer'.",
+    "Accepted alternatives: min/max tiering and an if/else tiering both reduce to over*rate for over<=0, so both pass. No ordering or format choice beyond the fixed driver's json.dump is graded.",
+    "Stale or self-controlled comparison: the delivered driver is recorded and then replaced by the verifier copy, and byte equality is checked in test_outputs.py:297-303 and test.sh:23. Expected values are sealed files, not the shipped package. The shipped copy installed at test_outputs.py:69-76 is never used as an oracle (run(shipped=True) is never called).",
+    "Fixture self-checks: load() pins the SHA-256 and row count against ROSTER and enforces rule 1.2 limits. It also blocks lines carrying left-to-today figures from families that do not grade them (test_outputs.py:177-189). The limits family reaches 200 lines, 60 sessions, 1 kB and 2,000,000 kB sessions, and rates 1 and 500."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behaviour to a failing assertion",
+      "status": "checked",
+      "reason": "Every tariff rule and both left-to-today figures have a dedicated family with exact value comparison of all five line keys plus account and total.",
+      "evidence": ["tests/test_outputs.py:214-252", "environment/app/docs/data-usage-tariff.md:26-42", "instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result checked (values, membership, order), not only existence or schema",
+      "status": "checked",
+      "reason": "compare() checks the account, the total, the line count and every LINE_KEY per line in order, with exact type equality.",
+      "evidence": ["tests/test_outputs.py:192-206"],
+      "finding_ids": []
+    },
+    {
+      "category": "Each named domain rule has an outcome-changing isolating case",
+      "status": "checked",
+      "reason": "Rule 2.1: S2, S3, S5. Rule 2.2: P1, P2 and FLEX F1. Rule 3.1 boundary: R1-R3. Tail: R5, R6. Rule 3.2: every file total. Not-over figures: N1-N6. FLEX: F1-F4 and X1-X3.",
+      "evidence": ["tests/expected/01-sessions.jsonl:1", "tests/expected/02-plans.jsonl:1", "tests/expected/03-later_rate.jsonl:1", "tests/expected/05-flex.jsonl:1", "tests/expected/06-not_over.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected",
+      "status": "checked",
+      "reason": "Statically traced these mutants and found each rejected: aggregate ceiling, aggregate floor (the shipped code), floor per session, +1 per session, swapped or single allowances, FLEX KeyError, tier off-by-one either way, all-volume 1-cent billing, flat rate for FLEX, clamped over, clamped charge, and an unguarded tail term for negatives.",
+      "evidence": ["tests/expected/01-sessions.jsonl:1", "tests/expected/03-later_rate.jsonl:1", "tests/expected/06-not_over.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "Extra keys are ignored. Equivalent tiering formulations yield identical integers across all sign partitions. Output serialization is fixed by the mandated unchanged driver. Integer typing is disclosed.",
+      "evidence": ["tests/test_outputs.py:196-206", "instruction.md:1", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced (driver unchanged)",
+      "status": "checked",
+      "reason": "The delivered driver bytes are compared to the shipped copy, the verifier copy is installed before any run and rechecked after, /app is sealed against writes, and test.sh repeats the cmp.",
+      "evidence": ["tests/test_outputs.py:58-90", "tests/test_outputs.py:297-303", "tests/test.sh:23-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: every legal sign partition discriminated",
+      "status": "checked",
+      "reason": "Overage and charge negative, zero and positive are each graded per plan type. Negative and positive totals are graded.",
+      "evidence": ["tests/expected/06-not_over.jsonl:1", "tests/expected/07-together.jsonl:1", "tests/expected/05-flex.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behaviour, Oracle-specific representation, stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "Expectations are sealed and hash-pinned, and the shipped package is not used as an oracle. All graded files satisfy rule 1.2 through within_limits. No undisclosed representation is enforced. The candidate's own src is executed under -I -S with the verifier's driver.",
+      "evidence": ["tests/test_outputs.py:130-147", "tests/test_outputs.py:164-189", "tests/expected/ROSTER:1-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localisation",
+      "status": "checked",
+      "reason": "There is one test per rule, and each failure message names the family, the account, the line index or id, and the key, with actual and expected values.",
+      "evidence": ["tests/test_outputs.py:192-211"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["FLEX allowance left to today's code", "rule 3.1 tiered charge"],
+      "case_or_path": "F3 (over 3881, rate 3 -> 5929) and F4 require tiered charges on the 5120 allowance, and F2 sits exactly at 1024.",
+      "status": "checked",
+      "evidence": ["tests/expected/05-flex.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["not-over overage and charge left to today's code", "rule 3.1 tiered charge formula"],
+      "case_or_path": "N1 over -2048 at rate 9 -> -18432, and N3/N4 over 0 -> 0. These reject a clamp and an unguarded (over-1024) tail term.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_over.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["FLEX allowance", "not-over figures"],
+      "case_or_path": "X1 (FLEX, no sessions, -5120*6) and X2 (FLEX exactly at 5120), alongside PLUS X4 negative.",
+      "status": "checked",
+      "evidence": ["tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.1 per-session rounding", "rule 2.3 over/not-over threshold"],
+      "case_or_path": "S2 is over under per-session rounding (2050) but not over under aggregate rounding (2025). S4 is similar (10250 vs 10231).",
+      "status": "checked",
+      "evidence": ["tests/expected/01-sessions.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["line order", "relabel/shuffle"],
+      "case_or_path": "The relabel permutes lines and sessions with a consistent expected permutation. Sorted-id output is rejected by 04 regardless of the seed.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:255-277", "tests/expected/04-order_and_total.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}
