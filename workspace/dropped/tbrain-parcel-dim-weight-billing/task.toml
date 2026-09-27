@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-parcel-dim-weight-billing"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Operations"
+subcategory = "Logistics"
+languages = ["python"]
+tags = ["parcel-billing", "dimensional-weight", "carrier-surcharges", "freight-invoicing", "shipping-rates"]
+expert_time_estimate_hours = 2
+difficulty_explanation = "This is the work of a carrier billing analyst who keeps a parcel depot's invoicing tooling in line with its published billing rules. The package carries slips real rating engines make. It divides every parcel's volume by 166 where the rules give a box a divisor of 139, rounds billable weight to the nearest pound instead of up, charges ground home deliveries 450 cents instead of 530, and takes fuel on the transport charge alone with the fraction of a cent dropped where a ground parcel's fuel is 14.25 per cent of transport and residential together, rounded half up. The harder half is knowing where the rules stop. They give a divisor only for a box, a residential amount only for a ground parcel, and a fuel rule only for a ground parcel. A flat parcel with a side under 2 inches keeps today's 166, an express parcel going to a home keeps today's 450, and an express parcel's fuel keeps today's step, the transport charge alone with the fraction dropped. The package's fuel step is never told the service, so every repair rewrites it, and the natural rewrite applies the new fuel formula to express parcels too. A hand-built reference fuzzed against the package will not flag the difference. No real shipping data is used. The manifests are synthetic, shaped like depot manifest exports, with hand-built manifests that sit on every limit."
+solution_explanation = "The reference patch gives a box (every side 2 inches or more) a dimensional divisor of 139, rounds the larger of actual and dimensional weight up to the next whole pound, charges a ground parcel going to a home 530 cents, and takes a ground parcel's fuel as 14.25 per cent of transport and residential together, rounded half up. Where the rules give no rule it keeps today's step: a parcel that is not a box keeps a divisor of 166, an express parcel going to a home keeps 450 cents, and an express parcel's fuel stays 14.25 per cent of transport alone with the fraction dropped. All arithmetic is exact (integers and fractions). The driver is untouched."
+verification_explanation = "A separate verifier image records the delivered driver's bytes, puts its own copy on /app/tools/parcelbill_run.py, seals /app as root-owned, and runs the documented command against the delivered /app/src. Each run is made as an unprivileged user in its own session with an isolated interpreter, on each manifest staged under one neutral name. It compares every README key as a JSON integer or string, and the parcel order. Expected invoices were sealed ahead of time into tests/expected by solution/seal.py from solution/model.py, a model written from the rules that never imports the package, and are pinned by SHA-256 and row count in tests/expected/ROSTER. There are 13 tests over 11 sealed files: one named test per rule, one for each of the three figures left to today's code, one combining them, a limits test, a seeded family and two harness tests. Parcels that are not boxes and express parcels appear only in the tests that grade them. Named manifests put actual weights on and just past whole pounds, boxes of 2 and 108 inches with sides in any order, a non-box whose dimensional weight is exactly one pound, and ground and express fuel bases that land exactly on a half cent. Every rule 1.3 limit is reached: 300 parcels, sides of 1 and 108 inches, weights of 1 and 1,500 tenths of a pound, every zone, and ids of 1 and 12 characters. The seeded family is also billed under run-time labels drawn from os.urandom: new ids and a new name, parcels shuffled and sides reordered. Locally the Oracle scores 1 and the unfixed package 0. Sixteen one-edit mutants of the reference each fail their own test, among them every departure reverted, a box threshold of 3 inches, banker's or floor-plus-one rounding, half-even fuel, a 139 divisor or a 530 or nought surcharge where today's step stands, the ground fuel formula on express parcels, a 150-pound cap and a 299-parcel cap. A contract-valid alternative scores 1, and a test proves the candidate cannot read /tests, the expectations, the shipped copy or /logs/verifier."
+relevant_experience = "Parcel carrier and 3PL billing: dimensional-weight rating, zone rate tables, residential and fuel surcharges, and the rating engines that produce shipper invoices."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 3600
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

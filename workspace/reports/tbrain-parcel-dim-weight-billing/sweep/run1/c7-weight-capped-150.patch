@@ -1,0 +1,65 @@
+diff --git a/app/src/parcelbill/charges.py b/app/src/parcelbill/charges.py
+--- a/app/src/parcelbill/charges.py
++++ b/app/src/parcelbill/charges.py
+@@ -2,6 +2,7 @@
+ 
+ ZONE_RATE = {2: 95, 3: 105, 4: 118, 5: 131, 6: 146, 7: 164, 8: 190}
+ RESIDENTIAL = 450
++GROUND_RESIDENTIAL = 530
+ FUEL_BASIS_POINTS = 1425
+ 
+ 
+@@ -10,8 +11,12 @@
+ 
+ 
+ def residential(parcel):
+-    return RESIDENTIAL if parcel["residential"] else 0
++    if not parcel["residential"]:
++        return 0
++    return GROUND_RESIDENTIAL if parcel["service"] == "GROUND" else RESIDENTIAL
+ 
+ 
+-def fuel(transport_charge, residential_charge):
++def fuel(parcel, transport_charge, residential_charge):
++    if parcel["service"] == "GROUND":
++        return ((transport_charge + residential_charge) * FUEL_BASIS_POINTS + 5000) // 10000
+     return transport_charge * FUEL_BASIS_POINTS // 10000
+diff --git a/app/src/parcelbill/invoice.py b/app/src/parcelbill/invoice.py
+--- a/app/src/parcelbill/invoice.py
++++ b/app/src/parcelbill/invoice.py
+@@ -8,7 +8,7 @@
+     pounds = billable(parcel)
+     moving = transport(parcel, pounds)
+     home = residential(parcel)
+-    surcharge = fuel(moving, home)
++    surcharge = fuel(parcel, moving, home)
+     return {"id": parcel["id"], "billable": pounds, "transport": moving, "residential": home,
+             "fuel": surcharge, "total": moving + home + surcharge}
+ 
+diff --git a/app/src/parcelbill/weight.py b/app/src/parcelbill/weight.py
+--- a/app/src/parcelbill/weight.py
++++ b/app/src/parcelbill/weight.py
+@@ -1,17 +1,20 @@
+ """Billable weight."""
+ 
++import math
+ from fractions import Fraction
+ 
+ DIM_DIVISOR = 166
++BOX_DIM_DIVISOR = 139
+ 
+ 
+ def dimensional(parcel):
+     """Pounds by volume."""
+     length, width, height = parcel["sides"]
+-    return Fraction(length * width * height, DIM_DIVISOR)
++    divisor = BOX_DIM_DIVISOR if min(parcel["sides"]) >= 2 else DIM_DIVISOR
++    return Fraction(length * width * height, divisor)
+ 
+ 
+ def billable(parcel):
+-    """Whole pounds billed: the heavier of actual and dimensional weight, to the nearest pound."""
++    """Whole pounds billed: the heavier of actual and dimensional weight, rounded up to a whole pound."""
+     heavier = max(Fraction(parcel["weight"], 10), dimensional(parcel))
+-    return round(heavier)
++    return min(150, math.ceil(heavier))
