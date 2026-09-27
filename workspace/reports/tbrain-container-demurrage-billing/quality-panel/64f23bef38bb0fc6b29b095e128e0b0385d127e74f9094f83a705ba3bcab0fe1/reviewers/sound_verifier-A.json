@@ -1,0 +1,173 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "64f23bef38bb0fc6b29b095e128e0b0385d127e74f9094f83a705ba3bcab0fe1",
+  "severity": "None",
+  "summary": "The verifier compares every README-listed statement key by exact JSON type and value, and it checks container order. Each tariff rule and each figure left to today's code has an isolating fixture. Every sign partition of the derived days, charge and total (negative, zero and positive) is graded. I found no plausible wrong implementation that passes and no contract-valid alternative that fails.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/demurrage-tariff.md",
+      "environment/app/examples/north-quay-0611.json",
+      "environment/app/src/demurrage/__init__.py",
+      "environment/app/src/demurrage/dwell.py",
+      "environment/app/src/demurrage/charges.py",
+      "environment/app/src/demurrage/statement.py",
+      "environment/app/tools/demurrage_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-dwell.jsonl",
+      "tests/expected/02-reefer.jsonl",
+      "tests/expected/03-higher_rate.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-tank.jsonl",
+      "tests/expected/06-not_on_demurrage.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl",
+      "tests/shipped/app/** (5 files; the manifest SHA-256 values are identical to the environment/app copies that were read, so their content was covered)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "From tariff DM-3 and instruction.md I derived these semantics. Dwell is picked_up - discharged + 1. Free days are DRY 5 and REEFER 3; a TANK keeps today's value of 5, from dwell.py:3,11-12. Demurrage days are dwell - free, with no clamp, from charges.py:4-5. The charge is rate*min(d,4) + 2*rate*max(d-4,0) when on demurrage, and today's d*rate otherwise. The total is the sum of the charges.",
+    "Recomputed every row of 01-dwell, 02-reefer, 03-higher_rate, 04-order_and_total, 05-tank, 06-not_on_demurrage and 07-together, including totals, by hand against those semantics. Every value agrees.",
+    "Spot-checked 08-generated: HJMEICL0, 57X5Q89J6 and 0RR380, plus the full DM3-0012 total of 53853630. Spot-checked 09-limits: ABCDEFGHIJK, L3, L7, L9, L15, L53, L113 and L177. All agree.",
+    "Mutant trace: dwell without the +1 fails 01-dwell, because D1 gives dwell 11 against the expected 12.",
+    "Mutant trace: a reefer given 5 free days fails 02-reefer, because R1 gives days -1 against the expected 1.",
+    "Mutant trace: a flat rate with no tier fails 03-higher_rate on H3 (5000 against 6000). A tier that starts at day 4 fails on H2 (5000 against 4000). A tier that starts after day 5 fails on H3.",
+    "Mutant trace: a tank given 3 free days, or an exception for TANK, fails 05-tank on T2.",
+    "Mutant trace: clamping days or charge at 0 for a container inside its free time fails 06-not_on_demurrage on N1 (-2/-15000), N2, N4 and N6. The same mutant fails 07-together on X1 and X4. Clamping only the charge also fails, as does clamping the total at 0 (DM3-0007 expects -34401).",
+    "Mutant trace: sorting containers, or losing file order, fails compare(). compare() is index-based at test_outputs.py:200-203, and DM3-0004 has non-sorted ids. The relabelled generated files are also shuffled.",
+    "Mutant trace: float or bool figures are rejected by the exact type check at test_outputs.py:189-190.",
+    "Mutant trace: an id-keyed or absolute-day-keyed lookup fails the relabelled generated files, which get fresh ids and shifted discharge days (test_outputs.py:252-278). The relabelled expectation is correct by construction, because the contract figures depend only on stay length, type and rate.",
+    "Signed derived quantities: days and charge are graded negative, zero and positive for each type. DRY: N1/N2/N6, N3, N7. REEFER: N4, N5, R1. TANK: X1, X2, T1/X3. The total is graded negative (DM3-0007) and positive (all others).",
+    "Alternative acceptance: compare() ignores extra keys (test_outputs.py:195,201). Key order and whitespace are irrelevant because stdout is parsed with json.loads (test_outputs.py:148).",
+    "Driver: the delivered driver bytes are recorded before replacement and compared with the shipped copy (test_outputs.py:59-67,298-304; test.sh:23). This enforces the byte-for-byte requirement in instruction.md:1.",
+    "Execution boundary: the fixed driver runs as an unprivileged UID with python3 -I -S (test_outputs.py:144). The instruction bills 'our own copy ... against your /app/src' (instruction.md:1). The -I flag drops the script directory, and the -S flag drops site-packages. Neither removes a mechanism a contract-valid /app/src-only fix would rely on, because the base image has no third-party packages.",
+    "Environment and verifier images use the same digest-pinned Python 3.13 base (environment/Dockerfile:2, tests/Dockerfile:2). Nothing is compiled, so there is no stale-binary path.",
+    "Fixture validity: load() applies within_limits() and the silent()/GRADES partition to every sealed file (test_outputs.py:161-186). This keeps graded inputs inside rule 1.2, and a container carrying a figure left to today's code appears only in the family that grades it."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if it is missing or reversed",
+      "status": "checked",
+      "reason": "Rules 2.1, 2.2, 2.3, 3.1 and 3.2 map to named test families. The two figures left to today's code (tank free days, and days and charge inside free time) have dedicated families. Each has at least one container whose output changes under the matching mutant.",
+      "evidence": ["tests/test_outputs.py:211-249", "tests/expected/01-dwell.jsonl:1", "tests/expected/03-higher_rate.jsonl:1", "tests/expected/05-tank.jsonl:1", "tests/expected/06-not_on_demurrage.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result: values, membership, uniqueness, required outputs",
+      "status": "checked",
+      "reason": "compare() checks terminal, total, container count and, per index, id, dwell, free, days and charge, all with exact type and value.",
+      "evidence": ["tests/test_outputs.py:189-203", "environment/app/README.md:23-31"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rule has an isolating case (not only held-out variation)",
+      "status": "checked",
+      "reason": "Isolating cases exist for the reefer free-day edge and one past it (R1, R2), the tier boundary at 4 and 5 days (H2, H3, H4, H5), tank free days (T2, T3), zero and negative days (N-series) and file order (DM3-0004).",
+      "evidence": ["tests/expected/02-reefer.jsonl:1", "tests/expected/03-higher_rate.jsonl:1", "tests/expected/04-order_and_total.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Traced these mutants: no +1 on dwell, reefer given 5 free days, tank given 3 free days or raising, no tier, tier off by one either way, clamps on days, charge or total, sorted output, float output and id-keyed lookup. Each fails at least one assertion.",
+      "evidence": ["tests/test_outputs.py:189-203", "tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/03-higher_rate.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives are accepted",
+      "status": "checked",
+      "reason": "Output is JSON-parsed, extra keys are ignored and key order is free. Only /app/src is graded, as the instruction states. Inputs the contract leaves open (duplicate ids, out-of-range values, unknown types) are never graded, because within_limits() is applied to every sealed file and to every relabelled file.",
+      "evidence": ["tests/test_outputs.py:148,161-171,195,201", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced (driver unchanged)",
+      "status": "checked",
+      "reason": "The delivered driver bytes are compared with the shipped driver before replacement, and the driver on the documented path is re-checked after the runs.",
+      "evidence": ["tests/test_outputs.py:59-67,298-304", "tests/test.sh:22-27", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantity partitions discriminated",
+      "status": "checked",
+      "reason": "Negative, zero and positive days and charge are graded for DRY, REEFER and TANK. Both negative and positive totals are graded.",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy, Oracle-specific representation, stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "Expectations are sealed JSONL, pinned by SHA-256 and row count in ROSTER. They are not produced by candidate code, and the shipped-copy run path is never used for comparison. There are no compiled artifacts. Every graded fixture passes within_limits() and so is inside the contract domain.",
+      "evidence": ["tests/test_outputs.py:47-56,174-186", "tests/expected/ROSTER:1-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localisation",
+      "status": "checked",
+      "reason": "Each family is named for its rule, and failure messages carry the family, terminal, index, id and key. Some families also exercise other rules; for example, D1 in the dwell family crosses the tier. This affects diagnosis, not reward correctness.",
+      "evidence": ["tests/test_outputs.py:189-208"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2 reefer free days", "3.1 tier after the fourth day"],
+      "case_or_path": "H4 and H5: a REEFER at exactly 4 and at 5 demurrage days. R4: a REEFER at 118 days with rate 100000.",
+      "status": "checked",
+      "evidence": ["tests/expected/03-higher_rate.jsonl:1", "tests/expected/02-reefer.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["tank free days left to today's code", "not-on-demurrage days/charge left to today's code"],
+      "case_or_path": "X1 (TANK, dwell 2, days -3, charge -2700) and X2 (TANK, days 0) beside X3 (TANK, 9 days, tiered).",
+      "status": "checked",
+      "evidence": ["tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 dwell counts both ends", "not-on-demurrage today's step"],
+      "case_or_path": "N2 and N4 are picked up on the discharge day, giving dwell 1. With the old dwell they would give 0, so negative days that use the corrected dwell are discriminated.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 total", "negative charges from today's step"],
+      "case_or_path": "DM3-0007 total -34401 and DM3-0008 total 21600 mix negative and positive charges.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 limits", "3.1 tier at the extreme rates"],
+      "case_or_path": "The limits file has 200 containers, rate 1 with 118 days (charge 232) and rate 100000 with 116 days (charge 22800000).",
+      "status": "checked",
+      "evidence": ["tests/expected/09-limits.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["container order", "relabelling with fresh ids and shifted days"],
+      "case_or_path": "relabel() shuffles the containers and permutes the expected lines identically. The expected figures do not depend on absolute day or id.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:252-278"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

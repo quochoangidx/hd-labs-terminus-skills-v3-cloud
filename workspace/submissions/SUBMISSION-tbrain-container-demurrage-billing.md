@@ -2,7 +2,7 @@
 
 - Task: Repair a container terminal's demurrage billing package so the dwell, free days, demurrage days and charges on its release files follow the terminal's demurrage tariff.
 - Category: Operations / Logistics
-- ZIP: `workspace/submissions/tbrain-container-demurrage-billing.zip` (sha256 ZIPSHA)
+- ZIP: `workspace/submissions/tbrain-container-demurrage-billing.zip` (sha256 8b949d01e8b12f11ecf89835940faeecbe0c5742b200c36f42b638a22ab07b7d)
 
 # Metadata
 

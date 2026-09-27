@@ -1,0 +1,176 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "64f23bef38bb0fc6b29b095e128e0b0385d127e74f9094f83a705ba3bcab0fe1",
+  "severity": "None",
+  "summary": "Every graded key of every container and the total is compared exactly against sealed statements. Hand checks of the tier arithmetic agree with DM-3. Each named rule has an isolating fixture: dwell +1, reefer free 3, tier at 4/5 days, the order and total, tank free days left at today's 5, and today's negative days and charge for containers not on demurrage. Each type is discriminated on every sign partition of days, charge and total. A seeded relabel pass rejects hardcoded answers. No plausible wrong implementation passing, and no contract-valid implementation failing, was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/demurrage-tariff.md",
+      "environment/app/examples/north-quay-0611.json",
+      "environment/app/src/demurrage/__init__.py",
+      "environment/app/src/demurrage/charges.py",
+      "environment/app/src/demurrage/dwell.py",
+      "environment/app/src/demurrage/statement.py",
+      "environment/app/tools/demurrage_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-dwell.jsonl",
+      "tests/expected/02-reefer.jsonl",
+      "tests/expected/03-higher_rate.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-tank.jsonl",
+      "tests/expected/06-not_on_demurrage.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl",
+      "tests/shipped/app/tools/demurrage_run.py",
+      "tests/shipped/app/src/demurrage/__init__.py",
+      "tests/shipped/app/src/demurrage/charges.py",
+      "tests/shipped/app/src/demurrage/dwell.py",
+      "tests/shipped/app/src/demurrage/statement.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Derived the expected semantics from environment/app/docs/demurrage-tariff.md:23-41 and instruction.md:1-5. Dwell is pickup - discharge + 1. Free days are DRY 5 and REEFER 3; TANK has no tariff rule, so today's FREE_DAYS=5 stands. Days are dwell - free for every container; for a container not on demurrage the tariff gives no rule, so today's subtraction stands and can be negative. Charge is rate*min(d,4) + 2*rate*(d-4) when on demurrage; otherwise today's d*rate stands. The total is the signed sum.",
+    "Hand-recomputed the charges in 01-dwell (D1, D3), 02-reefer (R4, R5), 03-higher_rate (all), 04-order_and_total (all), 05-tank (T1, T3, T6 and the total), 06/07 (all) and spot rows of 08-generated (8UZ0, XCVE9T18). All agree with the tariff-derived model.",
+    "Confirmed that compare() (tests/test_outputs.py:193-203) checks terminal, total, container count and order, and id/dwell/free/days/charge with an exact type and value match, while ignoring extra keys.",
+    "Checked that stripping the tier, clamping days or charge at 0, giving TANK 3 or 0 free days, a reefer rule that does not apply, off-by-one dwell, doubling the whole charge past day 4, or summing only positive charges each changes at least one sealed value.",
+    "Checked that the common equivalent tier formulations (piecewise with d<=4, or rate*min(d,4)+2*rate*max(d-4,0)) coincide with today's d*rate for d<=0, so legal alternatives are not rejected.",
+    "Checked that relabel() (tests/test_outputs.py:252-268) keeps each stay length and type and renames ids and the terminal, so the expected statement stays valid and embedded answers fail.",
+    "Checked driver integrity: the delivered bytes are recorded before the replacement (tests/test_outputs.py:59-67, 298-304), and the reward requires pytest rc 0 plus cmp (tests/test.sh:20-27).",
+    "Checked that silent() and GRADES keep tank and idle containers out of families that do not grade them (tests/test_outputs.py:151-158, 174-186).",
+    "Checked that within_limits enforces rule 1.2 on every sealed and relabelled file, so no graded case falls outside the contract domain."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to a failing assertion",
+      "status": "checked",
+      "reason": "Rule 2.1 is covered by 01-dwell, rule 2.2 by 02-reefer, rule 3.1 by 03-higher_rate, and rule 3.2 plus order by 04-order_and_total. Tank free days are covered by 05-tank and idle days/charge by 06-not_on_demurrage; each has a dedicated test function.",
+      "evidence": ["tests/test_outputs.py:211-249", "environment/app/docs/demurrage-tariff.md:23-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result compared (values, membership, order, not just keys/row count)",
+      "status": "checked",
+      "reason": "Every README key per container, plus terminal and total, is compared with type and value equality; container count and order are enforced.",
+      "evidence": ["tests/test_outputs.py:189-203", "environment/app/README.md:23-31", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case per named domain rule",
+      "status": "checked",
+      "reason": "Dwell 1 (N2, X1, X4) and 121 (D3) are covered. The reefer edge (N5 dwell 3 -> 0; R1 dwell 4 -> 1) is paired with DRY at the same stay (R3). The tier edges are 4 and 5 days for DRY and REEFER (H2-H5), with 1 day at H1. Tank at 5 and 6 dwell (X2, T2) separates 5 free days from 3 or 0.",
+      "evidence": ["tests/expected/02-reefer.jsonl:1", "tests/expected/03-higher_rate.jsonl:1", "tests/expected/05-tank.jsonl:1", "tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: each legal sign partition discriminated",
+      "status": "checked",
+      "reason": "Days and charge are <0, =0 and >0 for DRY (N1/N2/N6, N3, D2), REEFER (N4, N5, R1) and TANK (X1, X2, T2). The total is negative in DM3-0007 (-34401) and positive elsewhere. A clamp at 0 fails N1; a positive-only sum fails the DM3-0007 total.",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected (proxy / hardcoded / fixed answers)",
+      "status": "checked",
+      "reason": "The expectations sit under /tests (mode 700), and the candidate runs as uid 65534. The relabel pass uses fresh ids, terminal, order and days, so embedded answers fail, and every value is checked.",
+      "evidence": ["tests/test.sh:15", "tests/test_outputs.py:106-148", "tests/test_outputs.py:252-278", "tests/test_outputs.py:287-295"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (format, ordering, implementation choices)",
+      "status": "checked",
+      "reason": "JSON is parsed, so whitespace and key order are free, and extra keys are ignored. The common tier formulations agree with today's step for d<=0. Tank free days via dict.get(type, FREE_DAYS) or a REEFER-only branch both yield 5. Running with -I -S only drops site-packages, which the package does not need.",
+      "evidence": ["tests/test_outputs.py:144", "tests/test_outputs.py:193-203", "environment/app/src/demurrage/charges.py:8-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions enforced (driver byte-identical; no other restriction graded)",
+      "status": "checked",
+      "reason": "The delivered driver bytes are compared with the shipped copy, and the documented path is re-checked after the run. The 'no clamp/guard' promise is enforced through the idle and tank expectations. There is no stale-binary path: the candidate's live /app/src is imported by the verifier's driver.",
+      "evidence": ["instruction.md:1-3", "tests/test_outputs.py:59-67", "tests/test_outputs.py:298-304", "tests/test.sh:23-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reachability of graded cases within the contract domain",
+      "status": "checked",
+      "reason": "within_limits asserts rule 1.2 on every sealed row and every relabelled file, and all graded fixtures satisfy it (for example, limits has 200 containers, days 0 and 3650, stays 1 and 121, rates 1 and 100000).",
+      "evidence": ["tests/test_outputs.py:161-171", "tests/test_outputs.py:246-249", "environment/app/docs/demurrage-tariff.md:13-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Independence of expectations / self-controlled comparisons",
+      "status": "checked",
+      "reason": "The expectations are sealed JSONL pinned by SHA-256 and row count in ROSTER. The relabelled expectation is derived from the sealed statement by a label-only transformation, not from candidate output. The values match my independent tariff computation.",
+      "evidence": ["tests/expected/ROSTER:1-9", "tests/test_outputs.py:174-186", "tests/test_outputs.py:252-268"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localisation",
+      "status": "checked",
+      "reason": "There is one test per rule, and a family carries a tank or idle container only when it grades that figure. Failure messages name the family, terminal, index, id and key. Some families also exercise the dwell and tier rules (for example, D1 in 01-dwell has 7 days), but this is inherent to the rules and does not affect the reward.",
+      "evidence": ["tests/test_outputs.py:41-44", "tests/test_outputs.py:189-208"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 2.2 reefer free days", "rule 3.1 tier after 4th day"],
+      "case_or_path": "H4/H5 REEFER dwell 7/8 -> 4/5 days -> 3996/5994; R4 REEFER 118 days vs R5 DRY 116 days at 100000",
+      "status": "checked",
+      "evidence": ["tests/expected/03-higher_rate.jsonl:1", "tests/expected/02-reefer.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["tank free days left to today's code", "rule 3.1 tier"],
+      "case_or_path": "T1 tank 6 days -> 8000, T3 tank 5 days at rate 77 -> 462, T4 tank 116 days -> 22800000",
+      "status": "checked",
+      "evidence": ["tests/expected/05-tank.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["tank free days left to today's code", "idle days/charge left to today's code"],
+      "case_or_path": "X1 tank dwell 2 -> days -3, charge -2700; X2 tank dwell 5 -> 0/0; mixed with reefer idle X4 and DRY on demurrage X5",
+      "status": "checked",
+      "evidence": ["tests/expected/07-together.jsonl:1", "tests/test_outputs.py:44"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["idle charge left to today's code (negative)", "rule 3.2 total is sum of charges"],
+      "case_or_path": "DM3-0007 total -34401 includes the negative idle charges; DM3-0008 total 21600 mixes negative and positive",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.1 dwell counts both ends", "rule 2.2 free-time edge"],
+      "case_or_path": "The 'last free day' DRY dwell 5 (N3), REEFER dwell 3 (N5) and TANK dwell 5 (X2) are each paired with a 'just past' case (D2, R1, T2), so an off-by-one dwell shifts days by 1 and is rejected",
+      "status": "checked",
+      "evidence": ["tests/expected/01-dwell.jsonl:1", "tests/expected/02-reefer.jsonl:1", "tests/expected/06-not_on_demurrage.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["driver must be byte-identical", "statement from candidate /app/src"],
+      "case_or_path": "The verifier replaces the driver with its copy and runs it on the candidate's src, and the delivered bytes are checked separately. A modified driver fails test_submitted_driver_unchanged; a correct src passes.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:59-67", "tests/test_outputs.py:131-148", "tests/test_outputs.py:298-304"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}
