@@ -1,0 +1,432 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-qpcr-relative-expression",
+ "primary_outcome": "the report printed by /app/tools/qpcrrel_run.py gives every gene's amplification factor and contamination and every sample's mean Ct, fold change and flags for every target gene, as SOP QP-7 gives them",
+ "obligations": [
+  {
+   "id": "REPORTABLE",
+   "class": "core",
+   "contribution": "a reportable replicate is a determined unknown well with a Ct from 10.00 up to and including 35.00",
+   "authority": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "whose Ct is from"
+   },
+   "implementation_sites": [
+    "environment/app/src/qpcrrel/replicates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides every mean Ct and every not-detected flag"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_2_reportable_replicate_window"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_reportable_replicate_window"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "replicate sets of one or two holding 35.00 exactly or a Ct earlier than 10.00",
+   "wrong_but_plausible": "ct < 35.00 with no floor (shipped)",
+   "selfdescription_phrase": "reportable replicate"
+  },
+  {
+   "id": "CURVE_POINTS",
+   "class": "core",
+   "contribution": "curve points use determined standard wells only, a level needs two, and its Ct is the plain mean of all of them (no replicate window or outlier rule)",
+   "authority": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "A curve point is a dilution level with two or more"
+   },
+   "implementation_sites": [
+    "environment/app/src/qpcrrel/curve.py",
+    "environment/app/src/qpcrrel/replicates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the curve points give the slope and so every factor"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_curve_points_use_determined_wells",
+     "test_outputs.py::test_curve_point_averages_every_determined_standard"
+    ],
+    "boundary": [
+     "test_outputs.py::test_curve_point_averages_every_determined_standard"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "Undetermined standards and single-determined levels; levels with a stray well, standards earlier than 10.00 and later than 35.00",
+   "wrong_but_plausible": "Undetermined standards at 40.0 (shipped); the replicate window or outliers put into the shared mean_ct (natural over-repair, trap T1)",
+   "selfdescription_phrase": "curve point"
+  },
+  {
+   "id": "NTC_CONTAMINATION",
+   "class": "core",
+   "contribution": "an NTC Ct at or below 35.00 contaminates, early ones included (shipped already right)",
+   "authority": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "A gene is contaminated on the plate when one of its NTC wells has a Ct at or"
+   },
+   "implementation_sites": [
+    "environment/app/src/qpcrrel/ntc.py",
+    "environment/app/src/qpcrrel/plate.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "contamination gates every fold change through 5.4 and 6.3"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_early_ntc_signal_contaminates"
+    ],
+    "boundary": [
+     "test_outputs.py::test_early_ntc_signal_contaminates"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "NTC wells at 5.00-9.99 beside Undetermined ones",
+   "wrong_but_plausible": "the 2.2 floor put into the shared called() (natural over-repair, trap T2)",
+   "selfdescription_phrase": "contaminated"
+  },
+  {
+   "id": "FACTOR",
+   "class": "core",
+   "contribution": "10^(-1/s) through two or more curve points, uncapped; 2 below two curve points",
+   "authority": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "A gene's amplification factor is 10^(-1/s)"
+   },
+   "implementation_sites": [
+    "environment/app/src/qpcrrel/curve.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every relative quantity is raised to its gene's factor"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_factor_above_two_is_not_capped"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_1_factor_above_two_is_not_capped"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "curves with slopes -3.30 to -2.90",
+   "wrong_but_plausible": "cap at 2 (shipped)",
+   "selfdescription_phrase": "amplification factor"
+  },
+  {
+   "id": "OUTLIERS_MEAN",
+   "class": "core",
+   "contribution": "every reportable replicate more than 0.50 from the lower median of three or more is an outlier; mean of the rest",
+   "authority": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "each of"
+   },
+   "implementation_sites": [
+    "environment/app/src/qpcrrel/replicates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the mean Ct feeds every relative quantity"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_every_stray_replicate_is_an_outlier"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_every_stray_replicate_is_an_outlier"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "sets of three, five and six with two strays",
+   "wrong_but_plausible": "no outlier rule (shipped); mean of the middle two as the median",
+   "selfdescription_phrase": "outlier"
+  },
+  {
+   "id": "NOT_DETECTED",
+   "class": "core",
+   "contribution": "a gene not detected has no mean Ct and no fold change; ref and nd flags",
+   "authority": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "A gene that is not detected in a sample has no mean Ct in that sample"
+   },
+   "implementation_sites": [
+    "environment/app/src/qpcrrel/replicates.py",
+    "environment/app/src/qpcrrel/expression.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides which results carry a fold change"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_3_not_detected_has_no_mean_or_fold_change"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_3_not_detected_has_no_mean_or_fold_change"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "targets and reference genes with only Undetermined or late wells, in a sample and in the calibrator",
+   "wrong_but_plausible": "substitute 40.0 and report a fold change (shipped)",
+   "selfdescription_phrase": "not detected"
+  },
+  {
+   "id": "NORMALISATION",
+   "class": "core",
+   "contribution": "each gene uses its own factor; the normalisation factor is the geometric mean of the reference quantities",
+   "authority": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "A sample's normalisation factor is the geometric mean"
+   },
+   "implementation_sites": [
+    "environment/app/src/qpcrrel/expression.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the fold change is the target quantity over this factor"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_2_geometric_mean_of_own_factor_quantities"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_2_geometric_mean_of_own_factor_quantities"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "one to four reference genes whose factors differ from the target's",
+   "wrong_but_plausible": "the target's factor raised to the mean reference shift (shipped)",
+   "selfdescription_phrase": "normalisation factor"
+  },
+  {
+   "id": "PLATE_LOADER",
+   "class": "support",
+   "contribution": "decode wells (Undetermined -> None) and group them",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/qpcrrel/plate.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_generated_plates"
+   ]
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver printing the report",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/qpcrrel_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "REPORTABLE",
+    "to": "OUTLIERS_MEAN"
+   },
+   {
+    "from": "REPORTABLE",
+    "to": "NOT_DETECTED"
+   },
+   {
+    "from": "OUTLIERS_MEAN",
+    "to": "NORMALISATION"
+   },
+   {
+    "from": "CURVE_POINTS",
+    "to": "FACTOR"
+   },
+   {
+    "from": "FACTOR",
+    "to": "NORMALISATION"
+   },
+   {
+    "from": "NTC_CONTAMINATION",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "NOT_DETECTED",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "NORMALISATION",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "FACTOR",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "OUTLIERS_MEAN",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "NTC_CONTAMINATION",
+    "to": "NORMALISATION"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "reportable-then-outliers-then-mean",
+   "obligation_ids": [
+    "REPORTABLE",
+    "OUTLIERS_MEAN",
+    "NOT_DETECTED"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_2_reportable_replicate_window",
+    "test_outputs.py::test_rule_4_1_every_stray_replicate_is_an_outlier"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "shared-mean-curve-points-then-factor",
+   "obligation_ids": [
+    "CURVE_POINTS",
+    "OUTLIERS_MEAN",
+    "FACTOR"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_curve_point_averages_every_determined_standard",
+    "test_outputs.py::test_rule_2_4_curve_points_use_determined_wells"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "shared-called-ntc-and-replicates",
+   "obligation_ids": [
+    "NTC_CONTAMINATION",
+    "REPORTABLE",
+    "NOT_DETECTED"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_early_ntc_signal_contaminates",
+    "test_outputs.py::test_rule_4_3_not_detected_has_no_mean_or_fold_change"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "factors-and-means-make-the-fold-change",
+   "obligation_ids": [
+    "FACTOR",
+    "OUTLIERS_MEAN",
+    "NORMALISATION"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_2_geometric_mean_of_own_factor_quantities",
+    "test_outputs.py::test_generated_plates"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Its rules hold for every plate inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Should a plate inside section 1 ever need a value the SOP has no rule for",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Plates from one to forty-eight samples and up to 384 wells will be reduced"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED (authoring; graded plates are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave that driver as it is; the file you leave in its place must match ours byte for byte",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED), checked before and after candidate code",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness",
+  "test_outputs.py::test_generated_plates": "seeded trap-free plates over the section 1 domain; exercises every governed obligation together"
+ },
+ "removed_obligations": [
+  {
+   "id": "TA_ALL_OUTLIER_KEEP",
+   "reason": "contract_review r1 F2: made impossible by the lower-median rule of 4.1",
+   "former_anchor": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "is the mean of the middle"
+   }
+  },
+  {
+   "id": "TB_TWO_POINT_KEEP",
+   "reason": "contract_review r1 F1: 2.5/3.1 now govern two-point curves and genes below two points",
+   "former_anchor": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "three or more of them"
+   }
+  }
+ ],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the facility's report consumer reads these keys and orders",
+   "authority_anchor": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "The report gives one result for every sample and every target gene"
+   }
+  },
+  {
+   "id": "FLAG-ORDER",
+   "domain_required": true,
+   "rationale": "flags are compared exactly",
+   "authority_anchor": {
+    "file": "environment/app/docs/relative-expression-sop.md",
+    "anchor": "in this order and each at most once"
+   }
+  },
+  {
+   "id": "TOLERANCE",
+   "domain_required": true,
+   "rationale": "figures are unrounded (1.2); the instruction states accept 1e-9 and reject 1e-8 relative bounds",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "one within one part in 10^9 of the expected value passes"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": []
+}

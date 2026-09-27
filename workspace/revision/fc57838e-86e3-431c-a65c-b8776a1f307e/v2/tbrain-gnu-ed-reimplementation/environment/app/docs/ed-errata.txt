@@ -1,0 +1,68 @@
+GNU ed 1.19 against its own manual
+==================================
+
+The manual in ed.txt describes ed, but the program is what the maintenance scripts
+talk to, and in the places below 1.19 does not do what the manual says. Each entry
+states what the program does. Everything the manual describes that is not listed
+here holds as written.
+
+Addresses and marks
+
+1. An apostrophe address whose mark was never set does not fail. It resolves to
+   address 0. So 'a= prints 0 on an empty buffer, 'aa appends at the start of the
+   buffer, and 'ax puts the cut buffer there.
+
+2. A mark stays on its line when that line is changed, and it survives the undo of
+   that change. The manual says a mark is cleared by modifying its line.
+
+Regular expressions
+
+3. A bounded repeat at the start of an expression or subexpression is an error, not
+   the literal text the manual promises: \{2\} on its own fails to compile. An
+   unescaped brace is an ordinary character, so {2} matches the text {2}.
+
+4. In extended expressions ^ and $ anchor wherever they appear, so a^b matches
+   nothing. The manual and POSIX make them ordinary characters away from the ends.
+
+5. A global substitution continues from what is left of the line and treats that
+   remainder as a line of its own, so a word-beginning anchor can match inside the
+   original word: s/\<./X/g turns ab into XX.
+
+Commands
+
+6. f FILE sets the default filename and prints it. The manual has it print the
+   filename only when FILE is left out.
+
+7. A one-address j does nothing, as the manual says, but it still clears the undo
+   stack, so a following u has nothing to undo.
+
+8. A global command clears the undo stack even when its pattern selected no line.
+
+9. m accepts the last line of the range being moved as its destination, although
+   the manual forbids a destination inside that range.
+
+10. A successful s leaves the line as it stood before the substitution in the cut
+   buffer, not the line it produced.
+
+11. A global command list whose first line holds nothing but a backslash is an
+    empty command list, which means p for every selected line.
+
+12. A substitution with no final delimiter inside a global command list takes the
+    rest of the list as its replacement text instead of failing.
+
+13. W clears the warning that q gives for a modified buffer when it writes the
+    whole buffer, the same way w does.
+
+Files
+
+14. The rule in the manual's Limitations section holds as written: a file holding a
+    NUL is binary, and ed neither appends a newline to its last line on reading nor
+    writes one back, unless that line has since been modified. Reading an empty file
+    puts it back in the state where no newline is written.
+
+Invocation
+
+15. Options may appear before or after FILE, may be combined in one argument, and -p
+    may carry its string attached. A lone -- ends the options. An unknown option, or
+    -p with no string after it, is a usage error: ed exits non-zero without reading
+    any command.

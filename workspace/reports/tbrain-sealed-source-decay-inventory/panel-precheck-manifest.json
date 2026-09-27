@@ -1,0 +1,587 @@
+{
+  "schema_version": 1,
+  "task_slug": "tbrain-sealed-source-decay-inventory",
+  "primary_outcome": "the survey report of a sealed-source inventory decay-corrected to the survey date agrees with manual RPO-7 over the section 1 envelope",
+  "obligations": [
+    {
+      "id": "DAY_COUNT",
+      "class": "core",
+      "contribution": "day counts are actual Gregorian days",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "every month at its real length"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/dates.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_1_2_day_count_uses_calendar_days"
+        ],
+        "boundary": [
+          "test_outputs.py::test_section_1_limits_reached"
+        ]
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "reference and survey dates on the 31st, on 28/29 February and across leap years, a short-lived nuclide so a day moves the activity visibly, leak tests 182 and 183 calendar days back",
+      "wrong_but_plausible": "keep thirty-day months",
+      "selfdescription_phrase": "day count"
+    },
+    {
+      "id": "HALF_LIFE_DAYS",
+      "class": "core",
+      "contribution": "a year of half-life is 365.25 days",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "is 365.25 days."
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/nuclides.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_1_4_year_of_half_life_is_365_25_days"
+        ],
+        "boundary": [
+          "test_outputs.py::test_section_1_limits_reached"
+        ]
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "year-unit nuclides (Na-22, Co-60, Cf-252) decades past their reference date",
+      "wrong_but_plausible": "365-day year",
+      "selfdescription_phrase": "half-life in days"
+    },
+    {
+      "id": "DECAY_LAW",
+      "class": "core",
+      "contribution": "current activity is A_ref x 2^(-t/T)",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "A = A_ref x 2^(-t/T)"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/decay.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_3_1_decay_law_uses_half_life"
+        ],
+        "boundary": [
+          "test_outputs.py::test_section_1_limits_reached"
+        ]
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "entries exactly one and several half-lives old and entries on their reference date",
+      "wrong_but_plausible": "exp(-t/T), treating the half-life as a mean life",
+      "selfdescription_phrase": "current activity"
+    },
+    {
+      "id": "DAUGHTER",
+      "class": "core",
+      "contribution": "equilibrium daughter activity is parent current activity times the branching fraction",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "Its activity is the parent's current activity times the branching"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/decay.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_3_2_daughter_scaled_by_branching_fraction"
+        ],
+        "boundary": [],
+        "boundary_not_applicable": "the witness is a routing or scaling decision with no numeric edge of its own; its inputs sit in its named test"
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "Cs-137 (0.944) beside Sr-90 and Ge-68 (1.0) and a nuclide with no daughter",
+      "wrong_but_plausible": "daughter activity equal to the parent's",
+      "selfdescription_phrase": "daughter activity"
+    },
+    {
+      "id": "EXEMPTION",
+      "class": "core",
+      "contribution": "exempt when total activity is at or below the exempt quantity",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "An entry is *exempt* when its total activity is at or below the exempt"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/checks.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_4_1_exemption_judged_on_total_activity"
+        ],
+        "boundary": [
+          "test_outputs.py::test_rule_4_1_exemption_judged_on_total_activity"
+        ]
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "Sr-90 at 5000 Bq on its reference date (total exactly 1e4) and at 5000.5 Bq; Cs-137 whose parent is below and total above the quantity; a non-daughter nuclide exactly on its quantity",
+      "wrong_but_plausible": "compare the parent alone, or use strictly below",
+      "selfdescription_phrase": "exemption"
+    },
+    {
+      "id": "LEAK_TEST",
+      "class": "core",
+      "contribution": "leak-testable on current activity against the class threshold; due with no leak test on record or the latest-dated leak test more than 182 days back",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "of its nuclide's leak-test class: 3.7e6 Bq (3.7 MBq) or more for class"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/checks.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_5_1_leak_threshold_by_class_on_current_activity",
+          "test_outputs.py::test_rule_5_2_leak_test_interval_of_182_days"
+        ],
+        "boundary": [
+          "test_outputs.py::test_rule_5_2_leak_test_interval_of_182_days"
+        ]
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "sources whose certificate is above and current activity below 3.7e6 (and 3.7e5 alpha); sources exactly at each threshold on their reference date; wipes returned out of date order with the latest-dated passing test 182 and 183 days back",
+      "wrong_but_plausible": "judge the certificate figure; take the last wipe listed",
+      "selfdescription_phrase": "leak-testable"
+    },
+    {
+      "id": "DISPOSAL",
+      "class": "core",
+      "contribution": "short-lived entries become eligible once elapsed time is ten half-lives or more",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "have elapsed, that is, when its elapsed time is ten times its half-life or more."
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/checks.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_7_1_disposal_after_ten_half_lives"
+        ],
+        "boundary": [
+          "test_outputs.py::test_rule_7_1_disposal_after_ten_half_lives"
+        ]
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "Ir-192 aged 736-738 days and I-125 aged 593-594 days (between 1/1024 and 1/1000 of the certificate figure but under ten half-lives), and 739 / 595 days; Po-210 (138 d) never eligible",
+      "wrong_but_plausible": "activity at or below a thousandth of the certificate figure",
+      "selfdescription_phrase": "decay-to-disposal"
+    },
+    {
+      "id": "LOCATION_POSTING",
+      "class": "core",
+      "contribution": "held activity and source count from current activities of licensed material; fraction of limit; over limit when more than the limit",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "6.1 A location's *held activity* is the sum of the current activities of the"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/locations.py",
+        "environment/app/src/sealsrc/report.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the figure feeds the per-entry calls or the location postings of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_rule_6_1_held_activity_from_current_activities",
+          "test_outputs.py::test_rule_6_2_fraction_and_over_limit_at_the_limit"
+        ],
+        "boundary": [
+          "test_outputs.py::test_rule_6_2_fraction_and_over_limit_at_the_limit"
+        ]
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "stores of aged long-lived entries with daughters; a store held exactly at its limit on the reference date; an empty store",
+      "wrong_but_plausible": "sum certificate figures, or add daughter activity to the held activity",
+      "selfdescription_phrase": "held activity"
+    },
+    {
+      "id": "TRAP_FUTURE_CERTIFICATE",
+      "class": "core",
+      "contribution": "a certificate dated after the survey keeps today's step: no elapsed time, the certificate figure stands",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "for a survey date on or after the reference date."
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/dates.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the kept figure feeds the entry's calls and its store's posting"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_certificate_dated_after_the_survey_keeps_todays_figure"
+        ],
+        "boundary": [],
+        "boundary_not_applicable": "the witness is a routing or scaling decision with no numeric edge of its own; its inputs sit in its named test"
+      },
+      "expected_source": "shipped_differential",
+      "discriminating_instance": "entries certified 1 day to decades after the survey, short- and long-lived, at a store with other entries",
+      "wrong_but_plausible": "signed calendar day count back-extrapolates the activity (overflowing for old short-lived gaps)",
+      "selfdescription_phrase": "dated after the survey"
+    },
+    {
+      "id": "DRIVER_AND_LAYOUT",
+      "class": "support",
+      "contribution": "fixed driver and JSON report layout",
+      "implementation_complete": true,
+      "repair_surface": false,
+      "paths": [
+        "environment/app/tools/sealsrc_run.py",
+        "environment/app/README.md"
+      ],
+      "smoke_test_ids": [
+        "test_outputs.py::test_driver_is_unchanged"
+      ]
+    },
+    {
+      "id": "TRAP_WIPE_NOT_A_LEAK_TEST",
+      "class": "core",
+      "contribution": "a wipe reading 185 Bq or more is not a leak test, so it neither counts as the last leak test nor as one on record",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "A *leak test* of an entry is a wipe of the source whose removable activity is"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/checks.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the decision feeds the leak-test call or the store posting of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_wipes_that_show_a_leak_are_not_leak_tests"
+        ],
+        "boundary": [],
+        "boundary_not_applicable": "a routing decision; its 185 Bq / exempt-quantity edges sit in its own named test"
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "leak-testable entries whose latest-dated wipe reads 185 Bq, 186 Bq or 1e6 Bq with the latest passing wipe (184.99 Bq) 183 days back, or none",
+      "wrong_but_plausible": "take the latest wipe by date whatever it read",
+      "selfdescription_phrase": "leak test"
+    },
+    {
+      "id": "TRAP_LICENSING_FOLLOWS_CERTIFICATE",
+      "class": "core",
+      "contribution": "licensing is judged on the certificate parent figure, so licensed entries decayed below the exempt quantity still count and daughter nuclides received at or below it never do",
+      "authority": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "Licensing follows the certificate: an entry received as licensed material stays"
+      },
+      "implementation_sites": [
+        "environment/app/src/sealsrc/locations.py",
+        "environment/app/src/sealsrc/report.py"
+      ],
+      "separability": {
+        "standalone_deliverable": false,
+        "joins_before_output": true,
+        "rationale": "the decision feeds the leak-test call or the store posting of the same survey report"
+      },
+      "witnesses": {
+        "positive": [
+          "test_outputs.py::test_licensing_follows_the_certificate_in_store_postings"
+        ],
+        "boundary": [],
+        "boundary_not_applicable": "a routing decision; its 185 Bq / exempt-quantity edges sit in its own named test"
+      },
+      "expected_source": "independent_model",
+      "discriminating_instance": "stores holding entries licensed at receipt now at or below the exempt quantity (parent and total), and Cs-137/Sr-90 entries received at or below the quantity whose total is above it",
+      "wrong_but_plausible": "judge licensing on today's activity, on the exempt flag, or drop the filter",
+      "selfdescription_phrase": "licensing test"
+    }
+  ],
+  "causal_graph": {
+    "edges": [
+      {
+        "from": "DAY_COUNT",
+        "to": "DECAY_LAW"
+      },
+      {
+        "from": "HALF_LIFE_DAYS",
+        "to": "DECAY_LAW"
+      },
+      {
+        "from": "TRAP_FUTURE_CERTIFICATE",
+        "to": "DECAY_LAW"
+      },
+      {
+        "from": "DECAY_LAW",
+        "to": "DAUGHTER"
+      },
+      {
+        "from": "DAUGHTER",
+        "to": "EXEMPTION"
+      },
+      {
+        "from": "DECAY_LAW",
+        "to": "EXEMPTION"
+      },
+      {
+        "from": "DECAY_LAW",
+        "to": "LEAK_TEST"
+      },
+      {
+        "from": "DAY_COUNT",
+        "to": "LEAK_TEST"
+      },
+      {
+        "from": "DAY_COUNT",
+        "to": "DISPOSAL"
+      },
+      {
+        "from": "HALF_LIFE_DAYS",
+        "to": "DISPOSAL"
+      },
+      {
+        "from": "DECAY_LAW",
+        "to": "LOCATION_POSTING"
+      },
+      {
+        "from": "EXEMPTION",
+        "to": "PRIMARY_OUTCOME"
+      },
+      {
+        "from": "LEAK_TEST",
+        "to": "PRIMARY_OUTCOME"
+      },
+      {
+        "from": "LOCATION_POSTING",
+        "to": "PRIMARY_OUTCOME"
+      },
+      {
+        "from": "DAUGHTER",
+        "to": "PRIMARY_OUTCOME"
+      },
+      {
+        "from": "DISPOSAL",
+        "to": "PRIMARY_OUTCOME"
+      },
+      {
+        "from": "DECAY_LAW",
+        "to": "PRIMARY_OUTCOME"
+      },
+      {
+        "from": "TRAP_WIPE_NOT_A_LEAK_TEST",
+        "to": "LEAK_TEST"
+      },
+      {
+        "from": "DAY_COUNT",
+        "to": "TRAP_WIPE_NOT_A_LEAK_TEST"
+      },
+      {
+        "from": "TRAP_LICENSING_FOLLOWS_CERTIFICATE",
+        "to": "LOCATION_POSTING"
+      },
+      {
+        "from": "DECAY_LAW",
+        "to": "TRAP_LICENSING_FOLLOWS_CERTIFICATE"
+      }
+    ]
+  },
+  "interactions": [
+    {
+      "id": "age-decay",
+      "obligation_ids": [
+        "DAY_COUNT",
+        "HALF_LIFE_DAYS",
+        "DECAY_LAW"
+      ],
+      "witness_ids": [
+        "test_outputs.py::test_generated_inventories"
+      ],
+      "joins_before_output": true
+    },
+    {
+      "id": "daughter-exemption",
+      "obligation_ids": [
+        "DECAY_LAW",
+        "DAUGHTER",
+        "EXEMPTION"
+      ],
+      "witness_ids": [
+        "test_outputs.py::test_rule_4_1_exemption_judged_on_total_activity"
+      ],
+      "joins_before_output": true
+    },
+    {
+      "id": "decay-leak",
+      "obligation_ids": [
+        "DECAY_LAW",
+        "LEAK_TEST",
+        "DAY_COUNT"
+      ],
+      "witness_ids": [
+        "test_outputs.py::test_rule_5_1_leak_threshold_by_class_on_current_activity"
+      ],
+      "joins_before_output": true
+    },
+    {
+      "id": "future-certificate-decay",
+      "obligation_ids": [
+        "TRAP_FUTURE_CERTIFICATE",
+        "DAY_COUNT",
+        "DECAY_LAW"
+      ],
+      "witness_ids": [
+        "test_outputs.py::test_certificate_dated_after_the_survey_keeps_todays_figure"
+      ],
+      "joins_before_output": true
+    },
+    {
+      "id": "wipes-leak",
+      "obligation_ids": [
+        "TRAP_WIPE_NOT_A_LEAK_TEST",
+        "LEAK_TEST",
+        "DAY_COUNT"
+      ],
+      "witness_ids": [
+        "test_outputs.py::test_wipes_that_show_a_leak_are_not_leak_tests"
+      ],
+      "joins_before_output": true
+    },
+    {
+      "id": "licensing-posting",
+      "obligation_ids": [
+        "TRAP_LICENSING_FOLLOWS_CERTIFICATE",
+        "LOCATION_POSTING",
+        "DECAY_LAW"
+      ],
+      "witness_ids": [
+        "test_outputs.py::test_licensing_follows_the_certificate_in_store_postings"
+      ],
+      "joins_before_output": true
+    },
+    {
+      "id": "disposal-age",
+      "obligation_ids": [
+        "DISPOSAL",
+        "DAY_COUNT",
+        "HALF_LIFE_DAYS"
+      ],
+      "witness_ids": [
+        "test_outputs.py::test_rule_7_1_disposal_after_ten_half_lives"
+      ],
+      "joins_before_output": true
+    }
+  ],
+  "closure": {
+    "universal_rule": {
+      "file": "instruction.md",
+      "anchor": "Each of the manual's rules is meant for every inventory inside the limits its section 1 sets"
+    },
+    "silence": {
+      "file": "instruction.md",
+      "anchor": "Where the manual gives no rule for a figure it defines",
+      "named_cases": []
+    },
+    "coverage_envelope": {
+      "file": "instruction.md",
+      "anchor": "The surveys we run will include inventories where many entries share a store"
+    }
+  },
+  "determinism": {
+    "seeds": [
+      "solution/seal.py SEED (authoring only; graded inventories are sealed files)"
+    ],
+    "clock_dependence": "none",
+    "network": "none",
+    "order_sensitivity": "none"
+  },
+  "reference_selfdescription": "solution/solve.sh",
+  "restrictions": [
+    {
+      "id": "R-driver-unchanged",
+      "statement": "leave the driver alone and keep the report layout that /app/README.md describes",
+      "enforced_by": [
+        "test_outputs.py::test_driver_is_unchanged"
+      ],
+      "enforcement_level": "source",
+      "allowed_exceptions_disclosed": true
+    }
+  ],
+  "unclaimed_units_rationale": {
+    "test_outputs.py::test_candidate_cannot_read_expectations": "protected-ground-truth boundary check, no obligation",
+    "test_outputs.py::test_capacity_inventory": "5000-entry, 200-location inventory from the section 1 ceilings; trap-free by construction",
+    "test_outputs.py::test_section_1_limits_reached": "claimed as boundary witness"
+  },
+  "removed_obligations": [
+    {
+      "id": "TRAP_DISPOSAL_ELIGIBLE_NOT_STORED",
+      "reason": "redesign after contract_review r1: a one-hop read that a manual-derived reference reproduces; replaced by the licensing and wipe traps",
+      "former_anchor": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "it is in storage nowhere"
+      }
+    }
+  ],
+  "exact_output_requirements": [
+    {
+      "id": "ROW-ORDER",
+      "domain_required": true,
+      "rationale": "the survey is read against the inventory line by line",
+      "authority_anchor": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "8.1 The report lists every entry of the inventory, in inventory order, and every"
+      }
+    },
+    {
+      "id": "SUM-ORDER-TOLERANCE",
+      "domain_required": true,
+      "rationale": "no float-order ambiguity is graded: sums in inventory order; reported figures compared relative to the manual's figure, inclusive at 1e-9; threshold comparisons exact on computed figures",
+      "authority_anchor": {
+        "file": "environment/app/docs/source-inventory-manual.md",
+        "anchor": "more than one part in 10^9 of the manual's figure"
+      }
+    }
+  ],
+  "verifier_matrix": "verifier-matrix.json",
+  "strict_preflight": "preflight.json",
+  "wrong_paths": []
+}

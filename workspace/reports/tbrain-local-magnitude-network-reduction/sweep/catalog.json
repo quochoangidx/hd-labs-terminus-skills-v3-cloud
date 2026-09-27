@@ -1,0 +1,352 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "c1-report-carries-magnitude-type": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "    return {\"id\": event[\"id\"], \"ml\": network_magnitude(counted), \"stations\": rows}",
+     "new": "    return {\"id\": event[\"id\"], \"ml\": network_magnitude(counted), \"stations\": rows, \"type\": \"ML\"}"
+    }
+   ],
+   "expect_failing": [
+    "test_report_keeps_file_and_recording_order"
+   ],
+   "rationale": "6.2: the report carries no other keys"
+  },
+  "c1-network-ml-rounded-to-tenth": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/mlnet/network.py",
+     "old": "        return values[middle]\n",
+     "new": "        return round(values[middle], 1)\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_2_network_magnitude_is_median_of_contributors"
+   ],
+   "rationale": "0.3: nothing is rounded"
+  },
+  "c2-amplitude-capped-1e7": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/mlnet/amplitude.py",
+     "old": "    return float(amplitude_nm) / 2.0 *",
+     "new": "    return min(float(amplitude_nm), 1e7) / 2.0 *"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.2: amplitudes up to 10^8 nm"
+  },
+  "c3-table-ends-exclusive": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/mlnet/network.py",
+     "old": "return NEAREST_KM <= distance_km <= FARTHEST_KM",
+     "new": "return NEAREST_KM < distance_km < FARTHEST_KM"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_3_listed_distances_and_table_ends"
+   ],
+   "rationale": "5.1: both ends included"
+  },
+  "c3-far-end-exclusive": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/mlnet/network.py",
+     "old": "return NEAREST_KM <= distance_km <= FARTHEST_KM",
+     "new": "return NEAREST_KM <= distance_km < FARTHEST_KM"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_3_listed_distances_and_table_ends"
+   ],
+   "rationale": "5.1: 600 km included"
+  },
+  "c4-depth-zero-treated-as-one": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/mlnet/distance.py",
+     "old": "float(depth_km) ** 2)",
+     "new": "(float(depth_km) or 1.0) ** 2)"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_3_listed_distances_and_table_ends"
+   ],
+   "rationale": "1.1: depth from 0"
+  },
+  "c4-noise-floored-at-0.1": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/mlnet/station.py",
+     "old": ">= 3.0 * float(item[\"noise_nm\"])",
+     "new": ">= 3.0 * max(float(item[\"noise_nm\"]), 0.1)"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.2: noise from 0.01"
+  },
+  "c5-events-capped-40": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "for event in bulletin[\"events\"]]}",
+     "new": "for event in bulletin[\"events\"][:40]]}"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.1: up to fifty events"
+  },
+  "c5-recordings-capped-32": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "    for recording in event[\"recordings\"]:\n        amplitudes",
+     "new": "    for recording in event[\"recordings\"][:32]:\n        amplitudes"
+    },
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "    rows = [dict(stations[recording[\"code\"]]) for recording in event[\"recordings\"]]",
+     "new": "    rows = [dict(stations[recording[\"code\"]]) for recording in event[\"recordings\"][:32]]"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.1: up to forty recordings"
+  },
+  "c5-station-table-capped-128": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "for entry in stations}",
+     "new": "for entry in stations[:128]}"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.1: up to two hundred stations"
+  },
+  "c6-code-truncated-to-four": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "            \"code\": code,\n",
+     "new": "            \"code\": code[:4],\n"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.1: codes of one to five characters"
+  },
+  "c8-correction-magnitude-only": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/mlnet/station.py",
+     "old": "minus_log_a0(distance_km) + correction",
+     "new": "minus_log_a0(distance_km) + abs(correction)"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_2_station_correction_is_added"
+   ],
+   "rationale": "1.1: corrections from -1.0"
+  },
+  "c8-station-ml-floored-at-zero": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/mlnet/station.py",
+     "old": "    return sum(magnitudes) / len(magnitudes)",
+     "new": "    return max(0.0, sum(magnitudes) / len(magnitudes))"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "negative station magnitudes are ordinary"
+  },
+  "c9-numbered-channels-skipped": {
+   "class": "C9",
+   "edits": [
+    {
+     "file": "app/mlnet/station.py",
+     "old": "        for item in amplitudes\n",
+     "new": "        for item in amplitudes\n        if item[\"channel\"][-1] not in \"12\"\n"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_bulletins"
+   ],
+   "rationale": "1.2: any three-character channel code"
+  },
+  "c10-depth-fixed-at-ten": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/mlnet/distance.py",
+     "old": "float(depth_km) ** 2)",
+     "new": "10.0 ** 2)"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_1_distance_is_hypocentral"
+   ],
+   "rationale": "depth varies per event"
+  },
+  "c11-mean-of-recording-means": {
+   "class": "C11",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "amplitudes.setdefault(recording[\"code\"], []).extend(recording[\"amplitudes\"])",
+     "new": "amplitudes.setdefault(recording[\"code\"], []).append(recording[\"amplitudes\"])"
+    },
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "            \"ml\": station_magnitude(items, distance_km, corrections[code]),",
+     "new": "            \"ml\": sum(station_magnitude(i, distance_km, corrections[code]) for i in items) / len(items),"
+    }
+   ],
+   "expect_failing": [
+    "test_two_sensors_of_one_site_are_one_station"
+   ],
+   "rationale": "4.3: flat mean over the station's readings"
+  },
+  "c12-near-distance-clamped": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/mlnet/distance.py",
+     "old": "    return math.sqrt(float(epi_km) ** 2 + float(depth_km) ** 2)",
+     "new": "    return max(10.0, math.sqrt(float(epi_km) ** 2 + float(depth_km) ** 2))"
+    }
+   ],
+   "expect_failing": [
+    "test_station_beyond_the_table_keeps_the_shipped_correction"
+   ],
+   "rationale": "silence: no clamp for distances the table does not reach"
+  },
+  "c12-far-correction-held": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/mlnet/attenuation.py",
+     "old": "    x = math.log10(distance_km)\n",
+     "new": "    distance_km = min(distance_km, CALIBRATION[-1][0])\n    x = math.log10(distance_km)\n"
+    }
+   ],
+   "expect_failing": [
+    "test_station_beyond_the_table_keeps_the_shipped_correction"
+   ],
+   "rationale": "silence: keep today's calculation beyond 600 km"
+  },
+  "c14-contributor-test-on-epicentral": {
+   "class": "C14",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "            \"contributes\": contributes(distance_km),",
+     "new": "            \"contributes\": contributes(float(epicentral[code])),"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_1_distance_is_hypocentral"
+   ],
+   "rationale": "3.1 distance feeds both correction and 5.1"
+  },
+  "c15-stations-sorted-by-code": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/mlnet/bulletin.py",
+     "old": "    rows = [dict(stations[recording[\"code\"]]) for recording in event[\"recordings\"]]",
+     "new": "    rows = sorted((dict(stations[recording[\"code\"]]) for recording in event[\"recordings\"]), key=lambda r: r[\"code\"])"
+    }
+   ],
+   "expect_failing": [
+    "test_report_keeps_file_and_recording_order"
+   ],
+   "rationale": "6.1: rows in recording order"
+  },
+  "c17-driver-rewritten": {
+   "class": "C17",
+   "edits": [
+    {
+     "file": "app/tools/ml_bulletin.py",
+     "old": "    json.dump(reduce_bulletin(bulletin), sys.stdout)",
+     "new": "    report = reduce_bulletin(bulletin)\n    json.dump(report, sys.stdout)"
+    }
+   ],
+   "expect_failing": [
+    "test_submitted_driver_matches_ours"
+   ],
+   "rationale": "the driver is frozen; the verifier runs its own copy"
+  }
+ },
+ "alternatives": {
+  "alt-ratio-hypot-statistics-median": {
+   "edits": [
+    {
+     "file": "app/mlnet/station.py",
+     "old": "if float(item[\"amplitude_nm\"]) >= 3.0 * float(item[\"noise_nm\"])",
+     "new": "if float(item[\"amplitude_nm\"]) / float(item[\"noise_nm\"]) >= 3.0"
+    },
+    {
+     "file": "app/mlnet/distance.py",
+     "old": "    return math.sqrt(float(epi_km) ** 2 + float(depth_km) ** 2)",
+     "new": "    return math.hypot(float(epi_km), float(depth_km))"
+    },
+    {
+     "file": "app/mlnet/network.py",
+     "old": "    middle = len(values) // 2\n",
+     "new": "    import statistics\n    return statistics.median(values)\n    middle = len(values) // 2\n"
+    }
+   ],
+   "rationale": "ratio form of 2.3, math.hypot for 3.1, statistics.median for 5.2: contract-equal forms"
+  },
+  "alt-bisect-interpolation-and-fmean": {
+   "edits": [
+    {
+     "file": "app/mlnet/attenuation.py",
+     "old": "    if CALIBRATION[0][0] <= distance_km <= CALIBRATION[-1][0]:\n        return near_value + (far_value - near_value) * (distance_km - near_km) / (far_km - near_km)\n",
+     "new": "    if CALIBRATION[0][0] <= distance_km <= CALIBRATION[-1][0]:\n        import bisect\n        xs = [d for d, _ in CALIBRATION]\n        i = min(max(bisect.bisect_left(xs, distance_km), 1), len(xs) - 1)\n        (d0, v0), (d1, v1) = CALIBRATION[i - 1], CALIBRATION[i]\n        return v0 + (distance_km - d0) * (v1 - v0) / (d1 - d0)\n"
+    },
+    {
+     "file": "app/mlnet/station.py",
+     "old": "    return sum(magnitudes) / len(magnitudes)",
+     "new": "    import statistics\n    return statistics.fmean(magnitudes)"
+    }
+   ],
+   "rationale": "a different in-table segment search and an exact-sum mean"
+  }
+ },
+ "untouched_classes": {
+  "C7": "Python integers and floats have no 32-bit accumulator; the widest sums (40 recordings, amplitudes to 1e8) are float and exact to far below 1e-6",
+  "C13": "envelope axes are crossed inside the generated and trap families (depth x distance x one/two channels x corrections x event size); the special input classes are deliberately not crossed with each other, so each trap costs one test",
+  "C16": "no function signature is promised; the only frozen surface is the driver, covered by C17",
+  "C18": "model, generator and fixtures live in solution/; tests/ only loads sealed JSON lines pinned in ROSTER (independence.json, test_sandbox_cannot_read_ground_truth)"
+ }
+}

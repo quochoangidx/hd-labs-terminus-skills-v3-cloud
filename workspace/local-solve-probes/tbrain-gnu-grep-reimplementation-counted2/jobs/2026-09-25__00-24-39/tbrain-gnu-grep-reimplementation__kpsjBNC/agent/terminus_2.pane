@@ -1,0 +1,1082 @@
+[?2004hroot@b231699c9d89:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@b231699c9d89:/app# clear
+[?2004l[H[J[3J[?2004hroot@b231699c9d89:/app# ls -la /app && find /app/pygrep -maxdepth 2 -type f -print 2>/dev/null
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Sep 24 15:08 .
+drwxr-xr-x 1 root root 4096 Sep 24 17:24 ..
+-rw-r--r-- 1 root root  215 Sep 24 15:08 README.md
+drwxr-xr-x 2 root root 4096 Sep 24 15:08 docs
+drwxr-xr-x 2 root root 4096 Sep 24 15:08 pygrep
+/app/pygrep/grep.py
+[?2004hroot@b231699c9d89:/app# grep --version | head -1; wc -l /app/docs/grep.txt; sed -n '1,220p' /app/pygrep/grep.py 2>/dev/null || true
+[?2004lbash: grep: command not found
+1516 /app/docs/grep.txt
+"""pygrep: a GNU grep 3.8 replacement in pure Python.
+
+Usage: python3 /app/pygrep/grep.py [OPTION]... PATTERNS [FILE]...
+"""
+
+import sys
+
+
+def main(argv):
+    sys.stderr.write("pygrep: not implemented yet\n")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+[?2004hroot@b231699c9d89:/app# grep -nE '^([0-9]+\.|[[:space:]]*[-*] |.*Context|.*group-separator|.*byte-offset|.*initial-tab|.*binary-files|.*null-data)' /app/docs/grep.txt | head -160
+[?2004lbash: grep: command not found
+[?2004hroot@b231699c9d89:/app# cat > /app/pygrep/grep.py <<'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> """Small, byte-oriented GNU grep 3.8 compatible implementation."""
+[?2004l[?2004h> import sys, os
+[?2004l[?2004h> 
+[?2004l[?2004h> B=lambda s: os.fsencode(s)
+[?2004l[?2004h> WORD=set(b'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_')
+[?2004l[?2004h> 
+[?2004l[?2004h> def ci(c):
+[?2004l[?2004h>     return c+32 if 65<=c<=90 else c
+[?2004l[?2004h> 
+[?2004l[?2004h> def cls_named(name):
+[?2004l[?2004h>     sets={
+[?2004l[?2004h>       b'alnum': set(range(48,58))|set(range(65,91))|set(range(97,123)),
+[?2004l[?2004h>       b'alpha': set(range(65,91))|set(range(97,123)), b'blank':{9,32},
+[?2004l[?2004h>       b'cntrl':set(range(32))|{127}, b'digit':set(range(48,58)),
+[?2004l[?2004h>       b'graph':set(range(33,127)), b'lower':set(range(97,123)),
+[?2004l[?2004h>       b'print':set(range(32,127)), b'punct':set(range(33,48))|set(range(58,65))|set(range(91,97))|set(range(123,127)),
+[?2004l[?2004h>       b'space':{9,10,11,12,13,32}, b'upper':set(range(65,91)), b'xdigit':set(b'0123456789abcdefABCDEF'),
+[?2004l[?2004h>       b'word':WORD,
+[?2004la,p,icase,memo)}
+   if not out:break
+ elif t=='rep':
+  x,lo,hi=node[1:]; cur={pos}; l[?2004h>     }
+[?2004l[?2004h>     return sets.get(name,set())
+[?2004l[?2004h> 
+[?2004l[?2004h> class Parser:
+[?2004l[?2004h>  def __init__(self,p,ere=False,icase=False): self.p=p; self.i=0; self.ere=ere; self.icase=icase
+[?2004l[?2004h>  def special(self,ch):
+[?2004l[?2004h>   if self.i>=len(self.p): return False
+[?2004l[?2004h>   if self.ere: return self.p[self.i]==ch
+[?2004l[?2004h>   return self.i+1<len(self.p) and self.p[self.i]==92 and self.p[self.i+1]==ch
+[?2004l[?2004h>  def take_special(self,ch):
+[?2004l[?2004h>   if not self.special(ch): return False
+[?2004l[?2004h>   self.i += 1 if self.ere else 2; return True
+[?2004l[?2004h>  def parse(self, stop=False):
+[?2004l[?2004h>   alts=[self.seq(stop)]
+[?2004l[?2004h>   while self.take_special(124): alts.append(self.seq(stop))
+[?2004l[?2004h>   return ('alt',alts) if len(alts)>1 else alts[0]
+[?2004l[?2004h>  def seq(self,stop):
+[?2004l[?2004h>   a=[]
+[?2004l[?2004h>   while self.i<len(self.p):
+[?2004l[?2004h>    if self.special(124) or (stop and self.special(41)): break
+[?2004l[?2004h>    x=self.atom()
+[?2004l[?2004h>    if self.i<len(self.p) and self.p[self.i]==42: self.i+=1; x=('rep',x,0,None)
+[?2004l[?2004h>    elif self.ere and self.i<len(self.p) and self.p[self.i] in (43,63):
+[?2004l[?2004h>     q=self.p[self.i]; self.i+=1; x=('rep',x,1,None) if q==43 else ('rep',x,0,1)
+[?2004l[?2004h>    elif (not self.ere) and self.i+1<len(self.p) and self.p[self.i]==92 and self.p[self.i+1] in (43,63):
+[?2004l[?2004h>     q=self.p[self.i+1]; self.i+=2; x=('rep',x,1,None) if q==43 else ('rep',x,0,1)
+[?2004l[?2004h>    else:
+[?2004l[?2004h>     save=self.i
+[?2004l[?2004h>     if self.take_special(123):
+[?2004l[?2004h>      j=self.i
+[?2004l[?2004h>      while self.i<len(self.p) and 48<=self.p[self.i]<=57:self.i+=1
+[?2004l[?2004h>      if self.i==j: self.i=save
+[?2004l[?2004h>      else:
+[?2004l[?2004h>       lo=int(self.p[j:self.i]); hi=lo
+[?2004l[?2004h>       if self.i<len(self.p) and self.p[self.i]==44:
+[?2004l[?2004h>        self.i+=1; j=self.i
+[?2004l[?2004h>        while self.i<len(self.p) and 48<=self.p[self.i]<=57:self.i+=1
+[?2004l[?2004h>        hi=int(self.p[j:self.i]) if self.i>j else None
+[?2004l[?2004h>       if not self.take_special(125): self.i=save
+[?2004l[?2004h>       else: x=('rep',x,lo,hi)
+[?2004l[?2004h>    a.append(x)
+[?2004l[?2004h>   return ('seq',a)
+[?2004l[?2004h>  def atom(self):
+[?2004l[?2004h>   if self.take_special(40):
+[?2004l[?2004h>    x=self.parse(True)
+[?2004l[?2004h>    if not self.take_special(41): raise ValueError('unmatched parenthesis')
+[?2004l[?2004h>    return x
+[?2004l[?2004h>   c=self.p[self.i]; self.i+=1
+[?2004l[?2004h>   if c==46:return ('dot',)
+[?2004l[?2004h>   if c==94:return ('bol',)
+[?2004l[?2004h>   if c==36:return ('eol',)
+[?2004l[?2004h>   if c==91:return self.bracket()
+[?2004l[?2004h>   if c==92:
+[?2004l[?2004h>    if self.i>=len(self.p): return ('lit',92)
+[?2004l[?2004h>    c=self.p[self.i]; self.i+=1
+[?2004l[?2004h>    # GNU extensions commonly documented by grep.
+[?2004l[?2004h>    if c in (98,60,62): return ({98:'wb',60:'bow',62:'eow'}[c],)
+[?2004l[?2004h>    if c in (66,96,39): return ({66:'nwb',96:'bol',39:'eol'}[c],)
+[?2004l[?2004h>   return ('lit',c)
+[?2004l[?2004h>  def bracket(self):
+[?2004l[?2004h>   neg=False
+[?2004l[?2004h>   if self.i<len(self.p) and self.p[self.i]==94: neg=True; self.i+=1
+[?2004l[?2004h>   s=set(); first=True; prev=None
+[?2004l[?2004h>   if self.i<len(self.p) and self.p[self.i]==93: s.add(93); self.i+=1
+[?2004l[?2004h>   while self.i<len(self.p) and self.p[self.i]!=93:
+[?2004l[?2004h>    if self.p[self.i:self.i+2]==b'[:':
+[?2004l[?2004h>     k=self.p.find(b':]',self.i+2)
+[?2004l[?2004h>     if k>=0: s |= cls_named(self.p[self.i+2:k]); self.i=k+2; prev=None; continue
+[?2004l[?2004h>    c=self.p[self.i]; self.i+=1
+[?2004l[?2004h>    if c==92 and self.i<len(self.p): c=self.p[self.i]; self.i+=1
+[?2004l[?2004h>    if c==45 and prev is not None and self.i<len(self.p) and self.p[self.i]!=93:
+[?2004l[?2004h>     d=self.p[self.i]; self.i+=1
+[?2004l[?2004h>     if d==92 and self.i<len(self.p): d=self.p[self.i]; self.i+=1
+[?2004l[?2004h>     s |= set(range(min(prev,d),max(prev,d)+1)); prev=None
+[?2004l[?2004h>    else: s.add(c); prev=c
+[?2004l[?2004h>   if self.i>=len(self.p): return ('lit',91)
+[?2004l[?2004h>   self.i+=1
+[?2004l[?2004h>   return ('class',s,neg)
+[?2004l[?2004h> 
+[?2004l[?2004h> def ends(node,data,pos,icase,memo):
+[?2004l[?2004h>  key=(id(node),pos)
+[?2004l[?2004h>  if key in memo:return memo[key]
+[?2004l[?2004h>  t=node[0]; out=set()
+[?2004l[?2004h>  if t=='lit':
+[?2004l[?2004h>   if pos<len(data) and (ci(data[pos])==ci(node[1]) if icase else data[pos]==node[1]):out.add(pos+1)
+[?2004l[?2004h>  elif t=='dot':
+[?2004l[?2004h>   if pos<len(data):out.add(pos+1)
+[?2004l[?2004h>  elif t=='class':
+[?2004l[?2004h>   if pos<len(data):
+[?2004l[?2004h>    c=data[pos]; hit=c in node[1]
+[?2004l[?2004h>    if icase: hit=hit or ci(c) in {ci(x) for x in node[1]}
+[?2004l[?2004h>    if hit != node[2]:out.add(pos+1)
+[?2004l[?2004h>  elif t=='bol':
+[?2004l[?2004h>   if pos==0:out.add(pos)
+[?2004l=argv[i:]
+ if o.after is [?2004h>  elif t=='eol':
+[?2004l[?2004h>   if pos==len(data):out.add(pos)
+[?2004l[?2004h>  elif t in ('wb','nwb','bow','eow'):
+[?2004lmp[?2004h>   l=pos>0 and data[pos-1] in WORD; r=pos<len(data) and data[pos] in WORD
+[?2004l[?2004h>   ok={'wb':l!=r,'nwb':l==r,'bow':(not l and r),'eow':(l and not r)}[t]
+[?2004l[?2004h>   if ok:out.add(pos)
+[?2004l[?2004h>  elif t=='alt':
+[?2004l[?2004h>   for x in node[1]:out |= ends(x,data,pos,icase,memo)
+[?2004l[?2004h>  elif t=='seq':
+[?2004l):
+  for p in pa[?2004h>   out={pos}
+[?2004l.[?2004h>   for x in node[1]:
+[?2004l[?2004h>    out={q for p in out for q in ends(x,data,p,icase,memo)}
+[?2004l[?2004h>    if not out:break
+[?2004l.[?2004h>  elif t=='rep':
+[?2004l[?2004h>   x,lo,hi=node[1:]; cur={pos}; levels=[cur]
+[?2004l  e=[?2004h>   limit=hi if hi is not None else len(data)+1
+[?2004l[?2004h>   for _ in range(limit):
+[?2004ls[?2004h>    nxt={q for p in cur for q in ends(x,data,p,icase,memo) if q!=p}
+[?2004l[?2004h>    if not nxt:break
+[?2004l[?2004h>    levels.append(nxt); cur=nxt
+[?2004l[?2004h>   for k in range(lo,min(len(levels), (hi+1 if hi is not None else len(levels)))):out |= levels[k]
+[?2004l[?2004h>  memo[key]=out; return out
+[?2004l[?2004h> 
+[?2004l[?2004h> class Opt:
+[?2004l
+
+def [?2004h>  def __init__(self):
+[?2004l[?2004h>   self.mode=None; self.pats=[]; self.icase=False; self.inv=False; self.word=False; self.line=False
+[?2004l[?2004h>   self.out=None; self.quiet=False; self.silent=False; self.byte=False; self.fname=None; self.label=None
+[?2004l[?2004h>   self.num=False; self.tab=False; self.zero_name=False; self.zero=False; self.max=None
+[?2004l[?2004h>   self.after=None; self.before=None; self.common=0; self.sep=b'--'; self.use_sep=True; self.binary='binary'
+[?2004ln,off,context=False):
+ sep=b'-' if context else b':' ; f=[]
+ if o.fname is True or (o.fname is None and multi):f.append(name)
+ if o.num:f.append(str(n).encode())
+ if o.byte:f.append(str(off).encode())
+ if not[?2004h> 
+[?2004l[?2004h> def need(argv,i,val):
+[?2004l[?2004h>  if val!='':return val,i
+[?2004l[?2004h>  if i+1>=len(argv):raise ValueError('missing option argument')
+[?2004l[?2004h>  return argv[i+1],i+1
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse(argv):
+[?2004l[?2004h>  o=Opt(); files=[]; operand=None; i=0; explicit=False
+[?2004l[?2004h>  while i<len(argv):
+[?2004l[?2004h>   a=argv[i]
+[?2004l[?2004h>   if a=='--': i+=1; break
+[?2004l[?2004h>   if not a.startswith('-') or a=='-': break
+[?2004l[?2004h>   if a.startswith('--'):
+[?2004l[?2004h>    x=a[2:]; name,eq,val=x.partition('=')
+[?2004l[?2004h>    noarg={'extended-regexp':'E','fixed-strings':'F','basic-regexp':'G','ignore-case':'i','no-ignore-case':'J','invert-match':'v','word-regexp':'w','line-regexp':'x','count':'c','files-with-matches':'l','files-without-match':'L','quiet':'q','silent':'s','byte-offset':'b','with-filename':'H','no-filename':'h','line-number':'n','initial-tab':'T','null':'Z','null-data':'z','text':'a'}
+[?2004l[?2004h>    argmap={'regexp':'e','file':'f','max-count':'m','label':'Y','after-context':'A','before-context':'B','context':'C','group-separator':'S','binary-files':'D'}
+[?2004lpend(idx); matches.appen[?2004h>    if name=='no-group-separator':o.use_sep=False; i+=1;continue
+[?2004l[?2004h>    if name in noarg: chars=noarg[name]
+[?2004l[?2004h>    elif name in argmap:
+[?2004l[?2004h>     val,i=need(argv,i,val if eq else ''); chars=argmap[name]+val
+[?2004l[?2004h>    else: raise ValueError('unknown option')
+[?2004l[?2004h>   else: chars=a[1:]
+[?2004l[?2004h>   j=0
+[?2004l[?2004h>   if chars.isdigit(): o.common=int(chars); i+=1; continue
+[?2004l[?2004h>   while j<len(chars):
+[?2004l[?2004h>    c=chars[j]; j+=1
+[?2004l':
+   pr=pref[?2004h>    if c in 'GEF':
+[?2004l[?2004h>     if o.mode and o.mode!=c:raise ValueError('conflicting matchers')
+[?2004l[?2004h>     o.mode=c
+[?2004l[?2004h>    elif c=='i':o.icase=True
+[?2004ly a filename prefix, not lin[?2004h>    elif c=='J':o.icase=False
+[?2004le/byte fields
+   if pr:
+    s[?2004h>    elif c=='v':o.inv=True
+[?2004l[?2004h>    elif c=='w':o.word=True
+[?2004l[?2004h>    elif c=='x':o.line=True
+[?2004l[?2004h>    elif c in 'clL':o.out=c
+[?2004l[?2004h>    elif c=='q':o.quiet=True
+[?2004ln[?2004h>    elif c=='s':o.silent=True
+[?2004l[?2004h>    elif c=='b':o.byte=True
+[?2004l[?2004h>    elif c=='H':o.fname=True
+[?2004l[?2004h>    elif c=='h':o.fname=False
+[?2004l[?2004h>    elif c=='n':o.num=True
+[?2004l[?2004h>    elif c=='T':o.tab=True
+[?2004l[?2004h>    elif c=='Z':o.zero_name=True
+[?2004l[?2004h>    elif c=='z':o.zero=True
+[?2004l[?2004h>    elif c=='a':o.binary='text'
+[?2004l[?2004h>    elif c=='I':o.binary='without-match'
+[?2004l[?2004h>    elif c in 'efmYABCS D'.replace(' ',''):
+[?2004l[?2004h>     val,i=need(argv,i,chars[j:]); j=len(chars)
+[?2004l[?2004h>     if c=='e': o.pats += [(B(x),None) for x in val.split('\n')]; explicit=True
+[?2004l[?2004h>     elif c=='f':
+[?2004l[?2004h>      try:
+[?2004l[?2004h>       d=sys.stdin.buffer.read() if val=='-' else open(val,'rb').read()
+[?2004l[?2004h>       pp=d.split(b'\n'); pp=pp[:-1] if d.endswith(b'\n') else pp
+[?2004l[?2004h>       o.pats += [(x,None) for x in pp]; explicit=True
+[?2004lout is None and not o.inv and getattr(o,'only',False):pass
+    if chosen and hasattr(o,'only') and o.only and not o.inv:
+     pos=0
+     while True:
+      m=one_matches(l[?2004h>      except OSError: raise ValueError('pattern file')
+[?2004l[?2004h>     elif c=='m':o.max=int(val)
+[?2004l[?2004h>     elif c=='Y':o.label=B(val)
+[?2004l[?2004h>     elif c=='A':o.after=int(val)
+[?2004l[?2004h>     elif c=='B':o.before=int(val)
+[?2004l[?2004h>     elif c=='C':o.common=int(val)
+[?2004l[?2004h>     elif c=='S':o.sep=B(val);o.use_sep=True
+[?2004l[?2004h>     elif c=='D':
+[?2004l[?2004h>      if val not in ('binary','text','without-match'):raise ValueError('bad binary mode')
+[?2004l[?2004h>      o.binary=val
+[?2004l[?2004h>    else:raise ValueError('unknown option')
+[?2004l[?2004h>   i+=1
+[?2004l[?2004h>  if not explicit:
+[?2004l[?2004h>   if i>=len(argv):raise ValueError('no pattern')
+[?2004l[?2004h>   o.pats=[(B(x),None) for x in argv[i].split('\n')];i+=1
+[?2004l:break
+      s,e=m
+      if e>s: output.append(prefix(o,name,multi,x+1,off+s)+line[s:e]+(b'\0' if o.zero else b'\n'))
+      pos=e if e>s else s+1
+    else:
+     output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\0' if o.zero else b'\n'))
+   last_group=True
+ if output:sys.stdout.buffer.write(b''.join(output))
+ return 2 if err else (0 if had else 1)
+
+# -o is installed as a tiny parser extension without complicating option state above.
+_oldparse=parse
+def parse(argv):
+ mapped=[]; only=False
+ for a in argv:
+  if a==[?2004h>  files=argv[i:]
+[?2004l[?2004h>  if o.after is None:o.after=o.common
+[?2004l[?2004h>  if o.before is None:o.before=o.common
+[?2004l[?2004h>  return o,files
+[?2004l[?2004h> 
+[?2004l[?2004h> def compile_pats(o):
+[?2004l[?2004h>  out=[]
+[?2004l[?2004h>  for p,_ in o.pats:
+[?2004l[?2004h>   if o.mode=='F':out.append(p)
+[?2004l[?2004h>   else:
+[?2004l[?2004h>    z=Parser(p,o.mode=='E',o.icase).parse()
+[?2004l[?2004h>    out.append(z)
+[?2004l[?2004h>  return out
+[?2004l[?2004h> 
+[?2004l[?2004h> def one_matches(data,pats,o,start=0):
+[?2004l[?2004h>  best=None
+[?2004l[?2004h>  for s in range(start,len(data)+1):
+[?2004l[?2004h>   for p in pats:
+[?2004l[?2004h>    if o.mode=='F':
+[?2004l[?2004h>     if p==b'': e=s
+[?2004l[?2004h>     else:
+[?2004l[?2004h>      q=data.lower().find(p.lower(),s) if o.icase else data.find(p,s)
+[?2004l[?2004h>      if q<0:continue
+[?2004l[?2004h>      if q!=s:continue
+[?2004l[?2004h>      e=s+len(p)
+[?2004l[?2004h>     es={e}
+[?2004l[?2004h>    else:es=ends(p,data,s,o.icase,{})
+[?2004l[?2004h>    for e in es:
+[?2004l[?2004h>     if o.line and not (s==0 and e==len(data)):continue
+[?2004l[?2004h>     if o.word and not ((s==0 or data[s-1] not in WORD) and (e==len(data) or data[e] not in WORD)):continue
+[?2004l[?2004h>     if best is None or e>best:best=e
+[?2004l[?2004h>   if best is not None:return s,best
+[?2004l[?2004h>  return None
+[?2004l[?2004h> 
+[?2004l[?2004h> def records(d,delim):
+[?2004l[?2004h>  out=[]; start=0
+[?2004l[?2004h>  for i,c in enumerate(d):
+[?2004l[?2004h>   if c==delim:out.append((d[start:i],start,True));start=i+1
+[?2004l[?2004h>  if start<len(d):out.append((d[start:],start,False))
+[?2004l[?2004h>  return out
+[?2004l[?2004h> 
+[?2004l[?2004h> def prefix(o,name,multi,n,off,context=False):
+[?2004l[?2004h>  sep=b'-' if context else b':' ; f=[]
+[?2004l[?2004h>  if o.fname is True or (o.fname is None and multi):f.append(name)
+[?2004l[?2004h>  if o.num:f.append(str(n).encode())
+[?2004l[?2004h>  if o.byte:f.append(str(off).encode())
+[?2004l[?2004h>  if not f:return b''
+[?2004l[?2004h>  r=sep.join(f)+sep
+[?2004l[?2004h>  if o.tab:r+=b'\t'
+[?2004l[?2004h>  return r
+[?2004l[?2004h> 
+[?2004l[?2004h> def main(argv):
+[?2004l[?2004h>  try:o,files=parse(argv); pats=compile_pats(o)
+[?2004l[?2004h>  except Exception as e:
+[?2004l[?2004h>   sys.stderr.write('grep: '+str(e)+'\n');return 2
+[?2004l[?2004h>  if not files:files=['-']
+[?2004l[?2004h>  multi=len(files)>1; had=False; err=False; output=[]; last_group=False
+[?2004l[?2004h>  for fn in files:
+[?2004l[?2004h>   name=o.label or b'(standard input)' if fn=='-' else B(fn)
+[?2004l[?2004h>   try:d=sys.stdin.buffer.read() if fn=='-' else open(fn,'rb').read()
+[?2004l[?2004h>   except OSError as e:
+[?2004l[?2004h>    err=True
+[?2004l[?2004h>    if not o.silent:sys.stderr.write('grep: %s: %s\n'%(fn,e.strerror))
+[?2004l[?2004h>    continue
+[?2004l[?2004h>   binary=(b'\0' in d and not o.zero and o.binary!='text')
+[?2004l[?2004h>   rs=records(d,0 if o.zero else (0 if binary else 10))
+[?2004l[?2004h>   selected=[]; matches=[]
+[?2004l[?2004h>   if not (binary and o.binary=='without-match') and o.max!=0:
+[?2004l[?2004h>    for idx,(line,off,term) in enumerate(rs):
+[?2004l[?2004h>     m=one_matches(line,pats,o); yes=(m is not None)^o.inv
+[?2004l[?2004h>     if yes:
+[?2004l[?2004h>      selected.append(idx); matches.append(m)
+[?2004l[?2004h>      if o.max is not None and len(selected)>=o.max:break
+[?2004l[?2004h>      if binary and o.binary=='binary' and o.out!='c':break
+[?2004l[?2004h>   count=len(selected); had |= count>0
+[?2004l[?2004h>   if o.quiet and count:return 0
+[?2004l[?2004h>   if o.out in ('l','L'):
+[?2004l[?2004h>    yes=count>0 if o.out=='l' else count==0
+[?2004l[?2004h>    if yes:output.append(name+(b'\0' if o.zero_name else b'\n'))
+[?2004l[?2004h>    continue
+[?2004l[?2004h>   if o.out=='c':
+[?2004l[?2004h>    pr=prefix(o,name,multi,0,0) if (o.fname is True or (o.fname is None and multi)) else b''
+[?2004l[?2004h>    # count has only a filename prefix, not line/byte fields
+[?2004l[?2004h>    if pr:
+[?2004l[?2004h>     sep=b':'; shown=(name+sep)
+[?2004l[?2004h>    else:shown=b''
+[?2004l[?2004h>    output.append(shown+str(count).encode()+b'\n');continue
+[?2004l[?2004h>   if not count:continue
+[?2004l[?2004h>   if binary and o.binary=='binary':
+[?2004l[?2004h>    output.append(b'Binary file '+name+b' matches\n');continue
+[?2004l[?2004h>   selset=set(selected)
+[?2004l[?2004h>   show=set()
+[?2004l[?2004h>   for x in selected:show.update(range(max(0,x-o.before),min(len(rs),x+o.after+1)))
+[?2004l[?2004h>   groups=[]
+[?2004l[?2004h>   for x in sorted(show):
+[?2004l[?2004h>    if not groups or x>groups[-1][-1]+1:groups.append([x])
+[?2004l[?2004h>    else:groups[-1].append(x)
+[?2004l[?2004h>   for gi,g in enumerate(groups):
+[?2004l[?2004h>    if (last_group or gi) and o.use_sep:output.append(o.sep+b'\n')
+[?2004l[?2004h>    for x in g:
+[?2004l[?2004h>     line,off,term=rs[x]; chosen=x in selset
+[?2004l[?2004h>     if chosen and o.out is None and not o.inv and getattr(o,'only',False):pass
+[?2004l[?2004h>     if chosen and hasattr(o,'only') and o.only and not o.inv:
+[?2004l[?2004h>      pos=0
+[?2004l[?2004h>      while True:
+[?2004l[?2004h>       m=one_matches(line,pats,o,pos)
+[?2004l[?2004h>       if not m:break
+[?2004l[?2004h>       s,e=m
+[?2004l[?2004h>       if e>s: output.append(prefix(o,name,multi,x+1,off+s)+line[s:e]+(b'\0' if o.zero else b'\n'))
+[?2004l[?2004h>       pos=e if e>s else s+1
+[?2004l[?2004h>     else:
+[?2004l[?2004h>      output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\0' if o.zero else b'\n'))
+[?2004l[?2004h>    last_group=True
+[?2004l[?2004h>  if output:sys.stdout.buffer.write(b''.join(output))
+[?2004l[?2004h>  return 2 if err else (0 if had else 1)
+[?2004l[?2004h> 
+[?2004l[?2004h> # -o is installed as a tiny parser extension without complicating option state above.
+[?2004l[?2004h> _oldparse=parse
+[?2004l[?2004h> def parse(argv):
+[?2004l[?2004h>  mapped=[]; only=False
+[?2004l[?2004h>  for a in argv:
+[?2004l[?2004h>   if a=='--only-matching':only=True
+[?2004l[?2004h>   elif a.startswith('-') and not a.startswith('--') and 'o' in a[1:]:
+[?2004l[?2004h>    only=True; z='-'+a[1:].replace('o','');
+[?2004l[?2004h>    if z!='-':mapped.append(z)
+[?2004l[?2004h>   else:mapped.append(a)
+[?2004l[?2004h>  o,f=_oldparse(mapped);o.only=only;return o,f
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__':sys.exit(main(sys.argv[1:]))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/app# chmod +x /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/app# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/app# cd /tmp && printf 'foo\nbar\nfood\n' > a && printf 'xx\0foo\0zz' > bin && python3 /app/pygrep/grep.py foo a; echo st:$?; python3 /app/pygrep/grep.py -EnH '^(foo|bar)$' a; echo st:$?; python3 /app/pygrep/grep.py -Foc o a; echo st:$?; python3 /app/pygrep/grep.py -n -A1 foo a; echo st:$?; python3 /app/pygrep/grep.py -z foo bin | od -An -tx1c; echo st:${PIPESTATUS[0]}; python3 /app/pygrep/grep.py foo bin; echo st:$?
+[?2004lfoo
+--
+food
+st:0
+a:1:foo
+a:2:bar
+st:0
+2
+st:0
+1:foo
+2-bar
+3:food
+st:0
+  66  6f  6f  00
+   f   o   o  \0
+st:0
+Binary file bin matches
+st:0
+[?2004hroot@b231699c9d89:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("self.after=None; self.before=None; self.common=0; self.sep=b'--'; self.use_sep=True; self.binary='binary'", "self.after=None; self.before=None; self.common=0; self.context_given=False; self.sep=b'--'; self.use_sep=True; self.binary='binary'")
+[?2004l[?2004h> s=s.replace("elif c=='A':o.after=int(val)", "elif c=='A':o.after=int(val);o.context_given=True")
+[?2004l[?2004h> s=s.replace("elif c=='B':o.before=int(val)", "elif c=='B':o.before=int(val);o.context_given=True")
+[?2004l[?2004h> s=s.replace("elif c=='C':o.common=int(val)", "elif c=='C':o.common=int(val);o.context_given=True")
+[?2004l[?2004h> s=s.replace("if chars.isdigit(): o.common=int(chars); i+=1; continue", "if chars.isdigit(): o.common=int(chars); o.context_given=True; i+=1; continue")
+[?2004l[?2004h> s=s.replace("def records(d,delim):\n out=[]; start=0\n for i,c in enumerate(d):\n  if c==delim:out.append((d[start:i],start,True));start=i+1", "def records(d,delim):\n out=[]; start=0\n delims=delim if isinstance(delim,tuple) else (delim,)\n for i,c in enumerate(d):\n  if c in delims:out.append((d[start:i],start,True));start=i+1")
+[?2004l[?2004h> s=s.replace("rs=records(d,0 if o.zero else (0 if binary else 10))", "rs=records(d,0 if o.zero else ((0,10) if binary else 10))")
+[?2004l[?2004h> s=s.replace("for x in selected:show.update(range(max(0,x-o.before),min(len(rs),x+o.after+1)))", "for x in selected:\n   if o.only: show.add(x)\n   else: show.update(range(max(0,x-o.before),min(len(rs),x+o.after+1)))")
+[?2004l[?2004h> s=s.replace("if (last_group or gi) and o.use_sep:output.append(o.sep+b'\\n')", "if o.context_given and (last_group or gi) and o.use_sep:output.append(o.sep+b'\\n')")
+[?2004l[?2004h> s=s.replace("if chosen and hasattr(o,'only') and o.only and not o.inv:", "if chosen and hasattr(o,'only') and o.only and not o.inv:")
+[?2004l[?2004h> # The existing else prints inverted selected lines under -o; make -o/-v intentionally emit nothing.
+[?2004l[?2004h> s=s.replace("     else:\n      output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\\0' if o.zero else b'\\n'))", "     elif not (o.only and o.inv):\n      output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\\0' if o.zero else b'\\n'))")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/tmp# cd /tmp && printf 'foo\nbar\nfood\n' > a && printf 'foo\nx\nfoo\n' > b && printf 'foo\nxx\0foo\nyy\0no' > bin2
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- ordinary' && python3 /app/pygrep/grep.py foo a | od -An -tc
+[?2004l--- ordinary
+   f   o   o  \n   f   o   o   d  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- context' && python3 /app/pygrep/grep.py -n -A0 foo a | od -An -tc
+[?2004l--- context
+   1   :   f   o   o  \n   -   -  \n   3   :   f   o   o   d  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- separated context groups' && python3 /app/pygrep/grep.py -n -A1 foo b | od -An -tc
+[?2004l--- separated context groups
+   1   :   f   o   o  \n   2   -   x  \n   3   :   f   o   o  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- multi files' && python3 /app/pygrep/grep.py foo a b | od -An -tc
+[?2004l--- multi files
+   a   :   f   o   o  \n   a   :   f   o   o   d  \n   b   :   f
+   o   o  \n   b   :   f   o   o  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- binary count' && python3 /app/pygrep/grep.py -c foo bin2; echo st:$?
+[?2004l--- binary count
+2
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- only/invert' && python3 /app/pygrep/grep.py -ov foo a | od -An -tc; echo st:${PIPESTATUS[0]}
+[?2004l--- only/invert
+   b   a   r  \n
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- missing plus match' && python3 /app/pygrep/grep.py foo absent a >/tmp/out; x=$?; cat /tmp/out; echo st:$x
+[?2004l--- missing plus match
+grep: absent: No such file or directory
+a:foo
+a:food
+st:2
+[?2004hroot@b231699c9d89:/tmp# sed -n '240,430p' /app/docs/grep.txt | sed -n '/initial-tab/,+18p; /byte-offset/,+12p; /Context Line Control/,+90p'
+[?2004l‘--byte-offset’
+     Print the 0-based byte offset within the input file before each
+     line of output.  If ‘-o’ (‘--only-matching’) is specified, print
+     the offset of the matching part itself.
+
+‘-H’
+‘--with-filename’
+     Print the file name for each match.  This is the default when there
+     is more than one file to search.
+
+‘-h’
+‘--no-filename’
+     Suppress the prefixing of file names on output.  This is the
+‘--initial-tab’
+     Make sure that the first character of actual line content lies on a
+     tab stop, so that the alignment of tabs looks normal.  This is
+     useful with options that prefix their output to the actual content:
+     ‘-H’, ‘-n’, and ‘-b’.  This may also prepend spaces to output line
+     numbers and byte offsets so that lines from a single file all start
+     at the same column.
+
+‘-Z’
+‘--null’
+     Output a zero byte (the ASCII NUL character) instead of the
+     character that normally follows a file name.  For example, ‘grep
+     -lZ’ outputs a zero byte after each file name instead of the usual
+     newline.  This option makes the output unambiguous, even in the
+     presence of file names containing unusual characters like newlines.
+     This option can be used with commands like ‘find -print0’, ‘perl
+     -0’, ‘sort -z’, and ‘xargs -0’ to process arbitrary file names,
+     even those that contain newline characters.
+
+2.1.5 Context Line Control
+--------------------------
+
+“Context lines” are non-matching lines that are near a matching line.
+They are output only if one of the following options are used.
+Regardless of how these options are set, ‘grep’ never outputs any given
+line more than once.  If the ‘-o’ (‘--only-matching’) option is
+specified, these options have no effect and a warning is given upon
+their use.
+
+‘-A NUM’
+‘--after-context=NUM’
+     Print NUM lines of trailing context after matching lines.
+
+‘-B NUM’
+‘--before-context=NUM’
+     Print NUM lines of leading context before matching lines.
+
+‘-C NUM’
+‘-NUM’
+‘--context=NUM’
+     Print NUM lines of leading and trailing output context.
+
+‘--group-separator=STRING’
+     When ‘-A’, ‘-B’ or ‘-C’ are in use, print STRING instead of ‘--’
+     between groups of lines.
+
+‘--no-group-separator’
+     When ‘-A’, ‘-B’ or ‘-C’ are in use, do not print a separator
+     between groups of lines.
+
+   Here are some points about how ‘grep’ chooses the separator to print
+between prefix fields and line content:
+
+   • Matching lines normally use ‘:’ as a separator between prefix
+     fields and actual line content.
+
+   • Context (i.e., non-matching) lines use ‘-’ instead.
+
+   • When context is not specified, matching lines are simply output one
+     right after another.
+
+   • When context is specified, lines that are adjacent in the input
+     form a group and are output one right after another, while by
+     default a separator appears between non-adjacent groups.
+
+   • The default separator is a ‘--’ line; its presence and appearance
+     can be changed with the options above.
+
+   • Each group may contain several matching lines when they are close
+     enough to each other that two adjacent groups connect and can merge
+     into a single contiguous one.
+
+2.1.6 File and Directory Selection
+----------------------------------
+
+‘-a’
+‘--text’
+     Process a binary file as if it were text; this is equivalent to the
+     ‘--binary-files=text’ option.
+
+‘--binary-files=TYPE’
+     If a file’s data or metadata indicate that the file contains binary
+     data, assume that the file is of type TYPE.  Non-text bytes
+     indicate binary data; these are either output bytes that are
+     improperly encoded for the current locale (*note Environment
+     Variables::), or null input bytes when the ‘-z’ (‘--null-data’)
+     option is not given (*note Other Options::).
+
+     By default, TYPE is ‘binary’, and ‘grep’ suppresses output after
+     null input binary data is discovered, and suppresses output lines
+     that contain improperly encoded data.  When some output is
+     suppressed, ‘grep’ follows any output with a message to standard
+     error saying that a binary file matches.
+
+     If TYPE is ‘without-match’, when ‘grep’ discovers null input binary
+     data it assumes that the rest of the file does not match; this is
+     equivalent to the ‘-I’ option.
+
+     If TYPE is ‘text’, ‘grep’ processes binary data as if it were text;
+     this is equivalent to the ‘-a’ option.
+
+     When TYPE is ‘binary’, ‘grep’ may treat non-text bytes as line
+     terminators even without the ‘-z’ (‘--null-data’) option.  This
+     means choosing ‘binary’ versus ‘text’ can affect whether a pattern
+     matches a file.  For example, when TYPE is ‘binary’ the pattern
+     ‘q$’ might match ‘q’ immediately followed by a null byte, even
+     though this is not matched when TYPE is ‘text’.  Conversely, when
+     TYPE is ‘binary’ the pattern ‘.’ (period) might not match a null
+     byte.
+
+[?2004hroot@b231699c9d89:/tmp# nl -ba /app/pygrep/grep.py | sed -n '285,430p'
+[?2004l   285	     if o.max is not None and len(selected)>=o.max:break
+   286	     if binary and o.binary=='binary' and o.out!='c':break
+   287	  count=len(selected); had |= count>0
+   288	  if o.quiet and count:return 0
+   289	  if o.out in ('l','L'):
+   290	   yes=count>0 if o.out=='l' else count==0
+   291	   if yes:output.append(name+(b'\0' if o.zero_name else b'\n'))
+   292	   continue
+   293	  if o.out=='c':
+   294	   pr=prefix(o,name,multi,0,0) if (o.fname is True or (o.fname is None and multi)) else b''
+   295	   # count has only a filename prefix, not line/byte fields
+   296	   if pr:
+   297	    sep=b':'; shown=(name+sep)
+   298	   else:shown=b''
+   299	   output.append(shown+str(count).encode()+b'\n');continue
+   300	  if not count:continue
+   301	  if binary and o.binary=='binary':
+   302	   output.append(b'Binary file '+name+b' matches\n');continue
+   303	  selset=set(selected)
+   304	  show=set()
+   305	  for x in selected:
+   306	   if o.only: show.add(x)
+   307	   else: show.update(range(max(0,x-o.before),min(len(rs),x+o.after+1)))
+   308	  groups=[]
+   309	  for x in sorted(show):
+   310	   if not groups or x>groups[-1][-1]+1:groups.append([x])
+   311	   else:groups[-1].append(x)
+   312	  for gi,g in enumerate(groups):
+   313	   if o.context_given and (last_group or gi) and o.use_sep:output.append(o.sep+b'\n')
+   314	   for x in g:
+   315	    line,off,term=rs[x]; chosen=x in selset
+   316	    if chosen and o.out is None and not o.inv and getattr(o,'only',False):pass
+   317	    if chosen and hasattr(o,'only') and o.only and not o.inv:
+   318	     pos=0
+   319	     while True:
+   320	      m=one_matches(line,pats,o,pos)
+   321	      if not m:break
+   322	      s,e=m
+   323	      if e>s: output.append(prefix(o,name,multi,x+1,off+s)+line[s:e]+(b'\0' if o.zero else b'\n'))
+   324	      pos=e if e>s else s+1
+   325	    else:
+   326	     output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\0' if o.zero else b'\n'))
+   327	   last_group=True
+   328	 if output:sys.stdout.buffer.write(b''.join(output))
+   329	 return 2 if err else (0 if had else 1)
+   330	
+   331	# -o is installed as a tiny parser extension without complicating option state above.
+   332	_oldparse=parse
+   333	def parse(argv):
+   334	 mapped=[]; only=False
+   335	 for a in argv:
+   336	  if a=='--only-matching':only=True
+   337	  elif a.startswith('-') and not a.startswith('--') and 'o' in a[1:]:
+   338	   only=True; z='-'+a[1:].replace('o','');
+   339	   if z!='-':mapped.append(z)
+   340	  else:mapped.append(a)
+   341	 o,f=_oldparse(mapped);o.only=only;return o,f
+   342	
+   343	if __name__=='__main__':sys.exit(main(sys.argv[1:]))
+[?2004hroot@b231699c9d89:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> # Empty pattern files contain no patterns; a nonempty file without a final LF retains its last pattern.
+[?2004l[?2004h> s=s.replace("pp=d.split(b'\\n'); pp=pp[:-1] if d.endswith(b'\\n') else pp", "pp=[] if d==b'' else d.split(b'\\n'); pp=pp[:-1] if d.endswith(b'\\n') else pp")
+[?2004l[?2004h> # Prefix construction with -T padding and -Z after filename.
+[?2004l[?2004h> a=s.index('def prefix(o,name,multi,n,off,context=False):')
+[?2004l[?2004h> b=s.index('\ndef main(argv):',a)
+[?2004l[?2004h> s=s[:a]+'''def prefix(o,name,multi,n,off,context=False):
+[?2004l[?2004h>  sep=b'-' if context else b':'
+[?2004l[?2004h>  use_name=o.fname is True or (o.fname is None and multi)
+[?2004l[?2004h>  fields=[]
+[?2004l[?2004h>  if use_name: fields.append(name)
+[?2004l[?2004h>  if o.num:
+[?2004l[?2004h>   z=str(n).encode()
+[?2004l[?2004h>   if o.tab: z=z.rjust(getattr(o,'nwidth',len(z)))
+[?2004l[?2004h>   fields.append(z)
+[?2004l[?2004h>  if o.byte:
+[?2004l[?2004h>   z=str(off).encode()
+[?2004l[?2004h>   if o.tab: z=z.rjust(getattr(o,'bwidth',len(z)))
+[?2004l[?2004h>   fields.append(z)
+[?2004l[?2004h>  if not fields:return b''
+[?2004l[?2004h>  # -Z replaces only the separator immediately following a filename.
+[?2004l[?2004h>  if use_name and o.zero_name:
+[?2004l[?2004h>   r=fields[0]+b'\\0'
+[?2004l[?2004h>   if len(fields)>1:r+=sep.join(fields[1:])+sep
+[?2004l[?2004h>  else:r=sep.join(fields)+sep
+[?2004l[?2004h>  if o.tab:r+=b'\\t'
+[?2004l[?2004h>  return r
+[?2004l[?2004h> '''+s[b:]
+[?2004l[?2004h> # Establish tab-alignment widths for each input file.
+[?2004l[?2004h> s=s.replace("rs=records(d,0 if o.zero else ((0,10) if binary else 10))", "rs=records(d,0 if o.zero else ((0,10) if binary else 10))\n  o.nwidth=len(str(max(1,len(rs))))\n  o.bwidth=len(str(max(0,len(d))))")
+[?2004l[?2004h> # Counts use the normal filename separator, including -Z, but no line/offset fields.
+[?2004l[?2004h> old="""pr=prefix(o,name,multi,0,0) if (o.fname is True or (o.fname is None and multi)) else b''
+[?2004l[?2004h>    # count has only a filename prefix, not line/byte fields
+[?2004l[?2004h>    if pr:
+[?2004l[?2004h>     sep=b':'; shown=(name+sep)
+[?2004l[?2004h>    else:shown=b''
+[?2004l[?2004h>    output.append(shown+str(count).encode()+b'\\n');continue"""
+[?2004l[?2004h> new="""use_name=o.fname is True or (o.fname is None and multi)
+[?2004l[?2004h>    shown=(name+(b'\\0' if o.zero_name else b':')) if use_name else b''
+[?2004l[?2004h>    output.append(shown+str(count).encode()+b'\\n');continue"""
+[?2004l[?2004h> s=s.replace(old,new)
+[?2004l[?2004h> # -L succeeds when it lists at least one file.
+[?2004l[?2004h> s=s.replace("if yes:output.append(name+(b'\\0' if o.zero_name else b'\\n'))\n   continue", "if yes:\n    output.append(name+(b'\\0' if o.zero_name else b'\\n'))\n    had=True\n   continue")
+[?2004l[?2004h> # -o makes context ineffective, including separators.
+[?2004l[?2004h> s=s.replace("if o.context_given and (last_group or gi) and o.use_sep:", "if o.context_given and not o.only and (last_group or gi) and o.use_sep:")
+[?2004l[?2004h> # Replace the exact rendering tail robustly.
+[?2004l[?2004h> s=s.replace("""     else:
+[?2004l[?2004h>       output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\\0' if o.zero else b'\\n'))""", """     elif not (o.only and o.inv):
+[?2004l[?2004h>       output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\\0' if o.zero else b'\\n'))""")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/tmp# cd /tmp
+[?2004l[?2004hroot@b231699c9d89:/tmp# : > empty.pat
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\nbar\nfood\n' > a
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'x\ny\n' > nomatch
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -ov (expect no bytes, status 0)' && python3 /app/pygrep/grep.py -ov foo a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- -ov (expect no bytes, status 0)
+ 62 61 72 0a
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- empty -f (expect no bytes, status 1)' && python3 /app/pygrep/grep.py -f empty.pat a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- empty -f (expect no bytes, status 1)
+st:1
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -L status' && python3 /app/pygrep/grep.py -L foo nomatch; echo st:$?
+[?2004l--- -L status
+nomatch
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- normal -HZ' && python3 /app/pygrep/grep.py -HZ foo a | od -An -tx1c
+[?2004l--- normal -HZ
+  61  00  66  6f  6f  0a  61  00  66  6f  6f  64  0a
+   a  \0   f   o   o  \n   a  \0   f   o   o   d  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- count -HZ' && python3 /app/pygrep/grep.py -cHZ foo a | od -An -tx1c
+[?2004l--- count -HZ
+  61  00  32  0a
+   a  \0   2  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -nT widths' && { seq 1 12; } > nums && python3 /app/pygrep/grep.py -nT -e 1 nums | od -An -tc
+[?2004l--- -nT widths
+       1   :  \t   1  \n   1   0   :  \t   1   0  \n   1   1   :
+  \t   1   1  \n   1   2   :  \t   1   2  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -o ignores context separators' && python3 /app/pygrep/grep.py -oA0 foo a | od -An -tc
+[?2004l--- -o ignores context separators
+   f   o   o  \n   f   o   o  \n
+[?2004hroot@b231699c9d89:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("elif c=='a':o.binary='text'", "elif c=='a':o.binary='text'\n   elif c=='I':o.binary='without-match'")
+[?2004l[?2004h> s=s.replace("count=len(selected); had |= count>0", "count=len(selected)\n  if o.out!='L': had |= count>0")
+[?2004l[?2004h> # Directly alter the actual source text around the rendering branch.
+[?2004l[?2004h> s=s.replace("     else:\n      output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\\0' if o.zero else b'\\n'))", "     elif not (o.only and o.inv):\n      output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\\0' if o.zero else b'\\n'))")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/tmp# tail -n +310 /app/pygrep/grep.py | head -35
+[?2004l   continue
+  if o.out=='c':
+   use_name=o.fname is True or (o.fname is None and multi)
+   shown=(name+(b'\0' if o.zero_name else b':')) if use_name else b''
+   output.append(shown+str(count).encode()+b'\n');continue
+  if not count:continue
+  if binary and o.binary=='binary':
+   output.append(b'Binary file '+name+b' matches\n');continue
+  selset=set(selected)
+  show=set()
+  for x in selected:
+   if o.only: show.add(x)
+   else: show.update(range(max(0,x-o.before),min(len(rs),x+o.after+1)))
+  groups=[]
+  for x in sorted(show):
+   if not groups or x>groups[-1][-1]+1:groups.append([x])
+   else:groups[-1].append(x)
+  for gi,g in enumerate(groups):
+   if o.context_given and not o.only and (last_group or gi) and o.use_sep:output.append(o.sep+b'\n')
+   for x in g:
+    line,off,term=rs[x]; chosen=x in selset
+    if chosen and o.out is None and not o.inv and getattr(o,'only',False):pass
+    if chosen and hasattr(o,'only') and o.only and not o.inv:
+     pos=0
+     while True:
+      m=one_matches(line,pats,o,pos)
+      if not m:break
+      s,e=m
+      if e>s: output.append(prefix(o,name,multi,x+1,off+s)+line[s:e]+(b'\0' if o.zero else b'\n'))
+      pos=e if e>s else s+1
+    else:
+     output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\0' if o.zero else b'\n'))
+   last_group=True
+ if output:sys.stdout.buffer.write(b''.join(output))
+ return 2 if err else (0 if had else 1)
+[?2004hroot@b231699c9d89:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace('import sys, os', 'import sys, os, re')
+[?2004l[?2004h> # Insert a backreference-capable wrapper and translator before compile_pats.
+[?2004l[?2004h> mark='def compile_pats(o):\n'
+[?2004l[?2004h> insert=r'''class BackrefPattern:
+[?2004l[?2004h>  def __init__(self, pattern, ere, icase):
+[?2004l[?2004h>   self.regex=re.compile(translate_regex(pattern,ere), re.I if icase else 0)
+[?2004l[?2004h> 
+[?2004l[?2004h> def translate_regex(p,ere):
+[?2004l[?2004h>  """Translate the documented ASCII BRE/ERE syntax to Python bytes regex."""
+[?2004l[?2004h>  out=bytearray(); i=0
+[?2004l[?2004h>  while i<len(p):
+[?2004l[?2004h>   c=p[i]
+[?2004l[?2004h>   if c==91:                       # copy bracket expression, expanding POSIX classes
+[?2004l[?2004h>    j=i+1; buf=bytearray(b'[')
+[?2004l[?2004h>    if j<len(p) and p[j]==94:buf.append(94);j+=1
+[?2004l[?2004h>    if j<len(p) and p[j]==93:buf.append(93);j+=1
+[?2004l[?2004h>    while j<len(p) and p[j]!=93:
+[?2004l[?2004h>     if p[j:j+2]==b'[:':
+[?2004l[?2004h>      k=p.find(b':]',j+2)
+[?2004l[?2004h>      if k>=0:
+[?2004l[?2004h>       name=p[j+2:k]; chars=sorted(cls_named(name))
+[?2004l[?2004h>       for x in chars:
+[?2004l[?2004h>        if x in (92,93,45,94):buf.append(92)
+[?2004l[?2004h>        buf.append(x)
+[?2004l[?2004h>       j=k+2;continue
+[?2004l[?2004h>     buf.append(p[j]);j+=1
+[?2004l[?2004h>    if j<len(p):buf.append(93);j+=1
+[?2004l[?2004h>    out.extend(buf);i=j;continue
+[?2004l[?2004h>   if c==92 and i+1<len(p):
+[?2004l[?2004h>    d=p[i+1];i+=2
+[?2004l[?2004h>    if 49<=d<=57:out.extend((92,d));continue
+[?2004l[?2004h>    if not ere and d in b'()|+?{}':out.append(d);continue
+[?2004l[?2004h>    if d==60:out.extend(b'(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])');continue
+[?2004l[?2004h>    if d==62:out.extend(b'(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])');continue
+[?2004l[?2004h>    if d==98:out.extend(b'\\b');continue
+[?2004l[?2004h>    if d==66:out.extend(b'\\B');continue
+[?2004l[?2004h>    out.extend((92,d));continue
+[?2004l[?2004h>   i+=1
+[?2004l[?2004h>   if not ere and c in b'()+?|{}':out.extend((92,c))
+[?2004l[?2004h>   else:out.append(c)
+[?2004l[?2004h>  return bytes(out)
+[?2004l[?2004h> 
+[?2004l[?2004h> '''
+[?2004l[?2004h> s=s.replace(mark,insert+mark)
+[?2004l[?2004h> # Compile patterns containing a numeric backreference with the fallback.
+[?2004l[?2004h> s=s.replace("if o.mode=='F':out.append(p)\n  else:\n   z=Parser(p,o.mode=='E',o.icase).parse()", "if o.mode=='F':out.append(p)\n  else:\n   if re.search(br'\\\\[1-9]',p):\n    out.append(BackrefPattern(p,o.mode=='E',o.icase));continue\n   z=Parser(p,o.mode=='E',o.icase).parse()")
+[?2004l[?2004h> # At a candidate start, test all possible endpoints longest-first for fallback patterns.
+[?2004l[?2004h> s=s.replace("else:es=ends(p,data,s,o.icase,{})", "elif isinstance(p,BackrefPattern):\n    es=set()\n    for ee in range(len(data),s-1,-1):\n     mm=p.regex.match(data,s,ee)\n     if mm is not None and mm.start()==s and mm.end()==ee:\n      es={ee};break\n   else:es=ends(p,data,s,o.icase,{})")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/tmp# cd /tmp
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\nbar\nfood\n' > a
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\nnone\n' > yes
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'none\n' > no
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'abab\nabcabc\nabac\n' > refs
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\0bar\n' > binary
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -ov empty output' && python3 /app/pygrep/grep.py -ov foo a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- -ov empty output
+ 62 61 72 0a
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -L all matching => status 1' && python3 /app/pygrep/grep.py -L foo yes; echo st:$?
+[?2004l--- -L all matching => status 1
+st:1
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -L mixed => list/status 0' && python3 /app/pygrep/grep.py -L foo yes no; echo st:$?
+[?2004l--- -L mixed => list/status 0
+no
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -I binary no match' && python3 /app/pygrep/grep.py -I foo binary; echo st:$?
+[?2004l--- -I binary no match
+st:1
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- BRE backref' && python3 /app/pygrep/grep.py '^\(ab\)\1$' refs; echo st:$?
+[?2004l--- BRE backref
+abab
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- ERE backref' && python3 /app/pygrep/grep.py -E '^(abc)\1$' refs; echo st:$?
+[?2004l--- ERE backref
+abcabc
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- max zero/count precedence' && python3 /app/pygrep/grep.py -om0 foo a; echo st:$?; python3 /app/pygrep/grep.py -oc foo a; echo st:$?
+[?2004l--- max zero/count precedence
+st:1
+2
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- conflicting matcher' && python3 /app/pygrep/grep.py -EF foo a >/tmp/z; echo st:$? bytes:$(wc -c </tmp/z)
+[?2004l--- conflicting matcher
+grep: conflicting matchers
+st:2 bytes:0
+[?2004hroot@b231699c9d89:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> # List modes override count regardless of option order; l/L retain last-value behavior with each other.
+[?2004l[?2004h> s=s.replace("elif c in 'clL':o.out=c", "elif c=='c':\n    if o.out not in ('l','L'):o.out='c'\n   elif c in 'lL':o.out=c")
+[?2004l[?2004h> # Replace the concrete final rendering branch based on its unique output statement.
+[?2004l[?2004h> lines=s.splitlines()
+[?2004l[?2004h> for i,line in enumerate(lines):
+[?2004l[?2004h>  if "output.append(prefix(o,name,multi,x+1,off,not chosen)+line+" in line:
+[?2004l[?2004h>   if i and lines[i-1].strip()=='else:':
+[?2004l[?2004h>    indent=lines[i-1][:-len(lines[i-1].lstrip())]
+[?2004l[?2004h>    lines[i-1]=indent+"elif not (o.only and o.inv):"
+[?2004l[?2004h> s='\n'.join(lines)+'\n'
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/tmp# nl -ba /app/pygrep/grep.py | sed -n '205,235p;385,410p'
+[?2004l   205	    elif c=='C':o.common=int(val);o.context_given=True
+   206	    elif c=='S':o.sep=B(val);o.use_sep=True
+   207	    elif c=='D':
+   208	     if val not in ('binary','text','without-match'):raise ValueError('bad binary mode')
+   209	     o.binary=val
+   210	   else:raise ValueError('unknown option')
+   211	  i+=1
+   212	 if not explicit:
+   213	  if i>=len(argv):raise ValueError('no pattern')
+   214	  o.pats=[(B(x),None) for x in argv[i].split('\n')];i+=1
+   215	 files=argv[i:]
+   216	 if o.after is None:o.after=o.common
+   217	 if o.before is None:o.before=o.common
+   218	 return o,files
+   219	
+   220	class BackrefPattern:
+   221	 def __init__(self, pattern, ere, icase):
+   222	  self.regex=re.compile(translate_regex(pattern,ere), re.I if icase else 0)
+   223	
+   224	def translate_regex(p,ere):
+   225	 """Translate the documented ASCII BRE/ERE syntax to Python bytes regex."""
+   226	 out=bytearray(); i=0
+   227	 while i<len(p):
+   228	  c=p[i]
+   229	  if c==91:                       # copy bracket expression, expanding POSIX classes
+   230	   j=i+1; buf=bytearray(b'[')
+   231	   if j<len(p) and p[j]==94:buf.append(94);j+=1
+   232	   if j<len(p) and p[j]==93:buf.append(93);j+=1
+   233	   while j<len(p) and p[j]!=93:
+   234	    if p[j:j+2]==b'[:':
+   235	     k=p.find(b':]',j+2)
+   385	      if not m:break
+   386	      s,e=m
+   387	      if e>s: output.append(prefix(o,name,multi,x+1,off+s)+line[s:e]+(b'\0' if o.zero else b'\n'))
+   388	      pos=e if e>s else s+1
+   389	    elif not (o.only and o.inv):
+   390	     output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\0' if o.zero else b'\n'))
+   391	   last_group=True
+   392	 if output:sys.stdout.buffer.write(b''.join(output))
+   393	 return 2 if err else (0 if had else 1)
+   394	
+   395	# -o is installed as a tiny parser extension without complicating option state above.
+   396	_oldparse=parse
+   397	def parse(argv):
+   398	 mapped=[]; only=False
+   399	 for a in argv:
+   400	  if a=='--only-matching':only=True
+   401	  elif a.startswith('-') and not a.startswith('--') and 'o' in a[1:]:
+   402	   only=True; z='-'+a[1:].replace('o','');
+   403	   if z!='-':mapped.append(z)
+   404	  else:mapped.append(a)
+   405	 o,f=_oldparse(mapped);o.only=only;return o,f
+   406	
+   407	if __name__=='__main__':sys.exit(main(sys.argv[1:]))
+[?2004hroot@b231699c9d89:/tmp# cd /tmp
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\nbar\nfood\n' > a
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\nx\n' > f1
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'x\nfoo\n' > f2
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -ov: no output/status 0' && python3 /app/pygrep/grep.py -ov foo a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- -ov: no output/status 0
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- list overrides count both orders' && python3 /app/pygrep/grep.py -lc foo a; echo st:$?; python3 /app/pygrep/grep.py -cl foo a; echo st:$?
+[?2004l--- list overrides count both orders
+a
+st:0
+a
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- L overrides count both orders' && python3 /app/pygrep/grep.py -Lc zzz a; echo st:$?; python3 /app/pygrep/grep.py -cL zzz a; echo st:$?
+[?2004l--- L overrides count both orders
+a
+st:0
+a
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- multiple patterns/long case precedence' && python3 /app/pygrep/grep.py -e foo -e bar a; python3 /app/pygrep/grep.py -i --no-ignore-case FOO a; echo st:$?
+[?2004l--- multiple patterns/long case precedence
+foo
+bar
+food
+st:1
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- fixed metacharacters' && printf 'a.b\naxb\n' | python3 /app/pygrep/grep.py -F 'a.b'; echo st:$?
+[?2004l--- fixed metacharacters
+a.b
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- only matching offsets' && python3 /app/pygrep/grep.py -nbo 'o+' a; echo st:$?
+[?2004l--- only matching offsets
+st:1
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- context separator across files' && python3 /app/pygrep/grep.py -nA0 foo f1 f2 | od -An -tc
+[?2004l--- context separator across files
+   f   1   :   1   :   f   o   o  \n   -   -  \n   f   2   :   2
+   :   f   o   o  \n
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- custom/no separator' && python3 /app/pygrep/grep.py -A0 --group-separator=X foo a; python3 /app/pygrep/grep.py -A0 --no-group-separator foo a
+[?2004l--- custom/no separator
+foo
+X
+food
+foo
+food
+[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py && test -x /app/pygrep/grep.py && echo READY
+[?2004lREADY
+[?2004hroot@b231699c9d89:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("self.out=None; self.quiet=False; self.silent=False", "self.out=None; self.only=False; self.quiet=False; self.silent=False")
+[?2004l[?2004h> s=s.replace("'quiet':'q','silent':'s'", "'quiet':'q','only-matching':'o','silent':'s'")
+[?2004l[?2004h> s=s.replace("elif c=='q':o.quiet=True", "elif c=='q':o.quiet=True\n   elif c=='o':o.only=True")
+[?2004l[?2004h> s=s.replace("if o.quiet and count:return 0", "if o.quiet and count:return 0\n  if o.quiet:continue")
+[?2004l[?2004h> # Remove the old argv-rewriting parser wrapper.
+[?2004l[?2004h> start=s.find("# -o is installed as a tiny parser extension")
+[?2004l[?2004h> if start>=0:
+[?2004l[?2004h>  end=s.find("if __name__=='__main__'",start)
+[?2004l[?2004h>  s=s[:start]+s[end:]
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/tmp# tail -20 /app/pygrep/grep.py
+[?2004l  for gi,g in enumerate(groups):
+   if o.context_given and not o.only and (last_group or gi) and o.use_sep:output.append(o.sep+b'\n')
+   for x in g:
+    line,off,term=rs[x]; chosen=x in selset
+    if chosen and o.out is None and not o.inv and getattr(o,'only',False):pass
+    if chosen and hasattr(o,'only') and o.only and not o.inv:
+     pos=0
+     while True:
+      m=one_matches(line,pats,o,pos)
+      if not m:break
+      s,e=m
+      if e>s: output.append(prefix(o,name,multi,x+1,off+s)+line[s:e]+(b'\0' if o.zero else b'\n'))
+      pos=e if e>s else s+1
+    elif not (o.only and o.inv):
+     output.append(prefix(o,name,multi,x+1,off,not chosen)+line+(b'\0' if o.zero else b'\n'))
+   last_group=True
+ if output:sys.stdout.buffer.write(b''.join(output))
+ return 2 if err else (0 if had else 1)
+
+if __name__=='__main__':sys.exit(main(sys.argv[1:]))
+[?2004hroot@b231699c9d89:/tmp# cd /tmp
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\nbar\nfood\n' > a
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- quiet count no match: no output/status 1' && python3 /app/pygrep/grep.py -qc zzz a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- quiet count no match: no output/status 1
+st:1
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- quiet L no match: no output/status 1' && python3 /app/pygrep/grep.py -qL zzz a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- quiet L no match: no output/status 1
+st:1
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- quiet with early error then match: status 0' && python3 /app/pygrep/grep.py -q foo missing a; echo st:$?
+[?2004l--- quiet with early error then match: status 0
+grep: missing: No such file or directory
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- quiet with error/no match: status 2' && python3 /app/pygrep/grep.py -q zzz missing a; echo st:$?
+[?2004l--- quiet with error/no match: status 2
+grep: missing: No such file or directory
+st:2
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- -e operand that looks like -o' && printf '%s\n' '-o' 'x' | python3 /app/pygrep/grep.py -F -e -o; echo st:$?
+[?2004l--- -e operand that looks like -o
+-o
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- normal only matching' && python3 /app/pygrep/grep.py --only-matching 'fo.' a; echo st:$?
+[?2004l--- normal only matching
+foo
+foo
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- clustered only/count and invert' && python3 /app/pygrep/grep.py -oc foo a; python3 /app/pygrep/grep.py -ov foo a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- clustered only/count and invert
+2
+st:0
+[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py && chmod +x /app/pygrep/grep.py && echo IMPLEMENTATION_READY
+[?2004lIMPLEMENTATION_READY
+[?2004hroot@b231699c9d89:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("'quiet':'q','only-matching':'o','silent':'s'", "'quiet':'q','silent':'q','only-matching':'o','no-messages':'s'")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@b231699c9d89:/tmp# cd /tmp
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf 'foo\n' > a
+[?2004l[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- --silent suppresses output and succeeds on match' && python3 /app/pygrep/grep.py --silent foo a | od -An -tx1; echo st:${PIPESTATUS[0]}
+[?2004l--- --silent suppresses output and succeeds on match
+st:0
+[?2004hroot@b231699c9d89:/tmp# printf '%s\n' '--- --no-messages suppresses diagnostic but retains output/status' && python3 /app/pygrep/grep.py --no-messages foo missing a | od -An -tc; echo st:${PIPESTATUS[0]}
+[?2004l--- --no-messages suppresses diagnostic but retains output/status
+   a   :   f   o   o  \n
+st:2
+[?2004hroot@b231699c9d89:/tmp# python3 -m py_compile /app/pygrep/grep.py && test -x /app/pygrep/grep.py && echo FINAL_READY
+[?2004lFINAL_READY
+[?2004hroot@b231699c9d89:/tmp# 

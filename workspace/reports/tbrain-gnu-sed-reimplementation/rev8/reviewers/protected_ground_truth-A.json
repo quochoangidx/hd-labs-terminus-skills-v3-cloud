@@ -1,0 +1,146 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-A",
+  "snapshot_sha256": "d1e1daa9b7f760fc2ef54e5302bcfffd2ae5c1a4e0da387ba432453d620dfa2a",
+  "severity": "None",
+  "summary": "No candidate-reachable path to read, predict, replace or influence the grader's expected values or reward. Expected output is computed at test time by root-run GNU sed. test.sh makes the binary 0700 root before any candidate code runs. The candidate runs as uid 65534 with --no-new-privs in a root-owned 0755 workdir that the verifier populates, and only after the reference run for that case. Hidden cases in /tests and the reward directory are 0700 root, and cases are excluded from the agent image by .dockerignore.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/scope.md",
+      "environment/app/docs/sed.txt",
+      "environment/app/pysed/sed.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/cases/areas.json",
+      "tests/cases/areas_2.json",
+      "tests/cases/mixed_1_2.json",
+      "tests/cases/mixed_3_4.json",
+      "tests/cases/matrix.json",
+      "tests/cases/sweeps.json",
+      "tests/cases/inputs.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled packet-manifest.json (19 task files + 2 panel docs) with the files read. Read every file in full: matrix.json in two pages (1-2393, 2393-3833) and sed.txt in four pages (1-1200, 1200-2499, 2499-3948, 3948-5116).",
+    "Traced where the expected value comes from. test_outputs.py:149 runs GNU_SED=/bin/sed (test_outputs.py:78) as root before the candidate (test_outputs.py:150). test.sh:16 runs chmod 700 on readlink -f /bin/sed before pytest starts (test.sh:25). No golden output files exist anywhere in the packet.",
+    "Traced candidate privileges. DEMOTE (test_outputs.py:107) runs setpriv with --reuid/--regid 65534, --clear-groups and --no-new-privs. The candidate therefore cannot read or exec the 0700 root sed binary, and the no-new-privs flag blocks setuid re-escalation (guide example C-3).",
+    "Traced the workdir. test_outputs.py:118-127 uses mkdtemp, which is root-owned, with mode 0755. The verifier writes the case files as 0644. The candidate UID cannot add, modify or symlink files there, and it runs only after GNU sed has produced 'want' for that case (test_outputs.py:149-150). The directory is removed after each case (test_outputs.py:152).",
+    "Traced the reward channel. test.sh:4-5 and test.sh:15 make /logs/verifier mode 0700 root. The reward is written by root from pytest's exit code (test.sh:26-31). Candidate stdout goes only into the pytest pipe compared at test_outputs.py:153 and cannot impersonate verification.",
+    "Traced hidden-case exposure. environment/.dockerignore:12 excludes tests/, and environment/Dockerfile:6 copies only app/. tests/Dockerfile:5 puts cases under /tests, which test.sh:15 makes 0700. The candidate process cannot list or read the cases.",
+    "Checked what the candidate artifact can do to the root verifier. test.sh:20-21 makes /app root-owned and not group- or other-writable. pytest runs with python3 -I and cwd in a root mktemp dir (test.sh:23-25), so /app is never on the root interpreter's import path. The root process's only read of /app is the 4-byte ELF probe at test_outputs.py:337-341, which returns nothing to the candidate.",
+    "Checked argv, cwd and env for outcome leakage (guide examples C-4, C-5, C-6). Arguments are the case's opts/script/extra and neutral file names (f, g, f1, f2, e, m, missing, -). cwd is a random mkdtemp. ENV is fixed (test_outputs.py:109). No name or path encodes an expected output. 'missing'/'m' name absent files, and the candidate can observe that absence directly anyway.",
+    "Checked whether any case script makes root GNU sed touch candidate-writable paths. scope.md:8 excludes r/R/w/W/e/F and the s///w and s///e flags. I read every case in all seven case files and grepped for /tmp, /dev, /proc, /app, /tests and /logs: none use these commands or absolute paths. Root sed therefore reads only verifier-written files in its own workdir plus the stdin the verifier supplies.",
+    "Checked cross-case persistence. Candidate-writable locations such as /tmp are never read by the GNU sed reference run or by the comparison. A leftover candidate process under uid 65534 cannot ptrace or signal root processes or write into root 0755 workdirs, so the most it can do is cause its own cases to fail.",
+    "Considered bypasses of the audit hook, for example process-spawn primitives with no audit event. Even with a bypass, the uid-65534/no-new-privs process cannot exec the 0700 root /bin/sed, and no other copy of the reference is visible in the packet. That makes it a question of enforcing the pure-Python restriction (sound_verifier territory), not of obtaining ground truth. I did not treat it as a finding on this axis.",
+    "Confirmed the verifier's own access-boundary probe runs in the candidate's execution context: test_outputs.py:344-347 runs DEMOTE, and site-packages is made 0700 at test.sh:19."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "The reference is the GNU sed binary. test.sh makes it root 0700 before candidate execution. The candidate runs demoted with no-new-privs. No golden files exist.",
+      "evidence": ["tests/test.sh:16", "tests/test_outputs.py:78", "tests/test_outputs.py:107", "tests/test_outputs.py:149-150"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths (symlink / path traversal)",
+      "status": "checked",
+      "reason": "Root GNU sed reads only verifier-created files inside a root-owned mkdtemp dir, before the candidate runs. Scripts use no r/w/R/W commands. The only root read of /app content is a 4-byte ELF check whose result is not returned to the candidate and cannot turn a failure into a pass.",
+      "evidence": ["tests/test_outputs.py:118-127", "tests/test_outputs.py:337-342", "environment/app/docs/scope.md:8", "tests/test.sh:20-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Expected values computed independently of the submitted artifact",
+      "status": "checked",
+      "reason": "'want' comes from /bin/sed on the verifier-staged inputs, independent of /app. No candidate-supplied checksum or self-report is trusted.",
+      "evidence": ["tests/test_outputs.py:149", "tests/test_outputs.py:153"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes exposed through filenames, arguments, working directories or environment variables",
+      "status": "checked",
+      "reason": "cwd is a random mkdtemp. ENV is a fixed three-key dict. File names are neutral letters, and the args are exactly the sed invocation under test. No channel encodes expected stdout or status.",
+      "evidence": ["tests/test_outputs.py:109", "tests/test_outputs.py:112-115", "tests/test_outputs.py:118-119", "tests/cases/areas.json:1523-1536", "tests/cases/matrix.json:1794-1805"],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading results kept in a trusted channel",
+      "status": "checked",
+      "reason": "The reward is derived by root from pytest's exit code into a 0700 root directory. The candidate's stdout and exit status are only data compared against 'want'.",
+      "evidence": ["tests/test.sh:4-5", "tests/test.sh:15", "tests/test.sh:25-31", "tests/test_outputs.py:130-139"],
+      "finding_ids": []
+    },
+    {
+      "category": "Access boundary tested from the candidate's execution context",
+      "status": "checked",
+      "reason": "test_editing_is_done_in_python runs a probe under DEMOTE confirming site-packages is unreadable. The candidate runs themselves use the same DEMOTE+CANDIDATE prefix.",
+      "evidence": ["tests/test_outputs.py:344-347", "tests/test_outputs.py:352"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden test data exposure to the agent environment (colocation_walk / cases in image)",
+      "status": "checked",
+      "reason": ".dockerignore excludes tests/ and solution/. The environment image copies only app/, which contains the README, the docs and the stub sed.py.",
+      "evidence": ["environment/.dockerignore:11-12", "environment/Dockerfile:6", "environment/app/pysed/sed.py:1-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Persisted or partially reset state that can alter a later expected value (cache_carryover)",
+      "status": "checked",
+      "reason": "Each case gets a fresh workdir, and the reference runs before the candidate. Nothing the candidate writes is read by a later reference run or reused as a baseline.",
+      "evidence": ["tests/test_outputs.py:147-152"],
+      "finding_ids": []
+    },
+    {
+      "category": "Candidate binary / artifact replaceable after inspection (check-to-use, C-9)",
+      "status": "checked",
+      "reason": "/app is made root-owned and not group- or other-writable before any run. The demoted candidate cannot replace /app/pysed/sed.py between the ELF scan and later invocations.",
+      "evidence": ["tests/test.sh:20-21", "tests/test_outputs.py:106"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["Instruction permits comparing against /bin/sed during development", "Program may not call sed or start processes at grading"],
+      "case_or_path": "The candidate tries to wrap /bin/sed at grading time. test.sh:16 makes the binary root 0700, and the candidate is uid 65534 with no-new-privs. The exec fails even if the audit hook is bypassed, so the reference output stays out of reach.",
+      "status": "checked",
+      "evidence": ["instruction.md:1", "instruction.md:7", "tests/test.sh:16", "tests/test_outputs.py:107"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Files may be missing / '-' means stdin (instruction)", "Workdir staging by verifier"],
+      "case_or_path": "The candidate cannot create the missing file 'm' or 'missing' in the root 0755 workdir to change the reference result. Both runs see the same absent file, and the reference runs first.",
+      "status": "checked",
+      "evidence": ["instruction.md:5", "tests/test_outputs.py:118-127", "tests/cases/matrix.json:2173-2191"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Only /app is carried over to the checks", "Verifier walks /app as root"],
+      "case_or_path": "A candidate symlink or special file under /app is opened by the root ELF probe. The probe reads 4 bytes and returns nothing to the candidate. The worst case is a hang or failure, which only harms the candidate.",
+      "status": "checked",
+      "evidence": ["instruction.md:7", "tests/test_outputs.py:337-342"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["scope.md excludes r/R/w/W/e commands", "Reference sed runs as root"],
+      "case_or_path": "No case uses file-touching sed commands, so root sed cannot be steered to a candidate-planted path in /tmp. I confirmed this by reading every case file and grepping for absolute paths.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/scope.md:8", "tests/cases/areas.json:1-1725", "tests/cases/sweeps.json:1-354"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

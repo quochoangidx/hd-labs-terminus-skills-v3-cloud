@@ -1,0 +1,109 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "d1e1daa9b7f760fc2ef54e5302bcfffd2ae5c1a4e0da387ba432453d620dfa2a",
+  "severity": "Minor",
+  "summary": "The verifier compares correctly against live GNU sed 4.9, but it grades two things the contract says it will not: one case whose script is itself a syntax error (the instruction promises scripts never fail), and \\s/\\S on \\v, \\f and \\r, where the binary goes beyond the manual's definition and scope.md does not list it. Grading is all-or-nothing, so either case alone sets the reward to 0.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/pysed/sed.py",
+      "environment/app/docs/scope.md",
+      "environment/app/docs/sed.txt (lines 60-2377: chapters 2-5, the sections scope.md cites)",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/cases/inputs.json",
+      "tests/cases/areas.json",
+      "tests/cases/areas_2.json",
+      "tests/cases/mixed_1_2.json",
+      "tests/cases/mixed_3_4.json",
+      "tests/cases/matrix.json",
+      "tests/cases/sweeps.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/docs/sed.txt lines 1-59 and 2378-end (front matter, locale/multibyte, How sed works, examples, index). scope.md does not cite these, and they were searched only for labels, delimiters, ~N and \\s."
+    ]
+  },
+  "findings": [
+    {
+      "id": "SV-1",
+      "severity": "Minor",
+      "claim": "A graded case uses a script that GNU sed rejects as a syntax error, but the instruction promises scripts never fail. The verifier therefore requires GNU's error behaviour (empty stdout, status 1) on input the contract excludes.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "instruction.md:5 says 'Scripts never fail and always finish', so no graded case should depend on how the program reports an invalid script.",
+        "actual_behavior": "In the case at tests/cases/areas_2.json:267 ('sX\\XXXXg' on 'aXbX'), the delimiter is X. The regex is '\\X' (an escaped delimiter, meaning a literal X). The next X closes the regex, and the X after it closes an empty replacement. That leaves 'Xg' as the flags, and 'X' is not a valid s flag, so GNU sed stops with an 'unknown option to s' error: empty stdout, exit status 1. check() compares (stdout, status) exactly against that.",
+        "trace_or_receipt": "Static parse, not executed. The sibling cases in areas_2.json:182-278 all follow the template s<d>b<d><\\<d>><d> / s<d>\\<d><d>X<d>g. With d='X', the replacement 'X' becomes the delimiter itself, which produces the flags 'Xg'. test_outputs.py:142-161 compares stdout bytes and exit status. test.sh:25-30 writes reward 1 only when every test passes."
+      },
+      "reachable_case_or_path": "An implementation that trusts 'scripts never fail' and ignores an unknown s flag, or keeps parsing past it, prints 'ab' with status 0. GNU prints nothing with status 1. test_substitution_and_regex_escapes fails.",
+      "graded_effect": "A contract-valid implementation fails a whole test family, and because grading is all-or-nothing its reward is 0.",
+      "citations": ["tests/cases/areas_2.json:267", "instruction.md:5", "tests/test_outputs.py:142-161", "tests/test.sh:25-30"],
+      "root_invariant": "Every graded case must be a valid script inside the promised input domain.",
+      "authority": ["instruction.md:5", "instruction.md:9"],
+      "implementation_sites": ["tests/cases/areas_2.json:264-268"],
+      "sibling_variants": ["All other delimiter-template cases (areas_2.json:182-278, matrix.json:3478-3613, sweeps.json:105-306) were parsed. None puts the delimiter in its replacement or flags. For example, sXbX<\\X>X (areas_2.json:262) is valid."],
+      "interaction_variants": ["The same failure would appear with any delimiter that is also a legal flag character. The generated sweep uses replacement 'y' and flag 'g' for letter delimiters, and none of those collide (sgxgygg, spxpypg and swxwywg all leave 'g' as the flag)."],
+      "minimal_repair_boundary": "Fix or remove the case-generation template for the 'escaped delimiter in regex' family so that the replacement never equals the delimiter (for example use replacement 'Y' when d='X'), or drop the case.",
+      "closure_evidence": ["Running GNU sed over every roster case exits with 0, 2 or a q/Q code, never 1 or 4.", "A mutant that ignores unknown s flags then passes that case."]
+    },
+    {
+      "id": "SV-2",
+      "severity": "Minor",
+      "claim": "The verifier grades \\s and \\S on vertical tab, form feed and carriage return. The manual defines \\s as spaces and tabs (plus embedded newlines), and scope.md does not list this binary behaviour as a departure. This breaks the promise that every check relies only on behaviour the manual describes.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "sed.txt:2141-2143 defines \\s as 'whitespace characters (spaces and tabs). Newlines embedded in the pattern/hold spaces will also match'. instruction.md:9 says every check relies only on manual-described behaviour plus scope.md, and instruction.md:3 and scope.md:16-18 say the listed departures are left open. A manual-following \\s is therefore [ \\t\\n].",
+        "actual_behavior": "sweeps.json:94-95 run s/\\s/./g and s/\\S/./g over @ascii (inputs.json:17), which contains \\v, \\f and \\r. GNU's \\s is glibc [[:space:]], which also matches \\v, \\f and \\r, and the verifier expects that output.",
+        "trace_or_receipt": "Static reading, not executed. In the @ascii line, bytes 0x0b, 0x0c and 0x0d become '.' under GNU but stay unchanged under [ \\t\\n], so the outputs differ. No other case feeds \\v, \\f or \\r to \\s: the matrix_regex_escapes inputs contain only spaces and tabs."
+      },
+      "reachable_case_or_path": "An implementation that follows sed.txt:2142 literally, with \\s = [ \\t\\n] and \\S its complement, fails test_sweep_classes.",
+      "graded_effect": "A manual-faithful implementation fails a whole family, so its reward is 0. Python's own re \\s happens to agree with GNU, which is why the gap only hits careful readers of the manual.",
+      "citations": ["tests/cases/sweeps.json:94", "tests/cases/sweeps.json:95", "tests/cases/inputs.json:17", "environment/app/docs/sed.txt:2141-2149", "instruction.md:9", "environment/app/docs/scope.md:10", "environment/app/docs/scope.md:16-18"],
+      "root_invariant": "Where the binary differs from the manual in a way scope.md does not settle, that behaviour must either be disclosed in scope.md or left ungraded.",
+      "authority": ["instruction.md:3", "instruction.md:9", "environment/app/docs/scope.md:12-18"],
+      "implementation_sites": ["tests/cases/sweeps.json:94-95"],
+      "sibling_variants": ["Lower confidence, not executed: ADDR1,~N where ADDR1's line is already a multiple of N (areas.json:716 '4,~4p', 730 '5,~5p', 765 '3,~1p', 772 '8,~4p', 779 '1,~1p', 751 '0~4,~4p'; mixed_3_4.json:519, 996; mixed_1_2.json:1092, 1097). sed.txt:1644-1648 says the range covers 'the lines following ADDR1 until the next line whose input line number is a multiple of N', which read literally gives 4..8 for 4,~4. My understanding is that GNU ends the range at ADDR1 itself, and scope.md settles neither reading."],
+      "interaction_variants": ["\\b over @ascii (sweeps.json:103) depends only on \\w, which the manual defines consistently with GNU, so it is not affected."],
+      "minimal_repair_boundary": "Add the \\s = [[:space:]] rule (and, if confirmed, the ADDR1,~N-at-a-multiple rule) to scope.md's 'Points the manual leaves open' with how GNU 4.9 settles it, or remove the \\v/\\f/\\r bytes from the \\s/\\S sweep input.",
+      "closure_evidence": ["A mutant with \\s = [ \\t\\n] either passes (if the cases are narrowed) or fails a rule that scope.md now discloses.", "GNU output for 4,~4p on seq 10 is recorded and matches the disclosed rule."]
+    }
+  ],
+  "checks_performed": [
+    "Traced test.sh: sealing /bin/sed, /tests and site-packages; the job-user run; the all-or-nothing reward.",
+    "Traced test_outputs.py: loading the roster with exact family counts; staging each case's workdir; running GNU and the candidate in the same fresh directory with LC_ALL=C and the same stdin; comparing (stdout bytes, status) with a timeout; stderr is not compared.",
+    "Checked that the audit-hook guard and the ELF scan enforce the no-subprocess/no-native-code rule for the graded runs.",
+    "Read every case in all six case files and inputs.json and checked each against scope.md's left-open list: double * in BRE, ERE ^/$ in mid position, a range whose first line number n/N already passed, a range end that n/N read past, 0 as second address, a backslash delimiter with a backslash in the regex, a label followed by a space or }, a non-branching T, a backslash after the whitespace of one-line a/i/c, and c with an open range at end of input.",
+    "Checked that every // case uses a regex already tried earlier in the run (sweeps.json:308-319, areas*.json).",
+    "Checked \\N group captures for ambiguous multi-way matches (matrix.json:1622-1631, the mixed cases).",
+    "Checked the missing-file and q/Q exit-code cases against scope.md:14.",
+    "Checked that every input is ASCII with a trailing newline, and that line counts stay within 'a few dozen'."
+  ],
+  "coverage_sweep": [
+    {"category": "Map each required behavior to a discriminating assertion", "status": "checked", "reason": "Every scope.md feature has cases, and each comparison is against live GNU output, which distinguishes wrong behaviour.", "evidence": ["tests/test_outputs.py:142-161", "environment/app/docs/scope.md:7-10"], "finding_ids": []},
+    {"category": "Full core result checked (not existence/shape)", "status": "checked", "reason": "Exact stdout bytes plus exit status are compared for every case.", "evidence": ["tests/test_outputs.py:153"], "finding_ids": []},
+    {"category": "Named domain rules have isolating cases", "status": "checked", "reason": "Leftmost-longest, the N-at-EOF rule, -s hold reset, Q dropping appends, exit 2 on missing files, and // runtime semantics each have cases.", "evidence": ["tests/cases/areas.json:352-440", "tests/cases/matrix.json:2222-2305", "tests/cases/matrix.json:2921-2952", "tests/cases/sweeps.json:308-319"], "finding_ids": []},
+    {"category": "Plausible incorrect solutions rejected", "status": "checked", "reason": "Python re leftmost-first alternation, a t flag not reset by n/N, and eager opening of missing files are all distinguished by cases.", "evidence": ["tests/cases/areas.json:359-376", "tests/cases/matrix.json:2326-2366", "tests/cases/matrix.json:2207-2221"], "finding_ids": []},
+    {"category": "Contract-valid alternatives accepted", "status": "checked", "reason": "Two cases grade behaviour the contract excludes or does not describe.", "evidence": ["tests/cases/areas_2.json:267", "tests/cases/sweeps.json:94-95"], "finding_ids": ["SV-1", "SV-2"]},
+    {"category": "Documented restrictions enforced", "status": "checked", "reason": "The audit hook blocks process spawning and ctypes. The ELF scan, the root-only GNU binary and the root-only site-packages are all enforced.", "evidence": ["tests/test_outputs.py:85-106", "tests/test_outputs.py:332-355", "tests/test.sh:15-21"], "finding_ids": []},
+    {"category": "Stale binaries / self-controlled comparisons / unreachable cases", "status": "checked", "reason": "The expected output comes from GNU run by the verifier as root; the candidate cannot write under /app or reach the GNU binary. The roster counts are asserted, so no case is silently dropped.", "evidence": ["tests/test_outputs.py:69-73", "tests/test.sh:16-21"], "finding_ids": []},
+    {"category": "Representation vs semantics (stderr, encoding)", "status": "checked", "reason": "stderr is discarded, matching instruction.md:1. Bytes are compared as-is, which the contract requires ('byte for byte').", "evidence": ["tests/test_outputs.py:131-132", "instruction.md:1"], "finding_ids": []}
+  ],
+  "interaction_sweep": [
+    {"rules": ["missing file gives exit 2", "q/Q exit code"], "case_or_path": "q7 with the missing file first; 2q42 across a missing file; N;q9 before the missing file is reached", "status": "checked", "evidence": ["tests/cases/matrix.json:2173-2221", "environment/app/docs/scope.md:14"], "finding_ids": []},
+    {"rules": ["t flag reset on input read", "D restart without read"], "case_or_path": "1{N;s/a/A/;D};t ok and the T variant", "status": "checked", "evidence": ["tests/cases/areas.json:1263-1276"], "finding_ids": []},
+    {"rules": ["n/N inside ranges", "left-open range read-past"], "case_or_path": "0~1,+2N and 1~2,+2N traced: the range end is always seen at the start of a cycle", "status": "checked", "evidence": ["tests/cases/mixed_1_2.json:438", "tests/cases/mixed_1_2.json:792"], "finding_ids": []},
+    {"rules": ["escaped delimiter", "replacement/flags parsing"], "case_or_path": "sX\\XXXXg", "status": "checked", "evidence": ["tests/cases/areas_2.json:267"], "finding_ids": ["SV-1"]},
+    {"rules": ["\\s definition", "full-ASCII sweep input"], "case_or_path": "s/\\s/./g over @ascii", "status": "checked", "evidence": ["tests/cases/sweeps.json:94"], "finding_ids": ["SV-2"]}
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

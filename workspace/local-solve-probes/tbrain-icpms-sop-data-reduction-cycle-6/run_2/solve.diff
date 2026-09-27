@@ -1,0 +1,159 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/blanks.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/blanks.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/blanks.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/blanks.py	2026-09-27 09:14:36
+@@ -2,8 +2,21 @@
+ 
+ 
+ def blank_level(runs, analyte, readings):
+-    """Blank level of one analyte; readings maps run id to its reading."""
+-    for run in runs:
+-        if run["kind"] == "blank":
+-            return readings[run["id"]]
+-    return 0.0
++    """Blank level of one analyte; readings maps run id to its reading.
++
++    The mean of the batch's method-blank results for the analyte, taking every
++    blank of the batch wherever it sits in the run order.  A blank is judged on
++    its reading (SOP section 3): a reading at or above the analyte's ``mdl`` is
++    a result, one below it is a non-detect and is not a result.  When the batch
++    holds no method-blank result the SOP defines no mean, and the level stays
++    at the package's long-standing 0.0.
++    """
++    mdl = analyte["mdl"]
++    results = [
++        readings[run["id"]]
++        for run in runs
++        if run["kind"] == "blank" and readings[run["id"]] >= mdl
++    ]
++    if not results:
++        return 0.0
++    return sum(results) / len(results)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/calib.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/calib.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/calib.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/calib.py	2026-09-27 09:14:36
+@@ -6,12 +6,21 @@
+ 
+ 
+ def fit_line(standards, analyte):
+-    """Return (slope, intercept) of the analyte's calibration line."""
++    """Return (slope, intercept) of the analyte's calibration line.
++
++    Ordinary least squares of response on concentration through every
++    standard's point, unweighted, with the intercept fitted (SOP section 2).
++    """
+     xs = [std["conc"][analyte] for std in standards]
+     ys = [response(std["counts"][analyte], std["is_counts"]) for std in standards]
+-    sxy = sum(x * y for x, y in zip(xs, ys))
+-    sxx = sum(x * x for x in xs)
+-    return sxy / sxx, 0.0
++    n = len(xs)
++    mean_x = sum(xs) / n
++    mean_y = sum(ys) / n
++    sxy = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
++    sxx = sum((x - mean_x) * (x - mean_x) for x in xs)
++    slope = sxy / sxx
++    intercept = mean_y - slope * mean_x
++    return slope, intercept
+ 
+ 
+ def reading(run, analyte, line):
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/qc.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/qc.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/qc.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/qc.py	2026-09-27 09:14:47
+@@ -2,20 +2,42 @@
+ 
+ 
+ def ccv_recovery(reading, true):
++    """The reading as a percentage of the true concentration; not rounded."""
+     return reading / true * 100.0
+ 
+ 
+ def ccv_passes(recovery):
+-    return 90.0 < recovery < 110.0
++    """Pass when the recovery, rounded to one decimal place, is 90.0 to 110.0."""
++    rounded = round(recovery, 1)
++    return 90.0 <= rounded <= 110.0
+ 
+ 
+ def bracket_ok(runs, index, ccv_pass):
+-    """ccv_pass maps a CCV run id to whether it passed for the analyte."""
+-    for before in range(index - 1, -1, -1):
+-        if runs[before]["kind"] == "ccv":
+-            return ccv_pass[runs[before]["id"]]
++    """``ccv_ok`` of the run at ``index``; ccv_pass maps a CCV run id to its pass.
++
++    A run with a CCV both before it and after it is bracketed by the nearest
++    CCV on each side, and is false when either of those two failed (SOP
++    section 6).  For a run the SOP does not bracket the package keeps its
++    long-standing answer: the nearest preceding CCV, or true when there is
++    none.
++    """
++    before = None
++    for position in range(index - 1, -1, -1):
++        if runs[position]["kind"] == "ccv":
++            before = runs[position]["id"]
++            break
++    after = None
++    for position in range(index + 1, len(runs)):
++        if runs[position]["kind"] == "ccv":
++            after = runs[position]["id"]
++            break
++    if before is not None and after is not None:
++        return ccv_pass[before] and ccv_pass[after]
++    if before is not None:
++        return ccv_pass[before]
+     return True
+ 
+ 
+-def spike_recovery(spike_amount, parent_amount, added, dilution):
+-    return (spike_amount - parent_amount) / (added * dilution) * 100.0
++def spike_recovery(spike_amount, parent_amount, added):
++    """The spike amount less its parent's, as a percentage of the amount added."""
++    return (spike_amount - parent_amount) / added * 100.0
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/report.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/report.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/report.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/report.py	2026-09-27 09:14:52
+@@ -15,7 +15,7 @@
+         a["name"]: {run["id"]: calib.reading(run, a["name"], lines[a["name"]]) for run in runs}
+         for a in analytes
+     }
+-    levels = {a["name"]: blanks.blank_level(runs, a["name"], readings[a["name"]]) for a in analytes}
++    levels = {a["name"]: blanks.blank_level(runs, a, readings[a["name"]]) for a in analytes}
+ 
+     ccv_pass = {a["name"]: {} for a in analytes}
+     ccvs = []
+@@ -59,7 +59,6 @@
+                 amounts[name][run["id"]],
+                 amounts[name][run["parent"]],
+                 run["added"][name],
+-                run["dilution"],
+             )
+             spikes.append({"id": run["id"], "analyte": name, "recovery": recovery})
+ 
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/samples.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/samples.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/baseline/environment/app/src/metalquant/samples.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-icpms-sop-data-reduction-cycle-6/run_2/solve/environment/app/src/metalquant/samples.py	2026-09-27 09:14:47
+@@ -2,17 +2,20 @@
+ 
+ 
+ def corrected(reading, level):
++    """The corrected reading: the reading less the blank level."""
+     return reading - level
+ 
+ 
+ def amount(reading, level, dilution):
+-    return reading * dilution - level
++    """The concentration in the sample as received, in ug/L."""
++    return corrected(reading, level) * dilution
+ 
+ 
+ def flag(reading, level, dilution, analyte):
+-    value = amount(reading, level, dilution)
++    """``ND``, ``J`` or ``""``, judged on the corrected reading."""
++    value = corrected(reading, level)
+     if value < analyte["mdl"]:
+         return "ND"
+-    if value <= analyte["loq"]:
++    if value < analyte["loq"]:
+         return "J"
+     return ""

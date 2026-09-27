@@ -1,0 +1,2551 @@
+[?2004hroot@1a267ab558a6:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@1a267ab558a6:/app# clear
+[?2004l[H[J[3J[?2004hroot@1a267ab558a6:/app# find /app/legacy -maxdepth 3 -type f -printf '%p\n' | sort
+[?2004l/app/legacy/CUSTREC.cpy
+/app/legacy/RUNBOOK.md
+/app/legacy/TARIFFS.cpy
+/app/legacy/WBILL.cbl
+/app/legacy/samples/2025q1-north.dat
+/app/legacy/samples/2025q1-north.pay
+/app/legacy/samples/2025q1-north.stmt
+[?2004hroot@1a267ab558a6:/app# printf '%s\n' '--- RUNBOOK ---'; cat /app/legacy/RUNBOOK.md; printf '%s\n' '--- WBILL ---'; nl -ba /app/legacy/WBILL.cbl
+[?2004l--- RUNBOOK ---
+# WBILL job step - run notes
+
+WBILL prints the quarterly water statements for one district, then posts the
+quarter's payments and adjustments against the new balances and prints the
+ledger. It is the second step of the quarterly run, after the meter-reading
+extract and the payments export.
+
+## Build
+
+    cobc -x WBILL.cbl
+
+GnuCOBOL 3.1.2, default dialect and options. The copybooks `CUSTREC.cpy` and
+`TARIFFS.cpy` sit next to the program.
+
+## Run
+
+    CUSTIN=<reading extract> PAYIN=<payments export> STMTOUT=<statement file> ./WBILL
+
+- `CUSTIN` is a line sequential file of 80-byte records laid out as in
+  `CUSTREC.cpy`: normally one `H` header record, then one `C` record per
+  account. A line shorter than 80 bytes is read as if padded on the right with
+  spaces (an empty line as 80 spaces), but a `C` record always runs at least
+  through `PAID` (64 bytes) and an `H` record through `STMT-DATE`. Numeric
+  fields always hold digits, with a `+` or `-` in front where the layout has a
+  separate sign. A district's current charges stay below 1,000,000.00 per
+  account and below 100,000,000.00 in total.
+- `PAYIN` is a line sequential file of lines up to 80 bytes, one posting per
+  line, with fields separated by `;` as the program's `UNSTRING` expects. It
+  is keyed by hand at the counters and by the bank feed, so any printable
+  ASCII can turn up in it. A line shorter than 80 bytes is read as if padded
+  on the right with spaces (an empty line as 80 spaces). An empty file means
+  nothing to post. Every posting, once rounded to cents, is at most 99,999.99
+  either way, and a run's postings total less than 10,000,000.00 either way.
+- An amount passes the program's `TEST-NUMVAL` check when it is spaces, an
+  optional `+` or `-` and more spaces, then digits with at most one decimal
+  point (`.5` and `5.` included), then spaces; or spaces, digits with at most
+  one decimal point, spaces, and an optional trailing `+`, `-`, `CR` or `DB` in
+  capitals, then spaces. Anything else, a blank amount included, is refused.
+- Both inputs are printable ASCII with line-feed line ends.
+- `STMTOUT` is a line sequential file: every record the program writes goes
+  out with its trailing spaces removed and a single line feed after it.
+
+## Samples
+
+`samples/2025q1-north.dat` is the Q1 2025 reading extract for the north
+district, `samples/2025q1-north.pay` its payments export, and
+`samples/2025q1-north.stmt` the statement file this step produced from them.
+Printing and posting take `STMTOUT` as it stands, so its exact bytes matter.
+--- WBILL ---
+     1	       IDENTIFICATION DIVISION.
+     2	       PROGRAM-ID. WBILL.
+     3	      *----------------------------------------------------------------
+     4	      * WBILL - QUARTERLY WATER STATEMENT RUN.
+     5	      * READS THE METER-READING FILE (CUSTIN) AND WRITES THE PRINTED
+     6	      * STATEMENT FILE (STMTOUT).  ONE HEADER RECORD, THEN ONE RECORD
+     7	      * PER ACCOUNT.  THEN POSTS THE PAYMENTS AND ADJUSTMENTS FILE
+     8	      * (PAYIN) AGAINST THE NEW BALANCES AND PRINTS THE LEDGER.
+     9	      *----------------------------------------------------------------
+    10	       ENVIRONMENT DIVISION.
+    11	       INPUT-OUTPUT SECTION.
+    12	       FILE-CONTROL.
+    13	           SELECT CUST-IN  ASSIGN TO CUSTIN
+    14	               ORGANIZATION IS LINE SEQUENTIAL.
+    15	           SELECT STMT-OUT ASSIGN TO STMTOUT
+    16	               ORGANIZATION IS LINE SEQUENTIAL.
+    17	           SELECT PAY-IN   ASSIGN TO PAYIN
+    18	               ORGANIZATION IS LINE SEQUENTIAL.
+    19	       DATA DIVISION.
+    20	       FILE SECTION.
+    21	       FD  CUST-IN.
+    22	       01  IN-REC                    PIC X(80).
+    23	       FD  STMT-OUT.
+    24	       01  OUT-REC                   PIC X(72).
+    25	       FD  PAY-IN.
+    26	       01  PAY-REC                   PIC X(80).
+    27	       WORKING-STORAGE SECTION.
+    28	       COPY "CUSTREC.cpy".
+    29	       COPY "TARIFFS.cpy".
+    30	       01  WS-FLAGS.
+    31	           05  WS-EOF                PIC X VALUE "N".
+    32	               88  END-OF-INPUT      VALUE "Y".
+    33	           05  WS-PAY-EOF            PIC X VALUE "N".
+    34	               88  END-OF-PAY        VALUE "Y".
+    35	       01  ACCT-TABLE.
+    36	           05  AT-COUNT              PIC 9(4) VALUE 0.
+    37	           05  AT-ENTRY OCCURS 1 TO 999 TIMES
+    38	                   DEPENDING ON AT-COUNT INDEXED BY AX.
+    39	               10  AT-ACCT           PIC X(8).
+    40	               10  AT-BAL            PIC S9(9)V99.
+    41	       01  PAY-WORK.
+    42	           05  PAY-LINE              PIC X(80).
+    43	           05  PL-ACCT               PIC X(8)  VALUE SPACES.
+    44	           05  PL-KIND               PIC X(3)  VALUE SPACES.
+    45	               88  KIND-PAY          VALUE "PAY".
+    46	               88  KIND-ADJ          VALUE "ADJ".
+    47	               88  KIND-FEE          VALUE "FEE".
+    48	               88  KIND-REF          VALUE "REF".
+    49	           05  PL-AMT-TXT            PIC X(16) VALUE SPACES.
+    50	           05  PL-MEMO               PIC X(30) VALUE SPACES.
+    51	           05  PL-FIELDS             PIC 99.
+    52	           05  PL-ACCT-LEN           PIC 99.
+    53	           05  WS-LINE-NO            PIC 9(3)  VALUE 0.
+    54	           05  WS-AMT                PIC S9(7)V99.
+    55	           05  WS-WHOLE              PIC S9(7).
+    56	           05  WS-PART               PIC S9(7)V99.
+    57	           05  WS-REM                PIC S9(3)V99.
+    58	           05  WS-APPLIED            PIC 9(3)  VALUE 0.
+    59	           05  WS-PAY-REJECTED       PIC 9(3)  VALUE 0.
+    60	           05  WS-TOT-PAID           PIC S9(9)V99 VALUE 0.
+    61	           05  WS-TOT-OTHER          PIC S9(9)V99 VALUE 0.
+    62	       01  WS-WORK.
+    63	           05  WS-UNITS              PIC 9(7).
+    64	           05  WS-TEMP               PIC 9(7).
+    65	           05  WS-LIM1               PIC 9(5)V9.
+    66	           05  WS-LIM2               PIC 9(5)V9.
+    67	           05  WS-B1                 PIC 9(5)V9.
+    68	           05  WS-B2                 PIC 9(5)V9.
+    69	           05  WS-B3                 PIC 9(7)V9.
+    70	           05  WS-C1                 PIC 9(6)V99.
+    71	           05  WS-C2                 PIC 9(6)V99.
+    72	           05  WS-C3                 PIC 9(7)V99.
+    73	           05  WS-USAGE              PIC 9(7)V99.
+    74	           05  WS-STANDING           PIC 9(5)V99.
+    75	           05  WS-DISCOUNT           PIC 9(6)V99.
+    76	           05  WS-NET                PIC 9(7)V99.
+    77	           05  WS-VAT                PIC 9(6)V99.
+    78	           05  WS-CURRENT            PIC 9(7)V99.
+    79	           05  WS-INTEREST           PIC 9(5)V99.
+    80	           05  WS-BALANCE            PIC S9(7)V99.
+    81	           05  WS-CARRY              PIC S9(7)V99.
+    82	           05  WS-DUE                PIC 9(7)V99.
+    83	           05  WS-NAME               PIC X(24).
+    84	           05  WS-NAME-OUT           PIC X(24).
+    85	           05  WS-REASON             PIC X(20).
+    86	           05  WS-DATE-DMY           PIC 9(8).
+    87	       01  WS-TOTALS.
+    88	           05  WS-BILLED             PIC 9(3)    VALUE 0.
+    89	           05  WS-REJECTED           PIC 9(3)    VALUE 0.
+    90	           05  WS-CREDITS            PIC 9(3)    VALUE 0.
+    91	           05  WS-TOT-UNITS          PIC 9(11)   VALUE 0.
+    92	           05  WS-TOT-CURRENT        PIC 9(11)V99 VALUE 0.
+    93	           05  WS-TOT-DUE            PIC 9(11)V99 VALUE 0.
+    94	           05  WS-TOT-NET            PIC S9(11)V99 VALUE 0.
+    95	           05  WS-AVERAGE            PIC 9(9)V99 VALUE 0.
+    96	       01  L-HEAD.
+    97	           05  FILLER                PIC X(15) VALUE "STATEMENTS FOR ".
+    98	           05  LH-REGION             PIC X(20).
+    99	           05  FILLER                PIC X(7)  VALUE " DATED ".
+   100	           05  LH-DATE               PIC 99/99/9999.
+   101	       01  L-ACCT.
+   102	           05  FILLER                PIC X(8)  VALUE "ACCOUNT ".
+   103	           05  LA-MASK               PIC X(4)  VALUE "****".
+   104	           05  LA-TAIL               PIC X(4).
+   105	           05  FILLER                PIC X(2)  VALUE SPACES.
+   106	           05  LA-NAME               PIC X(24).
+   107	           05  FILLER                PIC X(8)  VALUE " TARIFF ".
+   108	           05  LA-TARIFF             PIC X.
+   109	       01  L-READ.
+   110	           05  FILLER                PIC X(9)  VALUE "READINGS ".
+   111	           05  LR-PREV               PIC ZZZZZ9.
+   112	           05  FILLER                PIC X(4)  VALUE " TO ".
+   113	           05  LR-CURR               PIC ZZZZZ9.
+   114	           05  FILLER                PIC X(8)  VALUE "  USAGE ".
+   115	           05  LR-UNITS              PIC Z,ZZZ,ZZ9.
+   116	           05  FILLER                PIC X(6)  VALUE " OVER ".
+   117	           05  LR-DAYS               PIC ZZ9.
+   118	           05  FILLER                PIC X(5)  VALUE " DAYS".
+   119	       01  L-BANDS.
+   120	           05  FILLER                PIC X(6)  VALUE "BANDS ".
+   121	           05  LB-1                  PIC ZZ,ZZ9.9.
+   122	           05  FILLER                PIC X     VALUE SPACE.
+   123	           05  LB-2                  PIC ZZ,ZZ9.9.
+   124	           05  FILLER                PIC X     VALUE SPACE.
+   125	           05  LB-3                  PIC Z,ZZZ,ZZ9.9.
+   126	       01  L-CHARGE.
+   127	           05  FILLER                PIC X(13) VALUE "USAGE CHARGE ".
+   128	           05  LC-USAGE              PIC $$,$$$,$$9.99.
+   129	           05  FILLER                PIC X(10) VALUE "  STANDING".
+   130	           05  LC-STANDING           PIC $$$,$$9.99.
+   131	       01  L-DISC.
+   132	           05  FILLER                PIC X(9)  VALUE "DISCOUNT ".
+   133	           05  LD-DISCOUNT           PIC ZZ,ZZ9.99 BLANK WHEN ZERO.
+   134	           05  FILLER                PIC X(5)  VALUE "  VAT".
+   135	           05  LD-VAT                PIC ZZZ,ZZ9.99.
+   136	           05  FILLER                PIC X(9)  VALUE "  CURRENT".
+   137	           05  LD-CURRENT            PIC $$$,$$9.99.
+   138	       01  L-ARR.
+   139	           05  FILLER                PIC X(8)  VALUE "ARREARS ".
+   140	           05  LX-ARREARS            PIC ++,+++,++9.99.
+   141	           05  FILLER                PIC X(10) VALUE "  INTEREST".
+   142	           05  LX-INTEREST           PIC ZZ,ZZ9.99 BLANK WHEN ZERO.
+   143	           05  FILLER                PIC X(6)  VALUE "  PAID".
+   144	           05  LX-PAID               PIC ZZ,ZZ9.99.
+   145	       01  L-BAL.
+   146	           05  FILLER                PIC X(8)  VALUE "BALANCE ".
+   147	           05  LL-BALANCE            PIC Z,ZZZ,ZZ9.99CR.
+   148	           05  FILLER                PIC X(12) VALUE "  AMOUNT DUE".
+   149	           05  LL-DUE                PIC ***,**9.99.
+   150	       01  L-CARRY.
+   151	           05  FILLER                PIC X(11) VALUE "CREDIT C/F ".
+   152	           05  LY-CARRY              PIC $$$,$$9.99-.
+   153	       01  L-REJECT.
+   154	           05  FILLER                PIC X(7)  VALUE "REJECT ".
+   155	           05  LJ-ACCT               PIC X(8).
+   156	           05  FILLER                PIC X     VALUE SPACE.
+   157	           05  LJ-REASON             PIC X(20).
+   158	       01  L-LEDGER.
+   159	           05  FILLER                PIC X(24)
+   160	                                     VALUE "PAYMENTS AND ADJUSTMENTS".
+   161	       01  L-POST.
+   162	           05  LP-KIND               PIC X(3).
+   163	           05  FILLER                PIC X     VALUE SPACE.
+   164	           05  LP-ACCT               PIC X(8).
+   165	           05  FILLER                PIC X     VALUE SPACE.
+   166	           05  LP-AMT                PIC ----,--9.99.
+   167	           05  FILLER                PIC X(7)  VALUE " WHOLE ".
+   168	           05  LP-WHOLE              PIC -----9.
+   169	           05  FILLER                PIC X(5)  VALUE " BAL ".
+   170	           05  LP-BAL                PIC Z,ZZZ,ZZ9.99CR.
+   171	           05  FILLER                PIC X     VALUE SPACE.
+   172	           05  LP-MEMO               PIC X(30).
+   173	       01  L-SPLIT.
+   174	           05  FILLER                PIC X(16) VALUE "    FEE SPLIT 3X".
+   175	           05  LS-PART               PIC ---,--9.99.
+   176	           05  FILLER                PIC X(11) VALUE " REMAINDER ".
+   177	           05  LS-REM                PIC -9.99.
+   178	       01  L-PAYREJ.
+   179	           05  FILLER                PIC X(5)  VALUE "LINE ".
+   180	           05  LQ-LINE               PIC ZZ9.
+   181	           05  FILLER                PIC X(10) VALUE " REJECTED ".
+   182	           05  LQ-REASON             PIC X(20).
+   183	       01  L-PAYTOT.
+   184	           05  FILLER                PIC X(8)  VALUE "POSTED  ".
+   185	           05  LV-APPLIED            PIC ZZ9.
+   186	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   187	           05  LV-REJECTED           PIC ZZ9.
+   188	           05  FILLER                PIC X(8)  VALUE "  PAID  ".
+   189	           05  LV-PAID               PIC $$,$$$,$$9.99-.
+   190	           05  FILLER                PIC X(8)  VALUE "  OTHER ".
+   191	           05  LV-OTHER              PIC $$,$$$,$$9.99-.
+   192	       01  L-TOT1.
+   193	           05  FILLER                PIC X(16) VALUE "ACCOUNTS BILLED ".
+   194	           05  LT-BILLED             PIC ZZ9.
+   195	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   196	           05  LT-REJECTED           PIC ZZ9.
+   197	           05  FILLER                PIC X(10) VALUE "  CREDITS ".
+   198	           05  LT-CREDITS            PIC ZZ9.
+   199	       01  L-TOT2.
+   200	           05  FILLER                PIC X(12) VALUE "TOTAL UNITS ".
+   201	           05  LT-UNITS              PIC ZZZ,ZZZ,ZZ9.
+   202	           05  FILLER                PIC X(16) VALUE "  TOTAL CURRENT ".
+   203	           05  LT-CURRENT            PIC $$$,$$$,$$9.99.
+   204	       01  L-TOT3.
+   205	           05  FILLER                PIC X(10) VALUE "TOTAL DUE ".
+   206	           05  LT-DUE                PIC $$$,$$$,$$9.99.
+   207	           05  FILLER                PIC X(15) VALUE "  AVERAGE BILL ".
+   208	           05  LT-AVERAGE            PIC $$,$$$,$$9.99.
+   209	       01  L-TOT4.
+   210	           05  FILLER                PIC X(13) VALUE "NET POSITION ".
+   211	           05  LT-NET                PIC ---,---,--9.99.
+   212	       PROCEDURE DIVISION.
+   213	       MAIN-LINE.
+   214	           OPEN INPUT CUST-IN
+   215	                OUTPUT STMT-OUT
+   216	           PERFORM READ-IN
+   217	           IF NOT END-OF-INPUT AND IS-HEADER
+   218	               PERFORM WRITE-HEADER
+   219	               PERFORM READ-IN
+   220	           END-IF
+   221	           PERFORM UNTIL END-OF-INPUT
+   222	               IF IS-CUSTOMER
+   223	                   PERFORM ONE-ACCOUNT
+   224	               END-IF
+   225	               PERFORM READ-IN
+   226	           END-PERFORM
+   227	           PERFORM WRITE-TOTALS
+   228	           PERFORM POST-PAYMENTS
+   229	           CLOSE CUST-IN STMT-OUT
+   230	           STOP RUN.
+   231	
+   232	       READ-IN.
+   233	           READ CUST-IN INTO CUST-REC
+   234	               AT END SET END-OF-INPUT TO TRUE
+   235	           END-READ.
+   236	
+   237	       WRITE-HEADER.
+   238	           MOVE HDR-REGION TO LH-REGION
+   239	           MOVE STMT-DATE(7:2) TO WS-DATE-DMY(1:2)
+   240	           MOVE STMT-DATE(5:2) TO WS-DATE-DMY(3:2)
+   241	           MOVE STMT-DATE(1:4) TO WS-DATE-DMY(5:4)
+   242	           MOVE WS-DATE-DMY TO LH-DATE
+   243	           WRITE OUT-REC FROM L-HEAD
+   244	           MOVE SPACES TO OUT-REC
+   245	           WRITE OUT-REC.
+   246	
+   247	       ONE-ACCOUNT.
+   248	           MOVE SPACES TO WS-REASON
+   249	           SET TX TO 1
+   250	           SEARCH TARIFF-ROW
+   251	               AT END MOVE "UNKNOWN TARIFF" TO WS-REASON
+   252	               WHEN TR-CODE(TX) = TARIFF
+   253	                   CONTINUE
+   254	           END-SEARCH
+   255	           EVALUATE TRUE
+   256	               WHEN WS-REASON NOT = SPACES
+   257	                   CONTINUE
+   258	               WHEN BILL-DAYS = 0
+   259	                   MOVE "NO BILLING DAYS" TO WS-REASON
+   260	               WHEN BILL-DAYS > 120
+   261	                   MOVE "PERIOD TOO LONG" TO WS-REASON
+   262	           END-EVALUATE
+   263	           IF WS-REASON NOT = SPACES
+   264	               ADD 1 TO WS-REJECTED
+   265	               MOVE ACCT-NO TO LJ-ACCT
+   266	               MOVE WS-REASON TO LJ-REASON
+   267	               WRITE OUT-REC FROM L-REJECT
+   268	               MOVE SPACES TO OUT-REC
+   269	               WRITE OUT-REC
+   270	           ELSE
+   271	               PERFORM CALC-BILL
+   272	               PERFORM PRINT-BILL
+   273	           END-IF.
+   274	
+   275	       CALC-BILL.
+   276	           IF CURR-READ >= PREV-READ
+   277	               SUBTRACT PREV-READ FROM CURR-READ GIVING WS-UNITS
+   278	           ELSE
+   279	               COMPUTE WS-UNITS = CURR-READ + 1000000 - PREV-READ
+   280	           END-IF
+   281	           MULTIPLY TR-LIMIT1(TX) BY BILL-DAYS GIVING WS-TEMP
+   282	           DIVIDE WS-TEMP BY 30 GIVING WS-LIM1 ROUNDED
+   283	           MULTIPLY TR-LIMIT2(TX) BY BILL-DAYS GIVING WS-TEMP
+   284	           DIVIDE WS-TEMP BY 30 GIVING WS-LIM2 ROUNDED
+   285	           MOVE 0 TO WS-B1 WS-B2 WS-B3
+   286	           IF WS-UNITS > WS-LIM1
+   287	               MOVE WS-LIM1 TO WS-B1
+   288	               IF WS-UNITS > WS-LIM2
+   289	                   SUBTRACT WS-LIM1 FROM WS-LIM2 GIVING WS-B2
+   290	                   SUBTRACT WS-LIM2 FROM WS-UNITS GIVING WS-B3
+   291	               ELSE
+   292	                   SUBTRACT WS-LIM1 FROM WS-UNITS GIVING WS-B2
+   293	               END-IF
+   294	           ELSE
+   295	               MOVE WS-UNITS TO WS-B1
+   296	           END-IF
+   297	           MULTIPLY WS-B1 BY TR-RATE1(TX) GIVING WS-C1 ROUNDED
+   298	           MULTIPLY WS-B2 BY TR-RATE2(TX) GIVING WS-C2 ROUNDED
+   299	           MULTIPLY WS-B3 BY TR-RATE3(TX) GIVING WS-C3 ROUNDED
+   300	           ADD WS-C1 WS-C2 WS-C3 GIVING WS-USAGE
+   301	           MULTIPLY BILL-DAYS BY TR-STANDING(TX)
+   302	               GIVING WS-STANDING ROUNDED
+   303	           MOVE 0 TO WS-DISCOUNT
+   304	           IF TARIFF-RELIEF
+   305	               MULTIPLY WS-USAGE BY 0.15 GIVING WS-DISCOUNT
+   306	               SUBTRACT WS-DISCOUNT FROM WS-USAGE
+   307	           END-IF
+   308	           ADD WS-USAGE WS-STANDING GIVING WS-NET
+   309	           MULTIPLY WS-NET BY 0.05 GIVING WS-VAT ROUNDED
+   310	           ADD WS-NET WS-VAT GIVING WS-CURRENT
+   311	           MOVE 0 TO WS-INTEREST
+   312	           IF ARREARS > 0
+   313	               MULTIPLY ARREARS BY 0.015 GIVING WS-INTEREST ROUNDED
+   314	           END-IF
+   315	           COMPUTE WS-BALANCE = WS-CURRENT + ARREARS + WS-INTEREST
+   316	                              - PAID
+   317	           MOVE 0 TO WS-DUE WS-CARRY
+   318	           IF WS-BALANCE > 0
+   319	               MOVE WS-BALANCE TO WS-DUE
+   320	           END-IF
+   321	           IF WS-BALANCE < 0
+   322	               MULTIPLY WS-BALANCE BY 0.975 GIVING WS-CARRY ROUNDED
+   323	               ADD 1 TO WS-CREDITS
+   324	           END-IF
+   325	           ADD 1 TO WS-BILLED
+   326	           ADD 1 TO AT-COUNT
+   327	           MOVE ACCT-NO TO AT-ACCT(AT-COUNT)
+   328	           MOVE WS-BALANCE TO AT-BAL(AT-COUNT)
+   329	           ADD WS-UNITS TO WS-TOT-UNITS
+   330	           ADD WS-CURRENT TO WS-TOT-CURRENT
+   331	           ADD WS-DUE TO WS-TOT-DUE
+   332	           ADD WS-BALANCE TO WS-TOT-NET.
+   333	
+   334	       PRINT-BILL.
+   335	           MOVE CUST-NAME TO WS-NAME
+   336	           INSPECT WS-NAME CONVERTING "abcdefghijklmnopqrstuvwxyz"
+   337	                                   TO "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+   338	           MOVE SPACES TO WS-NAME-OUT
+   339	           STRING WS-NAME DELIMITED BY "  " INTO WS-NAME-OUT
+   340	           IF WS-NAME-OUT = SPACES
+   341	               MOVE "(NO NAME ON FILE)" TO WS-NAME-OUT
+   342	           END-IF
+   343	           MOVE ACCT-NO(5:4) TO LA-TAIL
+   344	           MOVE WS-NAME-OUT TO LA-NAME
+   345	           MOVE TARIFF TO LA-TARIFF
+   346	           WRITE OUT-REC FROM L-ACCT
+   347	           MOVE PREV-READ TO LR-PREV
+   348	           MOVE CURR-READ TO LR-CURR
+   349	           MOVE WS-UNITS TO LR-UNITS
+   350	           MOVE BILL-DAYS TO LR-DAYS
+   351	           WRITE OUT-REC FROM L-READ
+   352	           MOVE WS-B1 TO LB-1
+   353	           MOVE WS-B2 TO LB-2
+   354	           MOVE WS-B3 TO LB-3
+   355	           WRITE OUT-REC FROM L-BANDS
+   356	           MOVE WS-USAGE TO LC-USAGE
+   357	           MOVE WS-STANDING TO LC-STANDING
+   358	           WRITE OUT-REC FROM L-CHARGE
+   359	           MOVE WS-DISCOUNT TO LD-DISCOUNT
+   360	           MOVE WS-VAT TO LD-VAT
+   361	           MOVE WS-CURRENT TO LD-CURRENT
+   362	           WRITE OUT-REC FROM L-DISC
+   363	           MOVE ARREARS TO LX-ARREARS
+   364	           MOVE WS-INTEREST TO LX-INTEREST
+   365	           MOVE PAID TO LX-PAID
+   366	           WRITE OUT-REC FROM L-ARR
+   367	           MOVE WS-BALANCE TO LL-BALANCE
+   368	           MOVE WS-DUE TO LL-DUE
+   369	           WRITE OUT-REC FROM L-BAL
+   370	           IF WS-BALANCE < 0
+   371	               MOVE WS-CARRY TO LY-CARRY
+   372	               WRITE OUT-REC FROM L-CARRY
+   373	           END-IF
+   374	           MOVE SPACES TO OUT-REC
+   375	           WRITE OUT-REC.
+   376	
+   377	       WRITE-TOTALS.
+   378	           MOVE WS-BILLED TO LT-BILLED
+   379	           MOVE WS-REJECTED TO LT-REJECTED
+   380	           MOVE WS-CREDITS TO LT-CREDITS
+   381	           WRITE OUT-REC FROM L-TOT1
+   382	           MOVE WS-TOT-UNITS TO LT-UNITS
+   383	           MOVE WS-TOT-CURRENT TO LT-CURRENT
+   384	           WRITE OUT-REC FROM L-TOT2
+   385	           IF WS-BILLED > 0
+   386	               DIVIDE WS-TOT-CURRENT BY WS-BILLED
+   387	                   GIVING WS-AVERAGE ROUNDED
+   388	           END-IF
+   389	           MOVE WS-TOT-DUE TO LT-DUE
+   390	           MOVE WS-AVERAGE TO LT-AVERAGE
+   391	           WRITE OUT-REC FROM L-TOT3
+   392	           MOVE WS-TOT-NET TO LT-NET
+   393	           WRITE OUT-REC FROM L-TOT4.
+   394	
+   395	       POST-PAYMENTS.
+   396	           MOVE SPACES TO OUT-REC
+   397	           WRITE OUT-REC
+   398	           WRITE OUT-REC FROM L-LEDGER
+   399	           OPEN INPUT PAY-IN
+   400	           PERFORM READ-PAY
+   401	           PERFORM UNTIL END-OF-PAY
+   402	               ADD 1 TO WS-LINE-NO
+   403	               PERFORM ONE-PAYMENT
+   404	               PERFORM READ-PAY
+   405	           END-PERFORM
+   406	           CLOSE PAY-IN
+   407	           MOVE WS-APPLIED TO LV-APPLIED
+   408	           MOVE WS-PAY-REJECTED TO LV-REJECTED
+   409	           MOVE WS-TOT-PAID TO LV-PAID
+   410	           MOVE WS-TOT-OTHER TO LV-OTHER
+   411	           WRITE OUT-REC FROM L-PAYTOT.
+   412	
+   413	       READ-PAY.
+   414	           READ PAY-IN INTO PAY-LINE
+   415	               AT END SET END-OF-PAY TO TRUE
+   416	           END-READ.
+   417	
+   418	       ONE-PAYMENT.
+   419	           MOVE 0 TO PL-FIELDS PL-ACCT-LEN
+   420	           UNSTRING PAY-LINE DELIMITED BY ";"
+   421	               INTO PL-ACCT COUNT IN PL-ACCT-LEN
+   422	                    PL-KIND
+   423	                    PL-AMT-TXT
+   424	                    PL-MEMO
+   425	               TALLYING IN PL-FIELDS
+   426	           END-UNSTRING
+   427	           MOVE SPACES TO WS-REASON
+   428	           EVALUATE TRUE
+   429	               WHEN PL-FIELDS < 3
+   430	                   MOVE "TOO FEW FIELDS" TO WS-REASON
+   431	               WHEN PL-ACCT-LEN NOT = 8
+   432	                   MOVE "BAD ACCOUNT" TO WS-REASON
+   433	               WHEN FUNCTION TEST-NUMVAL(PL-AMT-TXT) NOT = 0
+   434	                   MOVE "BAD AMOUNT" TO WS-REASON
+   435	               WHEN NOT (KIND-PAY OR KIND-ADJ OR KIND-FEE OR KIND-REF)
+   436	                   MOVE "BAD KIND" TO WS-REASON
+   437	           END-EVALUATE
+   438	           IF WS-REASON = SPACES
+   439	               SET AX TO 1
+   440	               SEARCH AT-ENTRY
+   441	                   AT END MOVE "NO SUCH ACCOUNT" TO WS-REASON
+   442	                   WHEN AT-ACCT(AX) = PL-ACCT
+   443	                       CONTINUE
+   444	               END-SEARCH
+   445	           END-IF
+   446	           IF WS-REASON NOT = SPACES
+   447	               ADD 1 TO WS-PAY-REJECTED
+   448	               MOVE WS-LINE-NO TO LQ-LINE
+   449	               MOVE WS-REASON TO LQ-REASON
+   450	               WRITE OUT-REC FROM L-PAYREJ
+   451	           ELSE
+   452	               PERFORM APPLY-PAYMENT
+   453	           END-IF.
+   454	
+   455	       APPLY-PAYMENT.
+   456	           EVALUATE TRUE
+   457	               WHEN KIND-PAY
+   458	                   COMPUTE WS-AMT ROUNDED MODE NEAREST-EVEN
+   459	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   460	                   SUBTRACT WS-AMT FROM AT-BAL(AX)
+   461	                   ADD WS-AMT TO WS-TOT-PAID
+   462	               WHEN KIND-ADJ
+   463	                   COMPUTE WS-AMT ROUNDED
+   464	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   465	                   ADD WS-AMT TO AT-BAL(AX)
+   466	                   ADD WS-AMT TO WS-TOT-OTHER
+   467	               WHEN KIND-FEE
+   468	                   COMPUTE WS-AMT = FUNCTION NUMVAL(PL-AMT-TXT)
+   469	                   ADD WS-AMT TO AT-BAL(AX)
+   470	                   ADD WS-AMT TO WS-TOT-OTHER
+   471	                   DIVIDE WS-AMT BY 3 GIVING WS-PART ROUNDED
+   472	                       REMAINDER WS-REM
+   473	               WHEN KIND-REF
+   474	                   COMPUTE WS-AMT ROUNDED MODE TOWARD-LESSER
+   475	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   476	                   ADD WS-AMT TO AT-BAL(AX)
+   477	                   ADD WS-AMT TO WS-TOT-OTHER
+   478	           END-EVALUATE
+   479	           COMPUTE WS-WHOLE = FUNCTION INTEGER(WS-AMT)
+   480	           INSPECT PL-MEMO CONVERTING "0123456789" TO "XXXXXXXXXX"
+   481	               AFTER INITIAL "#"
+   482	           ADD 1 TO WS-APPLIED
+   483	           MOVE PL-KIND TO LP-KIND
+   484	           MOVE PL-ACCT TO LP-ACCT
+   485	           MOVE WS-AMT TO LP-AMT
+   486	           MOVE WS-WHOLE TO LP-WHOLE
+   487	           MOVE AT-BAL(AX) TO LP-BAL
+   488	           MOVE PL-MEMO TO LP-MEMO
+   489	           WRITE OUT-REC FROM L-POST
+   490	           IF KIND-FEE
+   491	               MOVE WS-PART TO LS-PART
+   492	               MOVE WS-REM TO LS-REM
+   493	               WRITE OUT-REC FROM L-SPLIT
+   494	           END-IF.
+[?2004hroot@1a267ab558a6:/app# for f in /app/legacy/*; do if [ -f "$f" ] && [ "$f" != /app/legacy/WBILL.cbl ] && [ "$f" != /app/legacy/RUNBOOK.md ]; then echo "--- $f ---"; nl -ba "$f"; fi; done
+[?2004l--- /app/legacy/CUSTREC.cpy ---
+     1	      *----------------------------------------------------------------
+     2	      * CUSTREC  -  METER-READING INPUT RECORD (80 BYTES)
+     3	      *----------------------------------------------------------------
+     4	       01  CUST-REC.
+     5	           05  REC-TYPE              PIC X.
+     6	               88  IS-HEADER         VALUE "H".
+     7	               88  IS-CUSTOMER       VALUE "C".
+     8	           05  CUST-BODY.
+     9	               10  ACCT-NO           PIC X(8).
+    10	               10  CUST-NAME         PIC X(24).
+    11	               10  TARIFF            PIC X.
+    12	                   88  TARIFF-DOMESTIC    VALUE "D".
+    13	                   88  TARIFF-COMMERCIAL  VALUE "C".
+    14	                   88  TARIFF-RELIEF      VALUE "L".
+    15	               10  PREV-READ         PIC 9(6).
+    16	               10  CURR-READ         PIC 9(6).
+    17	               10  BILL-DAYS         PIC 9(3).
+    18	               10  ARREARS           PIC S9(5)V99
+    19	                                     SIGN LEADING SEPARATE.
+    20	               10  PAID              PIC 9(5)V99.
+    21	               10  FILLER            PIC X(16).
+    22	           05  HDR-BODY REDEFINES CUST-BODY.
+    23	               10  STMT-DATE         PIC 9(8).
+    24	               10  HDR-REGION        PIC X(20).
+    25	               10  FILLER            PIC X(51).
+--- /app/legacy/TARIFFS.cpy ---
+     1	      *----------------------------------------------------------------
+     2	      * TARIFFS  -  BAND LIMITS PER 30 DAYS, UNIT RATES, STANDING
+     3	      *             CHARGE PER DAY.  ONE ROW PER TARIFF LETTER.
+     4	      *----------------------------------------------------------------
+     5	       01  TARIFF-VALUES.
+     6	           05  FILLER  PIC X(29) VALUE "D0010003012050185752441003125".
+     7	           05  FILLER  PIC X(29) VALUE "C0050020011500140251655009860".
+     8	           05  FILLER  PIC X(29) VALUE "L0010003012050185752441003125".
+     9	       01  TARIFF-TABLE REDEFINES TARIFF-VALUES.
+    10	           05  TARIFF-ROW OCCURS 3 TIMES INDEXED BY TX.
+    11	               10  TR-CODE           PIC X.
+    12	               10  TR-LIMIT1         PIC 9(4).
+    13	               10  TR-LIMIT2         PIC 9(4).
+    14	               10  TR-RATE1          PIC 9V9999.
+    15	               10  TR-RATE2          PIC 9V9999.
+    16	               10  TR-RATE3          PIC 9V9999.
+    17	               10  TR-STANDING       PIC 9V9999.
+[?2004hroot@1a267ab558a6:/app# for f in /app/legacy/samples/*; do echo "=== $f ==="; wc -lc "$f"; sed -n '1,20l' "$f"; done
+[?2004l=== /app/legacy/samples/2025q1-north.dat ===
+  21 1701 /app/legacy/samples/2025q1-north.dat
+H20250331NORTH DISTRICT                                              \
+           $
+C10004821Jane O'Hara             D012345012612090+00000000006500     \
+           $
+C10004822PATEL  RAVI             D088210088291091+00012500000000     \
+           $
+C10004830Lindqvist Anders        L004410004502092+00000000003000     \
+           $
+C10004837HOLM & DAUGHTERS        C230115231880090+00450000045000     \
+           $
+C10004841wu mei                  D067000067024089-00025000000000     \
+           $
+C10004855Brennan Kathleen        D015500015590090+00000000020000     \
+           $
+C10004860RIVERSIDE LAUNDRY LTD   C700000752400091+00000000000000     \
+           $
+C10004871O'Neill Padraig         L003001003059090+00008120000000     \
+           $
+C10004879Greenhalgh Susan        D051234051234090+00000000000000     \
+           $
+C10004880FAULKNER J              Q001000001100090+00000000000000     \
+           $
+C10004893Mbeki Thandiwe          D091020091155120+00033330001000     \
+           $
+C10004902NORTHGATE COLD STORE    C410500480800090+02500000000000     \
+           $
+C10004915Castellano Rosa         L007788007850060-00010000000000     \
+           $
+C10004923HARBOUR MASTER'S OFFICE C120000121750030-10000009999999     \
+           $
+C10004930Kowalski Piotr          D033300033410000+00000000000000     \
+           $
+C10004944ST ANNE'S SCHOOL        C005000015500091+00015000000000     \
+           $
+C10004951Ahmed Farida            D020020020105090+00000000009000     \
+           $
+C10004966EASTFIELD DAIRY         C600000660000091+00000000000000     \
+           $
+C10004978Dubois  Claire          L010400010471091+00000000000000     \
+           $
+=== /app/legacy/samples/2025q1-north.pay ===
+ 11 430 /app/legacy/samples/2025q1-north.pay
+10004821;PAY;65.00;counter cash$
+10004837;PAY;450.00;bank transfer ref 20250402$
+10004855;PAY;200.00;card #4929001122334455$
+10004902;ADJ;-1250.00;meter re-read #88120$
+10004860;PAY;15000.00;direct debit$
+10004871;FEE;30.00;late payment fee$
+10004893;PAY;10.00;card #5100998877665544$
+10004966;REF;42.50;overpayment returned$
+10004980;PAY;50.00;unknown account$
+10004923;ADJ;18.75;goodwill credit reversed$
+10004951;PAY;90.00;cheque 000512$
+=== /app/legacy/samples/2025q1-north.stmt ===
+ 171 7488 /app/legacy/samples/2025q1-north.stmt
+STATEMENTS FOR NORTH DISTRICT       DATED 31/03/2025$
+$
+ACCOUNT ****4821  JANE O'HARA              TARIFF D$
+READINGS  12345 TO  12612  USAGE       267 OVER  90 DAYS$
+BANDS     30.0     60.0       177.0$
+USAGE CHARGE       $579.66  STANDING    $28.13$
+DISCOUNT            VAT     30.39  CURRENT   $638.18$
+ARREARS         +0.00  INTEREST           PAID    65.00$
+BALANCE       573.18    AMOUNT DUE****573.18$
+$
+ACCOUNT ****4822  PATEL                    TARIFF D$
+READINGS  88210 TO  88291  USAGE        81 OVER  91 DAYS$
+BANDS     30.3     50.7         0.0$
+USAGE CHARGE       $130.69  STANDING    $28.44$
+DISCOUNT            VAT      7.96  CURRENT   $167.09$
+ARREARS        +12.50  INTEREST     0.19  PAID     0.00$
+BALANCE       179.78    AMOUNT DUE****179.78$
+$
+ACCOUNT ****4830  LINDQVIST ANDERS         TARIFF L$
+READINGS   4410 TO   4502  USAGE        92 OVER  92 DAYS$
+[?2004hroot@1a267ab558a6:/app# sed -n '1,140p' /app/legacy/WBILL.cbl | nl -ba -v1
+[?2004l     1	       IDENTIFICATION DIVISION.
+     2	       PROGRAM-ID. WBILL.
+     3	      *----------------------------------------------------------------
+     4	      * WBILL - QUARTERLY WATER STATEMENT RUN.
+     5	      * READS THE METER-READING FILE (CUSTIN) AND WRITES THE PRINTED
+     6	      * STATEMENT FILE (STMTOUT).  ONE HEADER RECORD, THEN ONE RECORD
+     7	      * PER ACCOUNT.  THEN POSTS THE PAYMENTS AND ADJUSTMENTS FILE
+     8	      * (PAYIN) AGAINST THE NEW BALANCES AND PRINTS THE LEDGER.
+     9	      *----------------------------------------------------------------
+    10	       ENVIRONMENT DIVISION.
+    11	       INPUT-OUTPUT SECTION.
+    12	       FILE-CONTROL.
+    13	           SELECT CUST-IN  ASSIGN TO CUSTIN
+    14	               ORGANIZATION IS LINE SEQUENTIAL.
+    15	           SELECT STMT-OUT ASSIGN TO STMTOUT
+    16	               ORGANIZATION IS LINE SEQUENTIAL.
+    17	           SELECT PAY-IN   ASSIGN TO PAYIN
+    18	               ORGANIZATION IS LINE SEQUENTIAL.
+    19	       DATA DIVISION.
+    20	       FILE SECTION.
+    21	       FD  CUST-IN.
+    22	       01  IN-REC                    PIC X(80).
+    23	       FD  STMT-OUT.
+    24	       01  OUT-REC                   PIC X(72).
+    25	       FD  PAY-IN.
+    26	       01  PAY-REC                   PIC X(80).
+    27	       WORKING-STORAGE SECTION.
+    28	       COPY "CUSTREC.cpy".
+    29	       COPY "TARIFFS.cpy".
+    30	       01  WS-FLAGS.
+    31	           05  WS-EOF                PIC X VALUE "N".
+    32	               88  END-OF-INPUT      VALUE "Y".
+    33	           05  WS-PAY-EOF            PIC X VALUE "N".
+    34	               88  END-OF-PAY        VALUE "Y".
+    35	       01  ACCT-TABLE.
+    36	           05  AT-COUNT              PIC 9(4) VALUE 0.
+    37	           05  AT-ENTRY OCCURS 1 TO 999 TIMES
+    38	                   DEPENDING ON AT-COUNT INDEXED BY AX.
+    39	               10  AT-ACCT           PIC X(8).
+    40	               10  AT-BAL            PIC S9(9)V99.
+    41	       01  PAY-WORK.
+    42	           05  PAY-LINE              PIC X(80).
+    43	           05  PL-ACCT               PIC X(8)  VALUE SPACES.
+    44	           05  PL-KIND               PIC X(3)  VALUE SPACES.
+    45	               88  KIND-PAY          VALUE "PAY".
+    46	               88  KIND-ADJ          VALUE "ADJ".
+    47	               88  KIND-FEE          VALUE "FEE".
+    48	               88  KIND-REF          VALUE "REF".
+    49	           05  PL-AMT-TXT            PIC X(16) VALUE SPACES.
+    50	           05  PL-MEMO               PIC X(30) VALUE SPACES.
+    51	           05  PL-FIELDS             PIC 99.
+    52	           05  PL-ACCT-LEN           PIC 99.
+    53	           05  WS-LINE-NO            PIC 9(3)  VALUE 0.
+    54	           05  WS-AMT                PIC S9(7)V99.
+    55	           05  WS-WHOLE              PIC S9(7).
+    56	           05  WS-PART               PIC S9(7)V99.
+    57	           05  WS-REM                PIC S9(3)V99.
+    58	           05  WS-APPLIED            PIC 9(3)  VALUE 0.
+    59	           05  WS-PAY-REJECTED       PIC 9(3)  VALUE 0.
+    60	           05  WS-TOT-PAID           PIC S9(9)V99 VALUE 0.
+    61	           05  WS-TOT-OTHER          PIC S9(9)V99 VALUE 0.
+    62	       01  WS-WORK.
+    63	           05  WS-UNITS              PIC 9(7).
+    64	           05  WS-TEMP               PIC 9(7).
+    65	           05  WS-LIM1               PIC 9(5)V9.
+    66	           05  WS-LIM2               PIC 9(5)V9.
+    67	           05  WS-B1                 PIC 9(5)V9.
+    68	           05  WS-B2                 PIC 9(5)V9.
+    69	           05  WS-B3                 PIC 9(7)V9.
+    70	           05  WS-C1                 PIC 9(6)V99.
+    71	           05  WS-C2                 PIC 9(6)V99.
+    72	           05  WS-C3                 PIC 9(7)V99.
+    73	           05  WS-USAGE              PIC 9(7)V99.
+    74	           05  WS-STANDING           PIC 9(5)V99.
+    75	           05  WS-DISCOUNT           PIC 9(6)V99.
+    76	           05  WS-NET                PIC 9(7)V99.
+    77	           05  WS-VAT                PIC 9(6)V99.
+    78	           05  WS-CURRENT            PIC 9(7)V99.
+    79	           05  WS-INTEREST           PIC 9(5)V99.
+    80	           05  WS-BALANCE            PIC S9(7)V99.
+    81	           05  WS-CARRY              PIC S9(7)V99.
+    82	           05  WS-DUE                PIC 9(7)V99.
+    83	           05  WS-NAME               PIC X(24).
+    84	           05  WS-NAME-OUT           PIC X(24).
+    85	           05  WS-REASON             PIC X(20).
+    86	           05  WS-DATE-DMY           PIC 9(8).
+    87	       01  WS-TOTALS.
+    88	           05  WS-BILLED             PIC 9(3)    VALUE 0.
+    89	           05  WS-REJECTED           PIC 9(3)    VALUE 0.
+    90	           05  WS-CREDITS            PIC 9(3)    VALUE 0.
+    91	           05  WS-TOT-UNITS          PIC 9(11)   VALUE 0.
+    92	           05  WS-TOT-CURRENT        PIC 9(11)V99 VALUE 0.
+    93	           05  WS-TOT-DUE            PIC 9(11)V99 VALUE 0.
+    94	           05  WS-TOT-NET            PIC S9(11)V99 VALUE 0.
+    95	           05  WS-AVERAGE            PIC 9(9)V99 VALUE 0.
+    96	       01  L-HEAD.
+    97	           05  FILLER                PIC X(15) VALUE "STATEMENTS FOR ".
+    98	           05  LH-REGION             PIC X(20).
+    99	           05  FILLER                PIC X(7)  VALUE " DATED ".
+   100	           05  LH-DATE               PIC 99/99/9999.
+   101	       01  L-ACCT.
+   102	           05  FILLER                PIC X(8)  VALUE "ACCOUNT ".
+   103	           05  LA-MASK               PIC X(4)  VALUE "****".
+   104	           05  LA-TAIL               PIC X(4).
+   105	           05  FILLER                PIC X(2)  VALUE SPACES.
+   106	           05  LA-NAME               PIC X(24).
+   107	           05  FILLER                PIC X(8)  VALUE " TARIFF ".
+   108	           05  LA-TARIFF             PIC X.
+   109	       01  L-READ.
+   110	           05  FILLER                PIC X(9)  VALUE "READINGS ".
+   111	           05  LR-PREV               PIC ZZZZZ9.
+   112	           05  FILLER                PIC X(4)  VALUE " TO ".
+   113	           05  LR-CURR               PIC ZZZZZ9.
+   114	           05  FILLER                PIC X(8)  VALUE "  USAGE ".
+   115	           05  LR-UNITS              PIC Z,ZZZ,ZZ9.
+   116	           05  FILLER                PIC X(6)  VALUE " OVER ".
+   117	           05  LR-DAYS               PIC ZZ9.
+   118	           05  FILLER                PIC X(5)  VALUE " DAYS".
+   119	       01  L-BANDS.
+   120	           05  FILLER                PIC X(6)  VALUE "BANDS ".
+   121	           05  LB-1                  PIC ZZ,ZZ9.9.
+   122	           05  FILLER                PIC X     VALUE SPACE.
+   123	           05  LB-2                  PIC ZZ,ZZ9.9.
+   124	           05  FILLER                PIC X     VALUE SPACE.
+   125	           05  LB-3                  PIC Z,ZZZ,ZZ9.9.
+   126	       01  L-CHARGE.
+   127	           05  FILLER                PIC X(13) VALUE "USAGE CHARGE ".
+   128	           05  LC-USAGE              PIC $$,$$$,$$9.99.
+   129	           05  FILLER                PIC X(10) VALUE "  STANDING".
+   130	           05  LC-STANDING           PIC $$$,$$9.99.
+   131	       01  L-DISC.
+   132	           05  FILLER                PIC X(9)  VALUE "DISCOUNT ".
+   133	           05  LD-DISCOUNT           PIC ZZ,ZZ9.99 BLANK WHEN ZERO.
+   134	           05  FILLER                PIC X(5)  VALUE "  VAT".
+   135	           05  LD-VAT                PIC ZZZ,ZZ9.99.
+   136	           05  FILLER                PIC X(9)  VALUE "  CURRENT".
+   137	           05  LD-CURRENT            PIC $$$,$$9.99.
+   138	       01  L-ARR.
+   139	           05  FILLER                PIC X(8)  VALUE "ARREARS ".
+   140	           05  LX-ARREARS            PIC ++,+++,++9.99.
+[?2004hroot@1a267ab558a6:/app# sed -n '141,280p' /app/legacy/WBILL.cbl | nl -ba -v141
+[?2004l   141	           05  FILLER                PIC X(10) VALUE "  INTEREST".
+   142	           05  LX-INTEREST           PIC ZZ,ZZ9.99 BLANK WHEN ZERO.
+   143	           05  FILLER                PIC X(6)  VALUE "  PAID".
+   144	           05  LX-PAID               PIC ZZ,ZZ9.99.
+   145	       01  L-BAL.
+   146	           05  FILLER                PIC X(8)  VALUE "BALANCE ".
+   147	           05  LL-BALANCE            PIC Z,ZZZ,ZZ9.99CR.
+   148	           05  FILLER                PIC X(12) VALUE "  AMOUNT DUE".
+   149	           05  LL-DUE                PIC ***,**9.99.
+   150	       01  L-CARRY.
+   151	           05  FILLER                PIC X(11) VALUE "CREDIT C/F ".
+   152	           05  LY-CARRY              PIC $$$,$$9.99-.
+   153	       01  L-REJECT.
+   154	           05  FILLER                PIC X(7)  VALUE "REJECT ".
+   155	           05  LJ-ACCT               PIC X(8).
+   156	           05  FILLER                PIC X     VALUE SPACE.
+   157	           05  LJ-REASON             PIC X(20).
+   158	       01  L-LEDGER.
+   159	           05  FILLER                PIC X(24)
+   160	                                     VALUE "PAYMENTS AND ADJUSTMENTS".
+   161	       01  L-POST.
+   162	           05  LP-KIND               PIC X(3).
+   163	           05  FILLER                PIC X     VALUE SPACE.
+   164	           05  LP-ACCT               PIC X(8).
+   165	           05  FILLER                PIC X     VALUE SPACE.
+   166	           05  LP-AMT                PIC ----,--9.99.
+   167	           05  FILLER                PIC X(7)  VALUE " WHOLE ".
+   168	           05  LP-WHOLE              PIC -----9.
+   169	           05  FILLER                PIC X(5)  VALUE " BAL ".
+   170	           05  LP-BAL                PIC Z,ZZZ,ZZ9.99CR.
+   171	           05  FILLER                PIC X     VALUE SPACE.
+   172	           05  LP-MEMO               PIC X(30).
+   173	       01  L-SPLIT.
+   174	           05  FILLER                PIC X(16) VALUE "    FEE SPLIT 3X".
+   175	           05  LS-PART               PIC ---,--9.99.
+   176	           05  FILLER                PIC X(11) VALUE " REMAINDER ".
+   177	           05  LS-REM                PIC -9.99.
+   178	       01  L-PAYREJ.
+   179	           05  FILLER                PIC X(5)  VALUE "LINE ".
+   180	           05  LQ-LINE               PIC ZZ9.
+   181	           05  FILLER                PIC X(10) VALUE " REJECTED ".
+   182	           05  LQ-REASON             PIC X(20).
+   183	       01  L-PAYTOT.
+   184	           05  FILLER                PIC X(8)  VALUE "POSTED  ".
+   185	           05  LV-APPLIED            PIC ZZ9.
+   186	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   187	           05  LV-REJECTED           PIC ZZ9.
+   188	           05  FILLER                PIC X(8)  VALUE "  PAID  ".
+   189	           05  LV-PAID               PIC $$,$$$,$$9.99-.
+   190	           05  FILLER                PIC X(8)  VALUE "  OTHER ".
+   191	           05  LV-OTHER              PIC $$,$$$,$$9.99-.
+   192	       01  L-TOT1.
+   193	           05  FILLER                PIC X(16) VALUE "ACCOUNTS BILLED ".
+   194	           05  LT-BILLED             PIC ZZ9.
+   195	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   196	           05  LT-REJECTED           PIC ZZ9.
+   197	           05  FILLER                PIC X(10) VALUE "  CREDITS ".
+   198	           05  LT-CREDITS            PIC ZZ9.
+   199	       01  L-TOT2.
+   200	           05  FILLER                PIC X(12) VALUE "TOTAL UNITS ".
+   201	           05  LT-UNITS              PIC ZZZ,ZZZ,ZZ9.
+   202	           05  FILLER                PIC X(16) VALUE "  TOTAL CURRENT ".
+   203	           05  LT-CURRENT            PIC $$$,$$$,$$9.99.
+   204	       01  L-TOT3.
+   205	           05  FILLER                PIC X(10) VALUE "TOTAL DUE ".
+   206	           05  LT-DUE                PIC $$$,$$$,$$9.99.
+   207	           05  FILLER                PIC X(15) VALUE "  AVERAGE BILL ".
+   208	           05  LT-AVERAGE            PIC $$,$$$,$$9.99.
+   209	       01  L-TOT4.
+   210	           05  FILLER                PIC X(13) VALUE "NET POSITION ".
+   211	           05  LT-NET                PIC ---,---,--9.99.
+   212	       PROCEDURE DIVISION.
+   213	       MAIN-LINE.
+   214	           OPEN INPUT CUST-IN
+   215	                OUTPUT STMT-OUT
+   216	           PERFORM READ-IN
+   217	           IF NOT END-OF-INPUT AND IS-HEADER
+   218	               PERFORM WRITE-HEADER
+   219	               PERFORM READ-IN
+   220	           END-IF
+   221	           PERFORM UNTIL END-OF-INPUT
+   222	               IF IS-CUSTOMER
+   223	                   PERFORM ONE-ACCOUNT
+   224	               END-IF
+   225	               PERFORM READ-IN
+   226	           END-PERFORM
+   227	           PERFORM WRITE-TOTALS
+   228	           PERFORM POST-PAYMENTS
+   229	           CLOSE CUST-IN STMT-OUT
+   230	           STOP RUN.
+   231	
+   232	       READ-IN.
+   233	           READ CUST-IN INTO CUST-REC
+   234	               AT END SET END-OF-INPUT TO TRUE
+   235	           END-READ.
+   236	
+   237	       WRITE-HEADER.
+   238	           MOVE HDR-REGION TO LH-REGION
+   239	           MOVE STMT-DATE(7:2) TO WS-DATE-DMY(1:2)
+   240	           MOVE STMT-DATE(5:2) TO WS-DATE-DMY(3:2)
+   241	           MOVE STMT-DATE(1:4) TO WS-DATE-DMY(5:4)
+   242	           MOVE WS-DATE-DMY TO LH-DATE
+   243	           WRITE OUT-REC FROM L-HEAD
+   244	           MOVE SPACES TO OUT-REC
+   245	           WRITE OUT-REC.
+   246	
+   247	       ONE-ACCOUNT.
+   248	           MOVE SPACES TO WS-REASON
+   249	           SET TX TO 1
+   250	           SEARCH TARIFF-ROW
+   251	               AT END MOVE "UNKNOWN TARIFF" TO WS-REASON
+   252	               WHEN TR-CODE(TX) = TARIFF
+   253	                   CONTINUE
+   254	           END-SEARCH
+   255	           EVALUATE TRUE
+   256	               WHEN WS-REASON NOT = SPACES
+   257	                   CONTINUE
+   258	               WHEN BILL-DAYS = 0
+   259	                   MOVE "NO BILLING DAYS" TO WS-REASON
+   260	               WHEN BILL-DAYS > 120
+   261	                   MOVE "PERIOD TOO LONG" TO WS-REASON
+   262	           END-EVALUATE
+   263	           IF WS-REASON NOT = SPACES
+   264	               ADD 1 TO WS-REJECTED
+   265	               MOVE ACCT-NO TO LJ-ACCT
+   266	               MOVE WS-REASON TO LJ-REASON
+   267	               WRITE OUT-REC FROM L-REJECT
+   268	               MOVE SPACES TO OUT-REC
+   269	               WRITE OUT-REC
+   270	           ELSE
+   271	               PERFORM CALC-BILL
+   272	               PERFORM PRINT-BILL
+   273	           END-IF.
+   274	
+   275	       CALC-BILL.
+   276	           IF CURR-READ >= PREV-READ
+   277	               SUBTRACT PREV-READ FROM CURR-READ GIVING WS-UNITS
+   278	           ELSE
+   279	               COMPUTE WS-UNITS = CURR-READ + 1000000 - PREV-READ
+   280	           END-IF
+[?2004hroot@1a267ab558a6:/app# sed -n '281,420p' /app/legacy/WBILL.cbl | nl -ba -v281
+[?2004l   281	           MULTIPLY TR-LIMIT1(TX) BY BILL-DAYS GIVING WS-TEMP
+   282	           DIVIDE WS-TEMP BY 30 GIVING WS-LIM1 ROUNDED
+   283	           MULTIPLY TR-LIMIT2(TX) BY BILL-DAYS GIVING WS-TEMP
+   284	           DIVIDE WS-TEMP BY 30 GIVING WS-LIM2 ROUNDED
+   285	           MOVE 0 TO WS-B1 WS-B2 WS-B3
+   286	           IF WS-UNITS > WS-LIM1
+   287	               MOVE WS-LIM1 TO WS-B1
+   288	               IF WS-UNITS > WS-LIM2
+   289	                   SUBTRACT WS-LIM1 FROM WS-LIM2 GIVING WS-B2
+   290	                   SUBTRACT WS-LIM2 FROM WS-UNITS GIVING WS-B3
+   291	               ELSE
+   292	                   SUBTRACT WS-LIM1 FROM WS-UNITS GIVING WS-B2
+   293	               END-IF
+   294	           ELSE
+   295	               MOVE WS-UNITS TO WS-B1
+   296	           END-IF
+   297	           MULTIPLY WS-B1 BY TR-RATE1(TX) GIVING WS-C1 ROUNDED
+   298	           MULTIPLY WS-B2 BY TR-RATE2(TX) GIVING WS-C2 ROUNDED
+   299	           MULTIPLY WS-B3 BY TR-RATE3(TX) GIVING WS-C3 ROUNDED
+   300	           ADD WS-C1 WS-C2 WS-C3 GIVING WS-USAGE
+   301	           MULTIPLY BILL-DAYS BY TR-STANDING(TX)
+   302	               GIVING WS-STANDING ROUNDED
+   303	           MOVE 0 TO WS-DISCOUNT
+   304	           IF TARIFF-RELIEF
+   305	               MULTIPLY WS-USAGE BY 0.15 GIVING WS-DISCOUNT
+   306	               SUBTRACT WS-DISCOUNT FROM WS-USAGE
+   307	           END-IF
+   308	           ADD WS-USAGE WS-STANDING GIVING WS-NET
+   309	           MULTIPLY WS-NET BY 0.05 GIVING WS-VAT ROUNDED
+   310	           ADD WS-NET WS-VAT GIVING WS-CURRENT
+   311	           MOVE 0 TO WS-INTEREST
+   312	           IF ARREARS > 0
+   313	               MULTIPLY ARREARS BY 0.015 GIVING WS-INTEREST ROUNDED
+   314	           END-IF
+   315	           COMPUTE WS-BALANCE = WS-CURRENT + ARREARS + WS-INTEREST
+   316	                              - PAID
+   317	           MOVE 0 TO WS-DUE WS-CARRY
+   318	           IF WS-BALANCE > 0
+   319	               MOVE WS-BALANCE TO WS-DUE
+   320	           END-IF
+   321	           IF WS-BALANCE < 0
+   322	               MULTIPLY WS-BALANCE BY 0.975 GIVING WS-CARRY ROUNDED
+   323	               ADD 1 TO WS-CREDITS
+   324	           END-IF
+   325	           ADD 1 TO WS-BILLED
+   326	           ADD 1 TO AT-COUNT
+   327	           MOVE ACCT-NO TO AT-ACCT(AT-COUNT)
+   328	           MOVE WS-BALANCE TO AT-BAL(AT-COUNT)
+   329	           ADD WS-UNITS TO WS-TOT-UNITS
+   330	           ADD WS-CURRENT TO WS-TOT-CURRENT
+   331	           ADD WS-DUE TO WS-TOT-DUE
+   332	           ADD WS-BALANCE TO WS-TOT-NET.
+   333	
+   334	       PRINT-BILL.
+   335	           MOVE CUST-NAME TO WS-NAME
+   336	           INSPECT WS-NAME CONVERTING "abcdefghijklmnopqrstuvwxyz"
+   337	                                   TO "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+   338	           MOVE SPACES TO WS-NAME-OUT
+   339	           STRING WS-NAME DELIMITED BY "  " INTO WS-NAME-OUT
+   340	           IF WS-NAME-OUT = SPACES
+   341	               MOVE "(NO NAME ON FILE)" TO WS-NAME-OUT
+   342	           END-IF
+   343	           MOVE ACCT-NO(5:4) TO LA-TAIL
+   344	           MOVE WS-NAME-OUT TO LA-NAME
+   345	           MOVE TARIFF TO LA-TARIFF
+   346	           WRITE OUT-REC FROM L-ACCT
+   347	           MOVE PREV-READ TO LR-PREV
+   348	           MOVE CURR-READ TO LR-CURR
+   349	           MOVE WS-UNITS TO LR-UNITS
+   350	           MOVE BILL-DAYS TO LR-DAYS
+   351	           WRITE OUT-REC FROM L-READ
+   352	           MOVE WS-B1 TO LB-1
+   353	           MOVE WS-B2 TO LB-2
+   354	           MOVE WS-B3 TO LB-3
+   355	           WRITE OUT-REC FROM L-BANDS
+   356	           MOVE WS-USAGE TO LC-USAGE
+   357	           MOVE WS-STANDING TO LC-STANDING
+   358	           WRITE OUT-REC FROM L-CHARGE
+   359	           MOVE WS-DISCOUNT TO LD-DISCOUNT
+   360	           MOVE WS-VAT TO LD-VAT
+   361	           MOVE WS-CURRENT TO LD-CURRENT
+   362	           WRITE OUT-REC FROM L-DISC
+   363	           MOVE ARREARS TO LX-ARREARS
+   364	           MOVE WS-INTEREST TO LX-INTEREST
+   365	           MOVE PAID TO LX-PAID
+   366	           WRITE OUT-REC FROM L-ARR
+   367	           MOVE WS-BALANCE TO LL-BALANCE
+   368	           MOVE WS-DUE TO LL-DUE
+   369	           WRITE OUT-REC FROM L-BAL
+   370	           IF WS-BALANCE < 0
+   371	               MOVE WS-CARRY TO LY-CARRY
+   372	               WRITE OUT-REC FROM L-CARRY
+   373	           END-IF
+   374	           MOVE SPACES TO OUT-REC
+   375	           WRITE OUT-REC.
+   376	
+   377	       WRITE-TOTALS.
+   378	           MOVE WS-BILLED TO LT-BILLED
+   379	           MOVE WS-REJECTED TO LT-REJECTED
+   380	           MOVE WS-CREDITS TO LT-CREDITS
+   381	           WRITE OUT-REC FROM L-TOT1
+   382	           MOVE WS-TOT-UNITS TO LT-UNITS
+   383	           MOVE WS-TOT-CURRENT TO LT-CURRENT
+   384	           WRITE OUT-REC FROM L-TOT2
+   385	           IF WS-BILLED > 0
+   386	               DIVIDE WS-TOT-CURRENT BY WS-BILLED
+   387	                   GIVING WS-AVERAGE ROUNDED
+   388	           END-IF
+   389	           MOVE WS-TOT-DUE TO LT-DUE
+   390	           MOVE WS-AVERAGE TO LT-AVERAGE
+   391	           WRITE OUT-REC FROM L-TOT3
+   392	           MOVE WS-TOT-NET TO LT-NET
+   393	           WRITE OUT-REC FROM L-TOT4.
+   394	
+   395	       POST-PAYMENTS.
+   396	           MOVE SPACES TO OUT-REC
+   397	           WRITE OUT-REC
+   398	           WRITE OUT-REC FROM L-LEDGER
+   399	           OPEN INPUT PAY-IN
+   400	           PERFORM READ-PAY
+   401	           PERFORM UNTIL END-OF-PAY
+   402	               ADD 1 TO WS-LINE-NO
+   403	               PERFORM ONE-PAYMENT
+   404	               PERFORM READ-PAY
+   405	           END-PERFORM
+   406	           CLOSE PAY-IN
+   407	           MOVE WS-APPLIED TO LV-APPLIED
+   408	           MOVE WS-PAY-REJECTED TO LV-REJECTED
+   409	           MOVE WS-TOT-PAID TO LV-PAID
+   410	           MOVE WS-TOT-OTHER TO LV-OTHER
+   411	           WRITE OUT-REC FROM L-PAYTOT.
+   412	
+   413	       READ-PAY.
+   414	           READ PAY-IN INTO PAY-LINE
+   415	               AT END SET END-OF-PAY TO TRUE
+   416	           END-READ.
+   417	
+   418	       ONE-PAYMENT.
+   419	           MOVE 0 TO PL-FIELDS PL-ACCT-LEN
+   420	           UNSTRING PAY-LINE DELIMITED BY ";"
+[?2004hroot@1a267ab558a6:/app# sed -n '421,620p' /app/legacy/WBILL.cbl | nl -ba -v421
+[?2004l   421	               INTO PL-ACCT COUNT IN PL-ACCT-LEN
+   422	                    PL-KIND
+   423	                    PL-AMT-TXT
+   424	                    PL-MEMO
+   425	               TALLYING IN PL-FIELDS
+   426	           END-UNSTRING
+   427	           MOVE SPACES TO WS-REASON
+   428	           EVALUATE TRUE
+   429	               WHEN PL-FIELDS < 3
+   430	                   MOVE "TOO FEW FIELDS" TO WS-REASON
+   431	               WHEN PL-ACCT-LEN NOT = 8
+   432	                   MOVE "BAD ACCOUNT" TO WS-REASON
+   433	               WHEN FUNCTION TEST-NUMVAL(PL-AMT-TXT) NOT = 0
+   434	                   MOVE "BAD AMOUNT" TO WS-REASON
+   435	               WHEN NOT (KIND-PAY OR KIND-ADJ OR KIND-FEE OR KIND-REF)
+   436	                   MOVE "BAD KIND" TO WS-REASON
+   437	           END-EVALUATE
+   438	           IF WS-REASON = SPACES
+   439	               SET AX TO 1
+   440	               SEARCH AT-ENTRY
+   441	                   AT END MOVE "NO SUCH ACCOUNT" TO WS-REASON
+   442	                   WHEN AT-ACCT(AX) = PL-ACCT
+   443	                       CONTINUE
+   444	               END-SEARCH
+   445	           END-IF
+   446	           IF WS-REASON NOT = SPACES
+   447	               ADD 1 TO WS-PAY-REJECTED
+   448	               MOVE WS-LINE-NO TO LQ-LINE
+   449	               MOVE WS-REASON TO LQ-REASON
+   450	               WRITE OUT-REC FROM L-PAYREJ
+   451	           ELSE
+   452	               PERFORM APPLY-PAYMENT
+   453	           END-IF.
+   454	
+   455	       APPLY-PAYMENT.
+   456	           EVALUATE TRUE
+   457	               WHEN KIND-PAY
+   458	                   COMPUTE WS-AMT ROUNDED MODE NEAREST-EVEN
+   459	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   460	                   SUBTRACT WS-AMT FROM AT-BAL(AX)
+   461	                   ADD WS-AMT TO WS-TOT-PAID
+   462	               WHEN KIND-ADJ
+   463	                   COMPUTE WS-AMT ROUNDED
+   464	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   465	                   ADD WS-AMT TO AT-BAL(AX)
+   466	                   ADD WS-AMT TO WS-TOT-OTHER
+   467	               WHEN KIND-FEE
+   468	                   COMPUTE WS-AMT = FUNCTION NUMVAL(PL-AMT-TXT)
+   469	                   ADD WS-AMT TO AT-BAL(AX)
+   470	                   ADD WS-AMT TO WS-TOT-OTHER
+   471	                   DIVIDE WS-AMT BY 3 GIVING WS-PART ROUNDED
+   472	                       REMAINDER WS-REM
+   473	               WHEN KIND-REF
+   474	                   COMPUTE WS-AMT ROUNDED MODE TOWARD-LESSER
+   475	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   476	                   ADD WS-AMT TO AT-BAL(AX)
+   477	                   ADD WS-AMT TO WS-TOT-OTHER
+   478	           END-EVALUATE
+   479	           COMPUTE WS-WHOLE = FUNCTION INTEGER(WS-AMT)
+   480	           INSPECT PL-MEMO CONVERTING "0123456789" TO "XXXXXXXXXX"
+   481	               AFTER INITIAL "#"
+   482	           ADD 1 TO WS-APPLIED
+   483	           MOVE PL-KIND TO LP-KIND
+   484	           MOVE PL-ACCT TO LP-ACCT
+   485	           MOVE WS-AMT TO LP-AMT
+   486	           MOVE WS-WHOLE TO LP-WHOLE
+   487	           MOVE AT-BAL(AX) TO LP-BAL
+   488	           MOVE PL-MEMO TO LP-MEMO
+   489	           WRITE OUT-REC FROM L-POST
+   490	           IF KIND-FEE
+   491	               MOVE WS-PART TO LS-PART
+   492	               MOVE WS-REM TO LS-REM
+   493	               WRITE OUT-REC FROM L-SPLIT
+   494	           END-IF.
+[?2004hroot@1a267ab558a6:/app# echo '--- CUSTREC ---'; nl -ba /app/legacy/CUSTREC.cpy; echo '--- FULL SAMPLE OUTPUT ---'; nl -ba /app/legacy/samples/2025q1-north.stmt
+[?2004l--- CUSTREC ---
+     1	      *----------------------------------------------------------------
+     2	      * CUSTREC  -  METER-READING INPUT RECORD (80 BYTES)
+     3	      *----------------------------------------------------------------
+     4	       01  CUST-REC.
+     5	           05  REC-TYPE              PIC X.
+     6	               88  IS-HEADER         VALUE "H".
+     7	               88  IS-CUSTOMER       VALUE "C".
+     8	           05  CUST-BODY.
+     9	               10  ACCT-NO           PIC X(8).
+    10	               10  CUST-NAME         PIC X(24).
+    11	               10  TARIFF            PIC X.
+    12	                   88  TARIFF-DOMESTIC    VALUE "D".
+    13	                   88  TARIFF-COMMERCIAL  VALUE "C".
+    14	                   88  TARIFF-RELIEF      VALUE "L".
+    15	               10  PREV-READ         PIC 9(6).
+    16	               10  CURR-READ         PIC 9(6).
+    17	               10  BILL-DAYS         PIC 9(3).
+    18	               10  ARREARS           PIC S9(5)V99
+    19	                                     SIGN LEADING SEPARATE.
+    20	               10  PAID              PIC 9(5)V99.
+    21	               10  FILLER            PIC X(16).
+    22	           05  HDR-BODY REDEFINES CUST-BODY.
+    23	               10  STMT-DATE         PIC 9(8).
+    24	               10  HDR-REGION        PIC X(20).
+    25	               10  FILLER            PIC X(51).
+--- FULL SAMPLE OUTPUT ---
+     1	STATEMENTS FOR NORTH DISTRICT       DATED 31/03/2025
+     2	
+     3	ACCOUNT ****4821  JANE O'HARA              TARIFF D
+     4	READINGS  12345 TO  12612  USAGE       267 OVER  90 DAYS
+     5	BANDS     30.0     60.0       177.0
+     6	USAGE CHARGE       $579.66  STANDING    $28.13
+     7	DISCOUNT            VAT     30.39  CURRENT   $638.18
+     8	ARREARS         +0.00  INTEREST           PAID    65.00
+     9	BALANCE       573.18    AMOUNT DUE****573.18
+    10	
+    11	ACCOUNT ****4822  PATEL                    TARIFF D
+    12	READINGS  88210 TO  88291  USAGE        81 OVER  91 DAYS
+    13	BANDS     30.3     50.7         0.0
+    14	USAGE CHARGE       $130.69  STANDING    $28.44
+    15	DISCOUNT            VAT      7.96  CURRENT   $167.09
+    16	ARREARS        +12.50  INTEREST     0.19  PAID     0.00
+    17	BALANCE       179.78    AMOUNT DUE****179.78
+    18	
+    19	ACCOUNT ****4830  LINDQVIST ANDERS         TARIFF L
+    20	READINGS   4410 TO   4502  USAGE        92 OVER  92 DAYS
+    21	BANDS     30.7     61.3         0.0
+    22	USAGE CHARGE       $128.23  STANDING    $28.75
+    23	DISCOUNT     22.62  VAT      7.85  CURRENT   $164.83
+    24	ARREARS         +0.00  INTEREST           PAID    30.00
+    25	BALANCE       134.83    AMOUNT DUE****134.83
+    26	
+    27	ACCOUNT ****4837  HOLM & DAUGHTERS         TARIFF C
+    28	READINGS 230115 TO 231880  USAGE     1,765 OVER  90 DAYS
+    29	BANDS    150.0    450.0     1,165.0
+    30	USAGE CHARGE     $2,731.71  STANDING    $88.74
+    31	DISCOUNT            VAT    141.02  CURRENT $2,961.47
+    32	ARREARS       +450.00  INTEREST     6.75  PAID   450.00
+    33	BALANCE     2,968.22    AMOUNT DUE**2,968.22
+    34	
+    35	ACCOUNT ****4841  WU MEI                   TARIFF D
+    36	READINGS  67000 TO  67024  USAGE        24 OVER  89 DAYS
+    37	BANDS     24.0      0.0         0.0
+    38	USAGE CHARGE        $28.92  STANDING    $27.81
+    39	DISCOUNT            VAT      2.84  CURRENT    $59.57
+    40	ARREARS        -25.00  INTEREST           PAID     0.00
+    41	BALANCE        34.57    AMOUNT DUE*****34.57
+    42	
+    43	ACCOUNT ****4855  BRENNAN KATHLEEN         TARIFF D
+    44	READINGS  15500 TO  15590  USAGE        90 OVER  90 DAYS
+    45	BANDS     30.0     60.0         0.0
+    46	USAGE CHARGE       $147.60  STANDING    $28.13
+    47	DISCOUNT            VAT      8.79  CURRENT   $184.52
+    48	ARREARS         +0.00  INTEREST           PAID   200.00
+    49	BALANCE        15.48CR  AMOUNT DUE******0.00
+    50	CREDIT C/F     $15.09-
+    51	
+    52	ACCOUNT ****4860  RIVERSIDE LAUNDRY LTD    TARIFF C
+    53	READINGS 700000 TO 752400  USAGE    52,400 OVER  91 DAYS
+    54	BANDS    151.7    455.0    51,793.3
+    55	USAGE CHARGE    $86,530.51  STANDING    $89.73
+    56	DISCOUNT            VAT  4,331.01  CURRENT$90,951.25
+    57	ARREARS         +0.00  INTEREST           PAID     0.00
+    58	BALANCE    90,951.25    AMOUNT DUE*90,951.25
+    59	
+    60	ACCOUNT ****4871  O'NEILL PADRAIG          TARIFF L
+    61	READINGS   3001 TO   3059  USAGE        58 OVER  90 DAYS
+    62	BANDS     30.0     28.0         0.0
+    63	USAGE CHARGE        $74.94  STANDING    $28.13
+    64	DISCOUNT     13.22  VAT      5.15  CURRENT   $108.22
+    65	ARREARS         +8.12  INTEREST     0.12  PAID     0.00
+    66	BALANCE       116.46    AMOUNT DUE****116.46
+    67	
+    68	ACCOUNT ****4879  GREENHALGH SUSAN         TARIFF D
+    69	READINGS  51234 TO  51234  USAGE         0 OVER  90 DAYS
+    70	BANDS      0.0      0.0         0.0
+    71	USAGE CHARGE         $0.00  STANDING    $28.13
+    72	DISCOUNT            VAT      1.41  CURRENT    $29.54
+    73	ARREARS         +0.00  INTEREST           PAID     0.00
+    74	BALANCE        29.54    AMOUNT DUE*****29.54
+    75	
+    76	REJECT 10004880 UNKNOWN TARIFF
+    77	
+    78	ACCOUNT ****4893  MBEKI THANDIWE           TARIFF D
+    79	READINGS  91020 TO  91155  USAGE       135 OVER 120 DAYS
+    80	BANDS     40.0     80.0        15.0
+    81	USAGE CHARGE       $233.42  STANDING    $37.50
+    82	DISCOUNT            VAT     13.55  CURRENT   $284.47
+    83	ARREARS        +33.33  INTEREST     0.50  PAID    10.00
+    84	BALANCE       308.30    AMOUNT DUE****308.30
+    85	
+    86	ACCOUNT ****4902  NORTHGATE COLD STORE     TARIFF C
+    87	READINGS 410500 TO 480800  USAGE    70,300 OVER  90 DAYS
+    88	BANDS    150.0    450.0    69,700.0
+    89	USAGE CHARGE   $116,157.13  STANDING    $88.74
+    90	DISCOUNT            VAT  5,812.29  CURRENT$22,058.16
+    91	ARREARS     +2,500.00  INTEREST    37.50  PAID     0.00
+    92	BALANCE   124,595.66    AMOUNT DUE124,595.66
+    93	
+    94	ACCOUNT ****4915  CASTELLANO ROSA          TARIFF L
+    95	READINGS   7788 TO   7850  USAGE        62 OVER  60 DAYS
+    96	BANDS     20.0     40.0         2.0
+    97	USAGE CHARGE        $87.79  STANDING    $18.75
+    98	DISCOUNT     15.49  VAT      5.33  CURRENT   $111.87
+    99	ARREARS        -10.00  INTEREST           PAID     0.00
+   100	BALANCE       101.87    AMOUNT DUE****101.87
+   101	
+   102	ACCOUNT ****4923  HARBOUR MASTER'S OFFICE  TARIFF C
+   103	READINGS 120000 TO 121750  USAGE     1,750 OVER  30 DAYS
+   104	BANDS     50.0    150.0     1,550.0
+   105	USAGE CHARGE     $2,833.13  STANDING    $29.58
+   106	DISCOUNT            VAT    143.14  CURRENT $3,005.85
+   107	ARREARS    -10,000.00  INTEREST           PAID99,999.99
+   108	BALANCE   106,994.14CR  AMOUNT DUE******0.00
+   109	CREDIT C/F $04,319.29-
+   110	
+   111	REJECT 10004930 NO BILLING DAYS
+   112	
+   113	ACCOUNT ****4944  ST ANNE'S SCHOOL         TARIFF C
+   114	READINGS   5000 TO  15500  USAGE    10,500 OVER  91 DAYS
+   115	BANDS    151.7    455.0     9,893.3
+   116	USAGE CHARGE    $17,186.01  STANDING    $89.73
+   117	DISCOUNT            VAT    863.79  CURRENT$18,139.53
+   118	ARREARS        +15.00  INTEREST     0.23  PAID     0.00
+   119	BALANCE    18,154.76    AMOUNT DUE*18,154.76
+   120	
+   121	ACCOUNT ****4951  AHMED FARIDA             TARIFF D
+   122	READINGS  20020 TO  20105  USAGE        85 OVER  90 DAYS
+   123	BANDS     30.0     55.0         0.0
+   124	USAGE CHARGE       $138.31  STANDING    $28.13
+   125	DISCOUNT            VAT      8.32  CURRENT   $174.76
+   126	ARREARS         +0.00  INTEREST           PAID    90.00
+   127	BALANCE        84.76    AMOUNT DUE*****84.76
+   128	
+   129	ACCOUNT ****4966  EASTFIELD DAIRY          TARIFF C
+   130	READINGS 600000 TO 660000  USAGE    60,000 OVER  91 DAYS
+   131	BANDS    151.7    455.0    59,393.3
+   132	USAGE CHARGE    $99,108.51  STANDING    $89.73
+   133	DISCOUNT            VAT  4,959.91  CURRENT$04,158.15
+   134	ARREARS         +0.00  INTEREST           PAID     0.00
+   135	BALANCE   104,158.15    AMOUNT DUE104,158.15
+   136	
+   137	ACCOUNT ****4978  DUBOIS                   TARIFF L
+   138	READINGS  10400 TO  10471  USAGE        71 OVER  91 DAYS
+   139	BANDS     30.3     40.7         0.0
+   140	USAGE CHARGE        $95.30  STANDING    $28.44
+   141	DISCOUNT     16.81  VAT      6.19  CURRENT   $129.93
+   142	ARREARS         +0.00  INTEREST           PAID     0.00
+   143	BALANCE       129.93    AMOUNT DUE****129.93
+   144	
+   145	ACCOUNT ****4985  YAMAMOTO KEN             TARIFF D
+   146	READINGS  48000 TO  48133  USAGE       133 OVER  92 DAYS
+   147	BANDS     30.7     61.3        41.0
+   148	USAGE CHARGE       $250.93  STANDING    $28.75
+   149	DISCOUNT            VAT     13.98  CURRENT   $293.66
+   150	ARREARS        +44.12  INTEREST     0.66  PAID    40.00
+   151	BALANCE       298.44    AMOUNT DUE****298.44
+   152	
+   153	ACCOUNTS BILLED  18  REJECTED   2  CREDITS   2
+   154	TOTAL UNITS     197,813  TOTAL CURRENT    $343,621.05
+   155	TOTAL DUE    $342,819.70  AVERAGE BILL    $19,090.06
+   156	NET POSITION     235,810.08
+   157	
+   158	PAYMENTS AND ADJUSTMENTS
+   159	PAY 10004821       65.00 WHOLE     65 BAL       508.18   counter cash
+   160	PAY 10004837      450.00 WHOLE    450 BAL     2,518.22   bank transfer r
+   161	PAY 10004855      200.00 WHOLE    200 BAL       215.48CR card #XXXXXXXXX
+   162	ADJ 10004902   -1,250.00 WHOLE  -1250 BAL   123,345.66   meter re-read #
+   163	PAY 10004860   15,000.00 WHOLE  15000 BAL    75,951.25   direct debit
+   164	FEE 10004871       30.00 WHOLE     30 BAL       146.46   late payment fe
+   165	    FEE SPLIT 3X     10.00 REMAINDER  0.00
+   166	PAY 10004893       10.00 WHOLE     10 BAL       298.30   card #XXXXXXXXX
+   167	REF 10004966       42.50 WHOLE     42 BAL   104,200.65   overpayment ret
+   168	LINE   9 REJECTED NO SUCH ACCOUNT
+   169	ADJ 10004923       18.75 WHOLE     18 BAL   106,975.39CR goodwill credit
+   170	PAY 10004951       90.00 WHOLE     90 BAL         5.24CR cheque 000512
+   171	POSTED   10  REJECTED   1  PAID     $15,815.00   OTHER     $1,158.75-
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '85,180p'
+[?2004l    85	           05  WS-REASON             PIC X(20).
+    86	           05  WS-DATE-DMY           PIC 9(8).
+    87	       01  WS-TOTALS.
+    88	           05  WS-BILLED             PIC 9(3)    VALUE 0.
+    89	           05  WS-REJECTED           PIC 9(3)    VALUE 0.
+    90	           05  WS-CREDITS            PIC 9(3)    VALUE 0.
+    91	           05  WS-TOT-UNITS          PIC 9(11)   VALUE 0.
+    92	           05  WS-TOT-CURRENT        PIC 9(11)V99 VALUE 0.
+    93	           05  WS-TOT-DUE            PIC 9(11)V99 VALUE 0.
+    94	           05  WS-TOT-NET            PIC S9(11)V99 VALUE 0.
+    95	           05  WS-AVERAGE            PIC 9(9)V99 VALUE 0.
+    96	       01  L-HEAD.
+    97	           05  FILLER                PIC X(15) VALUE "STATEMENTS FOR ".
+    98	           05  LH-REGION             PIC X(20).
+    99	           05  FILLER                PIC X(7)  VALUE " DATED ".
+   100	           05  LH-DATE               PIC 99/99/9999.
+   101	       01  L-ACCT.
+   102	           05  FILLER                PIC X(8)  VALUE "ACCOUNT ".
+   103	           05  LA-MASK               PIC X(4)  VALUE "****".
+   104	           05  LA-TAIL               PIC X(4).
+   105	           05  FILLER                PIC X(2)  VALUE SPACES.
+   106	           05  LA-NAME               PIC X(24).
+   107	           05  FILLER                PIC X(8)  VALUE " TARIFF ".
+   108	           05  LA-TARIFF             PIC X.
+   109	       01  L-READ.
+   110	           05  FILLER                PIC X(9)  VALUE "READINGS ".
+   111	           05  LR-PREV               PIC ZZZZZ9.
+   112	           05  FILLER                PIC X(4)  VALUE " TO ".
+   113	           05  LR-CURR               PIC ZZZZZ9.
+   114	           05  FILLER                PIC X(8)  VALUE "  USAGE ".
+   115	           05  LR-UNITS              PIC Z,ZZZ,ZZ9.
+   116	           05  FILLER                PIC X(6)  VALUE " OVER ".
+   117	           05  LR-DAYS               PIC ZZ9.
+   118	           05  FILLER                PIC X(5)  VALUE " DAYS".
+   119	       01  L-BANDS.
+   120	           05  FILLER                PIC X(6)  VALUE "BANDS ".
+   121	           05  LB-1                  PIC ZZ,ZZ9.9.
+   122	           05  FILLER                PIC X     VALUE SPACE.
+   123	           05  LB-2                  PIC ZZ,ZZ9.9.
+   124	           05  FILLER                PIC X     VALUE SPACE.
+   125	           05  LB-3                  PIC Z,ZZZ,ZZ9.9.
+   126	       01  L-CHARGE.
+   127	           05  FILLER                PIC X(13) VALUE "USAGE CHARGE ".
+   128	           05  LC-USAGE              PIC $$,$$$,$$9.99.
+   129	           05  FILLER                PIC X(10) VALUE "  STANDING".
+   130	           05  LC-STANDING           PIC $$$,$$9.99.
+   131	       01  L-DISC.
+   132	           05  FILLER                PIC X(9)  VALUE "DISCOUNT ".
+   133	           05  LD-DISCOUNT           PIC ZZ,ZZ9.99 BLANK WHEN ZERO.
+   134	           05  FILLER                PIC X(5)  VALUE "  VAT".
+   135	           05  LD-VAT                PIC ZZZ,ZZ9.99.
+   136	           05  FILLER                PIC X(9)  VALUE "  CURRENT".
+   137	           05  LD-CURRENT            PIC $$$,$$9.99.
+   138	       01  L-ARR.
+   139	           05  FILLER                PIC X(8)  VALUE "ARREARS ".
+   140	           05  LX-ARREARS            PIC ++,+++,++9.99.
+   141	           05  FILLER                PIC X(10) VALUE "  INTEREST".
+   142	           05  LX-INTEREST           PIC ZZ,ZZ9.99 BLANK WHEN ZERO.
+   143	           05  FILLER                PIC X(6)  VALUE "  PAID".
+   144	           05  LX-PAID               PIC ZZ,ZZ9.99.
+   145	       01  L-BAL.
+   146	           05  FILLER                PIC X(8)  VALUE "BALANCE ".
+   147	           05  LL-BALANCE            PIC Z,ZZZ,ZZ9.99CR.
+   148	           05  FILLER                PIC X(12) VALUE "  AMOUNT DUE".
+   149	           05  LL-DUE                PIC ***,**9.99.
+   150	       01  L-CARRY.
+   151	           05  FILLER                PIC X(11) VALUE "CREDIT C/F ".
+   152	           05  LY-CARRY              PIC $$$,$$9.99-.
+   153	       01  L-REJECT.
+   154	           05  FILLER                PIC X(7)  VALUE "REJECT ".
+   155	           05  LJ-ACCT               PIC X(8).
+   156	           05  FILLER                PIC X     VALUE SPACE.
+   157	           05  LJ-REASON             PIC X(20).
+   158	       01  L-LEDGER.
+   159	           05  FILLER                PIC X(24)
+   160	                                     VALUE "PAYMENTS AND ADJUSTMENTS".
+   161	       01  L-POST.
+   162	           05  LP-KIND               PIC X(3).
+   163	           05  FILLER                PIC X     VALUE SPACE.
+   164	           05  LP-ACCT               PIC X(8).
+   165	           05  FILLER                PIC X     VALUE SPACE.
+   166	           05  LP-AMT                PIC ----,--9.99.
+   167	           05  FILLER                PIC X(7)  VALUE " WHOLE ".
+   168	           05  LP-WHOLE              PIC -----9.
+   169	           05  FILLER                PIC X(5)  VALUE " BAL ".
+   170	           05  LP-BAL                PIC Z,ZZZ,ZZ9.99CR.
+   171	           05  FILLER                PIC X     VALUE SPACE.
+   172	           05  LP-MEMO               PIC X(30).
+   173	       01  L-SPLIT.
+   174	           05  FILLER                PIC X(16) VALUE "    FEE SPLIT 3X".
+   175	           05  LS-PART               PIC ---,--9.99.
+   176	           05  FILLER                PIC X(11) VALUE " REMAINDER ".
+   177	           05  LS-REM                PIC -9.99.
+   178	       01  L-PAYREJ.
+   179	           05  FILLER                PIC X(5)  VALUE "LINE ".
+   180	           05  LQ-LINE               PIC ZZ9.
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '181,280p'
+[?2004l   181	           05  FILLER                PIC X(10) VALUE " REJECTED ".
+   182	           05  LQ-REASON             PIC X(20).
+   183	       01  L-PAYTOT.
+   184	           05  FILLER                PIC X(8)  VALUE "POSTED  ".
+   185	           05  LV-APPLIED            PIC ZZ9.
+   186	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   187	           05  LV-REJECTED           PIC ZZ9.
+   188	           05  FILLER                PIC X(8)  VALUE "  PAID  ".
+   189	           05  LV-PAID               PIC $$,$$$,$$9.99-.
+   190	           05  FILLER                PIC X(8)  VALUE "  OTHER ".
+   191	           05  LV-OTHER              PIC $$,$$$,$$9.99-.
+   192	       01  L-TOT1.
+   193	           05  FILLER                PIC X(16) VALUE "ACCOUNTS BILLED ".
+   194	           05  LT-BILLED             PIC ZZ9.
+   195	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   196	           05  LT-REJECTED           PIC ZZ9.
+   197	           05  FILLER                PIC X(10) VALUE "  CREDITS ".
+   198	           05  LT-CREDITS            PIC ZZ9.
+   199	       01  L-TOT2.
+   200	           05  FILLER                PIC X(12) VALUE "TOTAL UNITS ".
+   201	           05  LT-UNITS              PIC ZZZ,ZZZ,ZZ9.
+   202	           05  FILLER                PIC X(16) VALUE "  TOTAL CURRENT ".
+   203	           05  LT-CURRENT            PIC $$$,$$$,$$9.99.
+   204	       01  L-TOT3.
+   205	           05  FILLER                PIC X(10) VALUE "TOTAL DUE ".
+   206	           05  LT-DUE                PIC $$$,$$$,$$9.99.
+   207	           05  FILLER                PIC X(15) VALUE "  AVERAGE BILL ".
+   208	           05  LT-AVERAGE            PIC $$,$$$,$$9.99.
+   209	       01  L-TOT4.
+   210	           05  FILLER                PIC X(13) VALUE "NET POSITION ".
+   211	           05  LT-NET                PIC ---,---,--9.99.
+   212	       PROCEDURE DIVISION.
+   213	       MAIN-LINE.
+   214	           OPEN INPUT CUST-IN
+   215	                OUTPUT STMT-OUT
+   216	           PERFORM READ-IN
+   217	           IF NOT END-OF-INPUT AND IS-HEADER
+   218	               PERFORM WRITE-HEADER
+   219	               PERFORM READ-IN
+   220	           END-IF
+   221	           PERFORM UNTIL END-OF-INPUT
+   222	               IF IS-CUSTOMER
+   223	                   PERFORM ONE-ACCOUNT
+   224	               END-IF
+   225	               PERFORM READ-IN
+   226	           END-PERFORM
+   227	           PERFORM WRITE-TOTALS
+   228	           PERFORM POST-PAYMENTS
+   229	           CLOSE CUST-IN STMT-OUT
+   230	           STOP RUN.
+   231	
+   232	       READ-IN.
+   233	           READ CUST-IN INTO CUST-REC
+   234	               AT END SET END-OF-INPUT TO TRUE
+   235	           END-READ.
+   236	
+   237	       WRITE-HEADER.
+   238	           MOVE HDR-REGION TO LH-REGION
+   239	           MOVE STMT-DATE(7:2) TO WS-DATE-DMY(1:2)
+   240	           MOVE STMT-DATE(5:2) TO WS-DATE-DMY(3:2)
+   241	           MOVE STMT-DATE(1:4) TO WS-DATE-DMY(5:4)
+   242	           MOVE WS-DATE-DMY TO LH-DATE
+   243	           WRITE OUT-REC FROM L-HEAD
+   244	           MOVE SPACES TO OUT-REC
+   245	           WRITE OUT-REC.
+   246	
+   247	       ONE-ACCOUNT.
+   248	           MOVE SPACES TO WS-REASON
+   249	           SET TX TO 1
+   250	           SEARCH TARIFF-ROW
+   251	               AT END MOVE "UNKNOWN TARIFF" TO WS-REASON
+   252	               WHEN TR-CODE(TX) = TARIFF
+   253	                   CONTINUE
+   254	           END-SEARCH
+   255	           EVALUATE TRUE
+   256	               WHEN WS-REASON NOT = SPACES
+   257	                   CONTINUE
+   258	               WHEN BILL-DAYS = 0
+   259	                   MOVE "NO BILLING DAYS" TO WS-REASON
+   260	               WHEN BILL-DAYS > 120
+   261	                   MOVE "PERIOD TOO LONG" TO WS-REASON
+   262	           END-EVALUATE
+   263	           IF WS-REASON NOT = SPACES
+   264	               ADD 1 TO WS-REJECTED
+   265	               MOVE ACCT-NO TO LJ-ACCT
+   266	               MOVE WS-REASON TO LJ-REASON
+   267	               WRITE OUT-REC FROM L-REJECT
+   268	               MOVE SPACES TO OUT-REC
+   269	               WRITE OUT-REC
+   270	           ELSE
+   271	               PERFORM CALC-BILL
+   272	               PERFORM PRINT-BILL
+   273	           END-IF.
+   274	
+   275	       CALC-BILL.
+   276	           IF CURR-READ >= PREV-READ
+   277	               SUBTRACT PREV-READ FROM CURR-READ GIVING WS-UNITS
+   278	           ELSE
+   279	               COMPUTE WS-UNITS = CURR-READ + 1000000 - PREV-READ
+   280	           END-IF
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '281,380p'
+[?2004l   281	           MULTIPLY TR-LIMIT1(TX) BY BILL-DAYS GIVING WS-TEMP
+   282	           DIVIDE WS-TEMP BY 30 GIVING WS-LIM1 ROUNDED
+   283	           MULTIPLY TR-LIMIT2(TX) BY BILL-DAYS GIVING WS-TEMP
+   284	           DIVIDE WS-TEMP BY 30 GIVING WS-LIM2 ROUNDED
+   285	           MOVE 0 TO WS-B1 WS-B2 WS-B3
+   286	           IF WS-UNITS > WS-LIM1
+   287	               MOVE WS-LIM1 TO WS-B1
+   288	               IF WS-UNITS > WS-LIM2
+   289	                   SUBTRACT WS-LIM1 FROM WS-LIM2 GIVING WS-B2
+   290	                   SUBTRACT WS-LIM2 FROM WS-UNITS GIVING WS-B3
+   291	               ELSE
+   292	                   SUBTRACT WS-LIM1 FROM WS-UNITS GIVING WS-B2
+   293	               END-IF
+   294	           ELSE
+   295	               MOVE WS-UNITS TO WS-B1
+   296	           END-IF
+   297	           MULTIPLY WS-B1 BY TR-RATE1(TX) GIVING WS-C1 ROUNDED
+   298	           MULTIPLY WS-B2 BY TR-RATE2(TX) GIVING WS-C2 ROUNDED
+   299	           MULTIPLY WS-B3 BY TR-RATE3(TX) GIVING WS-C3 ROUNDED
+   300	           ADD WS-C1 WS-C2 WS-C3 GIVING WS-USAGE
+   301	           MULTIPLY BILL-DAYS BY TR-STANDING(TX)
+   302	               GIVING WS-STANDING ROUNDED
+   303	           MOVE 0 TO WS-DISCOUNT
+   304	           IF TARIFF-RELIEF
+   305	               MULTIPLY WS-USAGE BY 0.15 GIVING WS-DISCOUNT
+   306	               SUBTRACT WS-DISCOUNT FROM WS-USAGE
+   307	           END-IF
+   308	           ADD WS-USAGE WS-STANDING GIVING WS-NET
+   309	           MULTIPLY WS-NET BY 0.05 GIVING WS-VAT ROUNDED
+   310	           ADD WS-NET WS-VAT GIVING WS-CURRENT
+   311	           MOVE 0 TO WS-INTEREST
+   312	           IF ARREARS > 0
+   313	               MULTIPLY ARREARS BY 0.015 GIVING WS-INTEREST ROUNDED
+   314	           END-IF
+   315	           COMPUTE WS-BALANCE = WS-CURRENT + ARREARS + WS-INTEREST
+   316	                              - PAID
+   317	           MOVE 0 TO WS-DUE WS-CARRY
+   318	           IF WS-BALANCE > 0
+   319	               MOVE WS-BALANCE TO WS-DUE
+   320	           END-IF
+   321	           IF WS-BALANCE < 0
+   322	               MULTIPLY WS-BALANCE BY 0.975 GIVING WS-CARRY ROUNDED
+   323	               ADD 1 TO WS-CREDITS
+   324	           END-IF
+   325	           ADD 1 TO WS-BILLED
+   326	           ADD 1 TO AT-COUNT
+   327	           MOVE ACCT-NO TO AT-ACCT(AT-COUNT)
+   328	           MOVE WS-BALANCE TO AT-BAL(AT-COUNT)
+   329	           ADD WS-UNITS TO WS-TOT-UNITS
+   330	           ADD WS-CURRENT TO WS-TOT-CURRENT
+   331	           ADD WS-DUE TO WS-TOT-DUE
+   332	           ADD WS-BALANCE TO WS-TOT-NET.
+   333	
+   334	       PRINT-BILL.
+   335	           MOVE CUST-NAME TO WS-NAME
+   336	           INSPECT WS-NAME CONVERTING "abcdefghijklmnopqrstuvwxyz"
+   337	                                   TO "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+   338	           MOVE SPACES TO WS-NAME-OUT
+   339	           STRING WS-NAME DELIMITED BY "  " INTO WS-NAME-OUT
+   340	           IF WS-NAME-OUT = SPACES
+   341	               MOVE "(NO NAME ON FILE)" TO WS-NAME-OUT
+   342	           END-IF
+   343	           MOVE ACCT-NO(5:4) TO LA-TAIL
+   344	           MOVE WS-NAME-OUT TO LA-NAME
+   345	           MOVE TARIFF TO LA-TARIFF
+   346	           WRITE OUT-REC FROM L-ACCT
+   347	           MOVE PREV-READ TO LR-PREV
+   348	           MOVE CURR-READ TO LR-CURR
+   349	           MOVE WS-UNITS TO LR-UNITS
+   350	           MOVE BILL-DAYS TO LR-DAYS
+   351	           WRITE OUT-REC FROM L-READ
+   352	           MOVE WS-B1 TO LB-1
+   353	           MOVE WS-B2 TO LB-2
+   354	           MOVE WS-B3 TO LB-3
+   355	           WRITE OUT-REC FROM L-BANDS
+   356	           MOVE WS-USAGE TO LC-USAGE
+   357	           MOVE WS-STANDING TO LC-STANDING
+   358	           WRITE OUT-REC FROM L-CHARGE
+   359	           MOVE WS-DISCOUNT TO LD-DISCOUNT
+   360	           MOVE WS-VAT TO LD-VAT
+   361	           MOVE WS-CURRENT TO LD-CURRENT
+   362	           WRITE OUT-REC FROM L-DISC
+   363	           MOVE ARREARS TO LX-ARREARS
+   364	           MOVE WS-INTEREST TO LX-INTEREST
+   365	           MOVE PAID TO LX-PAID
+   366	           WRITE OUT-REC FROM L-ARR
+   367	           MOVE WS-BALANCE TO LL-BALANCE
+   368	           MOVE WS-DUE TO LL-DUE
+   369	           WRITE OUT-REC FROM L-BAL
+   370	           IF WS-BALANCE < 0
+   371	               MOVE WS-CARRY TO LY-CARRY
+   372	               WRITE OUT-REC FROM L-CARRY
+   373	           END-IF
+   374	           MOVE SPACES TO OUT-REC
+   375	           WRITE OUT-REC.
+   376	
+   377	       WRITE-TOTALS.
+   378	           MOVE WS-BILLED TO LT-BILLED
+   379	           MOVE WS-REJECTED TO LT-REJECTED
+   380	           MOVE WS-CREDITS TO LT-CREDITS
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '158,240p'
+[?2004l   158	       01  L-LEDGER.
+   159	           05  FILLER                PIC X(24)
+   160	                                     VALUE "PAYMENTS AND ADJUSTMENTS".
+   161	       01  L-POST.
+   162	           05  LP-KIND               PIC X(3).
+   163	           05  FILLER                PIC X     VALUE SPACE.
+   164	           05  LP-ACCT               PIC X(8).
+   165	           05  FILLER                PIC X     VALUE SPACE.
+   166	           05  LP-AMT                PIC ----,--9.99.
+   167	           05  FILLER                PIC X(7)  VALUE " WHOLE ".
+   168	           05  LP-WHOLE              PIC -----9.
+   169	           05  FILLER                PIC X(5)  VALUE " BAL ".
+   170	           05  LP-BAL                PIC Z,ZZZ,ZZ9.99CR.
+   171	           05  FILLER                PIC X     VALUE SPACE.
+   172	           05  LP-MEMO               PIC X(30).
+   173	       01  L-SPLIT.
+   174	           05  FILLER                PIC X(16) VALUE "    FEE SPLIT 3X".
+   175	           05  LS-PART               PIC ---,--9.99.
+   176	           05  FILLER                PIC X(11) VALUE " REMAINDER ".
+   177	           05  LS-REM                PIC -9.99.
+   178	       01  L-PAYREJ.
+   179	           05  FILLER                PIC X(5)  VALUE "LINE ".
+   180	           05  LQ-LINE               PIC ZZ9.
+   181	           05  FILLER                PIC X(10) VALUE " REJECTED ".
+   182	           05  LQ-REASON             PIC X(20).
+   183	       01  L-PAYTOT.
+   184	           05  FILLER                PIC X(8)  VALUE "POSTED  ".
+   185	           05  LV-APPLIED            PIC ZZ9.
+   186	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   187	           05  LV-REJECTED           PIC ZZ9.
+   188	           05  FILLER                PIC X(8)  VALUE "  PAID  ".
+   189	           05  LV-PAID               PIC $$,$$$,$$9.99-.
+   190	           05  FILLER                PIC X(8)  VALUE "  OTHER ".
+   191	           05  LV-OTHER              PIC $$,$$$,$$9.99-.
+   192	       01  L-TOT1.
+   193	           05  FILLER                PIC X(16) VALUE "ACCOUNTS BILLED ".
+   194	           05  LT-BILLED             PIC ZZ9.
+   195	           05  FILLER                PIC X(11) VALUE "  REJECTED ".
+   196	           05  LT-REJECTED           PIC ZZ9.
+   197	           05  FILLER                PIC X(10) VALUE "  CREDITS ".
+   198	           05  LT-CREDITS            PIC ZZ9.
+   199	       01  L-TOT2.
+   200	           05  FILLER                PIC X(12) VALUE "TOTAL UNITS ".
+   201	           05  LT-UNITS              PIC ZZZ,ZZZ,ZZ9.
+   202	           05  FILLER                PIC X(16) VALUE "  TOTAL CURRENT ".
+   203	           05  LT-CURRENT            PIC $$$,$$$,$$9.99.
+   204	       01  L-TOT3.
+   205	           05  FILLER                PIC X(10) VALUE "TOTAL DUE ".
+   206	           05  LT-DUE                PIC $$$,$$$,$$9.99.
+   207	           05  FILLER                PIC X(15) VALUE "  AVERAGE BILL ".
+   208	           05  LT-AVERAGE            PIC $$,$$$,$$9.99.
+   209	       01  L-TOT4.
+   210	           05  FILLER                PIC X(13) VALUE "NET POSITION ".
+   211	           05  LT-NET                PIC ---,---,--9.99.
+   212	       PROCEDURE DIVISION.
+   213	       MAIN-LINE.
+   214	           OPEN INPUT CUST-IN
+   215	                OUTPUT STMT-OUT
+   216	           PERFORM READ-IN
+   217	           IF NOT END-OF-INPUT AND IS-HEADER
+   218	               PERFORM WRITE-HEADER
+   219	               PERFORM READ-IN
+   220	           END-IF
+   221	           PERFORM UNTIL END-OF-INPUT
+   222	               IF IS-CUSTOMER
+   223	                   PERFORM ONE-ACCOUNT
+   224	               END-IF
+   225	               PERFORM READ-IN
+   226	           END-PERFORM
+   227	           PERFORM WRITE-TOTALS
+   228	           PERFORM POST-PAYMENTS
+   229	           CLOSE CUST-IN STMT-OUT
+   230	           STOP RUN.
+   231	
+   232	       READ-IN.
+   233	           READ CUST-IN INTO CUST-REC
+   234	               AT END SET END-OF-INPUT TO TRUE
+   235	           END-READ.
+   236	
+   237	       WRITE-HEADER.
+   238	           MOVE HDR-REGION TO LH-REGION
+   239	           MOVE STMT-DATE(7:2) TO WS-DATE-DMY(1:2)
+   240	           MOVE STMT-DATE(5:2) TO WS-DATE-DMY(3:2)
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '241,280p'
+[?2004l   241	           MOVE STMT-DATE(1:4) TO WS-DATE-DMY(5:4)
+   242	           MOVE WS-DATE-DMY TO LH-DATE
+   243	           WRITE OUT-REC FROM L-HEAD
+   244	           MOVE SPACES TO OUT-REC
+   245	           WRITE OUT-REC.
+   246	
+   247	       ONE-ACCOUNT.
+   248	           MOVE SPACES TO WS-REASON
+   249	           SET TX TO 1
+   250	           SEARCH TARIFF-ROW
+   251	               AT END MOVE "UNKNOWN TARIFF" TO WS-REASON
+   252	               WHEN TR-CODE(TX) = TARIFF
+   253	                   CONTINUE
+   254	           END-SEARCH
+   255	           EVALUATE TRUE
+   256	               WHEN WS-REASON NOT = SPACES
+   257	                   CONTINUE
+   258	               WHEN BILL-DAYS = 0
+   259	                   MOVE "NO BILLING DAYS" TO WS-REASON
+   260	               WHEN BILL-DAYS > 120
+   261	                   MOVE "PERIOD TOO LONG" TO WS-REASON
+   262	           END-EVALUATE
+   263	           IF WS-REASON NOT = SPACES
+   264	               ADD 1 TO WS-REJECTED
+   265	               MOVE ACCT-NO TO LJ-ACCT
+   266	               MOVE WS-REASON TO LJ-REASON
+   267	               WRITE OUT-REC FROM L-REJECT
+   268	               MOVE SPACES TO OUT-REC
+   269	               WRITE OUT-REC
+   270	           ELSE
+   271	               PERFORM CALC-BILL
+   272	               PERFORM PRINT-BILL
+   273	           END-IF.
+   274	
+   275	       CALC-BILL.
+   276	           IF CURR-READ >= PREV-READ
+   277	               SUBTRACT PREV-READ FROM CURR-READ GIVING WS-UNITS
+   278	           ELSE
+   279	               COMPUTE WS-UNITS = CURR-READ + 1000000 - PREV-READ
+   280	           END-IF
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '377,460p'
+[?2004l   377	       WRITE-TOTALS.
+   378	           MOVE WS-BILLED TO LT-BILLED
+   379	           MOVE WS-REJECTED TO LT-REJECTED
+   380	           MOVE WS-CREDITS TO LT-CREDITS
+   381	           WRITE OUT-REC FROM L-TOT1
+   382	           MOVE WS-TOT-UNITS TO LT-UNITS
+   383	           MOVE WS-TOT-CURRENT TO LT-CURRENT
+   384	           WRITE OUT-REC FROM L-TOT2
+   385	           IF WS-BILLED > 0
+   386	               DIVIDE WS-TOT-CURRENT BY WS-BILLED
+   387	                   GIVING WS-AVERAGE ROUNDED
+   388	           END-IF
+   389	           MOVE WS-TOT-DUE TO LT-DUE
+   390	           MOVE WS-AVERAGE TO LT-AVERAGE
+   391	           WRITE OUT-REC FROM L-TOT3
+   392	           MOVE WS-TOT-NET TO LT-NET
+   393	           WRITE OUT-REC FROM L-TOT4.
+   394	
+   395	       POST-PAYMENTS.
+   396	           MOVE SPACES TO OUT-REC
+   397	           WRITE OUT-REC
+   398	           WRITE OUT-REC FROM L-LEDGER
+   399	           OPEN INPUT PAY-IN
+   400	           PERFORM READ-PAY
+   401	           PERFORM UNTIL END-OF-PAY
+   402	               ADD 1 TO WS-LINE-NO
+   403	               PERFORM ONE-PAYMENT
+   404	               PERFORM READ-PAY
+   405	           END-PERFORM
+   406	           CLOSE PAY-IN
+   407	           MOVE WS-APPLIED TO LV-APPLIED
+   408	           MOVE WS-PAY-REJECTED TO LV-REJECTED
+   409	           MOVE WS-TOT-PAID TO LV-PAID
+   410	           MOVE WS-TOT-OTHER TO LV-OTHER
+   411	           WRITE OUT-REC FROM L-PAYTOT.
+   412	
+   413	       READ-PAY.
+   414	           READ PAY-IN INTO PAY-LINE
+   415	               AT END SET END-OF-PAY TO TRUE
+   416	           END-READ.
+   417	
+   418	       ONE-PAYMENT.
+   419	           MOVE 0 TO PL-FIELDS PL-ACCT-LEN
+   420	           UNSTRING PAY-LINE DELIMITED BY ";"
+   421	               INTO PL-ACCT COUNT IN PL-ACCT-LEN
+   422	                    PL-KIND
+   423	                    PL-AMT-TXT
+   424	                    PL-MEMO
+   425	               TALLYING IN PL-FIELDS
+   426	           END-UNSTRING
+   427	           MOVE SPACES TO WS-REASON
+   428	           EVALUATE TRUE
+   429	               WHEN PL-FIELDS < 3
+   430	                   MOVE "TOO FEW FIELDS" TO WS-REASON
+   431	               WHEN PL-ACCT-LEN NOT = 8
+   432	                   MOVE "BAD ACCOUNT" TO WS-REASON
+   433	               WHEN FUNCTION TEST-NUMVAL(PL-AMT-TXT) NOT = 0
+   434	                   MOVE "BAD AMOUNT" TO WS-REASON
+   435	               WHEN NOT (KIND-PAY OR KIND-ADJ OR KIND-FEE OR KIND-REF)
+   436	                   MOVE "BAD KIND" TO WS-REASON
+   437	           END-EVALUATE
+   438	           IF WS-REASON = SPACES
+   439	               SET AX TO 1
+   440	               SEARCH AT-ENTRY
+   441	                   AT END MOVE "NO SUCH ACCOUNT" TO WS-REASON
+   442	                   WHEN AT-ACCT(AX) = PL-ACCT
+   443	                       CONTINUE
+   444	               END-SEARCH
+   445	           END-IF
+   446	           IF WS-REASON NOT = SPACES
+   447	               ADD 1 TO WS-PAY-REJECTED
+   448	               MOVE WS-LINE-NO TO LQ-LINE
+   449	               MOVE WS-REASON TO LQ-REASON
+   450	               WRITE OUT-REC FROM L-PAYREJ
+   451	           ELSE
+   452	               PERFORM APPLY-PAYMENT
+   453	           END-IF.
+   454	
+   455	       APPLY-PAYMENT.
+   456	           EVALUATE TRUE
+   457	               WHEN KIND-PAY
+   458	                   COMPUTE WS-AMT ROUNDED MODE NEAREST-EVEN
+   459	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   460	                   SUBTRACT WS-AMT FROM AT-BAL(AX)
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '461,560p'
+[?2004l   461	                   ADD WS-AMT TO WS-TOT-PAID
+   462	               WHEN KIND-ADJ
+   463	                   COMPUTE WS-AMT ROUNDED
+   464	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   465	                   ADD WS-AMT TO AT-BAL(AX)
+   466	                   ADD WS-AMT TO WS-TOT-OTHER
+   467	               WHEN KIND-FEE
+   468	                   COMPUTE WS-AMT = FUNCTION NUMVAL(PL-AMT-TXT)
+   469	                   ADD WS-AMT TO AT-BAL(AX)
+   470	                   ADD WS-AMT TO WS-TOT-OTHER
+   471	                   DIVIDE WS-AMT BY 3 GIVING WS-PART ROUNDED
+   472	                       REMAINDER WS-REM
+   473	               WHEN KIND-REF
+   474	                   COMPUTE WS-AMT ROUNDED MODE TOWARD-LESSER
+   475	                       = FUNCTION NUMVAL(PL-AMT-TXT)
+   476	                   ADD WS-AMT TO AT-BAL(AX)
+   477	                   ADD WS-AMT TO WS-TOT-OTHER
+   478	           END-EVALUATE
+   479	           COMPUTE WS-WHOLE = FUNCTION INTEGER(WS-AMT)
+   480	           INSPECT PL-MEMO CONVERTING "0123456789" TO "XXXXXXXXXX"
+   481	               AFTER INITIAL "#"
+   482	           ADD 1 TO WS-APPLIED
+   483	           MOVE PL-KIND TO LP-KIND
+   484	           MOVE PL-ACCT TO LP-ACCT
+   485	           MOVE WS-AMT TO LP-AMT
+   486	           MOVE WS-WHOLE TO LP-WHOLE
+   487	           MOVE AT-BAL(AX) TO LP-BAL
+   488	           MOVE PL-MEMO TO LP-MEMO
+   489	           WRITE OUT-REC FROM L-POST
+   490	           IF KIND-FEE
+   491	               MOVE WS-PART TO LS-PART
+   492	               MOVE WS-REM TO LS-REM
+   493	               WRITE OUT-REC FROM L-SPLIT
+   494	           END-IF.
+[?2004hroot@1a267ab558a6:/app# nl -ba /app/legacy/WBILL.cbl | sed -n '247,280p'; nl -ba /app/legacy/WBILL.cbl | sed -n '377,395p'
+[?2004l   247	       ONE-ACCOUNT.
+   248	           MOVE SPACES TO WS-REASON
+   249	           SET TX TO 1
+   250	           SEARCH TARIFF-ROW
+   251	               AT END MOVE "UNKNOWN TARIFF" TO WS-REASON
+   252	               WHEN TR-CODE(TX) = TARIFF
+   253	                   CONTINUE
+   254	           END-SEARCH
+   255	           EVALUATE TRUE
+   256	               WHEN WS-REASON NOT = SPACES
+   257	                   CONTINUE
+   258	               WHEN BILL-DAYS = 0
+   259	                   MOVE "NO BILLING DAYS" TO WS-REASON
+   260	               WHEN BILL-DAYS > 120
+   261	                   MOVE "PERIOD TOO LONG" TO WS-REASON
+   262	           END-EVALUATE
+   263	           IF WS-REASON NOT = SPACES
+   264	               ADD 1 TO WS-REJECTED
+   265	               MOVE ACCT-NO TO LJ-ACCT
+   266	               MOVE WS-REASON TO LJ-REASON
+   267	               WRITE OUT-REC FROM L-REJECT
+   268	               MOVE SPACES TO OUT-REC
+   269	               WRITE OUT-REC
+   270	           ELSE
+   271	               PERFORM CALC-BILL
+   272	               PERFORM PRINT-BILL
+   273	           END-IF.
+   274	
+   275	       CALC-BILL.
+   276	           IF CURR-READ >= PREV-READ
+   277	               SUBTRACT PREV-READ FROM CURR-READ GIVING WS-UNITS
+   278	           ELSE
+   279	               COMPUTE WS-UNITS = CURR-READ + 1000000 - PREV-READ
+   280	           END-IF
+   377	       WRITE-TOTALS.
+   378	           MOVE WS-BILLED TO LT-BILLED
+   379	           MOVE WS-REJECTED TO LT-REJECTED
+   380	           MOVE WS-CREDITS TO LT-CREDITS
+   381	           WRITE OUT-REC FROM L-TOT1
+   382	           MOVE WS-TOT-UNITS TO LT-UNITS
+   383	           MOVE WS-TOT-CURRENT TO LT-CURRENT
+   384	           WRITE OUT-REC FROM L-TOT2
+   385	           IF WS-BILLED > 0
+   386	               DIVIDE WS-TOT-CURRENT BY WS-BILLED
+   387	                   GIVING WS-AVERAGE ROUNDED
+   388	           END-IF
+   389	           MOVE WS-TOT-DUE TO LT-DUE
+   390	           MOVE WS-AVERAGE TO LT-AVERAGE
+   391	           WRITE OUT-REC FROM L-TOT3
+   392	           MOVE WS-TOT-NET TO LT-NET
+   393	           WRITE OUT-REC FROM L-TOT4.
+   394	
+   395	       POST-PAYMENTS.
+[?2004hroot@1a267ab558a6:/app# cat -n /app/legacy/CUSTREC.cpy
+[?2004l     1	      *----------------------------------------------------------------
+     2	      * CUSTREC  -  METER-READING INPUT RECORD (80 BYTES)
+     3	      *----------------------------------------------------------------
+     4	       01  CUST-REC.
+     5	           05  REC-TYPE              PIC X.
+     6	               88  IS-HEADER         VALUE "H".
+     7	               88  IS-CUSTOMER       VALUE "C".
+     8	           05  CUST-BODY.
+     9	               10  ACCT-NO           PIC X(8).
+    10	               10  CUST-NAME         PIC X(24).
+    11	               10  TARIFF            PIC X.
+    12	                   88  TARIFF-DOMESTIC    VALUE "D".
+    13	                   88  TARIFF-COMMERCIAL  VALUE "C".
+    14	                   88  TARIFF-RELIEF      VALUE "L".
+    15	               10  PREV-READ         PIC 9(6).
+    16	               10  CURR-READ         PIC 9(6).
+    17	               10  BILL-DAYS         PIC 9(3).
+    18	               10  ARREARS           PIC S9(5)V99
+    19	                                     SIGN LEADING SEPARATE.
+    20	               10  PAID              PIC 9(5)V99.
+    21	               10  FILLER            PIC X(16).
+    22	           05  HDR-BODY REDEFINES CUST-BODY.
+    23	               10  STMT-DATE         PIC 9(8).
+    24	               10  HDR-REGION        PIC X(20).
+    25	               10  FILLER            PIC X(51).
+[?2004hroot@1a267ab558a6:/app# python3 - <<'PY'
+[?2004l[?2004h> from pathlib import Path
+[?2004l[?2004h> p=Path('/app/legacy/samples/2025q1-north.stmt').read_bytes().splitlines()
+[?2004l[?2004h> for i in [0,1,2,3,4,5,6,7,8,152,153,154,155,157,158,159,160,164,170]:
+[?2004l[?2004h>  print(i+1,len(p[i]),repr(p[i]))
+[?2004l[?2004h> PY
+[?2004l1 52 b'STATEMENTS FOR NORTH DISTRICT       DATED 31/03/2025'
+2 0 b''
+3 51 b"ACCOUNT ****4821  JANE O'HARA              TARIFF D"
+4 56 b'READINGS  12345 TO  12612  USAGE       267 OVER  90 DAYS'
+5 35 b'BANDS     30.0     60.0       177.0'
+6 46 b'USAGE CHARGE       $579.66  STANDING    $28.13'
+7 52 b'DISCOUNT            VAT     30.39  CURRENT   $638.18'
+8 55 b'ARREARS         +0.00  INTEREST           PAID    65.00'
+9 44 b'BALANCE       573.18    AMOUNT DUE****573.18'
+153 46 b'ACCOUNTS BILLED  18  REJECTED   2  CREDITS   2'
+154 53 b'TOTAL UNITS     197,813  TOTAL CURRENT    $343,621.05'
+155 52 b'TOTAL DUE    $342,819.70  AVERAGE BILL    $19,090.06'
+156 27 b'NET POSITION     235,810.08'
+158 24 b'PAYMENTS AND ADJUSTMENTS'
+159 69 b'PAY 10004821       65.00 WHOLE     65 BAL       508.18   counter cash'
+160 72 b'PAY 10004837      450.00 WHOLE    450 BAL     2,518.22   bank transfer r'
+161 72 b'PAY 10004855      200.00 WHOLE    200 BAL       215.48CR card #XXXXXXXXX'
+165 42 b'    FEE SPLIT 3X     10.00 REMAINDER  0.00'
+171 69 b'POSTED   10  REJECTED   1  PAID     $15,815.00   OTHER     $1,158.75-'
+[?2004hroot@1a267ab558a6:/app# mkdir -p /app/port && cat > /app/port/wbill.py <<'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import sys, re
+[?2004l[?2004h> from decimal import Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_DOWN
+[?2004l[?2004h> 
+[?2004l[?2004h> D = Decimal
+[?2004l[?2004h> CENT = D('0.01')
+[?2004l[?2004h> TENTH = D('0.1')
+[?2004l[?2004h> TARIFFS = {
+[?2004l[?2004h>     'D': (10, 30, D('1.2050'), D('1.8575'), D('2.4410'), D('.3125')),
+[?2004l[?2004h>     'C': (50, 200, D('1.1500'), D('1.4025'), D('1.6550'), D('.9860')),
+[?2004l[?2004h>     'L': (10, 30, D('1.2050'), D('1.8575'), D('2.4410'), D('.3125')),
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> def q(v, unit=CENT, rounding=ROUND_HALF_UP):
+[?2004l[?2004h>     return D(v).quantize(unit, rounding=rounding)
+[?2004l[?2004h> 
+[?2004l[?2004h> def trunc(v, unit=CENT):
+[?2004l[?2004h>     return D(v).quantize(unit, rounding=ROUND_DOWN)
+[?2004l[?2004h> 
+[?2004l[?2004h> def comma(v, dec=2):
+[?2004l[?2004h>     return f'{abs(D(v)):,.{dec}f}'
+[?2004l[?2004h> 
+[?2004l[?2004h> def right_num(v, width, dec=2, blank_zero=False):
+[?2004l[?2004h>     if blank_zero and D(v) == 0:
+[?2004l[?2004h>         return ' ' * width
+[?2004l[?2004h>     return comma(v, dec)[-width:].rjust(width)
+[?2004l[?2004h> 
+[?2004l[?2004h> def currency(v, width, dec=2):
+[?2004l[?2004h>     s = '$' + comma(v, dec)
+[?2004l[?2004h>     return s[-width:].rjust(width)
+[?2004l[?2004h> 
+[?2004l[?2004h> def stars(v, width, dec=2):
+[?2004l[?2004h>     s = comma(v, dec)
+[?2004l[?2004h>     return s[-width:].rjust(width, '*')
+[?2004l[?2004h> 
+[?2004l[?2004h> def lead_sign(v, width, dec=2):
+[?2004l[?2004h>     sign = '-' if D(v) < 0 else '+'
+[?2004l[?2004h>     s = sign + comma(v, dec)
+[?2004l[?2004h>     return s[-width:].rjust(width)
+[?2004l[?2004h> 
+[?2004l[?2004h> def float_sign(v, width, dec=2):
+[?2004l[?2004h>     s = comma(v, dec)
+[?2004l[?2004h>     if D(v) < 0:
+[?2004l[?2004h>         s = '-' + s
+[?2004l[?2004h>     return s[-width:].rjust(width)
+[?2004l[?2004h> 
+[?2004l[?2004h> def trail_cr(v, width, dec=2):
+[?2004l[?2004h>     tail = 'CR' if D(v) < 0 else '  '
+[?2004l[?2004h>     s = comma(v, dec)
+[?2004l[?2004h>     return s[-(width-2):].rjust(width-2) + tail
+[?2004l[?2004h> 
+[?2004l[?2004h> def money_trailing(v, width):
+[?2004l[?2004h>     s = '$' + comma(v, 2)
+[?2004l[?2004h>     suffix = '-' if D(v) < 0 else ' '
+[?2004l[?2004h>     return s[-(width-1):].rjust(width-1) + suffix
+[?2004l[?2004h> 
+[?2004l[?2004h> def emit(out, s=''):
+[?2004l[?2004h>     out.write(s[:72].rstrip(' ').encode('ascii') + b'\n')
+[?2004l[?2004h> 
+[?2004l[?2004h> def records(path, width=80):
+[?2004l[?2004h>     with open(path, 'rb') as f:
+[?2004l[?2004h>         for raw in f:
+[?2004l[?2004h>             raw = raw.rstrip(b'\n')
+[?2004l[?2004h>             if raw.endswith(b'\r'):
+[?2004l[?2004h>                 raw = raw[:-1]
+[?2004l[?2004h>             yield raw[:width].ljust(width, b' ').decode('ascii')
+[?2004l[?2004h> 
+[?2004l[?2004h> def digits(s):
+[?2004l[?2004h>     return int(s)
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_amount_text(s):
+[?2004l[?2004h>     # TEST-NUMVAL forms documented in the runbook. Return Decimal or None.
+[?2004l[?2004h>     if re.fullmatch(r' *[+-] *[0-9]*\.?[0-9]+ *| *[+-] *[0-9]+\.?[0-9]* *', s):
+[?2004l[?2004h>         t = s.strip()
+[?2004l[?2004h>         sign = 1
+[?2004l[?2004h>         if t[:1] in '+-':
+[?2004l[?2004h>             if t[0] == '-': sign = -1
+[?2004l[?2004h>             t = t[1:].strip()
+[?2004l[?2004h>         return D(t) * sign
+[?2004l[?2004h>     m = re.fullmatch(r' *([0-9]*\.?[0-9]+|[0-9]+\.?) *(\+|-|CR|DB)? *', s)
+[?2004l[?2004h>     if not m:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     v = D(m.group(1))
+[?2004l0)+'  CURRENT'+currency(current,10))
+            emit(out, 'ARREARS '+lead_sign(arrears,12)+'  INTEREST'+right_num(interest,9,2,True)+'  PAID'+right_num(paid,9))
+            emit(out, 'BALANCE '+trail_cr(balance,13)+'  AMOUNT DUE'+stars(due,10))
+            if balance < 0:
+                emit(out, 'CREDIT C/F '+money_trailing(carry,11))
+            emit(out[?2004h>     if m.group(2) in ('-', 'CR'):
+[?2004l[?2004h>         v = -v
+[?2004l[?2004h>     return v
+[?2004l[?2004h> 
+[?2004l[?2004h> def unstring(line, old):
+[?2004l[?2004h>     vals = old[:]
+[?2004l[?2004h>     parts = line.split(';')
+[?2004l[?2004h>     fields = min(len(parts), 4)
+[?2004l[?2004h>     widths = (8, 3, 16, 30)
+[?2004l[?2004h>     acct_len = 0
+[?2004l[?2004h>     for i in range(fields):
+[?2004l[?2004h>         text = parts[i]
+[?2004l[?2004h>         moved = text[:widths[i]]
+[?2004l[?2004h>         vals[i] = moved.ljust(widths[i])
+[?2004l[?2004h>         if i == 0:
+[?2004l[?2004h>             acct_len = len(moved)
+[?2004l[?2004h>     return vals, fields, acct_len
+[?2004l[?2004h> 
+[?2004l[?2004h> def main(readings, payments, output):
+[?2004l[?2004h>     billed = rejected = credits = 0
+[?2004l[?2004h>     tot_units = 0
+[?2004l[?2004h>     tot_current = tot_due = tot_net = D(0)
+[?2004l[?2004h>     accounts = []
+[?2004lt_o[?2004h>     with open(output, 'wb') as out:
+[?2004l[?2004h>         rs = iter(records(readings))
+[?2004l[?2004h>         first = next(rs, None)
+[?2004lpayments):
+        [?2004h>         pending = [] if first is None else [first]
+[?2004l[?2004h>         if first is not None and first[0] == 'H':
+[?2004lt, memo =[?2004h>             date, region = first[1:9], first[9:29]
+[?2004lal = pars[?2004h>             dmy = date[6:8] + date[4:6] + date[0:4]
+[?2004l[?2004h>             emit(out, 'STATEMENTS FOR ' + region + ' DATED ' + dmy[0:2]+'/'+dmy[2:4]+'/'+dmy[4:8])
+[?2004l[?2004h>             emit(out)
+[?2004l[?2004h>             pending = []
+[?2004lt [?2004h>         for r in pending + list(rs):
+[?2004ln [?2004h>             if r[0] != 'C':
+[?2004l[?2004h>                 continue
+[?2004lnu[?2004h>             acct, name, tariff = r[1:9], r[9:33], r[33]
+[?2004lon e[?2004h>             prev, curr, days = digits(r[34:40]), digits(r[40:46]), digits(r[46:49])
+[?2004l[?2004h>             arrears = D(r[50:57]) / 100
+[?2004l[?2004h>             if r[49] == '-': arrears = -arrears
+[?2004lt reason and idx is None: reason = 'NO SUCH ACCOUNT'
+            if reason:
+                payrej += 1
+                emit(out, 'LINE '+str(line[?2004h>             paid = D(r[57:64]) / 100
+[?2004lju[?2004h>             reason = ''
+[?2004l   [?2004h>             if tariff not in TARIFFS: reason = 'UNKNOWN TARIFF'
+[?2004l[?2004h>             elif days == 0: reason = 'NO BILLING DAYS'
+[?2004l[?2004h>             elif days > 120: reason = 'PERIOD TOO LONG'
+[?2004l[?2004h>             if reason:
+[?2004l[?2004h>                 rejected += 1
+[?2004l      amt = q(val); accounts[idx][1] += amt; tot_othe[?2004h>                 emit(out, 'REJECT ' + acct + ' ' + reason.ljust(20))
+[?2004l[?2004h>                 emit(out)
+[?2004l[?2004h>                 continue
+[?2004l   [?2004h>             lim1, lim2, rate1, rate2, rate3, standing_rate = TARIFFS[tariff]
+[?2004l[?2004h>             units = curr-prev if curr >= prev else curr+1000000-prev
+[?2004l[?2004h>             l1 = q(D(lim1*days)/30, TENTH)
+[?2004l[?2004h>             l2 = q(D(lim2*days)/30, TENTH)
+[?2004l[?2004h>             b1 = min(D(units), l1)
+[?2004l[?2004h>             b2 = D(0); b3 = D(0)
+[?2004l[?2004h>             if D(units) > l1:
+[?2004l[?2004h>                 if D(units) > l2:
+[?2004l[?2004h>                     b2, b3 = l2-l1, D(units)-l2
+[?2004l applied += 1
+   [?2004h>                 else: b2 = D(units)-l1
+[?2004l[?2004h>             c1, c2, c3 = q(b1*rate1), q(b2*rate2), q(b3*rate3)
+[?2004l[?2004h>             usage = c1+c2+c3
+[?2004laccounts[idx][1],13)+' '+memo[?2004h>             standing = q(D(days)*standing_rate)
+[?2004l
+            emit(out, s)
+            if kind ==[?2004h>             discount = D(0)
+[?2004l[?2004h>             if tariff == 'L':
+[?2004l[?2004h>                 discount = trunc(usage*D('.15'))
+[?2004l[?2004h>                 usage -= discount
+[?2004l[?2004h>             net = usage+standing
+[?2004l[?2004h>             vat = q(net*D('.05'))
+[?2004l[?2004h>             current = net+vat
+[?2004l[?2004h>             interest = q(arrears*D('.015')) if arrears > 0 else D(0)
+[?2004l[?2004h>             balance = current+arrears+interest-paid
+[?2004l[?2004h>             due = balance if balance > 0 else D(0)
+[?2004lt>')
+    main[?2004h>             carry = q(balance*D('.975')) if balance < 0 else D(0)
+[?2004l[?2004h>             if balance < 0: credits += 1
+[?2004l.[?2004h>             billed += 1
+[?2004ldat /app/legacy/samples/[?2004h>             accounts.append([acct, balance])
+[?2004l[?2004h>             tot_units += units; tot_current += current; tot_due += due; tot_net += balance
+[?2004l[?2004h>             uname = name.upper()
+[?2004l.st[?2004h>             cut = uname.find('  ')
+[?2004l[?2004h>             if cut >= 0: uname = uname[:cut]
+[?2004l[?2004h>             if not uname: uname = '(NO NAME ON FILE)'
+[?2004l[?2004h>             uname = uname[:24].ljust(24)
+[?2004l[?2004h>             emit(out, 'ACCOUNT ****'+acct[4:8]+'  '+uname+' TARIFF '+tariff)
+[?2004l[?2004h>             emit(out, 'READINGS '+str(prev).rjust(6)+' TO '+str(curr).rjust(6)+'  USAGE '+f'{units:,}'.rjust(9)+' OVER '+str(days).rjust(3)+' DAYS')
+[?2004l[?2004h>             emit(out, 'BANDS '+right_num(b1,8,1)+' '+right_num(b2,8,1)+' '+right_num(b3,12,1))
+[?2004l[?2004h>             emit(out, 'USAGE CHARGE '+currency(usage,12)+'  STANDING'+currency(standing,10))
+[?2004l[?2004h>             emit(out, 'DISCOUNT '+right_num(discount,9,2,True)+'  VAT'+right_num(vat,10)+'  CURRENT'+currency(current,10))
+[?2004l[?2004h>             emit(out, 'ARREARS '+lead_sign(arrears,12)+'  INTEREST'+right_num(interest,9,2,True)+'  PAID'+right_num(paid,9))
+[?2004l[?2004h>             emit(out, 'BALANCE '+trail_cr(balance,13)+'  AMOUNT DUE'+stars(due,10))
+[?2004l[?2004h>             if balance < 0:
+[?2004l[?2004h>                 emit(out, 'CREDIT C/F '+money_trailing(carry,11))
+[?2004l[?2004h>             emit(out)
+[?2004l[?2004h>         emit(out, 'ACCOUNTS BILLED '+str(billed).rjust(3)+'  REJECTED '+str(rejected).rjust(3)+'  CREDITS '+str(credits).rjust(3))
+[?2004l[?2004h>         emit(out, 'TOTAL UNITS '+f'{tot_units:,}'.rjust(11)+'  TOTAL CURRENT '+currency(tot_current,13))
+[?2004l[?2004h>         average = q(tot_current/D(billed)) if billed else D(0)
+[?2004l[?2004h>         emit(out, 'TOTAL DUE '+currency(tot_due,13)+'  AVERAGE BILL '+currency(average,12))
+[?2004l[?2004h>         emit(out, 'NET POSITION '+float_sign(tot_net,13))
+[?2004l[?2004h>         emit(out)
+[?2004l[?2004h>         emit(out, 'PAYMENTS AND ADJUSTMENTS')
+[?2004l[?2004h>         applied = payrej = line_no = 0
+[?2004l[?2004h>         tot_paid = tot_other = D(0)
+[?2004l[?2004h>         old = [' '*8, ' '*3, ' '*16, ' '*30]
+[?2004l[?2004h>         for line in records(payments):
+[?2004l[?2004h>             line_no += 1
+[?2004l[?2004h>             old, nf, alen = unstring(line, old)
+[?2004l[?2004h>             acct, kind, atxt, memo = old
+[?2004l[?2004h>             reason = ''
+[?2004l[?2004h>             val = parse_amount_text(atxt)
+[?2004l[?2004h>             if nf < 3: reason = 'TOO FEW FIELDS'
+[?2004l[?2004h>             elif alen != 8: reason = 'BAD ACCOUNT'
+[?2004l[?2004h>             elif val is None: reason = 'BAD AMOUNT'
+[?2004l[?2004h>             elif kind not in ('PAY','ADJ','FEE','REF'): reason = 'BAD KIND'
+[?2004l[?2004h>             idx = next((i for i,a in enumerate(accounts) if a[0] == acct), None) if not reason else None
+[?2004l[?2004h>             if not reason and idx is None: reason = 'NO SUCH ACCOUNT'
+[?2004l[?2004h>             if reason:
+[?2004l[?2004h>                 payrej += 1
+[?2004l[?2004h>                 emit(out, 'LINE '+str(line_no).rjust(3)+' REJECTED '+reason.ljust(20))
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             if kind == 'PAY':
+[?2004l[?2004h>                 amt = q(val, CENT, ROUND_HALF_EVEN); accounts[idx][1] -= amt; tot_paid += amt
+[?2004l[?2004h>             elif kind == 'ADJ':
+[?2004l[?2004h>                 amt = q(val); accounts[idx][1] += amt; tot_other += amt
+[?2004l[?2004h>             elif kind == 'FEE':
+[?2004l[?2004h>                 amt = trunc(val); accounts[idx][1] += amt; tot_other += amt
+[?2004l[?2004h>                 part = q(amt/D(3)); rem = amt-part*3
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 amt = q(val, CENT, ROUND_FLOOR); accounts[idx][1] += amt; tot_other += amt
+[?2004l[?2004h>             whole = int(D(amt).to_integral_value(rounding=ROUND_FLOOR))
+[?2004l[?2004h>             pos = memo.find('#')
+[?2004l[?2004h>             if pos >= 0:
+[?2004l[?2004h>                 memo = memo[:pos+1] + ''.join('X' if c.isdigit() else c for c in memo[pos+1:])
+[?2004l[?2004h>             applied += 1
+[?2004l[?2004h>             s = kind+' '+acct+' '+float_sign(amt,11)+' WHOLE '+float_sign(D(whole),6,0)+' BAL '+trail_cr(accounts[idx][1],13)+' '+memo
+[?2004l[?2004h>             emit(out, s)
+[?2004l[?2004h>             if kind == 'FEE':
+[?2004l[?2004h>                 emit(out, '    FEE SPLIT 3X'+float_sign(part,11)+' REMAINDER '+float_sign(rem,5))
+[?2004l[?2004h>         emit(out, 'POSTED  '+str(applied).rjust(3)+'  REJECTED '+str(payrej).rjust(3)+'  PAID  '+money_trailing(tot_paid,14)+'  OTHER '+money_trailing(tot_other,14))
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     if len(sys.argv) != 4:
+[?2004l[?2004h>         raise SystemExit('usage: wbill.py <readings> <payments> <output>')
+[?2004l[?2004h>     main(*sys.argv[1:])
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@1a267ab558a6:/app# chmod +x /app/port/wbill.py
+[?2004l[?2004hroot@1a267ab558a6:/app# python3 /app/port/wbill.py /app/legacy/samples/2025q1-north.dat /app/legacy/samples/2025q1-north.pay /tmp/test.stmt
+[?2004l[?2004hroot@1a267ab558a6:/app# cmp -l /app/legacy/samples/2025q1-north.stmt /tmp/test.stmt | head -40 || true
+[?2004l 194  61  40
+ 195  67  61
+ 197  56  67
+ 198  60  56
+ 199  12  60
+ 200 125  12
+ 201 123 125
+ 202 101 123
+ 203 107 101
+ 204 105 107
+ 205  40 105
+ 206 103  40
+ 207 110 103
+ 208 101 110
+ 209 122 101
+ 210 107 122
+ 211 105 107
+ 212  40 105
+ 315  40  53
+ 316  53  60
+ 317  60  56
+ 318  56  60
+ 320  60  40
+ 322  40 111
+ 323 111 116
+ 324 116 124
+ 325 124 105
+ 326 105 122
+ 327 122 105
+ 328 105 123
+ 329 123 124
+ 330 124  40
+ 341  40 120
+ 342 120 101
+ 343 101 111
+ 344 111 104
+ 345 104  40
+ 349  40  66
+ 350  66  65
+ 351  65  56
+cmp: EOF on /tmp/test.stmt after byte 7445
+cmp: write failed
+[?2004hroot@1a267ab558a6:/app# diff -u /app/legacy/samples/2025q1-north.stmt /tmp/test.stmt | head -120 || true
+[?2004l--- /app/legacy/samples/2025q1-north.stmt	2026-09-24 04:04:15.785722909 +0000
++++ /tmp/test.stmt	2026-09-24 12:59:10.556403008 +0000
+@@ -2,170 +2,170 @@
+ 
+ ACCOUNT ****4821  JANE O'HARA              TARIFF D
+ READINGS  12345 TO  12612  USAGE       267 OVER  90 DAYS
+-BANDS     30.0     60.0       177.0
+-USAGE CHARGE       $579.66  STANDING    $28.13
++BANDS     30.0     60.0        177.0
++USAGE CHARGE      $579.66  STANDING    $28.13
+ DISCOUNT            VAT     30.39  CURRENT   $638.18
+-ARREARS         +0.00  INTEREST           PAID    65.00
+-BALANCE       573.18    AMOUNT DUE****573.18
++ARREARS        +0.00  INTEREST           PAID    65.00
++BALANCE      573.18    AMOUNT DUE****573.18
+ 
+ ACCOUNT ****4822  PATEL                    TARIFF D
+ READINGS  88210 TO  88291  USAGE        81 OVER  91 DAYS
+-BANDS     30.3     50.7         0.0
+-USAGE CHARGE       $130.69  STANDING    $28.44
++BANDS     30.3     50.7          0.0
++USAGE CHARGE      $130.69  STANDING    $28.44
+ DISCOUNT            VAT      7.96  CURRENT   $167.09
+-ARREARS        +12.50  INTEREST     0.19  PAID     0.00
+-BALANCE       179.78    AMOUNT DUE****179.78
++ARREARS       +12.50  INTEREST     0.19  PAID     0.00
++BALANCE      179.78    AMOUNT DUE****179.78
+ 
+ ACCOUNT ****4830  LINDQVIST ANDERS         TARIFF L
+ READINGS   4410 TO   4502  USAGE        92 OVER  92 DAYS
+-BANDS     30.7     61.3         0.0
+-USAGE CHARGE       $128.23  STANDING    $28.75
++BANDS     30.7     61.3          0.0
++USAGE CHARGE      $128.23  STANDING    $28.75
+ DISCOUNT     22.62  VAT      7.85  CURRENT   $164.83
+-ARREARS         +0.00  INTEREST           PAID    30.00
+-BALANCE       134.83    AMOUNT DUE****134.83
++ARREARS        +0.00  INTEREST           PAID    30.00
++BALANCE      134.83    AMOUNT DUE****134.83
+ 
+ ACCOUNT ****4837  HOLM & DAUGHTERS         TARIFF C
+ READINGS 230115 TO 231880  USAGE     1,765 OVER  90 DAYS
+-BANDS    150.0    450.0     1,165.0
+-USAGE CHARGE     $2,731.71  STANDING    $88.74
++BANDS    150.0    450.0      1,165.0
++USAGE CHARGE    $2,731.71  STANDING    $88.74
+ DISCOUNT            VAT    141.02  CURRENT $2,961.47
+-ARREARS       +450.00  INTEREST     6.75  PAID   450.00
+-BALANCE     2,968.22    AMOUNT DUE**2,968.22
++ARREARS      +450.00  INTEREST     6.75  PAID   450.00
++BALANCE    2,968.22    AMOUNT DUE**2,968.22
+ 
+ ACCOUNT ****4841  WU MEI                   TARIFF D
+ READINGS  67000 TO  67024  USAGE        24 OVER  89 DAYS
+-BANDS     24.0      0.0         0.0
+-USAGE CHARGE        $28.92  STANDING    $27.81
++BANDS     24.0      0.0          0.0
++USAGE CHARGE       $28.92  STANDING    $27.81
+ DISCOUNT            VAT      2.84  CURRENT    $59.57
+-ARREARS        -25.00  INTEREST           PAID     0.00
+-BALANCE        34.57    AMOUNT DUE*****34.57
++ARREARS       -25.00  INTEREST           PAID     0.00
++BALANCE       34.57    AMOUNT DUE*****34.57
+ 
+ ACCOUNT ****4855  BRENNAN KATHLEEN         TARIFF D
+ READINGS  15500 TO  15590  USAGE        90 OVER  90 DAYS
+-BANDS     30.0     60.0         0.0
+-USAGE CHARGE       $147.60  STANDING    $28.13
++BANDS     30.0     60.0          0.0
++USAGE CHARGE      $147.60  STANDING    $28.13
+ DISCOUNT            VAT      8.79  CURRENT   $184.52
+-ARREARS         +0.00  INTEREST           PAID   200.00
+-BALANCE        15.48CR  AMOUNT DUE******0.00
++ARREARS        +0.00  INTEREST           PAID   200.00
++BALANCE       15.48CR  AMOUNT DUE******0.00
+ CREDIT C/F     $15.09-
+ 
+ ACCOUNT ****4860  RIVERSIDE LAUNDRY LTD    TARIFF C
+ READINGS 700000 TO 752400  USAGE    52,400 OVER  91 DAYS
+-BANDS    151.7    455.0    51,793.3
+-USAGE CHARGE    $86,530.51  STANDING    $89.73
++BANDS    151.7    455.0     51,793.3
++USAGE CHARGE   $86,530.51  STANDING    $89.73
+ DISCOUNT            VAT  4,331.01  CURRENT$90,951.25
+-ARREARS         +0.00  INTEREST           PAID     0.00
+-BALANCE    90,951.25    AMOUNT DUE*90,951.25
++ARREARS        +0.00  INTEREST           PAID     0.00
++BALANCE   90,951.25    AMOUNT DUE*90,951.25
+ 
+ ACCOUNT ****4871  O'NEILL PADRAIG          TARIFF L
+ READINGS   3001 TO   3059  USAGE        58 OVER  90 DAYS
+-BANDS     30.0     28.0         0.0
+-USAGE CHARGE        $74.94  STANDING    $28.13
++BANDS     30.0     28.0          0.0
++USAGE CHARGE       $74.94  STANDING    $28.13
+ DISCOUNT     13.22  VAT      5.15  CURRENT   $108.22
+-ARREARS         +8.12  INTEREST     0.12  PAID     0.00
+-BALANCE       116.46    AMOUNT DUE****116.46
++ARREARS        +8.12  INTEREST     0.12  PAID     0.00
++BALANCE      116.46    AMOUNT DUE****116.46
+ 
+ ACCOUNT ****4879  GREENHALGH SUSAN         TARIFF D
+ READINGS  51234 TO  51234  USAGE         0 OVER  90 DAYS
+-BANDS      0.0      0.0         0.0
+-USAGE CHARGE         $0.00  STANDING    $28.13
++BANDS      0.0      0.0          0.0
++USAGE CHARGE        $0.00  STANDING    $28.13
+ DISCOUNT            VAT      1.41  CURRENT    $29.54
+-ARREARS         +0.00  INTEREST           PAID     0.00
+-BALANCE        29.54    AMOUNT DUE*****29.54
++ARREARS        +0.00  INTEREST           PAID     0.00
++BALANCE       29.54    AMOUNT DUE*****29.54
+ 
+ REJECT 10004880 UNKNOWN TARIFF
+ 
+ ACCOUNT ****4893  MBEKI THANDIWE           TARIFF D
+ READINGS  91020 TO  91155  USAGE       135 OVER 120 DAYS
+-BANDS     40.0     80.0        15.0
+-USAGE CHARGE       $233.42  STANDING    $37.50
++BANDS     40.0     80.0         15.0
+[?2004hroot@1a267ab558a6:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/port/wbill.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("right_num(b3,12,1)", "right_num(b3,11,1)")
+[?2004l[?2004h> s=s.replace("currency(usage,12)", "currency(usage,13)")
+[?2004l[?2004h> s=s.replace("lead_sign(arrears,12)", "lead_sign(arrears,13)")
+[?2004l[?2004h> s=s.replace("trail_cr(balance,13)", "trail_cr(balance,14)")
+[?2004l[?2004h> s=s.replace("trail_cr(accounts[idx][1],13)", "trail_cr(accounts[idx][1],14)")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@1a267ab558a6:/app# python3 /app/port/wbill.py /app/legacy/samples/2025q1-north.dat /app/legacy/samples/2025q1-north.pay /tmp/test.stmt
+[?2004l[?2004hroot@1a267ab558a6:/app# cmp -s /app/legacy/samples/2025q1-north.stmt /tmp/test.stmt; echo "cmp_status=$?"
+[?2004lcmp_status=1
+[?2004hroot@1a267ab558a6:/app# diff -u /app/legacy/samples/2025q1-north.stmt /tmp/test.stmt | head -160 || true
+[?2004l--- /app/legacy/samples/2025q1-north.stmt	2026-09-24 04:04:15.785722909 +0000
++++ /tmp/test.stmt	2026-09-24 12:59:38.026050007 +0000
+@@ -87,7 +87,7 @@
+ READINGS 410500 TO 480800  USAGE    70,300 OVER  90 DAYS
+ BANDS    150.0    450.0    69,700.0
+ USAGE CHARGE   $116,157.13  STANDING    $88.74
+-DISCOUNT            VAT  5,812.29  CURRENT$22,058.16
++DISCOUNT            VAT  5,812.29  CURRENT122,058.16
+ ARREARS     +2,500.00  INTEREST    37.50  PAID     0.00
+ BALANCE   124,595.66    AMOUNT DUE124,595.66
+ 
+@@ -106,7 +106,7 @@
+ DISCOUNT            VAT    143.14  CURRENT $3,005.85
+ ARREARS    -10,000.00  INTEREST           PAID99,999.99
+ BALANCE   106,994.14CR  AMOUNT DUE******0.00
+-CREDIT C/F $04,319.29-
++CREDIT C/F 104,319.29-
+ 
+ REJECT 10004930 NO BILLING DAYS
+ 
+@@ -130,7 +130,7 @@
+ READINGS 600000 TO 660000  USAGE    60,000 OVER  91 DAYS
+ BANDS    151.7    455.0    59,393.3
+ USAGE CHARGE    $99,108.51  STANDING    $89.73
+-DISCOUNT            VAT  4,959.91  CURRENT$04,158.15
++DISCOUNT            VAT  4,959.91  CURRENT104,158.15
+ ARREARS         +0.00  INTEREST           PAID     0.00
+ BALANCE   104,158.15    AMOUNT DUE104,158.15
+ 
+@@ -151,18 +151,18 @@
+ BALANCE       298.44    AMOUNT DUE****298.44
+ 
+ ACCOUNTS BILLED  18  REJECTED   2  CREDITS   2
+-TOTAL UNITS     197,813  TOTAL CURRENT    $343,621.05
+-TOTAL DUE    $342,819.70  AVERAGE BILL    $19,090.06
+-NET POSITION     235,810.08
++TOTAL UNITS     197,813  TOTAL CURRENT   $343,621.05
++TOTAL DUE   $342,819.70  AVERAGE BILL   $19,090.06
++NET POSITION    235,810.08
+ 
+ PAYMENTS AND ADJUSTMENTS
+ PAY 10004821       65.00 WHOLE     65 BAL       508.18   counter cash
+ PAY 10004837      450.00 WHOLE    450 BAL     2,518.22   bank transfer r
+ PAY 10004855      200.00 WHOLE    200 BAL       215.48CR card #XXXXXXXXX
+-ADJ 10004902   -1,250.00 WHOLE  -1250 BAL   123,345.66   meter re-read #
+-PAY 10004860   15,000.00 WHOLE  15000 BAL    75,951.25   direct debit
++ADJ 10004902   -1,250.00 WHOLE -1,250 BAL   123,345.66   meter re-read #
++PAY 10004860   15,000.00 WHOLE 15,000 BAL    75,951.25   direct debit
+ FEE 10004871       30.00 WHOLE     30 BAL       146.46   late payment fe
+-    FEE SPLIT 3X     10.00 REMAINDER  0.00
++    FEE SPLIT 3X      10.00 REMAINDER  0.00
+ PAY 10004893       10.00 WHOLE     10 BAL       298.30   card #XXXXXXXXX
+ REF 10004966       42.50 WHOLE     42 BAL   104,200.65   overpayment ret
+ LINE   9 REJECTED NO SUCH ACCOUNT
+[?2004hroot@1a267ab558a6:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/port/wbill.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("def currency(v, width, dec=2):\n    s = '$' + comma(v, dec)\n    return s[-width:].rjust(width)\n", "def currency(v, width, dec=2):\n    n = comma(v, dec)\n    s = '$' + n\n    if len(s) > width:\n        s = '$' + n[-(width-1):]\n    return s.rjust(width)\n")
+[?2004l[?2004h> s=s.replace("def money_trailing(v, width):\n    s = '$' + comma(v, 2)\n    suffix = '-' if D(v) < 0 else ' '\n    return s[-(width-1):].rjust(width-1) + suffix\n", "def money_trailing(v, width):\n    n = comma(v, 2)\n    s = '$' + n\n    body = width - 1\n    if len(s) > body:\n        s = '$' + n[-(body-1):]\n    suffix = '-' if D(v) < 0 else ' '\n    return s.rjust(body) + suffix\n\ndef signed_integer(v, width):\n    s = str(abs(int(v)))\n    if D(v) < 0:\n        s = '-' + s\n    return s[-width:].rjust(width)\n")
+[?2004l[?2004h> s=s.replace("currency(tot_current,13)", "currency(tot_current,14)")
+[?2004l[?2004h> s=s.replace("currency(tot_due,13)", "currency(tot_due,14)")
+[?2004l[?2004h> s=s.replace("currency(average,12)", "currency(average,13)")
+[?2004l[?2004h> s=s.replace("float_sign(tot_net,13)", "float_sign(tot_net,14)")
+[?2004l[?2004h> s=s.replace("float_sign(D(whole),6,0)", "signed_integer(whole,6)")
+[?2004l[?2004h> s=s.replace("float_sign(part,11)", "float_sign(part,10)")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@1a267ab558a6:/app# python3 /app/port/wbill.py /app/legacy/samples/2025q1-north.dat /app/legacy/samples/2025q1-north.pay /tmp/test.stmt
+[?2004l[?2004hroot@1a267ab558a6:/app# cmp -s /app/legacy/samples/2025q1-north.stmt /tmp/test.stmt; echo "cmp_status=$?"
+[?2004lcmp_status=0
+[?2004hroot@1a267ab558a6:/app# diff -u /app/legacy/samples/2025q1-north.stmt /tmp/test.stmt | sed -n '1,200p' || true
+[?2004l[?2004hroot@1a267ab558a6:/app# python3 -m py_compile /app/port/wbill.py
+[?2004l[?2004hroot@1a267ab558a6:/app# mkdir -p /tmp/wbill-smoke; : > /tmp/wbill-smoke/readings; : > /tmp/wbill-smoke/payments; python3 /app/port/wbill.py /tmp/wbill-smoke/readings /tmp/wbill-smoke/payments /tmp/wbill-smoke/output; cat -n /tmp/wbill-smoke/output
+[?2004l     1	ACCOUNTS BILLED   0  REJECTED   0  CREDITS   0
+     2	TOTAL UNITS           0  TOTAL CURRENT          $0.00
+     3	TOTAL DUE          $0.00  AVERAGE BILL         $0.00
+     4	NET POSITION           0.00
+     5	
+     6	PAYMENTS AND ADJUSTMENTS
+     7	POSTED    0  REJECTED   0  PAID          $0.00   OTHER         $0.00
+[?2004hroot@1a267ab558a6:/app# python3 /app/port/wbill.py /app/legacy/samples/2025q1-north.dat /app/legacy/samples/2025q1-north.pay /tmp/wbill-final.stmt && cmp /app/legacy/samples/2025q1-north.stmt /tmp/wbill-final.stmt && echo 'sample byte comparison: PASS'; ls -l /app/port/wbill.py
+[?2004lsample byte comparison: PASS
+-rwxr-xr-x 1 root root 9479 Sep 24 13:00 /app/port/wbill.py
+[?2004hroot@1a267ab558a6:/app# python3 - <<'PY'
+[?2004l[?2004h> p = '/app/port/wbill.py'
+[?2004l[?2004h> s = open(p).read()
+[?2004l[?2004h> old = """            if pos >= 0:
+[?2004l[?2004h>                 memo = memo[:pos+1] + ''.join('X' if c.isdigit() else c for c in memo[pos+1:])
+[?2004l[?2004h>             applied += 1
+[?2004l[?2004h> """
+[?2004l[?2004h> new = """            if pos >= 0:
+[?2004l[?2004h>                 memo = memo[:pos+1] + ''.join('X' if c.isdigit() else c for c in memo[pos+1:])
+[?2004l[?2004h>             old[3] = memo
+[?2004l[?2004h>             applied += 1
+[?2004l[?2004h> """
+[?2004l[?2004h> if old not in s:
+[?2004l[?2004h>     raise SystemExit('target block not found')
+[?2004l[?2004h> open(p, 'w').write(s.replace(old, new))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@1a267ab558a6:/app# python3 -m py_compile /app/port/wbill.py
+[?2004l[?2004hroot@1a267ab558a6:/app# python3 /app/port/wbill.py /app/legacy/samples/2025q1-north.dat /app/legacy/samples/2025q1-north.pay /tmp/wbill-final.stmt
+[?2004l[?2004hroot@1a267ab558a6:/app# cmp /app/legacy/samples/2025q1-north.stmt /tmp/wbill-final.stmt && echo 'sample byte comparison: PASS'
+[?2004lsample byte comparison: PASS
+[?2004hroot@1a267ab558a6:/app# 

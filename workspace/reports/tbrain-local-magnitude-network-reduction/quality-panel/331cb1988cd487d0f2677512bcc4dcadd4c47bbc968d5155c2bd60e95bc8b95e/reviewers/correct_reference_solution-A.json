@@ -1,0 +1,182 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "331cb1988cd487d0f2677512bcc4dcadd4c47bbc968d5155c2bd60e95bc8b95e",
+  "severity": "Advisory",
+  "summary": "fix.patch correctly implements every NPM-4 rule the contract governs: magnification 2080 with half peak-to-peak, the 3x-noise reading rule, hypocentral distance, linear in-table interpolation, keeping the shipped off-table calculation, the added station correction, the mean of readings pooled across a station's recordings, one vote per station, the median, null below three contributors, and the report shape. No reward-relevant defect found. The only observation is advisory: rule thresholds are evaluated in IEEE doubles, so decimal-exact boundary ties (for example amplitude 0.3 with noise 0.1) come out on the float side. The sealed inputs deliberately exclude this class.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/manual/npm4-local-magnitude.md",
+      "environment/app/mlnet/__init__.py",
+      "environment/app/mlnet/amplitude.py",
+      "environment/app/mlnet/attenuation.py",
+      "environment/app/mlnet/bulletin.py",
+      "environment/app/mlnet/distance.py",
+      "environment/app/mlnet/network.py",
+      "environment/app/mlnet/station.py",
+      "environment/app/tools/ml_bulletin.py",
+      "environment/app/samples/brsn-2026-04-12.json",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/seal.py",
+      "solution/jobgen.py",
+      "solution/fixtures.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "CRS-1",
+      "severity": "Advisory",
+      "claim": "The reference evaluates NPM-4 threshold rules in binary floating point. An input whose decimal values sit exactly on a threshold that is not binary-exact is classified on the float side. Example: amplitude_nm 0.3 with noise_nm 0.1 is not treated as a reading, although 0.3 is exactly three times 0.1.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "Under a decimal-exact reading of NPM-4 2.3 ('an amplitude at least three times the noise of its channel'), amplitude 0.3 with noise 0.1 is a reading. The same reading of 5.1 ('both ends included') would count a station whose exact hypocentral distance is 10 km.",
+        "actual_behavior": "station.py (patched) keeps a reading only if float(0.3) >= 3.0 * float(0.1). In IEEE double, 3.0*0.1 = 0.30000000000000004 and 0.3 is 0.29999999999999998..., so the comparison is False and the channel is dropped from the station mean.",
+        "trace_or_receipt": "fix.patch:125-130 builds the list with the condition `float(item[\"amplitude_nm\"]) >= 3.0 * float(item[\"noise_nm\"])`. With amplitude_nm=0.3 and noise_nm=0.1 (both inside 1.2's ranges), the condition is False. If the recording also carries a second channel that is a clear reading (required by 1.3), the station ml is that channel's magnitude alone, not the mean of both. model.py:29-31 uses the identical float comparison, and seal.py:54-62 (numeric_discipline) admits only binary-exact 3x ties or ratios at least 1e-9 away from a tie. So no sealed input exercises this case. This is a static trace, not an execution."
+      },
+      "reachable_case_or_path": "Bulletin inside section 1 with a recording {channels: [{amplitude_nm: 0.3, noise_nm: 0.1}, {amplitude_nm: 1000, noise_nm: 1}]}, run through python3 /app/tools/ml_bulletin.py.",
+      "graded_effect": "None on the shipped grading: seal.py:54-69 keeps every sealed input off non-binary-exact ties and at least 1e-3 km from the 10/600 km ends, and model.py shares the float semantics. So the reference and expectations agree and no graded case is affected. Recorded as advisory because a decimal-exact interpretation of the contract would produce a different station ml or contributes flag on such inputs.",
+      "citations": [
+        "solution/fix.patch:125-130",
+        "solution/fix.patch:88",
+        "environment/app/mlnet/network.py:9-11",
+        "solution/model.py:29-41",
+        "solution/seal.py:54-69"
+      ],
+      "root_invariant": "Threshold rules (2.3 reading test, 5.1 table-end inclusion) are decided in IEEE-double arithmetic, not in the exact decimal values the bulletin states.",
+      "authority": [
+        "environment/app/manual/npm4-local-magnitude.md:60",
+        "environment/app/manual/npm4-local-magnitude.md:108-109",
+        "environment/app/manual/npm4-local-magnitude.md:18-20",
+        "instruction.md:1",
+        "instruction.md:5"
+      ],
+      "implementation_sites": [
+        "solution/fix.patch:125-130",
+        "solution/fix.patch:88",
+        "environment/app/mlnet/network.py:9-11",
+        "solution/fix.patch:33"
+      ],
+      "sibling_variants": [
+        "5.1 end inclusion: fix.patch:88 computes sqrt(epi^2 + depth^2) in doubles. A decimal pair whose exact hypocentral distance is 10 or 600 km (for example epi 2.8 with depth 9.6) can round just below 10 or above 600. contributes (network.py:11) is then False, and the off-table branch (fix.patch:33) is taken. seal.py:63-69 explicitly guards the sealed inputs against this class."
+      ],
+      "interaction_variants": [
+        "A flipped contributes flag feeds the count of three (5.3) and the median (5.2), so it can change a network ml between a value and null. Both are exact-compared per instruction.md:5, but no sealed input reaches this path."
+      ],
+      "minimal_repair_boundary": "If exact-decimal semantics were intended, the threshold comparisons in station.py and network.contributes/attenuation would need exact arithmetic (for example Fraction or decimal) on the parsed values. Otherwise the contract could state that the thresholds are evaluated on the parsed double values. Neither change is required for the current grading.",
+      "closure_evidence": [
+        "A bulletin with amplitude 0.3/noise 0.1 beside a clear reading yields a station ml equal to the mean of both channels under the chosen semantics.",
+        "A bulletin with epi 2.8, depth 9.6 yields contributes true under the chosen semantics."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Checked that every fix.patch hunk's context matches the shipped mlnet files line by line (amplitude.py, attenuation.py, bulletin.py, distance.py, network.py, station.py); solve.sh applies it from / with -p1 onto /app/mlnet, and patch is installed in the Dockerfile.",
+    "NPM-4 2.2: patched record_amplitude_mm = amplitude_nm/2*2080*1e-6 (fix.patch:9,22).",
+    "NPM-4 2.3: reading test amplitude >= 3*noise, inclusive (fix.patch:128).",
+    "NPM-4 3.1: hypocentral distance sqrt(epi^2+depth^2) (fix.patch:89); it feeds distance_km, the correction and contributes (fix.patch:58-64).",
+    "NPM-4 3.2/3.3: in-table branch is linear in distance on the correct segment. Traced d=10 (index 0, gives 1.700), d=20 (index 0, gives 2.060), d=600 (_segment returns last=10, segment 500-600, gives 4.790), and an interior value such as 125 (index 6, 100-150, linear).",
+    "Off-table: d<10 uses segment 0 and d>600 the last segment with the shipped log10 formula unchanged, fed with hypocentral distance; the minimum hypocentral distance is 1 km, so log10 is defined. No clamp or guard added (instruction.md:3).",
+    "NPM-4 4.1/4.2: station correction added (fix.patch:115).",
+    "NPM-4 4.3: mean over readings; per 1.3 every recording has at least one reading, so the pooled list is nonempty.",
+    "NPM-4 1.2 with 4.3/5.2/5.3: readings of a station's two recordings are pooled; one row per recording in recording order; one vote per station in the median and the count (fix.patch:48-69).",
+    "NPM-4 5.2/5.3: sorted median, mean of the middle two when even, None below three (fix.patch:97-106).",
+    "NPM-4 6.1/6.2: report keys events/id/ml/stations/code/distance_km/ml/contributes only; file order kept; the driver is untouched.",
+    "Traced sample event brsn2026gxqa (4 in-table stations at depth 9.4: even median of 4) and brsn2026gxra (3 stations: odd median) through the patched path.",
+    "Compared the reference logic with solution/model.py branch by branch; this is not taken as independent proof, but no divergence was found."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace ordinary case and each relevant boundary through reference logic",
+      "status": "checked",
+      "reason": "Traced sample events plus the boundaries at 10/600 km, exact 3x ties, off-table near/far, one/two/three contributors and odd/even median.",
+      "evidence": ["solution/fix.patch:33-35", "solution/fix.patch:97-106", "solution/fix.patch:125-130", "environment/app/samples/brsn-2026-04-12.json:11-48"],
+      "finding_ids": ["CRS-1"]
+    },
+    {
+      "category": "Output bytes: widths, precision, padding, delimiters, paths",
+      "status": "checked",
+      "reason": "Report is json.dump of unrounded floats (NPM-4 0.3); null for no ml; keys match 6.1 and nothing else (6.2); the driver path is unchanged.",
+      "evidence": ["environment/app/tools/ml_bulletin.py:16-19", "solution/fix.patch:57-70", "environment/app/manual/npm4-local-magnitude.md:121-128"],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state (replacement, identifier reuse)",
+      "status": "checked",
+      "reason": "Identifier reuse = a station code repeated across two recordings in one event. The reference pools amplitudes, takes epi from the first recording (equal by 1.2), copies one station row per recording, and counts each station once. Corrections map is built once per bulletin; no state leaks between events.",
+      "evidence": ["solution/fix.patch:47-69", "environment/app/manual/npm4-local-magnitude.md:36-39"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "Contract makes no recovery or durability promise; the task is a pure batch computation.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Open-input carve-outs and no-added-guard rule",
+      "status": "checked",
+      "reason": "Off-table correction keeps the shipped formula; no clamps or exclusions were added; the ZeroDivision on a recording with no readings is reachable only for files breaking 1.3, which are open inputs.",
+      "evidence": ["instruction.md:3", "solution/fix.patch:33-35", "solution/fix.patch:130"],
+      "finding_ids": []
+    },
+    {
+      "category": "Driver immutability and patch applicability",
+      "status": "checked",
+      "reason": "Patch touches only app/mlnet/*; the hunk contexts match the shipped sources; patch is installed in the image.",
+      "evidence": ["solution/solve.sh:31-32", "environment/Dockerfile:4", "solution/fix.patch:1-131"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["3.1 hypocentral distance", "5.1 contributes / 3.2 table range"],
+      "case_or_path": "fixtures hypocentral 'NEAR' epi 6 depth 12: hypocentral 13.4 km, so the station contributes and the in-table linear branch is used; table_ends epi 8 depth 6 gives exactly 10.0, contributes true, correction 1.700",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:88-89", "environment/app/mlnet/network.py:9-11", "solution/fix.patch:33-34"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["off-table shipped correction", "2.2/4.1/4.2/4.3 steps around it"],
+      "case_or_path": "Station at hypocentral 5 km: log10 end-segment extrapolation, but half amplitude, gain 2080, +correction and mean of readings all still applied",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:22", "solution/fix.patch:35-38", "solution/fix.patch:115", "solution/fix.patch:125-130"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 two recordings per station", "5.2 median / 5.3 fewer than three"],
+      "case_or_path": "Event with SITA twice and SITB once (fixtures.shared 'shared-null'): two distinct contributing stations, so ml null; both SITA rows carry the pooled ml",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:53-69", "solution/fix.patch:100-101"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 reading", "4.3 mean across pooled recordings"],
+      "case_or_path": "Station whose second recording's only amplitude is a reading while one channel of the first recording is sub-noise: the sub-noise channel is excluded after pooling",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:54", "solution/fix.patch:125-130"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 reading threshold", "float evaluation of exact decimal ties"],
+      "case_or_path": "amplitude 0.3, noise 0.1 beside a clear reading",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:128", "solution/seal.py:54-62"],
+      "finding_ids": ["CRS-1"]
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

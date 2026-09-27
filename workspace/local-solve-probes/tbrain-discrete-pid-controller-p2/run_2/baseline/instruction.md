@@ -1,0 +1,5 @@
+`/app/src/looptune` is the discrete PID controller our plant loops run on, and it no longer computes a step the way its design note, `/app/docs/control-note.md`, says it should. The note is the authority. Change the package so that it does what the note says, keeping its public surface as it is: `Tuning`, and `Controller` with `step`, `terms`, `set_manual`, `set_auto`, `retune` and the `integral` attribute.
+
+Every rule in the note holds for all the values it is written for. Where the note says nothing, what the package does today stands: raise no new exception, and add no clamp or guard to what a method or helper accepts now.
+
+The controller will be driven through step sequences from a handful to a few hundred steps long, with setpoint steps and ramps, feedforward, runs that sit on a limit or on the slew limit, switches between manual and automatic, retunes in mid-run, and settings a commissioning engineer would never choose. The outputs, the `integral` attribute and the `terms()` values are compared with `math.isclose(rel_tol=1e-9, abs_tol=1e-12)`, so how you order the arithmetic inside a formula is up to you.

@@ -1,0 +1,216 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-ward-nurse-rostering",
+ "primary_outcome": "four ward rosters that keep every hard rule and have a penalty no higher than each ward's best-known target",
+ "obligations": [
+  {
+   "id": "VALIDITY",
+   "class": "core",
+   "contribution": "every roster keeps every hard rule of the rules document",
+   "authority": {
+    "file": "environment/app/docs/roster-rules.md",
+    "anchor": "## Hard rules"
+   },
+   "implementation_sites": [
+    "solution/solve.sh"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "cover, rest, consecutive-day and night-rest rules decide which rosters are workable, so requests, weekends and hours can only be traded inside that set"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_ash_roster_is_valid",
+     "test_outputs.py::test_birch_roster_is_valid",
+     "test_outputs.py::test_cedar_roster_is_valid",
+     "test_outputs.py::test_dale_roster_is_valid"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "each hard rule is checked exhaustively over the whole file; one wrong-path receipt per rule family shows the validity test for that instance rejects it"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a roster that breaks exactly one hard rule",
+   "wrong_but_plausible": "fill the cover first and repair requests afterwards, leaving a late followed by an early, a missing senior or work inside the rest after nights",
+   "selfdescription_phrase": "rules"
+  },
+  {
+   "id": "COST",
+   "class": "core",
+   "contribution": "every roster's cost under the rules is at or below its best-known target",
+   "authority": {
+    "file": "environment/app/docs/roster-rules.md",
+    "anchor": "A valid roster's penalty is the sum of:"
+   },
+   "implementation_sites": [
+    "solution/solve.sh"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "cover, rest, consecutive-day and night-rest rules decide which rosters are workable, so requests, weekends and hours can only be traded inside that set"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_ash_roster_meets_target",
+     "test_outputs.py::test_birch_roster_meets_target",
+     "test_outputs.py::test_cedar_roster_meets_target",
+     "test_outputs.py::test_dale_roster_meets_target"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "the reference sits exactly on each target (cost equal to target passes); a valid near-miss above target is a wrong-path receipt"
+   },
+   "expected_source": "authority_text",
+   "discriminating_instance": "a valid roster whose cost is above the target",
+   "wrong_but_plausible": "the shipped fill-the-gaps roster or a single short local search that keeps the hard rules but leaves split weekends and missed requests above target",
+   "selfdescription_phrase": "target"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "VALIDITY",
+    "to": "COST"
+   },
+   {
+    "from": "COST",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "feasibility-shapes-cost",
+   "obligation_ids": [
+    "VALIDITY",
+    "COST"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_ash_roster_meets_target",
+    "test_outputs.py::test_birch_roster_meets_target",
+    "test_outputs.py::test_cedar_roster_meets_target",
+    "test_outputs.py::test_dale_roster_meets_target"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "environment/app/docs/roster-rules.md",
+   "anchor": "These rules decide whether a four-week ward roster can be worked"
+  },
+  "silence": {
+   "file": "environment/app/docs/roster-rules.md",
+   "anchor": "the last day is taken into account.",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "For each ward in `/app/wards/`"
+  }
+ },
+ "determinism": {
+  "seeds": [],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "FILE-FORMAT",
+   "domain_required": true,
+   "rationale": "the ward office's roster files carry one code per nurse per day in this shape; the instruction names the rules document as the format authority",
+   "authority_anchor": {
+    "file": "environment/app/docs/roster-rules.md",
+    "anchor": "File format"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight-final.json",
+ "wrong_paths": [
+  {
+   "id": "near-miss-dale",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COST"
+   ],
+   "receipt": "wrong-paths/near-miss-dale.json"
+  },
+  {
+   "id": "shipped-planner-ash",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COST"
+   ],
+   "receipt": "wrong-paths/shipped-planner-ash.json"
+  },
+  {
+   "id": "works-on-leave",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/works-on-leave.json"
+  },
+  {
+   "id": "cover-short",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/cover-short.json"
+  },
+  {
+   "id": "registered-short",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/registered-short.json"
+  },
+  {
+   "id": "no-senior-on-shift",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/no-senior-on-shift.json"
+  },
+  {
+   "id": "late-then-early",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/late-then-early.json"
+  },
+  {
+   "id": "too-many-days-in-a-row",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/too-many-days-in-a-row.json"
+  },
+  {
+   "id": "no-rest-after-nights",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/no-rest-after-nights.json"
+  },
+  {
+   "id": "edit-checker-and-targets",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/edit-checker-and-targets.json"
+  }
+ ],
+ "task_snapshot_sha256": "6de6c6c199167d11a2311c6438fd5231be04281657aefbe056db0ccc1c823981"
+}

@@ -1,0 +1,200 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-newspaper-ad-layout",
+ "primary_outcome": "four edition ad layouts that can go to press and cost no more than each edition's best-known target",
+ "obligations": [
+  {
+   "id": "VALIDITY",
+   "class": "core",
+   "contribution": "every layout keeps every hard rule of the rules document",
+   "authority": {
+    "file": "environment/app/docs/makeup-rules.md",
+    "anchor": "What a layout must do"
+   },
+   "implementation_sites": [
+    "solution/solve.sh"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the stacking, ad-share and competitor-spread rules decide which pages can take which ads, so lost revenue can only be lowered inside that set"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_mon_layout_is_valid",
+     "test_outputs.py::test_wed_layout_is_valid",
+     "test_outputs.py::test_fri_layout_is_valid",
+     "test_outputs.py::test_sat_layout_is_valid"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "each hard rule is checked exhaustively over the whole file; one wrong-path receipt per rule family shows the validity test for that instance rejects it"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a layout that breaks exactly one hard rule",
+   "wrong_but_plausible": "stack an ad on a partly filled row, exceed the page's ad share, or put two ads of one competitor group on facing pages",
+   "selfdescription_phrase": "rules"
+  },
+  {
+   "id": "COST",
+   "class": "core",
+   "contribution": "every layout's cost under the rules is at or below its best-known target",
+   "authority": {
+    "file": "environment/app/docs/makeup-rules.md",
+    "anchor": "A layout costs the sum of:"
+   },
+   "implementation_sites": [
+    "solution/solve.sh"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the stacking, ad-share and competitor-spread rules decide which pages can take which ads, so lost revenue can only be lowered inside that set"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_mon_layout_meets_target",
+     "test_outputs.py::test_wed_layout_meets_target",
+     "test_outputs.py::test_fri_layout_meets_target",
+     "test_outputs.py::test_sat_layout_meets_target"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "the reference sits exactly on each target (cost equal to target passes); a valid near-miss above target is a wrong-path receipt"
+   },
+   "expected_source": "authority_text",
+   "discriminating_instance": "a valid layout whose cost is above the target",
+   "wrong_but_plausible": "the shipped first-fit layout or a single short search that is valid but leaves paying ads out or on the wrong pages above target",
+   "selfdescription_phrase": "target"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "VALIDITY",
+    "to": "COST"
+   },
+   {
+    "from": "COST",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "feasibility-shapes-cost",
+   "obligation_ids": [
+    "VALIDITY",
+    "COST"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_mon_layout_meets_target",
+    "test_outputs.py::test_wed_layout_meets_target",
+    "test_outputs.py::test_fri_layout_meets_target",
+    "test_outputs.py::test_sat_layout_meets_target"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "environment/app/docs/makeup-rules.md",
+   "anchor": "These rules decide whether an edition's ad layout can go to press"
+  },
+  "silence": {
+   "file": "environment/app/docs/makeup-rules.md",
+   "anchor": "plays no part in the rules.",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "For each edition in `/app/editions/`"
+  }
+ },
+ "determinism": {
+  "seeds": [],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "FILE-FORMAT",
+   "domain_required": true,
+   "rationale": "the make-up room reads placements by page, column and row in this shape; the instruction names the rules document as the format authority",
+   "authority_anchor": {
+    "file": "environment/app/docs/makeup-rules.md",
+    "anchor": "File format"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight-final.json",
+ "wrong_paths": [
+  {
+   "id": "near-miss-sat",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COST"
+   ],
+   "receipt": "wrong-paths/near-miss-sat.json"
+  },
+  {
+   "id": "shipped-planner-mon",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COST"
+   ],
+   "receipt": "wrong-paths/shipped-planner-mon.json"
+  },
+  {
+   "id": "booked-ad-dropped",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/booked-ad-dropped.json"
+  },
+  {
+   "id": "ad-floating",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/ad-floating.json"
+  },
+  {
+   "id": "ads-overlap",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/ads-overlap.json"
+  },
+  {
+   "id": "ad-share-exceeded",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/ad-share-exceeded.json"
+  },
+  {
+   "id": "competitors-facing",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/competitors-facing.json"
+  },
+  {
+   "id": "edit-checker-and-targets",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/edit-checker-and-targets.json"
+  }
+ ],
+ "task_snapshot_sha256": "6dde2c81dee50660522a8a4bce9be58c652265b2790c9160c55416e48fbd2ebf"
+}

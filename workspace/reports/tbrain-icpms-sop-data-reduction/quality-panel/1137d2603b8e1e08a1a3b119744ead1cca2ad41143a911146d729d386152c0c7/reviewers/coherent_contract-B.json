@@ -1,0 +1,182 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-B",
+  "snapshot_sha256": "1137d2603b8e1e08a1a3b119744ead1cca2ad41143a911146d729d386152c0c7",
+  "severity": "None",
+  "summary": "The instruction, SOP TM-07 and the shipped code together fix every graded value. Where the SOP explicitly gives no rule (no blank results, unbracketed runs, non-detect spike or parent), the instruction says to keep the shipped calculation using SOP-defined inputs. Every hand-traced expected report matches that model, all hand-built fixtures stay inside the section 1 domain, and the stated comparison rules match the verifier's comparator. No contract defect was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/tools/metalquant_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/metalquant_run.py",
+      "tests/expected/ROSTER",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/capacity.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/generated-1.jsonl",
+      "tests/expected/generated-2.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/section_one_limits.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/spike_recovery.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled the 41 files in packet-manifest.json with the files read. All were read in full, and no output was truncated.",
+    "Listed each SOP rule (sections 2-8) and matched it to its named test in tests/test_outputs.py:150-216.",
+    "Identified the three places where the SOP gives no rule (section 3 line 62-63 with sections 4, 6 and 7). Checked that instruction.md:5 resolves each one to the shipped calculation (blanks.py:4-9, qc.py:12-17, qc.py:20-21) using SOP-defined readings and amounts.",
+    "Hand-traced blank_no_results rows 1-4 against the SOP line (slope 10, intercept 100). Expected levels are 0.0 with no blank and otherwise the first blank's SOP reading: -1.0, 0.25, 0.5.",
+    "Hand-traced spike_nondetects rows 1-2. Expected recoveries (48.75, -16.04, -15.0, 52.5) equal (spike SOP amount - parent SOP amount)/(added*dilution)*100. They do not use the shipped amount formula, which matches instruction.md:5's 'from the values the SOP does define'.",
+    "Hand-traced ccv_unbracketed rows 1-4. Runs before the first CCV give true, and runs after the last CCV take that CCV's SOP pass, matching the shipped nearest-earlier fallback.",
+    "Hand-traced report_order row 1 (B-SPK As recovery 47.5, a non-detect parent with a blank level from a result just above the MDL) and ccv ownership per analyte.",
+    "Checked every row of section_one_limits against the SOP section 1 bounds: slope 1e-12 and 1e6, intercept exactly 1e4*slope, readings of +/-1e4, CCV true of 10*loq and 0.001, added 0.001, dilution 1000, and mdl=loq.",
+    "Checked that the near-limit values in flag_limits and blank_nondetects keep the 1e-5 (and 1e-5 relative when the limit is above 1) margins required by SOP section 1.",
+    "Checked that the ccv_limits recoveries (90.0, 110.00000000000001, 110.04, 110.06, 89.96, 89.94) are far from the x.x5 rounding ties and that each pass matches the inclusive rounded rule.",
+    "Compared the tolerance and exactness wording in instruction.md:7 with _number/compare in tests/test_outputs.py:119-142.",
+    "Compared the driver-unchanged requirement in instruction.md:3 with tests/test_outputs.py:52-63,226-227 and the manifest hashes. The environment and shipped driver copies are identical (2b8b03...).",
+    "Spot-checked generated-1, generated-2 and capacity for CCV true concentrations of at least 10*loq and for CCV recoveries away from rounding ties (for example 89.95997, 110.03, 110.0599)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Every grading rule traces to a candidate-visible sentence or authoritative artifact",
+      "status": "checked",
+      "reason": "Calibration, readings, blank level, blank correction before dilution, ND/J flags on the corrected reading, CCV pass on the rounded recovery, bracketing, spike recovery and report layout are all defined in the SOP. The no-rule branches are resolved by instruction.md:5 plus the visible shipped code, and the expected data follow both.",
+      "evidence": [
+        "environment/app/docs/reduction-sop.md:44-117",
+        "instruction.md:5",
+        "environment/app/src/metalquant/blanks.py:4-9",
+        "environment/app/src/metalquant/qc.py:12-21",
+        "tests/expected/blank_no_results.jsonl:2",
+        "tests/expected/spike_nondetects.jsonl:1",
+        "tests/expected/ccv_unbracketed.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Permitted input domain and required boundary behaviour",
+      "status": "checked",
+      "reason": "SOP section 1 bounds every input and rules out exact-limit and rounding-tie cases. The hand-built fixtures reach both ends of each range without leaving the domain. Negative readings and negative blank levels are covered by the 'add no guard' sentence.",
+      "evidence": [
+        "environment/app/docs/reduction-sop.md:31-42",
+        "instruction.md:5-7",
+        "tests/expected/section_one_limits.jsonl:1-10",
+        "tests/expected/flag_limits.jsonl:1-3",
+        "tests/expected/negative_readings.jsonl:1-2"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Rendered instruction, declared artifacts and verifier paths agree",
+      "status": "checked",
+      "reason": "instruction.md names /app/src/metalquant, /app/tools/metalquant_run.py and /app/docs/reduction-sop.md. The verifier runs 'python3 /app/tools/metalquant_run.py BATCH' with its own identical driver copy, and task.toml sets artifacts to /app/. There is no broken template text and no sentinel.",
+      "evidence": [
+        "instruction.md:1-3",
+        "tests/test_outputs.py:25-29,102-116",
+        "task.toml:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Examples support the stated rules",
+      "status": "checked",
+      "reason": "examples/small-batch.json is an input-format example only, with no expected output. It matches the SOP section 1 schema, and instruction.md:5 warns that the rules apply beyond it.",
+      "evidence": [
+        "environment/app/examples/small-batch.json:1-20",
+        "instruction.md:5"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden arbitrary conventions / representation-specific grading",
+      "status": "checked",
+      "reason": "Exact comparison applies only to id, analyte, flag, ccv_ok and pass, and to the list order the SOP fixes. value may be a number or null, and other numbers are checked to rel/abs 1e-6 as disclosed. blank_levels keys are compared as a set, consistent with 'order carries no meaning'. The exact key set per entry follows the field list in SOP section 8.",
+      "evidence": [
+        "instruction.md:7",
+        "environment/app/docs/reduction-sop.md:101-115",
+        "tests/test_outputs.py:119-142"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction/test asymmetry and contradictions",
+      "status": "checked",
+      "reason": "Each named test corresponds to an SOP rule or to the disclosed keep-shipped principle. The driver byte check matches instruction.md:3. The candidate-read checks do not constrain candidate behaviour. There is no conflict between the SOP and the instruction: the SOP itself states it gives no rule for the non-detect cases.",
+      "evidence": [
+        "tests/test_outputs.py:150-241",
+        "environment/app/docs/reduction-sop.md:59-63"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["SOP 4 blank level from results only", "instruction keep-shipped for no-rule values"],
+      "case_or_path": "All blanks are non-detects and the first blank reading is -1.0. The shipped first-blank level is computed on the SOP fitted line and then subtracted, so W-62 becomes 1.5 J (blank_no_results row 2).",
+      "status": "checked",
+      "evidence": ["tests/expected/blank_no_results.jsonl:2", "environment/app/src/metalquant/blanks.py:4-9"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 7 spike recovery of results", "SOP 3 non-detect gives no rule + shipped added*dilution formula"],
+      "case_or_path": "Parent W-143 is a non-detect with blank level 2.5. The SOP amount is 2.5 (not the shipped 12.5), giving recovery (55-2.5)/(20*5)*100 = 52.5.",
+      "status": "checked",
+      "evidence": ["tests/expected/spike_nondetects.jsonl:2", "environment/app/src/metalquant/qc.py:20-21"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 6 rounded inclusive CCV pass", "shipped nearest-earlier CCV for unbracketed runs"],
+      "case_or_path": "C-1 comes after the last CCV A-CCV, where Tl fails at 88 and As passes. ccv_ok is false for Tl and true for As (report_order row 1). W-123 after the passing CCV-22 is true.",
+      "status": "checked",
+      "evidence": ["tests/expected/report_order.jsonl:1", "tests/expected/ccv_unbracketed.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 5 flags on corrected reading", "SOP 5 amount = corrected x dilution"],
+      "case_or_path": "W-84 has corrected reading 0.5 and dilution 100, so it is ND on the corrected reading even though the amount would be 50 (flag_basis row 2).",
+      "status": "checked",
+      "evidence": ["tests/expected/flag_basis.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 1 domain exclusions near limits", "instruction numeric tolerance"],
+      "case_or_path": "Values sit 1.5e-5 from the MDL (MB-10, MB-37, W-91) and 6.1e-5 from LOQ 5. Differences between OLS formulations are around 1e-12, so the flag decisions cannot differ between contract-valid implementations.",
+      "status": "checked",
+      "evidence": ["tests/expected/blank_nondetects.jsonl:2-3", "tests/expected/flag_limits.jsonl:1,3", "environment/app/docs/reduction-sop.md:39-42"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

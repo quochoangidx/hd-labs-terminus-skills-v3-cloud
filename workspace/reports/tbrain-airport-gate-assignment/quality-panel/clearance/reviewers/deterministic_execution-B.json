@@ -1,0 +1,152 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-B",
+  "snapshot_sha256": "25590022b6357de76fb75396cf487ca482a84db59f2075bacee567a36585154f",
+  "severity": "None",
+  "summary": "Grading is a pure, integer-only evaluation of four fixed plan files against fixed, hash-checked day data and fixed targets with no randomness, clock, network, filesystem-order or timing dependence; a fixed submission receives the same reward on every clean run.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/planner/plan_day.py",
+      "environment/app/tools/check_plan.py (byte-identical to tests/check_plan.py per manifest SHA-256 603464e7...)",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json (head read; whole file scanned by regex for non-integer numbers, exponents, NaN/Infinity and section keys)",
+      "environment/app/days/day-2.json (whole file scanned by regex as above)",
+      "environment/app/days/day-3.json (whole file scanned by regex as above)",
+      "environment/app/days/day-4.json (whole file scanned by regex as above)",
+      "solution/solve.sh",
+      "solution/plans/day-1.json",
+      "solution/plans/day-2.json",
+      "solution/plans/day-3.json",
+      "solution/plans/day-4.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/targets.json",
+      "tests/days/roster.json",
+      "tests/days/day-1.json.gz .. day-4.json.gz (binary; not decoded, identity bound by manifest hash and by the runtime SHA-256 assertion against roster.json)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced test.sh: fixed pytest invocation with -p no:randomly and -p no:cacheprovider, isolated interpreter (-I), fresh mktemp run dir used only as cwd; reward is 1 iff pytest rc==0 (tests/test.sh:13-21). The random temp dir name never reaches any comparison.",
+    "Traced test_outputs.py: TARGETS and ROSTER loaded from verifier-local files (tests/test_outputs.py:21-27); each day loaded from a local gzip copy and asserted against a fixed SHA-256 and counts (tests/test_outputs.py:30-40); plan read from /app/plans/<day>.json and scored by the verifier's own checker (tests/test_outputs.py:43-55). No random, time, date, sleep, network, glob or listdir use anywhere in .py/.sh files (regex scan).",
+    "Confirmed roster SHA-256 values equal the manifest hashes of environment/app/days/day-1..4.json (tests/days/roster.json:6,12,18,24 vs packet-manifest.json:12-15), and tests/targets.json equals environment/app/days/targets.json (same hash, packet-manifest.json:16,34), so verifier inputs are pinned bytes.",
+    "Traced check_plan.evaluate: validity checks are order-insensitive (turn occupancy sorted by (arrive, depart, tid), tests/check_plan.py:107-110; wingtip check is pairwise over all size-3 turns, :112-118); cost is a sum of integer products (:120-131) and the day data contain no decimals, exponents, NaN or Infinity (regex over all four day files), so cost is an exact integer independent of iteration order.",
+    "Checked dict iteration: plan['stands'] and 'where' follow JSON insertion order of the fixed file; only the first-reported error message could vary with order, never pass/fail, and ordering is identical across runs for the same bytes anyway.",
+    "Checked load_plan limits are fixed constants (tests/check_plan.py:17-19, 59-73) and sys.set_int_max_str_digits is set deterministically (:10).",
+    "Checked dependency pinning: both images pin python:3.13-slim-bookworm by digest (environment/Dockerfile:1, tests/Dockerfile:1); pytest==9.1.1 and pytest-json-ctrf==0.5.2 pinned (tests/Dockerfile:3). Transitive pytest deps and apt packages (tmux, asciinema) are unpinned but cannot change a data-only integer comparison; no graded input is remote.",
+    "Checked timing: no readiness waits or sleeps; verifier work is O(turns + transfers + wingtip pairs * size-3 turns^2) on <=360 turns, far under verifier timeout_sec=1800 (task.toml:19).",
+    "Checked solution determinism: solve.sh copies fixed plan files and checks them with the shipped checker (solution/solve.sh:24-35); no seeded search runs at solve time, so the Oracle artifact is fixed bytes.",
+    "Checked task.toml verifier/agent network_mode=no-network (task.toml:21,25); environment network_mode=public applies only to build."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fresh random seeds / unpinned generated corpora",
+      "status": "checked",
+      "reason": "No generator or RNG in the verifier; graded cases are four fixed day files stored as gzip copies bound to fixed SHA-256 values.",
+      "evidence": ["tests/test_outputs.py:30-40", "tests/days/roster.json:1-26", "tests/test.sh:15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Boundary cases guaranteed as fixtures rather than drawn",
+      "status": "checked",
+      "reason": "All graded instances (day-1..day-4) are always evaluated by eight fixed test functions; nothing is sampled.",
+      "evidence": ["tests/test_outputs.py:58-87"],
+      "finding_ids": []
+    },
+    {
+      "category": "Current date or time / evaluation clock",
+      "status": "checked",
+      "reason": "Times are whole minutes in the fixed day data; no wall-clock use in checker or tests.",
+      "evidence": ["environment/app/docs/stand-rules.md:8-9", "tests/check_plan.py:98-118"],
+      "finding_ids": []
+    },
+    {
+      "category": "Mutable remote data or dependencies; pinned deps and local inputs",
+      "status": "checked",
+      "reason": "Base images pinned by digest, pytest and ctrf plugin version-pinned, all graded inputs local to /tests; verifier runs without network. Unpinned transitive/apt packages cannot affect an integer data comparison.",
+      "evidence": ["tests/Dockerfile:1-6", "environment/Dockerfile:1-7", "task.toml:18-26"],
+      "finding_ids": []
+    },
+    {
+      "category": "Filesystem or iteration ordering; sort where required, accept equivalent orderings",
+      "status": "checked",
+      "reason": "Contract allows turn lists in any order and omitted stands; checker sorts per-stand occupancy and cost is an order-independent integer sum. No directory listing is used; plan paths are named explicitly.",
+      "evidence": ["environment/app/docs/stand-rules.md:63-67", "tests/check_plan.py:83-131", "tests/test_outputs.py:43-50"],
+      "finding_ids": []
+    },
+    {
+      "category": "Floating-point or numeric instability affecting threshold comparison",
+      "status": "checked",
+      "reason": "All day-file numbers are integers (regex found no decimals/exponents/NaN/Infinity); cost <= target comparison is exact integer.",
+      "evidence": ["tests/check_plan.py:120-131", "tests/test_outputs.py:53-55", "environment/app/docs/stand-rules.md:58-59"],
+      "finding_ids": []
+    },
+    {
+      "category": "Timing or readiness assumptions (waits, sleeps, timeouts)",
+      "status": "checked",
+      "reason": "No services, waits or sleeps; verifier workload is small relative to its 1800 s timeout.",
+      "evidence": ["tests/test.sh:1-21", "task.toml:18-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Random temporary names that could reach grading",
+      "status": "checked",
+      "reason": "mktemp directory is only the pytest cwd; paths used for grading are fixed (HERE-relative and /app/plans).",
+      "evidence": ["tests/test.sh:13-15", "tests/test_outputs.py:17-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated grading of same correct and incorrect submissions stays stable",
+      "status": "checked",
+      "reason": "Static trace: reward is a pure function of the four plan-file bytes plus pinned verifier files; a fixed correct or incorrect plan set yields the same pass/fail each run. Not executed.",
+      "evidence": ["tests/test_outputs.py:43-87", "tests/test.sh:15-21"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["turn lists in any order (stand-rules File format)", "buffer rule between turns on one stand"],
+      "case_or_path": "A plan listing a stand's turns in reverse arrival order: checker sorts by (arrive, depart, tid) before the buffer check, so the verdict is identical for any permutation.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:63-67", "tests/check_plan.py:107-110"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["wingtip rule", "stand may be omitted or empty"],
+      "case_or_path": "Wingtip pair where one stand key is absent: plan['stands'].get(a, []) yields empty list deterministically; no order dependence.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:41-44,66-67", "tests/check_plan.py:112-118"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["verifier-owned day copy", "candidate-visible /app/days file"],
+      "case_or_path": "Candidate edits /app/days/day-N.json or targets.json: verifier never reads them (uses /tests copies bound to fixed SHA-256), so grading cannot vary with agent-side mutation of inputs.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:21-40", "tests/days/roster.json:6", "packet-manifest.json:12-16"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["cost at or below target", "integer cost"],
+      "case_or_path": "Plan exactly on target (reference): cost == target with exact integer arithmetic passes every run; no float rounding boundary.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:53-55", "tests/check_plan.py:122-131", "solution/solve.sh:14-18"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,142 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-A",
+  "snapshot_sha256": "1dfbd5f15aa1797e681b3da01af44bd2bd925c4ef393cae0824fad0adf711731",
+  "severity": "None",
+  "summary": "The candidate-visible contract (instruction.md plus the rules document it names, the visible checker, editions and targets) fully determines every graded rule. The verifier's checker, editions and targets are byte-identical to the candidate-visible copies (manifest hashes match). I found no contradiction, hidden convention, representation-specific grading or instruction/test asymmetry.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/planner/plan_edition.py",
+      "environment/app/editions/mon.json",
+      "environment/app/editions/wed.json",
+      "environment/app/editions/fri.json",
+      "environment/app/editions/sat.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_layout.py",
+      "tests/targets.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Byte-identity via packet-manifest.json hashes: environment/app/tools/check_layout.py == tests/check_layout.py (3b155924...), environment/app/editions/targets.json == tests/targets.json (c8a4f2ba...), and each environment/app/editions/<ed>.json == tests/editions/<ed>.json. I read the tests copies of the checker and targets and the environment copies of the editions directly. The copies I did not open are covered by the identical hashes.",
+    "Compared each rule in makeup-rules.md:26-41 with check_layout.py:84-136: bounds and overlap (87-99), resting across the full width (102-108), page-1 strip and per-page share with integer division (110-117), competitor groups by spread where page 1 is alone and pages 2k/2k+1 map to k (119-132), booked ads placed (134-136).",
+    "Compared the cost definition in makeup-rules.md:43-55 with check_layout.py:138-152: left-out rate, per-ad floor division for wrong section and left-hand, and both penalties can apply to one ad.",
+    "Compared the file-format and JSON limits in makeup-rules.md:57-72 with load_layout/evaluate in check_layout.py:17-87: 2,000,000-byte cap, UTF-8 without BOM, NaN/Infinity rejected by parse_constant, 4300-digit cap applied through parse_int/parse_float, duplicate names rejected, depth 64 with the top level counted as 1, type(...) is int so floats, strings and booleans are rejected, unknown ids rejected, other keys ignored.",
+    "Compared the instruction's output paths and pass condition (instruction.md:1) with test_outputs.py:19-41: /app/layouts/<edition>.json; valid under the rules and cost <= target from targets.json. The targets are candidate-visible and identical.",
+    "Checked that every ad's section in all four editions is a key of that edition's sections map, so checker lookups cannot fail on a missing section. Checked that page counts (16/20/24/32) are even, which is consistent with the stated rule that an even last page faces nothing.",
+    "Noted non-booked ads that can never be placed (for example wed AD032 and sat AD018/AD043: 6x42 = 252 cells > 151 page limit). The contract prices them consistently as left-out rate, so this is not a contradiction.",
+    "Checked that the planner behaviour described in instruction.md:1 matches plan_edition.py:25-64. It is descriptive only and not graded.",
+    "Checked environment claims (Python 3.13, stdlib only, no network) against environment/Dockerfile:1 and task.toml:23-25."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Every grading rule traces to a sentence or authoritative candidate-visible artifact",
+      "status": "checked",
+      "reason": "instruction.md names makeup-rules.md as the rules and the targets file as the bound. makeup-rules.md:4 names tools/check_layout.py as the rules it applies. The verifier uses a byte-identical checker and identical data. Every assertion in test_outputs.py maps to a documented rule.",
+      "evidence": ["instruction.md:1", "environment/app/docs/makeup-rules.md:3-4", "tests/test_outputs.py:29-41", "packet-manifest.json:10-26"],
+      "finding_ids": []
+    },
+    {
+      "category": "Permitted input domain and needed boundaries",
+      "status": "checked",
+      "reason": "The inputs are four fixed editions. Page, column and row bounds, page-1 strip, share limit with floor division, resting at the foot versus on ads, spread pairing for page 1 and an even last page, and the per-ad floor division in cost are all stated explicitly and match the checker.",
+      "evidence": ["environment/app/docs/makeup-rules.md:8-13", "environment/app/docs/makeup-rules.md:32-41", "environment/app/docs/makeup-rules.md:53", "tests/check_layout.py:91-132"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rendered instruction, declared artifacts and verifier output paths agree; no broken template text or sentinels",
+      "status": "checked",
+      "reason": "The instruction path /app/layouts/<edition>.json, task.toml artifacts [/app/layouts/] and the verifier default LAYOUTS=/app/layouts with name + '.json' all agree. The instruction contains no template debris.",
+      "evidence": ["instruction.md:1-3", "task.toml:1", "tests/test_outputs.py:19", "tests/test_outputs.py:30"],
+      "finding_ids": []
+    },
+    {
+      "category": "Examples support the stated rules",
+      "status": "checked",
+      "reason": "The one format example (makeup-rules.md:59) matches the checker's expected shape. README usage lines match the planner and checker CLIs.",
+      "evidence": ["environment/app/docs/makeup-rules.md:59", "environment/app/README.md:9-10", "tests/check_layout.py:155-168"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contradictions or conflicting sources of truth",
+      "status": "checked",
+      "reason": "There is one rules document, one checker and one targets file, and the candidate-visible and verifier copies are identical. The planner is described as flawed, not as authoritative. No conflicts found.",
+      "evidence": ["packet-manifest.json:10-26", "environment/app/README.md:3-7"],
+      "finding_ids": []
+    },
+    {
+      "category": "Impossible requirements / achievability",
+      "status": "checked",
+      "reason": "Nothing in the rules makes the targets infeasible on its face. Booked ads have sizes within the page limits, and the shipped planner already yields valid layouts (task.toml:15). Whether the exact targets are reachable within the agent budget is a difficulty question, and reference correctness belongs to another axis because this packet has no solution.",
+      "evidence": ["task.toml:15", "task.toml:24", "environment/app/planner/plan_edition.py:63-64"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden arbitrary conventions / representation-specific grading",
+      "status": "checked",
+      "reason": "Grading parses JSON and compares an integer cost. Key order, whitespace and extra keys are free, as documented. The integer-type requirement for page/column/row is stated explicitly (makeup-rules.md:62-63). Placement is free within the rules; there is no hidden tie-break or canonical layout.",
+      "evidence": ["environment/app/docs/makeup-rules.md:61-65", "tests/check_layout.py:78-100", "tests/test_outputs.py:39-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction/test asymmetry",
+      "status": "checked",
+      "reason": "The tests check exactly validity plus cost <= target for the four named editions, which is exactly what the instruction asks. No extra assertions and no untested stated obligations.",
+      "evidence": ["instruction.md:1", "tests/test_outputs.py:44-73"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["competitor-group spread exclusion", "page 1 stands alone / even last page faces nothing"],
+      "case_or_path": "The spread function (0 for page 1, else p//2) in the checker, compared with doc lines 11-13 and rule 4, for the last page 16/20/24/32 of each edition.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:11-13", "environment/app/docs/makeup-rules.md:39-40", "tests/check_layout.py:119-132"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["front-page strip", "resting rule"],
+      "case_or_path": "A page-1 ad in rows 36-41 must rest on the foot or on ads. Both the cell cap and the row floor are enforced and both are documented.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:33-38", "tests/check_layout.py:102-117"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["wrong-section penalty", "left-hand penalty"],
+      "case_or_path": "A right_hand ad with a section, placed on an even page outside its section. Both floor-divided penalties add up, as documented at makeup-rules.md:54.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:47-55", "tests/check_layout.py:144-151"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["booked ads must be placed", "unknown ids / whole-number fields"],
+      "case_or_path": "A layout omitting a booked ad, or giving page as 3.0 or \"3\", is rejected in both the visible and the verifier checker (identical bytes).",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:41", "environment/app/docs/makeup-rules.md:62-64", "tests/check_layout.py:85-88", "tests/check_layout.py:134-136"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["JSON file limits (digits, depth, duplicates, BOM)", "other keys ignored"],
+      "case_or_path": "Extra top-level or placement keys are ignored, but duplicate names or depth > 64 in them are still rejected, which matches the doc wording that applies these limits to the whole file.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:64-72", "tests/check_layout.py:40-73"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

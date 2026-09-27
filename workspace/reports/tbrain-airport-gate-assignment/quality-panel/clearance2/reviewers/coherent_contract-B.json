@@ -1,0 +1,141 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-B",
+  "snapshot_sha256": "ec8842ae5638641cfcd13d969c7fe78de9cd771f41feffe107ba18ae6ad8ee8d",
+  "severity": "None",
+  "summary": "The contract is coherent and fully candidate-visible. The verifier grades each plan with a byte-identical copy of the shipped /app/tools/check_plan.py (the manifest hashes match) and with day files whose roster SHA-256 values equal the shipped /app/days/*.json hashes. It applies the documented pass rule cost <= target from targets.json, which is also identical to the shipped copy. Output paths, file format, validity rules, cost formula and parse limits in stand-rules.md agree with the checker. No hidden rule, tie-break, representation constraint or contradiction was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/tools/check_plan.py",
+      "environment/app/planner/plan_day.py",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json",
+      "environment/app/days/day-2.json",
+      "environment/app/days/day-3.json",
+      "environment/app/days/day-4.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/targets.json",
+      "tests/days/roster.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Compared packet-manifest hashes: environment/app/tools/check_plan.py and tests/check_plan.py are identical (603464e7...). environment/app/days/targets.json and tests/targets.json are identical (b97e3aa0...).",
+    "Compared each tests/days/roster.json sha256 with the manifest hash of environment/app/days/day-N.json. All four match, and tests/test_outputs.py:36 asserts that the decompressed verifier copy has this hash, so the verifier grades exactly the candidate-visible days. The .json.gz files are binary and were not decompressed. Their equivalence rests on that hash assertion.",
+    "Mapped the instruction's output path /app/plans/<day>.json (instruction.md:1) to the verifier's PLANS default /app/plans plus name.json (tests/test_outputs.py:21,44). They agree for day-1 through day-4.",
+    "Mapped the pass rule 'costs no more than the day's target' (instruction.md:1) to cost <= TARGETS[name] (tests/test_outputs.py:55).",
+    "Traced each stand-rules.md validity rule to check_plan.py. Coverage (placed exactly once, known stand, string turn ids) maps to lines 83-96. Size and international rules map to lines 103-106. The buffer rule maps to lines 107-110. Wingtip rules map to lines 112-118.",
+    "Proved statically that the consecutive-after-sort buffer check matches the pairwise rule 3. Sorting by arrive means d1+b<=a2<=a3, so no non-consecutive pair can conflict. With depart >= arrive, equal arrivals are always rejected, as the rule requires.",
+    "Traced the cost formula in stand-rules.md:48-59 (remote bus charge per turn, walk_metres list-index lookup with a nonzero diagonal, no other charges) to check_plan.py:120-131.",
+    "Traced the file-format limits in stand-rules.md:61-74 to check_plan.py:17-73: the byte cap, digit cap, BOM/NaN/Infinity rejection, duplicate-name rejection, depth 64 counting the top level as 1, ignored extra top-level keys, and omitted or empty stands allowed.",
+    "Ran a regex scan over all four day files for decimal literals and found none, so the documented claim 'Costs are whole numbers' holds for the integer data. Every day has buffer_minutes 15 and bus_cost_per_passenger 300.",
+    "Sampled the structure of day-1 and day-4 (stands list with R stands last, walk_metres matrix with a nonzero diagonal of 40, wingtip_pairs, turns, transfers). It matches the field definitions in stand-rules.md:8-29.",
+    "Checked the instruction's environment claims (no network, nothing installable, Python 3.13 stdlib) against environment/Dockerfile and task.toml [agent] network_mode no-network.",
+    "Checked the README usage lines against the actual tool signatures (DAY.json PLAN.json)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Every grading rule has a candidate-visible authoritative source",
+      "status": "checked",
+      "reason": "The verifier applies only load_plan/evaluate from a byte-identical copy of the shipped checker, plus cost <= target from an identical copy of the targets. stand-rules.md declares that it states the rules the checker applies, and the instruction points to both files. No verifier-only rule exists.",
+      "evidence": ["instruction.md:1-3", "environment/app/docs/stand-rules.md:3-4", "tests/test_outputs.py:19-55", "packet-manifest.json:17,21,14,27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Input domain and boundaries the task needs (buffer equality, wingtip strictness, size/international, file limits)",
+      "status": "checked",
+      "reason": "Buffer equality is allowed ('no later than', checked as d1+buffer > a2). Wingtip overlap is strict with no buffer. Size 'at most' and the international-only restriction are explicit. The byte, digit and depth limits are stated with inclusive semantics that match the code.",
+      "evidence": ["environment/app/docs/stand-rules.md:35-44", "environment/app/docs/stand-rules.md:69-74", "environment/app/tools/check_plan.py:61-62,103-118"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rendered instruction, declared artifacts and verifier output paths agree",
+      "status": "checked",
+      "reason": "The instruction names /app/plans/<day>.json for four days. task.toml declares artifacts /app/plans/. The verifier reads /app/plans/day-N.json. There is no broken template text or sentinel.",
+      "evidence": ["instruction.md:1", "task.toml:1", "tests/test_outputs.py:21,44"],
+      "finding_ids": []
+    },
+    {
+      "category": "Examples and supporting artifacts support the stated rules",
+      "status": "checked",
+      "reason": "The format example in stand-rules.md matches the checker's expected shape. The README commands match the tool usage. The shipped planner implements the same buffer and wingtip semantics. Its output is not graded.",
+      "evidence": ["environment/app/docs/stand-rules.md:63", "environment/app/README.md:9-10", "environment/app/planner/plan_day.py:14-26"],
+      "finding_ids": []
+    },
+    {
+      "category": "Conflicting sources of truth (candidate days/targets vs verifier copies)",
+      "status": "checked",
+      "reason": "The verifier's days are hash-bound to the candidate-visible days through the roster. The targets and the checker are byte-identical.",
+      "evidence": ["tests/days/roster.json:6,12,18,24", "packet-manifest.json:10-13", "tests/test_outputs.py:30-40"],
+      "finding_ids": []
+    },
+    {
+      "category": "Representation-specific grading",
+      "status": "checked",
+      "reason": "The plan is parsed as JSON. Turn order within a stand list is explicitly free ('in any order'), stands may be omitted, and extra top-level keys are ignored. No byte-level comparison is made.",
+      "evidence": ["environment/app/docs/stand-rules.md:65-67", "environment/app/tools/check_plan.py:78-96"],
+      "finding_ids": []
+    },
+    {
+      "category": "Achievability / impossible requirements",
+      "status": "checked",
+      "reason": "The instruction states each target is the cost of an existing best-found plan. Standard-library Python is enough to write valid plans, and the checker is available locally. No requirement contradicts another. How hard the targets are to reach is a difficulty question, not a contract defect.",
+      "evidence": ["instruction.md:1-3", "task.toml:24-25"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["buffer rule 3", "wingtip rule 4"],
+      "case_or_path": "Two size-3 turns on the neighbouring stands of a wingtip pair, where one departs exactly as the other arrives. The wingtip rule uses strict overlap with no buffer, so they do not clash. The per-stand buffer applies only within one stand. Docs and checker agree.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:38-44", "environment/app/tools/check_plan.py:107-118"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["remote bus charge", "walk_metres charge"],
+      "case_or_path": "A transfer between two turns on remote stands pays both turns' bus charges plus the walk entry. The docs state this explicitly, and the checker sums both independently.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:55-58", "environment/app/tools/check_plan.py:122-130"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["walk_metres indexed by stands-list position", "stand 'position' field"],
+      "case_or_path": "A candidate could confuse the pier 'position' field with the list index. The docs name the list index explicitly ('position i of the stands list'), and the checker uses enumerate order, so the rule is disclosed.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:25-26", "environment/app/tools/check_plan.py:121"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["stand may be omitted", "wingtip check"],
+      "case_or_path": "When a wingtip-pair stand is omitted from the plan, the checker uses .get(a, []), so no error occurs. This is consistent with the rule that a stand may be left out.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:66-67", "environment/app/tools/check_plan.py:113-114"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["exactly once placement", "unknown stand/turn rejection"],
+      "case_or_path": "A duplicate turn across two stands, a non-string turn id, or an unknown stand id is rejected. Each follows from 'every turn on exactly one stand' and 'ids exactly as in the day file'.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:33,64-66", "environment/app/tools/check_plan.py:83-96"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

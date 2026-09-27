@@ -1,0 +1,176 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-A",
+  "snapshot_sha256": "04ca85f6b27a0d4ff01b19012b7a5d9abd0fb6fa40599b1ce9f556c577aebf57",
+  "severity": "Unsure",
+  "summary": "No reachable path found for candidate code to read, replace, predict or impersonate the expected reports or the reward. Candidate code runs only as uid 65534 with no_new_privs and an empty environment, from a random cwd, on a neutrally named batch file. /tests and /logs/verifier are root 0700, the reward is written by root test.sh from the pytest exit code, and pytest runs with -I from a fresh root-owned directory. The only gap is two gzip goldens (generated.jsonl.gz, capacity.jsonl.gz) that the review tools could not decompress. Their batch payloads could therefore not be checked for outcome-bearing run ids. The structural argument below makes a leak there very unlikely, and no defect is suspected.",
+  "input_completeness": {
+    "status": "incomplete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/tools/metalquant_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/spike_recovery.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/report_order.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/expected/generated.jsonl.gz (binary gzip; the read tool cannot decompress it; contents not inspected)",
+      "tests/expected/capacity.jsonl.gz (binary gzip; the read tool cannot decompress it; contents not inspected)",
+      "tests/shipped/tools/metalquant_run.py not opened directly; its manifest SHA-256 (2b8b03b2...) is identical to environment/app/tools/metalquant_run.py, which was read in full"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced the candidate-visible build. environment/Dockerfile:5-6 copies only app/ into /app, and environment/.dockerignore:11-12 excludes solution/ and tests/, so neither the goldens nor the reference is in the agent image.",
+    "Traced the verifier image. tests/Dockerfile:5-12 copies tests to /tests (chmod 700 root), installs a root-owned 0644 driver copy at /opt/driver/tools and symlinks /opt/driver/src to /app/src.",
+    "Traced test.sh ordering. tests/test.sh:15 seals /tests and /logs/verifier to 700 before any candidate code runs. tests/test.sh:18-20 runs pytest as root with python3 -I from a fresh mktemp directory. tests/test.sh:21-26 derives the reward only from the pytest exit code.",
+    "Traced candidate execution. tests/test_outputs.py:62-83 runs setpriv with --reuid/--regid 65534, --clear-groups and --no-new-privs, plus env -i with a fixed minimal environment, in a new session with a group kill. tests/test_outputs.py:86-100 uses a random root-owned 0755 stage dir, a 0777 random work cwd, the neutral file name batch.json, and python3 -I -S on the verifier-owned driver.",
+    "Confirmed that only row['batch'] is written for candidate code (tests/test_outputs.py:131, 92-94). The expected report stays in the root pytest process and is compared against parsed candidate stdout (tests/test_outputs.py:100, 109-126).",
+    "Checked all fourteen non-gzip families: every batch payload holds only SOP input fields (analytes, standards, runs), with outcome-neutral run ids (W-*, MB-*, CCV-*, K-*, Z-*, A-MB and so on) and no expected values.",
+    "Checked the driver. environment/app/tools/metalquant_run.py:7 prepends ../src resolved from the verifier copy's own path, i.e. /opt/driver/src -> /app/src. The candidate controls only its own package code, which runs unprivileged.",
+    "Checked privileged reads of candidate paths. The only root read of a candidate path is DELIVERED_DRIVER.read_bytes() (tests/test_outputs.py:205-206). A symlink there could at most reproduce the shipped bytes, which equals leaving the file unchanged, and grants no answer access.",
+    "Checked the chmod -R a+rX /app at tests/test.sh:16. GNU chmod -R does not follow symlinks met during traversal, and it grants only read and traverse. The guard probes at tests/test_outputs.py:209-220 would turn any accidental exposure of /tests/expected/ROSTER or /logs/verifier into a reward-0 failure.",
+    "Checked lingering nobody-uid processes that escape killpg. They cannot read root-0700 /tests or /logs/verifier, cannot signal or trace root pytest, and cannot write into root-created stage dirs. Interfering with later nobody-uid runs or probes can only cause failures, not supply hidden answers."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Keep expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "The goldens live only in the verifier image under /tests, which is root 0700, and candidate code executes as uid 65534 with no_new_privs. No solution is present in either image, and tests/ and solution/ are excluded from the agent build context.",
+      "evidence": ["tests/Dockerfile:5-12", "tests/test.sh:15", "tests/test_outputs.py:62-71", "environment/.dockerignore:11-12", "environment/Dockerfile:5-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths (symlink/path traversal)",
+      "status": "checked",
+      "reason": "The root process reads only /app/tools/metalquant_run.py from candidate space, for a byte-equality check against the shipped copy. A redirect cannot earn anything beyond what leaving the file unchanged earns. chmod -R a+rX /app does not follow traversal symlinks, and the guard tests fail the reward if /tests or /logs become readable.",
+      "evidence": ["tests/test_outputs.py:27", "tests/test_outputs.py:205-206", "tests/test.sh:16", "tests/test_outputs.py:209-220"],
+      "finding_ids": []
+    },
+    {
+      "category": "Compute expected values independently of the submitted artifact",
+      "status": "checked",
+      "reason": "Expected reports are precomputed, SHA-256-pinned in ROSTER, and loaded by root. Candidate output is never used to derive the expectation.",
+      "evidence": ["tests/test_outputs.py:39-59", "tests/expected/ROSTER:1-17", "tests/test_outputs.py:129-131"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes via filenames, arguments, working directories, environment variables",
+      "status": "unresolved",
+      "reason": "The argv path, cwd and environment are neutral (random mkdtemp, batch.json, env -i with fixed values). The run ids in the fourteen readable families are outcome-neutral. The run ids inside the two gzip families could not be inspected.",
+      "evidence": ["tests/test_outputs.py:28", "tests/test_outputs.py:86-98", "tests/expected/report_order.jsonl:1", "tests/expected/spike_nondetects.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading results in a trusted channel; stdout or early exit cannot impersonate verification",
+      "status": "checked",
+      "reason": "Candidate stdout is only parsed as JSON data and compared field by field. Its exit code must be 0 but does not decide the reward. The reward is written by root test.sh from the pytest return code into root-0700 /logs/verifier.",
+      "evidence": ["tests/test_outputs.py:98-100", "tests/test_outputs.py:109-126", "tests/test.sh:4-5", "tests/test.sh:20-26"],
+      "finding_ids": []
+    },
+    {
+      "category": "Test the access boundary from the same execution context as the candidate program",
+      "status": "checked",
+      "reason": "The probes run through the same run_unprivileged path (setpriv plus env -i) as the driver and assert that /tests/expected/ROSTER and /logs/verifier are unreadable.",
+      "evidence": ["tests/test_outputs.py:209-220"],
+      "finding_ids": []
+    },
+    {
+      "category": "Separate verifier container / privilege-drop and setuid preconditions (C-3)",
+      "status": "checked",
+      "reason": "--no-new-privs is set and the verifier installs no setuid candidate binary. Candidate code is Python source run by the system interpreter.",
+      "evidence": ["tests/test_outputs.py:65"],
+      "finding_ids": []
+    },
+    {
+      "category": "Persisted or partially reset state trusted as a baseline (C-7) and candidate artifacts replaced after inspection (C-9)",
+      "status": "checked",
+      "reason": "Each batch gets fresh stage and work dirs. No candidate-writable state is reused as an expected baseline, and the driver executed is the root-owned 0644 copy in /opt/driver, not the candidate's /app/tools copy.",
+      "evidence": ["tests/test_outputs.py:86-100", "tests/Dockerfile:6-11"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reference or oracle colocated with the candidate execution path (C-8)",
+      "status": "checked",
+      "reason": "No reference implementation exists in either image. /opt/driver contains only the driver and a symlink to the candidate's own /app/src.",
+      "evidence": ["tests/Dockerfile:6-11", "environment/Dockerfile:5-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Pytest or interpreter hijack of the root grading process",
+      "status": "checked",
+      "reason": "pytest runs as root with python3 -I (no cwd or user site on sys.path, no PYTHON* variables) from a fresh root-owned mktemp directory, on /tests/test_outputs.py. /app is not an ancestor of the test path, so no candidate conftest or ini file is discovered.",
+      "evidence": ["tests/test.sh:18-20"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["the driver must stay byte-identical (instruction.md:3)", "the verifier executes its own driver copy against /app/src"],
+      "case_or_path": "A candidate replaces /app/tools/metalquant_run.py or makes it a symlink. The verifier executes /opt/driver/tools/metalquant_run.py (root-owned), so the candidate driver is never executed. The root byte-compare can at most read an equal file.",
+      "status": "checked",
+      "evidence": ["instruction.md:3", "tests/test_outputs.py:25-27", "tests/test_outputs.py:98", "tests/test_outputs.py:205-206", "tests/Dockerfile:6-11"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["candidate code runs unprivileged", "chmod -R a+rX /app runs as root before the tests"],
+      "case_or_path": "A candidate plants symlinks under /app, hoping root chmod will expose /tests. GNU chmod -R skips traversal symlinks, and /tests is sealed first; any exposure would also be caught by the ROSTER and logs probes, giving reward 0.",
+      "status": "checked",
+      "evidence": ["tests/test.sh:15-16", "tests/test_outputs.py:215-220"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["the process group is killed after each run", "later batches and probes run as the same uid 65534"],
+      "case_or_path": "A daemon escapes via setsid and persists as nobody. It can only interfere with later nobody-uid processes (causing failures), and it cannot read /tests, /logs/verifier or root process memory, so it gains no answers.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:62-83", "tests/test.sh:15"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["neutral candidate inputs", "the families are graded by comparing complete reports"],
+      "case_or_path": "A label-from-id shortcut. The ids in all fourteen readable families carry no outcome, so passing them needs real SOP computation. The gzip families remain uninspected.",
+      "status": "unresolved",
+      "evidence": ["tests/test_outputs.py:129-131", "tests/expected/flag_limits.jsonl:1-3", "tests/expected/ccv_unbracketed.jsonl:1-4"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "The batch payloads inside tests/expected/generated.jsonl.gz and tests/expected/capacity.jsonl.gz were not inspected. Their run ids or other input fields could in principle encode an expected flag or outcome. No such leak is suspected: every readable family uses neutral ids, and exploiting such a leak would require the candidate to know a hidden naming scheme it cannot read from root-0700 /tests.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "Decompress both gzip files and confirm that each row['batch'] holds only SOP section-1 input fields with outcome-neutral run ids and analyte names."
+    }
+  ],
+  "uncertainty": "Severity is Unsure only because two binary gzip goldens could not be decompressed with the available read-only tools. Every inspected execution and ownership path protects the ground truth and the reward channel, and no defect was found."
+}

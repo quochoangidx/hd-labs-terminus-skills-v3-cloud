@@ -1,0 +1,94 @@
+Binary files /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/__pycache__/__init__.cpython-313.pyc and /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/__pycache__/__init__.cpython-313.pyc differ
+Binary files /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/__pycache__/adjudicator.cpython-313.pyc and /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/__pycache__/adjudicator.cpython-313.pyc differ
+Binary files /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/__pycache__/ledger.cpython-313.pyc and /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/__pycache__/ledger.cpython-313.pyc differ
+Binary files /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/__pycache__/money.cpython-313.pyc and /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/__pycache__/money.cpython-313.pyc differ
+Binary files /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/__pycache__/plan.cpython-313.pyc and /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/__pycache__/plan.cpython-313.pyc differ
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/adjudicator.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/adjudicator.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/adjudicator.py	2026-09-24 10:29:02
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/adjudicator.py	2026-09-24 10:38:01
+@@ -38,30 +38,43 @@
+         self.ledger = Ledger(plan)
+ 
+     def deductible_left(self, member: str) -> int:
+-        return self.plan.deductible - self.ledger.deductible_paid(member)
++        plan = self.plan
++        left = plan.deductible - self.ledger.deductible_paid(member)
++        if plan.family_deductible > 0:
++            left = min(left, plan.family_deductible - self.ledger.family_deductible_paid())
++        return left
+ 
+     def adjudicate(self, line: Line) -> Result:
+         plan = self.plan
++        if line.kind == "preventive":
++            return Result(line.allowed, 0, 0, 0)
++
+         deductible = copay = coinsurance = 0
+         if line.kind == "office":
+             copay = plan.office_copay
+-            coinsurance = share(line.allowed - copay, plan.coinsurance)
++            if 0 < line.allowed < copay:
++                copay = line.allowed
+         else:
+             deductible = min(line.allowed, self.deductible_left(line.member))
+-            coinsurance = share(line.allowed, plan.coinsurance)
+-        charged_deductible = deductible
++            coinsurance = share(line.allowed - deductible, plan.coinsurance)
+ 
++        rooms = []
+         if plan.oop_max > 0:
+-            room = plan.oop_max - self.ledger.oop_paid(line.member)
++            rooms.append(plan.oop_max - self.ledger.oop_paid(line.member))
++        if plan.family_oop_max > 0:
++            rooms.append(plan.family_oop_max - self.ledger.family_oop_paid())
++        if rooms:
++            room = min(rooms)
+             excess = deductible + copay + coinsurance - room
+             if excess > 0:
+-                take = min(deductible, excess)
+-                deductible -= take
++                take = min(max(coinsurance, 0), excess)
++                coinsurance -= take
+                 excess -= take
+-                take = min(copay, excess)
++                take = min(max(copay, 0), excess)
+                 copay -= take
+                 excess -= take
+-                coinsurance -= min(coinsurance, excess)
++                take = min(max(deductible, 0), excess)
++                deductible -= take
+ 
+-        self.ledger.record(line.member, charged_deductible, copay, coinsurance)
++        self.ledger.record(line.member, deductible, copay, coinsurance)
+         return Result(line.allowed, deductible, copay, coinsurance)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/ledger.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/ledger.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/ledger.py	2026-09-24 10:29:02
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/ledger.py	2026-09-24 10:38:01
+@@ -32,4 +32,7 @@
+         self._deductible[member] += deductible
+         self._family_deductible += deductible
+         self._oop[member] += deductible + copay + coinsurance
+-        self._family_oop += deductible + coinsurance
++        if self.plan.family_oop_max > 0:
++            self._family_oop += deductible + copay + coinsurance
++        else:
++            self._family_oop += deductible + coinsurance
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/money.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/money.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/baseline/environment/app/src/costshare/money.py	2026-09-24 10:29:02
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-health-plan-cost-sharing/run_1/solve/environment/app/src/costshare/money.py	2026-09-24 10:38:01
+@@ -4,5 +4,15 @@
+ 
+ 
+ def share(amount: int, rate: int) -> int:
+-    """The share of ``amount`` cents at ``rate`` basis points, in whole cents."""
++    """The share of ``amount`` cents at ``rate`` basis points, in whole cents.
++
++    For a rate from 0 to 10000 the result is rounded to the nearest cent, with
++    an exact half going to the even cent.
++    """
++    if 0 <= rate <= BASIS:
++        quotient, remainder = divmod(amount * rate, BASIS)
++        twice = 2 * remainder
++        if twice > BASIS or (twice == BASIS and quotient % 2 == 1):
++            quotient += 1
++        return quotient
+     return (amount * rate + BASIS // 2) // BASIS

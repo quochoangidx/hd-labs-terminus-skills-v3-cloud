@@ -1,0 +1,52 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-2",
+  "snapshot_sha256": "c8b4d812db61634a39b8453e8d12635a6a7d6769693675fab88f108c56b795f1",
+  "severity": "None",
+  "findings": [],
+  "input_completeness": {
+    "complete": true,
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/dispatch-rules.md",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/Dockerfile",
+      "tests/targets.json",
+      "tests/orders/*.json (header, depot, fleet blocks, and a whole-corpus scan for non-integer numerals)",
+      "solution/solve.sh"
+    ],
+    "files_not_read_in_full": [
+      "solution/search/sisr.py: not executed by solve.sh or the verifier (solve.sh:24-28 only copies static plans), so its seeding cannot affect grading",
+      "environment/app/planner/plan_morning.py: candidate-side starting code, never run by the verifier (test_outputs.py:1-7, 17-32)",
+      "solution/plans/*.json: static data; their byte content is fixed by the manifest hashes"
+    ],
+    "notes": "Manifest hashes show tests/check_plan.py == environment/app/tools/check_plan.py, tests/orders/*.json == environment/app/orders/*.json, and tests/targets.json == environment/app/orders/targets.json (packet-manifest.json:12-19 vs 29-34).",
+    "status": "complete"
+  },
+  "coverage_sweep": {
+    "random_seeds_and_generated_cases": "No randomness in grading. The verifier reads four fixed plan files and evaluates them against fixed, sealed orders and targets (tests/test_outputs.py:19-48). The only random value is mktemp's RUN_DIR (tests/test.sh:13-14), used only as a cwd and never compared or read; pattern D-3, None.",
+    "clock_and_time": "No wall-clock use. All times are integer seconds taken from the orders (tests/check_plan.py:70-95; tests/orders/harbour-lanes.json:6-7).",
+    "numeric_stability": "All arithmetic is integer: distance uses math.isqrt with an exact ceiling (tests/check_plan.py:40-43); a scan of every tests/orders/*.json for decimal or exponent numerals found none; fleet pace/fixed/per_unit/shift/range are integers (tests/orders/old-town.json:1116-1140); depart must be a JSON int (tests/check_plan.py:70). Cost <= target is an exact integer comparison (tests/test_outputs.py:48) with targets equal to the reference costs (tests/targets.json:1-6, solution/solve.sh:18-22). No float tolerance edge.",
+    "ordering": "Routes and stops are processed in plan order, which the contract defines as visiting order (dispatch-rules.md:33-35, 58-60). Set/dict iteration affects only error-message text (check_plan.py:21, 101-106), not pass/fail.",
+    "dependencies_and_network": "Both images are pinned by digest (environment/Dockerfile:1, tests/Dockerfile:1); pytest==9.1.1 and pytest-json-ctrf==0.5.2 are pinned (tests/Dockerfile:3). The verifier runs with no network (task.toml:18-21). -p no:randomly and -p no:cacheprovider (tests/test.sh:15) remove test-order and cache effects.",
+    "timing_and_readiness": "No services, sleeps or timeouts in the grading path. Evaluation is a linear pass over at most a few hundred customers per morning, far below verifier timeout_sec=1800 (task.toml:19).",
+    "environment_isolation": "environment_mode = separate (task.toml:20); the verifier uses only its own copies of rules/orders/targets and runs no candidate code (test_outputs.py:1-7, 17-26), so edits to /app/tools or /app/orders cannot vary the grade between runs.",
+    "reference_path": "solve.sh copies fixed plans and runs the checker (solution/solve.sh:24-28); no search or seed runs at oracle time, so oracle reward is reproducible.",
+    "reward_channel": "reward.txt is initialized to 0 and set to 1 only on pytest rc==0 (tests/test.sh:4-5, 16-21); deterministic mapping."
+  },
+  "interaction_sweep": "Checked environment-variable override DISPATCH_PLANS (tests/test_outputs.py:19): unset by test.sh and the verifier image, so the default /app/plans path is used on every run. Checked the WORKDIR guard (tests/test.sh:7-11) against tests/Dockerfile:6 (WORKDIR /tests): always passes. Checked strict JSON loading (check_plan.py:18-37): repeated keys, NaN/Infinity and malformed input fail the same way every run. No interaction between the mutable candidate environment and grading was found.",
+  "non_blocking_observations": [
+    "Transitive pytest dependencies (pluggy, iniconfig, packaging) are not pinned in tests/Dockerfile:3. They resolve once at image build and do not plausibly change the outcome of these eight pure-data assertions, so this is not reported as a finding."
+  ],
+  "unresolved_checks": [],
+  "reach_and_flip_summary": "No uncontrolled input (seed, clock, remote data, filesystem order, timing) reaches a graded decision. A fixed submission gets the same eight verdicts on every clean run: the reference passes all eight and a fixed infeasible or over-target plan fails the same tests each time."
+}

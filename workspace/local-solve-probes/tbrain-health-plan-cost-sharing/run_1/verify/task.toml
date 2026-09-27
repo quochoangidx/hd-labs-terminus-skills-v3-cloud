@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-health-plan-cost-sharing"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Operations"
+subcategory = "Claims"
+languages = ["python"]
+tags = ["claims-adjudication", "deductible-accumulators", "out-of-pocket-maximum", "cost-sharing"]
+expert_time_estimate_hours = 4
+difficulty_explanation = "The package departs from its benefit design note in about ten places spread across rounding, line pricing, embedded family deductibles, the order an out-of-pocket cut removes cost-share parts, and what each accumulator records. Finding those is ordinary claims-system work. The hard part is knowing where each repair stops. Several rules are written for a stated range of one setting while the departure concerns another quantity (a rounding rule scoped by the coinsurance rate, a family total defined only for plans with a family maximum), several rules that look like they need a guard are universal (a copay on a zero or negative allowed amount, an unclamped deductible remainder, a family cap on a plan with no member cap), and a cut interacts with what the deductible accumulator records. An experienced claims-platform engineer has to hold the benefit semantics, the accumulator state across a family, and the exact scope of every sentence at once; the natural fix of each departure is right on the note's domain and wrong just outside it."
+solution_explanation = "The reference patch fixes each departure where the note speaks and leaves every expression the note does not reach as it ships: half-to-even rounding only for rates from 0 to 10000, preventive lines free and unrecorded, the office copay capped only for a positive allowed amount below it, no coinsurance on office lines, the family remainder in deductible_left only for a positive family deductible with no clamp, coinsurance on the pre-cut remainder, independent member and family rooms for each positive maximum, a cut that takes coinsurance then copay then deductible and skips parts at or below zero, the post-cut deductible recorded, and the copay added to the family total only when a family maximum exists."
+verification_explanation = "A separate verifier image runs its own read-only driver as an unprivileged user against the delivered /app/src, one scripted job per test, and compares every Result field, every ledger total after every line and every deductible_left answer exactly. Expected values come from an independent model written from the note that never imports the package; where the note is silent the model mirrors the shipped expression and the same job is also run on a sealed shipped copy, which must agree. One named test per note rule, including direct share and Ledger.record calls and three long deterministic sessions over ordinary and unusual plans."
+relevant_experience = "Several years building and testing health-plan claims adjudication: deductible and out-of-pocket accumulators, embedded family limits, copay and coinsurance sequencing, and regression suites for benefit-configuration changes."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 5400
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

@@ -1,0 +1,375 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-gnu-grep-reimplementation",
+ "primary_outcome": "python3 /app/pygrep/grep.py produces GNU grep 3.8's stdout and exit status for every retained command line",
+ "obligations": [
+  {
+   "id": "REGEX",
+   "class": "core",
+   "contribution": "POSIX leftmost-longest BRE/ERE matching with GNU escapes, classes and back-references",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "Regular-expression matching is POSIX leftmost-longest"
+   },
+   "implementation_sites": [
+    "solution/pygrep/posixre.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream and exit status grep produces for a command line"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_only_matching",
+     "test_outputs.py::test_patterns"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (empty patterns, empty input, last line without newline)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "grep -Eo 'a|ab' on ab prints ab",
+   "wrong_but_plausible": "Python re leftmost-first alternation",
+   "selfdescription_phrase": "pattern syntax (3)"
+  },
+  {
+   "id": "SELECTION",
+   "class": "core",
+   "contribution": "pattern lists, -F/-E/-G, -i, -v, -w and -x line selection, leftmost-longest over all patterns",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "with several patterns, the match is the leftmost-longest over all of them"
+   },
+   "implementation_sites": [
+    "solution/pygrep/grep.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream and exit status grep produces for a command line"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_patterns",
+     "test_outputs.py::test_only_matching"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (empty patterns, empty input, last line without newline)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "grep -o -e a -e ab on ab prints ab",
+   "wrong_but_plausible": "the first pattern that matches wins",
+   "selfdescription_phrase": "matcher selection (2.1.1-2.1.2)"
+  },
+  {
+   "id": "OUTPUT",
+   "class": "core",
+   "contribution": "-c/-l/-L/-q/-m/-o/-b/-H/-h/--label/-n/-T/-Z output controls and their precedence",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "Where options compete, GNU grep 3.8 resolves them as follows"
+   },
+   "implementation_sites": [
+    "solution/pygrep/grep.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream and exit status grep produces for a command line"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_output_controls",
+     "test_outputs.py::test_only_matching"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (empty patterns, empty input, last line without newline)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "grep -m1 -c x on two x lines prints 1",
+   "wrong_but_plausible": "-m ignored",
+   "selfdescription_phrase": "output controls (2.1.3-2.1.4)"
+  },
+  {
+   "id": "CONTEXT",
+   "class": "core",
+   "contribution": "before/after context, group merging and separators, also across files",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "the context options"
+   },
+   "implementation_sites": [
+    "solution/pygrep/grep.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream and exit status grep produces for a command line"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_context"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (empty patterns, empty input, last line without newline)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "grep -A0 x on x,a,x prints x -- x",
+   "wrong_but_plausible": "no separator between non-adjacent groups",
+   "selfdescription_phrase": "context (2.1.5)"
+  },
+  {
+   "id": "BINARY",
+   "class": "core",
+   "contribution": "NUL-containing input: -a/-I/--binary-files and -z records",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "A file counts as binary when it contains a NUL byte anywhere"
+   },
+   "implementation_sites": [
+    "solution/pygrep/grep.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream and exit status grep produces for a command line"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_binary_input",
+     "test_outputs.py::test_null_data"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (empty patterns, empty input, last line without newline)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "grep -c x on 'ax\\0bx\\n' prints 2",
+   "wrong_but_plausible": "binary files printed as text",
+   "selfdescription_phrase": "binary files (2.1.7)"
+  },
+  {
+   "id": "FILES",
+   "class": "core",
+   "contribution": "several files, stdin, missing files and the exit status",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "A file that cannot be opened is skipped"
+   },
+   "implementation_sites": [
+    "solution/pygrep/grep.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream and exit status grep produces for a command line"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_files_and_status"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (empty patterns, empty input, last line without newline)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "grep x missing a exits 2 with a's lines printed",
+   "wrong_but_plausible": "a missing file does not change the status",
+   "selfdescription_phrase": "exit status (2.3)"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "REGEX",
+    "to": "SELECTION"
+   },
+   {
+    "from": "SELECTION",
+    "to": "OUTPUT"
+   },
+   {
+    "from": "SELECTION",
+    "to": "CONTEXT"
+   },
+   {
+    "from": "BINARY",
+    "to": "OUTPUT"
+   },
+   {
+    "from": "FILES",
+    "to": "OUTPUT"
+   },
+   {
+    "from": "OUTPUT",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "CONTEXT",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "BINARY",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "FILES",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "generated-command-lines",
+   "obligation_ids": [
+    "REGEX",
+    "SELECTION",
+    "OUTPUT",
+    "CONTEXT",
+    "FILES"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_mixed_1",
+    "test_outputs.py::test_mixed_2",
+    "test_outputs.py::test_mixed_3",
+    "test_outputs.py::test_mixed_4",
+    "test_outputs.py::test_mixed_5",
+    "test_outputs.py::test_mixed_6",
+    "test_outputs.py::test_mixed_7",
+    "test_outputs.py::test_mixed_8"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "binary-with-output-controls",
+   "obligation_ids": [
+    "BINARY",
+    "OUTPUT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_binary_input"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "behaves exactly like GNU grep 3.8"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Every check relies only on behaviour that the manual describes",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "with many command lines"
+  }
+ },
+ "determinism": {
+  "seeds": [],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "X-stdlib-no-programs",
+   "statement": "Use only the Python standard library and do not start other programs",
+   "enforced_by": [
+    "test_outputs.py::test_launcher_stops_delegation_and_foreign_code",
+    "test_outputs.py::test_delivered_package_is_standard_library_python"
+   ],
+   "enforcement_level": "both",
+   "allowed_exceptions_disclosed": true,
+   "how": "every graded run goes through tests/guard.py, which ends the run on a process start, on native code and on an import from outside the standard library and the delivered files; the launcher is checked against five probe programs, including a ctypes load of libc, and the delivered package is read for binaries, unparsable sources and foreign imports"
+  }
+ ],
+ "unclaimed_units_rationale": {},
+ "exact_output_requirements": [
+  {
+   "id": "BYTE-EXACT-STDOUT",
+   "domain_required": true,
+   "rationale": "a drop-in replacement for scripts that call grep and read its output and status",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "the same standard output, byte for byte"
+   }
+  }
+ ],
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "leftmost-first-regex",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/leftmost-first-regex.json"
+  },
+  {
+   "id": "first-pattern-wins",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SELECTION"
+   ],
+   "receipt": "wrong-paths/first-pattern-wins.json"
+  },
+  {
+   "id": "word-first-match-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SELECTION"
+   ],
+   "receipt": "wrong-paths/word-first-match-only.json"
+  },
+  {
+   "id": "max-count-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "OUTPUT"
+   ],
+   "receipt": "wrong-paths/max-count-ignored.json"
+  },
+  {
+   "id": "no-group-separator",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CONTEXT"
+   ],
+   "receipt": "wrong-paths/no-group-separator.json"
+  },
+  {
+   "id": "binary-prints-lines",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "BINARY"
+   ],
+   "receipt": "wrong-paths/binary-prints-lines.json"
+  },
+  {
+   "id": "null-data-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "BINARY"
+   ],
+   "receipt": "wrong-paths/null-data-ignored.json"
+  },
+  {
+   "id": "missing-file-not-error",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/missing-file-not-error.json"
+  },
+  {
+   "id": "delegate-to-system-grep",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/delegate-to-system-grep.json"
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "task_snapshot_sha256": "32119d26d22c55cebda66f4e52729ea87227b832cd405e2600dcd15ad4ab390d"
+}

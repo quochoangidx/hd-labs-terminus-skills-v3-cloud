@@ -1,0 +1,171 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/curve.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/curve.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/curve.py	2026-09-27 14:06:39
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/curve.py	2026-09-27 14:16:31
+@@ -2,21 +2,23 @@
+ 
+ import math
+ 
+-from .replicates import NO_CALL_CT, mean_ct
++from .plate import determined
++from .replicates import mean_ct
+ 
+ PERFECT_DOUBLING = 2.0
+ 
+ 
+ def curve_points(standards):
+-    """(log10 quantity, mean Ct) of each dilution level with two or more wells, lowest quantity first."""
++    """(log10 quantity, mean Ct) of each dilution level with two or more determined wells."""
+     levels = {}
+     for quantity, ct in standards:
+-        levels.setdefault(quantity, []).append(NO_CALL_CT if ct is None else ct)
+-    return [
+-        (math.log10(quantity), mean_ct(cts))
+-        for quantity, cts in sorted(levels.items())
+-        if len(cts) >= 2
+-    ]
++        levels.setdefault(quantity, []).append(ct)
++    points = []
++    for quantity, cts in sorted(levels.items()):
++        wells = determined(cts)
++        if len(wells) >= 2:
++            points.append((math.log10(quantity), mean_ct(wells)))
++    return points
+ 
+ 
+ def slope(points):
+@@ -30,8 +32,8 @@
+ 
+ 
+ def amplification_factor(standards):
+-    """Amplification per cycle of one gene's assay."""
++    """Amplification per cycle of one gene's assay, with no ceiling."""
+     points = curve_points(standards)
+     if len(points) < 2:
+         return PERFECT_DOUBLING
+-    return min(10 ** (-1.0 / slope(points)), PERFECT_DOUBLING)
++    return 10 ** (-1.0 / slope(points))
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/expression.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/expression.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/expression.py	2026-09-27 14:06:39
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/expression.py	2026-09-27 14:16:31
+@@ -16,23 +16,36 @@
+     return flags
+ 
+ 
++def relative_quantity(plate, factors, sample, gene):
++    """A^(Ccal - Cs) for one gene, raised to that gene's own amplification factor."""
++    delta = sample_ct(plate.replicates(plate.calibrator, gene)) - sample_ct(
++        plate.replicates(sample, gene)
++    )
++    return factors[gene] ** delta
++
++
++def normalisation_factor(plate, factors, sample):
++    """Geometric mean of the relative quantities of the reference genes in one sample."""
++    quantities = [
++        relative_quantity(plate, factors, sample, gene) for gene in plate.reference_genes
++    ]
++    product = 1.0
++    for quantity in quantities:
++        product *= quantity
++    return product ** (1.0 / len(quantities))
++
++
+ def fold_change(plate, factors, sample, target):
+     """Target quantity relative to the calibrator, over the reference genes' shift."""
+-    cal = plate.calibrator
+-    factor = factors[target]
+-    shifts = [
+-        sample_ct(plate.replicates(cal, gene)) - sample_ct(plate.replicates(sample, gene))
+-        for gene in plate.reference_genes
+-    ]
+-    shift = sum(shifts) / len(shifts)
+-    delta = sample_ct(plate.replicates(cal, target)) - sample_ct(plate.replicates(sample, target))
+-    return factor ** delta / factor ** shift
++    return relative_quantity(plate, factors, sample, target) / normalisation_factor(
++        plate, factors, sample
++    )
+ 
+ 
+ def result(plate, factors, contaminated, sample, target):
+     """One row of the report."""
+     flags = flags_for(plate, contaminated, sample, target)
+-    fold = None if "ntc" in flags else fold_change(plate, factors, sample, target)
++    fold = None if flags else fold_change(plate, factors, sample, target)
+     return {
+         "sample": sample,
+         "gene": target,
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/plate.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/plate.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/plate.py	2026-09-27 14:06:39
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/plate.py	2026-09-27 14:16:31
+@@ -2,6 +2,7 @@
+ 
+ UNDETERMINED = "Undetermined"
+ CUTOFF_CYCLE = 35.0
++EARLIEST_CYCLE = 10.0
+ 
+ 
+ def ct_value(raw):
+@@ -9,6 +10,11 @@
+     if raw == UNDETERMINED:
+         return None
+     return float(raw)
++
++
++def determined(cts):
++    """Cts of the wells whose signal crossed the threshold, in export order."""
++    return [ct for ct in cts if ct is not None]
+ 
+ 
+ def called(cts):
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/replicates.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/replicates.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/baseline/environment/app/src/qpcrrel/replicates.py	2026-09-27 14:08:48
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-qpcr-relative-expression-cycle-2/run_1/solve/environment/app/src/qpcrrel/replicates.py	2026-09-27 14:16:31
+@@ -1,13 +1,18 @@
+ """Replicate wells of one sample and one gene."""
+ 
+-from .plate import called
++from .plate import CUTOFF_CYCLE, EARLIEST_CYCLE
+ 
+-NO_CALL_CT = 40.0  # the run length, used where a gene gives no usable Ct
++OUTLIER_LIMIT = 0.50  # cycles from the median beyond which a replicate is an outlier
+ 
+ 
++def reportable(cts):
++    """Cts of the replicates that count: determined, from 10.00 to the cut-off cycle."""
++    return [ct for ct in cts if ct is not None and EARLIEST_CYCLE <= ct <= CUTOFF_CYCLE]
++
++
+ def detected(cts):
+     """Whether any replicate of the gene counts in this sample."""
+-    return bool(called(cts))
++    return bool(reportable(cts))
+ 
+ 
+ def mean_ct(cts):
+@@ -15,9 +20,23 @@
+     return sum(cts) / len(cts)
+ 
+ 
++def median_ct(cts):
++    """Median of the replicates; of an even number, the lower of the middle two."""
++    ordered = sorted(cts)
++    return ordered[(len(ordered) - 1) // 2]
++
++
++def without_outliers(replicates):
++    """The reportable replicates that are not outliers (only three or more are screened)."""
++    if len(replicates) < 3:
++        return list(replicates)
++    median = median_ct(replicates)
++    return [ct for ct in replicates if abs(ct - median) <= OUTLIER_LIMIT]
++
++
+ def sample_ct(cts):
+-    """A sample's mean Ct for one gene, from the Cts of its unknown wells."""
+-    replicates = called(cts)
++    """A sample's mean Ct for one gene, or None where the gene is not detected."""
++    replicates = without_outliers(reportable(cts))
+     if not replicates:
+-        return NO_CALL_CT
++        return None
+     return mean_ct(replicates)

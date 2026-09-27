@@ -1,0 +1,33 @@
+# NOTE (redesign 1/1, 2026-09-27): obligations superseded by panel-precheck-manifest.json (HOLD, GAP_OPENER_HOLD_KEPT, CARRY for chained lots, UNCHAINED_KEPT); OFF_TABLE_KEPT and the 273 K departure removed.
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The disposition report printed by /app/tools/coldchain_run.py JOB_DIR gives, for every lot, the
+  disposition, hours per excursion band, remaining allowance per band, unlogged hours and mean
+  kinetic temperature that QA-SOP-311 gives.
+causal_core: >
+  logger exports -> intervals within one leg's export (2.3) -> logged interval vs logger gap (2.4)
+  -> attributed minutes per reading (3.1; gap attribution silent, today's step) -> band membership of
+  excursion readings (2.1, 2.5, 2.6, 3.2; readings beyond the table span silent, today's step)
+  -> per-leg band time -> lot band time summed over legs (4.1) -> remaining allowance after prior
+  time (2.8, 4.2); attributed minutes -> time-weighted Arrhenius MKT over every leg in kelvin (1.3, 5.1)
+  -> disposition from unrounded figures (1.2, 6.1-6.3); logger gaps -> unlogged time (3.3, 4.3) -> 6.2.
+core_obligations:
+  - {id: ATTRIBUTION, contribution: "a logged interval (<= 30 min) is attributed to the reading that opens it", authority: "SOP 2.3, 2.4, 3.1", witness: test_rule_3_1_logged_interval_goes_to_the_reading_that_opens_it, plausible_wrong: "keep closing-reading attribution (shipped)"}
+  - {id: GAP_ATTRIBUTION_KEPT, contribution: "a logger gap's minutes stay with the reading that closes it (SOP silent, today's step) and still count in band time and MKT", authority: "SOP 2.4, 3.1 + instruction silence clause", witness: test_logger_gap_keeps_todays_attribution, plausible_wrong: "attribute every interval to its opening reading; or drop gap minutes from band time / MKT (natural over-repairs)"}
+  - {id: BAND_ENDS, contribution: "labelled range includes both limits; a band above the range excludes its lower end and includes its upper end; below-range bands the reverse", authority: "SOP 2.1, 2.5", witness: test_rule_2_5_band_ends, plausible_wrong: "labelled range open at the top and above-range bands closed at the lower end (shipped)"}
+  - {id: OFF_TABLE_KEPT, contribution: "a reading beyond the stability table's span is charged where today's step charges it (outermost band on its side)", authority: "SOP 2.5, 2.6, 3.2 + instruction silence clause", witness: test_reading_beyond_the_table_keeps_todays_band, plausible_wrong: "two-ended band membership that charges it nowhere (natural over-repair)"}
+  - {id: CARRY, contribution: "a lot's band time is the total over its legs", authority: "SOP 4.1", witness: test_rule_4_1_band_time_carries_across_legs, plausible_wrong: "worst single leg (shipped)"}
+  - {id: PRIOR_TIME, contribution: "prior time on the release certificate is charged before the first leg", authority: "SOP 2.8, 4.2", witness: test_rule_4_2_prior_time_counts_against_the_allowance, plausible_wrong: "ignore the certificate (shipped)"}
+  - {id: MKT, contribution: "time-weighted Arrhenius mean in kelvin (273.15) over the minutes section 3 attributes, per leg", authority: "SOP 1.3, 5.1", witness: "test_rule_5_1_mkt_is_time_weighted_in_kelvin; test_mkt_of_a_lot_does_not_bridge_handovers", plausible_wrong: "unweighted mean with 273 (shipped); weights from successive stamps over all legs flattened (natural over-repair across handovers)"}
+  - {id: UNLOGGED, contribution: "unlogged time is the total of logger gaps (> 30 min) over every leg; more than 120 min quarantines", authority: "SOP 2.4, 3.3, 4.3, 6.2", witness: test_rule_3_3_unlogged_time_counts_gaps_over_30_minutes, plausible_wrong: "60-minute gap threshold (shipped)"}
+  - {id: DISPOSITION, contribution: "reject on a frozen reading or an exhausted allowance; quarantine on unrounded MKT above the upper limit or unlogged time over 120 min; else release", authority: "SOP 6.1-6.3, 1.2", witness: "test_rule_6_2_mkt_compared_unrounded; test_rule_6_1_allowance_used_exactly_is_not_exceeded", plausible_wrong: "compare the rounded MKT (shipped)"}
+  - {id: HOURS_ROUNDING, contribution: "reported hours rounded to the nearest hundredth", authority: "SOP 1.2", witness: test_rule_1_2_hours_rounded_to_the_hundredth, plausible_wrong: "truncate (shipped)"}
+support_obligations:
+  - {id: JOB_LOADER, supplied_boundary: "src/coldchain/records.py decodes stability.json, lots.json and logger CSV exports", why_not_core: "decoding is complete and not a repair surface"}
+  - {id: DRIVER, supplied_boundary: "tools/coldchain_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: REPORT_LAYOUT, supplied_boundary: "README report keys and lot order, already produced by report.py", why_not_core: "serialization already right apart from the hour rounding"}
+non_goals:
+  - malformed job directories and values outside SOP section 1 (left entirely open)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - stability-budget recovery, per-unit sampling, site storage deviations and anything the SOP does not mention

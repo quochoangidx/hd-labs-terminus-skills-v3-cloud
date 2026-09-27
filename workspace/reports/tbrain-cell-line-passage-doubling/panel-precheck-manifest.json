@@ -1,0 +1,254 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-cell-line-passage-doubling",
+ "primary_outcome": "the lineage report the fixed driver prints follows SOP CB-3: passage, doublings, PDL and limit flag per culture; vials left and PDL per bank",
+ "obligations": [
+  {
+   "id": "DOUBLINGS",
+   "class": "core",
+   "contribution": "doublings are log2 of the viable harvest over the viable seed, the seed counted at its source suspension's viability; losses below nought kept",
+   "authority": {
+    "file": "environment/app/docs/cell-bank-sop.md",
+    "anchor": "A culture's **doublings** are the base-two logarithm of the viable count of its"
+   },
+   "implementation_sites": [
+    "environment/app/src/cellbank/growth.py",
+    "environment/app/src/cellbank/lineage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the figure feeds the PDL, age, flags or bank figures of the same lineage report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_doublings_use_viable_harvest_and_seed",
+     "test_outputs.py::test_seed_counted_at_source_suspension_viability"
+    ],
+    "boundary": [
+     "test_outputs.py::test_losses_give_doublings_below_nought",
+     "test_outputs.py::test_invalid_counts_keep_todays_doublings"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "harvest and source viabilities that differ (thaw 75.0, harvest 100.0; source harvest 82.5 feeding a culture at 97.0), viability exactly 70.0",
+   "wrong_but_plausible": "correct only the harvest, or correct the seed at the culture's own harvest viability so the correction cancels",
+   "selfdescription_phrase": "doublings"
+  },
+  {
+   "id": "LINEAGE",
+   "class": "core",
+   "contribution": "passage number and PDL follow source and vial links; a thaw keeps its vial's harvest figures; a supplier vial starts at the line's seed",
+   "authority": {
+    "file": "environment/app/docs/cell-bank-sop.md",
+    "anchor": "Passage numbers and PDL follow the lineage"
+   },
+   "implementation_sites": [
+    "environment/app/src/cellbank/lineage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the figure feeds the PDL, age, flags or bank figures of the same lineage report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_pdl_and_passage_follow_the_lineage",
+     "test_outputs.py::test_thawed_bank_vial_keeps_its_harvest_figures"
+    ],
+    "boundary": [
+     "test_outputs.py::test_supplier_vial_starts_at_seed",
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "two lineages of one line interleaved in the log, sister cultures of one harvest, a bank vial thawed after the line has grown on",
+   "wrong_but_plausible": "a running PDL and passage per line in log order, one passage added at every thaw, every thaw restarting at the line's seed",
+   "selfdescription_phrase": "passage and PDL"
+  },
+  {
+   "id": "AGE_FLAGS",
+   "class": "core",
+   "contribution": "flags are judged on age, the highest PDL along the lineage: LIMIT above max_pdl, NEAR above max_pdl - 3",
+   "authority": {
+    "file": "environment/app/docs/cell-bank-sop.md",
+    "anchor": "A culture's flag is judged on the age of its harvest"
+   },
+   "implementation_sites": [
+    "environment/app/src/cellbank/lineage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the figure feeds the PDL, age, flags or bank figures of the same lineage report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_flag_judged_on_age_after_a_crash"
+    ],
+    "boundary": [
+     "test_outputs.py::test_near_band_is_three_doublings"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a crash after the line passed its maximum; ages 10^-5 either side of max_pdl and of max_pdl - 3",
+   "wrong_but_plausible": "judge the flag on the culture's own PDL, or keep a five-doubling band",
+   "selfdescription_phrase": "flags"
+  },
+  {
+   "id": "BANKS",
+   "class": "core",
+   "contribution": "vials left are vials frozen less vials thawed; bank PDL is the highest PDL of the vials still in stock",
+   "authority": {
+    "file": "environment/app/docs/cell-bank-sop.md",
+    "anchor": "bank in use is the highest PDL of its vials in stock"
+   },
+   "implementation_sites": [
+    "environment/app/src/cellbank/banks.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the figure feeds the PDL, age, flags or bank figures of the same lineage report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_vials_left_less_thaws",
+     "test_outputs.py::test_bank_pdl_is_highest_in_stock"
+    ],
+    "boundary": [
+     "test_outputs.py::test_bank_not_in_use_keeps_latest_freeze_pdl"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a bank of three freezes at rising PDL, the highest one fully thawed; a bank with every vial thawed",
+   "wrong_but_plausible": "report the frozen total, the latest freeze's PDL, or the highest PDL of every freeze ever made",
+   "selfdescription_phrase": "banks"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "DOUBLINGS",
+    "to": "LINEAGE"
+   },
+   {
+    "from": "LINEAGE",
+    "to": "AGE_FLAGS"
+   },
+   {
+    "from": "LINEAGE",
+    "to": "BANKS"
+   },
+   {
+    "from": "AGE_FLAGS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "BANKS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "LINEAGE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "DOUBLINGS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "viable-doublings-drive-pdl",
+   "obligation_ids": [
+    "DOUBLINGS",
+    "LINEAGE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_seed_counted_at_source_suspension_viability",
+    "test_outputs.py::test_generated_logs"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "lineage-pdl-decides-age-flag",
+   "obligation_ids": [
+    "LINEAGE",
+    "AGE_FLAGS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_flag_judged_on_age_after_a_crash",
+    "test_outputs.py::test_generated_logs"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "lineage-and-thaws-decide-bank-pdl",
+   "obligation_ids": [
+    "LINEAGE",
+    "BANKS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_bank_pdl_is_highest_in_stock",
+    "test_outputs.py::test_thawed_bank_vial_keeps_its_harvest_figures"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "every rule in it holds for every log within the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the SOP has no rule for a figure that one of the package's steps works out",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Logs of one to four hundred records over one to four lines will be run"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/seal.py fixed seed (authoring only; graded logs are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "Leave /app/tools/cellbank_run.py exactly as it is",
+   "enforced_by": [
+    "test_outputs.py::test_driver_is_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_driver_is_unchanged": "restriction witness (DRIVER-UNCHANGED)",
+  "test_outputs.py::test_candidate_cannot_read_expected_reports": "isolation witness",
+  "test_outputs.py::test_report_order_and_types": "section 7 report shape over every record kind",
+  "test_outputs.py::test_generated_logs": "seeded logs over the whole section 1 domain, trap-free by predicate",
+  "test_outputs.py::test_capacity_log": "400 records, four lines, 500-vial freezes: the section 1 maxima"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the line file's lineage report is read by the core's QA; keys and list order fixed by SOP 7.1",
+   "authority_anchor": {
+    "file": "environment/app/docs/cell-bank-sop.md",
+    "anchor": "one entry per `culture` record, in log order"
+   }
+  }
+ ],
+ "wrong_paths": []
+}

@@ -1,0 +1,652 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-occupational-noise-dose-survey",
+ "primary_outcome": "the report printed by /app/tools/noisedose_run.py gives every worker's and every similar-exposure group's dose, TWA and status, and every worker's ceiling and impulse flags, as manual HC-4 gives them",
+ "obligations": [
+  {
+   "id": "REFERENCE_DURATION",
+   "class": "core",
+   "contribution": "reference duration at the level a counted reading is counted at: 85 dBA criterion, 3 dB exchange; a reading above the ceiling level is counted where today's step counts it (silent)",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "The reference duration at a level L is"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/levels.py",
+    "environment/app/src/noisedose/runs.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the reference duration sets every measured dose, hence shift dose, TWA, status and group dose"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db",
+     "test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached",
+     "test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "full-shift readings at 80.0, 85.0, 91.0 and 140.0 dBA, and a one-minute run at 140.0 dBA on a 1,440-minute shift; readings at 115.0, 115.1, 118.5, 131.2 and 140.0 dBA beside ordinary readings",
+   "wrong_but_plausible": "keep the federal 90 dBA / 5 dB (shipped); count a reading above the ceiling at its own level (natural over-repair)",
+   "selfdescription_phrase": "reference duration"
+  },
+  {
+   "id": "COUNTED_READING",
+   "class": "core",
+   "contribution": "a reading exactly at the 80.0 dBA threshold level adds dose",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "A counted reading is a reading at or above"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/levels.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides which readings enter the measured dose"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "runs at 79.9, 80.0 and 80.1 dBA beside a louder run",
+   "wrong_but_plausible": "count only readings above 80.0 dBA",
+   "selfdescription_phrase": "counted reading"
+  },
+  {
+   "id": "SAMPLED_TIME",
+   "class": "core",
+   "contribution": "sampled time is the length of every reading, below-threshold readings included; a run logged at 0.0 is not a reading",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "A worker's sampled time is the total length of the worker's readings"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/levels.py",
+    "environment/app/src/noisedose/runs.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "sampled time is the projection denominator of the shift dose"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold",
+     "test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading",
+     "test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "partial surveys mixing counted readings with readings at 40.0-79.9 dBA; separately, partial surveys holding runs logged at 0.0 among counted readings",
+   "wrong_but_plausible": "count only readings that add dose (shipped), or count every run's minutes including runs logged at 0.0 (natural over-repair)",
+   "selfdescription_phrase": "sampled time"
+  },
+  {
+   "id": "SHIFT_DOSE",
+   "class": "core",
+   "contribution": "a partial survey (2.5: sampled time at least three quarters of the shift and shorter than it) is projected to the worker's own shift; one of the whole shift or longer keeps its measured dose; any other survey keeps today's step (silent)",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "A partial survey is projected to the worker's shift"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/shift.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the shift dose feeds the TWA, the status and the group mean"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift",
+     "test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose",
+     "test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters",
+     "test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection",
+     "test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose",
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "full-shift surveys one minute short of, equal to and longer than shifts of 360-1,440 minutes; a survey at exactly three quarters of a 600-minute shift; surveys below three quarters on shifts of 60, 360, 720 and 1,440 minutes; an empty log",
+   "wrong_but_plausible": "project to 480 minutes (shipped); apply the own-shift projection to every survey, or leave a survey below three quarters unprojected (natural over-repairs)",
+   "selfdescription_phrase": "shift dose"
+  },
+  {
+   "id": "TWA",
+   "class": "core",
+   "contribution": "TWA = 85 + 3 log2(D/100) for a dose above nought, reported to the nearest tenth of a decibel",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "85 + 3 \u00d7 log2(D / 100) dB"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/twa.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the reported TWA decides the worker and group status"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_twa_formula",
+     "test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "doses whose TWA has hundredths of 0.04 and 0.06 on either side of a tenth; a quiet worker's dose of nought with no TWA",
+   "wrong_but_plausible": "90 + 16.61 log10(D/100); truncating to the tenth",
+   "selfdescription_phrase": "TWA"
+  },
+  {
+   "id": "FLAGS",
+   "class": "core",
+   "contribution": "ceiling flag for a reading above 115.0 dBA; impulse flag for a peak of 140.0 dBC or more",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "An impulse is a peak of 140.0 dBC or more"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/flags.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "a flag makes the worker's status over whatever the TWA"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged",
+     "test_outputs.py::test_rule_5_2_impulse_at_140_dbc",
+     "test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_2_impulse_at_140_dbc",
+     "test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "peaks at 139.9, 140.0 and 170.0 dBC; readings at 115.0 and 115.1 dBA on workers whose TWA is below the action level",
+   "wrong_but_plausible": "treat only a peak above 140.0 dBC as an impulse",
+   "selfdescription_phrase": "impulse flag"
+  },
+  {
+   "id": "STATUS",
+   "class": "core",
+   "contribution": "over when flagged or when the TWA is above 85.0 dB; action from 82.0 up to 85.0 dB; below otherwise",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "\"action\" when the TWA is from 82.0 dB up to 85.0 dB"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/twa.py",
+    "environment/app/src/noisedose/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "worker status is the report's compliance verdict and uses the same bands as the group status"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_3_status_bands_at_82_and_85"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_3_status_bands_at_82_and_85"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "reported TWAs of 81.9, 82.0, 85.0 and 85.1 dB, including unrounded 81.95-81.99 and 85.04",
+   "wrong_but_plausible": "federal bands 85 and 90, or over from 85.0 inclusive",
+   "selfdescription_phrase": "status"
+  },
+  {
+   "id": "GROUP_DOSE",
+   "class": "core",
+   "contribution": "a group's dose is the mean of every member's shift dose, a quiet member's nought included; its TWA follows from that dose and its status from the TWA alone",
+   "authority": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "A group's dose is the mean of its members' shift doses"
+   },
+   "implementation_sites": [
+    "environment/app/src/noisedose/groups.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "group dose is built from the members' shift doses and yields the group TWA and status"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses",
+     "test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean",
+     "test_outputs.py::test_report_order_and_group_codes"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a group mixing a 95 dBA and two 83-84 dBA members; a group with a quiet full-shift member whose dose is nought",
+   "wrong_but_plausible": "average the members' TWAs in decibels (shipped), or keep the has-a-TWA filter that drops quiet members",
+   "selfdescription_phrase": "group dose"
+  },
+  {
+   "id": "SURVEY_LOADER",
+   "class": "support",
+   "contribution": "decode runs and peaks from the survey file",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/noisedose/survey.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_generated_surveys"
+   ]
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver printing the report",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/noisedose_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "REFERENCE_DURATION",
+    "to": "SHIFT_DOSE"
+   },
+   {
+    "from": "COUNTED_READING",
+    "to": "SHIFT_DOSE"
+   },
+   {
+    "from": "SAMPLED_TIME",
+    "to": "SHIFT_DOSE"
+   },
+   {
+    "from": "SHIFT_DOSE",
+    "to": "TWA"
+   },
+   {
+    "from": "SHIFT_DOSE",
+    "to": "GROUP_DOSE"
+   },
+   {
+    "from": "TWA",
+    "to": "STATUS"
+   },
+   {
+    "from": "FLAGS",
+    "to": "STATUS"
+   },
+   {
+    "from": "GROUP_DOSE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STATUS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "TWA",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "SHIFT_DOSE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "FLAGS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "sampled-time-is-the-projection-denominator",
+   "obligation_ids": [
+    "SAMPLED_TIME",
+    "SHIFT_DOSE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold",
+    "test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading",
+    "test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "counted-readings-make-the-measured-dose",
+   "obligation_ids": [
+    "REFERENCE_DURATION",
+    "COUNTED_READING",
+    "SHIFT_DOSE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db",
+    "test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts",
+    "test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "shift-dose-sets-twa-and-status",
+   "obligation_ids": [
+    "SHIFT_DOSE",
+    "TWA",
+    "STATUS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_3_status_bands_at_82_and_85",
+    "test_outputs.py::test_generated_surveys"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "flags-override-the-twa-bands",
+   "obligation_ids": [
+    "FLAGS",
+    "STATUS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_2_impulse_at_140_dbc",
+    "test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "shift-doses-make-the-group-figure",
+   "obligation_ids": [
+    "SHIFT_DOSE",
+    "GROUP_DOSE",
+    "TWA"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses",
+    "test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each of its rules holds for every survey within the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the manual gives no rule for a figure that one of the package's steps works out",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/noise-survey-manual.md",
+     "anchor": "A partial survey is a survey whose sampled time is at least three quarters",
+     "witness_ids": [
+      "test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection",
+      "test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose"
+     ]
+    },
+    {
+     "file": "environment/app/docs/noise-survey-manual.md",
+     "anchor": "one logged no higher than the ceiling level is counted",
+     "witness_ids": [
+      "test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Surveys of one to three hundred workers under one to forty group codes will be reduced"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED=20260926 (authoring only; graded surveys are sealed files)",
+   "tests/test_outputs.py RELABEL_SEED from os.urandom: relabels the generated family only (name, ids, worker order, run splits), a transformation that leaves every expected figure unchanged; the seed is printed with any failure"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave that driver exactly as it is; the file you leave there has to match ours byte for byte",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED), checked before and after candidate code",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness: the candidate user cannot read /tests, the sealed expectations, the shipped copy or /logs/verifier (with a readable control)",
+  "test_outputs.py::test_generated_surveys": "seeded trap-free surveys (at least three quarters of the shift sampled, no run at 0.0, no reading above the ceiling level) over the rest of the section 1 domain; exercises every governed obligation together",
+  "test_outputs.py::test_section_one_limits_reached": "300 workers, 40 group codes, 1,500-run and 2,880-minute logs, 500 peaks, 12- and 8-character ids and codes: the section 1 limits (trap-free)"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the programme's reporting step reads this JSON report; keys, list order and null TWA are fixed by the README data contract",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "in ascending character"
+   }
+  },
+  {
+   "id": "TWA-ROUNDING",
+   "domain_required": true,
+   "rationale": "compliance status is judged on the TWA as reported to a tenth of a decibel",
+   "authority_anchor": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "A TWA is rounded to the"
+   }
+  },
+  {
+   "id": "TOLERANCE",
+   "domain_required": true,
+   "rationale": "doses are the unrounded figure (manual 1.2); the instruction states an accept bound of one part in 10^11 and a reject bound of one part in 10^10, graded at the midpoint",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "within one part in 10^11 of the expected dose"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "revision-v12/preflight/preflight.json",
+ "wrong_paths": [
+  {
+   "id": "W01-federal-reference-duration",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REFERENCE_DURATION"
+   ],
+   "receipt": "wrong-paths/W01-federal-reference-duration.json"
+  },
+  {
+   "id": "W02-threshold-strict",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COUNTED_READING"
+   ],
+   "receipt": "wrong-paths/W02-threshold-strict.json"
+  },
+  {
+   "id": "W03-sampled-counted-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SAMPLED_TIME"
+   ],
+   "receipt": "wrong-paths/W03-sampled-counted-only.json"
+  },
+  {
+   "id": "W04-sampled-every-run",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SAMPLED_TIME"
+   ],
+   "receipt": "wrong-paths/W04-sampled-every-run.json"
+  },
+  {
+   "id": "W05-project-to-eight-hours",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SHIFT_DOSE"
+   ],
+   "receipt": "wrong-paths/W05-project-to-eight-hours.json"
+  },
+  {
+   "id": "W06-three-quarters-exclusive",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SHIFT_DOSE"
+   ],
+   "receipt": "wrong-paths/W06-three-quarters-exclusive.json"
+  },
+  {
+   "id": "W07-project-every-short-survey",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SHIFT_DOSE"
+   ],
+   "receipt": "wrong-paths/W07-project-every-short-survey.json"
+  },
+  {
+   "id": "W08-short-survey-unprojected",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SHIFT_DOSE"
+   ],
+   "receipt": "wrong-paths/W08-short-survey-unprojected.json"
+  },
+  {
+   "id": "W09-nothing-measured-divides",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SHIFT_DOSE"
+   ],
+   "receipt": "wrong-paths/W09-nothing-measured-divides.json"
+  },
+  {
+   "id": "W10-federal-twa",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TWA"
+   ],
+   "receipt": "wrong-paths/W10-federal-twa.json"
+  },
+  {
+   "id": "W11-twa-truncated",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TWA"
+   ],
+   "receipt": "wrong-paths/W11-twa-truncated.json"
+  },
+  {
+   "id": "W12-impulse-strict",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FLAGS"
+   ],
+   "receipt": "wrong-paths/W12-impulse-strict.json"
+  },
+  {
+   "id": "W13-ceiling-inclusive",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FLAGS"
+   ],
+   "receipt": "wrong-paths/W13-ceiling-inclusive.json"
+  },
+  {
+   "id": "W14-federal-status-bands",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STATUS"
+   ],
+   "receipt": "wrong-paths/W14-federal-status-bands.json"
+  },
+  {
+   "id": "W15-group-mean-of-twas",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "GROUP_DOSE"
+   ],
+   "receipt": "wrong-paths/W15-group-mean-of-twas.json"
+  },
+  {
+   "id": "W16-group-drops-quiet-members",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "GROUP_DOSE"
+   ],
+   "receipt": "wrong-paths/W16-group-drops-quiet-members.json"
+  },
+  {
+   "id": "W17-count-above-ceiling-at-own-level",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REFERENCE_DURATION"
+   ],
+   "receipt": "wrong-paths/W17-count-above-ceiling-at-own-level.json"
+  },
+  {
+   "id": "W18-kept-step-counted-minutes",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SHIFT_DOSE",
+    "SAMPLED_TIME"
+   ],
+   "receipt": "wrong-paths/W18-kept-step-counted-minutes.json"
+  },
+  {
+   "id": "H01-driver-tampered",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H01-driver-tampered.json"
+  },
+  {
+   "id": "H02-read-sealed-expectations",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H02-read-sealed-expectations.json"
+  }
+ ],
+ "task_snapshot_sha256": "1b3babc7d5804e914c02375696378bc9d7fc0d3051c5e85533bd4798a1a0e489"
+}

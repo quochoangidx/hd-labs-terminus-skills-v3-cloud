@@ -1,0 +1,3915 @@
+1 Introduction and preliminaries
+********************************
+
+This first chapter explains what GNU ‘m4’ is, where ‘m4’ comes from, how
+to read and use this documentation, how to call the ‘m4’ program, and
+how to report bugs about it.  It concludes by giving tips for reading
+the remainder of the manual.
+
+   The following chapters then detail all the features of the ‘m4’
+language.
+
+* Menu:
+
+* Intro::                       Introduction to ‘m4’
+* History::                     Historical references
+* Bugs::                        Problems and bugs
+* Manual::                      Using this manual
+
+2.6 Specifying input files on the command line
+==============================================
+
+The remaining arguments on the command line are taken to be input file
+names.  If no names are present, standard input is read.  A file name of
+‘-’ is taken to mean standard input.  It is conventional, but not
+required, for input files to end in ‘.m4’.
+
+   The input files are read in the sequence given.  Standard input can
+be read more than once, so the file name ‘-’ may appear multiple times
+on the command line; this makes a difference when input is from a
+terminal or other special file type.  It is an error if an input file
+ends in the middle of argument collection, a comment, or a quoted
+string.
+
+   The options ‘--define’ (‘-D’), ‘--undefine’ (‘-U’), ‘--synclines’
+(‘-s’), and ‘--trace’ (‘-t’) only take effect after processing input
+from any file names that occur earlier on the command line.  For
+example, assume the file ‘foo’ contains:
+
+     $ cat foo
+     bar
+
+   The text ‘bar’ can then be redefined over multiple uses of ‘foo’:
+
+     $ m4 -Dbar=hello foo -Dbar=world foo
+     ⇒hello
+     ⇒world
+
+   If none of the input files invoked ‘m4exit’ (*note M4exit::), the
+exit status of ‘m4’ will be 0 for success, 1 for general failure (such
+as problems with reading an input file), and 63 for version mismatch
+(*note Using frozen files::).
+
+   If you need to read a file whose name starts with a ‘-’, you can
+specify it as ‘./-file’, or use ‘--’ to mark the end of options.
+
+3 Lexical and syntactic conventions
+***********************************
+
+As ‘m4’ reads its input, it separates it into “tokens”.  A token is
+either a name, a quoted string, or any single character, that is not a
+part of either a name or a string.  Input to ‘m4’ can also contain
+comments.  GNU ‘m4’ does not yet understand multibyte locales; all
+operations are byte-oriented rather than character-oriented (although if
+your locale uses a single byte encoding, such as ISO-8859-1, you will
+not notice a difference).  However, ‘m4’ is eight-bit clean, so you can
+use non-ASCII characters in quoted strings (*note Changequote::),
+comments (*note Changecom::), and macro names (*note Indir::), with the
+exception of the NUL character (the zero byte ‘'\0'’).
+
+* Menu:
+
+* Names::                       Macro names
+* Quoted strings::              Quoting input to ‘m4’
+* Comments::                    Comments in ‘m4’ input
+* Other tokens::                Other kinds of input tokens
+* Input processing::            How ‘m4’ copies input to output
+
+3.1 Macro names
+===============
+
+A name is any sequence of letters, digits, and the character ‘_’
+(underscore), where the first character is not a digit.  ‘m4’ will use
+the longest such sequence found in the input.  If a name has a macro
+definition, it will be subject to macro expansion (*note Macros::).
+Names are case-sensitive.
+
+   Examples of legal names are: ‘foo’, ‘_tmp’, and ‘name01’.
+
+3.2 Quoting input to ‘m4’
+=========================
+
+A quoted string is a sequence of characters surrounded by quote strings,
+defaulting to ‘`’ and ‘'’, where the nested begin and end quotes within
+the string are balanced.  The value of a string token is the text, with
+one level of quotes stripped off.  Thus
+
+     `'
+     ⇒
+
+is the empty string, and double-quoting turns into single-quoting.
+
+     ``quoted''
+     ⇒`quoted'
+
+   The quote characters can be changed at any time, using the builtin
+macro ‘changequote’.  *Note Changequote::, for more information.
+
+3.3 Comments in ‘m4’ input
+==========================
+
+Comments in ‘m4’ are normally delimited by the characters ‘#’ and
+newline.  All characters between the comment delimiters are ignored, but
+the entire comment (including the delimiters) is passed through to the
+output—comments are _not_ discarded by ‘m4’.
+
+   Comments cannot be nested, so the first newline after a ‘#’ ends the
+comment.  The commenting effect of the begin-comment string can be
+inhibited by quoting it.
+
+     $ m4
+     `quoted text' # `commented text'
+     ⇒quoted text # `commented text'
+     `quoting inhibits' `#' `comments'
+     ⇒quoting inhibits # comments
+
+   The comment delimiters can be changed to any string at any time,
+using the builtin macro ‘changecom’.  *Note Changecom::, for more
+information.
+
+3.4 Other kinds of input tokens
+===============================
+
+Any character, that is neither a part of a name, nor of a quoted string,
+nor a comment, is a token by itself.  When not in the context of macro
+expansion, all of these tokens are just copied to output.  However,
+during macro expansion, whitespace characters (space, tab, newline,
+formfeed, carriage return, vertical tab), parentheses (‘(’ and ‘)’),
+comma (‘,’), and dollar (‘$’) have additional roles, explained later.
+
+3.5 How ‘m4’ copies input to output
+===================================
+
+As ‘m4’ reads the input token by token, it will copy each token directly
+to the output immediately.
+
+   The exception is when it finds a word with a macro definition.  In
+that case ‘m4’ will calculate the macro’s expansion, possibly reading
+more input to get the arguments.  It then inserts the expansion in front
+of the remaining input.  In other words, the resulting text from a macro
+call will be read and parsed into tokens again.
+
+   ‘m4’ expands a macro as soon as possible.  If it finds a macro call
+when collecting the arguments to another, it will expand the second call
+first.  This process continues until there are no more macro calls to
+expand and all the input has been consumed.
+
+   For a running example, examine how ‘m4’ handles this input:
+
+     format(`Result is %d', eval(`2**15'))
+
+First, ‘m4’ sees that the token ‘format’ is a macro name, so it collects
+the tokens ‘(’, ‘`Result is %d'’, ‘,’, and ‘ ’, before encountering
+another potential macro.  Sure enough, ‘eval’ is a macro name, so the
+nested argument collection picks up ‘(’, ‘`2**15'’, and ‘)’, invoking
+the eval macro with the lone argument of ‘2**15’.  The expansion of
+‘eval(2**15)’ is ‘32768’, which is then rescanned as the five tokens
+‘3’, ‘2’, ‘7’, ‘6’, and ‘8’; and combined with the next ‘)’, the format
+macro now has all its arguments, as if the user had typed:
+
+     format(`Result is %d', 32768)
+
+The format macro expands to ‘Result is 32768’, and we have another round
+of scanning for the tokens ‘Result’, ‘ ’, ‘is’, ‘ ’, ‘3’, ‘2’, ‘7’, ‘6’,
+and ‘8’.  None of these are macros, so the final output is
+
+     ⇒Result is 32768
+
+   As a more complicated example, we will contrast an actual code
+example from the Gnulib project(1), showing both a buggy approach and
+the desired results.  The user desires to output a shell assignment
+statement that takes its argument and turns it into a shell variable by
+converting it to uppercase and prepending a prefix.  The original
+attempt looks like this:
+
+     changequote([,])dnl
+     define([gl_STRING_MODULE_INDICATOR],
+       [
+         dnl comment
+         GNULIB_]translit([$1],[a-z],[A-Z])[=1
+       ])dnl
+       gl_STRING_MODULE_INDICATOR([strcase])
+     ⇒  
+     ⇒        GNULIB_strcase=1
+     ⇒  
+
+   Oops – the argument did not get capitalized.  And although the manual
+is not able to easily show it, both lines that appear empty actually
+contain two trailing spaces.  By stepping through the parse, it is easy
+to see what happened.  First, ‘m4’ sees the token ‘changequote’, which
+it recognizes as a macro, followed by ‘(’, ‘[’, ‘,’, ‘]’, and ‘)’ to
+form the argument list.  The macro expands to the empty string, but
+changes the quoting characters to something more useful for generating
+shell code (unbalanced ‘`’ and ‘'’ appear all the time in shell scripts,
+but unbalanced ‘[]’ tend to be rare).  Also in the first line, ‘m4’ sees
+the token ‘dnl’, which it recognizes as a builtin macro that consumes
+the rest of the line, resulting in no output for that line.
+
+   The second line starts a macro definition.  ‘m4’ sees the token
+‘define’, which it recognizes as a macro, followed by a ‘(’,
+‘[gl_STRING_MODULE_INDICATOR]’, and ‘,’.  Because an unquoted comma was
+encountered, the first argument is known to be the expansion of the
+single-quoted string token, or ‘gl_STRING_MODULE_INDICATOR’.  Next, ‘m4’
+sees ‘<NL>’, ‘ ’, and ‘ ’, but this whitespace is discarded as part of
+argument collection.  Then comes a rather lengthy single-quoted string
+token, ‘[<NL>    dnl comment<NL>    GNULIB_]’.  This is followed by the
+token ‘translit’, which ‘m4’ recognizes as a macro name, so a nested
+macro expansion has started.
+
+   The arguments to the ‘translit’ are found by the tokens ‘(’, ‘[$1]’,
+‘,’, ‘[a-z]’, ‘,’, ‘[A-Z]’, and finally ‘)’.  All three string arguments
+are expanded (or in other words, the quotes are stripped), and since
+neither ‘$’ nor ‘1’ need capitalization, the result of the macro is
+‘$1’.  This expansion is rescanned, resulting in the two literal
+characters ‘$’ and ‘1’.
+
+   Scanning of the outer macro resumes, and picks up with ‘[=1<NL>  ]’,
+and finally ‘)’.  The collected pieces of expanded text are
+concatenated, with the end result that the macro
+‘gl_STRING_MODULE_INDICATOR’ is now defined to be the sequence
+‘<NL>    dnl comment<NL>    GNULIB_$1=1<NL>  ’.  Once again, ‘dnl’ is
+recognized and avoids a newline in the output.
+
+   The final line is then parsed, beginning with ‘ ’ and ‘ ’ that are
+output literally.  Then ‘gl_STRING_MODULE_INDICATOR’ is recognized as a
+macro name, with an argument list of ‘(’, ‘[strcase]’, and ‘)’.  Since
+the definition of the macro contains the sequence ‘$1’, that sequence is
+replaced with the argument ‘strcase’ prior to starting the rescan.  The
+rescan sees ‘<NL>’ and four spaces, which are output literally, then
+‘dnl’, which discards the text ‘ comment<NL>’.  Next comes four more
+spaces, also output literally, and the token ‘GNULIB_strcase’, which
+resulted from the earlier parameter substitution.  Since that is not a
+macro name, it is output literally, followed by the literal tokens ‘=’,
+‘1’, ‘<NL>’, and two more spaces.  Finally, the original ‘<NL>’ seen
+after the macro invocation is scanned and output literally.
+
+   Now for a corrected approach.  This rearranges the use of newlines
+and whitespace so that less whitespace is output (which, although
+harmless to shell scripts, can be visually unappealing), and fixes the
+quoting issues so that the capitalization occurs when the macro
+‘gl_STRING_MODULE_INDICATOR’ is invoked, rather then when it is defined.
+It also adds another layer of quoting to the first argument of
+‘translit’, to ensure that the output will be rescanned as a string
+rather than a potential uppercase macro name needing further expansion.
+
+     changequote([,])dnl
+     define([gl_STRING_MODULE_INDICATOR],
+       [dnl comment
+       GNULIB_[]translit([[$1]], [a-z], [A-Z])=1dnl
+     ])dnl
+       gl_STRING_MODULE_INDICATOR([strcase])
+     ⇒    GNULIB_STRCASE=1
+
+   The parsing of the first line is unchanged.  The second line sees the
+name of the macro to define, then sees the discarded ‘<NL>’ and two
+spaces, as before.  But this time, the next token is ‘[dnl
+comment<NL>  GNULIB_[]translit([[$1]], [a-z], [A-Z])=1dnl<NL>]’, which
+includes nested quotes, followed by ‘)’ to end the macro definition and
+‘dnl’ to skip the newline.  No early expansion of ‘translit’ occurs, so
+the entire string becomes the definition of the macro.
+
+   The final line is then parsed, beginning with two spaces that are
+output literally, and an invocation of ‘gl_STRING_MODULE_INDICATOR’ with
+the argument ‘strcase’.  Again, the ‘$1’ in the macro definition is
+substituted prior to rescanning.  Rescanning first encounters ‘dnl’, and
+discards ‘ comment<NL>’.  Then two spaces are output literally.  Next
+comes the token ‘GNULIB_’, but that is not a macro, so it is output
+literally.  The token ‘[]’ is an empty string, so it does not affect
+output.  Then the token ‘translit’ is encountered.
+
+   This time, the arguments to ‘translit’ are parsed as ‘(’,
+‘[[strcase]]’, ‘,’, ‘ ’, ‘[a-z]’, ‘,’, ‘ ’, ‘[A-Z]’, and ‘)’.  The two
+spaces are discarded, and the translit results in the desired result
+‘[STRCASE]’.  This is rescanned, but since it is a string, the quotes
+are stripped and the only output is a literal ‘STRCASE’.  Then the
+scanner sees ‘=’ and ‘1’, which are output literally, followed by ‘dnl’
+which discards the rest of the definition of
+‘gl_STRING_MODULE_INDICATOR’.  The newline at the end of output is the
+literal ‘<NL>’ that appeared after the invocation of the macro.
+
+   The order in which ‘m4’ expands the macros can be further explored
+using the trace facilities of GNU ‘m4’ (*note Trace::).
+
+   ---------- Footnotes ----------
+
+   (1) Derived from a patch in
+<https://lists.gnu.org/archive/html/bug-gnulib/2007-01/msg00389.html>,
+and a followup patch in
+<https://lists.gnu.org/archive/html/bug-gnulib/2007-02/msg00000.html>
+
+4 How to invoke macros
+**********************
+
+This chapter covers macro invocation, macro arguments and how macro
+expansion is treated.
+
+* Menu:
+
+* Invocation::                  Macro invocation
+* Inhibiting Invocation::       Preventing macro invocation
+* Macro Arguments::             Macro arguments
+* Quoting Arguments::           On Quoting Arguments to macros
+* Macro expansion::             Expanding macros
+
+4.1 Macro invocation
+====================
+
+Macro invocations has one of the forms
+
+     name
+
+which is a macro invocation without any arguments, or
+
+     name(arg1, arg2, ..., argN)
+
+which is a macro invocation with N arguments.  Macros can have any
+number of arguments.  All arguments are strings, but different macros
+might interpret the arguments in different ways.
+
+   The opening parenthesis _must_ follow the NAME directly, with no
+spaces in between.  If it does not, the macro is called with no
+arguments at all.
+
+   For a macro call to have no arguments, the parentheses _must_ be left
+out.  The macro call
+
+     name()
+
+is a macro call with one argument, which is the empty string, not a call
+with no arguments.
+
+4.2 Preventing macro invocation
+===============================
+
+An innovation of the ‘m4’ language, compared to some of its predecessors
+(like Strachey’s ‘GPM’, for example), is the ability to recognize macro
+calls without resorting to any special, prefixed invocation character.
+While generally useful, this feature might sometimes be the source of
+spurious, unwanted macro calls.  So, GNU ‘m4’ offers several mechanisms
+or techniques for inhibiting the recognition of names as macro calls.
+
+   First of all, many builtin macros cannot meaningfully be called
+without arguments.  As a GNU extension, for any of these macros,
+whenever an opening parenthesis does not immediately follow their name,
+the builtin macro call is not triggered.  This solves the most usual
+cases, like for ‘include’ or ‘eval’.  Later in this document, the
+sentence “This macro is recognized only with parameters” refers to this
+specific provision of GNU M4, also known as a blind builtin macro.  For
+the builtins defined by POSIX that bear this disclaimer, POSIX
+specifically states that invoking those builtins without arguments is
+unspecified, because many other implementations simply invoke the
+builtin as though it were given one empty argument instead.
+
+     $ m4
+     eval
+     ⇒eval
+     eval(`1')
+     ⇒1
+
+   There is also a command line option (‘--prefix-builtins’, or ‘-P’,
+*note Invoking m4: Operation modes.) that renames all builtin macros
+with a prefix of ‘m4_’ at startup.  The option has no effect whatsoever
+on user defined macros.  For example, with this option, one has to write
+‘m4_dnl’ and even ‘m4_m4exit’.  It also has no effect on whether a macro
+requires parameters.
+
+     $ m4 -P
+     eval
+     ⇒eval
+     eval(`1')
+     ⇒eval(1)
+     m4_eval
+     ⇒m4_eval
+     m4_eval(`1')
+     ⇒1
+
+   Another alternative is to redefine problematic macros to a name less
+likely to cause conflicts, using *note Definitions::.
+
+   If your version of GNU ‘m4’ has the ‘changeword’ feature compiled in,
+it offers far more flexibility in specifying the syntax of macro names,
+both builtin or user-defined.  *Note Changeword::, for more information
+on this experimental feature.
+
+   Of course, the simplest way to prevent a name from being interpreted
+as a call to an existing macro is to quote it.  The remainder of this
+section studies a little more deeply how quoting affects macro
+invocation, and how quoting can be used to inhibit macro invocation.
+
+   Even if quoting is usually done over the whole macro name, it can
+also be done over only a few characters of this name (provided, of
+course, that the unquoted portions are not also a macro).  It is also
+possible to quote the empty string, but this works only _inside_ the
+name.  For example:
+
+     `divert'
+     ⇒divert
+     `d'ivert
+     ⇒divert
+     di`ver't
+     ⇒divert
+     div`'ert
+     ⇒divert
+
+all yield the string ‘divert’.  While in both:
+
+     `'divert
+     ⇒
+     divert`'
+     ⇒
+
+the ‘divert’ builtin macro will be called, which expands to the empty
+string.
+
+   The output of macro evaluations is always rescanned.  In the
+following example, the input ‘x`'y’ yields the string ‘bCD’, exactly as
+if ‘m4’ has been given ‘substr(ab`'cde, `1', `3')’ as input:
+
+     define(`cde', `CDE')
+     ⇒
+     define(`x', `substr(ab')
+     ⇒
+     define(`y', `cde, `1', `3')')
+     ⇒
+     x`'y
+     ⇒bCD
+
+   Unquoted strings on either side of a quoted string are subject to
+being recognized as macro names.  In the following example, quoting the
+empty string allows for the second ‘macro’ to be recognized as such:
+
+     define(`macro', `m')
+     ⇒
+     macro(`m')macro
+     ⇒mmacro
+     macro(`m')`'macro
+     ⇒mm
+
+   Quoting may prevent recognizing as a macro name the concatenation of
+a macro expansion with the surrounding characters.  In this example:
+
+     define(`macro', `di$1')
+     ⇒
+     macro(`v')`ert'
+     ⇒divert
+     macro(`v')ert
+     ⇒
+
+the input will produce the string ‘divert’.  When the quotes were
+removed, the ‘divert’ builtin was called instead.
+
+4.3 Macro arguments
+===================
+
+When a name is seen, and it has a macro definition, it will be expanded
+as a macro.
+
+   If the name is followed by an opening parenthesis, the arguments will
+be collected before the macro is called.  If too few arguments are
+supplied, the missing arguments are taken to be the empty string.
+However, some builtins are documented to behave differently for a
+missing optional argument than for an explicit empty string.  If there
+are too many arguments, the excess arguments are ignored.  Unquoted
+leading whitespace is stripped off all arguments, but whitespace
+generated by a macro expansion or occurring after a macro that expanded
+to an empty string remains intact.  Whitespace includes space, tab,
+newline, carriage return, vertical tab, and formfeed.
+
+     define(`macro', `$1')
+     ⇒
+     macro( unquoted leading space lost)
+     ⇒unquoted leading space lost
+     macro(` quoted leading space kept')
+     ⇒ quoted leading space kept
+     macro(
+      divert `unquoted space kept after expansion')
+     ⇒ unquoted space kept after expansion
+     macro(macro(`
+     ')`whitespace from expansion kept')
+     ⇒
+     ⇒whitespace from expansion kept
+     macro(`unquoted trailing whitespace kept'
+     )
+     ⇒unquoted trailing whitespace kept
+     ⇒
+
+   Normally ‘m4’ will issue warnings if a builtin macro is called with
+an inappropriate number of arguments, but it can be suppressed with the
+‘--quiet’ command line option (or ‘--silent’, or ‘-Q’, *note Invoking
+m4: Operation modes.).  For user defined macros, there is no check of
+the number of arguments given.
+
+     $ m4
+     index(`abc')
+     error→m4:stdin:1: Warning: too few arguments to builtin `index'
+     ⇒0
+     index(`abc',)
+     ⇒0
+     index(`abc', `b', `ignored')
+     error→m4:stdin:3: Warning: excess arguments to builtin `index' ignored
+     ⇒1
+
+     $ m4 -Q
+     index(`abc')
+     ⇒0
+     index(`abc',)
+     ⇒0
+     index(`abc', `b', `ignored')
+     ⇒1
+
+   Macros are expanded normally during argument collection, and whatever
+commas, quotes and parentheses that might show up in the resulting
+expanded text will serve to define the arguments as well.  Thus, if FOO
+expands to ‘, b, c’, the macro call
+
+     bar(a foo, d)
+
+is a macro call with four arguments, which are ‘a ’, ‘b’, ‘c’ and ‘d’.
+To understand why the first argument contains whitespace, remember that
+unquoted leading whitespace is never part of an argument, but trailing
+whitespace always is.
+
+   It is possible for a macro’s definition to change during argument
+collection, in which case the expansion uses the definition that was in
+effect at the time the opening ‘(’ was seen.
+
+     define(`f', `1')
+     ⇒
+     f(define(`f', `2'))
+     ⇒1
+     f
+     ⇒2
+
+   It is an error if the end of file occurs while collecting arguments.
+
+     hello world
+     ⇒hello world
+     define(
+     ^D
+     error→m4:stdin:2: ERROR: end of file in argument list
+
+4.4 On Quoting Arguments to macros
+==================================
+
+Each argument has unquoted leading whitespace removed.  Within each
+argument, all unquoted parentheses must match.  For example, if FOO is a
+macro,
+
+     foo(() (`(') `(')
+
+is a macro call, with one argument, whose value is ‘() (() (’.  Commas
+separate arguments, except when they occur inside quotes, comments, or
+unquoted parentheses.  *Note Pseudo Arguments::, for examples.
+
+   It is common practice to quote all arguments to macros, unless you
+are sure you want the arguments expanded.  Thus, in the above example
+with the parentheses, the ‘right’ way to do it is like this:
+
+     foo(`() (() (')
+
+   It is, however, in certain cases necessary (because nested expansion
+must occur to create the arguments for the outer macro) or convenient
+(because it uses fewer characters) to leave out quotes for some
+arguments, and there is nothing wrong in doing it.  It just makes life a
+bit harder, if you are not careful to follow a consistent quoting style.
+For consistency, this manual follows the rule of thumb that each layer
+of parentheses introduces another layer of single quoting, except when
+showing the consequences of quoting rules.  This is done even when the
+quoted string cannot be a macro, such as with integers when you have not
+changed the syntax via ‘changeword’ (*note Changeword::).
+
+   The quoting rule of thumb of one level of quoting per parentheses has
+a nice property: when a macro name appears inside parentheses, you can
+determine when it will be expanded.  If it is not quoted, it will be
+expanded prior to the outer macro, so that its expansion becomes the
+argument.  If it is single-quoted, it will be expanded after the outer
+macro.  And if it is double-quoted, it will be used as literal text
+instead of a macro name.
+
+     define(`active', `ACT, IVE')
+     ⇒
+     define(`show', `$1 $1')
+     ⇒
+     show(active)
+     ⇒ACT ACT
+     show(`active')
+     ⇒ACT, IVE ACT, IVE
+     show(``active'')
+     ⇒active active
+
+4.5 Macro expansion
+===================
+
+When the arguments, if any, to a macro call have been collected, the
+macro is expanded, and the expansion text is pushed back onto the input
+(unquoted), and reread.  The expansion text from one macro call might
+therefore result in more macros being called, if the calls are included,
+completely or partially, in the first macro calls’ expansion.
+
+   Taking a very simple example, if FOO expands to ‘bar’, and BAR
+expands to ‘Hello’, the input
+
+     $ m4 -Dbar=Hello -Dfoo=bar
+     foo
+     ⇒Hello
+
+will expand first to ‘bar’, and when this is reread and expanded, into
+‘Hello’.
+
+5 How to define new macros
+**************************
+
+Macros can be defined, redefined and deleted in several different ways.
+Also, it is possible to redefine a macro without losing a previous
+value, and bring back the original value at a later time.
+
+* Menu:
+
+* Define::                      Defining a new macro
+* Arguments::                   Arguments to macros
+* Pseudo Arguments::            Special arguments to macros
+* Undefine::                    Deleting a macro
+* Defn::                        Renaming macros
+* Pushdef::                     Temporarily redefining macros
+
+* Indir::                       Indirect call of macros
+* Builtin::                     Indirect call of builtins
+
+5.1 Defining a macro
+====================
+
+The normal way to define or redefine macros is to use the builtin
+‘define’:
+
+ -- Builtin: define (NAME, [EXPANSION])
+     Defines NAME to expand to EXPANSION.  If EXPANSION is not given, it
+     is taken to be empty.
+
+     The expansion of ‘define’ is void.  The macro ‘define’ is
+     recognized only with parameters.
+
+   The following example defines the macro FOO to expand to the text
+‘Hello World.’.
+
+     define(`foo', `Hello world.')
+     ⇒
+     foo
+     ⇒Hello world.
+
+   The empty line in the output is there because the newline is not a
+part of the macro definition, and it is consequently copied to the
+output.  This can be avoided by use of the macro ‘dnl’.  *Note Dnl::,
+for details.
+
+   The first argument to ‘define’ should be quoted; otherwise, if the
+macro is already defined, you will be defining a different macro.  This
+example shows the problems with underquoting, since we did not want to
+redefine ‘one’:
+
+     define(foo, one)
+     ⇒
+     define(foo, two)
+     ⇒
+     one
+     ⇒two
+
+   GNU ‘m4’ normally replaces only the _topmost_ definition of a macro
+if it has several definitions from ‘pushdef’ (*note Pushdef::).  Some
+other implementations of ‘m4’ replace all definitions of a macro with
+‘define’.  *Note Incompatibilities::, for more details.
+
+   As a GNU extension, the first argument to ‘define’ does not have to
+be a simple word.  It can be any text string, even the empty string.  A
+macro with a non-standard name cannot be invoked in the normal way, as
+the name is not recognized.  It can only be referenced by the builtins
+‘indir’ (*note Indir::) and ‘defn’ (*note Defn::).
+
+   Arrays and associative arrays can be simulated by using non-standard
+macro names.
+
+ -- Composite: array (INDEX)
+ -- Composite: array_set (INDEX, [VALUE])
+     Provide access to entries within an array.  ‘array’ reads the entry
+     at location INDEX, and ‘array_set’ assigns VALUE to location INDEX.
+
+     define(`array', `defn(format(``array[%d]'', `$1'))')
+     ⇒
+     define(`array_set', `define(format(``array[%d]'', `$1'), `$2')')
+     ⇒
+     array_set(`4', `array element no. 4')
+     ⇒
+     array_set(`17', `array element no. 17')
+     ⇒
+     array(`4')
+     ⇒array element no. 4
+     array(eval(`10 + 7'))
+     ⇒array element no. 17
+
+   Change the ‘%d’ to ‘%s’ and it is an associative array.
+
+5.2 Arguments to macros
+=======================
+
+Macros can have arguments.  The Nth argument is denoted by ‘$n’ in the
+expansion text, and is replaced by the Nth actual argument, when the
+macro is expanded.  Replacement of arguments happens before rescanning,
+regardless of how many nesting levels of quoting appear in the
+expansion.  Here is an example of a macro with two arguments.
+
+ -- Composite: exch (ARG1, ARG2)
+     Expands to ARG2 followed by ARG1, effectively exchanging their
+     order.
+
+     define(`exch', `$2, $1')
+     ⇒
+     exch(`arg1', `arg2')
+     ⇒arg2, arg1
+
+   This can be used, for example, if you like the arguments to ‘define’
+to be reversed.
+
+     define(`exch', `$2, $1')
+     ⇒
+     define(exch(``expansion text'', ``macro''))
+     ⇒
+     macro
+     ⇒expansion text
+
+   *Note Quoting Arguments::, for an explanation of the double quotes.
+(You should try and improve this example so that clients of ‘exch’ do
+not have to double quote; or *note Answers: Improved exch.).
+
+   As a special case, the zeroth argument, ‘$0’, is always the name of
+the macro being expanded.
+
+     define(`test', ``Macro name: $0'')
+     ⇒
+     test
+     ⇒Macro name: test
+
+   If you want quoted text to appear as part of the expansion text,
+remember that quotes can be nested in quoted strings.  Thus, in
+
+     define(`foo', `This is macro `foo'.')
+     ⇒
+     foo
+     ⇒This is macro foo.
+
+The ‘foo’ in the expansion text is _not_ expanded, since it is a quoted
+string, and not a name.
+
+   GNU ‘m4’ allows the number following the ‘$’ to consist of one or
+more digits, allowing macros to have any number of arguments.  The
+extension of accepting multiple digits is incompatible with POSIX, and
+is different than traditional implementations of ‘m4’, which only
+recognize one digit.  Therefore, future versions of GNU M4 will phase
+out this feature.  To portably access beyond the ninth argument, you can
+use the ‘argn’ macro documented later (*note Shift::).
+
+   POSIX also states that ‘$’ followed immediately by ‘{’ in a macro
+definition is implementation-defined.  This version of M4 passes the
+literal characters ‘${’ through unchanged, but M4 2.0 will implement an
+optional feature similar to ‘sh’, where ‘${11}’ expands to the eleventh
+argument, to replace the current recognition of ‘$11’.  Meanwhile, if
+you want to guarantee that you will get a literal ‘${’ in output when
+expanding a macro, even when you upgrade to M4 2.0, you can use nested
+quoting to your advantage:
+
+     define(`foo', `single quoted $`'{1} output')
+     ⇒
+     define(`bar', ``double quoted $'`{2} output'')
+     ⇒
+     foo(`a', `b')
+     ⇒single quoted ${1} output
+     bar(`a', `b')
+     ⇒double quoted ${2} output
+
+   To help you detect places in your M4 input files that might change in
+behavior due to the changed behavior of M4 2.0, you can use the
+‘--warn-macro-sequence’ command-line option (*note Invoking m4:
+Operation modes.) with the default regular expression.  This will add a
+warning any time a macro definition includes ‘$’ followed by multiple
+digits, or by ‘{’.  The warning is not enabled by default, because it
+triggers a number of warnings in Autoconf 2.61 (and Autoconf uses ‘-E’
+to treat warnings as errors), and because it will still be possible to
+restore older behavior in M4 2.0.
+
+     $ m4 --warn-macro-sequence
+     define(`foo', `$001 ${1} $1')
+     error→m4:stdin:1: Warning: definition of `foo' contains sequence `$001'
+     error→m4:stdin:1: Warning: definition of `foo' contains sequence `${1}'
+     ⇒
+     foo(`bar')
+     ⇒bar ${1} bar
+
+5.3 Special arguments to macros
+===============================
+
+There is a special notation for the number of actual arguments supplied,
+and for all the actual arguments.
+
+   The number of actual arguments in a macro call is denoted by ‘$#’ in
+the expansion text.
+
+ -- Composite: nargs (...)
+     Expands to a count of the number of arguments supplied.
+
+     define(`nargs', `$#')
+     ⇒
+     nargs
+     ⇒0
+     nargs()
+     ⇒1
+     nargs(`arg1', `arg2', `arg3')
+     ⇒3
+     nargs(`commas can be quoted, like this')
+     ⇒1
+     nargs(arg1#inside comments, commas do not separate arguments
+     still arg1)
+     ⇒1
+     nargs((unquoted parentheses, like this, group arguments))
+     ⇒1
+
+   Remember that ‘#’ defaults to the comment character; if you forget
+quotes to inhibit the comment behavior, your macro definition may not
+end where you expected.
+
+     dnl Attempt to define a macro to just `$#'
+     define(underquoted, $#)
+     oops)
+     ⇒
+     underquoted
+     ⇒0)
+     ⇒oops
+
+   The notation ‘$*’ can be used in the expansion text to denote all the
+actual arguments, unquoted, with commas in between.  For example
+
+     define(`echo', `$*')
+     ⇒
+     echo(arg1,    arg2, arg3 , arg4)
+     ⇒arg1,arg2,arg3 ,arg4
+
+   Often each argument should be quoted, and the notation ‘$@’ handles
+that.  It is just like ‘$*’, except that it quotes each argument.  A
+simple example of that is:
+
+     define(`echo', `$@')
+     ⇒
+     echo(arg1,    arg2, arg3 , arg4)
+     ⇒arg1,arg2,arg3 ,arg4
+
+   Where did the quotes go?  Of course, they were eaten, when the
+expanded text were reread by ‘m4’.  To show the difference, try
+
+     define(`echo1', `$*')
+     ⇒
+     define(`echo2', `$@')
+     ⇒
+     define(`foo', `This is macro `foo'.')
+     ⇒
+     echo1(foo)
+     ⇒This is macro This is macro foo..
+     echo1(`foo')
+     ⇒This is macro foo.
+     echo2(foo)
+     ⇒This is macro foo.
+     echo2(`foo')
+     ⇒foo
+
+*Note Trace::, if you do not understand this.  As another example of the
+difference, remember that comments encountered in arguments are passed
+untouched to the macro, and that quoting disables comments.
+
+     define(`echo1', `$*')
+     ⇒
+     define(`echo2', `$@')
+     ⇒
+     define(`foo', `bar')
+     ⇒
+     echo1(#foo'foo
+     foo)
+     ⇒#foo'foo
+     ⇒bar
+     echo2(#foo'foo
+     foo)
+     ⇒#foobar
+     ⇒bar'
+
+   A ‘$’ sign in the expansion text, that is not followed by anything
+‘m4’ understands, is simply copied to the macro expansion, as any other
+text is.
+
+     define(`foo', `$$$ hello $$$')
+     ⇒
+     foo
+     ⇒$$$ hello $$$
+
+   If you want a macro to expand to something like ‘$12’, the judicious
+use of nested quoting can put a safe character between the ‘$’ and the
+next character, relying on the rescanning to remove the nested quote.
+This will prevent ‘m4’ from interpreting the ‘$’ sign as a reference to
+an argument.
+
+     define(`foo', `no nested quote: $1')
+     ⇒
+     foo(`arg')
+     ⇒no nested quote: arg
+     define(`foo', `nested quote around $: `$'1')
+     ⇒
+     foo(`arg')
+     ⇒nested quote around $: $1
+     define(`foo', `nested empty quote after $: $`'1')
+     ⇒
+     foo(`arg')
+     ⇒nested empty quote after $: $1
+     define(`foo', `nested quote around next character: $`1'')
+     ⇒
+     foo(`arg')
+     ⇒nested quote around next character: $1
+     define(`foo', `nested quote around both: `$1'')
+     ⇒
+     foo(`arg')
+     ⇒nested quote around both: arg
+
+5.4 Deleting a macro
+====================
+
+A macro definition can be removed with ‘undefine’:
+
+ -- Builtin: undefine (NAME...)
+     For each argument, remove the macro NAME.  The macro names must
+     necessarily be quoted, since they will be expanded otherwise.
+
+     The expansion of ‘undefine’ is void.  The macro ‘undefine’ is
+     recognized only with parameters.
+
+     foo bar blah
+     ⇒foo bar blah
+     define(`foo', `some')define(`bar', `other')define(`blah', `text')
+     ⇒
+     foo bar blah
+     ⇒some other text
+     undefine(`foo')
+     ⇒
+     foo bar blah
+     ⇒foo other text
+     undefine(`bar', `blah')
+     ⇒
+     foo bar blah
+     ⇒foo bar blah
+
+   Undefining a macro inside that macro’s expansion is safe; the macro
+still expands to the definition that was in effect at the ‘(’.
+
+     define(`f', ``$0':$1')
+     ⇒
+     f(f(f(undefine(`f')`hello world')))
+     ⇒f:f:f:hello world
+     f(`bye')
+     ⇒f(bye)
+
+   It is not an error for NAME to have no macro definition.  In that
+case, ‘undefine’ does nothing.
+
+5.5 Renaming macros
+===================
+
+It is possible to rename an already defined macro.  To do this, you need
+the builtin ‘defn’:
+
+ -- Builtin: defn (NAME...)
+     Expands to the _quoted definition_ of each NAME.  If an argument is
+     not a defined macro, the expansion for that argument is empty.
+
+     If NAME is a user-defined macro, the quoted definition is simply
+     the quoted expansion text.  If, instead, there is only one NAME and
+     it is a builtin, the expansion is a special token, which points to
+     the builtin’s internal definition.  This token is only meaningful
+     as the second argument to ‘define’ (and ‘pushdef’), and is silently
+     converted to an empty string in most other contexts.  Combining a
+     builtin with anything else is not supported; a warning is issued
+     and the builtin is omitted from the final expansion.
+
+     The macro ‘defn’ is recognized only with parameters.
+
+   Its normal use is best understood through an example, which shows how
+to rename ‘undefine’ to ‘zap’:
+
+     define(`zap', defn(`undefine'))
+     ⇒
+     zap(`undefine')
+     ⇒
+     undefine(`zap')
+     ⇒undefine(zap)
+
+   In this way, ‘defn’ can be used to copy macro definitions, and also
+definitions of builtin macros.  Even if the original macro is removed,
+the other name can still be used to access the definition.
+
+   The fact that macro definitions can be transferred also explains why
+you should use ‘$0’, rather than retyping a macro’s name in its
+definition:
+
+     define(`foo', `This is `$0'')
+     ⇒
+     define(`bar', defn(`foo'))
+     ⇒
+     bar
+     ⇒This is bar
+
+   Macros used as string variables should be referred through ‘defn’, to
+avoid unwanted expansion of the text:
+
+     define(`string', `The macro dnl is very useful
+     ')
+     ⇒
+     string
+     ⇒The macro 
+     defn(`string')
+     ⇒The macro dnl is very useful
+     ⇒
+
+   However, it is important to remember that ‘m4’ rescanning is purely
+textual.  If an unbalanced end-quote string occurs in a macro
+definition, the rescan will see that embedded quote as the termination
+of the quoted string, and the remainder of the macro’s definition will
+be rescanned unquoted.  Thus it is a good idea to avoid unbalanced
+end-quotes in macro definitions or arguments to macros.
+
+     define(`foo', a'a)
+     ⇒
+     define(`a', `A')
+     ⇒
+     define(`echo', `$@')
+     ⇒
+     foo
+     ⇒A'A
+     defn(`foo')
+     ⇒aA'
+     echo(foo)
+     ⇒AA'
+
+   On the other hand, it is possible to exploit the fact that ‘defn’ can
+concatenate multiple macros prior to the rescanning phase, in order to
+join the definitions of macros that, in isolation, have unbalanced
+quotes.  This is particularly useful when one has used several macros to
+accumulate text that M4 should rescan as a whole.  In the example below,
+note how the use of ‘defn’ on ‘l’ in isolation opens a string, which is
+not closed until the next line; but used on ‘l’ and ‘r’ together results
+in nested quoting.
+
+     define(`l', `<[>')define(`r', `<]>')
+     ⇒
+     changequote(`[', `]')
+     ⇒
+     defn([l])defn([r])
+     ])
+     ⇒<[>]defn([r])
+     ⇒)
+     defn([l], [r])
+     ⇒<[>][<]>
+
+   Using ‘defn’ to generate special tokens for builtin macros outside of
+expected contexts can sometimes trigger warnings.  But most of the time,
+such tokens are silently converted to the empty string.
+
+     $ m4 -d
+     defn(`defn')
+     ⇒
+     define(defn(`divnum'), `cannot redefine a builtin token')
+     error→m4:stdin:2: Warning: define: invalid macro name ignored
+     ⇒
+     divnum
+     ⇒0
+     len(defn(`divnum'))
+     ⇒0
+
+   Also note that ‘defn’ with multiple arguments can only join text
+macros, not builtins, although a future version of GNU M4 may lift this
+restriction.
+
+     $ m4 -d
+     define(`a', `A')define(`AA', `b')
+     ⇒
+     traceon(`defn', `define')
+     ⇒
+     defn(`a', `divnum', `a')
+     error→m4:stdin:3: Warning: cannot concatenate builtin `divnum'
+     error→m4trace: -1- defn(`a', `divnum', `a') -> ``A'`A''
+     ⇒AA
+     define(`mydivnum', defn(`divnum', `divnum'))mydivnum
+     error→m4:stdin:4: Warning: cannot concatenate builtin `divnum'
+     error→m4:stdin:4: Warning: cannot concatenate builtin `divnum'
+     error→m4trace: -2- defn(`divnum', `divnum')
+     error→m4trace: -1- define(`mydivnum', `')
+     ⇒
+     traceoff(`defn', `define')
+     ⇒
+
+5.6 Temporarily redefining macros
+=================================
+
+It is possible to redefine a macro temporarily, reverting to the
+previous definition at a later time.  This is done with the builtins
+‘pushdef’ and ‘popdef’:
+
+ -- Builtin: pushdef (NAME, [EXPANSION])
+ -- Builtin: popdef (NAME...)
+     Analogous to ‘define’ and ‘undefine’.
+
+     These macros work in a stack-like fashion.  A macro is temporarily
+     redefined with ‘pushdef’, which replaces an existing definition of
+     NAME, while saving the previous definition, before the new one is
+     installed.  If there is no previous definition, ‘pushdef’ behaves
+     exactly like ‘define’.
+
+     If a macro has several definitions (of which only one is
+     accessible), the topmost definition can be removed with ‘popdef’.
+     If there is no previous definition, ‘popdef’ behaves like
+     ‘undefine’.
+
+     The expansion of both ‘pushdef’ and ‘popdef’ is void.  The macros
+     ‘pushdef’ and ‘popdef’ are recognized only with parameters.
+
+     define(`foo', `Expansion one.')
+     ⇒
+     foo
+     ⇒Expansion one.
+     pushdef(`foo', `Expansion two.')
+     ⇒
+     foo
+     ⇒Expansion two.
+     pushdef(`foo', `Expansion three.')
+     ⇒
+     pushdef(`foo', `Expansion four.')
+     ⇒
+     popdef(`foo')
+     ⇒
+     foo
+     ⇒Expansion three.
+     popdef(`foo', `foo')
+     ⇒
+     foo
+     ⇒Expansion one.
+     popdef(`foo')
+     ⇒
+     foo
+     ⇒foo
+
+   If a macro with several definitions is redefined with ‘define’, the
+topmost definition is _replaced_ with the new definition.  If it is
+removed with ‘undefine’, _all_ the definitions are removed, and not only
+the topmost one.  However, POSIX allows other implementations that treat
+‘define’ as replacing an entire stack of definitions with a single new
+definition, so to be portable to other implementations, it may be worth
+explicitly using ‘popdef’ and ‘pushdef’ rather than relying on the GNU
+behavior of ‘define’.
+
+     define(`foo', `Expansion one.')
+     ⇒
+     foo
+     ⇒Expansion one.
+     pushdef(`foo', `Expansion two.')
+     ⇒
+     foo
+     ⇒Expansion two.
+     define(`foo', `Second expansion two.')
+     ⇒
+     foo
+     ⇒Second expansion two.
+     undefine(`foo')
+     ⇒
+     foo
+     ⇒foo
+
+   Local variables within macros are made with ‘pushdef’ and ‘popdef’.
+At the start of the macro a new definition is pushed, within the macro
+it is manipulated and at the end it is popped, revealing the former
+definition.
+
+   It is possible to temporarily redefine a builtin with ‘pushdef’ and
+‘defn’.
+
+5.7 Indirect call of macros
+===========================
+
+Any macro can be called indirectly with ‘indir’:
+
+ -- Builtin: indir (NAME, [ARGS...])
+     Results in a call to the macro NAME, which is passed the rest of
+     the arguments ARGS.  If NAME is not defined, an error message is
+     printed, and the expansion is void.
+
+     The macro ‘indir’ is recognized only with parameters.
+
+   This can be used to call macros with computed or “invalid” names
+(‘define’ allows such names to be defined):
+
+     define(`$$internal$macro', `Internal macro (name `$0')')
+     ⇒
+     $$internal$macro
+     ⇒$$internal$macro
+     indir(`$$internal$macro')
+     ⇒Internal macro (name $$internal$macro)
+
+   The point is, here, that larger macro packages can have private
+macros defined, that will not be called by accident.  They can _only_ be
+called through the builtin ‘indir’.
+
+   One other point to observe is that argument collection occurs before
+‘indir’ invokes NAME, so if argument collection changes the value of
+NAME, that will be reflected in the final expansion.  This is different
+than the behavior when invoking macros directly, where the definition
+that was in effect before argument collection is used.
+
+     $ m4 -d
+     define(`f', `1')
+     ⇒
+     f(define(`f', `2'))
+     ⇒1
+     indir(`f', define(`f', `3'))
+     ⇒3
+     indir(`f', undefine(`f'))
+     error→m4:stdin:4: undefined macro `f'
+     ⇒
+
+   When handed the result of ‘defn’ (*note Defn::) as one of its
+arguments, ‘indir’ defers to the invoked NAME for whether a token
+representing a builtin is recognized or flattened to the empty string.
+
+     $ m4 -d
+     indir(defn(`defn'), `divnum')
+     error→m4:stdin:1: Warning: indir: invalid macro name ignored
+     ⇒
+     indir(`define', defn(`defn'), `divnum')
+     error→m4:stdin:2: Warning: define: invalid macro name ignored
+     ⇒
+     indir(`define', `foo', defn(`divnum'))
+     ⇒
+     foo
+     ⇒0
+     indir(`divert', defn(`foo'))
+     error→m4:stdin:5: empty string treated as 0 in builtin `divert'
+     ⇒
+
+5.8 Indirect call of builtins
+=============================
+
+Builtin macros can be called indirectly with ‘builtin’:
+
+ -- Builtin: builtin (NAME, [ARGS...])
+     Results in a call to the builtin NAME, which is passed the rest of
+     the arguments ARGS.  If NAME does not name a builtin, an error
+     message is printed, and the expansion is void.
+
+     The macro ‘builtin’ is recognized only with parameters.
+
+   This can be used even if NAME has been given another definition that
+has covered the original, or been undefined so that no macro maps to the
+builtin.
+
+     pushdef(`define', `hidden')
+     ⇒
+     undefine(`undefine')
+     ⇒
+     define(`foo', `bar')
+     ⇒hidden
+     foo
+     ⇒foo
+     builtin(`define', `foo', defn(`divnum'))
+     ⇒
+     foo
+     ⇒0
+     builtin(`define', `foo', `BAR')
+     ⇒
+     foo
+     ⇒BAR
+     undefine(`foo')
+     ⇒undefine(foo)
+     foo
+     ⇒BAR
+     builtin(`undefine', `foo')
+     ⇒
+     foo
+     ⇒foo
+
+   The NAME argument only matches the original name of the builtin, even
+when the ‘--prefix-builtins’ option (or ‘-P’, *note Invoking m4:
+Operation modes.) is in effect.  This is different from ‘indir’, which
+only tracks current macro names.
+
+     $ m4 -P
+     m4_builtin(`divnum')
+     ⇒0
+     m4_builtin(`m4_divnum')
+     error→m4:stdin:2: undefined builtin `m4_divnum'
+     ⇒
+     m4_indir(`divnum')
+     error→m4:stdin:3: undefined macro `divnum'
+     ⇒
+     m4_indir(`m4_divnum')
+     ⇒0
+
+   Note that ‘indir’ and ‘builtin’ can be used to invoke builtins
+without arguments, even when they normally require parameters to be
+recognized; but it will provoke a warning, and result in a void
+expansion.
+
+     builtin
+     ⇒builtin
+     builtin()
+     error→m4:stdin:2: undefined builtin `'
+     ⇒
+     builtin(`builtin')
+     error→m4:stdin:3: Warning: too few arguments to builtin `builtin'
+     ⇒
+     builtin(`builtin',)
+     error→m4:stdin:4: undefined builtin `'
+     ⇒
+     builtin(`builtin', ``'
+     ')
+     error→m4:stdin:5: undefined builtin ``'
+     error→'
+     ⇒
+     indir(`index')
+     error→m4:stdin:7: Warning: too few arguments to builtin `index'
+     ⇒
+
+6 Conditionals, loops, and recursion
+************************************
+
+Macros, expanding to plain text, perhaps with arguments, are not quite
+enough.  We would like to have macros expand to different things, based
+on decisions taken at run-time.  For that, we need some kind of
+conditionals.  Also, we would like to have some kind of loop construct,
+so we could do something a number of times, or while some condition is
+true.
+
+* Menu:
+
+* Ifdef::                       Testing if a macro is defined
+* Ifelse::                      If-else construct, or multibranch
+* Shift::                       Recursion in ‘m4’
+* Forloop::                     Iteration by counting
+* Foreach::                     Iteration by list contents
+* Stacks::                      Working with definition stacks
+* Composition::                 Building macros with macros
+
+6.1 Testing if a macro is defined
+=================================
+
+There are two different builtin conditionals in ‘m4’.  The first is
+‘ifdef’:
+
+ -- Builtin: ifdef (NAME, STRING-1, [STRING-2])
+     If NAME is defined as a macro, ‘ifdef’ expands to STRING-1,
+     otherwise to STRING-2.  If STRING-2 is omitted, it is taken to be
+     the empty string (according to the normal rules).
+
+     The macro ‘ifdef’ is recognized only with parameters.
+
+     ifdef(`foo', ``foo' is defined', ``foo' is not defined')
+     ⇒foo is not defined
+     define(`foo', `')
+     ⇒
+     ifdef(`foo', ``foo' is defined', ``foo' is not defined')
+     ⇒foo is defined
+     ifdef(`no_such_macro', `yes', `no', `extra argument')
+     error→m4:stdin:4: Warning: excess arguments to builtin `ifdef' ignored
+     ⇒no
+
+6.2 If-else construct, or multibranch
+=====================================
+
+The other conditional, ‘ifelse’, is much more powerful.  It can be used
+as a way to introduce a long comment, as an if-else construct, or as a
+multibranch, depending on the number of arguments supplied:
+
+ -- Builtin: ifelse (COMMENT)
+ -- Builtin: ifelse (STRING-1, STRING-2, EQUAL, [NOT-EQUAL])
+ -- Builtin: ifelse (STRING-1, STRING-2, EQUAL-1, STRING-3, STRING-4,
+          EQUAL-2, ..., [NOT-EQUAL])
+     Used with only one argument, the ‘ifelse’ simply discards it and
+     produces no output.
+
+     If called with three or four arguments, ‘ifelse’ expands into
+     EQUAL, if STRING-1 and STRING-2 are equal (character for
+     character), otherwise it expands to NOT-EQUAL.  A final fifth
+     argument is ignored, after triggering a warning.
+
+     If called with six or more arguments, and STRING-1 and STRING-2 are
+     equal, ‘ifelse’ expands into EQUAL-1, otherwise the first three
+     arguments are discarded and the processing starts again.
+
+     The macro ‘ifelse’ is recognized only with parameters.
+
+   Using only one argument is a common ‘m4’ idiom for introducing a
+block comment, as an alternative to repeatedly using ‘dnl’.  This
+special usage is recognized by GNU ‘m4’, so that in this case, the
+warning about missing arguments is never triggered.
+
+     ifelse(`some comments')
+     ⇒
+     ifelse(`foo', `bar')
+     error→m4:stdin:2: Warning: too few arguments to builtin `ifelse'
+     ⇒
+
+   Using three or four arguments provides decision points.
+
+     ifelse(`foo', `bar', `true')
+     ⇒
+     ifelse(`foo', `foo', `true')
+     ⇒true
+     define(`foo', `bar')
+     ⇒
+     ifelse(foo, `bar', `true', `false')
+     ⇒true
+     ifelse(foo, `foo', `true', `false')
+     ⇒false
+
+   Notice how the first argument was used unquoted; it is common to
+compare the expansion of a macro with a string.  With this macro, you
+can now reproduce the behavior of blind builtins, where the macro is
+recognized only with arguments.
+
+     define(`foo', `ifelse(`$#', `0', ``$0'', `arguments:$#')')
+     ⇒
+     foo
+     ⇒foo
+     foo()
+     ⇒arguments:1
+     foo(`a', `b', `c')
+     ⇒arguments:3
+
+   For an example of a way to make defining blind macros easier, see
+*note Composition::.
+
+   The macro ‘ifelse’ can take more than four arguments.  If given more
+than four arguments, ‘ifelse’ works like a ‘case’ or ‘switch’ statement
+in traditional programming languages.  If STRING-1 and STRING-2 are
+equal, ‘ifelse’ expands into EQUAL-1, otherwise the procedure is
+repeated with the first three arguments discarded.  This calls for an
+example:
+
+     ifelse(`foo', `bar', `third', `gnu', `gnats')
+     error→m4:stdin:1: Warning: excess arguments to builtin `ifelse' ignored
+     ⇒gnu
+     ifelse(`foo', `bar', `third', `gnu', `gnats', `sixth')
+     ⇒
+     ifelse(`foo', `bar', `third', `gnu', `gnats', `sixth', `seventh')
+     ⇒seventh
+     ifelse(`foo', `bar', `3', `gnu', `gnats', `6', `7', `8')
+     error→m4:stdin:4: Warning: excess arguments to builtin `ifelse' ignored
+     ⇒7
+
+   Naturally, the normal case will be slightly more advanced than these
+examples.  A common use of ‘ifelse’ is in macros implementing loops of
+various kinds.
+
+6.3 Recursion in ‘m4’
+=====================
+
+There is no direct support for loops in ‘m4’, but macros can be
+recursive.  There is no limit on the number of recursion levels, other
+than those enforced by your hardware and operating system.
+
+   Loops can be programmed using recursion and the conditionals
+described previously.
+
+   There is a builtin macro, ‘shift’, which can, among other things, be
+used for iterating through the actual arguments to a macro:
+
+ -- Builtin: shift (ARG1, ...)
+     Takes any number of arguments, and expands to all its arguments
+     except ARG1, separated by commas, with each argument quoted.
+
+     The macro ‘shift’ is recognized only with parameters.
+
+     shift
+     ⇒shift
+     shift(`bar')
+     ⇒
+     shift(`foo', `bar', `baz')
+     ⇒bar,baz
+
+   An example of the use of ‘shift’ is this macro:
+
+ -- Composite: reverse (...)
+     Takes any number of arguments, and reverses their order.
+
+   It is implemented as:
+
+     define(`reverse', `ifelse(`$#', `0', , `$#', `1', ``$1'',
+                               `reverse(shift($@)), `$1'')')
+     ⇒
+     reverse
+     ⇒
+     reverse(`foo')
+     ⇒foo
+     reverse(`foo', `bar', `gnats', `and gnus')
+     ⇒and gnus, gnats, bar, foo
+
+   While not a very interesting macro, it does show how simple loops can
+be made with ‘shift’, ‘ifelse’ and recursion.  It also shows that
+‘shift’ is usually used with ‘$@’.  Another example of this is an
+implementation of a short-circuiting conditional operator.
+
+ -- Composite: cond (TEST-1, STRING-1, EQUAL-1, [TEST-2], [STRING-2],
+          [EQUAL-2], ..., [NOT-EQUAL])
+     Similar to ‘ifelse’, where an equal comparison between the first
+     two strings results in the third, otherwise the first three
+     arguments are discarded and the process repeats.  The difference is
+     that each TEST-<N> is expanded only when it is encountered.  This
+     means that every third argument to ‘cond’ is normally given one
+     more level of quoting than the corresponding argument to ‘ifelse’.
+
+   Here is the implementation of ‘cond’, along with a demonstration of
+how it can short-circuit the side effects in ‘side’.  Notice how all the
+unquoted side effects happen regardless of how many comparisons are made
+with ‘ifelse’, compared with only the relevant effects with ‘cond’.
+
+     define(`cond',
+     `ifelse(`$#', `1', `$1',
+             `ifelse($1, `$2', `$3',
+                     `$0(shift(shift(shift($@))))')')')dnl
+     define(`side', `define(`counter', incr(counter))$1')dnl
+     define(`example1',
+     `define(`counter', `0')dnl
+     ifelse(side(`$1'), `yes', `one comparison: ',
+            side(`$1'), `no', `two comparisons: ',
+            side(`$1'), `maybe', `three comparisons: ',
+            `side(`default answer: ')')counter')dnl
+     define(`example2',
+     `define(`counter', `0')dnl
+     cond(`side(`$1')', `yes', `one comparison: ',
+          `side(`$1')', `no', `two comparisons: ',
+          `side(`$1')', `maybe', `three comparisons: ',
+          `side(`default answer: ')')counter')dnl
+     example1(`yes')
+     ⇒one comparison: 3
+     example1(`no')
+     ⇒two comparisons: 3
+     example1(`maybe')
+     ⇒three comparisons: 3
+     example1(`feeling rather indecisive today')
+     ⇒default answer: 4
+     example2(`yes')
+     ⇒one comparison: 1
+     example2(`no')
+     ⇒two comparisons: 2
+     example2(`maybe')
+     ⇒three comparisons: 3
+     example2(`feeling rather indecisive today')
+     ⇒default answer: 4
+
+   Another common task that requires iteration is joining a list of
+arguments into a single string.
+
+ -- Composite: join ([SEPARATOR], [ARGS...])
+ -- Composite: joinall ([SEPARATOR], [ARGS...])
+     Generate a single-quoted string, consisting of each ARG separated
+     by SEPARATOR.  While ‘joinall’ always outputs a SEPARATOR between
+     arguments, ‘join’ avoids the SEPARATOR for an empty ARG.
+
+   Here are some examples of its usage, based on the implementation
+‘m4-1.4.19/examples/join.m4’ distributed in this package:
+
+     $ m4 -I examples
+     include(`join.m4')
+     ⇒
+     join,join(`-'),join(`-', `'),join(`-', `', `')
+     ⇒,,,
+     joinall,joinall(`-'),joinall(`-', `'),joinall(`-', `', `')
+     ⇒,,,-
+     join(`-', `1')
+     ⇒1
+     join(`-', `1', `2', `3')
+     ⇒1-2-3
+     join(`', `1', `2', `3')
+     ⇒123
+     join(`-', `', `1', `', `', `2', `')
+     ⇒1-2
+     joinall(`-', `', `1', `', `', `2', `')
+     ⇒-1---2-
+     join(`,', `1', `2', `3')
+     ⇒1,2,3
+     define(`nargs', `$#')dnl
+     nargs(join(`,', `1', `2', `3'))
+     ⇒1
+
+   Examining the implementation shows some interesting points about
+several m4 programming idioms.
+
+     $ m4 -I examples
+     undivert(`join.m4')dnl
+     ⇒divert(`-1')
+     ⇒# join(sep, args) - join each non-empty ARG into a single
+     ⇒# string, with each element separated by SEP
+     ⇒define(`join',
+     ⇒`ifelse(`$#', `2', ``$2'',
+     ⇒  `ifelse(`$2', `', `', ``$2'_')$0(`$1', shift(shift($@)))')')
+     ⇒define(`_join',
+     ⇒`ifelse(`$#$2', `2', `',
+     ⇒  `ifelse(`$2', `', `', ``$1$2'')$0(`$1', shift(shift($@)))')')
+     ⇒# joinall(sep, args) - join each ARG, including empty ones,
+     ⇒# into a single string, with each element separated by SEP
+     ⇒define(`joinall', ``$2'_$0(`$1', shift($@))')
+     ⇒define(`_joinall',
+     ⇒`ifelse(`$#', `2', `', ``$1$3'$0(`$1', shift(shift($@)))')')
+     ⇒divert`'dnl
+
+   First, notice that this implementation creates helper macros ‘_join’
+and ‘_joinall’.  This division of labor makes it easier to output the
+correct number of SEPARATOR instances: ‘join’ and ‘joinall’ are
+responsible for the first argument, without a separator, while ‘_join’
+and ‘_joinall’ are responsible for all remaining arguments, always
+outputting a separator when outputting an argument.
+
+   Next, observe how ‘join’ decides to iterate to itself, because the
+first ARG was empty, or to output the argument and swap over to ‘_join’.
+If the argument is non-empty, then the nested ‘ifelse’ results in an
+unquoted ‘_’, which is concatenated with the ‘$0’ to form the next macro
+name to invoke.  The ‘joinall’ implementation is simpler since it does
+not have to suppress empty ARG; it always executes once then defers to
+‘_joinall’.
+
+   Another important idiom is the idea that SEPARATOR is reused for each
+iteration.  Each iteration has one less argument, but rather than
+discarding ‘$1’ by iterating with ‘$0(shift($@))’, the macro discards
+‘$2’ by using ‘$0(`$1', shift(shift($@)))’.
+
+   Next, notice that it is possible to compare more than one condition
+in a single ‘ifelse’ test.  The test of ‘$#$2’ against ‘2’ allows
+‘_join’ to iterate for two separate reasons—either there are still more
+than two arguments, or there are exactly two arguments but the last
+argument is not empty.
+
+   Finally, notice that these macros require exactly two arguments to
+terminate recursion, but that they still correctly result in empty
+output when given no ARGS (i.e., zero or one macro argument).  On the
+first pass when there are too few arguments, the ‘shift’ results in no
+output, but leaves an empty string to serve as the required second
+argument for the second pass.  Put another way, ‘`$1', shift($@)’ is not
+the same as ‘$@’, since only the former guarantees at least two
+arguments.
+
+   Sometimes, a recursive algorithm requires adding quotes to each
+element, or treating multiple arguments as a single element:
+
+ -- Composite: quote (...)
+ -- Composite: dquote (...)
+ -- Composite: dquote_elt (...)
+     Takes any number of arguments, and adds quoting.  With ‘quote’,
+     only one level of quoting is added, effectively removing whitespace
+     after commas and turning multiple arguments into a single string.
+     With ‘dquote’, two levels of quoting are added, one around each
+     element, and one around the list.  And with ‘dquote_elt’, two
+     levels of quoting are added around each element.
+
+   An actual implementation of these three macros is distributed as
+‘m4-1.4.19/examples/quote.m4’ in this package.  First, let’s examine
+their usage:
+
+     $ m4 -I examples
+     include(`quote.m4')
+     ⇒
+     -quote-dquote-dquote_elt-
+     ⇒----
+     -quote()-dquote()-dquote_elt()-
+     ⇒--`'-`'-
+     -quote(`1')-dquote(`1')-dquote_elt(`1')-
+     ⇒-1-`1'-`1'-
+     -quote(`1', `2')-dquote(`1', `2')-dquote_elt(`1', `2')-
+     ⇒-1,2-`1',`2'-`1',`2'-
+     define(`n', `$#')dnl
+     -n(quote(`1', `2'))-n(dquote(`1', `2'))-n(dquote_elt(`1', `2'))-
+     ⇒-1-1-2-
+     dquote(dquote_elt(`1', `2'))
+     ⇒``1'',``2''
+     dquote_elt(dquote(`1', `2'))
+     ⇒``1',`2''
+
+   The last two lines show that when given two arguments, ‘dquote’
+results in one string, while ‘dquote_elt’ results in two.  Now, examine
+the implementation.  Note that ‘quote’ and ‘dquote_elt’ make decisions
+based on their number of arguments, so that when called without
+arguments, they result in nothing instead of a quoted empty string; this
+is so that it is possible to distinguish between no arguments and an
+empty first argument.  ‘dquote’, on the other hand, results in a string
+no matter what, since it is still possible to tell whether it was
+invoked without arguments based on the resulting string.
+
+     $ m4 -I examples
+     undivert(`quote.m4')dnl
+     ⇒divert(`-1')
+     ⇒# quote(args) - convert args to single-quoted string
+     ⇒define(`quote', `ifelse(`$#', `0', `', ``$*'')')
+     ⇒# dquote(args) - convert args to quoted list of quoted strings
+     ⇒define(`dquote', ``$@'')
+     ⇒# dquote_elt(args) - convert args to list of double-quoted strings
+     ⇒define(`dquote_elt', `ifelse(`$#', `0', `', `$#', `1', ```$1''',
+     ⇒                             ```$1'',$0(shift($@))')')
+     ⇒divert`'dnl
+
+   It is worth pointing out that ‘quote(ARGS)’ is more efficient than
+‘joinall(`,', ARGS)’ for producing the same output.
+
+   One more useful macro based on ‘shift’ allows portably selecting an
+arbitrary argument (usually greater than the ninth argument), without
+relying on the GNU extension of multi-digit arguments (*note
+Arguments::).
+
+ -- Composite: argn (N, ...)
+     Expands to argument N out of the remaining arguments.  N must be a
+     positive number.  Usually invoked as ‘argn(`N',$@)’.
+
+   It is implemented as:
+
+     define(`argn', `ifelse(`$1', 1, ``$2'',
+       `argn(decr(`$1'), shift(shift($@)))')')
+     ⇒
+     argn(`1', `a')
+     ⇒a
+     define(`foo', `argn(`11', $@)')
+     ⇒
+     foo(`a', `b', `c', `d', `e', `f', `g', `h', `i', `j', `k', `l')
+     ⇒k
+
+6.4 Iteration by counting
+=========================
+
+Here is an example of a loop macro that implements a simple for loop.
+
+ -- Composite: forloop (ITERATOR, START, END, TEXT)
+     Takes the name in ITERATOR, which must be a valid macro name, and
+     successively assign it each integer value from START to END,
+     inclusive.  For each assignment to ITERATOR, append TEXT to the
+     expansion of the ‘forloop’.  TEXT may refer to ITERATOR.  Any
+     definition of ITERATOR prior to this invocation is restored.
+
+   It can, for example, be used for simple counting:
+
+     $ m4 -I examples
+     include(`forloop.m4')
+     ⇒
+     forloop(`i', `1', `8', `i ')
+     ⇒1 2 3 4 5 6 7 8 
+
+   For-loops can be nested, like:
+
+     $ m4 -I examples
+     include(`forloop.m4')
+     ⇒
+     forloop(`i', `1', `4', `forloop(`j', `1', `8', ` (i, j)')
+     ')
+     ⇒ (1, 1) (1, 2) (1, 3) (1, 4) (1, 5) (1, 6) (1, 7) (1, 8)
+     ⇒ (2, 1) (2, 2) (2, 3) (2, 4) (2, 5) (2, 6) (2, 7) (2, 8)
+     ⇒ (3, 1) (3, 2) (3, 3) (3, 4) (3, 5) (3, 6) (3, 7) (3, 8)
+     ⇒ (4, 1) (4, 2) (4, 3) (4, 4) (4, 5) (4, 6) (4, 7) (4, 8)
+     ⇒
+
+   The implementation of the ‘forloop’ macro is fairly straightforward.
+The ‘forloop’ macro itself is simply a wrapper, which saves the previous
+definition of the first argument, calls the internal macro ‘_forloop’,
+and re-establishes the saved definition of the first argument.
+
+   The macro ‘_forloop’ expands the fourth argument once, and tests to
+see if the iterator has reached the final value.  If it has not
+finished, it increments the iterator (using the predefined macro ‘incr’,
+*note Incr::), and recurses.
+
+   Here is an actual implementation of ‘forloop’, distributed as
+‘m4-1.4.19/examples/forloop.m4’ in this package:
+
+     $ m4 -I examples
+     undivert(`forloop.m4')dnl
+     ⇒divert(`-1')
+     ⇒# forloop(var, from, to, stmt) - simple version
+     ⇒define(`forloop', `pushdef(`$1', `$2')_forloop($@)popdef(`$1')')
+     ⇒define(`_forloop',
+     ⇒       `$4`'ifelse($1, `$3', `', `define(`$1', incr($1))$0($@)')')
+     ⇒divert`'dnl
+
+   Notice the careful use of quotes.  Certain macro arguments are left
+unquoted, each for its own reason.  Try to find out _why_ these
+arguments are left unquoted, and see what happens if they are quoted.
+(As presented, these two macros are useful but not very robust for
+general use.  They lack even basic error handling for cases like START
+less than END, END not numeric, or ITERATOR not being a macro name.  See
+if you can improve these macros; or *note Answers: Improved forloop.).
+
+6.5 Iteration by list contents
+==============================
+
+Here is an example of a loop macro that implements list iteration.
+
+ -- Composite: foreach (ITERATOR, PAREN-LIST, TEXT)
+ -- Composite: foreachq (ITERATOR, QUOTE-LIST, TEXT)
+     Takes the name in ITERATOR, which must be a valid macro name, and
+     successively assign it each value from PAREN-LIST or QUOTE-LIST.
+     In ‘foreach’, PAREN-LIST is a comma-separated list of elements
+     contained in parentheses.  In ‘foreachq’, QUOTE-LIST is a
+     comma-separated list of elements contained in a quoted string.  For
+     each assignment to ITERATOR, append TEXT to the overall expansion.
+     TEXT may refer to ITERATOR.  Any definition of ITERATOR prior to
+     this invocation is restored.
+
+   As an example, this displays each word in a list inside of a
+sentence, using an implementation of ‘foreach’ distributed as
+‘m4-1.4.19/examples/foreach.m4’, and ‘foreachq’ in
+‘m4-1.4.19/examples/foreachq.m4’.
+
+     $ m4 -I examples
+     include(`foreach.m4')
+     ⇒
+     foreach(`x', (foo, bar, foobar), `Word was: x
+     ')dnl
+     ⇒Word was: foo
+     ⇒Word was: bar
+     ⇒Word was: foobar
+     include(`foreachq.m4')
+     ⇒
+     foreachq(`x', `foo, bar, foobar', `Word was: x
+     ')dnl
+     ⇒Word was: foo
+     ⇒Word was: bar
+     ⇒Word was: foobar
+
+   It is possible to be more complex; each element of the PAREN-LIST or
+QUOTE-LIST can itself be a list, to pass as further arguments to a
+helper macro.  This example generates a shell case statement:
+
+     $ m4 -I examples
+     include(`foreach.m4')
+     ⇒
+     define(`_case', `  $1)
+         $2=" $1";;
+     ')dnl
+     define(`_cat', `$1$2')dnl
+     case $`'1 in
+     ⇒case $1 in
+     foreach(`x', `(`(`a', `vara')', `(`b', `varb')', `(`c', `varc')')',
+             `_cat(`_case', x)')dnl
+     ⇒  a)
+     ⇒    vara=" a";;
+     ⇒  b)
+     ⇒    varb=" b";;
+     ⇒  c)
+     ⇒    varc=" c";;
+     esac
+     ⇒esac
+
+   The implementation of the ‘foreach’ macro is a bit more involved; it
+is a wrapper around two helper macros.  First, ‘_arg1’ is needed to grab
+the first element of a list.  Second, ‘_foreach’ implements the
+recursion, successively walking through the original list.  Here is a
+simple implementation of ‘foreach’:
+
+     $ m4 -I examples
+     undivert(`foreach.m4')dnl
+     ⇒divert(`-1')
+     ⇒# foreach(x, (item_1, item_2, ..., item_n), stmt)
+     ⇒#   parenthesized list, simple version
+     ⇒define(`foreach', `pushdef(`$1')_foreach($@)popdef(`$1')')
+     ⇒define(`_arg1', `$1')
+     ⇒define(`_foreach', `ifelse(`$2', `()', `',
+     ⇒  `define(`$1', _arg1$2)$3`'$0(`$1', (shift$2), `$3')')')
+     ⇒divert`'dnl
+
+   Unfortunately, that implementation is not robust to macro names as
+list elements.  Each iteration of ‘_foreach’ is stripping another layer
+of quotes, leading to erratic results if list elements are not already
+fully expanded.  The first cut at implementing ‘foreachq’ takes this
+into account.  Also, when using quoted elements in a PAREN-LIST, the
+overall list must be quoted.  A QUOTE-LIST has the nice property of
+requiring fewer characters to create a list containing the same quoted
+elements.  To see the difference between the two macros, we attempt to
+pass double-quoted macro names in a list, expecting the macro name on
+output after one layer of quotes is removed during list iteration and
+the final layer removed during the final rescan:
+
+     $ m4 -I examples
+     define(`a', `1')define(`b', `2')define(`c', `3')
+     ⇒
+     include(`foreach.m4')
+     ⇒
+     include(`foreachq.m4')
+     ⇒
+     foreach(`x', `(``a'', ``(b'', ``c)'')', `x
+     ')
+     ⇒1
+     ⇒(2)1
+     ⇒
+     ⇒, x
+     ⇒)
+     foreachq(`x', ```a'', ``(b'', ``c)''', `x
+     ')dnl
+     ⇒a
+     ⇒(b
+     ⇒c)
+
+   Obviously, ‘foreachq’ did a better job; here is its implementation:
+
+     $ m4 -I examples
+     undivert(`foreachq.m4')dnl
+     ⇒include(`quote.m4')dnl
+     ⇒divert(`-1')
+     ⇒# foreachq(x, `item_1, item_2, ..., item_n', stmt)
+     ⇒#   quoted list, simple version
+     ⇒define(`foreachq', `pushdef(`$1')_foreachq($@)popdef(`$1')')
+     ⇒define(`_arg1', `$1')
+     ⇒define(`_foreachq', `ifelse(quote($2), `', `',
+     ⇒  `define(`$1', `_arg1($2)')$3`'$0(`$1', `shift($2)', `$3')')')
+     ⇒divert`'dnl
+
+   Notice that ‘_foreachq’ had to use the helper macro ‘quote’ defined
+earlier (*note Shift::), to ensure that the embedded ‘ifelse’ call does
+not go haywire if a list element contains a comma.  Unfortunately, this
+implementation of ‘foreachq’ has its own severe flaw.  Whereas the
+‘foreach’ implementation was linear, this macro is quadratic in the
+number of list elements, and is much more likely to trip up the limit
+set by the command line option ‘--nesting-limit’ (or ‘-L’, *note
+Invoking m4: Limits control.).  Additionally, this implementation does
+not expand ‘defn(`ITERATOR')’ very well, when compared with ‘foreach’.
+
+     $ m4 -I examples
+     include(`foreach.m4')include(`foreachq.m4')
+     ⇒
+     foreach(`name', `(`a', `b')', ` defn(`name')')
+     ⇒ a b
+     foreachq(`name', ``a', `b'', ` defn(`name')')
+     ⇒ _arg1(`a', `b') _arg1(shift(`a', `b'))
+
+   It is possible to have robust iteration with linear behavior and sane
+ITERATOR contents for either list style.  See if you can learn from the
+best elements of both of these implementations to create robust macros
+(or *note Answers: Improved foreach.).
+
+6.6 Working with definition stacks
+==================================
+
+Thanks to ‘pushdef’, manipulation of a stack is an intrinsic operation
+in ‘m4’.  Normally, only the topmost definition in a stack is important,
+but sometimes, it is desirable to manipulate the entire definition
+stack.
+
+ -- Composite: stack_foreach (MACRO, ACTION)
+ -- Composite: stack_foreach_lifo (MACRO, ACTION)
+     For each of the ‘pushdef’ definitions associated with MACRO, invoke
+     the macro ACTION with a single argument of that definition.
+     ‘stack_foreach’ visits the oldest definition first, while
+     ‘stack_foreach_lifo’ visits the current definition first.  ACTION
+     should not modify or dereference MACRO.  There are a few special
+     macros, such as ‘defn’, which cannot be used as the MACRO
+     parameter.
+
+   A sample implementation of these macros is distributed in the file
+‘m4-1.4.19/examples/stack.m4’.
+
+     $ m4 -I examples
+     include(`stack.m4')
+     ⇒
+     pushdef(`a', `1')pushdef(`a', `2')pushdef(`a', `3')
+     ⇒
+     define(`show', ``$1'
+     ')
+     ⇒
+     stack_foreach(`a', `show')dnl
+     ⇒1
+     ⇒2
+     ⇒3
+     stack_foreach_lifo(`a', `show')dnl
+     ⇒3
+     ⇒2
+     ⇒1
+
+   Now for the implementation.  Note the definition of a helper macro,
+‘_stack_reverse’, which destructively swaps the contents of one stack of
+definitions into the reverse order in the temporary macro ‘tmp-$1’.  By
+calling the helper twice, the original order is restored back into the
+macro ‘$1’; since the operation is destructive, this explains why ‘$1’
+must not be modified or dereferenced during the traversal.  The caller
+can then inject additional code to pass the definition currently being
+visited to ‘$2’.  The choice of helper names is intentional; since ‘-’
+is not valid as part of a macro name, there is no risk of conflict with
+a valid macro name, and the code is guaranteed to use ‘defn’ where
+necessary.  Finally, note that any macro used in the traversal of a
+‘pushdef’ stack, such as ‘pushdef’ or ‘defn’, cannot be handled by
+‘stack_foreach’, since the macro would temporarily be undefined during
+the algorithm.
+
+     $ m4 -I examples
+     undivert(`stack.m4')dnl
+     ⇒divert(`-1')
+     ⇒# stack_foreach(macro, action)
+     ⇒# Invoke ACTION with a single argument of each definition
+     ⇒# from the definition stack of MACRO, starting with the oldest.
+     ⇒define(`stack_foreach',
+     ⇒`_stack_reverse(`$1', `tmp-$1')'dnl
+     ⇒`_stack_reverse(`tmp-$1', `$1', `$2(defn(`$1'))')')
+     ⇒# stack_foreach_lifo(macro, action)
+     ⇒# Invoke ACTION with a single argument of each definition
+     ⇒# from the definition stack of MACRO, starting with the newest.
+     ⇒define(`stack_foreach_lifo',
+     ⇒`_stack_reverse(`$1', `tmp-$1', `$2(defn(`$1'))')'dnl
+     ⇒`_stack_reverse(`tmp-$1', `$1')')
+     ⇒define(`_stack_reverse',
+     ⇒`ifdef(`$1', `pushdef(`$2', defn(`$1'))$3`'popdef(`$1')$0($@)')')
+     ⇒divert`'dnl
+
+6.7 Building macros with macros
+===============================
+
+Since m4 is a macro language, it is possible to write macros that can
+build other macros.  First on the list is a way to automate the creation
+of blind macros.
+
+ -- Composite: define_blind (NAME, [VALUE])
+     Defines NAME as a blind macro, such that NAME will expand to VALUE
+     only when given explicit arguments.  VALUE should not be the result
+     of ‘defn’ (*note Defn::).  This macro is only recognized with
+     parameters, and results in an empty string.
+
+   Defining a macro to define another macro can be a bit tricky.  We
+want to use a literal ‘$#’ in the argument to the nested ‘define’.
+However, if ‘$’ and ‘#’ are adjacent in the definition of
+‘define_blind’, then it would be expanded as the number of arguments to
+‘define_blind’ rather than the intended number of arguments to NAME.
+The solution is to pass the difficult characters through extra arguments
+to a helper macro ‘_define_blind’.  When composing macros, it is a
+common idiom to need a helper macro to concatenate text that forms
+parameters in the composed macro, rather than interpreting the text as a
+parameter of the composing macro.
+
+   As for the limitation against using ‘defn’, there are two reasons.
+If a macro was previously defined with ‘define_blind’, then it can
+safely be renamed to a new blind macro using plain ‘define’; using
+‘define_blind’ to rename it just adds another layer of ‘ifelse’,
+occupying memory and slowing down execution.  And if a macro is a
+builtin, then it would result in an attempt to define a macro consisting
+of both text and a builtin token; this is not supported, and the builtin
+token is flattened to an empty string.
+
+   With that explanation, here’s the definition, and some sample usage.
+Notice that ‘define_blind’ is itself a blind macro.
+
+     $ m4 -d
+     define(`define_blind', `ifelse(`$#', `0', ``$0'',
+     `_$0(`$1', `$2', `$'`#', `$'`0')')')
+     ⇒
+     define(`_define_blind', `define(`$1',
+     `ifelse(`$3', `0', ``$4'', `$2')')')
+     ⇒
+     define_blind
+     ⇒define_blind
+     define_blind(`foo', `arguments were $*')
+     ⇒
+     foo
+     ⇒foo
+     foo(`bar')
+     ⇒arguments were bar
+     define(`blah', defn(`foo'))
+     ⇒
+     blah
+     ⇒blah
+     blah(`a', `b')
+     ⇒arguments were a,b
+     defn(`blah')
+     ⇒ifelse(`$#', `0', ``$0'', `arguments were $*')
+
+   Another interesting composition tactic is argument “currying”, or
+factoring a macro that takes multiple arguments for use in a context
+that provides exactly one argument.
+
+ -- Composite: curry (MACRO, ...)
+     Expand to a macro call that takes exactly one argument, then
+     appends that argument to the original arguments and invokes MACRO
+     with the resulting list of arguments.
+
+   A demonstration of currying makes the intent of this macro a little
+more obvious.  The macro ‘stack_foreach’ mentioned earlier is an example
+of a context that provides exactly one argument to a macro name.  But
+coupled with currying, we can invoke ‘reverse’ with two arguments for
+each definition of a macro stack.  This example uses the file
+‘m4-1.4.19/examples/curry.m4’ included in the distribution.
+
+     $ m4 -I examples
+     include(`curry.m4')include(`stack.m4')
+     ⇒
+     define(`reverse', `ifelse(`$#', `0', , `$#', `1', ``$1'',
+                               `reverse(shift($@)), `$1'')')
+     ⇒
+     pushdef(`a', `1')pushdef(`a', `2')pushdef(`a', `3')
+     ⇒
+     stack_foreach(`a', `:curry(`reverse', `4')')
+     ⇒:1, 4:2, 4:3, 4
+     curry(`curry', `reverse', `1')(`2')(`3')
+     ⇒3, 2, 1
+
+   Now for the implementation.  Notice how ‘curry’ leaves off with a
+macro name but no open parenthesis, while still in the middle of
+collecting arguments for ‘$1’.  The macro ‘_curry’ is the helper macro
+that takes one argument, then adds it to the list and finally supplies
+the closing parenthesis.  The use of a comma inside the ‘shift’ call
+allows currying to also work for a macro that takes one argument,
+although it often makes more sense to invoke that macro directly rather
+than going through ‘curry’.
+
+     $ m4 -I examples
+     undivert(`curry.m4')dnl
+     ⇒divert(`-1')
+     ⇒# curry(macro, args)
+     ⇒# Expand to a macro call that takes one argument, then invoke
+     ⇒# macro(args, extra).
+     ⇒define(`curry', `$1(shift($@,)_$0')
+     ⇒define(`_curry', ``$1')')
+     ⇒divert`'dnl
+
+   Unfortunately, with M4 1.4.x, ‘curry’ is unable to handle builtin
+tokens, which are silently flattened to the empty string when passed
+through another text macro.  This limitation will be lifted in a future
+release of M4.
+
+   Putting the last few concepts together, it is possible to copy or
+rename an entire stack of macro definitions.
+
+ -- Composite: copy (SOURCE, DEST)
+ -- Composite: rename (SOURCE, DEST)
+     Ensure that DEST is undefined, then define it to the same stack of
+     definitions currently in SOURCE.  ‘copy’ leaves SOURCE unchanged,
+     while ‘rename’ undefines SOURCE.  There are only a few macros, such
+     as ‘copy’ or ‘defn’, which cannot be copied via this macro.
+
+   The implementation is relatively straightforward (although since it
+uses ‘curry’, it is unable to copy builtin macros, such as the second
+definition of ‘a’ as a synonym for ‘divnum’.  See if you can design a
+version that works around this limitation, or *note Answers: Improved
+copy.).
+
+     $ m4 -I examples
+     include(`curry.m4')include(`stack.m4')
+     ⇒
+     define(`rename', `copy($@)undefine(`$1')')dnl
+     define(`copy', `ifdef(`$2', `errprint(`$2 already defined
+     ')m4exit(`1')',
+        `stack_foreach(`$1', `curry(`pushdef', `$2')')')')dnl
+     pushdef(`a', `1')pushdef(`a', defn(`divnum'))pushdef(`a', `2')
+     ⇒
+     copy(`a', `b')
+     ⇒
+     rename(`b', `c')
+     ⇒
+     a b c
+     ⇒2 b 2
+     popdef(`a', `c')c a
+     ⇒ 0
+     popdef(`a', `c')a c
+     ⇒1 1
+
+8 Input control
+***************
+
+This chapter describes various builtin macros for controlling the input
+to ‘m4’.
+
+* Menu:
+
+* Dnl::                         Deleting whitespace in input
+* Changequote::                 Changing the quote characters
+* Changecom::                   Changing the comment delimiters
+* Changeword::                  Changing the lexical structure of words
+* M4wrap::                      Saving text until end of input
+
+8.1 Deleting whitespace in input
+================================
+
+The builtin ‘dnl’ stands for “Discard to Next Line”:
+
+ -- Builtin: dnl
+     All characters, up to and including the next newline, are discarded
+     without performing any macro expansion.  A warning is issued if the
+     end of the file is encountered without a newline.
+
+     The expansion of ‘dnl’ is void.
+
+   It is often used in connection with ‘define’, to remove the newline
+that follows the call to ‘define’.  Thus
+
+     define(`foo', `Macro `foo'.')dnl A very simple macro, indeed.
+     foo
+     ⇒Macro foo.
+
+   The input up to and including the next newline is discarded, as
+opposed to the way comments are treated (*note Comments::).
+
+   Usually, ‘dnl’ is immediately followed by an end of line or some
+other whitespace.  GNU ‘m4’ will produce a warning diagnostic if ‘dnl’
+is followed by an open parenthesis.  In this case, ‘dnl’ will collect
+and process all arguments, looking for a matching close parenthesis.
+All predictable side effects resulting from this collection will take
+place.  ‘dnl’ will return no output.  The input following the matching
+close parenthesis up to and including the next newline, on whatever line
+containing it, will still be discarded.
+
+     dnl(`args are ignored, but side effects occur',
+     define(`foo', `like this')) while this text is ignored: undefine(`foo')
+     error→m4:stdin:1: Warning: excess arguments to builtin `dnl' ignored
+     See how `foo' was defined, foo?
+     ⇒See how foo was defined, like this?
+
+   If the end of file is encountered without a newline character, a
+warning is issued and dnl stops consuming input.
+
+     m4wrap(`m4wrap(`2 hi
+     ')0 hi dnl 1 hi')
+     ⇒
+     define(`hi', `HI')
+     ⇒
+     ^D
+     error→m4:stdin:1: Warning: end of file treated as newline
+     ⇒0 HI 2 HI
+
+8.2 Changing the quote characters
+=================================
+
+The default quote delimiters can be changed with the builtin
+‘changequote’:
+
+ -- Builtin: changequote ([START = ‘`’], [END = ‘'’])
+     This sets START as the new begin-quote delimiter and END as the new
+     end-quote delimiter.  If both arguments are missing, the default
+     quotes (‘`’ and ‘'’) are used.  If START is void, then quoting is
+     disabled.  Otherwise, if END is missing or void, the default
+     end-quote delimiter (‘'’) is used.  The quote delimiters can be of
+     any length.
+
+     The expansion of ‘changequote’ is void.
+
+     changequote(`[', `]')
+     ⇒
+     define([foo], [Macro [foo].])
+     ⇒
+     foo
+     ⇒Macro foo.
+
+   The quotation strings can safely contain non-ASCII characters.
+
+     define(`a', `b')
+     ⇒
+     «a»
+     ⇒«b»
+     changequote(`«', `»')
+     ⇒
+     «a»
+     ⇒a
+
+   If no single character is appropriate, START and END can be of any
+length.  Other implementations cap the delimiter length to five
+characters, but GNU has no inherent limit.
+
+     changequote(`[[[', `]]]')
+     ⇒
+     define([[[foo]]], [[[Macro [[[[[foo]]]]].]]])
+     ⇒
+     foo
+     ⇒Macro [[foo]].
+
+   Calling ‘changequote’ with START as the empty string will effectively
+disable the quoting mechanism, leaving no way to quote text.  However,
+using an empty string is not portable, as some other implementations of
+‘m4’ revert to the default quoting, while others preserve the prior
+non-empty delimiter.  If START is not empty, then an empty END will use
+the default end-quote delimiter of ‘'’, as otherwise, it would be
+impossible to end a quoted string.  Again, this is not portable, as some
+other ‘m4’ implementations reuse START as the end-quote delimiter, while
+others preserve the previous non-empty value.  Omitting both arguments
+restores the default begin-quote and end-quote delimiters; fortunately
+this behavior is portable to all implementations of ‘m4’.
+
+     define(`foo', `Macro `FOO'.')
+     ⇒
+     changequote(`', `')
+     ⇒
+     foo
+     ⇒Macro `FOO'.
+     `foo'
+     ⇒`Macro `FOO'.'
+     changequote(`,)
+     ⇒
+     foo
+     ⇒Macro FOO.
+
+   There is no way in ‘m4’ to quote a string containing an unmatched
+begin-quote, except using ‘changequote’ to change the current quotes.
+
+   If the quotes should be changed from, say, ‘[’ to ‘[[’, temporary
+quote characters have to be defined.  To achieve this, two calls of
+‘changequote’ must be made, one for the temporary quotes and one for the
+new quotes.
+
+   Macros are recognized in preference to the begin-quote string, so if
+a prefix of START can be recognized as part of a potential macro name,
+the quoting mechanism is effectively disabled.  Unless you use
+‘changeword’ (*note Changeword::), this means that START should not
+begin with a letter, digit, or ‘_’ (underscore).  However, even though
+quoted strings are not recognized, the quote characters can still be
+discerned in macro expansion and in trace output.
+
+     define(`echo', `$@')
+     ⇒
+     define(`hi', `HI')
+     ⇒
+     changequote(`q', `Q')
+     ⇒
+     q hi Q hi
+     ⇒q HI Q HI
+     echo(hi)
+     ⇒qHIQ
+     changequote
+     ⇒
+     changequote(`-', `EOF')
+     ⇒
+     - hi EOF hi
+     ⇒ hi  HI
+     changequote
+     ⇒
+     changequote(`1', `2')
+     ⇒
+     hi1hi2
+     ⇒hi1hi2
+     hi 1hi2
+     ⇒HI hi
+
+   Quotes are recognized in preference to argument collection.  In
+particular, if START is a single ‘(’, then argument collection is
+effectively disabled.  For portability with other implementations, it is
+a good idea to avoid ‘(’, ‘,’, and ‘)’ as the first character in START.
+
+     define(`echo', `$#:$@:')
+     ⇒
+     define(`hi', `HI')
+     ⇒
+     changequote(`(',`)')
+     ⇒
+     echo(hi)
+     ⇒0::hi
+     changequote
+     ⇒
+     changequote(`((', `))')
+     ⇒
+     echo(hi)
+     ⇒1:HI:
+     echo((hi))
+     ⇒0::hi
+     changequote
+     ⇒
+     changequote(`,', `)')
+     ⇒
+     echo(hi,hi)bye)
+     ⇒1:HIhibye:
+
+   However, if you are not worried about portability, using ‘(’ and ‘)’
+as quoting characters has an interesting property—you can use it to
+compute a quoted string containing the expansion of any quoted text, as
+long as the expansion results in both balanced quotes and balanced
+parentheses.  The trick is realizing ‘expand’ uses ‘$1’ unquoted, to
+trigger its expansion using the normal quoting characters, but uses
+extra parentheses to group unquoted commas that occur in the expansion
+without consuming whitespace following those commas.  Then ‘_expand’
+uses ‘changequote’ to convert the extra parentheses back into quoting
+characters.  Note that it takes two more ‘changequote’ invocations to
+restore the original quotes.  Contrast the behavior on whitespace when
+using ‘$*’, via ‘quote’, to attempt the same task.
+
+     changequote(`[', `]')dnl
+     define([a], [1, (b)])dnl
+     define([b], [2])dnl
+     define([quote], [[$*]])dnl
+     define([expand], [_$0(($1))])dnl
+     define([_expand],
+       [changequote([(], [)])$1changequote`'changequote(`[', `]')])dnl
+     expand([a, a, [a, a], [[a, a]]])
+     ⇒1, (2), 1, (2), a, a, [a, a]
+     quote(a, a, [a, a], [[a, a]])
+     ⇒1,(2),1,(2),a, a,[a, a]
+
+   If END is a prefix of START, the end-quote will be recognized in
+preference to a nested begin-quote.  In particular, changing the quotes
+to have the same string for START and END disables nesting of quotes.
+When quote nesting is disabled, it is impossible to double-quote strings
+across macro expansions, so using the same string is not done very
+often.
+
+     define(`hi', `HI')
+     ⇒
+     changequote(`""', `"')
+     ⇒
+     ""hi"""hi"
+     ⇒hihi
+     ""hi" ""hi"
+     ⇒hi hi
+     ""hi"" "hi"
+     ⇒hi" "HI"
+     changequote
+     ⇒
+     `hi`hi'hi'
+     ⇒hi`hi'hi
+     changequote(`"', `"')
+     ⇒
+     "hi"hi"hi"
+     ⇒hiHIhi
+
+   It is an error if the end of file occurs within a quoted string.
+
+     `hello world'
+     ⇒hello world
+     `dangling quote
+     ^D
+     error→m4:stdin:2: ERROR: end of file in string
+
+     ifelse(`dangling quote
+     ^D
+     error→m4:stdin:1: ERROR: end of file in string
+
+8.3 Changing the comment delimiters
+===================================
+
+The default comment delimiters can be changed with the builtin macro
+‘changecom’:
+
+ -- Builtin: changecom ([START], [END = ‘<NL>’])
+     This sets START as the new begin-comment delimiter and END as the
+     new end-comment delimiter.  If both arguments are missing, or START
+     is void, then comments are disabled.  Otherwise, if END is missing
+     or void, the default end-comment delimiter of newline is used.  The
+     comment delimiters can be of any length.
+
+     The expansion of ‘changecom’ is void.
+
+     define(`comment', `COMMENT')
+     ⇒
+     # A normal comment
+     ⇒# A normal comment
+     changecom(`/*', `*/')
+     ⇒
+     # Not a comment anymore
+     ⇒# Not a COMMENT anymore
+     But: /* this is a comment now */ while this is not a comment
+     ⇒But: /* this is a comment now */ while this is not a COMMENT
+
+   Note how comments are copied to the output, much as if they were
+quoted strings.  If you want the text inside a comment expanded, quote
+the begin-comment delimiter.
+
+   Calling ‘changecom’ without any arguments, or with START as the empty
+string, will effectively disable the commenting mechanism.  To restore
+the original comment start of ‘#’, you must explicitly ask for it.  If
+START is not empty, then an empty END will use the default end-comment
+delimiter of newline, as otherwise, it would be impossible to end a
+comment.  However, this is not portable, as some other ‘m4’
+implementations preserve the previous non-empty delimiters instead.
+
+     define(`comment', `COMMENT')
+     ⇒
+     changecom
+     ⇒
+     # Not a comment anymore
+     ⇒# Not a COMMENT anymore
+     changecom(`#', `')
+     ⇒
+     # comment again
+     ⇒# comment again
+
+   The comment strings can safely contain non-ASCII characters.
+
+     define(`a', `b')
+     ⇒
+     «a»
+     ⇒«b»
+     changecom(`«', `»')
+     ⇒
+     «a»
+     ⇒«a»
+
+   If no single character is appropriate, START and END can be of any
+length.  Other implementations cap the delimiter length to five
+characters, but GNU has no inherent limit.
+
+   Comments are recognized in preference to macros.  However, this is
+not compatible with other implementations, where macros and even quoting
+takes precedence over comments, so it may change in a future release.
+For portability, this means that START should not begin with a letter,
+digit, or ‘_’ (underscore), and that neither the start-quote nor the
+start-comment string should be a prefix of the other.
+
+     define(`hi', `HI')
+     ⇒
+     define(`hi1hi2', `hello')
+     ⇒
+     changecom(`q', `Q')
+     ⇒
+     q hi Q hi
+     ⇒q hi Q HI
+     changecom(`1', `2')
+     ⇒
+     hi1hi2
+     ⇒hello
+     hi 1hi2
+     ⇒HI 1hi2
+
+   Comments are recognized in preference to argument collection.  In
+particular, if START is a single ‘(’, then argument collection is
+effectively disabled.  For portability with other implementations, it is
+a good idea to avoid ‘(’, ‘,’, and ‘)’ as the first character in START.
+
+     define(`echo', `$#:$*:$@:')
+     ⇒
+     define(`hi', `HI')
+     ⇒
+     changecom(`(',`)')
+     ⇒
+     echo(hi)
+     ⇒0:::(hi)
+     changecom
+     ⇒
+     changecom(`((', `))')
+     ⇒
+     echo(hi)
+     ⇒1:HI:HI:
+     echo((hi))
+     ⇒0:::((hi))
+     changecom(`,', `)')
+     ⇒
+     echo(hi,hi)bye)
+     ⇒1:HI,hi)bye:HI,hi)bye:
+     changecom
+     ⇒
+     echo(hi,`,`'hi',hi)
+     ⇒3:HI,,HI,HI:HI,,`'hi,HI:
+     echo(hi,`,`'hi',hi`'changecom(`,,', `hi'))
+     ⇒3:HI,,`'hi,HI:HI,,`'hi,HI:
+
+   It is an error if the end of file occurs within a comment.
+
+     changecom(`/*', `*/')
+     ⇒
+     /*dangling comment
+     ^D
+     error→m4:stdin:2: ERROR: end of file in comment
+
+8.5 Saving text until end of input
+==================================
+
+It is possible to ‘save’ some text until the end of the normal input has
+been seen.  Text can be saved, to be read again by ‘m4’ when the normal
+input has been exhausted.  This feature is normally used to initiate
+cleanup actions before normal exit, e.g., deleting temporary files.
+
+   To save input text, use the builtin ‘m4wrap’:
+
+ -- Builtin: m4wrap (STRING, ...)
+     Stores STRING in a safe place, to be reread when end of input is
+     reached.  As a GNU extension, additional arguments are concatenated
+     with a space to the STRING.
+
+     The expansion of ‘m4wrap’ is void.  The macro ‘m4wrap’ is
+     recognized only with parameters.
+
+     define(`cleanup', `This is the `cleanup' action.
+     ')
+     ⇒
+     m4wrap(`cleanup')
+     ⇒
+     This is the first and last normal input line.
+     ⇒This is the first and last normal input line.
+     ^D
+     ⇒This is the cleanup action.
+
+   The saved input is only reread when the end of normal input is seen,
+and not if ‘m4exit’ is used to exit ‘m4’.
+
+   It is safe to call ‘m4wrap’ from saved text, but then the order in
+which the saved text is reread is undefined.  If ‘m4wrap’ is not used
+recursively, the saved pieces of text are reread in the opposite order
+in which they were saved (LIFO—last in, first out).  However, this
+behavior is likely to change in a future release, to match POSIX, so you
+should not depend on this order.
+
+   It is possible to emulate POSIX behavior even with older versions of
+GNU M4 by including the file ‘m4-1.4.19/examples/wrapfifo.m4’ from the
+distribution:
+
+     $ m4 -I examples
+     undivert(`wrapfifo.m4')dnl
+     ⇒dnl Redefine m4wrap to have FIFO semantics.
+     ⇒define(`_m4wrap_level', `0')dnl
+     ⇒define(`m4wrap',
+     ⇒`ifdef(`m4wrap'_m4wrap_level,
+     ⇒       `define(`m4wrap'_m4wrap_level,
+     ⇒               defn(`m4wrap'_m4wrap_level)`$1')',
+     ⇒       `builtin(`m4wrap', `define(`_m4wrap_level',
+     ⇒                                  incr(_m4wrap_level))dnl
+     ⇒m4wrap'_m4wrap_level)dnl
+     ⇒define(`m4wrap'_m4wrap_level, `$1')')')dnl
+     include(`wrapfifo.m4')
+     ⇒
+     m4wrap(`a`'m4wrap(`c
+     ', `d')')m4wrap(`b')
+     ⇒
+     ^D
+     ⇒abc
+
+   It is likewise possible to emulate LIFO behavior without resorting to
+the GNU M4 extension of ‘builtin’, by including the file
+‘m4-1.4.19/examples/wraplifo.m4’ from the distribution.  (Unfortunately,
+both examples shown here share some subtle bugs.  See if you can find
+and correct them; or *note Answers: Improved m4wrap.).
+
+     $ m4 -I examples
+     undivert(`wraplifo.m4')dnl
+     ⇒dnl Redefine m4wrap to have LIFO semantics.
+     ⇒define(`_m4wrap_level', `0')dnl
+     ⇒define(`_m4wrap', defn(`m4wrap'))dnl
+     ⇒define(`m4wrap',
+     ⇒`ifdef(`m4wrap'_m4wrap_level,
+     ⇒       `define(`m4wrap'_m4wrap_level,
+     ⇒               `$1'defn(`m4wrap'_m4wrap_level))',
+     ⇒       `_m4wrap(`define(`_m4wrap_level', incr(_m4wrap_level))dnl
+     ⇒m4wrap'_m4wrap_level)dnl
+     ⇒define(`m4wrap'_m4wrap_level, `$1')')')dnl
+     include(`wraplifo.m4')
+     ⇒
+     m4wrap(`a`'m4wrap(`c
+     ', `d')')m4wrap(`b')
+     ⇒
+     ^D
+     ⇒bac
+
+   Here is an example of implementing a factorial function using
+‘m4wrap’:
+
+     define(`f', `ifelse(`$1', `0', `Answer: 0!=1
+     ', eval(`$1>1'), `0', `Answer: $2$1=eval(`$2$1')
+     ', `m4wrap(`f(decr(`$1'), `$2$1*')')')')
+     ⇒
+     f(`10')
+     ⇒
+     ^D
+     ⇒Answer: 10*9*8*7*6*5*4*3*2*1=3628800
+
+   Invocations of ‘m4wrap’ at the same recursion level are concatenated
+and rescanned as usual:
+
+     define(`aa', `AA
+     ')
+     ⇒
+     m4wrap(`a')m4wrap(`a')
+     ⇒
+     ^D
+     ⇒AA
+
+however, the transition between recursion levels behaves like an end of
+file condition between two input files.
+
+     m4wrap(`m4wrap(`)')len(abc')
+     ⇒
+     ^D
+     error→m4:stdin:1: ERROR: end of file in argument list
+
+9 File inclusion
+****************
+
+‘m4’ allows you to include named files at any point in the input.
+
+* Menu:
+
+* Include::                     Including named files
+* Search Path::                 Searching for include files
+
+9.1 Including named files
+=========================
+
+There are two builtin macros in ‘m4’ for including files:
+
+ -- Builtin: include (FILE)
+ -- Builtin: sinclude (FILE)
+     Both macros cause the file named FILE to be read by ‘m4’.  When the
+     end of the file is reached, input is resumed from the previous
+     input file.
+
+     The expansion of ‘include’ and ‘sinclude’ is therefore the contents
+     of FILE.
+
+     If FILE does not exist, is a directory, or cannot otherwise be
+     read, the expansion is void, and ‘include’ will fail with an error
+     while ‘sinclude’ is silent.  The empty string counts as a file that
+     does not exist.
+
+     The macros ‘include’ and ‘sinclude’ are recognized only with
+     parameters.
+
+     include(`none')
+     error→m4:stdin:1: cannot open `none': No such file or directory
+     ⇒
+     include()
+     error→m4:stdin:2: cannot open `': No such file or directory
+     ⇒
+     sinclude(`none')
+     ⇒
+     sinclude()
+     ⇒
+
+   The rest of this section assumes that ‘m4’ is invoked with the ‘-I’
+option (*note Invoking m4: Preprocessor features.) pointing to the
+‘m4-1.4.19/examples’ directory shipped as part of the GNU ‘m4’ package.
+The file ‘m4-1.4.19/examples/incl.m4’ in the distribution contains the
+lines:
+
+     $ cat examples/incl.m4
+     ⇒Include file start
+     ⇒foo
+     ⇒Include file end
+
+   Normally file inclusion is used to insert the contents of a file into
+the input stream.  The contents of the file will be read by ‘m4’ and
+macro calls in the file will be expanded:
+
+     $ m4 -I examples
+     define(`foo', `FOO')
+     ⇒
+     include(`incl.m4')
+     ⇒Include file start
+     ⇒FOO
+     ⇒Include file end
+     ⇒
+
+   The fact that ‘include’ and ‘sinclude’ expand to the contents of the
+file can be used to define macros that operate on entire files.  Here is
+an example, which defines ‘bar’ to expand to the contents of ‘incl.m4’:
+
+     $ m4 -I examples
+     define(`bar', include(`incl.m4'))
+     ⇒
+     This is `bar':  >>bar<<
+     ⇒This is bar:  >>Include file start
+     ⇒foo
+     ⇒Include file end
+     ⇒<<
+
+   This use of ‘include’ is not trivial, though, as files can contain
+quotes, commas, and parentheses, which can interfere with the way the
+‘m4’ parser works.  GNU ‘m4’ seamlessly concatenates the file contents
+with the next character, even if the included file ended in the middle
+of a comment, string, or macro call.  These conditions are only treated
+as end of file errors if specified as input files on the command line.
+
+   In GNU ‘m4’, an alternative method of reading files is using
+‘undivert’ (*note Undivert::) on a named file.
+
+10 Diverting and undiverting output
+***********************************
+
+Diversions are a way of temporarily saving output.  The output of ‘m4’
+can at any time be diverted to a temporary file, and be reinserted into
+the output stream, “undiverted”, again at a later time.
+
+   Numbered diversions are counted from 0 upwards, diversion number 0
+being the normal output stream.  GNU ‘m4’ tries to keep diversions in
+memory.  However, there is a limit to the overall memory usable by all
+diversions taken together (512K, currently).  When this maximum is about
+to be exceeded, a temporary file is opened to receive the contents of
+the biggest diversion still in memory, freeing this memory for other
+diversions.  When creating the temporary file, ‘m4’ honors the value of
+the environment variable ‘TMPDIR’, and falls back to ‘/tmp’.  Thus, the
+amount of available disk space provides the only real limit on the
+number and aggregate size of diversions.
+
+   Diversions make it possible to generate output in a different order
+than the input was read.  It is possible to implement topological
+sorting dependencies.  For example, GNU Autoconf makes use of diversions
+under the hood to ensure that the expansion of a prerequisite macro
+appears in the output prior to the expansion of a dependent macro,
+regardless of which order the two macros were invoked in the user’s
+input file.
+
+* Menu:
+
+* Divert::                      Diverting output
+* Undivert::                    Undiverting output
+* Divnum::                      Diversion numbers
+* Cleardivert::                 Discarding diverted text
+
+10.1 Diverting output
+=====================
+
+Output is diverted using ‘divert’:
+
+ -- Builtin: divert ([NUMBER = ‘0’])
+     The current diversion is changed to NUMBER.  If NUMBER is left out
+     or empty, it is assumed to be zero.  If NUMBER cannot be parsed,
+     the diversion is unchanged.
+
+     The expansion of ‘divert’ is void.
+
+   When all the ‘m4’ input will have been processed, all existing
+diversions are automatically undiverted, in numerical order.
+
+     divert(`1')
+     This text is diverted.
+     divert
+     ⇒
+     This text is not diverted.
+     ⇒This text is not diverted.
+     ^D
+     ⇒
+     ⇒This text is diverted.
+
+   Several calls of ‘divert’ with the same argument do not overwrite the
+previous diverted text, but append to it.  Diversions are printed after
+any wrapped text is expanded.
+
+     define(`text', `TEXT')
+     ⇒
+     divert(`1')`diverted text.'
+     divert
+     ⇒
+     m4wrap(`Wrapped text precedes ')
+     ⇒
+     ^D
+     ⇒Wrapped TEXT precedes diverted text.
+
+   If output is diverted to a negative diversion, it is simply
+discarded.  This can be used to suppress unwanted output.  A common
+example of unwanted output is the trailing newlines after macro
+definitions.  Here is a common programming idiom in ‘m4’ for avoiding
+them.
+
+     divert(`-1')
+     define(`foo', `Macro `foo'.')
+     define(`bar', `Macro `bar'.')
+     divert
+     ⇒
+
+   Traditional implementations only supported ten diversions.  But as a
+GNU extension, diversion numbers can be as large as positive integers
+will allow, rather than treating a multi-digit diversion number as a
+request to discard text.
+
+     divert(eval(`1<<28'))world
+     divert(`2')hello
+     ^D
+     ⇒hello
+     ⇒world
+
+   Note that ‘divert’ is an English word, but also an active macro
+without arguments.  When processing plain text, the word might appear in
+normal text and be unintentionally swallowed as a macro invocation.  One
+way to avoid this is to use the ‘-P’ option to rename all builtins
+(*note Invoking m4: Operation modes.).  Another is to write a wrapper
+that requires a parameter to be recognized.
+
+     We decided to divert the stream for irrigation.
+     ⇒We decided to  the stream for irrigation.
+     define(`divert', `ifelse(`$#', `0', ``$0'', `builtin(`$0', $@)')')
+     ⇒
+     divert(`-1')
+     Ignored text.
+     divert(`0')
+     ⇒
+     We decided to divert the stream for irrigation.
+     ⇒We decided to divert the stream for irrigation.
+
+10.2 Undiverting output
+=======================
+
+Diverted text can be undiverted explicitly using the builtin ‘undivert’:
+
+ -- Builtin: undivert ([DIVERSIONS...])
+     Undiverts the numeric DIVERSIONS given by the arguments, in the
+     order given.  If no arguments are supplied, all diversions are
+     undiverted, in numerical order.
+
+     As a GNU extension, DIVERSIONS may contain non-numeric strings,
+     which are treated as the names of files to copy into the output
+     without expansion.  A warning is issued if a file could not be
+     opened.
+
+     The expansion of ‘undivert’ is void.
+
+     divert(`1')
+     This text is diverted.
+     divert
+     ⇒
+     This text is not diverted.
+     ⇒This text is not diverted.
+     undivert(`1')
+     ⇒
+     ⇒This text is diverted.
+     ⇒
+
+   Notice the last two blank lines.  One of them comes from the newline
+following ‘undivert’, the other from the newline that followed the
+‘divert’!  A diversion often starts with a blank line like this.
+
+   When diverted text is undiverted, it is _not_ reread by ‘m4’, but
+rather copied directly to the current output, and it is therefore not an
+error to undivert into a diversion.  Undiverting the empty string is the
+same as specifying diversion 0; in either case nothing happens since the
+output has already been flushed.
+
+     divert(`1')diverted text
+     divert
+     ⇒
+     undivert()
+     ⇒
+     undivert(`0')
+     ⇒
+     undivert
+     ⇒diverted text
+     ⇒
+     divert(`1')more
+     divert(`2')undivert(`1')diverted text`'divert
+     ⇒
+     undivert(`1')
+     ⇒
+     undivert(`2')
+     ⇒more
+     ⇒diverted text
+
+   When a diversion has been undiverted, the diverted text is discarded,
+and it is not possible to bring back diverted text more than once.
+
+     divert(`1')
+     This text is diverted first.
+     divert(`0')undivert(`1')dnl
+     ⇒
+     ⇒This text is diverted first.
+     undivert(`1')
+     ⇒
+     divert(`1')
+     This text is also diverted but not appended.
+     divert(`0')undivert(`1')dnl
+     ⇒
+     ⇒This text is also diverted but not appended.
+
+   Attempts to undivert the current diversion are silently ignored.
+Thus, when the current diversion is not 0, the current diversion does
+not get rearranged among the other diversions.
+
+     divert(`1')one
+     divert(`2')two
+     divert(`3')three
+     divert(`2')undivert`'dnl
+     divert`'undivert`'dnl
+     ⇒two
+     ⇒one
+     ⇒three
+
+   GNU ‘m4’ allows named files to be undiverted.  Given a non-numeric
+argument, the contents of the file named will be copied, uninterpreted,
+to the current output.  This complements the builtin ‘include’ (*note
+Include::).  To illustrate the difference, assume the file ‘foo’
+contains:
+
+     $ cat foo
+     bar
+
+then
+
+     define(`bar', `BAR')
+     ⇒
+     undivert(`foo')
+     ⇒bar
+     ⇒
+     include(`foo')
+     ⇒BAR
+     ⇒
+
+   If the file is not found (or cannot be read), an error message is
+issued, and the expansion is void.  It is possible to intermix files and
+diversion numbers.
+
+     divert(`1')diversion one
+     divert(`2')undivert(`foo')dnl
+     divert(`3')diversion three
+     divert`'dnl
+     undivert(`1', `2', `foo', `3')dnl
+     ⇒diversion one
+     ⇒bar
+     ⇒bar
+     ⇒diversion three
+
+10.3 Diversion numbers
+======================
+
+The current diversion is tracked by the builtin ‘divnum’:
+
+ -- Builtin: divnum
+     Expands to the number of the current diversion.
+
+     Initial divnum
+     ⇒Initial 0
+     divert(`1')
+     Diversion one: divnum
+     divert(`2')
+     Diversion two: divnum
+     ^D
+     ⇒
+     ⇒Diversion one: 1
+     ⇒
+     ⇒Diversion two: 2
+
+10.4 Discarding diverted text
+=============================
+
+Often it is not known, when output is diverted, whether the diverted
+text is actually needed.  Since all non-empty diversion are brought back
+on the main output stream when the end of input is seen, a method of
+discarding a diversion is needed.  If all diversions should be
+discarded, the easiest is to end the input to ‘m4’ with ‘divert(`-1')’
+followed by an explicit ‘undivert’:
+
+     divert(`1')
+     Diversion one: divnum
+     divert(`2')
+     Diversion two: divnum
+     divert(`-1')
+     undivert
+     ^D
+
+No output is produced at all.
+
+   Clearing selected diversions can be done with the following macro:
+
+ -- Composite: cleardivert ([DIVERSIONS...])
+     Discard the contents of each of the listed numeric DIVERSIONS.
+
+     define(`cleardivert',
+     `pushdef(`_n', divnum)divert(`-1')undivert($@)divert(_n)popdef(`_n')')
+     ⇒
+
+   It is called just like ‘undivert’, but the effect is to clear the
+diversions, given by the arguments.  (This macro has a nasty bug!  You
+should try to see if you can find it and correct it; or *note Answers:
+Improved cleardivert.).
+
+11 Macros for text handling
+***************************
+
+There are a number of builtins in ‘m4’ for manipulating text in various
+ways, extracting substrings, searching, substituting, and so on.
+
+* Menu:
+
+* Len::                         Calculating length of strings
+* Index macro::                 Searching for substrings
+* Regexp::                      Searching for regular expressions
+* Substr::                      Extracting substrings
+* Translit::                    Translating characters
+* Patsubst::                    Substituting text by regular expression
+* Format::                      Formatting strings (printf-like)
+
+11.1 Calculating length of strings
+==================================
+
+The length of a string can be calculated by ‘len’:
+
+ -- Builtin: len (STRING)
+     Expands to the length of STRING, as a decimal number.
+
+     The macro ‘len’ is recognized only with parameters.
+
+     len()
+     ⇒0
+     len(`abcdef')
+     ⇒6
+
+11.2 Searching for substrings
+=============================
+
+Searching for substrings is done with ‘index’:
+
+ -- Builtin: index (STRING, SUBSTRING)
+     Expands to the index of the first occurrence of SUBSTRING in
+     STRING.  The first character in STRING has index 0.  If SUBSTRING
+     does not occur in STRING, ‘index’ expands to ‘-1’.
+
+     The macro ‘index’ is recognized only with parameters.
+
+     index(`gnus, gnats, and armadillos', `nat')
+     ⇒7
+     index(`gnus, gnats, and armadillos', `dag')
+     ⇒-1
+
+   Omitting SUBSTRING evokes a warning, but still produces output;
+contrast this with an empty SUBSTRING.
+
+     index(`abc')
+     error→m4:stdin:1: Warning: too few arguments to builtin `index'
+     ⇒0
+     index(`abc', `')
+     ⇒0
+     index(`abc', `b')
+     ⇒1
+
+11.3 Searching for regular expressions
+======================================
+
+Searching for regular expressions is done with the builtin ‘regexp’:
+
+ -- Builtin: regexp (STRING, REGEXP, [REPLACEMENT])
+     Searches for REGEXP in STRING.  The syntax for regular expressions
+     is the same as in GNU Emacs, which is similar to BRE, Basic Regular
+     Expressions in POSIX. *Note Syntax of Regular Expressions:
+     (emacs)Regexps.  Support for ERE, Extended Regular Expressions is
+     not available, but will be added in GNU M4 2.0.
+
+     If REPLACEMENT is omitted, ‘regexp’ expands to the index of the
+     first match of REGEXP in STRING.  If REGEXP does not match anywhere
+     in STRING, it expands to -1.
+
+     If REPLACEMENT is supplied, and there was a match, ‘regexp’ changes
+     the expansion to this argument, with ‘\N’ substituted by the text
+     matched by the Nth parenthesized sub-expression of REGEXP, up to
+     nine sub-expressions.  The escape ‘\&’ is replaced by the text of
+     the entire regular expression matched.  For all other characters,
+     ‘\’ treats the next character literally.  A warning is issued if
+     there were fewer sub-expressions than the ‘\N’ requested, or if
+     there is a trailing ‘\’.  If there was no match, ‘regexp’ expands
+     to the empty string.
+
+     The macro ‘regexp’ is recognized only with parameters.
+
+     regexp(`GNUs not Unix', `\<[a-z]\w+')
+     ⇒5
+     regexp(`GNUs not Unix', `\<Q\w*')
+     ⇒-1
+     regexp(`GNUs not Unix', `\w\(\w+\)$', `*** \& *** \1 ***')
+     ⇒*** Unix *** nix ***
+     regexp(`GNUs not Unix', `\<Q\w*', `*** \& *** \1 ***')
+     ⇒
+
+   Here are some more examples on the handling of backslash:
+
+     regexp(`abc', `\(b\)', `\\\10\a')
+     ⇒\b0a
+     regexp(`abc', `b', `\1\')
+     error→m4:stdin:2: Warning: sub-expression 1 not present
+     error→m4:stdin:2: Warning: trailing \ ignored in replacement
+     ⇒
+     regexp(`abc', `\(\(d\)?\)\(c\)', `\1\2\3\4\5\6')
+     error→m4:stdin:3: Warning: sub-expression 4 not present
+     error→m4:stdin:3: Warning: sub-expression 5 not present
+     error→m4:stdin:3: Warning: sub-expression 6 not present
+     ⇒c
+
+   Omitting REGEXP evokes a warning, but still produces output; contrast
+this with an empty REGEXP argument.
+
+     regexp(`abc')
+     error→m4:stdin:1: Warning: too few arguments to builtin `regexp'
+     ⇒0
+     regexp(`abc', `')
+     ⇒0
+     regexp(`abc', `', `\\def')
+     ⇒\def
+
+11.4 Extracting substrings
+==========================
+
+Substrings are extracted with ‘substr’:
+
+ -- Builtin: substr (STRING, FROM, [LENGTH])
+     Expands to the substring of STRING, which starts at index FROM, and
+     extends for LENGTH characters, or to the end of STRING, if LENGTH
+     is omitted.  The starting index of a string is always 0.  The
+     expansion is empty if there is an error parsing FROM or LENGTH, if
+     FROM is beyond the end of STRING, or if LENGTH is negative.
+
+     The macro ‘substr’ is recognized only with parameters.
+
+     substr(`gnus, gnats, and armadillos', `6')
+     ⇒gnats, and armadillos
+     substr(`gnus, gnats, and armadillos', `6', `5')
+     ⇒gnats
+
+   Omitting FROM evokes a warning, but still produces output.
+
+     substr(`abc')
+     error→m4:stdin:1: Warning: too few arguments to builtin `substr'
+     ⇒abc
+     substr(`abc',)
+     error→m4:stdin:2: empty string treated as 0 in builtin `substr'
+     ⇒abc
+
+11.5 Translating characters
+===========================
+
+Character translation is done with ‘translit’:
+
+ -- Builtin: translit (STRING, CHARS, [REPLACEMENT])
+     Expands to STRING, with each character that occurs in CHARS
+     translated into the character from REPLACEMENT with the same index.
+
+     If REPLACEMENT is shorter than CHARS, the excess characters of
+     CHARS are deleted from the expansion; if CHARS is shorter, the
+     excess characters in REPLACEMENT are silently ignored.  If
+     REPLACEMENT is omitted, all characters in STRING that are present
+     in CHARS are deleted from the expansion.  If a character appears
+     more than once in CHARS, only the first instance is used in making
+     the translation.  Only a single translation pass is made, even if
+     characters in REPLACEMENT also appear in CHARS.
+
+     As a GNU extension, both CHARS and REPLACEMENT can contain
+     character-ranges, e.g., ‘a-z’ (meaning all lowercase letters) or
+     ‘0-9’ (meaning all digits).  To include a dash ‘-’ in CHARS or
+     REPLACEMENT, place it first or last in the entire string, or as the
+     last character of a range.  Back-to-back ranges can share a common
+     endpoint.  It is not an error for the last character in the range
+     to be ‘larger’ than the first.  In that case, the range runs
+     backwards, i.e., ‘9-0’ means the string ‘9876543210’.  The
+     expansion of a range is dependent on the underlying encoding of
+     characters, so using ranges is not always portable between
+     machines.
+
+     The macro ‘translit’ is recognized only with parameters.
+
+     translit(`GNUs not Unix', `A-Z')
+     ⇒s not nix
+     translit(`GNUs not Unix', `a-z', `A-Z')
+     ⇒GNUS NOT UNIX
+     translit(`GNUs not Unix', `A-Z', `z-a')
+     ⇒tmfs not fnix
+     translit(`+,-12345', `+--1-5', `<;>a-c-a')
+     ⇒<;>abcba
+     translit(`abcdef', `aabdef', `bcged')
+     ⇒bgced
+
+   In the ASCII encoding, the first example deletes all uppercase
+letters, the second converts lowercase to uppercase, and the third
+‘mirrors’ all uppercase letters, while converting them to lowercase.
+The two first cases are by far the most common, even though they are not
+portable to EBCDIC or other encodings.  The fourth example shows a range
+ending in ‘-’, as well as back-to-back ranges.  The final example shows
+that ‘a’ is mapped to ‘b’, not ‘c’; the resulting ‘b’ is not further
+remapped to ‘g’; the ‘d’ and ‘e’ are swapped, and the ‘f’ is discarded.
+
+   Omitting CHARS evokes a warning, but still produces output.
+
+     translit(`abc')
+     error→m4:stdin:1: Warning: too few arguments to builtin `translit'
+     ⇒abc
+
+11.6 Substituting text by regular expression
+============================================
+
+Global substitution in a string is done by ‘patsubst’:
+
+ -- Builtin: patsubst (STRING, REGEXP, [REPLACEMENT])
+     Searches STRING for matches of REGEXP, and substitutes REPLACEMENT
+     for each match.  The syntax for regular expressions is the same as
+     in GNU Emacs (*note Regexp::).
+
+     The parts of STRING that are not covered by any match of REGEXP are
+     copied to the expansion.  Whenever a match is found, the search
+     proceeds from the end of the match, so a character from STRING will
+     never be substituted twice.  If REGEXP matches a string of zero
+     length, the start position for the search is incremented, to avoid
+     infinite loops.
+
+     When a replacement is to be made, REPLACEMENT is inserted into the
+     expansion, with ‘\N’ substituted by the text matched by the Nth
+     parenthesized sub-expression of PATSUBST, for up to nine
+     sub-expressions.  The escape ‘\&’ is replaced by the text of the
+     entire regular expression matched.  For all other characters, ‘\’
+     treats the next character literally.  A warning is issued if there
+     were fewer sub-expressions than the ‘\N’ requested, or if there is
+     a trailing ‘\’.
+
+     The REPLACEMENT argument can be omitted, in which case the text
+     matched by REGEXP is deleted.
+
+     The macro ‘patsubst’ is recognized only with parameters.
+
+     patsubst(`GNUs not Unix', `^', `OBS: ')
+     ⇒OBS: GNUs not Unix
+     patsubst(`GNUs not Unix', `\<', `OBS: ')
+     ⇒OBS: GNUs OBS: not OBS: Unix
+     patsubst(`GNUs not Unix', `\w*', `(\&)')
+     ⇒(GNUs)() (not)() (Unix)()
+     patsubst(`GNUs not Unix', `\w+', `(\&)')
+     ⇒(GNUs) (not) (Unix)
+     patsubst(`GNUs not Unix', `[A-Z][a-z]+')
+     ⇒GN not 
+     patsubst(`GNUs not Unix', `not', `NOT\')
+     error→m4:stdin:6: Warning: trailing \ ignored in replacement
+     ⇒GNUs NOT Unix
+
+   Here is a slightly more realistic example, which capitalizes
+individual words or whole sentences, by substituting calls of the macros
+‘upcase’ and ‘downcase’ into the strings.
+
+ -- Composite: upcase (TEXT)
+ -- Composite: downcase (TEXT)
+ -- Composite: capitalize (TEXT)
+     Expand to TEXT, but with capitalization changed: ‘upcase’ changes
+     all letters to upper case, ‘downcase’ changes all letters to lower
+     case, and ‘capitalize’ changes the first character of each word to
+     upper case and the remaining characters to lower case.
+
+   First, an example of their usage, using implementations distributed
+in ‘m4-1.4.19/examples/capitalize.m4’.
+
+     $ m4 -I examples
+     include(`capitalize.m4')
+     ⇒
+     upcase(`GNUs not Unix')
+     ⇒GNUS NOT UNIX
+     downcase(`GNUs not Unix')
+     ⇒gnus not unix
+     capitalize(`GNUs not Unix')
+     ⇒Gnus Not Unix
+
+   Now for the implementation.  There is a helper macro ‘_capitalize’
+which puts only its first word in mixed case.  Then ‘capitalize’ merely
+parses out the words, and replaces them with an invocation of
+‘_capitalize’.  (As presented here, the ‘capitalize’ macro has some
+subtle flaws.  You should try to see if you can find and correct them;
+or *note Answers: Improved capitalize.).
+
+     $ m4 -I examples
+     undivert(`capitalize.m4')dnl
+     ⇒divert(`-1')
+     ⇒# upcase(text)
+     ⇒# downcase(text)
+     ⇒# capitalize(text)
+     ⇒#   change case of text, simple version
+     ⇒define(`upcase', `translit(`$*', `a-z', `A-Z')')
+     ⇒define(`downcase', `translit(`$*', `A-Z', `a-z')')
+     ⇒define(`_capitalize',
+     ⇒       `regexp(`$1', `^\(\w\)\(\w*\)',
+     ⇒               `upcase(`\1')`'downcase(`\2')')')
+     ⇒define(`capitalize', `patsubst(`$1', `\w+', `_$0(`\&')')')
+     ⇒divert`'dnl
+
+   While ‘regexp’ replaces the whole input with the replacement as soon
+as there is a match, ‘patsubst’ replaces each _occurrence_ of a match
+and preserves non-matching pieces:
+
+     define(`patreg',
+     `patsubst($@)
+     regexp($@)')dnl
+     patreg(`bar foo baz Foo', `foo\|Foo', `FOO')
+     ⇒bar FOO baz FOO
+     ⇒FOO
+     patreg(`aba abb 121', `\(.\)\(.\)\1', `\2\1\2')
+     ⇒bab abb 212
+     ⇒bab
+
+   Omitting REGEXP evokes a warning, but still produces output; contrast
+this with an empty REGEXP argument.
+
+     patsubst(`abc')
+     error→m4:stdin:1: Warning: too few arguments to builtin `patsubst'
+     ⇒abc
+     patsubst(`abc', `')
+     ⇒abc
+     patsubst(`abc', `', `\\-')
+     ⇒\-a\-b\-c\-
+
+11.7 Formatting strings (printf-like)
+=====================================
+
+Formatted output can be made with ‘format’:
+
+ -- Builtin: format (FORMAT-STRING, ...)
+     Works much like the C function ‘printf’.  The first argument
+     FORMAT-STRING can contain ‘%’ specifications which are satisfied by
+     additional arguments, and the expansion of ‘format’ is the
+     formatted string.
+
+     The macro ‘format’ is recognized only with parameters.
+
+   Its use is best described by a few examples:
+
+     define(`foo', `The brown fox jumped over the lazy dog')
+     ⇒
+     format(`The string "%s" uses %d characters', foo, len(foo))
+     ⇒The string "The brown fox jumped over the lazy dog" uses 38 characters
+     format(`%*.*d', `-1', `-1', `1')
+     ⇒1
+     format(`%.0f', `56789.9876')
+     ⇒56790
+     len(format(`%-*X', `5000', `1'))
+     ⇒5000
+     ifelse(format(`%010F', `infinity'), `       INF', `success',
+            format(`%010F', `infinity'), `  INFINITY', `success',
+            format(`%010F', `infinity'))
+     ⇒success
+     ifelse(format(`%.1A', `1.999'), `0X1.0P+1', `success',
+            format(`%.1A', `1.999'), `0X2.0P+0', `success',
+            format(`%.1A', `1.999'))
+     ⇒success
+     format(`%g', `0xa.P+1')
+     ⇒20
+
+   Using the ‘forloop’ macro defined earlier (*note Forloop::), this
+example shows how ‘format’ can be used to produce tabular output.
+
+     $ m4 -I examples
+     include(`forloop.m4')
+     ⇒
+     forloop(`i', `1', `10', `format(`%6d squared is %10d
+     ', i, eval(i**2))')
+     ⇒     1 squared is          1
+     ⇒     2 squared is          4
+     ⇒     3 squared is          9
+     ⇒     4 squared is         16
+     ⇒     5 squared is         25
+     ⇒     6 squared is         36
+     ⇒     7 squared is         49
+     ⇒     8 squared is         64
+     ⇒     9 squared is         81
+     ⇒    10 squared is        100
+     ⇒
+
+   The builtin ‘format’ is modeled after the ANSI C ‘printf’ function,
+and supports these ‘%’ specifiers: ‘c’, ‘s’, ‘d’, ‘o’, ‘x’, ‘X’, ‘u’,
+‘a’, ‘A’, ‘e’, ‘E’, ‘f’, ‘F’, ‘g’, ‘G’, and ‘%’; it supports field
+widths and precisions, and the flags ‘+’, ‘-’, ‘ ’, ‘0’, ‘#’, and ‘'’.
+For integer specifiers, the width modifiers ‘hh’, ‘h’, and ‘l’ are
+recognized, and for floating point specifiers, the width modifier ‘l’ is
+recognized.  Items not yet supported include positional arguments, the
+‘n’, ‘p’, ‘S’, and ‘C’ specifiers, the ‘z’, ‘t’, ‘j’, ‘L’ and ‘ll’
+modifiers, and any platform extensions available in the native ‘printf’.
+For more details on the functioning of ‘printf’, see the C Library
+Manual, or the POSIX specification (for example, ‘%a’ is supported even
+on platforms that haven’t yet implemented C99 hexadecimal floating point
+output natively).
+
+   Unrecognized specifiers result in a warning.  It is anticipated that
+a future release of GNU ‘m4’ will support more specifiers, and give
+better warnings when various problems such as overflow are encountered.
+Likewise, escape sequences are not yet recognized.
+
+     format(`%p', `0')
+     error→m4:stdin:1: Warning: unrecognized specifier in `%p'
+     ⇒
+
+12 Macros for doing arithmetic
+******************************
+
+Integer arithmetic is included in ‘m4’, with a C-like syntax.  As
+convenient shorthands, there are builtins for simple increment and
+decrement operations.
+
+* Menu:
+
+* Incr::                        Decrement and increment operators
+* Eval::                        Evaluating integer expressions
+
+12.1 Decrement and increment operators
+======================================
+
+Increment and decrement of integers are supported using the builtins
+‘incr’ and ‘decr’:
+
+ -- Builtin: incr (NUMBER)
+ -- Builtin: decr (NUMBER)
+     Expand to the numerical value of NUMBER, incremented or
+     decremented, respectively, by one.  Except for the empty string,
+     the expansion is empty if NUMBER could not be parsed.
+
+     The macros ‘incr’ and ‘decr’ are recognized only with parameters.
+
+     incr(`4')
+     ⇒5
+     decr(`7')
+     ⇒6
+     incr()
+     error→m4:stdin:3: empty string treated as 0 in builtin `incr'
+     ⇒1
+     decr()
+     error→m4:stdin:4: empty string treated as 0 in builtin `decr'
+     ⇒-1
+
+12.2 Evaluating integer expressions
+===================================
+
+Integer expressions are evaluated with ‘eval’:
+
+ -- Builtin: eval (EXPRESSION, [RADIX = ‘10’], [WIDTH])
+     Expands to the value of EXPRESSION.  The expansion is empty if a
+     problem is encountered while parsing the arguments.  If specified,
+     RADIX and WIDTH control the format of the output.
+
+     Calculations are done with 32-bit signed numbers.  Overflow
+     silently results in wraparound.  A warning is issued if division by
+     zero is attempted, or if EXPRESSION could not be parsed.
+
+     Expressions can contain the following operators, listed in order of
+     decreasing precedence.
+
+     ‘()’
+          Parentheses
+     ‘+ - ~ !’
+          Unary plus and minus, and bitwise and logical negation
+     ‘**’
+          Exponentiation
+     ‘* / %’
+          Multiplication, division, and modulo
+     ‘+ -’
+          Addition and subtraction
+     ‘<< >>’
+          Shift left or right
+     ‘> >= < <=’
+          Relational operators
+     ‘== !=’
+          Equality operators
+     ‘&’
+          Bitwise and
+     ‘^’
+          Bitwise exclusive-or
+     ‘|’
+          Bitwise or
+     ‘&&’
+          Logical and
+     ‘||’
+          Logical or
+
+     The macro ‘eval’ is recognized only with parameters.
+
+   All binary operators, except exponentiation, are left associative.  C
+operators that perform variable assignment, such as ‘+=’ or ‘--’, are
+not implemented, since ‘eval’ only operates on constants, not variables.
+Attempting to use them results in an error.  However, since traditional
+implementations treated ‘=’ as an undocumented alias for ‘==’ as opposed
+to an assignment operator, this usage is supported as a special case.
+Be aware that a future version of GNU M4 may support assignment
+semantics as an extension when POSIX mode is not requested, and that
+using ‘=’ to check equality is not portable.
+
+     eval(`2 = 2')
+     error→m4:stdin:1: Warning: recommend ==, not =, for equality operator
+     ⇒1
+     eval(`++0')
+     error→m4:stdin:2: invalid operator in eval: ++0
+     ⇒
+     eval(`0 |= 1')
+     error→m4:stdin:3: invalid operator in eval: 0 |= 1
+     ⇒
+
+   Note that some older ‘m4’ implementations use ‘^’ as an alternate
+operator for the exponentiation, although POSIX requires the C behavior
+of bitwise exclusive-or.  The precedence of the negation operators, ‘~’
+and ‘!’, was traditionally lower than equality.  The unary operators
+could not be used reliably more than once on the same term without
+intervening parentheses.  The traditional precedence of the equality
+operators ‘==’ and ‘!=’ was identical instead of lower than the
+relational operators such as ‘<’, even through GNU M4 1.4.8.  Starting
+with version 1.4.9, GNU M4 correctly follows POSIX precedence rules.  M4
+scripts designed to be portable between releases must be aware that
+parentheses may be required to enforce C precedence rules.  Likewise,
+division by zero, even in the unused branch of a short-circuiting
+operator, is not always well-defined in other implementations.
+
+   Following are some examples where the current version of M4 follows C
+precedence rules, but where older versions and some other
+implementations of ‘m4’ require explicit parentheses to get the correct
+result:
+
+     eval(`1 == 2 > 0')
+     ⇒1
+     eval(`(1 == 2) > 0')
+     ⇒0
+     eval(`! 0 * 2')
+     ⇒2
+     eval(`! (0 * 2)')
+     ⇒1
+     eval(`1 | 1 ^ 1')
+     ⇒1
+     eval(`(1 | 1) ^ 1')
+     ⇒0
+     eval(`+ + - ~ ! ~ 0')
+     ⇒1
+     eval(`2 || 1 / 0')
+     ⇒1
+     eval(`0 || 1 / 0')
+     error→m4:stdin:9: divide by zero in eval: 0 || 1 / 0
+     ⇒
+     eval(`0 && 1 % 0')
+     ⇒0
+     eval(`2 && 1 % 0')
+     error→m4:stdin:11: modulo by zero in eval: 2 && 1 % 0
+     ⇒
+
+   As a GNU extension, the operator ‘**’ performs integral
+exponentiation.  The operator is right-associative, and if evaluated,
+the exponent must be non-negative, and at least one of the arguments
+must be non-zero, or a warning is issued.
+
+     eval(`2 ** 3 ** 2')
+     ⇒512
+     eval(`(2 ** 3) ** 2')
+     ⇒64
+     eval(`0 ** 1')
+     ⇒0
+     eval(`2 ** 0')
+     ⇒1
+     eval(`0 ** 0')
+     ⇒
+     error→m4:stdin:5: divide by zero in eval: 0 ** 0
+     eval(`4 ** -2')
+     error→m4:stdin:6: negative exponent in eval: 4 ** -2
+     ⇒
+
+   Within EXPRESSION, (but not RADIX or WIDTH), numbers without a
+special prefix are decimal.  A simple ‘0’ prefix introduces an octal
+number.  ‘0x’ introduces a hexadecimal number.  As GNU extensions, ‘0b’
+introduces a binary number.  ‘0r’ introduces a number expressed in any
+radix between 1 and 36: the prefix should be immediately followed by the
+decimal expression of the radix, a colon, then the digits making the
+number.  For radix 1, leading zeros are ignored, and all remaining
+digits must be ‘1’; for all other radices, the digits are ‘0’, ‘1’, ‘2’,
+....  Beyond ‘9’, the digits are ‘a’, ‘b’ ... up to ‘z’.  Lower and
+upper case letters can be used interchangeably in numbers prefixes and
+as number digits.
+
+   Parentheses may be used to group subexpressions whenever needed.  For
+the relational operators, a true relation returns ‘1’, and a false
+relation return ‘0’.
+
+   Here are a few examples of use of ‘eval’.
+
+     eval(`-3 * 5')
+     ⇒-15
+     eval(`-99 / 10')
+     ⇒-9
+     eval(`-99 % 10')
+     ⇒-9
+     eval(`99 % -10')
+     ⇒9
+     eval(index(`Hello world', `llo') >= 0)
+     ⇒1
+     eval(`0r1:0111 + 0b100 + 0r3:12')
+     ⇒12
+     define(`square', `eval(`($1) ** 2')')
+     ⇒
+     square(`9')
+     ⇒81
+     square(square(`5')` + 1')
+     ⇒676
+     define(`foo', `666')
+     ⇒
+     eval(`foo / 6')
+     error→m4:stdin:11: bad expression in eval: foo / 6
+     ⇒
+     eval(foo / 6)
+     ⇒111
+
+   As the last two lines show, ‘eval’ does not handle macro names, even
+if they expand to a valid expression (or part of a valid expression).
+Therefore all macros must be expanded before they are passed to ‘eval’.
+
+   Some calculations are not portable to other implementations, since
+they have undefined semantics in C, but GNU ‘m4’ has well-defined
+behavior on overflow.  When shifting, an out-of-range shift amount is
+implicitly brought into the range of 32-bit signed integers using an
+implicit bit-wise and with 0x1f).
+
+     define(`max_int', eval(`0x7fffffff'))
+     ⇒
+     define(`min_int', incr(max_int))
+     ⇒
+     eval(min_int` < 0')
+     ⇒1
+     eval(max_int` > 0')
+     ⇒1
+     ifelse(eval(min_int` / -1'), min_int, `overflow occurred')
+     ⇒overflow occurred
+     min_int
+     ⇒-2147483648
+     eval(`0x80000000 % -1')
+     ⇒0
+     eval(`-4 >> 1')
+     ⇒-2
+     eval(`-4 >> 33')
+     ⇒-2
+
+   If RADIX is specified, it specifies the radix to be used in the
+expansion.  The default radix is 10; this is also the case if RADIX is
+the empty string.  A warning results if the radix is outside the range
+of 1 through 36, inclusive.  The result of ‘eval’ is always taken to be
+signed.  No radix prefix is output, and for radices greater than 10, the
+digits are lower case.  The WIDTH argument specifies the minimum output
+width, excluding any negative sign.  The result is zero-padded to extend
+the expansion to the requested width.  A warning results if the width is
+negative.  If RADIX or WIDTH is out of bounds, the expansion of ‘eval’
+is empty.
+
+     eval(`666', `10')
+     ⇒666
+     eval(`666', `11')
+     ⇒556
+     eval(`666', `6')
+     ⇒3030
+     eval(`666', `6', `10')
+     ⇒0000003030
+     eval(`-666', `6', `10')
+     ⇒-0000003030
+     eval(`10', `', `0')
+     ⇒10
+     `0r1:'eval(`10', `1', `11')
+     ⇒0r1:01111111111
+     eval(`10', `16')
+     ⇒a
+     eval(`1', `37')
+     error→m4:stdin:9: radix 37 in builtin `eval' out of range
+     ⇒
+     eval(`1', , `-1')
+     error→m4:stdin:10: negative width to builtin `eval'
+     ⇒
+     eval()
+     error→m4:stdin:11: empty string treated as 0 in builtin `eval'
+     ⇒0
+
+14 Miscellaneous builtin macros
+*******************************
+
+This chapter describes various builtins, that do not really belong in
+any of the previous chapters.
+
+* Menu:
+
+* Errprint::                    Printing error messages
+* Location::                    Printing current location
+* M4exit::                      Exiting from ‘m4’
+
+14.1 Printing error messages
+============================
+
+You can print error messages using ‘errprint’:
+
+ -- Builtin: errprint (MESSAGE, ...)
+     Prints MESSAGE and the rest of the arguments to standard error,
+     separated by spaces.  Standard error is used, regardless of the
+     ‘--debugfile’ option (*note Invoking m4: Debugging options.).
+
+     The expansion of ‘errprint’ is void.  The macro ‘errprint’ is
+     recognized only with parameters.
+
+     errprint(`Invalid arguments to forloop
+     ')
+     error→Invalid arguments to forloop
+     ⇒
+     errprint(`1')errprint(`2',`3
+     ')
+     error→12 3
+     ⇒
+
+   A trailing newline is _not_ printed automatically, so it should be
+supplied as part of the argument, as in the example.  Unfortunately, the
+exact output of ‘errprint’ is not very portable to other ‘m4’
+implementations: POSIX requires that all arguments be printed, but some
+implementations of ‘m4’ only print the first.  Furthermore, some BSD
+implementations always append a newline for each ‘errprint’ call,
+regardless of whether the last argument already had one, and POSIX is
+silent on whether this is acceptable.
+
+14.2 Printing current location
+==============================
+
+To make it possible to specify the location of an error, three utility
+builtins exist:
+
+ -- Builtin: __file__
+ -- Builtin: __line__
+ -- Builtin: __program__
+     Expand to the quoted name of the current input file, the current
+     input line number in that file, and the quoted name of the current
+     invocation of ‘m4’.
+
+     errprint(__program__:__file__:__line__: `input error
+     ')
+     error→m4:stdin:1: input error
+     ⇒
+
+   Line numbers start at 1 for each file.  If the file was found due to
+the ‘-I’ option or ‘M4PATH’ environment variable, that is reflected in
+the file name.  The syncline option (‘-s’, *note Invoking m4:
+Preprocessor features.), and the ‘f’ and ‘l’ flags of ‘debugmode’ (*note
+Debug Levels::), also use this notion of current file and line.
+Redefining the three location macros has no effect on syncline, debug,
+warning, or error message output.
+
+   This example reuses the file ‘incl.m4’ mentioned earlier (*note
+Include::):
+
+     $ m4 -I examples
+     define(`foo', ``$0' called at __file__:__line__')
+     ⇒
+     foo
+     ⇒foo called at stdin:2
+     include(`incl.m4')
+     ⇒Include file start
+     ⇒foo called at examples/incl.m4:2
+     ⇒Include file end
+     ⇒
+
+   The location of macros invoked during the rescanning of macro
+expansion text corresponds to the location in the file where the
+expansion was triggered, regardless of how many newline characters the
+expansion text contains.  As of GNU M4 1.4.8, the location of text
+wrapped with ‘m4wrap’ (*note M4wrap::) is the point at which the
+‘m4wrap’ was invoked.  Previous versions, however, behaved as though
+wrapped text came from line 0 of the file “”.
+
+     define(`echo', `$@')
+     ⇒
+     define(`foo', `echo(__line__
+     __line__)')
+     ⇒
+     echo(__line__
+     __line__)
+     ⇒4
+     ⇒5
+     m4wrap(`foo
+     ')
+     ⇒
+     foo(errprint(__line__
+     __line__
+     ))
+     error→8
+     error→9
+     ⇒8
+     ⇒8
+     __line__
+     ⇒11
+     m4wrap(`__line__
+     ')
+     ⇒
+     ^D
+     ⇒12
+     ⇒6
+     ⇒6
+
+   The ‘__program__’ macro behaves like ‘$0’ in shell terminology.  If
+you invoke ‘m4’ through an absolute path or a link with a different
+spelling, rather than by relying on a ‘PATH’ search for plain ‘m4’, it
+will affect how ‘__program__’ expands.  The intent is that you can use
+it to produce error messages with the same formatting that ‘m4’ produces
+internally.  It can also be used within ‘syscmd’ (*note Syscmd::) to
+pick the same version of ‘m4’ that is currently running, rather than
+whatever version of ‘m4’ happens to be first in ‘PATH’.  It was first
+introduced in GNU M4 1.4.6.
+
+14.3 Exiting from ‘m4’
+======================
+
+If you need to exit from ‘m4’ before the entire input has been read, you
+can use ‘m4exit’:
+
+ -- Builtin: m4exit ([CODE = ‘0’])
+     Causes ‘m4’ to exit, with exit status CODE.  If CODE is left out,
+     the exit status is zero.  If CODE cannot be parsed, or is outside
+     the range of 0 to 255, the exit status is one.  No further input is
+     read, and all wrapped and diverted text is discarded.
+
+     m4wrap(`This text is lost due to `m4exit'.')
+     ⇒
+     divert(`1') So is this.
+     divert
+     ⇒
+     m4exit And this is never read.
+
+   A common use of this is to abort processing:
+
+ -- Composite: fatal_error (MESSAGE)
+     Abort processing with an error message and non-zero status.  Prefix
+     MESSAGE with details about where the error occurred, and print the
+     resulting string to standard error.
+
+     define(`fatal_error',
+            `errprint(__program__:__file__:__line__`: fatal error: $*
+     ')m4exit(`1')')
+     ⇒
+     fatal_error(`this is a BAD one, buster')
+     error→m4:stdin:4: fatal error: this is a BAD one, buster
+
+   After this macro call, ‘m4’ will exit with exit status 1.  This macro
+is only intended for error exits, since the normal exit procedures are
+not followed, i.e., diverted text is not undiverted, and saved text
+(*note M4wrap::) is not reread.  (This macro could be made more robust
+to earlier versions of ‘m4’.  You should try to see if you can find
+weaknesses and correct them; or *note Answers: Improved fatal_error.).
+
+   Note that it is still possible for the exit status to be different
+than what was requested by ‘m4exit’.  If ‘m4’ detects some other error,
+such as a write error on standard output, the exit status will be
+non-zero even if ‘m4exit’ requested zero.
+
+   If standard input is seekable, then the file will be positioned at
+the next unread character.  If it is a pipe or other non-seekable file,
+then there are no guarantees how much data ‘m4’ might have read into
+buffers, and thus discarded.

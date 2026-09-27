@@ -1,0 +1,111 @@
+--- a/src/qpcrrel/curve.py
++++ b/src/qpcrrel/curve.py
+@@ -2,16 +2,17 @@
+ 
+ import math
+ 
+-from .replicates import NO_CALL_CT, mean_ct
++from .replicates import mean_ct
+ 
+ PERFECT_DOUBLING = 2.0
+ 
+ 
+ def curve_points(standards):
+-    """(log10 quantity, mean Ct) of each dilution level with two or more wells, lowest quantity first."""
++    """(log10 quantity, mean Ct) of each dilution level with two or more determined wells, lowest first."""
+     levels = {}
+     for quantity, ct in standards:
+-        levels.setdefault(quantity, []).append(NO_CALL_CT if ct is None else ct)
++        if ct is not None:
++            levels.setdefault(quantity, []).append(ct)
+     return [
+         (math.log10(quantity), mean_ct(cts))
+         for quantity, cts in sorted(levels.items())
+@@ -34,4 +35,4 @@
+     points = curve_points(standards)
+     if len(points) < 2:
+         return PERFECT_DOUBLING
+-    return min(10 ** (-1.0 / slope(points)), PERFECT_DOUBLING)
++    return 10 ** (-1.0 / slope(points))
+--- a/src/qpcrrel/expression.py
++++ b/src/qpcrrel/expression.py
+@@ -1,4 +1,6 @@
+ """Relative quantities, normalisation and fold change for one result."""
++
++import math
+ 
+ from .replicates import detected, sample_ct
+ 
+@@ -19,20 +21,19 @@
+ def fold_change(plate, factors, sample, target):
+     """Target quantity relative to the calibrator, over the reference genes' shift."""
+     cal = plate.calibrator
+-    factor = factors[target]
+-    shifts = [
+-        sample_ct(plate.replicates(cal, gene)) - sample_ct(plate.replicates(sample, gene))
+-        for gene in plate.reference_genes
+-    ]
+-    shift = sum(shifts) / len(shifts)
+-    delta = sample_ct(plate.replicates(cal, target)) - sample_ct(plate.replicates(sample, target))
+-    return factor ** delta / factor ** shift
++
++    def relative_quantity(gene):
++        delta = sample_ct(plate.replicates(cal, gene)) - sample_ct(plate.replicates(sample, gene))
++        return factors[gene] ** delta
++
++    logs = [math.log(relative_quantity(gene)) for gene in plate.reference_genes]
++    return relative_quantity(target) / math.exp(sum(logs) / len(logs))
+ 
+ 
+ def result(plate, factors, contaminated, sample, target):
+     """One row of the report."""
+     flags = flags_for(plate, contaminated, sample, target)
+-    fold = None if "ntc" in flags else fold_change(plate, factors, sample, target)
++    fold = None if flags else fold_change(plate, factors, sample, target)
+     return {
+         "sample": sample,
+         "gene": target,
+--- a/src/qpcrrel/replicates.py
++++ b/src/qpcrrel/replicates.py
+@@ -2,12 +2,18 @@
+ 
+ from .plate import called
+ 
+-NO_CALL_CT = 40.0  # the run length, used where a gene gives no usable Ct
++EARLIEST_CYCLE = 10.0
++STRAY_CYCLES = 0.5
++
++
++def reportable(cts):
++    """The replicate Cts that count toward a sample's result (SOP 2.2)."""
++    return [ct for ct in called(cts) if ct >= EARLIEST_CYCLE]
+ 
+ 
+ def detected(cts):
+     """Whether any replicate of the gene counts in this sample."""
+-    return bool(called(cts))
++    return bool(reportable(cts))
+ 
+ 
+ def mean_ct(cts):
+@@ -15,9 +21,17 @@
+     return sum(cts) / len(cts)
+ 
+ 
++def without_outliers(cts):
++    """Replicates no more than 0.50 cycles from their median, the lower middle one for an even count."""
++    if len(cts) < 3:
++        return list(cts)
++    centre = sorted(cts)[(len(cts) - 1) // 2]
++    return [ct for ct in cts if abs(ct - centre) <= STRAY_CYCLES]
++
++
+ def sample_ct(cts):
+     """A sample's mean Ct for one gene, from the Cts of its unknown wells."""
+-    replicates = called(cts)
++    replicates = reportable(cts)
+     if not replicates:
+-        return NO_CALL_CT
+-    return mean_ct(replicates)
++        return None
++    return mean_ct(without_outliers(replicates))

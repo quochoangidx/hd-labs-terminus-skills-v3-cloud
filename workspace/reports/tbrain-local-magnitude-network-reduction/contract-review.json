@@ -1,0 +1,95 @@
+{
+  "reviewer_turn": "contract_review",
+  "visibility": "task/instruction.md, task/environment/** (Dockerfile, .dockerignore, app/README.md, app/manual/npm4-local-magnitude.md, app/mlnet/*.py, app/tools/ml_bulletin.py, app/samples/brsn-2026-04-12.json), _docs/solver_path_screen.md. Shipped package executed on the sample and on constructed inputs; an independent reference (rv/ref.py in scratchpad) written from NPM-4 plus the silence clause.",
+  "departures_identified": [
+    "2.2 magnification 2800 -> 2080 (amplitude.py)",
+    "2.2 record amplitude is half the peak-to-peak value (amplitude.py)",
+    "2.3 only readings (amplitude_nm >= 3 * noise_nm) enter (station.py)",
+    "3.1 hypocentral distance sqrt(epi^2 + depth^2) (distance.py; also the reported distance_km)",
+    "3.3 linear interpolation in distance between listed distances, not log-distance (attenuation.py)",
+    "4.1/4.2 station correction added, not subtracted (station.py)",
+    "4.3 mean of channel magnitudes of readings, not the largest channel (station.py)",
+    "5.2 median, not mean (network.py)",
+    "5.3 fewer than three contributing stations -> null (network.py)"
+  ],
+  "kept_shipped": [
+    "5.1 contributes() 10 <= d <= 600 inclusive is already correct (fed with hypocentral distance)",
+    "Silent region: -log A0 outside 10-600 km (hypocentral 1 to ~1001.8 km). NPM-4 3.2/3.3 give values only at and between listed distances; the silence clause keeps today's calculation, i.e. log-distance extrapolation along the end segment (10-20 below, 500-600 above), fed with hypocentral distance, while every other step (2080, halving, readings, added correction, mean) follows NPM-4. Linear extrapolation or clamping would be wrong."
+  ],
+  "findings": [
+    {
+      "id": "CR-1",
+      "severity": "should_fix",
+      "location": "NPM-4 2.3 (reading threshold) vs instruction tolerance sentence",
+      "issue": "An amplitude exactly three times its noise is a reading, but for decimal ties that are not binary-exact the natural implementations disagree: 0.3 >= 3*0.1 is False, 0.3/0.1 >= 3 is False, while the decimal truth is a reading. Whether a channel is a reading changes a station ml by far more than 1e-6, so the 1e-6 tolerance does not absorb it.",
+      "evidence": "python3: 3*0.1 >= 0.3 -> True; 0.3 >= 3*0.1 -> False; 1.5 >= 3*0.5 -> True (exact).",
+      "suggested_fix": "Keep verifier tie cases to binary-exact pairs (e.g. 1.5/0.5, 3.0/1.0, 0.75/0.25) where a >= 3*n and a/n >= 3 agree, and keep non-tie cases away from the threshold by a relative margin (say 1e-9). No contract change needed if the verifier obeys this; otherwise state the comparison in NPM-4."
+    },
+    {
+      "id": "CR-2",
+      "severity": "should_fix",
+      "location": "NPM-4 3.2/3.3 and instruction paragraph 2 (silence clause), for distances outside 10-600 km",
+      "issue": "The graded out-of-table station ml depends on reading -log A0 outside the table as silent (so shipped log-distance extrapolation is kept). The only anchors are 3.2 'The table runs from 10 km to 600 km' and 3.3's scope 'Between two listed distances'. 3.3's following sentence, 'Some agencies interpolate on the logarithm of distance; the network does not', can be read as a blanket ban on log-distance treatment, which pushes a careful reader to extrapolate linearly (the one-line fix x = distance also does exactly that, since extrapolation shares the formula). I think the contract is decidable as written, but it is a contrary-signal shape of the kind that produced 0/8 unanimous misses.",
+      "evidence": "At d=1 km: kept log extrapolation 0.504106, linear 1.376, clamp 1.700. At d=1000 km: log 5.574500, linear 5.910, clamp 4.790. Envelope promises epicentral 0-1000 km and depths to 60 km, so both sides of the table are graded.",
+      "suggested_fix": "Add a definitional sentence to 3.2 such as 'This part gives no correction for a distance outside the table.' so the silence rests on a stated definition rather than on the scope word 'Between'. That keeps the trap (the solver must still decouple interpolation from extrapolation in the same function) while removing the contrary-instinct reading."
+    },
+    {
+      "id": "CR-3",
+      "severity": "should_fix",
+      "location": "Design / solver-path screen",
+      "issue": "Only one restraint trap (CR-2). Everything else is stated explicitly in NPM-4 with 'the network does not X' contrast sentences, which read as a departure checklist; per the platform calibration every run repairs every departure. A single-trap design is the midi/royalty shape (BASE 7/8 to CORE 4/8, or 0/8 if the trap fails fairness).",
+      "evidence": "Nine departures, each named in a rule sentence; the sole silent sub-domain is out-of-table -log A0.",
+      "suggested_fix": "Consider adding a second independent trap of a different kind (for example a preserved shipped behaviour inside the median/contributing aggregate, or a two-hop definitional exclusion), each derivable from a definition chain in NPM-4."
+    },
+    {
+      "id": "CR-4",
+      "severity": "polish",
+      "location": "instruction.md paragraph 2, sentence 3",
+      "issue": "'For such a value, keeping the present calculation takes precedence over the rest of this paragraph' is hard to parse: the rest of the paragraph is the guard/clamp ban and the open-input clause, neither of which conflicts with keeping the calculation. A reader may wonder what conflict is being resolved and over-read it (e.g. keep the shipped max-channel or 2800 for out-of-table stations).",
+      "evidence": "The next clause 'every other step it passes through still follows NPM-4' is what actually resolves scope; the precedence clause adds no decidable content.",
+      "suggested_fix": "Reword to: 'For such a value, keep the present calculation; every other step it passes through still follows NPM-4.'"
+    },
+    {
+      "id": "CR-5",
+      "severity": "polish",
+      "location": "NPM-4 5.1 boundaries (10 km, 600 km) with hypocentral distance",
+      "issue": "`contributes` is compared exactly, but a boundary built from a non-Pythagorean pair can land 1 ulp either side depending on math.hypot vs math.sqrt(x*x+y*y).",
+      "evidence": "Exact pairs such as (6,8)->10, (600,0)->600, (360,480)->600 are safe.",
+      "suggested_fix": "Verifier boundary witnesses should use exact Pythagorean or zero-depth pairs only; keep other near-boundary cases at least 1e-9 away."
+    },
+    {
+      "id": "CR-6",
+      "severity": "polish",
+      "location": "mlnet/attenuation.py shipped behaviour at epi_km = 0",
+      "issue": "Shipped code crashes (log10(0)) for a station on the epicentre; after the 3.1 fix hypocentral distance is >= 1 km so this disappears. Not a defect of the contract, just note the verifier must not treat 'crash' as preserved behaviour.",
+      "evidence": "ValueError: math domain error on event depth 60, epi 0.",
+      "suggested_fix": "None needed."
+    }
+  ],
+  "witnesses": [
+    {"id": "W1", "input": "sample brsn2026gxqa (depth 9.4, 4 stations, even count)", "expected": "distances 20.840345, 48.224994, 84.424937, 162.272487; station ml 3.239135, 3.200450, 3.064103, 2.827713; event ml = mean of middle two = 3.132277", "derivation": "3.1 hypot, 2.2 a/2*2080e-6, 3.3 linear, 4.1 +corr, 4.3 mean of readings (all channels are readings, CLDW 4105>=2640, 4630>=2730), 5.2 even median. Shipped gives 3.584927.", "determined": true},
+    {"id": "W2", "input": "sample brsn2026gxra (depth 22, 3 stations, odd)", "expected": "event ml 2.378985 (= MOSS station ml, the middle one); HEN2 2.666932, TARN 2.291874", "derivation": "same chain, 5.2 odd median", "determined": true},
+    {"id": "W3", "input": "depth 8, epi 6, one channel 1000 nm noise 10, corr 0", "expected": "distance 10.0, contributes true, station ml 1.717033 (log10(1.04)+1.700), event ml null", "derivation": "listed-distance value 1.700 (3.3); 5.1 inclusive; 5.3 one station -> null", "determined": true},
+    {"id": "W4 (silent, near)", "input": "depth 3, epi 4, 1000 nm, corr +0.1", "expected": "distance 5.0, contributes false, station ml 1.457033 using kept log extrapolation -log A0(5)=1.340", "derivation": "NPM-4 gives no correction below 10 km; silence clause keeps shipped segment-0 log-distance formula, fed with hypocentral distance, correction added. Linear extrapolation would give 1.52+..., clamp 1.70+...", "determined": "yes under the silence clause; see CR-2 for the contrary reading risk"},
+    {"id": "W5 (silent, far)", "input": "depth 0, epi 1000, 10 nm noise 1, corr 0", "expected": "distance 1000, contributes false, station ml 3.591533 (log10(0.0104) + 5.574500)", "derivation": "kept log extrapolation on the 500-600 segment", "determined": "yes under the silence clause"},
+    {"id": "W6 (reading threshold)", "input": "depth 0, epi 100, corr 0, channels (1.5,0.5), (1.4,0.5), (6000,0.01)", "expected": "readings: 1.5 (exact tie) and 6000; station ml = mean(0.193125, 3.795185) = 1.994155", "derivation": "2.3 'at least three times'; 1.4 < 1.5 excluded; 4.3 mean", "determined": true},
+    {"id": "W6b (float tie)", "input": "channel amplitude 0.3, noise 0.1", "expected": "decimally a reading; float a>=3*n and a/n>=3 both say not a reading", "derivation": "2.3", "determined": false, "note": "CR-1: verifier must avoid this shape"},
+    {"id": "W7 (boundary / <3)", "input": "depth 60; A epi 0, B epi 600, C epi 599, all 1000 nm noise 1; corr A 0, B +0.1, C -1.0", "expected": "A d=60 contributes, ml 2.693033; B d=602.992537 not, ml 4.914674 (extrapolated); C d=601.997508 not, ml 3.812138; event ml null (one contributor)", "derivation": "3.1 moves B and C out of the table although epi <= 600; 5.3", "determined": true},
+    {"id": "W8 (outlier / median)", "input": "depth 0; A,C,D at epi 50 with 1000 nm (corr 0, -1, +1), B at epi 5 with 1e8 nm corr +0.1", "expected": "ml A 2.597033, C 1.597033, D 3.597033, B 6.457033 (not contributing); event ml 2.597033", "derivation": "4.2 negative correction lowers, 5.1 excludes B, 5.2 median of three", "determined": true}
+  ],
+  "solver_path_screen": {
+    "pre_mortem": "A strong solver reads NPM-4 top to bottom, maps each rule to the module it contradicts (amplitude.py gain and halving, station.py sign/max/readings, distance.py hypot, attenuation.py log->linear, network.py median and <3), and writes a ~40-line reference from the manual. It self-checks by differential-testing its package against that reference on the sample and on random bulletins spanning the section-1 envelope (depth 0-60, epi 0-1000, 1-4 channels). The self-check cannot catch the one graded silent region: out-of-table -log A0. If the solver edits minus_log_a0 to interpolate on distance, the extrapolation turns linear too, and its reference (written from 3.3) agrees, so fuzzing passes. Solvers who read the silence clause against the envelope ('out to 1000 km', table ends at 600) will split the function and keep log extrapolation; local Opus 5.5 probably does, platform Opus 5 may not. Everything else collapses.",
+    "scores": {
+      "reference_unreachable": 2,
+      "authority_incomplete_for_grading": 3,
+      "hidden_state_not_closed_form": 1,
+      "restraint_traps": 3,
+      "fuzz_blind_spot": 3
+    },
+    "self_verification_resistance": 3,
+    "prediction": "collapses",
+    "confidence": "medium",
+    "decisive_reason": "All nine departures are named in rule sentences and differential-testable; resistance rests on a single restraint trap (log-distance extrapolation kept outside 10-600 km inside the same function as the linear-interpolation fix), which a careful Opus-class reader of the silence clause is likely to keep."
+  },
+  "overall": "accept_with_fixes"
+}

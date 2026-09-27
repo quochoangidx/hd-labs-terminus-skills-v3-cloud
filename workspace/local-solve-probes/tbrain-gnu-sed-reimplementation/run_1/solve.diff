@@ -1,0 +1,1556 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-sed-reimplementation/run_1/baseline/environment/app/pysed/sed.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-sed-reimplementation/run_1/solve/environment/app/pysed/sed.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-sed-reimplementation/run_1/baseline/environment/app/pysed/sed.py	2026-09-24 11:37:42
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-sed-reimplementation/run_1/solve/environment/app/pysed/sed.py	2026-09-24 13:49:00
+@@ -3,13 +3,1548 @@
+ Usage: python3 /app/pysed/sed.py [OPTION]... {script-only-if-no-other-script} [input-file]...
+ """
+ 
++import re
+ import sys
+ 
+ 
++class SedError(Exception):
++    def __init__(self, msg, status=1):
++        Exception.__init__(self, msg)
++        self.status = status
++
++
++# ---------------------------------------------------------------------------
++# Character helpers (C locale, bytes decoded as latin-1)
++# ---------------------------------------------------------------------------
++
++_UPPER = {i: i - 32 for i in range(ord('a'), ord('z') + 1)}
++_LOWER = {i: i + 32 for i in range(ord('A'), ord('Z') + 1)}
++
++
++def to_upper(s):
++    return s.translate(_UPPER)
++
++
++def to_lower(s):
++    return s.translate(_LOWER)
++
++
++def _chars(pred):
++    return frozenset(chr(i) for i in range(256) if pred(i))
++
++
++CLASSES = {
++    'alpha': _chars(lambda c: 65 <= c <= 90 or 97 <= c <= 122),
++    'digit': _chars(lambda c: 48 <= c <= 57),
++    'alnum': _chars(lambda c: 65 <= c <= 90 or 97 <= c <= 122 or 48 <= c <= 57),
++    'upper': _chars(lambda c: 65 <= c <= 90),
++    'lower': _chars(lambda c: 97 <= c <= 122),
++    'space': frozenset(' \t\n\r\f\v'),
++    'blank': frozenset(' \t'),
++    'punct': _chars(lambda c: 33 <= c <= 126 and not (65 <= c <= 90 or 97 <= c <= 122 or 48 <= c <= 57)),
++    'print': _chars(lambda c: 32 <= c <= 126),
++    'graph': _chars(lambda c: 33 <= c <= 126),
++    'cntrl': _chars(lambda c: c < 32 or c == 127),
++    'xdigit': frozenset('0123456789abcdefABCDEF'),
++}
++
++SIMPLE_ESC = {'a': '\a', 'f': '\f', 'n': '\n', 'r': '\r', 't': '\t', 'v': '\v'}
++
++
++def convert_number(s, i, base):
++    """s[i] is the letter d/o/x.  Returns (char, new_index)."""
++    ndig = {10: 3, 8: 3, 16: 2}[base]
++    j = i + 1
++    n = 0
++    cnt = 0
++    while j < len(s) and cnt < ndig:
++        c = s[j]
++        try:
++            d = int(c, 16)
++        except ValueError:
++            break
++        if d >= base:
++            break
++        n = n * base + d
++        j += 1
++        cnt += 1
++    if cnt == 0:
++        return s[i], i + 1
++    return chr(n & 0xff), j
++
++
++def ctrl_char(c):
++    return chr(ord(to_upper(c)) ^ 0x40)
++
++
++# ---------------------------------------------------------------------------
++# Regular expressions: POSIX BRE/ERE (GNU flavour) -> Python re
++# ---------------------------------------------------------------------------
++
++INF = float('inf')
++
++
++def preprocess_regex(s):
++    """Apply GNU sed escape conversions (\\t, \\xHH, ...) to a regex."""
++    out = []
++    i = 0
++    n = len(s)
++    while i < n:
++        c = s[i]
++        if c == '\\' and i + 1 < n:
++            d = s[i + 1]
++            if d in SIMPLE_ESC:
++                out.append(SIMPLE_ESC[d])
++                i += 2
++            elif d in 'dox':
++                ch, j = convert_number(s, i + 1, {'d': 10, 'o': 8, 'x': 16}[d])
++                if j == i + 2 and ch == d:
++                    out.append(d)
++                else:
++                    out.append('\\\\' if ch == '\\' else ch)
++                i = j
++            elif d == 'c' and i + 2 < n:
++                ch = ctrl_char(s[i + 2])
++                out.append('\\\\' if ch == '\\' else ch)
++                i += 3
++            else:
++                out.append(c + d)
++                i += 2
++        else:
++            out.append(c)
++            i += 1
++    return ''.join(out)
++
++
++def class_to_py(chars, negate):
++    """Build a Python character class from a set of characters."""
++    codes = sorted(ord(c) for c in chars)
++    parts = []
++    i = 0
++    while i < len(codes):
++        j = i
++        while j + 1 < len(codes) and codes[j + 1] == codes[j] + 1:
++            j += 1
++        if j == i:
++            parts.append('\\x%02x' % codes[i])
++        else:
++            parts.append('\\x%02x-\\x%02x' % (codes[i], codes[j]))
++        i = j + 1
++    body = ''.join(parts)
++    if negate:
++        if not body:
++            return '[\\x00-\\xff]'
++        return '[^' + body + ']'
++    if not body:
++        return '(?!)'
++    return '[' + body + ']'
++
++
++class Tok(object):
++    __slots__ = ('kind', 'val')
++
++    def __init__(self, kind, val=None):
++        self.kind = kind
++        self.val = val
++
++
++def parse_bracket(s, i):
++    """s[i] is just after '['.  Returns (set, negate, new_index)."""
++    n = len(s)
++    negate = False
++    if i < n and s[i] == '^':
++        negate = True
++        i += 1
++    items = set()
++    first = True
++
++    def read_elem(i):
++        # returns (kind, value, new_i) ; kind 'char' or 'class'
++        c = s[i]
++        if c == '[' and i + 1 < n and s[i + 1] in '.:=':
++            t = s[i + 1]
++            end = s.find(t + ']', i + 2)
++            if end < 0:
++                raise SedError('unterminated address regex')
++            name = s[i + 2:end]
++            if t == ':':
++                if name not in CLASSES:
++                    raise SedError('invalid character class')
++                return 'class', CLASSES[name], end + 2
++            # collating symbol / equivalence class
++            if len(name) != 1:
++                raise SedError('invalid collation character')
++            return 'char', name, end + 2
++        return 'char', c, i + 1
++
++    while True:
++        if i >= n:
++            raise SedError('unterminated address regex')
++        c = s[i]
++        if c == ']' and not first:
++            i += 1
++            break
++        first = False
++        kind, val, i = read_elem(i)
++        if kind == 'class':
++            items |= val
++            continue
++        # possible range
++        if i + 1 < n and s[i] == '-' and s[i + 1] != ']':
++            kind2, val2, j = read_elem(i + 1)
++            if kind2 == 'class':
++                raise SedError('invalid range end')
++            lo, hi = ord(val), ord(val2)
++            if lo > hi:
++                raise SedError('invalid range end')
++            for k in range(lo, hi + 1):
++                items.add(chr(k))
++            i = j
++            continue
++        items.add(val)
++    return items, negate, i
++
++
++def tokenize(s, ere):
++    toks = []
++    i = 0
++    n = len(s)
++    while i < n:
++        c = s[i]
++        if c == '\\':
++            if i + 1 >= n:
++                raise SedError('trailing backslash (\\)')
++            d = s[i + 1]
++            i += 2
++            if not ere and d == '(':
++                toks.append(Tok('open'))
++            elif not ere and d == ')':
++                toks.append(Tok('close'))
++            elif not ere and d == '|':
++                toks.append(Tok('alt'))
++            elif not ere and d == '+':
++                toks.append(Tok('quant', (1, None, '+')))
++            elif not ere and d == '?':
++                toks.append(Tok('quant', (0, 1, '?')))
++            elif not ere and d == '{':
++                end = s.find('\\}', i)
++                if end < 0:
++                    raise SedError('unmatched \\{')
++                body = s[i:end]
++                iv = parse_interval(body)
++                if iv is None:
++                    raise SedError('invalid content of \\{\\}')
++                toks.append(Tok('quant', (iv[0], iv[1], '{')))
++                i = end + 2
++            elif d in '123456789':
++                toks.append(Tok('backref', int(d)))
++            elif d == 'w':
++                toks.append(Tok('set', '[A-Za-z0-9_]'))
++            elif d == 'W':
++                toks.append(Tok('set', '[^A-Za-z0-9_]'))
++            elif d == 's':
++                toks.append(Tok('set', '[ \\t\\n\\r\\f\\v]'))
++            elif d == 'S':
++                toks.append(Tok('set', '[^ \\t\\n\\r\\f\\v]'))
++            elif d == 'b':
++                toks.append(Tok('assert', ('(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_]))', True)))
++            elif d == 'B':
++                toks.append(Tok('assert', ('(?:(?<=[A-Za-z0-9_])(?=[A-Za-z0-9_])|(?<![A-Za-z0-9_])(?![A-Za-z0-9_]))', True)))
++            elif d == '<':
++                toks.append(Tok('assert', ('(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])', True)))
++            elif d == '>':
++                toks.append(Tok('assert', ('(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])', True)))
++            elif d == '`':
++                toks.append(Tok('assert', ('(?<![\\s\\S])', False)))
++            elif d == "'":
++                toks.append(Tok('assert', ('(?![\\s\\S])', True)))
++            elif d == 'n':
++                toks.append(Tok('lit', '\n'))
++            else:
++                toks.append(Tok('lit', d))
++            continue
++        if c == '[':
++            items, negate, i = parse_bracket(s, i + 1)
++            toks.append(Tok('bracket', (items, negate)))
++            continue
++        i += 1
++        if c == '.':
++            toks.append(Tok('any'))
++        elif c == '*':
++            toks.append(Tok('quant', (0, None, '*')))
++        elif c == '^':
++            toks.append(Tok('bol'))
++        elif c == '$':
++            toks.append(Tok('eol'))
++        elif ere and c == '(':
++            toks.append(Tok('open'))
++        elif ere and c == ')':
++            toks.append(Tok('close'))
++        elif ere and c == '|':
++            toks.append(Tok('alt'))
++        elif ere and c == '+':
++            toks.append(Tok('quant', (1, None, '+')))
++        elif ere and c == '?':
++            toks.append(Tok('quant', (0, 1, '?')))
++        elif ere and c == '{':
++            end = s.find('}', i)
++            iv = parse_interval(s[i:end]) if end >= 0 else None
++            if iv is None:
++                toks.append(Tok('lit', '{'))
++            else:
++                toks.append(Tok('quant', (iv[0], iv[1], '{')))
++                i = end + 1
++        else:
++            toks.append(Tok('lit', c))
++    return toks
++
++
++def parse_interval(body):
++    m = re.match(r'^([0-9]*)(,([0-9]*))?$', body)
++    if not m:
++        return None
++    if m.group(2) is None:
++        if not m.group(1):
++            return None
++        v = int(m.group(1))
++        return (v, v)
++    lo = int(m.group(1)) if m.group(1) else 0
++    hi = int(m.group(3)) if m.group(3) else None
++    if hi is not None and hi < lo:
++        return None
++    return (lo, hi)
++
++
++class RegexTranslator(object):
++    def __init__(self, toks, ere, mline):
++        self.toks = toks
++        self.pos = 0
++        self.ere = ere
++        self.mline = mline
++        self.ngroups = 0
++        self.closed = set()
++        self.lookahead = False
++        self.has_backref = False
++
++    def peek(self, k=0):
++        p = self.pos + k
++        return self.toks[p] if p < len(self.toks) else None
++
++    def parse(self):
++        py, mn, mx = self.parse_alt(0)
++        while self.pos < len(self.toks):
++            # unmatched close at top level: literal
++            t = self.toks[self.pos]
++            self.pos += 1
++            b = self.parse_alt(0)
++            py = py + re.escape(')') + b[0]
++            mn = mn + 1 + b[1]
++            mx = mx + 1 + b[2]
++        return py, mn, mx
++
++    def parse_alt(self, depth):
++        branches = [self.parse_branch(depth)]
++        while True:
++            t = self.peek()
++            if t is not None and t.kind == 'alt':
++                self.pos += 1
++                branches.append(self.parse_branch(depth))
++            else:
++                break
++        if len(branches) == 1:
++            return branches[0]
++        py = '(?:' + '|'.join(b[0] for b in branches) + ')'
++        return py, min(b[1] for b in branches), max(b[2] for b in branches)
++
++    def anchor_bol(self):
++        return '(?<![^\\n])' if self.mline else '(?<![\\s\\S])'
++
++    def anchor_eol(self):
++        self.lookahead = True
++        return '(?![^\\n])' if self.mline else '(?![\\s\\S])'
++
++    def parse_branch(self, depth):
++        items = []  # list of [py, min, max, quantifiable]
++        start = True
++        after_anchor = False
++        while True:
++            t = self.peek()
++            if t is None or t.kind == 'alt':
++                break
++            if t.kind == 'close':
++                if depth > 0:
++                    break
++                if self.ere or True:
++                    # unmatched close paren: treat literally
++                    self.pos += 1
++                    items.append([re.escape(')'), 1, 1, True])
++                    start = False
++                    after_anchor = False
++                    continue
++            self.pos += 1
++            k = t.kind
++            if k == 'bol':
++                if self.ere or start:
++                    items.append([self.anchor_bol(), 0, 0, False])
++                    start = False
++                    after_anchor = True
++                    continue
++                items.append([re.escape('^'), 1, 1, True])
++            elif k == 'eol':
++                nt = self.peek()
++                if self.ere or nt is None or nt.kind in ('alt', 'close'):
++                    items.append([self.anchor_eol(), 0, 0, False])
++                    start = False
++                    after_anchor = False
++                    continue
++                items.append([re.escape('$'), 1, 1, True])
++            elif k == 'quant':
++                lo, hi, sym = t.val
++                if start or after_anchor or not items:
++                    if sym == '{':
++                        raise SedError('Invalid preceding regular expression')
++                    items.append([re.escape(sym), 1, 1, True])
++                else:
++                    items[-1] = self.apply_quant(items[-1], lo, hi)
++                    start = False
++                    continue
++            elif k == 'lit':
++                items.append([re.escape(t.val), 1, 1, True])
++            elif k == 'any':
++                items.append(['[^\\n]' if self.mline else '[\\s\\S]', 1, 1, True])
++            elif k == 'set':
++                items.append([t.val, 1, 1, True])
++            elif k == 'bracket':
++                chars, negate = t.val
++                if negate and self.mline:
++                    chars = set(chars) | {'\n'}
++                items.append([class_to_py(chars, negate), 1, 1, True])
++            elif k == 'assert':
++                py, la = t.val
++                if la:
++                    self.lookahead = True
++                items.append([py, 0, 0, False])
++            elif k == 'backref':
++                if t.val not in self.closed:
++                    raise SedError('Invalid back reference')
++                self.has_backref = True
++                items.append(['(?:\\%d)' % t.val, 0, INF, True])
++            elif k == 'open':
++                self.ngroups += 1
++                g = self.ngroups
++                py, mn, mx = self.parse_alt(depth + 1)
++                ct = self.peek()
++                if ct is None or ct.kind != 'close':
++                    raise SedError('Unmatched ( or \\(')
++                self.pos += 1
++                self.closed.add(g)
++                items.append(['(' + py + ')', mn, mx, True])
++            start = False
++            after_anchor = False
++        py = ''.join(it[0] for it in items)
++        mn = sum(it[1] for it in items)
++        mx = sum(it[2] for it in items)
++        return py, mn, mx
++
++    def apply_quant(self, item, lo, hi):
++        py, mn, mx, _ = item
++        if mx == 0:
++            if lo == 0:
++                return ['(?:' + py + ')?', 0, 0, True]
++            return item
++        if hi is None:
++            q = '*' if lo == 0 else ('+' if lo == 1 else '{%d,}' % lo)
++            nmx = INF
++        else:
++            if lo == 0 and hi == 1:
++                q = '?'
++            elif lo == hi:
++                q = '{%d}' % lo
++            else:
++                q = '{%d,%d}' % (lo, hi)
++            nmx = mx * hi
++        return ['(?:' + py + ')' + q, mn * lo, nmx, True]
++
++
++class Regex(object):
++    def __init__(self, src, ere, icase, mline):
++        self.src = src
++        pre = preprocess_regex(src)
++        toks = tokenize(pre, ere)
++        tr = RegexTranslator(toks, ere, mline)
++        py, mn, mx = tr.parse()
++        self.py = py
++        self.ngroups = tr.ngroups
++        self.maxlen = mx
++        self.lookahead = tr.lookahead
++        self.flags = re.ASCII | re.DOTALL | (re.IGNORECASE if icase else 0)
++        try:
++            self.rx = re.compile(py, self.flags)
++        except re.error as e:
++            raise SedError('invalid regex: %s' % e)
++        self.endcache = {}
++
++    def search_any(self, s):
++        return self.rx.search(s) is not None
++
++    def _check(self, s, st, e):
++        """A match starting at st and ending at or after e, if any."""
++        r = len(s) - e
++        c = self.endcache.get(r)
++        if c is None:
++            c = re.compile('(?:' + self.py + ')(?![\\s\\S]{%d})' % (r + 1), self.flags)
++            if len(self.endcache) > 3000:
++                self.endcache.clear()
++            self.endcache[r] = c
++        return c.match(s, st)
++
++    def find(self, s, pos):
++        """Leftmost-longest match starting at or after pos."""
++        m = self.rx.search(s, pos)
++        if m is None:
++            return None
++        st, e0 = m.span()
++        n = len(s)
++        hi = n
++        if self.maxlen != INF:
++            hi = min(n, st + int(self.maxlen))
++        if hi <= e0:
++            return m
++        m1 = self._check(s, st, e0 + 1)
++        if m1 is None:
++            return m
++        best = m1
++        lo = m1.end()
++        while lo < hi:
++            mid = (lo + 1 + hi) // 2
++            mm = self._check(s, st, mid)
++            if mm is not None:
++                best = mm
++                lo = mm.end()
++            else:
++                hi = mid - 1
++        return best
++
++
++# ---------------------------------------------------------------------------
++# Script representation and parsing
++# ---------------------------------------------------------------------------
++
++class Addr(object):
++    __slots__ = ('kind', 'n', 'step', 'rx')
++
++    def __init__(self, kind, n=0, step=0, rx=None):
++        self.kind = kind
++        self.n = n
++        self.step = step
++        self.rx = rx
++
++
++class Cmd(object):
++    def __init__(self, name):
++        self.name = name
++        self.a1 = None
++        self.a2 = None
++        self.negate = False
++        self.active = False
++        self.range_end = 0
++        self.text = ''
++        self.label = None
++        self.target = None
++        self.int_arg = None
++        # s command
++        self.rx = None
++        self.repl = None
++        self.gflag = False
++        self.pflag = False
++        self.nth = 1
++        self.ymap = None
++        self.block_end = None
++
++
++EMPTY_RX = object()
++
++
++class Parser(object):
++    def __init__(self, text, ere):
++        self.s = text
++        self.i = 0
++        self.ere = ere
++
++    def peek(self):
++        if self.i < len(self.s):
++            return self.s[self.i]
++        return None
++
++    def get(self):
++        if self.i < len(self.s):
++            c = self.s[self.i]
++            self.i += 1
++            return c
++        self.i += 1
++        return None
++
++    def skip_ws(self):
++        while self.i < len(self.s) and self.s[self.i] in ' \t':
++            self.i += 1
++
++    def read_int(self):
++        st = self.i
++        while self.i < len(self.s) and self.s[self.i].isdigit():
++            self.i += 1
++        if st == self.i:
++            return None
++        return int(self.s[st:self.i])
++
++    def read_delimited(self, delim, regex):
++        buf = []
++        while True:
++            c = self.get()
++            if c is None:
++                raise SedError('unterminated command')
++            if c == '\\':
++                d = self.get()
++                if d is None:
++                    raise SedError('unterminated command')
++                if d == delim:
++                    if not regex and d == '&':
++                        buf.append('\\&')
++                    else:
++                        buf.append(d)
++                elif d == '\n':
++                    buf.append('\n')
++                elif d == 'n' and regex:
++                    buf.append('\n')
++                else:
++                    buf.append('\\' + d)
++            elif c == delim:
++                break
++            elif c == '\n' and regex:
++                raise SedError('unterminated address regex')
++            else:
++                buf.append(c)
++        return ''.join(buf)
++
++    def make_rx(self, pat, icase, mline):
++        if pat == '':
++            return EMPTY_RX
++        return Regex(pat, self.ere, icase, mline)
++
++    def parse_regex_addr(self, delim):
++        pat = self.read_delimited(delim, True)
++        icase = mline = False
++        while True:
++            self.skip_ws()
++            c = self.peek()
++            if c == 'I':
++                icase = True
++                self.i += 1
++            elif c == 'M':
++                mline = True
++                self.i += 1
++            else:
++                break
++        return Addr('re', rx=self.make_rx(pat, icase, mline))
++
++    def parse_addr(self):
++        c = self.peek()
++        if c is not None and c.isdigit():
++            n = self.read_int()
++            if self.peek() == '~':
++                self.i += 1
++                st = self.read_int()
++                return Addr('step', n, st or 0)
++            return Addr('num', n)
++        if c == '$':
++            self.i += 1
++            return Addr('last')
++        if c == '/':
++            self.i += 1
++            return self.parse_regex_addr('/')
++        if c == '\\':
++            self.i += 1
++            d = self.get()
++            if d is None or d == '\n' or d == '\\':
++                raise SedError('unexpected delimiter')
++            return self.parse_regex_addr(d)
++        return None
++
++    def read_end_of_cmd(self):
++        self.skip_ws()
++        c = self.peek()
++        if c is None or c == '\n' or c == ';':
++            self.i += 1
++            return
++        if c == '}' or c == '#':
++            return
++        raise SedError('extra characters after command')
++
++    def read_label(self):
++        self.skip_ws()
++        st = self.i
++        while self.i < len(self.s) and self.s[self.i] not in ' \t\n\r\f\v;}':
++            self.i += 1
++        return self.s[st:self.i]
++
++    def read_text(self):
++        self.skip_ws()
++        c = self.peek()
++        if c == '\\':
++            self.i += 1
++            if self.peek() == '\n':
++                self.i += 1
++        elif c is None:
++            raise SedError('expected \\ after a, c or i')
++        raw = []
++        while True:
++            c = self.get()
++            if c is None or c == '\n':
++                break
++            if c == '\\':
++                d = self.get()
++                if d is None:
++                    break
++                raw.append('\\' + d)
++            else:
++                raw.append(c)
++        return unescape_text(''.join(raw)) + '\n'
++
++    def parse(self):
++        cmds = []
++        stack = []
++        labels = {}
++        s = self.s
++        while True:
++            while self.i < len(s) and s[self.i] in ' \t\n\r\f\v;':
++                self.i += 1
++            if self.i >= len(s):
++                break
++            if s[self.i] == '#':
++                while self.i < len(s) and s[self.i] != '\n':
++                    self.i += 1
++                continue
++            a1 = self.parse_addr()
++            a2 = None
++            if a1 is not None:
++                self.skip_ws()
++                if self.peek() == ',':
++                    self.i += 1
++                    self.skip_ws()
++                    c = self.peek()
++                    if c == '+' or c == '~':
++                        self.i += 1
++                        n = self.read_int()
++                        if n is None:
++                            raise SedError('expected number')
++                        a2 = Addr('plus' if c == '+' else 'mult', n)
++                    else:
++                        a2 = self.parse_addr()
++                        if a2 is None:
++                            raise SedError('unexpected ,')
++                        if a2.kind == 'step':
++                            a2 = Addr('num', a2.n)
++                if a1.kind == 'num' and a1.n == 0:
++                    if a2 is None or a2.kind != 're':
++                        raise SedError('invalid usage of line address 0')
++                    a1 = Addr('zero')
++            self.skip_ws()
++            negate = False
++            while self.peek() == '!':
++                negate = True
++                self.i += 1
++                self.skip_ws()
++            ch = self.get()
++            if ch is None:
++                raise SedError('missing command')
++            cmd = Cmd(ch)
++            cmd.a1 = a1
++            cmd.a2 = a2
++            cmd.negate = negate
++            if a1 is not None and a1.kind == 'zero':
++                cmd.active = True
++            if ch == '{':
++                stack.append(len(cmds))
++                cmds.append(cmd)
++                continue
++            elif ch == '}':
++                if not stack:
++                    raise SedError('unexpected }')
++                if a1 is not None:
++                    raise SedError('} doesn\'t want any addresses')
++                op = stack.pop()
++                cmds[op].block_end = len(cmds)
++                cmds.append(cmd)
++                self.read_end_of_cmd()
++                continue
++            elif ch in '=dDgGhHnNpPxz':
++                self.read_end_of_cmd()
++            elif ch == 'l' or ch == 'L':
++                self.skip_ws()
++                cmd.int_arg = self.read_int()
++                self.read_end_of_cmd()
++            elif ch in 'qQ':
++                self.skip_ws()
++                n = self.read_int()
++                cmd.int_arg = n if n is not None else 0
++                self.read_end_of_cmd()
++            elif ch in 'aic':
++                cmd.text = self.read_text()
++            elif ch == ':':
++                if a1 is not None:
++                    raise SedError(': doesn\'t want any addresses')
++                lab = self.read_label()
++                if not lab:
++                    raise SedError('":" lacks a label')
++                labels[lab] = len(cmds)
++                cmd.label = lab
++            elif ch in 'btT':
++                lab = self.read_label()
++                cmd.label = lab if lab else None
++            elif ch == 's':
++                self.parse_s(cmd)
++            elif ch == 'y':
++                self.parse_y(cmd)
++            elif ch == '#':
++                while self.i < len(s) and s[self.i] != '\n':
++                    self.i += 1
++                continue
++            else:
++                raise SedError('unknown command: `%s\'' % ch)
++            cmds.append(cmd)
++        if stack:
++            raise SedError('unmatched `{\'')
++        for c in cmds:
++            if c.name in 'btT' and c.label is not None:
++                if c.label not in labels:
++                    raise SedError('can\'t find label for jump to `%s\'' % c.label)
++                c.target = labels[c.label]
++        return cmds
++
++    def parse_s(self, cmd):
++        delim = self.get()
++        if delim is None or delim == '\n' or delim == '\\':
++            raise SedError('unterminated `s\' command')
++        pat = self.read_delimited(delim, True)
++        rep = self.read_delimited(delim, False)
++        icase = mline = False
++        nth = None
++        while True:
++            c = self.peek()
++            if c == 'g':
++                cmd.gflag = True
++            elif c == 'p':
++                cmd.pflag = True
++            elif c in ('i', 'I'):
++                icase = True
++            elif c in ('m', 'M'):
++                mline = True
++            elif c == 'e':
++                pass
++            elif c is not None and c.isdigit():
++                nth = self.read_int()
++                if nth == 0:
++                    raise SedError('number option to `s\' command may not be zero')
++                continue
++            elif c == 'w':
++                raise SedError('w flag not supported')
++            else:
++                break
++            self.i += 1
++        cmd.nth = nth if nth is not None else 1
++        cmd.rx = self.make_rx(pat, icase, mline)
++        cmd.repl = parse_replacement(rep)
++        if cmd.rx is not EMPTY_RX:
++            for kind, val in cmd.repl:
++                if kind == 'grp' and val > cmd.rx.ngroups:
++                    raise SedError('invalid reference \\%d on `s\' command\'s RHS' % val)
++        self.read_end_of_cmd()
++
++    def parse_y(self, cmd):
++        delim = self.get()
++        if delim is None or delim == '\n' or delim == '\\':
++            raise SedError('unterminated `y\' command')
++
++        def part():
++            buf = []
++            while True:
++                c = self.get()
++                if c is None:
++                    raise SedError('unterminated `y\' command')
++                if c == '\\':
++                    d = self.get()
++                    if d is None:
++                        raise SedError('unterminated `y\' command')
++                    if d == delim:
++                        buf.append(d)
++                    elif d == '\\':
++                        buf.append('\\')
++                    elif d == '\n':
++                        buf.append('\n')
++                    elif d in SIMPLE_ESC:
++                        buf.append(SIMPLE_ESC[d])
++                    elif d in 'dox':
++                        tmp = d + self.s[self.i:self.i + 3]
++                        ch, j = convert_number(tmp, 0, {'d': 10, 'o': 8, 'x': 16}[d])
++                        self.i += j - 1
++                        buf.append(ch)
++                    elif d == 'c' and self.peek() is not None:
++                        buf.append(ctrl_char(self.get()))
++                    else:
++                        raise SedError('unknown option to `y\'')
++                elif c == delim:
++                    break
++                else:
++                    buf.append(c)
++            return buf
++        src = part()
++        dst = part()
++        if len(src) != len(dst):
++            raise SedError('strings for `y\' command are different lengths')
++        m = {}
++        for a, b in zip(src, dst):
++            if a not in m:
++                m[a] = b
++        cmd.ymap = {ord(a): b for a, b in m.items()}
++        self.read_end_of_cmd()
++
++
++def unescape_text(raw):
++    out = []
++    i = 0
++    n = len(raw)
++    while i < n:
++        c = raw[i]
++        if c == '\\' and i + 1 < n:
++            d = raw[i + 1]
++            if d in SIMPLE_ESC:
++                out.append(SIMPLE_ESC[d])
++                i += 2
++            elif d in 'dox':
++                ch, j = convert_number(raw, i + 1, {'d': 10, 'o': 8, 'x': 16}[d])
++                out.append(ch)
++                i = j
++            elif d == 'c' and i + 2 < n:
++                out.append(ctrl_char(raw[i + 2]))
++                i += 3
++            else:
++                out.append(d)
++                i += 2
++        else:
++            out.append(c)
++            i += 1
++    return ''.join(out)
++
++
++def parse_replacement(rep):
++    parts = []
++    lit = []
++
++    def flush():
++        if lit:
++            parts.append(('lit', ''.join(lit)))
++            del lit[:]
++    i = 0
++    n = len(rep)
++    while i < n:
++        c = rep[i]
++        if c == '\\' and i + 1 < n:
++            d = rep[i + 1]
++            i += 2
++            if d.isdigit():
++                flush()
++                parts.append(('grp', int(d)))
++            elif d == '&':
++                lit.append('&')
++            elif d in 'LUElu':
++                flush()
++                parts.append(('case', d))
++            elif d == '\n':
++                lit.append('\n')
++            elif d in SIMPLE_ESC:
++                lit.append(SIMPLE_ESC[d])
++            elif d in 'dox':
++                ch, j = convert_number(rep, i - 1, {'d': 10, 'o': 8, 'x': 16}[d])
++                lit.append(ch)
++                i = j
++            elif d == 'c' and i < n:
++                lit.append(ctrl_char(rep[i]))
++                i += 1
++            else:
++                lit.append(d)
++        elif c == '&':
++            flush()
++            parts.append(('grp', 0))
++            i += 1
++        else:
++            lit.append(c)
++            i += 1
++    flush()
++    return parts
++
++
++# ---------------------------------------------------------------------------
++# Execution
++# ---------------------------------------------------------------------------
++
++class Quit(Exception):
++    def __init__(self, code):
++        Exception.__init__(self)
++        self.code = code
++
++
++class Sed(object):
++    def __init__(self, cmds, quiet, separate, files, line_len):
++        self.cmds = cmds
++        self.quiet = quiet
++        self.separate = separate
++        self.line_len = line_len
++        self.out = []
++        self.missing_nl = False
++        self.bad_input = False
++        self.last_rx = None
++        self.append_queue = []
++        # load inputs
++        self.inputs = []  # list of (lines, last_has_newline)
++        if not files:
++            files = ['-']
++        for f in files:
++            data = None
++            if f == '-':
++                data = sys.stdin.buffer.read()
++            else:
++                try:
++                    with open(f.encode('latin-1'), 'rb') as fh:
++                        data = fh.read()
++                except (IOError, OSError) as e:
++                    sys.stderr.write("sed: can't read %s: %s\n" % (f, e.strerror or 'error'))
++                    self.bad_input = True
++                    continue
++            text = data.decode('latin-1')
++            if text == '':
++                self.inputs.append([])
++                continue
++            lines = text.split('\n')
++            if lines[-1] == '':
++                lines.pop()
++                recs = [(l, True) for l in lines]
++            else:
++                recs = [(l, True) for l in lines[:-1]] + [(lines[-1], False)]
++            self.inputs.append(recs)
++        self.fidx = 0
++        self.lidx = 0
++        self.line_no = 0
++        self.chomped = True
++        self.ps = ''
++        self.hold = ''
++        self.tflag = False
++
++    # -- output ------------------------------------------------------------
++    def write(self, s):
++        if self.missing_nl:
++            self.out.append('\n')
++            self.missing_nl = False
++        self.out.append(s)
++
++    def print_ps(self, s=None):
++        if s is None:
++            s = self.ps
++        if self.chomped:
++            self.write(s + '\n')
++        else:
++            self.write(s)
++            self.missing_nl = True
++
++    def flush_appends(self):
++        for t in self.append_queue:
++            self.write(t)
++        self.append_queue = []
++
++    # -- input -------------------------------------------------------------
++    def is_last(self):
++        if self.separate:
++            return self.lidx >= len(self.inputs[self.fidx])
++        return not self._any_more()
++
++    def _any_more(self):
++        if self.fidx < len(self.inputs) and self.lidx < len(self.inputs[self.fidx]):
++            return True
++        j = self.fidx + 1
++        while j < len(self.inputs):
++            if self.inputs[j]:
++                return True
++            j += 1
++        return False
++
++    def read_line(self):
++        while self.fidx < len(self.inputs) and self.lidx >= len(self.inputs[self.fidx]):
++            self.fidx += 1
++            self.lidx = 0
++            if self.separate and self.fidx < len(self.inputs):
++                self.new_file()
++        if self.fidx >= len(self.inputs):
++            return None
++        rec = self.inputs[self.fidx][self.lidx]
++        self.lidx += 1
++        self.line_no += 1
++        self.chomped = rec[1]
++        self.tflag = False
++        return rec[0]
++
++    def new_file(self):
++        self.line_no = 0
++        for c in self.cmds:
++            c.active = c.a1 is not None and c.a1.kind == 'zero' and c.a2 is not None
++
++    def at_eof(self):
++        """Would n/N find no more input?"""
++        if self.separate:
++            return self.lidx >= len(self.inputs[self.fidx])
++        return not self._any_more()
++
++    # -- regex -------------------------------------------------------------
++    def get_rx(self, rx):
++        if rx is EMPTY_RX:
++            if self.last_rx is None:
++                raise SedError('no previous regular expression', 1)
++            return self.last_rx
++        self.last_rx = rx
++        return rx
++
++    # -- addresses -----------------------------------------------------------
++    def match_one(self, a):
++        k = a.kind
++        if k == 'num':
++            return self.line_no == a.n
++        if k == 're':
++            return self.get_rx(a.rx).search_any(self.ps)
++        if k == 'last':
++            return self.is_last()
++        if k == 'step':
++            if a.step <= 0:
++                return self.line_no == a.n
++            return self.line_no >= a.n and (self.line_no - a.n) % a.step == 0
++        if k == 'zero':
++            return False
++        return False
++
++    def match_addr(self, c):
++        if c.a1 is None:
++            return True
++        if c.a2 is None:
++            return self.match_one(c.a1)
++        l = self.line_no
++        a2 = c.a2
++        if c.active:
++            if a2.kind in ('num', 'plus', 'mult'):
++                end = c.range_end if a2.kind != 'num' else a2.n
++                if l >= end:
++                    c.active = False
++                    if l > end:
++                        # past the end: behave as if range were closed before
++                        return self.match_one(c.a1) and self._start_range(c, l)
++                return True
++            if self.match_one(a2):
++                c.active = False
++            return True
++        if not self.match_one(c.a1):
++            return False
++        return self._start_range(c, l)
++
++    def _start_range(self, c, l):
++        a2 = c.a2
++        k = a2.kind
++        if k == 'num':
++            if a2.n > l:
++                c.active = True
++                c.range_end = a2.n
++            return True
++        if k == 'plus':
++            end = l + a2.n
++            if end > l:
++                c.active = True
++                c.range_end = end
++            return True
++        if k == 'mult':
++            n = a2.n
++            if n <= 0:
++                return True
++            end = ((l + n - 1) // n) * n
++            if end > l:
++                c.active = True
++                c.range_end = end
++            return True
++        c.active = True
++        return True
++
++    # -- commands ------------------------------------------------------------
++    def do_list(self, width):
++        out = []
++        cur = 0
++        for ch in self.ps:
++            o = ord(ch)
++            if ch == '\\':
++                rep = '\\\\'
++            elif 32 <= o <= 126:
++                rep = ch
++            elif ch == '\a':
++                rep = '\\a'
++            elif ch == '\b':
++                rep = '\\b'
++            elif ch == '\f':
++                rep = '\\f'
++            elif ch == '\n':
++                rep = '\\n'
++            elif ch == '\r':
++                rep = '\\r'
++            elif ch == '\t':
++                rep = '\\t'
++            elif ch == '\v':
++                rep = '\\v'
++            else:
++                rep = '\\%03o' % o
++            if width > 1 and cur + len(rep) > width - 1:
++                out.append('\\\n')
++                cur = 0
++            out.append(rep)
++            cur += len(rep)
++        out.append('$\n')
++        self.write(''.join(out))
++
++    def expand(self, parts, m):
++        res = []
++        mode = None
++        one = None
++        for kind, val in parts:
++            if kind == 'case':
++                if val == 'U' or val == 'L':
++                    mode = val
++                elif val == 'E':
++                    mode = None
++                    one = None
++                else:
++                    one = val
++                continue
++            if kind == 'lit':
++                text = val
++            else:
++                try:
++                    text = m.group(val)
++                except IndexError:
++                    text = None
++                if text is None:
++                    text = ''
++            if not text:
++                continue
++            if mode == 'U':
++                text = to_upper(text)
++            elif mode == 'L':
++                text = to_lower(text)
++            if one is not None:
++                f = to_upper(text[0]) if one == 'u' else to_lower(text[0])
++                text = f + text[1:]
++                one = None
++            res.append(text)
++        return ''.join(res)
++
++    def do_subst(self, c):
++        rx = self.get_rx(c.rx)
++        s = self.ps
++        n = len(s)
++        pos = 0
++        out = []
++        count = 0
++        did = False
++        prev_end = -1
++        while pos <= n:
++            m = rx.find(s, pos)
++            if m is None:
++                break
++            st, en = m.span()
++            if st == en and st == prev_end:
++                if st >= n:
++                    break
++                out.append(s[pos:st + 1])
++                pos = st + 1
++                continue
++            count += 1
++            out.append(s[pos:st])
++            if count >= c.nth:
++                out.append(self.expand(c.repl, m))
++                did = True
++            else:
++                out.append(s[st:en])
++            prev_end = en
++            if st == en:
++                if en < n:
++                    out.append(s[en])
++                pos = en + 1
++            else:
++                pos = en
++            if did and not c.gflag:
++                break
++        if not did:
++            return
++        if pos <= n:
++            out.append(s[pos:])
++        self.ps = ''.join(out)
++        self.tflag = True
++        if c.pflag:
++            self.print_ps()
++
++    def run(self):
++        cmds = self.cmds
++        ncmds = len(cmds)
++        restart = False
++        if self.separate:
++            self.new_file()
++        while True:
++            if not restart:
++                line = self.read_line()
++                if line is None:
++                    break
++                self.ps = line
++            restart = False
++            pc = 0
++            autoprint = True
++            while pc < ncmds:
++                c = cmds[pc]
++                sel = self.match_addr(c)
++                if c.negate:
++                    sel = not sel
++                name = c.name
++                if not sel:
++                    if name == '{':
++                        pc = c.block_end + 1
++                    else:
++                        pc += 1
++                    continue
++                pc += 1
++                if name == '{' or name == '}' or name == ':':
++                    continue
++                if name == 's':
++                    self.do_subst(c)
++                elif name == 'p':
++                    self.print_ps()
++                elif name == 'd':
++                    autoprint = False
++                    break
++                elif name == 'D':
++                    i = self.ps.find('\n')
++                    if i < 0:
++                        autoprint = False
++                        break
++                    self.ps = self.ps[i + 1:]
++                    autoprint = False
++                    restart = True
++                    break
++                elif name == 'h':
++                    self.hold = self.ps
++                elif name == 'H':
++                    self.hold = self.hold + '\n' + self.ps
++                elif name == 'g':
++                    self.ps = self.hold
++                elif name == 'G':
++                    self.ps = self.ps + '\n' + self.hold
++                elif name == 'x':
++                    self.ps, self.hold = self.hold, self.ps
++                elif name == 'b':
++                    if c.target is None:
++                        pc = ncmds
++                    else:
++                        pc = c.target
++                elif name == 't':
++                    if self.tflag:
++                        self.tflag = False
++                        pc = ncmds if c.target is None else c.target
++                elif name == 'T':
++                    if not self.tflag:
++                        pc = ncmds if c.target is None else c.target
++                    else:
++                        self.tflag = False
++                elif name == 'n':
++                    if self.at_eof():
++                        break
++                    if not self.quiet:
++                        self.print_ps()
++                    self.flush_appends()
++                    line = self.read_line()
++                    if line is None:
++                        autoprint = False
++                        break
++                    self.ps = line
++                elif name == 'N':
++                    if self.at_eof():
++                        break
++                    self.flush_appends()
++                    line = self.read_line()
++                    if line is None:
++                        break
++                    self.ps = self.ps + '\n' + line
++                elif name == '=':
++                    self.write('%d\n' % self.line_no)
++                elif name == 'a':
++                    self.append_queue.append(c.text)
++                elif name == 'i':
++                    self.write(c.text)
++                elif name == 'c':
++                    if not (c.a2 is not None and c.active):
++                        self.write(c.text)
++                    autoprint = False
++                    break
++                elif name == 'l':
++                    w = self.line_len if c.int_arg is None else c.int_arg
++                    self.do_list(w)
++                elif name == 'q':
++                    if not self.quiet:
++                        self.print_ps()
++                    self.flush_appends()
++                    raise Quit(c.int_arg)
++                elif name == 'Q':
++                    raise Quit(c.int_arg)
++                elif name == 'y':
++                    self.ps = self.ps.translate(c.ymap)
++                elif name == 'z':
++                    self.ps = ''
++                elif name == 'P':
++                    i = self.ps.find('\n')
++                    self.write((self.ps if i < 0 else self.ps[:i]) + '\n')
++            if autoprint and not self.quiet:
++                self.print_ps()
++            self.flush_appends()
++        return 2 if self.bad_input else 0
++
++
++# ---------------------------------------------------------------------------
++# Command line
++# ---------------------------------------------------------------------------
++
+ def main(argv):
+-    sys.stderr.write("pysed: not implemented yet\n")
+-    return 4
++    scripts = []
++    nonopts = []
++    quiet = False
++    ere = False
++    separate = False
++    line_len = 70
++    i = 0
++    only_files = False
++    try:
++        while i < len(argv):
++            a = argv[i]
++            i += 1
++            if only_files or a == '-' or not a.startswith('-'):
++                nonopts.append(a)
++                continue
++            if a == '--':
++                only_files = True
++                continue
++            if a.startswith('--'):
++                name, eq, val = a[2:].partition('=')
++                if name in ('quiet', 'silent'):
++                    quiet = True
++                elif name == 'regexp-extended':
++                    ere = True
++                elif name == 'separate':
++                    separate = True
++                elif name == 'expression':
++                    if not eq:
++                        val = argv[i]
++                        i += 1
++                    scripts.append(val)
++                elif name == 'file':
++                    if not eq:
++                        val = argv[i]
++                        i += 1
++                    scripts.append(read_script_file(val))
++                elif name == 'line-length':
++                    if not eq:
++                        val = argv[i]
++                        i += 1
++                    line_len = int(val)
++                elif name in ('posix', 'debug', 'unbuffered', 'binary', 'sandbox',
++                              'follow-symlinks'):
++                    pass
++                else:
++                    raise SedError('unknown option -- %s' % name)
++                continue
++            j = 1
++            while j < len(a):
++                ch = a[j]
++                j += 1
++                if ch == 'n':
++                    quiet = True
++                elif ch in 'Er':
++                    ere = True
++                elif ch == 's':
++                    separate = True
++                elif ch in 'ub':
++                    pass
++                elif ch in 'efl':
++                    if j < len(a):
++                        val = a[j:]
++                    else:
++                        if i >= len(argv):
++                            raise SedError('option requires an argument -- %s' % ch)
++                        val = argv[i]
++                        i += 1
++                    if ch == 'e':
++                        scripts.append(val)
++                    elif ch == 'f':
++                        scripts.append(read_script_file(val))
++                    else:
++                        line_len = int(val)
++                    break
++                else:
++                    raise SedError('invalid option -- \'%s\'' % ch)
++        if not scripts:
++            if not nonopts:
++                raise SedError('Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]...')
++            scripts.append(nonopts.pop(0))
++        script = '\n'.join(scripts)
++        if script.startswith('#n') and (len(script) == 2 or script[2] == '\n'):
++            quiet = True
++        cmds = Parser(script, ere).parse()
++    except SedError as e:
++        sys.stderr.write('sed: -e expression #1, char 0: %s\n' % e)
++        return 1
++    except (ValueError, IndexError) as e:
++        sys.stderr.write('sed: %s\n' % e)
++        return 1
+ 
++    sed = Sed(cmds, quiet, separate, nonopts, line_len)
++    status = 0
++    try:
++        status = sed.run()
++    except Quit as q:
++        status = q.code
++    except SedError as e:
++        sys.stderr.write('sed: %s\n' % e)
++        status = e.status if e.status else 4
++    data = ''.join(sed.out).encode('latin-1')
++    try:
++        sys.stdout.buffer.write(data)
++        sys.stdout.buffer.flush()
++    except (IOError, OSError):
++        return 4
++    return status
+ 
+-if __name__ == "__main__":
+-    sys.exit(main(sys.argv[1:]))
++
++def read_script_file(path):
++    if path == '-':
++        data = sys.stdin.buffer.read()
++    else:
++        with open(path, 'rb') as fh:
++            data = fh.read()
++    text = data.decode('latin-1')
++    if text.endswith('\n'):
++        text = text[:-1]
++    return text
++
++
++if __name__ == '__main__':
++    # Work on raw bytes of arguments (latin-1) to stay byte-transparent.
++    try:
++        args = [a.encode(sys.getfilesystemencoding(), 'surrogateescape').decode('latin-1')
++                for a in sys.argv[1:]]
++    except Exception:
++        args = sys.argv[1:]
++    sys.exit(main(args))

@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-cobol-statement-port"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Software"
+subcategory = "Languages"
+languages = ["python", "cobol"]
+tags = ["cobol", "legacy-migration", "numeric-editing", "fixed-point-arithmetic", "gnucobol"]
+expert_time_estimate_hours = 4
+difficulty_explanation = "The port has to reproduce, byte for byte and without a compiler, what a GnuCOBOL 3.1.2 build of a 494-line billing and posting program writes. Getting the common paths right is not enough: the hard part is the standard COBOL semantics the program leans on in its rarer paths, which a Python rewrite silently changes. Examples: numeric-edited moves that drop high-order digits and GnuCOBOL's floating-currency behaviour when they do (visible only in the production sample), STRING DELIMITED BY a double space, UNSTRING leaving receiving fields untouched on short lines and counting characters examined rather than moved in COUNT IN, FUNCTION NUMVAL treating a trailing DB like CR as negative, per-statement ROUNDED MODE (nearest-even, away from zero, toward lesser, truncation), and DIVIDE ... ROUNDED ... REMAINDER computing the remainder from the truncated quotient. Two GPT-5.6 runs each ported the program cleanly enough to match the production sample and 21 of the 24 hidden extracts (22 of 25 tests), and both failed on the COUNT IN, NUMVAL DB and ROUNDED REMAINDER rules. The extracts are synthetic but shaped like a water utility's quarterly run: tariff bands, arrears and credits, and a hand-keyed payments file."
+solution_explanation = "The reference port reads both files as fixed-width and delimited records exactly as the COBOL READ and UNSTRING do, does all arithmetic in exact decimals with each statement's ROUNDED or truncation rule and each field's size, formats every numeric-edited picture with one routine that implements zero suppression, floating $/+/-, check protection, CR and trailing sign, BLANK WHEN ZERO, high-order truncation and GnuCOBOL's floating-insertion overflow behaviour, and writes line sequential output with trailing spaces removed. It was fuzzed against the real GnuCOBOL build on several hundred random extract pairs with no byte difference."
+verification_explanation = "The verifier image builds its own copy of WBILL.cbl with GnuCOBOL 3.1.2 in a build stage and runs it on 24 hidden extract pairs (district runs, rejected records, meter rollover, credits, large accounts, names of every shape, rounding boundaries, short lines, header placement, and payments files covering every posting kind, amount form, field count, account shape and memo length); only the resulting statement files are copied into the final image, so no compiler is reachable when the port runs. Each test runs the port as an unprivileged user on copies of one pair and compares its output with the job step's byte for byte, reporting the first differing line. The reference port passes all 25 tests; the shipped stub fails all 24 port tests."
+relevant_experience = "Mainframe and COBOL modernisation: porting batch billing programs to Python and Java, COBOL numeric editing and decimal arithmetic rules, and GnuCOBOL runtime behaviour."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 5400
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

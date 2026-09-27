@@ -1,0 +1,184 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "67ee9e4627dd64a2d9376e8d3edab33663588a38947ac38ce94c947c9a067095",
+  "severity": "None",
+  "summary": "The verifier runs the documented command, using a verifier-owned driver, on sealed batches and compares every report completely: exact ids, analytes, flags, ccv_ok and pass values, list order and key sets, and numbers within the tolerance the instruction states. Each SOP rule has an isolating fixture that rejects the matching shipped defect or a plausible wrong variant. I recomputed the isolating goldens by hand and found them consistent with the SOP and with the instruction's rule for values the SOP leaves undefined. I found no false rejection of contract-valid output.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/tools/metalquant_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/metalquant_run.py",
+      "tests/expected/ROSTER",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/capacity.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/generated-1.jsonl",
+      "tests/expected/generated-2.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/section_one_limits.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/spike_recovery.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 41 packet-manifest entries with the files read; environment/app/tools/metalquant_run.py (which I read) and tests/shipped/tools/metalquant_run.py share the manifest hash 2b8b03b2..., so the verifier's copy of the driver is the candidate-visible driver.",
+    "Traced the grading path in tests/test_outputs.py (lines 52-147) and test.sh: the delivered driver is captured, the shipped copy is installed, each batch is reduced as uid 65534 with 'python3 -I -S DRIVER batch.json', stdout is parsed as JSON, and compare() checks top-level keys, blank_levels keys and values, list lengths, the per-entry key set, and every field.",
+    "Checked the comparator against instruction.md:7. ids, analytes, flags, ccv_ok and pass values use exact type-and-value equality; value uses a numeric or null comparison; recoveries and blank levels use a relative 1e-6 tolerance, or an absolute 1e-6 tolerance when the expected number is below 1. That matches the stated tolerance, and bool is excluded from the numeric check.",
+    "Mapped each shipped defect to the isolating fixture that rejects it. calib.fit_line forced through the origin: calibration.jsonl rows 1-4 (fitted intercept 100 response units). blanks.blank_level taking the first blank's reading: blank_mean and blank_nondetects row 1. samples.amount applying dilution before the blank: dilution.jsonl W-72 (52.5 against the shipped 70.5). samples.flag judged on the amount: flag_basis W-81 and W-82. qc.ccv_passes using strict, unrounded limits: ccv_limits CCV-1, CCV-3 and CCV-5. qc.bracket_ok checking only the preceding CCV: ccv_bracketing W-111. qc.spike_recovery dividing by added*dilution: spike_recovery rows 1-2 (100 and 380).",
+    "Recomputed goldens by hand, reading only and executing nothing: calibration rows 1-4 (row 3 by OLS over replicate standards, giving 11.658); blank_no_results rows 1-4; blank_mean; blank_nondetects; blank_single_result; dilution; flag_basis; flag_limits row 1; negative_readings row 1; ccv_limits; ccv_bracketing; ccv_unbracketed rows 1-4; spike_recovery rows 1-3; spike_nondetects rows 1-2; report_order row 2 and parts of row 1 (Tl, As, Pb). Each matched the golden to within tolerance.",
+    "Confirmed that the fallback goldens follow instruction.md:5 ('keep the calculation the code makes today from the values the SOP does define'). A batch whose blanks are all non-detects uses the first blank's SOP reading (blank_no_results rows 2-4, generated-1 row 5). A spike recovery involving a non-detect uses the shipped divisor added*dilution applied to SOP amounts (spike_nondetects rows 1-2). Unbracketed ccv_ok uses the shipped look-back applied to the SOP pass/fail (generated-2 L2620 Se, after an L2619 Se CCV at 89.96).",
+    "Checked that fixture batches stay within SOP section 1 limits: 3 to 8 standards; slopes down to 1e-12 (section_one row 4); intercept equal to 1e4 times the slope (section_one row 3); readings of plus and minus 1e4; CCV true values of at least 10x loq; CCV readings between 0.5x and 1.5x the true value; spike parents always earlier sample runs; 80 runs, 4 analytes and 8 standards in capacity.jsonl.",
+    "Assessed whether the tolerance could hide or create errors. Section 1 keeps judged values 1e-5 away from mdl and loq and CCV recoveries 1e-6 away from a rounding tie, so any correct OLS formulation or float ordering gives the same flags and pass values, and numeric differences stay far inside the 1e-6 bound.",
+    "Considered 'python3 -I -S' as a possible false rejection. instruction.md:3 says batches are reduced with the verifier's own copy of the driver against the candidate's /app/src, and the environment has no third-party packages, so relying on external site-packages is outside the contract. I found no false rejection."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails when it is missing or reversed",
+      "status": "checked",
+      "reason": "Each of the 17 family tests compares complete reports. SOP sections 2 to 8 each have a family whose fixed batches change the report when that rule is wrong: calibration; blank_mean, blank_nondetects, blank_single_result and blank_no_results; dilution, flag_basis and flag_limits; negative_readings; ccv_limits, ccv_bracketing and ccv_unbracketed; spike_recovery and spike_nondetects; report_order.",
+      "evidence": ["tests/test_outputs.py:150-223", "environment/app/docs/reduction-sop.md:44-117"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result: values, membership, uniqueness, required outputs",
+      "status": "checked",
+      "reason": "compare() requires exactly the four top-level keys, the same blank_levels key set, equal list lengths, exactly the required key set in every entry, and each field checked in order. Nothing is checked only for existence or row count.",
+      "evidence": ["tests/test_outputs.py:125-142", "environment/app/docs/reduction-sop.md:101-115"],
+      "finding_ids": []
+    },
+    {
+      "category": "For each named domain rule, include a case whose outcome changes when that rule is wrong",
+      "status": "checked",
+      "reason": "Fitted intercept (calibration row 1). Internal-standard ratio (calibration row 4). Unweighted OLS over replicates (calibration row 3). Blank level as the mean of results only (blank_nondetects row 1: 2.5, not 1.0). Blanks anywhere in the run order (blank_mean row 2). Blank removed before dilution (dilution W-72). Flag on the corrected reading (flag_basis W-82). mdl and loq boundaries (flag_limits). No clamping of negative readings (negative_readings). Rounded, inclusive CCV pass (ccv_limits). Nearest CCV on each side (ccv_bracketing W-113 before; capacity L2611 Mo after, where nearest-after L2615 passes and the later L2616 fails). Spike divisor is the added amount (spike_recovery row 2: 380). J results count as results (spike_recovery row 3). Order follows the analytes list, not alphabetical order (report_order row 1).",
+      "evidence": ["tests/expected/calibration.jsonl:1-4", "tests/expected/blank_nondetects.jsonl:1", "tests/expected/dilution.jsonl:1", "tests/expected/flag_basis.jsonl:1-2", "tests/expected/ccv_limits.jsonl:1", "tests/expected/ccv_bracketing.jsonl:1", "tests/expected/capacity.jsonl:1", "tests/expected/spike_recovery.jsonl:2-3", "tests/expected/report_order.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Try a plausible incorrect solution and confirm rejection",
+      "status": "checked",
+      "reason": "Traced each shipped defect and several plausible partial repairs (a running blank mean, mean over all blanks, blank results judged against loq, any failing CCV before the run, any failing CCV after the run, unrounded pass limits, applying the section 7 divisor to non-detect spikes, clamping negatives, sorted output). Each changes at least one compared field in a named fixture.",
+      "evidence": ["environment/app/src/metalquant/calib.py:8-14", "environment/app/src/metalquant/blanks.py:4-9", "environment/app/src/metalquant/samples.py:8-18", "environment/app/src/metalquant/qc.py:8-21", "tests/expected/blank_mean.jsonl:1", "tests/expected/blank_nondetects.jsonl:2", "tests/expected/spike_nondetects.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Try contract-valid alternatives for formatting, ordering and implementation choices",
+      "status": "checked",
+      "reason": "Output is compared after json.loads, so key order and whitespace are free. blank_levels are compared as a keyed set, as SOP 8 allows. Numbers may be int or float. The fixture domain keeps boundary values away from limits and rounding ties, so alternative OLS formulas, rounding methods and float orderings pass. Enforced list order and exact key sets are stated by SOP 8 and instruction.md:7.",
+      "evidence": ["tests/test_outputs.py:116-142", "instruction.md:7", "environment/app/docs/reduction-sop.md:36-42"],
+      "finding_ids": []
+    },
+    {
+      "category": "Enforce documented restrictions and lifecycle behavior",
+      "status": "checked",
+      "reason": "The requirement to leave the driver byte-identical is enforced from bytes captured before the replacement. 'Add no correction, qualifier, exclusion or guard' is enforced by exact comparison of the whole report, and the fallback cases required by instruction.md:5 are graded by blank_no_results, spike_nondetects and ccv_unbracketed.",
+      "evidence": ["tests/test_outputs.py:52-63", "tests/test_outputs.py:226-227", "instruction.md:3-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities and sign partitions",
+      "status": "checked",
+      "reason": "Negative readings, negative corrected readings, a negative blank level from the fallback (negative_readings row 1, generated-1 row 4), negative fitted intercepts (section_one row 6, generated-1 row 5), and spike recoveries on both sides of zero, including all three non-detect partitions (spike_nondetects row 1: spike only, parent only, both), are each asserted.",
+      "evidence": ["tests/expected/negative_readings.jsonl:1-2", "tests/expected/section_one_limits.jsonl:6", "tests/expected/spike_nondetects.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization / first-event transition (bracketing)",
+      "status": "checked",
+      "reason": "Runs before the first CCV, after the last CCV, in batches with no CCV, and before a lone failing CCV are all graded (ccv_unbracketed rows 1-4), and they separate the shipped look-back from a nearest-after rule or a default of false.",
+      "evidence": ["tests/expected/ccv_unbracketed.jsonl:1-4", "environment/app/src/metalquant/qc.py:12-17"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons",
+      "status": "checked",
+      "reason": "Expected values are sealed goldens protected by a pinned roster, not candidate output. The driver is the verifier's own copy, and the candidate package is loaded fresh from /app/src with bytecode writing disabled. I found no requirement tied to a particular implementation representation beyond the report fields the contract names.",
+      "evidence": ["tests/test_outputs.py:41-75", "tests/test_outputs.py:102-116", "tests/test.sh:15-20"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases (fixtures outside the declared input domain)",
+      "status": "checked",
+      "reason": "I checked hand-built fixtures against every SOP section 1 bound (counts, is_counts, slopes, intercept-to-slope ratio, CCV true-value and reading ranges, reading range, added and dilution ranges, spike parents always earlier sample runs). All lie within the domain.",
+      "evidence": ["environment/app/docs/reduction-sop.md:18-42", "tests/expected/section_one_limits.jsonl:1-9"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["SOP 4 blank level (no-results fallback)", "SOP 3 negative readings not clamped"],
+      "case_or_path": "negative_readings row 1: the only blank, MB-26, reads -1 (non-detect), so the fallback level is -1 and W-103's corrected reading of 1.25 gives J with 2.5. Clamping would give ND.",
+      "status": "checked",
+      "evidence": ["tests/expected/negative_readings.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 5 flag on corrected reading", "SOP 5 blank removed before dilution"],
+      "case_or_path": "flag_basis row 2 W-84: reading 2.5, level 2, corrected 0.5 gives ND at dilution 100. Flagging on the amount, or subtracting after dilution, would report a value.",
+      "status": "checked",
+      "evidence": ["tests/expected/flag_basis.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 7 spike recovery", "SOP 3 non-detect gives no rule plus the instruction fallback"],
+      "case_or_path": "spike_nondetects rows 1-2 cover spike only, parent only and both as non-detects, together with a nonzero blank level: the shipped divisor is applied to SOP amounts. spike_recovery row 3 shows that J results use the SOP divisor.",
+      "status": "checked",
+      "evidence": ["tests/expected/spike_nondetects.jsonl:1-2", "tests/expected/spike_recovery.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 6 rounded inclusive pass", "SOP 6 bracketing / unbracketed fallback"],
+      "case_or_path": "generated-2: L2604 Zn is bracketed by CCVs at 89.96 and 89.96 (rounded pass, so ccv_ok is true). L2620 Se comes after the last CCV, L2619 Se at 89.96, and is true, so the fallback uses the SOP pass value.",
+      "status": "checked",
+      "evidence": ["tests/expected/generated-2.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 6 per-analyte ccv_ok", "SOP 8 ordering within a run by the analytes list"],
+      "case_or_path": "section_one row 9 (E-1: Pb false, Sb true) and report_order row 1 (analyte order Tl, As, Pb, Cd; spikes listed in run order B-SPK then A-SPK).",
+      "status": "checked",
+      "evidence": ["tests/expected/section_one_limits.jsonl:9", "tests/expected/report_order.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 4 results judged per analyte", "SOP 3 mdl threshold"],
+      "case_or_path": "report_order row 1: the As blank M-MB reads 0.500015 against an mdl of 0.5, so it is a result, and the As mean is 0.7500076. blank_nondetects rows 2-3 put blanks just above and just below the mdl.",
+      "status": "checked",
+      "evidence": ["tests/expected/report_order.jsonl:1", "tests/expected/blank_nondetects.jsonl:2-3"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,28 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The report printed by /app/tools/qpcrrel_run.py gives, for every gene, its amplification factor
+  and contamination, and for every sample and target gene, the mean Ct, fold change and flags
+  that SOP QP-7 gives.
+causal_core: >
+  wells -> reportable replicates (2.2) -> outliers against the median (4.1) -> mean Ct (4.2; all-outlier
+  sets keep today's step) -> not detected (2.3, 4.3); standard wells -> curve points (2.4) -> standard
+  curve (2.5, three or more points) -> amplification factor (3.1, uncapped; fewer points keep today's
+  step); NTC wells -> contamination (2.6); mean Cts x factors -> relative quantities (5.1) ->
+  geometric-mean normalisation (5.2) -> fold change (5.3) gated by flags (5.4, 6.3).
+core_obligations:
+  - {id: REPORTABLE, contribution: "Ct 10.00 up to and including 35.00", authority: "SOP 2.2", witness: "family D1", plausible_wrong: "ct < 35.00, no floor (shipped)"}
+  - {id: CURVE_POINTS, contribution: "determined standard wells only; a level needs two", authority: "SOP 2.4", witness: "family D2", plausible_wrong: "Undetermined standards counted at 40.0 (shipped)"}
+  - {id: CONTAMINATION, contribution: "only an NTC Ct at or below 35.00 contaminates", authority: "SOP 2.6", witness: "family D3", plausible_wrong: "any determined NTC (shipped)"}
+  - {id: FACTOR, contribution: "10^(-1/s) of a standard curve, uncapped; a gene without a standard curve keeps today's factor", authority: "SOP 2.5, 3.1; instruction silence clause", witness: "family D4; trap family TB", plausible_wrong: "cap at 2 (shipped) / uncapped for every fitted line or 2.0 below three points (natural over-repairs)"}
+  - {id: OUTLIERS_MEAN, contribution: "every reportable replicate more than 0.50 from the median is an outlier; mean of the rest; a set whose every replicate is an outlier keeps today's step", authority: "SOP 4.1, 4.2; instruction silence clause", witness: "family D5; trap family TA", plausible_wrong: "drop only a lone stray (shipped) / empty set routed to not-detected, crash, or median (natural over-repairs)"}
+  - {id: NOT_DETECTED, contribution: "no mean Ct and no fold change when not detected; flags ref/nd", authority: "SOP 2.3, 4.3, 5.4, 6.3", witness: "family D6", plausible_wrong: "substitute 40.0 and report a fold change (shipped)"}
+  - {id: NORMALISATION, contribution: "each gene its own factor; geometric mean of reference quantities", authority: "SOP 5.1, 5.2", witness: "family D7", plausible_wrong: "target factor to the mean reference shift (shipped)"}
+support_obligations:
+  - {id: PLATE_LOADER, supplied_boundary: "src/qpcrrel/plate.py decodes wells (Undetermined -> None)", why_not_core: "decoding is complete and not a repair surface"}
+  - {id: DRIVER, supplied_boundary: "tools/qpcrrel_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: REPORT_LAYOUT, supplied_boundary: "README report keys; SOP 6.1-6.3 orders, already produced by report.py/expression.py", why_not_core: "serialization and order already right"}
+non_goals:
+  - plates outside section 1 limits, slope limits broken, a replicate exactly 0.50 from its median, repeated gene names, malformed files (left entirely open)
+  - absolute quantification, melt curves, baseline/threshold setting, inter-plate calibration
+  - direct calls to package helpers (graded through the driver only)
+  - error messages and exit codes

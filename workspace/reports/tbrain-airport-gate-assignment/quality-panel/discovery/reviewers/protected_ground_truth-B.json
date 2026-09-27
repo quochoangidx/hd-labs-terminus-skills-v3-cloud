@@ -1,0 +1,130 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-B",
+  "snapshot_sha256": "f9e2a843946feb803bea831bc197043b8ff4892295c4cbe2c5db018ff2b20e91",
+  "severity": "None",
+  "summary": "No reachable path lets candidate-controlled bytes read, replace, predict or influence the grader's trusted inputs or reward. The verifier runs in its own image (it has pytest; the agent image does not). It reads only the four plan files as JSON data and scores them with its own sealed copies of check_plan.py, the day data (SHA-256 pinned by roster.json) and targets.json. No candidate code runs, no stored answer plan exists anywhere, and the reward comes from pytest's exit code in a verifier-owned script. The targets are public by design, since the instruction tells candidates to meet them.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/planner/plan_day.py",
+      "environment/app/tools/check_plan.py",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json",
+      "environment/app/days/day-2.json",
+      "environment/app/days/day-3.json",
+      "environment/app/days/day-4.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/targets.json",
+      "tests/days/roster.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read every text file in the manifest. environment/app/tools/check_plan.py and tests/check_plan.py have the same manifest hash (603464e7...), and I read the verifier copy in full and the environment copy's load_plan/evaluate region. environment and tests targets.json also have the same hash (b97e3aa0...), and I read both.",
+    "Checked the day-*.json files for answer-bearing content. A count of every JSON object key in the four files (21701) equals the count of keys in the documented schema (name, buffer_minutes, bus_cost_per_passenger, stands, turns, transfers, walk_metres, wingtip_pairs, id, pier, position, size, international, remote, arrive, depart, pax_in, pax_out, from, to, passengers). So no file embeds a plan, assignment, best cost or solution field. The top-level layout was confirmed for each file.",
+    "Did not decompress tests/days/*.json.gz (binary). They are tied to the candidate-visible environment day files because test_outputs.py:36 asserts the SHA-256 of the decompressed bytes against roster.json, and roster.json:6,12,18,24 hashes equal the manifest hashes of environment/app/days/day-1..4.json. They are therefore the same public input data, not hidden answers.",
+    "Traced where the reward comes from: test.sh:4-5 creates /logs/verifier with mode 700 and pre-writes 0. It runs pytest with python -I from a fresh mktemp directory with no cacheprovider (test.sh:13-15), and writes 1 only when pytest exits 0 (test.sh:16-21).",
+    "Confirmed that the verifier runs in its own image. tests/Dockerfile:3 installs pytest, while environment/Dockerfile:3 installs only tmux, asciinema and ca-certificates, and test.sh never installs pytest. So the tests cannot run inside the agent image, and candidate changes to that image's site-packages, conftest or /app code are not in the verifier's execution path.",
+    "Traced every read the verifier makes. test_outputs.py:21-27 loads targets and roster from HERE (/tests). test_outputs.py:34 loads day data from /tests/days. test_outputs.py:19 imports check_plan from /tests. The only candidate path read is PLANS/<day>.json (test_outputs.py:21,44), parsed as data by load_plan (check_plan.py:59-73); nothing is executed.",
+    "Considered a symlinked plan file: isfile, getsize and open follow symlinks (test_outputs.py:45, check_plan.py:61-64). No verifier-side file contains a valid low-cost plan: the day files, targets, roster and python sources have no 'stands' object mapping stand ids to turn ids. So such a link cannot produce a passing plan, only a parse failure (reward 0).",
+    "Checked whether the plan parser can escape. json.loads uses parse_constant, object_pairs_hook, parse_int and parse_float guards with no eval or pickle (check_plan.py:66-67). evaluate indexes the verifier's own day dicts with plan-supplied string keys and rejects unknown stands and turns (check_plan.py:83-96). A plan cannot change the stored day, target or cost formula.",
+    "Checked the STAND_PLANS environment override (test_outputs.py:21). It is read by the verifier process, whose environment comes from the verifier image and harness, and the candidate cannot set it."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "No golden plan exists. The grader recomputes cost from its own sealed day copy and compares it with the target. The targets and the checker are candidate-visible by design (instruction.md:1-3), since the task is to meet them. The verifier executes no candidate code.",
+      "evidence": ["instruction.md:1", "instruction.md:3", "tests/test_outputs.py:3-6", "tests/test_outputs.py:43-55", "tests/check_plan.py:76-131"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths: symlink and path traversal",
+      "status": "checked",
+      "reason": "The only candidate-influenced read is PLANS/<day>.json, with fixed file names. Following a symlink there reaches no file whose content would be a passing plan, so there is no credit-earning escape.",
+      "evidence": ["tests/test_outputs.py:44-48", "tests/check_plan.py:59-73", "tests/days/roster.json:1-26", "tests/targets.json:1-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Expected values computed independently of the submitted artifact",
+      "status": "checked",
+      "reason": "Cost is computed from the verifier's day copy, whose SHA-256 is checked against roster.json, and compared with the verifier's own targets.json. Nothing the candidate provides is trusted as a checksum or cost. The candidate-editable /app/days, /app/days/targets.json and /app/tools/check_plan.py are never read by the verifier.",
+      "evidence": ["tests/test_outputs.py:21-40", "tests/test_outputs.py:53-55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes exposed through filenames, arguments, working directories or environment variables",
+      "status": "checked",
+      "reason": "No candidate process is invoked, so there is no argument, cwd or environment channel. Plan file names are fixed by the instruction. Pass or fail depends only on computed cost against a public target.",
+      "evidence": ["tests/test_outputs.py:58-87", "tests/test.sh:13-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading results in a trusted channel; candidate stdout or early exit cannot impersonate verification",
+      "status": "checked",
+      "reason": "reward.txt is written only by test.sh, from pytest's exit code, in a mode-700 verifier directory. It defaults to 0. No candidate output is parsed as a verdict.",
+      "evidence": ["tests/test.sh:4-5", "tests/test.sh:15-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Access boundary tested from the candidate's execution context; separate container and privilege assumptions",
+      "status": "checked",
+      "reason": "Candidate code runs only in the agent image, which lacks pytest. The verifier image installs pytest and copies tests to /tests, so verification cannot run in the agent image. Candidate-writable files in the agent image, such as site-packages .pth files, /app sources and conftest, are outside the verifier's interpreter. Only the plan data files reach grading.",
+      "evidence": ["environment/Dockerfile:1-7", "tests/Dockerfile:1-6", "tests/test.sh:15", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Persisted or partially reset state (cache_carryover) and verifier-executed binaries (colocation, setuid, check-to-use)",
+      "status": "not_applicable",
+      "reason": "Grading is a single stateless pass over data files. pytest runs with -p no:cacheprovider in a fresh mktemp directory, and no candidate binary is built or executed.",
+      "evidence": ["tests/test.sh:13-15", "tests/test_outputs.py:3-6"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["candidate may edit anything in /app (instruction.md:3 'how you produce them is up to you')", "verifier checks plans against a day definition"],
+      "case_or_path": "The candidate rewrites /app/days/day-1.json with fewer transfers, or edits /app/tools/check_plan.py to report a low cost. The verifier ignores both: it loads the gzip copy from /tests/days, pinned by SHA-256 and counts, and imports /tests/check_plan.py.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:17-19", "tests/test_outputs.py:30-40"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["targets.json is candidate-visible", "pass condition is cost <= target"],
+      "case_or_path": "The candidate edits /app/days/targets.json to raise the targets. The verifier reads /tests/targets.json (test_outputs.py:22), so the edit has no effect. Knowing the targets is intended by the contract and does not give away a plan.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:22-23", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["plan file is candidate-authored JSON", "verifier parses it with a custom loader in-process"],
+      "case_or_path": "A crafted plan using NaN, duplicate keys, deep nesting, huge numbers, a non-dict 'stands' or non-string turn ids. Each is rejected as a PlanError, which fails the test, or parsed as inert data. No code execution or state mutation affects the day, targets or reward file.",
+      "status": "checked",
+      "evidence": ["tests/check_plan.py:22-73", "tests/check_plan.py:78-96"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["plan path is fixed under PLANS", "verifier follows symlinks when reading"],
+      "case_or_path": "/app/plans/day-1.json is a symlink to /tests/days/roster.json or another verifier file. Whether the transfer preserves symlinks is not shown, but either way no target file is a valid plan, so the result is at most reward 0.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:44-48", "tests/check_plan.py:78-79", "tests/days/roster.json:1-26"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,2475 @@
+[?2004hroot@f0fc7ca51bbb:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@f0fc7ca51bbb:/app# clear
+[?2004l[H[J[3J[?2004hroot@f0fc7ca51bbb:/app# find /app -maxdepth 3 -type f -printf '%p\n' | sort
+[?2004l/app/README.md
+/app/docs/dispatch-rules.md
+/app/orders/harbour-lanes.json
+/app/orders/north-ring.json
+/app/orders/old-town.json
+/app/orders/riverside.json
+/app/orders/targets.json
+/app/planner/plan_morning.py
+/app/tools/check_plan.py
+[?2004hroot@f0fc7ca51bbb:/app# cat /app/docs/dispatch-rules.md && printf '\n--- TARGETS ---\n' && cat /app/orders/targets.json
+[?2004l# Morning dispatch rules
+
+These rules decide whether a delivery plan can be run and what it costs. They
+are the rules `tools/check_plan.py` applies.
+
+## Orders
+
+Each file in `orders/` is one morning. It lists the bakery (`depot`), the
+customers to deliver to, and the vehicles available (`fleet`). Positions are
+integer grid coordinates `x`, `y` in units of 100 m; times are seconds after
+midnight. The bakery opens at `open` and closes at `close`.
+
+A customer has an integer `id`, a position, a `demand` in crates, a delivery
+window `ready`..`due`, and a `service` time in seconds for unloading. Its
+`kind` (cafe, grocer, hotel, market) is for information only and changes no
+rule.
+
+A fleet entry is one kind of vehicle, named by its `type`: `count` vehicles of it are available,
+each carrying up to `capacity` crates. It travels at `pace` seconds per unit of
+distance, costs `fixed` for being used at all and `per_unit` for every unit of
+distance it drives, may be out for at most `shift` seconds from leaving the
+bakery to getting back, and, where `range` is not null, may drive at most
+`range` units of distance in the morning. Costs are in cents.
+
+## Distance and time
+
+The distance between two points is the Euclidean distance between them,
+rounded up to a whole unit. A vehicle takes `distance * pace` seconds to drive
+it.
+
+## A route
+
+A route is one vehicle's morning: it leaves the bakery at its departure time,
+visits its customers in order, and comes back. Every route visits at least one
+customer, and each vehicle runs at most one route.
+
+- The departure is a whole number of seconds, not before the bakery opens.
+- At each customer the vehicle unloads from the later of its arrival and the
+  customer's `ready` time, and that must not be after `due`. Unloading takes the
+  customer's `service` time; the vehicle leaves as soon as it is done.
+- The vehicle must be back at the bakery no later than it closes, and no more
+  than `shift` seconds after its departure.
+- The crates on the route (the sum of its customers' demands) must fit the
+  vehicle's `capacity`, and the distance driven must be within its `range`
+  where it has one. The distance driven is the sum of the rounded legs, from
+  the bakery through each customer in turn and back to the bakery.
+
+## A plan
+
+A plan delivers to every customer of the morning exactly once, uses no more
+vehicles of a kind than the fleet has, and costs the sum over its routes of the
+vehicle's `fixed` cost plus `per_unit` times the route's distance.
+
+It is written as JSON:
+
+    {"routes": [{"type": "van", "depart": 18000, "stops": [12, 4, 31]}, ...]}
+
+where `type` names a fleet entry, `depart` is the departure time as a JSON
+integer (`18000`, not `18000.0`) and `stops` lists customer ids, as the
+integers in the orders file, in visiting order. Other keys are ignored.
+
+--- TARGETS ---
+{
+ "harbour-lanes": 77867,
+ "old-town": 147362,
+ "riverside": 201921,
+ "north-ring": 288705
+}[?2004hroot@f0fc7ca51bbb:/app# printf '%s\n' '--- CHECKER ---'; sed -n '1,260p' /app/tools/check_plan.py; printf '%s\n' '--- PLANNER ---'; sed -n '1,320p' /app/planner/plan_morning.py
+[?2004l--- CHECKER ---
+"""Check a delivery plan against docs/dispatch-rules.md and print its cost.
+
+Usage: python3 tools/check_plan.py orders/<morning>.json plans/<morning>.json
+"""
+
+import json
+import math
+import sys
+
+
+class PlanError(ValueError):
+    pass
+
+
+def distance(a, b):
+    sq = (a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2
+    d = math.isqrt(sq)
+    return d if d * d == sq else d + 1
+
+
+def evaluate(orders, plan):
+    depot = orders["depot"]
+    customers = {c["id"]: c for c in orders["customers"]}
+    fleet = {f["type"]: f for f in orders["fleet"]}
+    used = {t: 0 for t in fleet}
+    served = set()
+    total = 0
+    if not isinstance(plan, dict) or not isinstance(plan.get("routes"), list):
+        raise PlanError("a plan is a JSON object with a routes list")
+    for number, route in enumerate(plan["routes"], start=1):
+        where = f"route {number}"
+        if not isinstance(route, dict):
+            raise PlanError(f"{where}: not a JSON object")
+        kind = fleet.get(route.get("type")) if isinstance(route.get("type"), str) else None
+        if kind is None:
+            raise PlanError(f"{where}: unknown vehicle type {route.get('type')!r}")
+        stops = route.get("stops")
+        if not isinstance(stops, list) or not stops:
+            raise PlanError(f"{where}: no stops")
+        depart = route.get("depart")
+        if not isinstance(depart, int) or isinstance(depart, bool) or depart < depot["open"]:
+            raise PlanError(f"{where}: departure must be a whole second, not before opening")
+        used[route["type"]] += 1
+        clock, here, crates, driven = depart, depot, 0, 0
+        for cid in stops:
+            if not isinstance(cid, int) or isinstance(cid, bool) or cid not in customers:
+                raise PlanError(f"{where}: unknown customer {cid!r}")
+            if cid in served:
+                raise PlanError(f"{where}: customer {cid} delivered twice")
+            served.add(cid)
+            customer = customers[cid]
+            leg = distance(here, customer)
+            driven += leg
+            start = max(clock + leg * kind["pace"], customer["ready"])
+            if start > customer["due"]:
+                raise PlanError(f"{where}: customer {cid} reached at {start}, after its window closes at {customer['due']}")
+            clock = start + customer["service"]
+            crates += customer["demand"]
+            here = customer
+        leg = distance(here, depot)
+        driven += leg
+        back = clock + leg * kind["pace"]
+        if back > depot["close"]:
+            raise PlanError(f"{where}: back at {back}, after the bakery closes")
+        if back - depart > kind["shift"]:
+            raise PlanError(f"{where}: out for {back - depart} s, longer than the {kind['shift']} s shift")
+        if crates > kind["capacity"]:
+            raise PlanError(f"{where}: {crates} crates on a vehicle that carries {kind['capacity']}")
+        if kind["range"] is not None and driven > kind["range"]:
+            raise PlanError(f"{where}: drives {driven} units, beyond its range of {kind['range']}")
+        total += kind["fixed"] + kind["per_unit"] * driven
+    for name, count in used.items():
+        if count > fleet[name]["count"]:
+            raise PlanError(f"{count} routes use a {name}; only {fleet[name]['count']} are available")
+    missing = sorted(set(customers) - served)
+    if missing:
+        raise PlanError(f"{len(missing)} customers get no delivery, first {missing[:5]}")
+    return total
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.exit(__doc__)
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    with open(argv[2]) as fh:
+        plan = json.load(fh)
+    try:
+        cost = evaluate(orders, plan)
+    except PlanError as exc:
+        print(f"INFEASIBLE: {exc}")
+        return 1
+    print(f"feasible, cost {cost}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+--- PLANNER ---
+"""Current dispatch planner: nearest-next greedy, vans first.
+
+Usage: python3 planner/plan_morning.py orders/<morning>.json plans/<morning>.json
+
+Builds one route at a time. A route leaves when the bakery opens and keeps
+driving to the nearest customer it can still reach inside that customer's window
+with room on board; when nothing fits, it goes home and the next vehicle starts.
+"""
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from check_plan import distance, evaluate  # noqa: E402
+
+ORDER = ("van", "truck", "bike")
+
+
+def plan(orders):
+    depot = orders["depot"]
+    left = {c["id"]: c for c in orders["customers"]}
+    fleet = sorted(orders["fleet"], key=lambda f: ORDER.index(f["type"]) if f["type"] in ORDER else 99)
+    routes = []
+    for kind in fleet:
+        for _ in range(kind["count"]):
+            if not left:
+                break
+            clock, here, crates, driven, stops = depot["open"], depot, 0, 0, []
+            while True:
+                best = None
+                for c in left.values():
+                    leg = distance(here, c)
+                    start = max(clock + leg * kind["pace"], c["ready"])
+                    if start > c["due"] or crates + c["demand"] > kind["capacity"]:
+                        continue
+                    back = start + c["service"] + distance(c, depot) * kind["pace"]
+                    if back > depot["close"] or back - depot["open"] > kind["shift"]:
+                        continue
+                    total = driven + leg + distance(c, depot)
+                    if kind["range"] is not None and total > kind["range"]:
+                        continue
+                    if best is None or leg < best[0]:
+                        best = (leg, c, start)
+                if best is None:
+                    break
+                leg, c, start = best
+                stops.append(c["id"])
+                clock, here, crates, driven = start + c["service"], c, crates + c["demand"], driven + leg
+                del left[c["id"]]
+            if stops:
+                routes.append({"type": kind["type"], "depart": depot["open"], "stops": stops})
+    return {"routes": routes}
+
+
+def main(argv):
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    result = plan(orders)
+    with open(argv[2], "w") as fh:
+        json.dump(result, fh, indent=1)
+    try:
+        print("cost", evaluate(orders, result))
+    except ValueError as exc:
+        print("INFEASIBLE:", exc)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
+[?2004hroot@f0fc7ca51bbb:/app# for f in /app/orders/*.json; do echo "--- $f ---"; python3 - "$f" <<'PY'
+[?2004l[?2004h> import json,sys
+[?2004l[?2004h> x=json.load(open(sys.argv[1]))
+[?2004l[?2004h> print(type(x).__name__)
+[?2004l[?2004h> if isinstance(x,dict):
+[?2004l[?2004h>  print('keys:',list(x))
+[?2004l[?2004h>  for k,v in x.items():
+[?2004l[?2004h>   print(k, 'len='+str(len(v)) if hasattr(v,'__len__') else v)
+[?2004l[?2004h>   if isinstance(v,list): print(' sample:',v[:2])
+[?2004l[?2004h> else: print(x[:3])
+[?2004l[?2004h> PY
+[?2004l[?2004h> done
+[?2004l--- /app/orders/harbour-lanes.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name len=13
+depot len=4
+customers len=60
+ sample: [{'id': 1, 'x': 99, 'y': 25, 'demand': 2, 'ready': 32400, 'due': 37800, 'service': 290, 'kind': 'cafe'}, {'id': 2, 'x': 155, 'y': -80, 'demand': 14, 'ready': 18000, 'due': 21600, 'service': 590, 'kind': 'grocer'}]
+fleet len=3
+ sample: [{'type': 'bike', 'count': 5, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 7, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}]
+--- /app/orders/north-ring.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name len=10
+depot len=4
+customers len=220
+ sample: [{'id': 1, 'x': 66, 'y': -48, 'demand': 24, 'ready': 16200, 'due': 21600, 'service': 840, 'kind': 'market'}, {'id': 2, 'x': 18, 'y': -53, 'demand': 12, 'ready': 21600, 'due': 24300, 'service': 540, 'kind': 'grocer'}]
+fleet len=3
+ sample: [{'type': 'bike', 'count': 18, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 27, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}]
+--- /app/orders/old-town.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name len=8
+depot len=4
+customers len=110
+ sample: [{'id': 1, 'x': 7, 'y': -22, 'demand': 33, 'ready': 16200, 'due': 21600, 'service': 1065, 'kind': 'market'}, {'id': 2, 'x': -15, 'y': -20, 'demand': 11, 'ready': 21600, 'due': 32400, 'service': 515, 'kind': 'grocer'}]
+fleet len=3
+ sample: [{'type': 'bike', 'count': 9, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 13, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}]
+--- /app/orders/riverside.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name len=9
+depot len=4
+customers len=160
+ sample: [{'id': 1, 'x': 49, 'y': 102, 'demand': 32, 'ready': 16200, 'due': 21600, 'service': 1040, 'kind': 'market'}, {'id': 2, 'x': 123, 'y': 40, 'demand': 4, 'ready': 32400, 'due': 36000, 'service': 340, 'kind': 'cafe'}]
+fleet len=3
+ sample: [{'type': 'bike', 'count': 13, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 20, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}]
+--- /app/orders/targets.json ---
+dict
+keys: ['harbour-lanes', 'old-town', 'riverside', 'north-ring']
+harbour-lanes 77867
+old-town 147362
+riverside 201921
+north-ring 288705
+[?2004hroot@f0fc7ca51bbb:/app# sed -n '1,220p' /app/tools/check_plan.py
+[?2004l"""Check a delivery plan against docs/dispatch-rules.md and print its cost.
+
+Usage: python3 tools/check_plan.py orders/<morning>.json plans/<morning>.json
+"""
+
+import json
+import math
+import sys
+
+
+class PlanError(ValueError):
+    pass
+
+
+def distance(a, b):
+    sq = (a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2
+    d = math.isqrt(sq)
+    return d if d * d == sq else d + 1
+
+
+def evaluate(orders, plan):
+    depot = orders["depot"]
+    customers = {c["id"]: c for c in orders["customers"]}
+    fleet = {f["type"]: f for f in orders["fleet"]}
+    used = {t: 0 for t in fleet}
+    served = set()
+    total = 0
+    if not isinstance(plan, dict) or not isinstance(plan.get("routes"), list):
+        raise PlanError("a plan is a JSON object with a routes list")
+    for number, route in enumerate(plan["routes"], start=1):
+        where = f"route {number}"
+        if not isinstance(route, dict):
+            raise PlanError(f"{where}: not a JSON object")
+        kind = fleet.get(route.get("type")) if isinstance(route.get("type"), str) else None
+        if kind is None:
+            raise PlanError(f"{where}: unknown vehicle type {route.get('type')!r}")
+        stops = route.get("stops")
+        if not isinstance(stops, list) or not stops:
+            raise PlanError(f"{where}: no stops")
+        depart = route.get("depart")
+        if not isinstance(depart, int) or isinstance(depart, bool) or depart < depot["open"]:
+            raise PlanError(f"{where}: departure must be a whole second, not before opening")
+        used[route["type"]] += 1
+        clock, here, crates, driven = depart, depot, 0, 0
+        for cid in stops:
+            if not isinstance(cid, int) or isinstance(cid, bool) or cid not in customers:
+                raise PlanError(f"{where}: unknown customer {cid!r}")
+            if cid in served:
+                raise PlanError(f"{where}: customer {cid} delivered twice")
+            served.add(cid)
+            customer = customers[cid]
+            leg = distance(here, customer)
+            driven += leg
+            start = max(clock + leg * kind["pace"], customer["ready"])
+            if start > customer["due"]:
+                raise PlanError(f"{where}: customer {cid} reached at {start}, after its window closes at {customer['due']}")
+            clock = start + customer["service"]
+            crates += customer["demand"]
+            here = customer
+        leg = distance(here, depot)
+        driven += leg
+        back = clock + leg * kind["pace"]
+        if back > depot["close"]:
+            raise PlanError(f"{where}: back at {back}, after the bakery closes")
+        if back - depart > kind["shift"]:
+            raise PlanError(f"{where}: out for {back - depart} s, longer than the {kind['shift']} s shift")
+        if crates > kind["capacity"]:
+            raise PlanError(f"{where}: {crates} crates on a vehicle that carries {kind['capacity']}")
+        if kind["range"] is not None and driven > kind["range"]:
+            raise PlanError(f"{where}: drives {driven} units, beyond its range of {kind['range']}")
+        total += kind["fixed"] + kind["per_unit"] * driven
+    for name, count in used.items():
+        if count > fleet[name]["count"]:
+            raise PlanError(f"{count} routes use a {name}; only {fleet[name]['count']} are available")
+    missing = sorted(set(customers) - served)
+    if missing:
+        raise PlanError(f"{len(missing)} customers get no delivery, first {missing[:5]}")
+    return total
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.exit(__doc__)
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    with open(argv[2]) as fh:
+        plan = json.load(fh)
+    try:
+        cost = evaluate(orders, plan)
+    except PlanError as exc:
+        print(f"INFEASIBLE: {exc}")
+        return 1
+    print(f"feasible, cost {cost}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,glob,collections,os
+[?2004l[?2004h> for fn in glob.glob('/app/orders/*.json'):
+[?2004l[?2004h>  if fn.endswith('targets.json'): continue
+[?2004l[?2004h>  o=json.load(open(fn)); cs=o['customers']
+[?2004l[?2004h>  print('\n',os.path.basename(fn), 'depot=',o['depot'],'customers=',len(cs),'demand=',sum(c['demand'] for c in cs))
+[?2004l[?2004h>  print('fleet:')
+[?2004l[?2004h>  for f in o['fleet']: print(' ',f)
+[?2004l[?2004h>  print('windows:',collections.Counter((c['ready'],c['due']) for c in cs))
+[?2004l[?2004h>  print('demand bands:',collections.Counter('bike' if c['demand']<=14 else 'van' if c['demand']<=60 else 'truck' for c in cs))
+[?2004l[?2004h> PY
+[?2004l
+ north-ring.json depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} customers= 220 demand= 2686
+fleet:
+  {'type': 'bike', 'count': 18, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 27, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 11, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+windows: Counter({(16200, 21600): 29, (25200, 28800): 14, (23400, 27000): 11, (21600, 25200): 11, (19800, 23400): 10, (21600, 24300): 8, (21600, 27000): 8, (32400, 36000): 8, (27000, 30600): 7, (25200, 36000): 7, (25200, 27900): 7, (25200, 30600): 7, (25200, 32400): 6, (32400, 37800): 5, (28800, 34200): 5, (19800, 27000): 5, (28800, 39600): 5, (28800, 32400): 5, (27000, 32400): 4, (32400, 43200): 4, (27000, 34200): 4, (18000, 25200): 4, (23400, 28800): 4, (18000, 21600): 4, (21600, 28800): 3, (23400, 26100): 3, (19800, 22500): 3, (21600, 32400): 3, (27000, 29700): 3, (32400, 35100): 3, (19800, 25200): 2, (28800, 36000): 2, (23400, 30600): 2, (19800, 30600): 2, (18000, 28800): 2, (32400, 39600): 2, (18000, 20700): 2, (23400, 34200): 2, (18000, 23400): 2, (28800, 31500): 1, (27000, 37800): 1})
+demand bands: Counter({'bike': 159, 'van': 61})
+
+ harbour-lanes.json depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} customers= 60 demand= 616
+fleet:
+  {'type': 'bike', 'count': 5, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 7, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 3, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+windows: Counter({(18000, 21600): 5, (16200, 21600): 5, (28800, 32400): 4, (21600, 25200): 4, (32400, 37800): 3, (25200, 30600): 3, (25200, 27900): 3, (27000, 30600): 3, (21600, 28800): 3, (25200, 28800): 3, (23400, 27000): 2, (19800, 23400): 2, (21600, 32400): 2, (19800, 25200): 2, (28800, 31500): 2, (25200, 36000): 2, (21600, 24300): 2, (28800, 36000): 2, (18000, 25200): 1, (23400, 34200): 1, (21600, 27000): 1, (27000, 32400): 1, (28800, 34200): 1, (28800, 39600): 1, (19800, 27000): 1, (25200, 32400): 1})
+demand bands: Counter({'bike': 49, 'van': 11})
+
+ riverside.json depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} customers= 160 demand= 1786
+fleet:
+  {'type': 'bike', 'count': 13, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 20, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 8, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+windows: Counter({(16200, 21600): 15, (25200, 28800): 15, (21600, 25200): 8, (23400, 27000): 7, (27000, 30600): 6, (28800, 31500): 6, (18000, 21600): 6, (21600, 28800): 6, (28800, 32400): 5, (28800, 39600): 5, (28800, 34200): 5, (32400, 36000): 4, (23400, 28800): 4, (18000, 28800): 4, (21600, 24300): 4, (25200, 32400): 4, (25200, 27900): 4, (32400, 43200): 3, (28800, 36000): 3, (21600, 27000): 3, (19800, 23400): 3, (18000, 20700): 3, (18000, 25200): 3, (19800, 22500): 3, (25200, 30600): 3, (19800, 25200): 3, (19800, 30600): 3, (23400, 34200): 2, (32400, 39600): 2, (32400, 35100): 2, (21600, 32400): 2, (19800, 27000): 2, (25200, 36000): 2, (18000, 23400): 2, (27000, 37800): 2, (27000, 32400): 2, (23400, 30600): 2, (27000, 34200): 1, (27000, 29700): 1})
+demand bands: Counter({'bike': 119, 'van': 41})
+
+ old-town.json depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} customers= 110 demand= 1282
+fleet:
+  {'type': 'bike', 'count': 9, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 13, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 5, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+windows: Counter({(16200, 21600): 12, (25200, 28800): 8, (21600, 24300): 6, (21600, 32400): 5, (32400, 35100): 5, (21600, 25200): 5, (25200, 36000): 5, (28800, 34200): 5, (28800, 32400): 4, (32400, 36000): 4, (28800, 36000): 4, (25200, 32400): 3, (25200, 27900): 3, (19800, 23400): 3, (21600, 28800): 3, (23400, 28800): 3, (25200, 30600): 3, (21600, 27000): 3, (32400, 43200): 3, (28800, 31500): 2, (27000, 37800): 2, (18000, 28800): 2, (18000, 25200): 2, (18000, 23400): 2, (32400, 39600): 2, (27000, 30600): 2, (23400, 34200): 1, (32400, 37800): 1, (28800, 39600): 1, (19800, 25200): 1, (18000, 21600): 1, (18000, 20700): 1, (19800, 30600): 1, (27000, 29700): 1, (23400, 26100): 1})
+demand bands: Counter({'bike': 83, 'van': 27})
+[?2004hroot@f0fc7ca51bbb:/app# mkdir -p /app/plans /tmp/base; for n in harbour-lanes old-town riverside north-ring; do echo "=== $n ==="; python3 /app/planner/plan_morning.py /app/orders/$n.json /tmp/base/$n.json; python3 /app/tools/check_plan.py /app/orders/$n.json /tmp/base/$n.json || true; done
+[?2004l=== harbour-lanes ===
+INFEASIBLE: 3 customers get no delivery, first [2, 17, 28]
+INFEASIBLE: 3 customers get no delivery, first [2, 17, 28]
+=== old-town ===
+INFEASIBLE: 4 customers get no delivery, first [8, 30, 62, 73]
+INFEASIBLE: 4 customers get no delivery, first [8, 30, 62, 73]
+=== riverside ===
+cost 313212
+feasible, cost 313212
+=== north-ring ===
+cost 425927
+feasible, cost 425927
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import json
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  p=json.load(open('/tmp/base/'+n+'.json'))
+[?2004l[?2004h>  print(n,len(p['routes']),[(r['type'],len(r['stops'])) for r in p['routes']])
+[?2004l[?2004h> PY
+[?2004lharbour-lanes 10 [('van', 10), ('van', 7), ('van', 8), ('van', 6), ('van', 2), ('van', 5), ('van', 8), ('truck', 4), ('truck', 3), ('truck', 4)]
+old-town 18 [('van', 6), ('van', 5), ('van', 8), ('van', 4), ('van', 5), ('van', 3), ('van', 6), ('van', 9), ('van', 3), ('van', 7), ('van', 5), ('van', 3), ('van', 5), ('truck', 7), ('truck', 10), ('truck', 8), ('truck', 5), ('truck', 7)]
+riverside 28 [('van', 3), ('van', 9), ('van', 10), ('van', 4), ('van', 5), ('van', 7), ('van', 8), ('van', 6), ('van', 6), ('van', 6), ('van', 5), ('van', 8), ('van', 5), ('van', 4), ('van', 7), ('van', 6), ('van', 7), ('van', 5), ('van', 7), ('van', 6), ('truck', 6), ('truck', 8), ('truck', 7), ('truck', 6), ('truck', 4), ('truck', 3), ('truck', 1), ('truck', 1)]
+north-ring 38 [('van', 7), ('van', 7), ('van', 4), ('van', 6), ('van', 8), ('van', 4), ('van', 9), ('van', 7), ('van', 6), ('van', 3), ('van', 4), ('van', 5), ('van', 4), ('van', 4), ('van', 4), ('van', 5), ('van', 7), ('van', 4), ('van', 4), ('van', 4), ('van', 4), ('van', 5), ('van', 4), ('van', 5), ('van', 5), ('van', 6), ('van', 5), ('truck', 13), ('truck', 9), ('truck', 11), ('truck', 10), ('truck', 8), ('truck', 8), ('truck', 8), ('truck', 3), ('truck', 5), ('truck', 4), ('truck', 1)]
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/solve.py <<'PY'
+[?2004l[?2004h> import json, math, random, sys, time, os
+[?2004l[?2004h> sys.path.insert(0,'/app/tools')
+[?2004l[?2004h> from check_plan import evaluate
+[?2004l[?2004h> 
+[?2004l[?2004h> name=sys.argv[1]
+[?2004l[?2004h> o=json.load(open('/app/orders/'+name+'.json'))
+[?2004l[?2004h> D=o['depot']; C={c['id']:c for c in o['customers']}; ids=list(C)
+[?2004l[?2004h> F={f['type']:f for f in o['fleet']}; types=list(F)
+[?2004l[?2004h> pts={0:D}|C
+[?2004l[?2004h> 
+[?2004l[?2004h> def dist(a,b):
+[?2004l[?2004h>  p,q=pts[a],pts[b]; s=(p['x']-q['x'])**2+(p['y']-q['y'])**2
+[?2004l[?2004h>  z=math.isqrt(s); return z if z*z==s else z+1
+[?2004l[?2004h> dd={(a,b):dist(a,b) for a in pts for b in pts}
+[?2004l[?2004h> 
+[?2004l[?2004h> from functools import lru_cache
+[?2004l[?2004h> @lru_cache(maxsize=1000000)
+[?2004l[?2004h> def info(t,seq):
+[?2004l[?2004h>  if not seq: return (0,D['open'],True)
+[?2004l[?2004h>  f=F[t]
+[?2004l[?2004h>  if sum(C[x]['demand'] for x in seq)>f['capacity']: return (0,0,False)
+[?2004l[?2004h>  length=dd[0,seq[0]]+sum(dd[a,b] for a,b in zip(seq,seq[1:]))+dd[seq[-1],0]
+[?2004l[?2004h>  if f['range'] is not None and length>f['range']: return (length,0,False)
+[?2004l('DONE',name,bestcost,'iterations',it)
+PY
+for n in [?2004h>  # Repeatedly delay departure enough to eliminate shift excess caused by waiting.
+[?2004l[?2004h>  dep=D['open']
+[?2004l[?2004h>  for _ in range(len(seq)+2):
+[?2004l[?2004h>   clock=dep; prev=0; ok=True
+[?2004l[?2004h>   for x in seq:
+[?2004l[?2004h>    clock=max(clock+dd[prev,x]*f['pace'],C[x]['ready'])
+[?2004l[?2004h>    if clock>C[x]['due']: ok=False; break
+[?2004l[?2004h>    clock+=C[x]['service']; prev=x
+[?2004l[?2004h>   if not ok: return (length,dep,False)
+[?2004l[?2004h>   back=clock+dd[prev,0]*f['pace']
+[?2004l[?2004h>   excess=back-dep-f['shift']
+[?2004l[?2004h>   if excess<=0:
+[?2004l[?2004h>    return (length,dep,back<=D['close'])
+[?2004l[?2004h>   dep+=excess
+[?2004l[?2004h>   if dep<D['open'] or dep>D['close']: return (length,dep,False)
+[?2004l[?2004h>  return (length,dep,False)
+[?2004l[?2004h> 
+[?2004l[?2004h> def rcost(t,s):
+[?2004l[?2004h>  if not s:return 0
+[?2004l[?2004h>  z,_,ok=info(t,tuple(s)); return F[t]['fixed']+F[t]['per_unit']*z if ok else 10**12
+[?2004l[?2004h> 
+[?2004l[?2004h> def construct(rng, mode):
+[?2004l[?2004h>  routes=[]
+[?2004l[?2004h>  # Slots retain type, including empty available vehicles.
+[?2004l[?2004h>  for t in types:
+[?2004l[?2004h>   routes += [[t,[]] for _ in range(F[t]['count'])]
+[?2004l[?2004h>  if mode==0:
+[?2004l[?2004h>   order=sorted(ids,key=lambda x:(C[x]['due']+rng.uniform(-2500,2500), math.atan2(C[x]['y'],C[x]['x'])))
+[?2004l[?2004h>  elif mode==1:
+[?2004l[?2004h>   ang=rng.uniform(-math.pi,math.pi)
+[?2004l[?2004h>   order=sorted(ids,key=lambda x:(C[x]['due']//3600, (math.atan2(C[x]['y'],C[x]['x'])-ang)%(2*math.pi)+rng.random()*.7))
+[?2004l[?2004h>  elif mode==2:
+[?2004l[?2004h>   order=sorted(ids,key=lambda x:(C[x]['ready']+rng.uniform(-5000,5000),-C[x]['demand']))
+[?2004l[?2004h>  else:
+[?2004l[?2004h>   order=ids[:]; rng.shuffle(order)
+[?2004l[?2004h>  for x in order:
+[?2004l[?2004h>   opts=[]
+[?2004l[?2004h>   seenempty=set()
+[?2004l[?2004h>   for ri,(t,s) in enumerate(routes):
+[?2004l[?2004h>    if not s:
+[?2004l[?2004h>     if t in seenempty: continue
+[?2004l[?2004h>     seenempty.add(t)
+[?2004l[?2004h>    old=rcost(t,s)
+[?2004l[?2004h>    for p in range(len(s)+1):
+[?2004l[?2004h>     ns=tuple(s[:p]+[x]+s[p:]); z,_,ok=info(t,ns)
+[?2004l[?2004h>     if ok:
+[?2004l[?2004h>      delta=(F[t]['fixed']+F[t]['per_unit']*z)-old
+[?2004l[?2004h>      # mild randomization, preserving broad cost preference
+[?2004l[?2004h>      opts.append((delta*(1+rng.random()*.10),delta,ri,p))
+[?2004l[?2004h>   if not opts:return None
+[?2004l[?2004h>   opts.sort()
+[?2004l[?2004h>   # Occasionally select among close alternatives to diversify geometry.
+[?2004l[?2004h>   lim=min(len(opts),4)
+[?2004l[?2004h>   k=0 if rng.random()<.82 else rng.randrange(lim)
+[?2004l[?2004h>   _,_,ri,p=opts[k]; routes[ri][1].insert(p,x)
+[?2004l[?2004h>  return routes
+[?2004l[?2004h> 
+[?2004l[?2004h> def improve(routes,rng,deadline):
+[?2004l[?2004h>  # Intra-route 2-opt/reversal improvements, then best relocations.
+[?2004l[?2004h>  changed=True
+[?2004l[?2004h>  while changed and time.time()<deadline:
+[?2004l[?2004h>   changed=False
+[?2004l[?2004h>   for ri,(t,s) in enumerate(routes):
+[?2004l[?2004h>    if len(s)<2: continue
+[?2004l[?2004h>    old=rcost(t,s); best=old; bs=None
+[?2004l[?2004h>    for i in range(len(s)):
+[?2004l[?2004h>     for j in range(i+1,len(s)):
+[?2004l[?2004h>      ns=s[:i]+list(reversed(s[i:j+1]))+s[j+1:]
+[?2004l[?2004h>      z=rcost(t,ns)
+[?2004l[?2004h>      if z<best: best,bs=z,ns
+[?2004l[?2004h>    if bs is not None: routes[ri][1]=bs; changed=True
+[?2004l[?2004h>  # random/best relocation passes
+[?2004l[?2004h>  for passes in range(8):
+[?2004l[?2004h>   if time.time()>=deadline: break
+[?2004l[?2004h>   bestmove=None; bestdelta=-1e-9
+[?2004l[?2004h>   order=list(range(len(routes))); rng.shuffle(order)
+[?2004l[?2004h>   for ai in order:
+[?2004l[?2004h>    ta,a=routes[ai]
+[?2004l[?2004h>    if not a: continue
+[?2004l[?2004h>    olda=rcost(ta,a)
+[?2004l[?2004h>    for ix,x in enumerate(a):
+[?2004l[?2004h>     na=a[:ix]+a[ix+1:]; ca=rcost(ta,na)
+[?2004l[?2004h>     for bi,(tb,b) in enumerate(routes):
+[?2004l[?2004h>      if bi==ai: continue
+[?2004l[?2004h>      oldb=rcost(tb,b)
+[?2004l[?2004h>      for p in range(len(b)+1):
+[?2004l[?2004h>       nb=b[:p]+[x]+b[p:]; cb=rcost(tb,nb)
+[?2004l[?2004h>       delta=(ca+cb)-(olda+oldb)
+[?2004l[?2004h>       if delta<bestdelta:
+[?2004l[?2004h>        bestdelta=delta; bestmove=(ai,ix,bi,p,na,nb)
+[?2004l[?2004h>   if bestmove is None: break
+[?2004l[?2004h>   ai,ix,bi,p,na,nb=bestmove
+[?2004l[?2004h>   routes[ai][1]=na; routes[bi][1]=nb
+[?2004l[?2004h>  return routes
+[?2004l[?2004h> 
+[?2004l[?2004h> def planof(routes):
+[?2004l[?2004h>  out=[]
+[?2004l[?2004h>  for t,s in routes:
+[?2004l[?2004h>   if s:
+[?2004l[?2004h>    _,dep,ok=info(t,tuple(s)); assert ok
+[?2004l[?2004h>    out.append({'type':t,'depart':int(dep),'stops':s})
+[?2004l[?2004h>  return {'routes':out}
+[?2004l[?2004h> 
+[?2004l[?2004h> target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> limit=float(sys.argv[2]) if len(sys.argv)>2 else 25
+[?2004l[?2004h> end=time.time()+limit; best=None; bestcost=10**18; it=0
+[?2004l[?2004h> while time.time()<end:
+[?2004l[?2004h>  rng=random.Random(9176+it*1000003)
+[?2004l[?2004h>  r=construct(rng,it%4); it+=1
+[?2004l[?2004h>  if r is None: continue
+[?2004l[?2004h>  # Give promising constructions more local-search time.
+[?2004l[?2004h>  p=planof(r)
+[?2004l[?2004h>  try: c=evaluate(o,p)
+[?2004l[?2004h>  except Exception: continue
+[?2004l[?2004h>  if c<bestcost*1.18:
+[?2004l[?2004h>   r=improve(r,rng,min(end,time.time()+3.0))
+[?2004l[?2004h>   p=planof(r); c=evaluate(o,p)
+[?2004l[?2004h>  if c<bestcost:
+[?2004l[?2004h>   bestcost,best=c,p
+[?2004l[?2004h>   os.makedirs('/app/plans',exist_ok=True)
+[?2004l[?2004h>   json.dump(best,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>   print(name,'iteration',it,'best',c,'target',target,flush=True)
+[?2004l[?2004h>  if bestcost<=target: break
+[?2004l[?2004h> print('DONE',name,bestcost,'iterations',it)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/solve.py "$n" 35; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json || true; done
+[?2004lharbour-lanes iteration 1 best 126960 target 77867
+harbour-lanes iteration 2 best 100234 target 77867
+harbour-lanes iteration 6 best 92175 target 77867
+harbour-lanes iteration 78 best 90057 target 77867
+harbour-lanes iteration 310 best 87178 target 77867
+DONE harbour-lanes 87178 iterations 2466
+feasible, cost 87178
+old-town iteration 3 best 206327 target 147362
+old-town iteration 14 best 195718 target 147362
+old-town iteration 26 best 188972 target 147362
+old-town iteration 86 best 188078 target 147362
+DONE old-town 188078 iterations 518
+feasible, cost 188078
+riverside iteration 1 best 284448 target 201921
+riverside iteration 2 best 264412 target 201921
+riverside iteration 18 best 259237 target 201921
+riverside iteration 50 best 256483 target 201921
+DONE riverside 256483 iterations 62
+feasible, cost 256483
+north-ring iteration 1 best 409112 target 288705
+north-ring iteration 2 best 391010 target 288705
+north-ring iteration 6 best 378482 target 288705
+north-ring iteration 10 best 376926 target 288705
+north-ring iteration 14 best 373474 target 288705
+north-ring iteration 42 best 363720 target 288705
+DONE north-ring 363720 iterations 59
+feasible, cost 363720
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,math
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); p=json.load(open('/app/plans/'+n+'.json')); C={c['id']:c for c in o['customers']}; D=o['depot']; F={f['type']:f for f in o['fleet']}
+[?2004l[?2004h>  def d(a,b):
+[?2004l[?2004h>   s=(a['x']-b['x'])**2+(a['y']-b['y'])**2; z=math.isqrt(s); return z+(z*z<s)
+[?2004l[?2004h>  print('\n',n)
+[?2004l[?2004h>  tot=0
+[?2004l[?2004h>  for t in F:
+[?2004l[?2004h>   rows=[]
+[?2004l[?2004h>   for r in p['routes']:
+[?2004l[?2004h>    if r['type']!=t:continue
+[?2004l[?2004h>    q=sum(C[x]['demand'] for x in r['stops']); seq=[D]+[C[x] for x in r['stops']]+[D]; ds=sum(d(a,b) for a,b in zip(seq,seq[1:])); cost=F[t]['fixed']+F[t]['per_unit']*ds; tot+=cost; rows.append((q,ds,cost,len(r['stops'])))
+[?2004l[?2004h>   print(t,len(rows),'demand',sum(x[0] for x in rows),'loads',[x[0] for x in rows],'distance',sum(x[1] for x in rows),'cost',sum(x[2] for x in rows))
+[?2004l[?2004h>  print('total',tot)
+[?2004l[?2004h> PY
+[?2004l
+ harbour-lanes
+bike 5 demand 70 loads [14, 14, 14, 14, 14] distance 1182 cost 6864
+van 7 demand 410 loads [59, 57, 60, 57, 57, 60, 60] distance 2751 cost 59661
+truck 1 demand 136 loads [136] distance 587 cost 20653
+total 87178
+
+ old-town
+bike 8 demand 106 loads [12, 13, 14, 14, 12, 13, 14, 14] distance 1645 cost 10490
+van 11 demand 637 loads [60, 59, 52, 60, 56, 59, 60, 60, 59, 60, 52] distance 5379 cost 105369
+truck 4 demand 539 loads [148, 149, 149, 93] distance 1801 cost 72219
+total 188078
+
+ riverside
+bike 13 demand 157 loads [13, 8, 8, 13, 14, 12, 14, 9, 14, 14, 14, 13, 11] distance 3012 cost 17724
+van 15 demand 882 loads [60, 60, 60, 59, 60, 60, 58, 59, 60, 56, 58, 59, 60, 54, 59] distance 7131 cost 141441
+truck 5 demand 747 loads [150, 150, 148, 149, 150] distance 2622 cost 97318
+total 256483
+
+ north-ring
+bike 18 demand 234 loads [13, 14, 14, 12, 14, 13, 13, 13, 12, 13, 13, 14, 12, 14, 14, 11, 12, 13] distance 3552 cost 23304
+van 27 demand 1574 loads [60, 60, 58, 59, 59, 58, 58, 60, 55, 59, 59, 58, 58, 58, 58, 54, 59, 59, 60, 57, 58, 60, 58, 58, 56, 58, 60] distance 9224 cost 214864
+truck 6 demand 878 loads [148, 150, 143, 147, 148, 142] distance 3608 cost 125552
+total 363720
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/anneal.py <<'PY'
+[?2004l[?2004h> import json,math,random,time,sys,os
+[?2004l[?2004h> sys.path.insert(0,'/app/tools'); from check_plan import evaluate
+[?2004l[?2004h> n=sys.argv[1]; limit=float(sys.argv[2]); O=json.load(open('/app/orders/'+n+'.json')); P=json.load(open('/app/plans/'+n+'.json'))
+[?2004l[?2004h> D=O['depot']; C={c['id']:c for c in O['customers']}; F={f['type']:f for f in O['fleet']}; pts={0:D}|C
+[?2004l[?2004h> DD={}
+[?2004l[?2004h> for a,p in pts.items():
+[?2004l[?2004h>  for b,q in pts.items():
+[?2004l[?2004h>   z=(p['x']-q['x'])**2+(p['y']-q['y'])**2; r=math.isqrt(z); DD[a,b]=r+(r*r<z)
+[?2004l[?2004h> from functools import lru_cache
+[?2004l[?2004h> @lru_cache(maxsize=2000000)
+[?2004l[?2004h> def inf(t,s):
+[?2004l[?2004h>  if not s:return (0,D['open'],True)
+[?2004l[?2004h>  f=F[t]
+[?2004l[?2004h>  if sum(C[x]['demand'] for x in s)>f['capacity']:return (0,0,False)
+[?2004l[?2004h>  ds=DD[0,s[0]]+sum(DD[a,b] for a,b in zip(s,s[1:]))+DD[s[-1],0]
+[?2004l[?2004h>  if f['range'] is not None and ds>f['range']:return(ds,0,False)
+[?2004l[?2004h>  dep=D['open']
+[?2004l[?2004h>  for z in range(len(s)+2):
+[?2004l[?2004h>   cl=dep; pr=0
+[?2004l[?2004h>   for x in s:
+[?2004l[?2004h>    cl=max(cl+DD[pr,x]*f['pace'],C[x]['ready'])
+[?2004l[?2004h>    if cl>C[x]['due']:return(ds,dep,False)
+[?2004l[?2004h>    cl+=C[x]['service'];pr=x
+[?2004l[?2004h>   back=cl+DD[pr,0]*f['pace']; ex=back-dep-f['shift']
+[?2004l[?2004h>   if ex<=0:return(ds,dep,back<=D['close'])
+[?2004l[?2004h>   dep+=ex
+[?2004l[?2004h>  return(ds,dep,False)
+[?2004l[?2004h> def co(t,s):
+[?2004l[?2004h>  if not s:return 0
+[?2004l[?2004h>  d,_,ok=inf(t,tuple(s));return F[t]['fixed']+F[t]['per_unit']*d if ok else 10**9
+[?2004l[?2004h> def slots(plan):
+[?2004l[?2004h>  r=[[x['type'],x['stops'][:]] for x in plan['routes']]
+[?2004l[?2004h>  for t,f in F.items():
+[?2004l[?2004h>   for _ in range(f['count']-sum(x[0]==t for x in r)):r.append([t,[]])
+[?2004l[?2004h>  return r
+[?2004l[?2004h> def output(R):
+[?2004l[?2004h>  rr=[]
+[?2004l[?2004h>  for t,s in R:
+[?2004l[?2004h>   if s:
+[?2004l[?2004h>    _,dep,ok=inf(t,tuple(s));assert ok
+[?2004l[?2004h>    rr.append({'type':t,'depart':int(dep),'stops':s})
+[?2004l[?2004h>  return {'routes':rr}
+[?2004l[?2004h> def total(R):return sum(co(t,s) for t,s in R)
+[?2004l[?2004h> base=slots(P); bc=total(base); best=[[t,s[:]] for t,s in base]; target=json.load(open('/app/orders/targets.json'))[n]
+[?2004l[?2004h> print('start',n,bc,'target',target,flush=True)
+[?2004l[?2004h> end=time.time()+limit; rng=random.Random(77123); epoch=0
+[?2004l[?2004h> while time.time()<end and bc>target:
+[?2004l[?2004h>  # Restart from global best, with high temperature gradually cooling.
+[?2004l[?2004h>  R=[[t,s[:]] for t,s in best]; cur=bc; steps=0; epoch+=1
+[?2004l[?2004h>  T0=1800 if epoch%3 else 4000
+[?2004l[?2004h>  while steps<120000 and time.time()<end:
+[?2004l[?2004h>   steps+=1; temp=max(8,T0*(1-steps/120000))
+[?2004l[?2004h>   typ=rng.randrange(100); non=[i for i,x in enumerate(R) if x[1]]
+[?2004l[?2004h>   if not non:continue
+[?2004l[?2004h>   a=rng.choice(non); ta,A=R[a]; ca=co(ta,A)
+[?2004l[?2004h>   changed=[]
+[?2004l[?2004h>   if typ<38: # relocate
+[?2004l[?2004h>    ix=rng.randrange(len(A)); x=A[ix]; b=rng.randrange(len(R));
+[?2004l[?2004h>    if b==a:continue
+[?2004l[?2004h>    tb,B=R[b]; p=rng.randrange(len(B)+1); NA=A[:ix]+A[ix+1:]; NB=B[:p]+[x]+B[p:]
+[?2004l[?2004h>    nc=co(ta,NA)+co(tb,NB); old=ca+co(tb,B); changed=[(a,NA),(b,NB)]
+[?2004l[?2004h>   elif typ<72: # swap
+[?2004l[?2004h>    b=rng.choice(non)
+[?2004l[?2004h>    if b==a:continue
+[?2004l[?2004h>    tb,B=R[b]; ix=rng.randrange(len(A));iy=rng.randrange(len(B)); NA=A[:];NB=B[:];NA[ix],NB[iy]=NB[iy],NA[ix]
+[?2004l[?2004h>    nc=co(ta,NA)+co(tb,NB);old=ca+co(tb,B);changed=[(a,NA),(b,NB)]
+[?2004l[?2004h>   elif typ<87: # reverse segment
+[?2004l[?2004h>    if len(A)<2:continue
+[?2004l[?2004h>    i,j=sorted(rng.sample(range(len(A)+1),2)); NA=A[:i]+list(reversed(A[i:j]))+A[j:]
+[?2004l[?2004h>    nc=co(ta,NA);old=ca;changed=[(a,NA)]
+[?2004l[?2004h>   else: # exchange tails / 2-opt star
+[?2004l[?2004h>    b=rng.choice(non)
+[?2004l[?2004h>    if b==a:continue
+[?2004l[?2004h>    tb,B=R[b]; i=rng.randrange(len(A)+1);j=rng.randrange(len(B)+1)
+[?2004l[?2004h>    if rng.random()<.5: NA=A[:i]+B[j:];NB=B[:j]+A[i:]
+[?2004l[?2004h>    else: NA=A[:i]+list(reversed(B[:j]));NB=list(reversed(A[i:]))+B[j:]
+[?2004l[?2004h>    nc=co(ta,NA)+co(tb,NB);old=ca+co(tb,B);changed=[(a,NA),(b,NB)]
+[?2004l[?2004h>   delta=nc-old
+[?2004l[?2004h>   if nc>=10**9:continue
+[?2004l[?2004h>   if delta<=0 or rng.random()<math.exp(-delta/temp):
+[?2004l[?2004h>    for i,s in changed:R[i][1]=s
+[?2004l[?2004h>    cur+=delta
+[?2004l[?2004h>    if cur<bc:
+[?2004l[?2004h>     q=output(R)
+[?2004l[?2004h>     try: real=evaluate(O,q)
+[?2004l[?2004h>     except: continue
+[?2004l[?2004h>     bc=real;best=[[t,s[:]] for t,s in R]
+[?2004l[?2004h>     json.dump(q,open('/app/plans/'+n+'.json','w'),indent=1)
+[?2004l[?2004h>     print('best',bc,'epoch',epoch,'step',steps,flush=True)
+[?2004l[?2004h>     if bc<=target:break
+[?2004l[?2004h> print('DONE',n,bc)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/anneal.py "$n" 50; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lstart harbour-lanes 87178 target 77867
+best 87151 epoch 1 step 478
+best 86971 epoch 4 step 50
+best 86689 epoch 7 step 23
+best 86687 epoch 20 step 10
+best 86661 epoch 20 step 20
+best 86469 epoch 22 step 106876
+best 86203 epoch 22 step 107037
+best 86165 epoch 22 step 107055
+best 86145 epoch 22 step 107956
+best 86144 epoch 22 step 114158
+best 85992 epoch 22 step 114168
+best 85774 epoch 22 step 114366
+best 85750 epoch 22 step 114572
+best 85748 epoch 22 step 114952
+best 85746 epoch 22 step 114954
+best 85745 epoch 22 step 115124
+best 85580 epoch 22 step 115231
+best 85524 epoch 22 step 115341
+best 85510 epoch 22 step 115365
+best 85472 epoch 22 step 115379
+best 85453 epoch 22 step 115540
+best 85378 epoch 22 step 115931
+best 85323 epoch 22 step 116049
+best 85248 epoch 22 step 116905
+best 85210 epoch 22 step 117031
+best 85172 epoch 22 step 117209
+best 85170 epoch 22 step 117490
+best 85092 epoch 22 step 117628
+best 85076 epoch 22 step 118005
+best 85062 epoch 22 step 118118
+best 85040 epoch 22 step 118786
+DONE harbour-lanes 85040
+feasible, cost 85040
+start old-town 188078 target 147362
+best 188026 epoch 1 step 98110
+best 187720 epoch 1 step 98125
+best 187313 epoch 1 step 98188
+best 187115 epoch 1 step 98295
+best 186660 epoch 1 step 100364
+best 185892 epoch 1 step 100897
+best 185814 epoch 1 step 100956
+best 185368 epoch 1 step 101003
+best 185228 epoch 1 step 101204
+best 184986 epoch 1 step 101209
+best 184912 epoch 1 step 101417
+best 184844 epoch 1 step 101427
+best 184822 epoch 1 step 101444
+best 184772 epoch 1 step 101452
+best 184668 epoch 1 step 103155
+best 184617 epoch 1 step 103168
+best 184577 epoch 1 step 103324
+best 184566 epoch 1 step 103341
+best 184325 epoch 1 step 103342
+best 184266 epoch 1 step 103487
+best 184265 epoch 1 step 103548
+best 184155 epoch 1 step 103550
+best 184144 epoch 1 step 103616
+best 183858 epoch 1 step 103631
+best 183726 epoch 1 step 105118
+best 183714 epoch 1 step 105306
+best 183703 epoch 1 step 105312
+best 183340 epoch 1 step 105384
+best 183026 epoch 1 step 106055
+best 183015 epoch 1 step 106065
+best 182989 epoch 1 step 106131
+best 182981 epoch 1 step 106160
+best 182930 epoch 1 step 106247
+best 182787 epoch 1 step 106260
+best 182517 epoch 1 step 106261
+best 182439 epoch 1 step 106381
+best 182219 epoch 1 step 106401
+best 182060 epoch 1 step 106979
+best 181773 epoch 1 step 107041
+best 181500 epoch 1 step 107114
+best 181247 epoch 1 step 107424
+best 181019 epoch 1 step 107440
+best 181008 epoch 1 step 107457
+best 180854 epoch 1 step 107660
+best 180799 epoch 1 step 107724
+best 180414 epoch 1 step 107743
+best 180400 epoch 1 step 107744
+best 180165 epoch 1 step 107948
+best 180154 epoch 1 step 107967
+best 179929 epoch 1 step 108314
+best 179836 epoch 1 step 108499
+best 179612 epoch 1 step 113709
+best 178833 epoch 1 step 113725
+best 178616 epoch 1 step 113769
+best 178572 epoch 1 step 113807
+best 178562 epoch 1 step 113810
+best 178558 epoch 1 step 113874
+best 178292 epoch 1 step 113936
+best 177560 epoch 1 step 114006
+best 177538 epoch 1 step 114059
+best 177471 epoch 1 step 114673
+best 177441 epoch 1 step 115167
+best 177397 epoch 1 step 115214
+best 177257 epoch 1 step 115273
+best 177235 epoch 1 step 115347
+best 177202 epoch 1 step 115351
+best 177145 epoch 1 step 115531
+best 177050 epoch 1 step 115552
+best 177035 epoch 1 step 115611
+best 177023 epoch 1 step 115706
+best 177012 epoch 1 step 115809
+best 176968 epoch 1 step 116194
+best 176957 epoch 1 step 116445
+best 176936 epoch 1 step 116527
+best 175419 epoch 1 step 116608
+best 175418 epoch 1 step 116728
+best 175402 epoch 1 step 116832
+best 175143 epoch 1 step 116866
+best 175132 epoch 1 step 116948
+best 175063 epoch 1 step 117313
+best 174876 epoch 1 step 117386
+best 174766 epoch 1 step 117395
+best 174752 epoch 1 step 118165
+best 174486 epoch 1 step 118168
+best 174468 epoch 1 step 119158
+best 174452 epoch 1 step 119175
+best 174408 epoch 1 step 119352
+best 174343 epoch 1 step 119523
+best 174310 epoch 2 step 111797
+best 173993 epoch 2 step 112057
+best 173937 epoch 2 step 112240
+best 173758 epoch 2 step 112307
+best 173747 epoch 2 step 112631
+best 173648 epoch 2 step 112871
+best 173623 epoch 2 step 112966
+best 173490 epoch 2 step 112970
+best 173260 epoch 2 step 113001
+best 172919 epoch 2 step 113101
+best 172787 epoch 2 step 113213
+best 172782 epoch 2 step 113259
+best 172435 epoch 2 step 113509
+best 172393 epoch 2 step 113572
+best 172271 epoch 2 step 113654
+best 171974 epoch 2 step 113726
+best 171941 epoch 2 step 113765
+best 170809 epoch 2 step 114040
+best 170764 epoch 2 step 117103
+best 170620 epoch 2 step 117275
+best 170585 epoch 2 step 117476
+best 170549 epoch 2 step 117577
+best 170547 epoch 2 step 117605
+best 170360 epoch 2 step 117836
+best 170155 epoch 2 step 118170
+best 170122 epoch 2 step 118214
+best 170078 epoch 2 step 118551
+best 170037 epoch 12 step 6
+DONE old-town 170037
+feasible, cost 170037
+start riverside 256483 target 201921
+best 255860 epoch 1 step 114418
+best 255858 epoch 1 step 114560
+best 255611 epoch 1 step 114597
+best 255583 epoch 1 step 114674
+best 255484 epoch 1 step 114685
+best 255451 epoch 1 step 114724
+best 255383 epoch 1 step 114781
+best 255378 epoch 1 step 114808
+best 254716 epoch 1 step 114911
+best 254419 epoch 1 step 114956
+best 253924 epoch 1 step 115269
+best 253555 epoch 1 step 115360
+best 253391 epoch 1 step 115864
+best 253325 epoch 1 step 115941
+best 253263 epoch 1 step 115954
+best 253092 epoch 1 step 116058
+best 252985 epoch 1 step 116090
+best 252934 epoch 1 step 116160
+best 252890 epoch 1 step 116303
+best 252813 epoch 1 step 116328
+best 252805 epoch 1 step 116745
+best 252756 epoch 1 step 116913
+best 251415 epoch 1 step 116980
+best 251228 epoch 1 step 117051
+best 250901 epoch 1 step 117481
+best 250790 epoch 1 step 118027
+best 250782 epoch 1 step 118075
+best 250605 epoch 1 step 118231
+best 250603 epoch 1 step 118448
+best 249800 epoch 1 step 118518
+best 249591 epoch 1 step 118627
+best 249572 epoch 1 step 118679
+best 248660 epoch 1 step 118788
+best 248330 epoch 1 step 119042
+best 248099 epoch 1 step 119072
+best 247065 epoch 1 step 119154
+best 247043 epoch 1 step 119164
+best 246911 epoch 1 step 119169
+best 246669 epoch 1 step 119844
+best 246612 epoch 1 step 119886
+best 246590 epoch 1 step 119907
+best 246348 epoch 3 step 3
+best 246326 epoch 8 step 4
+DONE riverside 246326
+feasible, cost 246326
+start north-ring 363720 target 288705
+best 363619 epoch 6 step 39
+best 363515 epoch 10 step 117715
+best 363482 epoch 10 step 117834
+best 363394 epoch 10 step 117988
+best 362998 epoch 10 step 118041
+best 362495 epoch 10 step 118128
+best 362471 epoch 10 step 118184
+best 362465 epoch 10 step 118207
+best 362454 epoch 10 step 118697
+best 362432 epoch 10 step 118831
+best 362350 epoch 10 step 118957
+best 362343 epoch 10 step 119641
+best 362323 epoch 10 step 119661
+best 362257 epoch 10 step 119821
+best 362202 epoch 13 step 5
+best 361850 epoch 14 step 2
+best 361839 epoch 15 step 17
+best 361707 epoch 16 step 18
+best 361627 epoch 16 step 142
+best 360650 epoch 18 step 14
+best 360644 epoch 20 step 117521
+best 360622 epoch 20 step 117653
+best 360582 epoch 20 step 117657
+best 360452 epoch 20 step 117688
+best 360342 epoch 20 step 117702
+best 360188 epoch 20 step 117807
+best 360085 epoch 20 step 117830
+best 359931 epoch 20 step 117910
+best 359741 epoch 20 step 117932
+best 359737 epoch 20 step 118015
+best 359682 epoch 20 step 118307
+best 359664 epoch 20 step 118335
+best 359584 epoch 20 step 118361
+best 358676 epoch 20 step 118388
+best 358321 epoch 20 step 118397
+best 358291 epoch 20 step 118444
+best 358133 epoch 20 step 118699
+best 357709 epoch 20 step 118844
+best 357500 epoch 20 step 118960
+best 357467 epoch 20 step 119125
+best 356675 epoch 20 step 119531
+best 356610 epoch 20 step 119627
+best 356534 epoch 20 step 119648
+best 356435 epoch 20 step 119904
+DONE north-ring 356435
+feasible, cost 356435
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/tmp/solve.py'
+[?2004l[?2004h> s=open(p).read(); s=s[:s.index("target=json.load")]
+[?2004l[?2004h> open('/tmp/core.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/regret.py <<'PY'
+[?2004l[?2004h> import sys,time,random,json,os
+[?2004l[?2004h> name=sys.argv[1]
+[?2004l[?2004h> exec(open('/tmp/core.py').read())
+[?2004l[?2004h> target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> try:
+[?2004l[?2004h>  old=json.load(open('/app/plans/'+name+'.json')); bestcost=evaluate(o,old); best=old
+[?2004l[?2004h> except: bestcost=10**18;best=None
+[?2004l[?2004h> end=time.time()+float(sys.argv[2]); it=0
+[?2004l[?2004h> # Opening discounts vary to encourage high-capacity routes before incremental economics dominate.
+[?2004l[?2004h> discounts=[0.0,.12,.25,.4,.6,1.0]
+[?2004l[?2004h> while time.time()<end:
+[?2004l[?2004h>  rng=random.Random(4409+it*7919); disc=discounts[it%len(discounts)]; it+=1
+[?2004l[?2004h>  R=[]
+[?2004l[?2004h>  for t in types:R += [[t,[]] for _ in range(F[t]['count'])]
+[?2004l[?2004h>  left=set(ids); failed=False
+[?2004l[?2004h>  while left:
+[?2004l[?2004h>   choices=[]
+[?2004l[?2004h>   # sample all customers; rank by regret between distinct route slots
+[?2004l[?2004h>   for x in left:
+[?2004l[?2004h>    opts=[]; seen=set()
+[?2004l[?2004h>    for ri,(t,s) in enumerate(R):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>      if t in seen:continue
+[?2004l[?2004h>      seen.add(t)
+[?2004l[?2004h>     oldc=rcost(t,s)
+[?2004l[?2004h>     for p in range(len(s)+1):
+[?2004l[?2004h>      ns=tuple(s[:p]+[x]+s[p:]); z,_,ok=info(t,ns)
+[?2004l[?2004h>      if ok:
+[?2004l[?2004h>       new=F[t]['fixed']+F[t]['per_unit']*z
+[?2004l[?2004h>       delta=new-oldc
+[?2004l[?2004h>       adj=delta-(1-disc)*F[t]['fixed'] if not s else delta
+[?2004l[?2004h>       opts.append((adj,delta,ri,p))
+[?2004l[?2004h>    if not opts:continue
+[?2004l[?2004h>    opts.sort(); b=opts[0]
+[?2004l[?2004h>    # Distinct alternatives; large regret means assign now. Tight due windows get a mild bonus.
+[?2004l[?2004h>    second=opts[min(len(opts)-1,3)][0]
+[?2004l[?2004h>    regret=second-b[0]
+[?2004l[?2004h>    urgency=(46800-C[x]['due'])/2000
+[?2004l[?2004h>    choices.append((regret+urgency+rng.random()*80,x,b))
+[?2004l[?2004h>   if not choices:failed=True;break
+[?2004l[?2004h>   choices.sort(reverse=True); _,x,b=choices[0 if rng.random()<.9 else rng.randrange(min(4,len(choices)))]
+[?2004l[?2004h>   _,_,ri,p=b;R[ri][1].insert(p,x);left.remove(x)
+[?2004l[?2004h>  if failed:continue
+[?2004l[?2004h>  p=planof(R)
+[?2004l[?2004h>  try:c=evaluate(o,p)
+[?2004l[?2004h>  except:continue
+[?2004l[?2004h>  if c<bestcost:
+[?2004l[?2004h>   # short deterministic improvement from prior solver
+[?2004l[?2004h>   R=improve(R,rng,min(end,time.time()+4));p=planof(R);c=evaluate(o,p)
+[?2004l[?2004h>   if c<bestcost:
+[?2004l[?2004h>    bestcost,best=c,p;json.dump(best,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>    print(name,'best',c,'target',target,'disc',disc,'iter',it,flush=True)
+[?2004l[?2004h>  if bestcost<=target:break
+[?2004l[?2004h> print('DONE',name,bestcost,it)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/regret.py "$n" 55; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lDONE harbour-lanes 85040 807
+feasible, cost 85040
+DONE old-town 170037 129
+feasible, cost 170037
+DONE riverside 246326 39
+feasible, cost 246326
+north-ring best 338691 target 288705 disc 0.0 iter 1
+DONE north-ring 338691 16
+feasible, cost 338691
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,itertools
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); p=json.load(open('/app/plans/'+n+'.json')); dem=sum(c['demand'] for c in o['customers']); F={f['type']:f for f in o['fleet']}
+[?2004l[?2004h>  print('\n',n,'demand',dem,'current', {t:sum(r['type']==t for r in p['routes']) for t in F})
+[?2004l[?2004h>  a=[]
+[?2004l[?2004h>  for b in range(F['bike']['count']+1):
+[?2004l[?2004h>   for v in range(F['van']['count']+1):
+[?2004l[?2004h>    for tr in range(F['truck']['count']+1):
+[?2004l[?2004h>     cap=14*b+60*v+150*tr
+[?2004l[?2004h>     if cap>=dem:
+[?2004l[?2004h>      fixed=900*b+4200*v+9500*tr
+[?2004l[?2004h>      a.append((fixed,cap-dem,b,v,tr))
+[?2004l[?2004h>  print('lowest fixed combos:',sorted(a)[:15])
+[?2004l[?2004h> PY
+[?2004l
+ harbour-lanes demand 616 current {'bike': 4, 'van': 5, 'truck': 2}
+lowest fixed combos: [(40500, 10, 4, 2, 3), (41100, 14, 0, 3, 3), (41400, 24, 5, 2, 3), (41800, 12, 2, 5, 2), (42000, 28, 1, 3, 3), (42500, 10, 4, 7, 1), (42700, 26, 3, 5, 2), (42900, 42, 2, 3, 3), (43400, 24, 5, 7, 1), (43600, 40, 4, 5, 2), (43800, 56, 3, 3, 3), (44200, 44, 0, 6, 2), (44500, 54, 5, 5, 2), (44700, 70, 4, 3, 3), (45100, 58, 1, 6, 2)]
+
+ old-town demand 1282 current {'bike': 4, 'van': 12, 'truck': 4}
+lowest fixed combos: [(84100, 0, 8, 7, 5), (84700, 4, 4, 8, 5), (85000, 14, 9, 7, 5), (85300, 8, 0, 9, 5), (85400, 2, 6, 10, 4), (85600, 18, 5, 8, 5), (86000, 6, 2, 11, 4), (86100, 0, 8, 12, 3), (86200, 22, 1, 9, 5), (86300, 16, 7, 10, 4), (86500, 32, 6, 8, 5), (86700, 4, 4, 13, 3), (86900, 20, 3, 11, 4), (87000, 14, 9, 12, 3), (87100, 36, 2, 9, 5)]
+
+ riverside demand 1786 current {'bike': 3, 'van': 17, 'truck': 6}
+lowest fixed combos: [(116200, 2, 12, 7, 8), (116800, 6, 8, 8, 8), (117100, 16, 13, 7, 8), (117400, 10, 4, 9, 8), (117500, 4, 10, 10, 7), (117700, 20, 9, 8, 8), (118000, 14, 0, 10, 8), (118100, 8, 6, 11, 7), (118200, 2, 12, 12, 6), (118300, 24, 5, 9, 8), (118400, 18, 11, 10, 7), (118600, 34, 10, 8, 8), (118700, 12, 2, 12, 7), (118800, 6, 8, 13, 6), (118900, 28, 1, 10, 8)]
+
+ north-ring demand 2686 current {'bike': 17, 'van': 27, 'truck': 6}
+lowest fixed combos: [(175900, 0, 14, 14, 11), (176500, 4, 10, 15, 11), (176800, 14, 15, 14, 11), (177100, 8, 6, 16, 11), (177200, 2, 12, 17, 10), (177400, 18, 11, 15, 11), (177500, 12, 17, 16, 10), (177700, 12, 2, 17, 11), (177700, 28, 16, 14, 11), (177800, 6, 8, 18, 10), (177900, 0, 14, 19, 9), (178000, 22, 7, 16, 11), (178100, 16, 13, 17, 10), (178300, 32, 12, 15, 11), (178400, 10, 4, 19, 10)]
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/fixed.py <<'PY'
+[?2004l[?2004h> import sys,time,random,json
+[?2004l[?2004h> name=sys.argv[1];exec(open('/tmp/core.py').read()); target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> best=json.load(open('/app/plans/'+name+'.json'));bestcost=evaluate(o,best); demand=sum(c['demand'] for c in C.values())
+[?2004l[?2004h> end=time.time()+float(sys.argv[2]); it=0
+[?2004l[?2004h> # all trucks; vary van count around capacity minimum and allow some bikes
+[?2004l[?2004h> nt=F['truck']['count']; base=max(0,(demand-150*nt+59)//60)
+[?2004l[?2004h> patterns=[]
+[?2004l[?2004h> for nv in range(max(0,base-1),min(F['van']['count'],base+6)+1):
+[?2004l[?2004h>  for nb in [0,min(2,F['bike']['count']),min(5,F['bike']['count']),F['bike']['count']]:
+[?2004l[?2004h>   if 150*nt+60*nv+14*nb>=demand:patterns.append((nb,nv,nt))
+[?2004l[?2004h> # also one/two fewer trucks
+[?2004l[?2004h> for tr in range(max(0,nt-2),nt):
+[?2004l[?2004h>  v=max(0,(demand-150*tr+59)//60)
+[?2004l[?2004h>  for extra in range(4):
+[?2004l[?2004h>   if v+extra<=F['van']['count']:patterns.append((0,v+extra,tr))
+[?2004l[?2004h> while time.time()<end:
+[?2004l[?2004h>  nb,nv,ntt=patterns[it%len(patterns)];rng=random.Random(9929+it*104729);it+=1
+[?2004l[?2004h>  R=[['bike',[]] for _ in range(nb)]+[['van',[]] for _ in range(nv)]+[['truck',[]] for _ in range(ntt)]
+[?2004l[?2004h>  left=set(ids); fail=False
+[?2004l[?2004h>  while left:
+[?2004l[?2004h>   cand=[]
+[?2004l[?2004h>   for x in left:
+[?2004l[?2004h>    opts=[]
+[?2004l[?2004h>    for ri,(t,s) in enumerate(R):
+[?2004l[?2004h>     old=rcost(t,s)
+[?2004l[?2004h>     for p in range(len(s)+1):
+[?2004l[?2004h>      ns=tuple(s[:p]+[x]+s[p:]);z,_,ok=info(t,ns)
+[?2004l[?2004h>      if ok:opts.append(((F[t]['per_unit']*z+(0 if s else F[t]['fixed']))-old,ri,p))
+[?2004l[?2004h>    if not opts:continue
+[?2004l[?2004h>    opts.sort(); regret=(opts[min(2,len(opts)-1)][0]-opts[0][0])
+[?2004l[?2004h>    # prioritize large demand and tight due when regret similar
+[?2004l[?2004h>    score=regret+C[x]['demand']*8+(46800-C[x]['due'])/30+rng.random()*100
+[?2004l[?2004h>    cand.append((score,x,opts[0]))
+[?2004l[?2004h>   if not cand:fail=True;break
+[?2004l[?2004h>   cand.sort(reverse=True); _,x,op=cand[0 if rng.random()<.94 else rng.randrange(min(3,len(cand)))]
+[?2004l[?2004h>   _,ri,p=op;R[ri][1].insert(p,x);left.remove(x)
+[?2004l[?2004h>  if fail:continue
+[?2004l[?2004h>  try:p=planof(R);c=evaluate(o,p)
+[?2004l[?2004h>  except:continue
+[?2004l[?2004h>  if c<bestcost:
+[?2004l[?2004h>   R=improve(R,rng,min(end,time.time()+5));p=planof(R);c=evaluate(o,p)
+[?2004l[?2004h>   if c<bestcost:
+[?2004l[?2004h>    bestcost,best=c,p;json.dump(p,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>    print(name,'BEST',c,'target',target,'pattern',nb,nv,ntt,'iter',it,flush=True)
+[?2004l[?2004h>  if bestcost<=target:break
+[?2004l[?2004h> print('DONE',name,bestcost,it)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/fixed.py "$n" 60; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lDONE harbour-lanes 85040 622
+feasible, cost 85040
+DONE old-town 170037 91
+feasible, cost 170037
+DONE riverside 246326 28
+feasible, cost 246326
+DONE north-ring 338691 13
+feasible, cost 338691
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/merge.py <<'PY'
+[?2004l[?2004h> import sys,json,random,time
+[?2004l[?2004h> name=sys.argv[1];exec(open('/tmp/core.py').read()); P=json.load(open('/app/plans/'+name+'.json')); target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> R=[[r['type'],r['stops'][:]] for r in P['routes']]; end=time.time()+float(sys.argv[2]); rng=random.Random(8181)
+[?2004l[?2004h> def build(nodes,tries=80):
+[?2004l[?2004h>  best=None;bc=10**18
+[?2004l[?2004h>  orders=[sorted(nodes,key=lambda x:C[x]['due']),sorted(nodes,key=lambda x:C[x]['ready'])]
+[?2004l[?2004h>  for _ in range(tries):
+[?2004l[?2004h>   z=nodes[:];rng.shuffle(z);orders.append(z)
+[?2004l[?2004h>  for order in orders:
+[?2004l[?2004h>   s=[];ok=True
+[?2004l[?2004h>   for x in order:
+[?2004l[?2004h>    opts=[]
+[?2004l[?2004h>    for p in range(len(s)+1):
+[?2004l[?2004h>     ns=s[:p]+[x]+s[p:]; c=rcost('truck',ns)
+[?2004l[?2004h>     if c<10**12:opts.append((c,p,ns))
+[?2004l[?2004h>    if not opts:ok=False;break
+[?2004l[?2004h>    # mostly cheapest, occasionally diversify
+[?2004l[?2004h>    opts.sort(); s=opts[0 if rng.random()<.9 else rng.randrange(min(3,len(opts)))][2]
+[?2004l[?2004h>   if ok:
+[?2004l[?2004h>    c=rcost('truck',s)
+[?2004l[?2004h>    if c<bc:bc,best=c,s
+[?2004l[?2004h>  return best,bc
+[?2004l[?2004h> while time.time()<end:
+[?2004l[?2004h>  used=sum(t=='truck' for t,s in R)
+[?2004l[?2004h>  if used>=F['truck']['count']:break
+[?2004l[?2004h>  cand=[]
+[?2004l[?2004h>  inds=[i for i,(t,s) in enumerate(R) if t!='truck' and s]
+[?2004l[?2004h>  for ai,a in enumerate(inds):
+[?2004l[?2004h>   for b in inds[ai+1:]:
+[?2004l[?2004h>    nodes=R[a][1]+R[b][1]
+[?2004l[?2004h>    if sum(C[x]['demand'] for x in nodes)>F['truck']['capacity']:continue
+[?2004l[?2004h>    s,nc=build(nodes,20)
+[?2004l[?2004h>    if s is not None:
+[?2004l[?2004h>     saving=rcost(R[a][0],R[a][1])+rcost(R[b][0],R[b][1])-nc
+[?2004l[?2004h>     cand.append((saving,a,b,s))
+[?2004l[?2004h>  if not cand:break
+[?2004l[?2004h>  cand.sort(reverse=True); saving,a,b,s=cand[0]
+[?2004l[?2004h>  if saving<=0:break
+[?2004l[?2004h>  print(name,'merge saving',saving,'routes',a,b,flush=True)
+[?2004l[?2004h>  for i in sorted([a,b],reverse=True):R.pop(i)
+[?2004l[?2004h>  R.append(['truck',s])
+[?2004l[?2004h>  q=planof(R); print(' cost',evaluate(o,q),flush=True);json.dump(q,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h> print('DONE',evaluate(o,planof(R)))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/merge.py "$n" 55; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lDONE 85040
+feasible, cost 85040
+DONE 170037
+feasible, cost 170037
+DONE 246326
+feasible, cost 246326
+DONE 338691
+feasible, cost 338691
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/sweep.py <<'PY'
+[?2004l[?2004h> import sys,json,math,time,random
+[?2004l[?2004h> name=sys.argv[1];exec(open('/tmp/core.py').read()); target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> best=json.load(open('/app/plans/'+name+'.json'));bc=evaluate(o,best); end=time.time()+float(sys.argv[2]); rng=random.Random(33)
+[?2004l[?2004h> # Build a feasible, inexpensive ordering for one angularly contiguous group.
+[?2004l[?2004h> def make(t,nodes,variant):
+[?2004l[?2004h>  orders=[]
+[?2004l[?2004h>  if variant%3==0:orders.append(sorted(nodes,key=lambda x:(C[x]['due'],C[x]['ready'])))
+[?2004l[?2004h>  if variant%3==1:orders.append(sorted(nodes,key=lambda x:(C[x]['ready'],C[x]['due'])))
+[?2004l[?2004h>  orders.append(nodes[:]); orders.append(list(reversed(nodes)))
+[?2004l[?2004h>  ans=None;ac=10**12
+[?2004l[?2004h>  for order in orders:
+[?2004l[?2004h>   s=[];ok=True
+[?2004l[?2004h>   for x in order:
+[?2004l[?2004h>    z=[]
+[?2004l[?2004h>    for p in range(len(s)+1):
+[?2004l[?2004h>     ns=s[:p]+[x]+s[p:];c=rcost(t,ns)
+[?2004l[?2004h>     if c<10**12:z.append((c,ns))
+[?2004l[?2004h>    if not z:ok=False;break
+[?2004l[?2004h>    z.sort();s=z[0][1]
+[?2004l[?2004h>   if ok:
+[?2004l[?2004h>    # steepest feasible 2-opt
+[?2004l[?2004h>    change=True
+[?2004l[?2004h>    while change:
+[?2004l[?2004h>     change=False;cc=rcost(t,s)
+[?2004l[?2004h>     for i in range(len(s)):
+[?2004l[?2004h>      for j in range(i+1,len(s)):
+[?2004l[?2004h>       ns=s[:i]+list(reversed(s[i:j+1]))+s[j+1:];c=rcost(t,ns)
+[?2004l[?2004h>       if c<cc:cc,s,change=c,ns,True
+[?2004l[?2004h>    if cc<ac:ac,ans=cc,s
+[?2004l[?2004h>  return ans,ac
+[?2004l[?2004h> angles=sorted(ids,key=lambda x:math.atan2(C[x]['y'],C[x]['x']))
+[?2004l[?2004h> rotations=max(12,min(len(ids),36)); attempt=0
+[?2004l[?2004h> while time.time()<end and bc>target:
+[?2004l[?2004h>  shift=(attempt*len(ids)//rotations)%len(ids); seq=angles[shift:]+angles[:shift]; variant=attempt;attempt+=1
+[?2004l[?2004h>  # Occasionally use a projected-coordinate sweep rather than polar angle.
+[?2004l[?2004h>  if attempt%5==0:
+[?2004l[?2004h>   th=rng.random()*math.pi
+[?2004l[?2004h>   seq=sorted(ids,key=lambda x:C[x]['x']*math.cos(th)+C[x]['y']*math.sin(th))
+[?2004l[?2004h>  seg={}
+[?2004l[?2004h>  maxst=18
+[?2004l[?2004h>  for i in range(len(seq)):
+[?2004l[?2004h>   demand=0
+[?2004l[?2004h>   for j in range(i,min(len(seq),i+maxst)):
+[?2004l[?2004h>    demand+=C[seq[j]]['demand']
+[?2004l[?2004h>    nodes=seq[i:j+1]
+[?2004l[?2004h>    for ti,t in enumerate(types):
+[?2004l[?2004h>     if demand<=F[t]['capacity']:
+[?2004l[?2004h>      s,c=make(t,nodes,variant)
+[?2004l[?2004h>      if s is not None:seg[i,j+1,t]=(c,s)
+[?2004l[?2004h>  # DP states: (position,bikes,vans,trucks) -> (cost, predecessor)
+[?2004l[?2004h>  states={(0,0,0,0):(0,None)}; layers={0:[(0,0,0,0)]}
+[?2004l[?2004h>  for pos in range(len(seq)):
+[?2004l[?2004h>   for st in layers.get(pos,[]):
+[?2004l[?2004h>    cost,_=states[st]; counts=list(st[1:])
+[?2004l[?2004h>    for j in range(pos+1,min(len(seq),pos+maxst)+1):
+[?2004l[?2004h>     for ti,t in enumerate(types):
+[?2004l[?2004h>      key=(pos,j,t)
+[?2004l[?2004h>      if key not in seg or counts[ti]>=F[t]['count']:continue
+[?2004l[?2004h>      nc=counts[:];nc[ti]+=1; ns=(j,*nc); val=cost+seg[key][0]
+[?2004l[?2004h>      if ns not in states or val<states[ns][0]:
+[?2004l[?2004h>       states[ns]=(val,(st,key)); layers.setdefault(j,[]).append(ns)
+[?2004l[?2004h>  finals=[(v[0],s) for s,v in states.items() if s[0]==len(seq)]
+[?2004l[?2004h>  if not finals:continue
+[?2004l[?2004h>  finals.sort()
+[?2004l[?2004h>  for val,st in finals[:5]:
+[?2004l[?2004h>   routes=[];cur=st
+[?2004l[?2004h>   while cur[0]:
+[?2004l[?2004h>    prev,key=states[cur][1];i,j,t=key;c,s=seg[key];routes.append([t,s]);cur=prev
+[?2004l[?2004h>   p=planof(routes)
+[?2004l[?2004h>   try:c=evaluate(o,p)
+[?2004l[?2004h>   except:continue
+[?2004l[?2004h>   if c<bc:
+[?2004l[?2004h>    bc,best=c,p;json.dump(p,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>    print(name,'BEST',bc,'target',target,'attempt',attempt,'mix',{t:sum(r['type']==t for r in p['routes']) for t in types},flush=True)
+[?2004l[?2004h>    break
+[?2004l[?2004h>  print(name,'attempt',attempt,'dp',finals[0][0] if finals else None,'inc',bc,flush=True)
+[?2004l[?2004h> print('DONE',name,bc)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/sweep.py "$n" 90; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes attempt 1 dp 86416 inc 85040
+harbour-lanes attempt 2 dp 86442 inc 85040
+harbour-lanes attempt 3 dp 90376 inc 85040
+harbour-lanes attempt 4 dp 90279 inc 85040
+harbour-lanes attempt 5 dp 105880 inc 85040
+harbour-lanes attempt 6 dp 88662 inc 85040
+harbour-lanes attempt 7 dp 88614 inc 85040
+harbour-lanes attempt 8 dp 88607 inc 85040
+harbour-lanes attempt 9 dp 90585 inc 85040
+harbour-lanes attempt 10 dp 109399 inc 85040
+harbour-lanes attempt 11 dp 86416 inc 85040
+harbour-lanes attempt 12 dp 91333 inc 85040
+harbour-lanes attempt 13 dp 87356 inc 85040
+harbour-lanes attempt 14 dp 87439 inc 85040
+harbour-lanes attempt 15 dp 98474 inc 85040
+harbour-lanes attempt 16 dp 86416 inc 85040
+harbour-lanes attempt 17 dp 89035 inc 85040
+harbour-lanes attempt 18 dp 90920 inc 85040
+harbour-lanes attempt 19 dp 88913 inc 85040
+harbour-lanes attempt 20 dp 93755 inc 85040
+harbour-lanes attempt 21 dp 88123 inc 85040
+harbour-lanes attempt 22 dp 88275 inc 85040
+harbour-lanes attempt 23 dp 87397 inc 85040
+harbour-lanes attempt 24 dp 88009 inc 85040
+harbour-lanes attempt 25 dp 112526 inc 85040
+harbour-lanes attempt 26 dp 89063 inc 85040
+harbour-lanes attempt 27 dp 87470 inc 85040
+harbour-lanes attempt 28 dp 86416 inc 85040
+harbour-lanes attempt 29 dp 90727 inc 85040
+harbour-lanes attempt 30 dp 93250 inc 85040
+harbour-lanes attempt 31 dp 87902 inc 85040
+harbour-lanes attempt 32 dp 88431 inc 85040
+harbour-lanes attempt 33 dp 86416 inc 85040
+harbour-lanes attempt 34 dp 87996 inc 85040
+harbour-lanes attempt 35 dp 94302 inc 85040
+harbour-lanes attempt 36 dp 86416 inc 85040
+harbour-lanes attempt 37 dp 86416 inc 85040
+harbour-lanes attempt 38 dp 86442 inc 85040
+harbour-lanes attempt 39 dp 90376 inc 85040
+harbour-lanes attempt 40 dp 93214 inc 85040
+harbour-lanes attempt 41 dp 89506 inc 85040
+harbour-lanes attempt 42 dp 88662 inc 85040
+harbour-lanes attempt 43 dp 88614 inc 85040
+harbour-lanes attempt 44 dp 88607 inc 85040
+harbour-lanes attempt 45 dp 112568 inc 85040
+harbour-lanes attempt 46 dp 86416 inc 85040
+harbour-lanes attempt 47 dp 86416 inc 85040
+harbour-lanes attempt 48 dp 91333 inc 85040
+harbour-lanes attempt 49 dp 87356 inc 85040
+harbour-lanes attempt 50 dp 104797 inc 85040
+harbour-lanes attempt 51 dp 86471 inc 85040
+harbour-lanes attempt 52 dp 86416 inc 85040
+harbour-lanes attempt 53 dp 89035 inc 85040
+harbour-lanes attempt 54 dp 90920 inc 85040
+harbour-lanes attempt 55 dp 102489 inc 85040
+harbour-lanes attempt 56 dp 89035 inc 85040
+harbour-lanes attempt 57 dp 88123 inc 85040
+harbour-lanes attempt 58 dp 88275 inc 85040
+harbour-lanes attempt 59 dp 87397 inc 85040
+harbour-lanes attempt 60 dp 94222 inc 85040
+harbour-lanes attempt 61 dp 89306 inc 85040
+harbour-lanes attempt 62 dp 89063 inc 85040
+harbour-lanes attempt 63 dp 87470 inc 85040
+harbour-lanes attempt 64 dp 86416 inc 85040
+harbour-lanes attempt 65 dp 98198 inc 85040
+harbour-lanes attempt 66 dp 86416 inc 85040
+harbour-lanes attempt 67 dp 87902 inc 85040
+harbour-lanes attempt 68 dp 88431 inc 85040
+harbour-lanes attempt 69 dp 86416 inc 85040
+harbour-lanes attempt 70 dp 96624 inc 85040
+harbour-lanes attempt 71 dp 88448 inc 85040
+harbour-lanes attempt 72 dp 86416 inc 85040
+harbour-lanes attempt 73 dp 86416 inc 85040
+DONE harbour-lanes 85040
+feasible, cost 85040
+old-town BEST 168057 target 147362 attempt 1 mix {'bike': 9, 'van': 9, 'truck': 5}
+old-town attempt 1 dp 168057 inc 168057
+old-town attempt 2 dp 169714 inc 168057
+old-town attempt 3 dp 168676 inc 168057
+old-town attempt 4 dp 173492 inc 168057
+old-town attempt 5 dp 193995 inc 168057
+old-town attempt 6 dp 173587 inc 168057
+old-town attempt 7 dp 171626 inc 168057
+old-town attempt 8 dp 168057 inc 168057
+old-town attempt 9 dp 174060 inc 168057
+old-town attempt 10 dp 185938 inc 168057
+old-town attempt 11 dp 169130 inc 168057
+old-town attempt 12 dp 169056 inc 168057
+DONE old-town 168057
+feasible, cost 168057
+riverside BEST 231055 target 201921 attempt 1 mix {'bike': 5, 'van': 11, 'truck': 8}
+riverside attempt 1 dp 231055 inc 231055
+riverside BEST 228556 target 201921 attempt 2 mix {'bike': 4, 'van': 11, 'truck': 8}
+riverside attempt 2 dp 228556 inc 228556
+riverside attempt 3 dp 228974 inc 228556
+DONE riverside 228556
+feasible, cost 228556
+north-ring BEST 327998 target 288705 attempt 1 mix {'bike': 10, 'van': 20, 'truck': 10}
+north-ring attempt 1 dp 327998 inc 327998
+DONE north-ring 327998
+feasible, cost 327998
+[?2004hroot@f0fc7ca51bbb:/app# cp /tmp/anneal.py /tmp/anneal2.py; sed -i 's/steps<120000/steps<25000/g; s/steps\/120000/steps\/25000/g; s/T0=1800 if epoch%3 else 4000/T0=350 if epoch%3 else 900/' /tmp/anneal2.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/anneal2.py "$n" 90; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lstart harbour-lanes 85040 target 77867
+best 84774 epoch 4 step 23828
+best 84641 epoch 4 step 24568
+best 84603 epoch 6 step 48
+best 84584 epoch 8 step 22
+best 84386 epoch 13 step 239
+best 84379 epoch 16 step 24217
+best 84360 epoch 16 step 24520
+best 84349 epoch 16 step 24816
+best 84348 epoch 17 step 20108
+best 84343 epoch 17 step 21039
+best 84310 epoch 17 step 21199
+best 84153 epoch 17 step 21207
+best 84149 epoch 17 step 21326
+best 84121 epoch 17 step 21596
+best 83962 epoch 17 step 21798
+best 83798 epoch 17 step 21957
+best 83776 epoch 17 step 23814
+best 83772 epoch 17 step 23844
+best 83735 epoch 17 step 24434
+best 83567 epoch 19 step 20772
+best 83487 epoch 19 step 20783
+best 83471 epoch 26 step 21916
+best 83348 epoch 26 step 21934
+best 83315 epoch 26 step 22007
+best 83116 epoch 26 step 22764
+best 83112 epoch 26 step 23082
+best 83074 epoch 26 step 23114
+best 83055 epoch 26 step 24050
+best 83036 epoch 30 step 94
+best 82995 epoch 31 step 2771
+best 82615 epoch 31 step 2848
+best 82543 epoch 31 step 3260
+best 82525 epoch 31 step 3625
+best 82335 epoch 31 step 3760
+best 82258 epoch 32 step 77
+best 82254 epoch 34 step 307
+best 82250 epoch 34 step 485
+best 82240 epoch 35 step 23480
+best 82229 epoch 35 step 23785
+best 82172 epoch 35 step 23808
+best 82095 epoch 35 step 23903
+best 82073 epoch 35 step 24542
+best 82054 epoch 35 step 24573
+best 81905 epoch 38 step 22347
+best 81878 epoch 38 step 22738
+best 81874 epoch 38 step 22969
+best 81709 epoch 38 step 23489
+best 81678 epoch 38 step 24055
+best 81649 epoch 38 step 24456
+best 81638 epoch 38 step 24920
+best 81634 epoch 38 step 24978
+best 81615 epoch 54 step 87
+best 81611 epoch 55 step 213
+best 81600 epoch 58 step 207
+best 81561 epoch 70 step 19454
+best 81551 epoch 70 step 21393
+best 81475 epoch 70 step 21505
+best 80677 epoch 70 step 22066
+best 80666 epoch 70 step 22944
+best 80647 epoch 70 step 23965
+best 80575 epoch 70 step 24260
+best 80571 epoch 70 step 24761
+best 80533 epoch 70 step 24808
+best 80518 epoch 113 step 142
+best 80514 epoch 118 step 110
+best 80455 epoch 194 step 41
+DONE harbour-lanes 80455
+feasible, cost 80455
+start old-town 168057 target 147362
+best 167791 epoch 1 step 20924
+best 167520 epoch 1 step 20969
+best 167467 epoch 1 step 21241
+best 167465 epoch 1 step 21276
+best 167442 epoch 1 step 21327
+best 167431 epoch 1 step 21340
+best 167423 epoch 1 step 21392
+best 167338 epoch 1 step 21399
+best 167135 epoch 1 step 21491
+best 167025 epoch 1 step 21518
+best 166992 epoch 1 step 22010
+best 166986 epoch 1 step 22180
+best 166984 epoch 1 step 22225
+best 166970 epoch 1 step 22414
+best 166794 epoch 1 step 22865
+best 166750 epoch 1 step 22924
+best 166631 epoch 1 step 23438
+best 166576 epoch 1 step 23541
+best 166574 epoch 1 step 23544
+best 166475 epoch 1 step 23767
+best 166456 epoch 1 step 24175
+best 166445 epoch 1 step 24320
+best 166379 epoch 1 step 24353
+best 166375 epoch 1 step 24648
+best 166356 epoch 2 step 24378
+best 165953 epoch 2 step 24395
+best 165941 epoch 2 step 24426
+best 164551 epoch 2 step 24873
+best 164488 epoch 5 step 123
+best 164349 epoch 8 step 24059
+best 164344 epoch 8 step 24274
+best 164274 epoch 8 step 24498
+best 164254 epoch 8 step 24787
+best 164156 epoch 10 step 21977
+best 163991 epoch 10 step 22265
+best 163782 epoch 10 step 23272
+best 163760 epoch 10 step 23766
+best 163741 epoch 10 step 24865
+best 163560 epoch 10 step 24980
+best 163555 epoch 11 step 91
+best 163380 epoch 14 step 58
+best 163376 epoch 17 step 7
+best 163079 epoch 17 step 20952
+best 163022 epoch 17 step 21012
+best 162890 epoch 17 step 21336
+best 162879 epoch 17 step 21392
+best 162867 epoch 17 step 21421
+best 162865 epoch 17 step 21784
+best 162799 epoch 17 step 21912
+best 162744 epoch 17 step 22108
+best 162740 epoch 17 step 22378
+best 162729 epoch 17 step 22555
+best 162707 epoch 17 step 22610
+best 162689 epoch 17 step 22857
+best 162645 epoch 17 step 23201
+best 162601 epoch 17 step 23444
+best 162597 epoch 17 step 23661
+best 162575 epoch 17 step 23732
+best 162563 epoch 17 step 23832
+best 162443 epoch 17 step 23949
+best 162083 epoch 17 step 24032
+best 162017 epoch 17 step 24817
+best 161995 epoch 18 step 10
+best 161986 epoch 19 step 14
+best 161749 epoch 19 step 20162
+best 161694 epoch 19 step 20278
+best 161650 epoch 19 step 20301
+best 161555 epoch 19 step 20355
+best 161479 epoch 19 step 20535
+best 161435 epoch 19 step 20562
+best 161417 epoch 19 step 20571
+best 161352 epoch 19 step 20784
+best 161341 epoch 19 step 20964
+best 161127 epoch 19 step 20999
+best 161009 epoch 19 step 21014
+best 160833 epoch 19 step 21140
+best 160776 epoch 19 step 21207
+best 160697 epoch 19 step 21294
+best 160586 epoch 19 step 22001
+best 160558 epoch 19 step 22352
+best 160551 epoch 19 step 23182
+best 160350 epoch 19 step 24601
+best 160328 epoch 19 step 24752
+best 160298 epoch 19 step 24967
+best 160279 epoch 23 step 13
+best 160235 epoch 23 step 27
+best 160072 epoch 28 step 24242
+best 159996 epoch 28 step 24382
+best 159944 epoch 28 step 24543
+best 159940 epoch 28 step 24633
+best 159437 epoch 29 step 22064
+best 159400 epoch 29 step 22756
+best 159345 epoch 29 step 22964
+best 159312 epoch 29 step 23460
+best 159300 epoch 29 step 23746
+best 159256 epoch 29 step 24383
+best 159013 epoch 30 step 59
+best 158995 epoch 33 step 62
+best 158888 epoch 34 step 24178
+best 158877 epoch 34 step 24293
+best 158827 epoch 34 step 24448
+best 158805 epoch 34 step 24552
+best 158795 epoch 38 step 24935
+best 158491 epoch 38 step 24942
+best 158480 epoch 41 step 142
+best 158450 epoch 47 step 22818
+best 158336 epoch 47 step 22841
+best 158311 epoch 47 step 22936
+best 158124 epoch 47 step 23269
+best 158091 epoch 47 step 23443
+best 158080 epoch 47 step 24203
+best 157747 epoch 47 step 24279
+best 157604 epoch 47 step 24614
+best 157509 epoch 47 step 24900
+best 157493 epoch 50 step 21243
+best 157372 epoch 50 step 21279
+best 157354 epoch 50 step 21695
+best 157299 epoch 50 step 21995
+best 157267 epoch 50 step 22024
+best 157184 epoch 50 step 22265
+best 156953 epoch 50 step 22374
+best 156832 epoch 50 step 23758
+best 156810 epoch 50 step 23922
+best 156799 epoch 50 step 24051
+best 156609 epoch 50 step 24449
+best 156514 epoch 50 step 24541
+best 156415 epoch 53 step 38
+best 156272 epoch 55 step 27
+best 156074 epoch 77 step 5
+best 155920 epoch 78 step 38
+best 155909 epoch 119 step 133
+best 155876 epoch 124 step 54
+best 155865 epoch 184 step 12
+best 155821 epoch 186 step 10
+best 155590 epoch 222 step 40
+best 155552 epoch 226 step 162
+best 155541 epoch 227 step 124
+best 155464 epoch 236 step 69
+best 155442 epoch 256 step 96
+best 155378 epoch 277 step 4
+best 155356 epoch 278 step 140
+DONE old-town 155356
+feasible, cost 155356
+start riverside 228556 target 201921
+best 227239 epoch 2 step 26
+best 227000 epoch 2 step 18198
+best 226810 epoch 2 step 18262
+best 226791 epoch 2 step 18346
+best 226664 epoch 2 step 18597
+best 226658 epoch 2 step 18682
+best 226623 epoch 2 step 20720
+best 226604 epoch 2 step 20761
+best 226598 epoch 2 step 20855
+best 226532 epoch 2 step 20888
+best 226285 epoch 2 step 20925
+best 226229 epoch 2 step 21029
+best 225922 epoch 2 step 21606
+best 225845 epoch 2 step 21626
+best 225839 epoch 2 step 21903
+best 225827 epoch 2 step 22118
+best 225770 epoch 2 step 22401
+best 225704 epoch 2 step 22985
+best 225672 epoch 2 step 23295
+best 225615 epoch 2 step 23355
+best 225609 epoch 2 step 23954
+best 225578 epoch 2 step 24345
+best 225245 epoch 4 step 417
+best 225224 epoch 8 step 21118
+best 225190 epoch 8 step 21328
+best 225171 epoch 8 step 21516
+best 225101 epoch 8 step 21905
+best 225043 epoch 8 step 22260
+best 225026 epoch 8 step 22440
+best 224702 epoch 8 step 22657
+best 224658 epoch 8 step 22743
+best 224620 epoch 8 step 22811
+best 224543 epoch 8 step 22867
+best 224448 epoch 8 step 22916
+best 224446 epoch 8 step 23517
+best 224351 epoch 8 step 23597
+best 224320 epoch 8 step 24001
+best 224261 epoch 17 step 21392
+best 224037 epoch 17 step 21478
+best 223787 epoch 17 step 21937
+best 222571 epoch 17 step 22060
+best 222494 epoch 17 step 22167
+best 222456 epoch 17 step 22264
+best 222385 epoch 17 step 23142
+best 222361 epoch 17 step 23204
+best 221965 epoch 17 step 23505
+best 221946 epoch 22 step 262
+best 221927 epoch 25 step 89
+best 221850 epoch 35 step 45
+best 221707 epoch 38 step 87
+best 221696 epoch 47 step 7
+best 221498 epoch 52 step 106
+best 221454 epoch 56 step 47
+best 221421 epoch 69 step 10
+best 221250 epoch 82 step 66
+best 221169 epoch 83 step 91
+best 221136 epoch 83 step 102
+best 221103 epoch 125 step 112
+best 221048 epoch 139 step 48
+best 220743 epoch 148 step 339
+best 220578 epoch 153 step 45
+best 220545 epoch 154 step 84
+best 220521 epoch 154 step 204
+best 220433 epoch 171 step 74
+best 220414 epoch 177 step 20
+DONE riverside 220414
+feasible, cost 220414
+start north-ring 327998 target 288705
+best 327889 epoch 13 step 102
+best 327415 epoch 19 step 328
+best 327398 epoch 19 step 20190
+best 327354 epoch 19 step 20226
+best 327350 epoch 19 step 20562
+best 327328 epoch 19 step 20613
+best 327207 epoch 19 step 21086
+best 327196 epoch 19 step 21389
+best 327130 epoch 19 step 21543
+best 327097 epoch 19 step 21727
+best 327075 epoch 19 step 22278
+best 326885 epoch 19 step 22319
+best 326779 epoch 19 step 22366
+best 326570 epoch 19 step 22638
+best 326548 epoch 19 step 22781
+best 326542 epoch 19 step 23047
+best 326393 epoch 19 step 23299
+best 326360 epoch 19 step 23585
+best 326333 epoch 19 step 23853
+best 326058 epoch 19 step 23903
+best 325915 epoch 19 step 24359
+best 325871 epoch 19 step 24545
+best 325847 epoch 19 step 24632
+best 325825 epoch 29 step 95
+best 325803 epoch 29 step 144
+best 325658 epoch 29 step 332
+best 325646 epoch 30 step 27
+best 325624 epoch 35 step 2
+best 325486 epoch 35 step 24493
+best 325352 epoch 41 step 2
+best 325259 epoch 47 step 23169
+best 324893 epoch 47 step 23343
+best 324874 epoch 47 step 23591
+best 324700 epoch 47 step 23753
+best 324501 epoch 47 step 24033
+best 324477 epoch 47 step 24232
+best 324457 epoch 47 step 24486
+best 324451 epoch 48 step 1
+best 324310 epoch 51 step 7
+best 323925 epoch 53 step 30
+best 323917 epoch 59 step 56
+best 323910 epoch 64 step 777
+best 323899 epoch 64 step 927
+best 323866 epoch 70 step 54
+best 323862 epoch 74 step 31
+best 323856 epoch 74 step 42
+best 323618 epoch 74 step 111
+best 323523 epoch 74 step 208
+best 323276 epoch 76 step 87
+best 323202 epoch 82 step 178
+best 323182 epoch 82 step 237
+best 323160 epoch 82 step 280
+best 323156 epoch 88 step 8
+best 323086 epoch 109 step 21807
+best 323044 epoch 109 step 22024
+best 322870 epoch 109 step 22478
+best 322350 epoch 109 step 22558
+best 322344 epoch 109 step 22653
+best 322314 epoch 109 step 22931
+best 322276 epoch 109 step 22988
+best 322188 epoch 109 step 23127
+best 322176 epoch 109 step 23647
+best 322170 epoch 109 step 23935
+best 322160 epoch 109 step 23952
+best 322110 epoch 109 step 24262
+best 321878 epoch 109 step 24621
+best 321868 epoch 109 step 24626
+best 321417 epoch 109 step 24881
+best 321219 epoch 109 step 24888
+best 321151 epoch 111 step 18
+best 321102 epoch 113 step 81
+best 320959 epoch 124 step 112
+best 320955 epoch 126 step 35
+best 320927 epoch 126 step 68
+best 320889 epoch 128 step 22
+best 320886 epoch 131 step 26
+best 320207 epoch 131 step 24348
+best 320171 epoch 133 step 20
+best 320105 epoch 136 step 7
+best 319915 epoch 137 step 12
+best 319840 epoch 138 step 35
+best 319820 epoch 142 step 82
+best 319732 epoch 149 step 131
+best 319570 epoch 155 step 93
+best 319455 epoch 157 step 24895
+best 319439 epoch 158 step 267
+best 319297 epoch 161 step 24808
+best 318857 epoch 161 step 24866
+best 318851 epoch 161 step 24879
+best 318795 epoch 165 step 130
+best 318769 epoch 167 step 47
+best 318722 epoch 173 step 13
+best 318593 epoch 173 step 110
+best 318579 epoch 179 step 100
+best 318294 epoch 181 step 35
+best 317935 epoch 191 step 102
+best 317891 epoch 193 step 2
+best 317814 epoch 194 step 47
+best 317495 epoch 194 step 60
+DONE north-ring 317495
+feasible, cost 317495
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,math
+[?2004l[?2004h> T=json.load(open('/app/orders/targets.json'))
+[?2004l[?2004h> for n in T:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));p=json.load(open('/app/plans/'+n+'.json'));C={c['id']:c for c in o['customers']};D=o['depot'];F={f['type']:f for f in o['fleet']}
+[?2004l[?2004h>  def d(a,b):
+[?2004l[?2004h>   q=(a['x']-b['x'])**2+(a['y']-b['y'])**2;r=math.isqrt(q);return r+(r*r<q)
+[?2004l[?2004h>  print('\n',n,'target',T[n])
+[?2004l[?2004h>  for t,f in F.items():
+[?2004l[?2004h>   rr=[r for r in p['routes'] if r['type']==t]; ds=[];loads=[]
+[?2004l[?2004h>   for r in rr:
+[?2004l[?2004h>    z=[D]+[C[x] for x in r['stops']]+[D];ds.append(sum(d(a,b) for a,b in zip(z,z[1:])));loads.append(sum(C[x]['demand'] for x in r['stops']))
+[?2004l[?2004h>   print(t,'n',len(rr),'fixed',len(rr)*f['fixed'],'dist',sum(ds),'variable',sum(ds)*f['per_unit'],'loads',loads)
+[?2004l[?2004h> PY
+[?2004l
+ harbour-lanes target 77867
+bike n 3 fixed 2700 dist 657 variable 1314 loads [14, 12, 14]
+van n 5 fixed 21000 dist 1798 variable 19778 loads [59, 59, 60, 60, 54]
+truck n 2 fixed 19000 dist 877 variable 16663 loads [141, 143]
+
+ old-town target 147362
+bike n 3 fixed 2700 dist 763 variable 1526 loads [12, 14, 14]
+van n 9 fixed 37800 dist 2910 variable 32010 loads [59, 60, 55, 54, 58, 59, 49, 59, 55]
+truck n 5 fixed 47500 dist 1780 variable 33820 loads [148, 146, 149, 150, 141]
+
+ riverside target 201921
+bike n 1 fixed 900 dist 232 variable 464 loads [11]
+van n 11 fixed 46200 dist 3868 variable 42548 loads [47, 60, 58, 60, 54, 60, 54, 56, 60, 57, 37]
+truck n 8 fixed 76000 dist 2858 variable 54302 loads [149, 137, 145, 150, 150, 147, 146, 148]
+
+ north-ring target 288705
+bike n 11 fixed 9900 dist 2230 variable 4460 loads [13, 14, 14, 14, 13, 14, 10, 14, 11, 13, 14]
+van n 19 fixed 79800 dist 5668 variable 62348 loads [56, 54, 60, 59, 49, 60, 52, 60, 58, 53, 59, 59, 57, 60, 60, 59, 57, 56, 55]
+truck n 10 fixed 95000 dist 3473 variable 65987 loads [149, 148, 144, 145, 144, 144, 147, 139, 149, 150]
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/lns.py <<'PY'
+[?2004l[?2004h> import sys,json,random,time,math
+[?2004l[?2004h> name=sys.argv[1];exec(open('/tmp/core.py').read());target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> P=json.load(open('/app/plans/'+name+'.json')); R=[[r['type'],r['stops'][:]] for r in P['routes']]; best=[[t,s[:]] for t,s in R];bc=sum(rcost(t,s) for t,s in R);cur=bc
+[?2004l[?2004h> end=time.time()+float(sys.argv[2]);rng=random.Random(int(sys.argv[3]) if len(sys.argv)>3 else 123);it=0
+[?2004l[?2004h> 
+[?2004l[?2004h> def polish(Q,deadline):
+[?2004l[?2004h>  for ri,(t,s) in enumerate(Q):
+[?2004l[?2004h>   changed=True
+[?2004l[?2004h>   while changed and time.time()<deadline:
+[?2004l[?2004h>    changed=False; old=rcost(t,s)
+[?2004l[?2004h>    # or-opt/reversal within route
+[?2004l[?2004h>    for i in range(len(s)):
+[?2004l[?2004h>     for j in range(i+1,len(s)):
+[?2004l[?2004h>      ns=s[:i]+list(reversed(s[i:j+1]))+s[j+1:];c=rcost(t,ns)
+[?2004l[?2004h>      if c<old:s=ns;old=c;changed=True
+[?2004l[?2004h>    Q[ri][1]=s
+[?2004l[?2004h>  return Q
+[?2004l[?2004h> while time.time()<end and bc>target:
+[?2004l[?2004h>  it+=1; Q=[[t,s[:]] for t,s in R]; allx=[x for t,s in Q for x in s]
+[?2004l[?2004h>  # Related removal by spatial and time-window proximity; periodically remove whole routes.
+[?2004l[?2004h>  rem=[]
+[?2004l[?2004h>  if it%7==0:
+[?2004l[?2004h>   non=[i for i,(t,s) in enumerate(Q) if s]; rng.shuffle(non)
+[?2004l[?2004h>   for i in non[:rng.choice([1,2,2,3])]:rem+=Q[i][1]
+[?2004l[?2004h>  else:
+[?2004l[?2004h>   seed=rng.choice(allx); k=rng.randint(max(4,len(allx)//25),max(7,len(allx)//10))
+[?2004l[?2004h>   def rel(x):
+[?2004l[?2004h>    spatial=dd[seed,x]
+[?2004l[?2004h>    temporal=abs(C[seed]['ready']-C[x]['ready'])/80+abs(C[seed]['due']-C[x]['due'])/120
+[?2004l[?2004h>    return spatial+temporal+rng.random()*80
+[?2004l[?2004h>   rem=sorted(allx,key=rel)[:k]
+[?2004l[?2004h>  rs=set(rem)
+[?2004l[?2004h>  for z in Q:z[1][:]=[x for x in z[1] if x not in rs]
+[?2004l[?2004h>  left=set(rem); failed=False
+[?2004l[?2004h>  while left:
+[?2004l[?2004h>   choices=[]
+[?2004l[?2004h>   for x in left:
+[?2004l[?2004h>    opts=[]
+[?2004l[?2004h>    for ri,(t,s) in enumerate(Q):
+[?2004l[?2004h>     old=rcost(t,s)
+[?2004l[?2004h>     for p in range(len(s)+1):
+[?2004l[?2004h>      ns=s[:p]+[x]+s[p:]; c=rcost(t,ns)
+[?2004l[?2004h>      if c<10**12:opts.append((c-old,ri,p))
+[?2004l[?2004h>    if opts:
+[?2004l[?2004h>     opts.sort(); regret=opts[min(2,len(opts)-1)][0]-opts[0][0]
+[?2004l[?2004h>     choices.append((regret+rng.random()*30,x,opts))
+[?2004l[?2004h>   if not choices:failed=True;break
+[?2004l[?2004h>   choices.sort(reverse=True);_,x,opts=choices[0]
+[?2004l[?2004h>   pick=0 if rng.random()<.94 else rng.randrange(min(3,len(opts)))
+[?2004l[?2004h>   _,ri,p=opts[pick];Q[ri][1].insert(p,x);left.remove(x)
+[?2004l[?2004h>  if failed:continue
+[?2004l[?2004h>  nc=sum(rcost(t,s) for t,s in Q)
+[?2004l[?2004h>  progress=(end-time.time())/float(sys.argv[2]); temp=20+500*progress
+[?2004l[?2004h>  if nc<=cur or rng.random()<math.exp((cur-nc)/temp):
+[?2004l[?2004h>   R=Q;cur=nc
+[?2004l[?2004h>   if nc<bc:
+[?2004l[?2004h>    Q=polish(Q,min(end,time.time()+1.0));nc=sum(rcost(t,s) for t,s in Q);R=Q;cur=nc
+[?2004l[?2004h>    if nc<bc:
+[?2004l[?2004h>     p=planof(Q)
+[?2004l[?2004h>     try:real=evaluate(o,p)
+[?2004l[?2004h>     except:continue
+[?2004l[?2004h>     bc=real;best=[[t,s[:]] for t,s in Q];json.dump(p,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>     print(name,'BEST',bc,'target',target,'iter',it,flush=True)
+[?2004l[?2004h>  # periodic restart from best
+[?2004l[?2004h>  if it%100==0:R=[[t,s[:]] for t,s in best];cur=bc
+[?2004l[?2004h> print('DONE',name,bc,it)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/lns.py "$n" 90 8291; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes BEST 80400 target 77867 iter 101
+harbour-lanes BEST 80312 target 77867 iter 344
+DONE harbour-lanes 80312 31537
+feasible, cost 80312
+old-town BEST 155242 target 147362 iter 57
+old-town BEST 155008 target 147362 iter 62
+old-town BEST 154986 target 147362 iter 64
+old-town BEST 154953 target 147362 iter 89
+old-town BEST 154733 target 147362 iter 103
+old-town BEST 154677 target 147362 iter 622
+old-town BEST 154661 target 147362 iter 793
+old-town BEST 154534 target 147362 iter 794
+old-town BEST 154523 target 147362 iter 795
+old-town BEST 154490 target 147362 iter 913
+old-town BEST 154485 target 147362 iter 1605
+old-town BEST 154411 target 147362 iter 2104
+old-town BEST 154400 target 147362 iter 2111
+old-town BEST 154345 target 147362 iter 2115
+old-town BEST 154334 target 147362 iter 2201
+old-town BEST 154293 target 147362 iter 2775
+old-town BEST 154132 target 147362 iter 3076
+old-town BEST 154110 target 147362 iter 3083
+old-town BEST 154099 target 147362 iter 3085
+old-town BEST 153967 target 147362 iter 3102
+old-town BEST 153923 target 147362 iter 3202
+old-town BEST 153906 target 147362 iter 3555
+old-town BEST 153895 target 147362 iter 3856
+old-town BEST 153840 target 147362 iter 4201
+old-town BEST 153796 target 147362 iter 4257
+old-town BEST 153774 target 147362 iter 4423
+old-town BEST 153741 target 147362 iter 4708
+old-town BEST 153738 target 147362 iter 4906
+old-town BEST 153716 target 147362 iter 5001
+old-town BEST 153708 target 147362 iter 5403
+old-town BEST 153459 target 147362 iter 5459
+old-town BEST 153406 target 147362 iter 5482
+old-town BEST 153387 target 147362 iter 5601
+old-town BEST 153354 target 147362 iter 5610
+old-town BEST 153332 target 147362 iter 5612
+old-town BEST 153245 target 147362 iter 5986
+old-town BEST 153155 target 147362 iter 6007
+old-town BEST 153088 target 147362 iter 6010
+old-town BEST 153033 target 147362 iter 6455
+old-town BEST 152995 target 147362 iter 6953
+old-town BEST 152891 target 147362 iter 7058
+old-town BEST 152889 target 147362 iter 7206
+old-town BEST 152888 target 147362 iter 7219
+old-town BEST 152832 target 147362 iter 7475
+old-town BEST 152824 target 147362 iter 7477
+DONE old-town 152824 10445
+feasible, cost 152824
+riverside BEST 219843 target 201921 iter 1
+riverside BEST 218572 target 201921 iter 58
+riverside BEST 218548 target 201921 iter 102
+riverside BEST 218534 target 201921 iter 204
+riverside BEST 218462 target 201921 iter 332
+riverside BEST 218414 target 201921 iter 338
+riverside BEST 218391 target 201921 iter 339
+riverside BEST 218085 target 201921 iter 409
+riverside BEST 217896 target 201921 iter 502
+riverside BEST 217863 target 201921 iter 508
+riverside BEST 217734 target 201921 iter 538
+riverside BEST 217478 target 201921 iter 616
+riverside BEST 217473 target 201921 iter 620
+riverside BEST 217173 target 201921 iter 625
+riverside BEST 217054 target 201921 iter 663
+riverside BEST 216266 target 201921 iter 687
+riverside BEST 215895 target 201921 iter 698
+riverside BEST 215262 target 201921 iter 780
+riverside BEST 214877 target 201921 iter 799
+riverside BEST 214559 target 201921 iter 904
+riverside BEST 214471 target 201921 iter 905
+riverside BEST 213706 target 201921 iter 1228
+riverside BEST 213703 target 201921 iter 1271
+riverside BEST 212848 target 201921 iter 1302
+riverside BEST 212090 target 201921 iter 1329
+riverside BEST 211831 target 201921 iter 1378
+riverside BEST 211776 target 201921 iter 1392
+riverside BEST 211643 target 201921 iter 1609
+riverside BEST 211491 target 201921 iter 1807
+riverside BEST 211426 target 201921 iter 1853
+riverside BEST 211360 target 201921 iter 2308
+riverside BEST 211250 target 201921 iter 2339
+riverside BEST 211174 target 201921 iter 2535
+riverside BEST 210908 target 201921 iter 2638
+riverside BEST 210889 target 201921 iter 3151
+riverside BEST 210829 target 201921 iter 3349
+riverside BEST 210791 target 201921 iter 3526
+DONE riverside 210791 3730
+feasible, cost 210791
+north-ring BEST 314944 target 288705 iter 1
+north-ring BEST 314115 target 288705 iter 34
+north-ring BEST 313693 target 288705 iter 36
+north-ring BEST 313448 target 288705 iter 37
+north-ring BEST 313107 target 288705 iter 38
+north-ring BEST 313102 target 288705 iter 41
+north-ring BEST 312988 target 288705 iter 46
+north-ring BEST 312812 target 288705 iter 54
+north-ring BEST 311615 target 288705 iter 58
+north-ring BEST 310940 target 288705 iter 61
+north-ring BEST 310123 target 288705 iter 67
+north-ring BEST 309866 target 288705 iter 69
+north-ring BEST 309844 target 288705 iter 71
+north-ring BEST 309198 target 288705 iter 73
+north-ring BEST 307840 target 288705 iter 86
+north-ring BEST 307706 target 288705 iter 89
+north-ring BEST 306972 target 288705 iter 114
+north-ring BEST 306953 target 288705 iter 308
+north-ring BEST 306927 target 288705 iter 313
+north-ring BEST 306598 target 288705 iter 410
+north-ring BEST 306491 target 288705 iter 603
+north-ring BEST 306429 target 288705 iter 996
+north-ring BEST 306258 target 288705 iter 1052
+north-ring BEST 306256 target 288705 iter 1074
+north-ring BEST 305996 target 288705 iter 1098
+north-ring BEST 305920 target 288705 iter 1118
+north-ring BEST 305898 target 288705 iter 1129
+north-ring BEST 305872 target 288705 iter 1131
+north-ring BEST 305822 target 288705 iter 1212
+north-ring BEST 305821 target 288705 iter 1224
+north-ring BEST 305611 target 288705 iter 1293
+north-ring BEST 305161 target 288705 iter 1297
+north-ring BEST 305146 target 288705 iter 1308
+north-ring BEST 304955 target 288705 iter 1476
+north-ring BEST 304933 target 288705 iter 1606
+north-ring BEST 304762 target 288705 iter 1710
+north-ring BEST 304760 target 288705 iter 1849
+north-ring BEST 304706 target 288705 iter 1874
+north-ring BEST 304535 target 288705 iter 1900
+north-ring BEST 304467 target 288705 iter 1905
+north-ring BEST 304191 target 288705 iter 1926
+north-ring BEST 304169 target 288705 iter 1959
+north-ring BEST 304095 target 288705 iter 1991
+north-ring BEST 304076 target 288705 iter 2131
+north-ring BEST 304050 target 288705 iter 2141
+north-ring BEST 303998 target 288705 iter 2152
+north-ring BEST 303979 target 288705 iter 2168
+north-ring BEST 303673 target 288705 iter 2357
+north-ring BEST 303656 target 288705 iter 2385
+north-ring BEST 303648 target 288705 iter 2388
+DONE north-ring 303648 2391
+feasible, cost 303648
+[?2004hroot@f0fc7ca51bbb:/app# for spec in 'harbour-lanes 19001' 'old-town 29003' 'riverside 39007' 'north-ring 49009'; do set -- $spec; python3 /tmp/lns.py "$1" 180 "$2" > "/tmp/lns-$1.log" 2>&1 & done; wait
+[?2004l[1] 908
+[2] 909
+[3] 910
+[4] 911
+[1]   Done                    python3 /tmp/lns.py "$1" 180 "$2" > "/tmp/lns-$1.log" 2>&1
+[2]   Done                    python3 /tmp/lns.py "$1" 180 "$2" > "/tmp/lns-$1.log" 2>&1
+[3]-  Done                    python3 /tmp/lns.py "$1" 180 "$2" > "/tmp/lns-$1.log" 2>&1
+[4]+  Done                    python3 /tmp/lns.py "$1" 180 "$2" > "/tmp/lns-$1.log" 2>&1
+[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do echo "=== $n ==="; tail -5 /tmp/lns-$n.log; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004l=== harbour-lanes ===
+DONE harbour-lanes 80312 29571
+feasible, cost 80312
+=== old-town ===
+old-town BEST 152782 target 147362 iter 9084
+old-town BEST 152771 target 147362 iter 9090
+old-town BEST 152760 target 147362 iter 9102
+old-town BEST 152738 target 147362 iter 9138
+DONE old-town 152738 10647
+feasible, cost 152738
+=== riverside ===
+riverside BEST 210639 target 201921 iter 479
+riverside BEST 210316 target 201921 iter 701
+riverside BEST 210278 target 201921 iter 1718
+riverside BEST 210107 target 201921 iter 2654
+DONE riverside 210107 3595
+feasible, cost 210107
+=== north-ring ===
+north-ring BEST 303641 target 288705 iter 1637
+DONE north-ring 303641 1741
+feasible, cost 303641
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/lns2.py <<'PY'
+[?2004l[?2004h> import sys,json,random,time,math
+[?2004l[?2004h> name=sys.argv[1];exec(open('/tmp/core.py').read()); target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> P=json.load(open('/app/plans/'+name+'.json')); R=[[r['type'],r['stops'][:]] for r in P['routes']]
+[?2004l[?2004h> # Add every unused fleet slot so the search can alter route counts and vehicle mix.
+[?2004l[?2004h> for t,f in F.items():
+[?2004l[?2004h>  for _ in range(f['count']-sum(a==t for a,s in R)):R.append([t,[]])
+[?2004l[?2004h> best=[[t,s[:] for s in [s]][0] for t,s in R]; bc=sum(rcost(t,s) for t,s in R); cur=bc
+[?2004l[?2004h> end=time.time()+float(sys.argv[2]); rng=random.Random(int(sys.argv[3])); it=0
+[?2004l[?2004h> 
+[?2004l[?2004h> def polish(Q,deadline):
+[?2004l[?2004h>  for ri,(t,s) in enumerate(Q):
+[?2004l[?2004h>   while time.time()<deadline:
+[?2004l[?2004h>    old=rcost(t,s); bn=None;bv=old
+[?2004l[?2004h>    for i in range(len(s)):
+[?2004l[?2004h>     for j in range(i+1,len(s)):
+[?2004l[?2004h>      ns=s[:i]+list(reversed(s[i:j+1]))+s[j+1:];v=rcost(t,ns)
+[?2004l[?2004h>      if v<bv:bv,bn=v,ns
+[?2004l[?2004h>    if bn is None:break
+[?2004l[?2004h>    s=bn;Q[ri][1]=s
+[?2004l[?2004h>  return Q
+[?2004l[?2004h> while time.time()<end and bc>target:
+[?2004l[?2004h>  it+=1;Q=[[t,s[:] for s in [s]][0] for t,s in R]; allx=[x for t,s in Q for x in s]; mode=it%5
+[?2004l[?2004h>  k=rng.randint(max(6,len(allx)//10),max(9,len(allx)*3//10))
+[?2004l[?2004h>  if mode==0: rem=rng.sample(allx,k)
+[?2004l[?2004h>  elif mode in (1,2):
+[?2004l[?2004h>   seed=rng.choice(allx)
+[?2004l[?2004h>   def score(x):
+[?2004l[?2004h>    if mode==1:return dd[seed,x]+rng.random()*100
+[?2004l[?2004h>    return dd[seed,x]*.35+abs(C[seed]['ready']-C[x]['ready'])/40+abs(C[seed]['due']-C[x]['due'])/60+rng.random()*80
+[?2004l[?2004h>   rem=sorted(allx,key=score)[:k]
+[?2004l[?2004h>  elif mode==3:
+[?2004l[?2004h>   # Remove costly customers by their distance saving within current route.
+[?2004l[?2004h>   vals=[]
+[?2004l[?2004h>   for t,s in Q:
+[?2004l[?2004h>    for i,x in enumerate(s):
+[?2004l[?2004h>     a=0 if i==0 else s[i-1];b=0 if i+1==len(s) else s[i+1]
+[?2004l[?2004h>     gain=(dd[a,x]+dd[x,b]-dd[a,b])*F[t]['per_unit']
+[?2004l[?2004h>     vals.append((gain+rng.random()*400,x))
+[?2004l[?2004h>   rem=[x for z,x in sorted(vals,reverse=True)[:k]]
+[?2004l[?2004h>  else:
+[?2004l[?2004h>   non=[i for i,z in enumerate(Q) if z[1]];rng.shuffle(non);rem=[]
+[?2004l[?2004h>   for i in non:
+[?2004l[?2004h>    rem+=Q[i][1]
+[?2004l[?2004h>    if len(rem)>=k:break
+[?2004l[?2004h>  rs=set(rem)
+[?2004l[?2004h>  for z in Q:z[1][:]=[x for x in z[1] if x not in rs]
+[?2004l[?2004h>  left=set(rem);fail=False
+[?2004l[?2004h>  while left:
+[?2004l[?2004h>   candidates=[]
+[?2004l[?2004h>   for x in left:
+[?2004l[?2004h>    opts=[];seenempty=set()
+[?2004l[?2004h>    for ri,(t,s) in enumerate(Q):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>      if t in seenempty:continue
+[?2004l[?2004h>      seenempty.add(t)
+[?2004l[?2004h>     old=rcost(t,s)
+[?2004l[?2004h>     for p in range(len(s)+1):
+[?2004l[?2004h>      ns=s[:p]+[x]+s[p:];v=rcost(t,ns)
+[?2004l[?2004h>      if v<10**12:opts.append((v-old,ri,p))
+[?2004l[?2004h>    if opts:
+[?2004l[?2004h>     opts.sort(); reg=opts[min(3,len(opts)-1)][0]-opts[0][0]
+[?2004l[?2004h>     candidates.append((reg+rng.random()*40,x,opts))
+[?2004l[?2004h>   if not candidates:fail=True;break
+[?2004l[?2004h>   candidates.sort(reverse=True);_,x,opts=candidates[0]
+[?2004l[?2004h>   pick=0 if rng.random()<.97 else rng.randrange(min(3,len(opts)))
+[?2004l[?2004h>   _,ri,p=opts[pick];Q[ri][1].insert(p,x);left.remove(x)
+[?2004l[?2004h>  if fail:continue
+[?2004l[?2004h>  nc=sum(rcost(t,s) for t,s in Q); frac=(end-time.time())/float(sys.argv[2]);temp=30+300*frac
+[?2004l[?2004h>  if nc<=cur or rng.random()<math.exp((cur-nc)/temp):
+[?2004l[?2004h>   R=Q;cur=nc
+[?2004l[?2004h>   if nc<bc:
+[?2004l[?2004h>    Q=polish(Q,min(end,time.time()+1.5));nc=sum(rcost(t,s) for t,s in Q);R=Q;cur=nc
+[?2004l[?2004h>    if nc<bc:
+[?2004l[?2004h>     p=planof(Q)
+[?2004l[?2004h>     try:real=evaluate(o,p)
+[?2004l[?2004h>     except:continue
+[?2004l[?2004h>     bc=real;best=[[t,s[:] for s in [s]][0] for t,s in Q];json.dump(p,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>     print(name,'BEST',bc,'target',target,'iter',it,'mode',mode,flush=True)
+[?2004l[?2004h>  if it%80==0:R=[[t,s[:] for s in [s]][0] for t,s in best];cur=bc
+[?2004l[?2004h> print('DONE',name,bc,it)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for spec in 'harbour-lanes 61001' 'old-town 62003' 'riverside 63007' 'north-ring 64009'; do set -- $spec; python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1 & done; wait
+[?2004l[1] 971
+[2] 972
+[3] 973
+[4] 974
+[1]   Exit 1                  python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[2]   Exit 1                  python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[3]-  Exit 1                  python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[4]+  Exit 1                  python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do echo "=== $n ==="; tail -8 /tmp/lns2-$n.log; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004l=== harbour-lanes ===
+  File "/tmp/lns2.py", line 7
+    best=[[t,s[:] for s in [s]][0] for t,s in R]; bc=sum(rcost(t,s) for t,s in R); cur=bc
+           ^^^^^^
+SyntaxError: did you forget parentheses around the comprehension target?
+feasible, cost 80312
+=== old-town ===
+  File "/tmp/lns2.py", line 7
+    best=[[t,s[:] for s in [s]][0] for t,s in R]; bc=sum(rcost(t,s) for t,s in R); cur=bc
+           ^^^^^^
+SyntaxError: did you forget parentheses around the comprehension target?
+feasible, cost 152738
+=== riverside ===
+  File "/tmp/lns2.py", line 7
+    best=[[t,s[:] for s in [s]][0] for t,s in R]; bc=sum(rcost(t,s) for t,s in R); cur=bc
+           ^^^^^^
+SyntaxError: did you forget parentheses around the comprehension target?
+feasible, cost 210107
+=== north-ring ===
+  File "/tmp/lns2.py", line 7
+    best=[[t,s[:] for s in [s]][0] for t,s in R]; bc=sum(rcost(t,s) for t,s in R); cur=bc
+           ^^^^^^
+SyntaxError: did you forget parentheses around the comprehension target?
+feasible, cost 303641
+[?2004hroot@f0fc7ca51bbb:/app# sed -i 's/\[\[t,s\[:\] for s in \[s\]\]\[0\] for t,s in R\]/[[t,s[:]] for t,s in R]/g; s/\[\[t,s\[:\] for s in \[s\]\]\[0\] for t,s in Q\]/[[t,s[:]] for t,s in Q]/g; s/\[\[t,s\[:\] for s in \[s\]\]\[0\] for t,s in best\]/[[t,s[:]] for t,s in best]/g' /tmp/lns2.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# python3 -m py_compile /tmp/lns2.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for spec in 'harbour-lanes 61001' 'old-town 62003' 'riverside 63007' 'north-ring 64009'; do set -- $spec; python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1 & done; wait
+[?2004l[1] 1008
+[2] 1009
+[3] 1010
+[4] 1011
+[1]   Done                    python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[2]   Done                    python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[3]-  Done                    python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[4]+  Done                    python3 /tmp/lns2.py "$1" 240 "$2" > "/tmp/lns2-$1.log" 2>&1
+[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do echo "=== $n ==="; tail -8 /tmp/lns2-$n.log; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004l=== harbour-lanes ===
+DONE harbour-lanes 80312 10159
+feasible, cost 80312
+=== old-town ===
+old-town BEST 151922 target 147362 iter 628 mode 3
+old-town BEST 151669 target 147362 iter 635 mode 0
+old-town BEST 151487 target 147362 iter 991 mode 1
+old-town BEST 151399 target 147362 iter 1045 mode 0
+old-town BEST 150181 target 147362 iter 1491 mode 1
+old-town BEST 150169 target 147362 iter 1535 mode 0
+old-town BEST 150165 target 147362 iter 1765 mode 0
+DONE old-town 150165 1835
+feasible, cost 150165
+=== riverside ===
+riverside BEST 210028 target 201921 iter 30 mode 0
+riverside BEST 209641 target 201921 iter 107 mode 2
+riverside BEST 209350 target 201921 iter 436 mode 1
+riverside BEST 209295 target 201921 iter 497 mode 2
+riverside BEST 209278 target 201921 iter 511 mode 1
+DONE riverside 209278 541
+feasible, cost 209278
+=== north-ring ===
+DONE north-ring 303641 233
+feasible, cost 303641
+[?2004hroot@f0fc7ca51bbb:/app# for spec in 'harbour-lanes 71011 240' 'old-town 72019 240' 'riverside 73037 300' 'north-ring 74051 300'; do set -- $spec; python3 /tmp/lns2.py "$1" "$3" "$2" > "/tmp/lns3-$1.log" 2>&1 & done; wait
+[?2004l[1] 1091
+[2] 1092
+[3] 1093
+[4] 1094
+[1]   Done                    python3 /tmp/lns2.py "$1" "$3" "$2" > "/tmp/lns3-$1.log" 2>&1
+[2]   Done                    python3 /tmp/lns2.py "$1" "$3" "$2" > "/tmp/lns3-$1.log" 2>&1
+[3]-  Done                    python3 /tmp/lns2.py "$1" "$3" "$2" > "/tmp/lns3-$1.log" 2>&1
+[4]+  Done                    python3 /tmp/lns2.py "$1" "$3" "$2" > "/tmp/lns3-$1.log" 2>&1
+[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do echo "=== $n ==="; tail -10 /tmp/lns3-$n.log; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004l=== harbour-lanes ===
+harbour-lanes BEST 79395 target 77867 iter 374 mode 4
+harbour-lanes BEST 79346 target 77867 iter 376 mode 1
+harbour-lanes BEST 79313 target 77867 iter 381 mode 1
+harbour-lanes BEST 79250 target 77867 iter 422 mode 2
+harbour-lanes BEST 79144 target 77867 iter 1113 mode 3
+harbour-lanes BEST 79118 target 77867 iter 1539 mode 4
+harbour-lanes BEST 79095 target 77867 iter 2260 mode 0
+harbour-lanes BEST 78901 target 77867 iter 2321 mode 1
+harbour-lanes BEST 78699 target 77867 iter 2395 mode 0
+DONE harbour-lanes 78699 11228
+feasible, cost 78699
+=== old-town ===
+old-town BEST 149073 target 147362 iter 908 mode 3
+old-town BEST 149007 target 147362 iter 1311 mode 1
+old-town BEST 148995 target 147362 iter 1485 mode 0
+old-town BEST 148952 target 147362 iter 1540 mode 0
+old-town BEST 148924 target 147362 iter 1615 mode 0
+old-town BEST 148913 target 147362 iter 1660 mode 0
+old-town BEST 148880 target 147362 iter 1765 mode 0
+old-town BEST 148795 target 147362 iter 1771 mode 1
+old-town BEST 148785 target 147362 iter 1855 mode 0
+DONE old-town 148785 2040
+feasible, cost 148785
+=== riverside ===
+riverside BEST 209197 target 201921 iter 93 mode 3
+riverside BEST 209038 target 201921 iter 275 mode 0
+riverside BEST 208872 target 201921 iter 278 mode 3
+riverside BEST 208573 target 201921 iter 316 mode 1
+riverside BEST 208478 target 201921 iter 405 mode 0
+DONE riverside 208478 901
+feasible, cost 208478
+=== north-ring ===
+DONE north-ring 303641 389
+feasible, cost 303641
+[?2004hroot@f0fc7ca51bbb:/app# cp /tmp/lns2.py /tmp/lns2iso.py; sed -i "/P=json.load/a out=sys.argv[4]" /tmp/lns2iso.py; sed -i "s#open('/app/plans/'+name+'.json','w')#open(out,'w')#" /tmp/lns2iso.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# cp /tmp/lns.py /tmp/lnsiso.py; sed -i "/P=json.load/a out=sys.argv[4]" /tmp/lnsiso.py; sed -i "s#open('/app/plans/'+name+'.json','w')#open(out,'w')#" /tmp/lnsiso.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# python3 -m py_compile /tmp/lns2iso.py /tmp/lnsiso.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# rm -f /tmp/cand-*.json /tmp/cand-*.log
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside; do for s in 101 211 307; do python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1 & done; done
+[?2004l[1] 1199
+[2] 1200
+[3] 1201
+[4] 1202
+[5] 1203
+[6] 1204
+[7] 1205
+[8] 1206
+[9] 1207
+[?2004hroot@f0fc7ca51bbb:/app# for s in 401 503 607 709; do python3 /tmp/lnsiso.py north-ring 300 "$((s*1013))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1 & done
+[?2004l[10] 1208
+[11] 1209
+[12] 1210
+[13] 1211
+[?2004hroot@f0fc7ca51bbb:/app# for s in 811 907; do python3 /tmp/lns2iso.py north-ring 300 "$((s*1019))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1 & done
+[?2004l[14] 1212
+[15] 1213
+[?2004hroot@f0fc7ca51bbb:/app# wait
+[?2004l[1]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[2]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[3]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[4]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[5]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[6]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[7]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[9]   Done                    python3 /tmp/lns2iso.py "$n" 300 "$((s*1009))" "/tmp/cand-$n-$s.json" > "/tmp/cand-$n-$s.log" 2>&1
+[10]   Done                    python3 /tmp/lnsiso.py north-ring 300 "$((s*1013))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1
+[11]   Done                    python3 /tmp/lnsiso.py north-ring 300 "$((s*1013))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1
+[12]   Done                    python3 /tmp/lnsiso.py north-ring 300 "$((s*1013))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1
+[13]   Done                    python3 /tmp/lnsiso.py north-ring 300 "$((s*1013))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1
+[14]-  Done                    python3 /tmp/lns2iso.py north-ring 300 "$((s*1019))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1
+[15]+  Done                    python3 /tmp/lns2iso.py north-ring 300 "$((s*1019))" "/tmp/cand-north-ring-$s.json" > "/tmp/cand-north-ring-$s.log" 2>&1
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import glob,json,sys,os,shutil
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); dest='/app/plans/'+n+'.json'; best=evaluate(o,json.load(open(dest))); bf=dest
+[?2004l[?2004h>  for f in glob.glob('/tmp/cand-'+n+'-*.json'):
+[?2004l[?2004h>   try:c=evaluate(o,json.load(open(f)))
+[?2004l[?2004h>   except Exception as e:continue
+[?2004l[?2004h>   print(n,os.path.basename(f),c)
+[?2004l[?2004h>   if c<best:best,bf=c,f
+[?2004l[?2004h>  if bf!=dest:shutil.copyfile(bf,dest)
+[?2004l[?2004h>  print('SELECT',n,best,bf)
+[?2004l[?2004h> PY
+[?2004lSELECT harbour-lanes 78699 /app/plans/harbour-lanes.json
+old-town cand-old-town-101.json 148648
+old-town cand-old-town-211.json 148718
+old-town cand-old-town-307.json 148648
+SELECT old-town 148648 /tmp/cand-old-town-101.json
+riverside cand-riverside-307.json 208326
+riverside cand-riverside-101.json 208459
+riverside cand-riverside-211.json 208459
+SELECT riverside 208326 /tmp/cand-riverside-307.json
+north-ring cand-north-ring-811.json 303403
+north-ring cand-north-ring-401.json 303550
+SELECT north-ring 303403 /tmp/cand-north-ring-811.json
+[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lfeasible, cost 78699
+feasible, cost 148648
+feasible, cost 208326
+feasible, cost 303403
+[?2004hroot@f0fc7ca51bbb:/app# python3 /tmp/lns2.py harbour-lanes 300 881017 > /tmp/ded-harbour.log 2>&1; tail -15 /tmp/ded-harbour.log; python3 /app/tools/check_plan.py /app/orders/harbour-lanes.json /app/plans/harbour-lanes.json
+[?2004lDONE harbour-lanes 78699 57832
+feasible, cost 78699
+[?2004hroot@f0fc7ca51bbb:/app# python3 /tmp/lns2.py old-town 300 991027 > /tmp/ded-old.log 2>&1; tail -15 /tmp/ded-old.log; python3 /app/tools/check_plan.py /app/orders/old-town.json /app/plans/old-town.json
+[?2004lold-town BEST 148582 target 147362 iter 3150 mode 0
+old-town BEST 148494 target 147362 iter 3682 mode 2
+old-town BEST 148484 target 147362 iter 4111 mode 1
+old-town BEST 148480 target 147362 iter 5785 mode 0
+DONE old-town 148480 11226
+feasible, cost 148480
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/exactlocal.py <<'PY'
+[?2004l[?2004h> import sys,json,time
+[?2004l[?2004h> name=sys.argv[1];exec(open('/tmp/core.py').read());target=json.load(open('/app/orders/targets.json'))[name]
+[?2004l[?2004h> P=json.load(open('/app/plans/'+name+'.json'));R=[[r['type'],r['stops'][:]] for r in P['routes']]; end=time.time()+float(sys.argv[2]); bc=evaluate(o,P);iteration=0
+[?2004l[?2004h> while time.time()<end and bc>target:
+[?2004l[?2004h>  iteration+=1; bestdelta=0; move=None
+[?2004l[?2004h>  # Exhaustive relocation and direct-position swaps.
+[?2004l[?2004h>  for a,(ta,A) in enumerate(R):
+[?2004l[?2004h>   ca=rcost(ta,A)
+[?2004l[?2004h>   for ix,x in enumerate(A):
+[?2004l[?2004h>    NA=A[:ix]+A[ix+1:]; cna=rcost(ta,NA)
+[?2004l[?2004h>    for b,(tb,B) in enumerate(R):
+[?2004l[?2004h>     if b==a:continue
+[?2004l[?2004h>     cb=rcost(tb,B)
+[?2004l[?2004h>     for p in range(len(B)+1):
+[?2004l[?2004h>      NB=B[:p]+[x]+B[p:]; d=cna+rcost(tb,NB)-ca-cb
+[?2004l[?2004h>      if d<bestdelta:bestdelta=d;move=('r',a,b,NA,NB)
+[?2004l[?2004h>     for iy,y in enumerate(B):
+[?2004l[?2004h>      SA=A[:];SB=B[:];SA[ix]=y;SB[iy]=x;d=rcost(ta,SA)+rcost(tb,SB)-ca-cb
+[?2004l[?2004h>      if d<bestdelta:bestdelta=d;move=('s',a,b,SA,SB)
+[?2004l[?2004h>   # Exhaustive 2-opt-star tail exchanges for each unordered route pair.
+[?2004l[?2004h>   for b in range(a+1,len(R)):
+[?2004l[?2004h>    tb,B=R[b];cb=rcost(tb,B)
+[?2004l[?2004h>    for i in range(len(A)+1):
+[?2004l[?2004h>     for j in range(len(B)+1):
+[?2004l[?2004h>      for rev in (False,True):
+[?2004l[?2004h>       if not rev:NA=A[:i]+B[j:];NB=B[:j]+A[i:]
+[?2004l[?2004h>       else:NA=A[:i]+list(reversed(B[:j]));NB=list(reversed(A[i:]))+B[j:]
+[?2004l[?2004h>       d=rcost(ta,NA)+rcost(tb,NB)-ca-cb
+[?2004l[?2004h>       if d<bestdelta:bestdelta=d;move=('t',a,b,NA,NB)
+[?2004l[?2004h>  if move is None:break
+[?2004l[?2004h>  _,a,b,NA,NB=move;R[a][1]=NA;R[b][1]=NB;bc+=bestdelta
+[?2004l[?2004h>  p=planof(R);real=evaluate(o,p);bc=real;json.dump(p,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>  print(name,'BEST',bc,'target',target,'delta',bestdelta,'iter',iteration,flush=True)
+[?2004l[?2004h> print('DONE',name,bc,iteration)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# python3 -m py_compile /tmp/exactlocal.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# python3 /tmp/exactlocal.py harbour-lanes 300; python3 /app/tools/check_plan.py /app/orders/harbour-lanes.json /app/plans/harbour-lanes.json
+[?2004lDONE harbour-lanes 78699 1
+feasible, cost 78699
+[?2004hroot@f0fc7ca51bbb:/app# python3 /tmp/exactlocal.py old-town 300; python3 /app/tools/check_plan.py /app/orders/old-town.json /app/plans/old-town.json
+[?2004lDONE old-town 148480 1
+feasible, cost 148480
+[?2004hroot@f0fc7ca51bbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import json
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  p=json.load(open('/app/plans/'+n+'.json'))
+[?2004l[?2004h>  print(n,[(r['type'],len(r['stops'])) for r in p['routes']])
+[?2004l[?2004h> PY
+[?2004lharbour-lanes [('bike', 3), ('van', 5), ('van', 7), ('van', 9), ('van', 4), ('van', 8), ('truck', 10), ('bike', 2), ('bike', 2), ('bike', 3), ('van', 3), ('van', 4)]
+old-town [('bike', 2), ('truck', 9), ('van', 7), ('truck', 7), ('van', 8), ('van', 6), ('truck', 8), ('bike', 2), ('van', 6), ('van', 5), ('van', 6), ('truck', 11), ('truck', 7), ('van', 9), ('bike', 2), ('bike', 2), ('bike', 1), ('bike', 4), ('bike', 3), ('bike', 3), ('bike', 2)]
+riverside [('van', 5), ('van', 7), ('van', 9), ('truck', 12), ('truck', 10), ('truck', 12), ('truck', 13), ('truck', 8), ('truck', 14), ('van', 5), ('van', 6), ('truck', 11), ('van', 10), ('truck', 10), ('van', 7), ('van', 8), ('van', 6), ('bike', 2), ('van', 5)]
+north-ring [('van', 3), ('truck', 13), ('van', 7), ('van', 5), ('van', 5), ('truck', 7), ('van', 4), ('truck', 13), ('bike', 3), ('van', 10), ('truck', 9), ('van', 4), ('truck', 13), ('bike', 3), ('van', 8), ('van', 7), ('truck', 10), ('truck', 8), ('truck', 12), ('van', 3), ('truck', 7), ('bike', 2), ('van', 6), ('van', 3), ('bike', 2), ('bike', 2), ('van', 6), ('van', 4), ('truck', 8), ('van', 6), ('bike', 1), ('bike', 3), ('bike', 2), ('bike', 1), ('bike', 2), ('van', 3), ('van', 7), ('van', 4), ('bike', 4)]
+[?2004hroot@f0fc7ca51bbb:/app# cat > /tmp/route_dp.py <<'PY'
+[?2004l[?2004h> import sys,json,time
+[?2004l[?2004h> name=sys.argv[1];exec(open('/tmp/core.py').read());P=json.load(open('/app/plans/'+name+'.json')); before=evaluate(o,P); deadline=time.time()+float(sys.argv[2])
+[?2004l[?2004h> 
+[?2004l[?2004h> def optimize(t,nodes):
+[?2004l[?2004h>  n=len(nodes)
+[?2004l[?2004h>  if n<2 or n>18:return nodes
+[?2004l[?2004h>  f=F[t]; full=(1<<n)-1
+[?2004l[?2004h>  # labels[(mask,last)] = list of [distance_so_far, service_end_time, parent]
+[?2004l[?2004h>  L={}
+[?2004l[?2004h>  for i,x in enumerate(nodes):
+[?2004l[?2004h>   arr=max(D['open']+dd[0,x]*f['pace'],C[x]['ready'])
+[?2004l[?2004h>   if arr<=C[x]['due']:L[(1<<i,i)]=[(dd[0,x],arr+C[x]['service'],None)]
+[?2004l[?2004h>  for size in range(1,n):
+[?2004l[?2004h>   if time.time()>deadline:return nodes
+[?2004l[?2004h>   keys=[k for k in L if k[0].bit_count()==size]
+[?2004l[?2004h>   for mask,last in keys:
+[?2004l[?2004h>    for li,(dr,cl,par) in enumerate(list(L[(mask,last)])):
+[?2004l[?2004h>     a=nodes[last]
+[?2004l[?2004h>     for j,x in enumerate(nodes):
+[?2004l[?2004h>      if mask>>j&1:continue
+[?2004l[?2004h>      nd=dr+dd[a,x]; ar=max(cl+dd[a,x]*f['pace'],C[x]['ready'])
+[?2004l[?2004h>      if ar>C[x]['due']:continue
+[?2004l[?2004h>      nc=ar+C[x]['service']; key=(mask|1<<j,j); labels=L.setdefault(key,[])
+[?2004l[?2004h>      # A label with no more distance and no later time dominates.
+[?2004l[?2004h>      if any(d<=nd and c<=nc for d,c,p in labels):continue
+[?2004l[?2004h>      labels[:]=[z for z in labels if not (nd<=z[0] and nc<=z[1])]
+[?2004l[?2004h>      labels.append((nd,nc,(mask,last,li)))
+[?2004l[?2004h>  best=None
+[?2004l[?2004h>  for last in range(n):
+[?2004l[?2004h>   for li,(dr,cl,par) in enumerate(L.get((full,last),[])):
+[?2004l[?2004h>    total=dr+dd[nodes[last],0]
+[?2004l[?2004h>    # Reconstruct and use exact official-equivalent feasibility, including shift/departure adjustment.
+[?2004l[?2004h>    seq=[];state=(full,last,li)
+[?2004l[?2004h>    while state:
+[?2004l[?2004h>     m,j,k=state;seq.append(nodes[j]); state=L[(m,j)][k][2]
+[?2004l[?2004h>    seq.reverse();d,dep,ok=info(t,tuple(seq))
+[?2004l[?2004h>    if ok and (best is None or d<best[0]):best=(d,seq)
+[?2004l[?2004h>  return best[1] if best else nodes
+[?2004l[?2004h> 
+[?2004l[?2004h> for r in P['routes']:
+[?2004l[?2004h>  old=rcost(r['type'],r['stops']); ns=optimize(r['type'],r['stops']); new=rcost(r['type'],ns)
+[?2004l[?2004h>  if new<old:
+[?2004l[?2004h>   print(name,r['type'],len(ns),'route saving',old-new,flush=True);r['stops']=ns
+[?2004l[?2004h>  # refresh departure for either ordering
+[?2004l[?2004h>  _,dep,ok=info(r['type'],tuple(r['stops']));r['depart']=int(dep)
+[?2004l[?2004h> after=evaluate(o,P)
+[?2004l[?2004h> if after<before:json.dump(P,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h> print('DONE',name,before,after)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# python3 -m py_compile /tmp/route_dp.py
+[?2004l[?2004hroot@f0fc7ca51bbb:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /tmp/route_dp.py "$n" 300; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lDONE harbour-lanes 78699 78699
+feasible, cost 78699
+DONE old-town 148480 148480
+feasible, cost 148480
+DONE riverside 208326 208326
+feasible, cost 208326
+north-ring bike 4 route saving 2
+DONE north-ring 303403 303401
+feasible, cost 303401
+[?2004hroot@f0fc7ca51bbb:/app# for spec in 'harbour-lanes 1801009' 'old-town 2801013' 'riverside 3801023' 'north-ring 4801031'; do set -- $spec; python3 /tmp/lns2.py "$1" 600 "$2" > "/tmp/long-$1.log" 2>&1 & done; wait
+[?2004l[1] 1547
+[2] 1548
+[3] 1549
+[4] 1550

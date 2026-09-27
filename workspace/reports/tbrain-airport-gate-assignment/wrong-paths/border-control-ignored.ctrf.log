@@ -1,0 +1,172 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 8 items
+
+../../tests/test_outputs.py ..FF....                                     [100%]
+
+=================================== FAILURES ===================================
+___________________________ test_day_2_plan_is_valid ___________________________
+
+name = 'day-2'
+
+    def _cost(name):
+        path = os.path.join(PLANS, name + ".json")
+        assert os.path.isfile(path), f"no plan at {path}"
+        try:
+            plan = load_plan(path)
+>           return evaluate(_day(name), plan)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:48: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+day = {'name': 'day-2', 'buffer_minutes': 15, 'bus_cost_per_passenger': 300, 'stands': [{'id': 'A01', 'pier': 'A', 'position...05', 'pier': 'A', 'position': 5, 'size': 1, ...}, {'id': 'A06', 'pier': 'A', 'position': 6, 'size': 1, ...}, ...], ...}
+plan = {'stands': {'A01': ['T026', 'T060', 'T083', 'T106', 'T150', 'T187', ...], 'A02': ['T027', 'T056', 'T078', 'T103', 'T163', 'T173'], 'A03': ['T016', 'T063', 'T124', 'T147'], 'A04': ['T030', 'T050', 'T080', 'T118', 'T141', 'T176', ...], ...}}
+
+    def evaluate(day, plan):
+        """Return the integer cost of the plan, or raise PlanError."""
+        if not isinstance(plan, dict) or not isinstance(plan.get("stands"), dict):
+            raise PlanError('the plan must be an object with a "stands" object')
+        stands = {s["id"]: s for s in day["stands"]}
+        turns = {t["id"]: t for t in day["turns"]}
+        where = {}
+        for sid, lst in plan["stands"].items():
+            if sid not in stands:
+                raise PlanError(f"unknown stand {sid!r}")
+            if not isinstance(lst, list):
+                raise PlanError(f"stand {sid}: expected a list of turn ids")
+            for tid in lst:
+                if not isinstance(tid, str) or tid not in turns:
+                    raise PlanError(f"stand {sid}: unknown turn {tid!r}")
+                if tid in where:
+                    raise PlanError(f"turn {tid} is placed twice")
+                where[tid] = sid
+        missing = [t for t in turns if t not in where]
+        if missing:
+            raise PlanError(f"turn {missing[0]} is not placed ({len(missing)} missing)")
+    
+        buffer = day["buffer_minutes"]
+        for sid, lst in plan["stands"].items():
+            s = stands[sid]
+            for tid in lst:
+                t = turns[tid]
+                if t["size"] > s["size"]:
+                    raise PlanError(f"turn {tid} (size {t['size']}) does not fit stand {sid} (size {s['size']})")
+                if t["international"] and not s["international"]:
+>                   raise PlanError(f"international turn {tid} on stand {sid}, which has no passport control")
+E                   check_plan.PlanError: international turn T014 on stand A01, which has no passport control
+
+/tests/check_plan.py:106: PlanError
+
+During handling of the above exception, another exception occurred:
+
+    def test_day_2_plan_is_valid():
+>       _cost("day-2")
+
+/tests/test_outputs.py:67: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+name = 'day-2'
+
+    def _cost(name):
+        path = os.path.join(PLANS, name + ".json")
+        assert os.path.isfile(path), f"no plan at {path}"
+        try:
+            plan = load_plan(path)
+            return evaluate(_day(name), plan)
+        except PlanError as exc:
+>           pytest.fail(f"{name}: plan breaks the stand rules: {exc}")
+E           Failed: day-2: plan breaks the stand rules: international turn T014 on stand A01, which has no passport control
+
+/tests/test_outputs.py:50: Failed
+_________________________ test_day_2_plan_meets_target _________________________
+
+name = 'day-2'
+
+    def _cost(name):
+        path = os.path.join(PLANS, name + ".json")
+        assert os.path.isfile(path), f"no plan at {path}"
+        try:
+            plan = load_plan(path)
+>           return evaluate(_day(name), plan)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:48: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+day = {'name': 'day-2', 'buffer_minutes': 15, 'bus_cost_per_passenger': 300, 'stands': [{'id': 'A01', 'pier': 'A', 'position...05', 'pier': 'A', 'position': 5, 'size': 1, ...}, {'id': 'A06', 'pier': 'A', 'position': 6, 'size': 1, ...}, ...], ...}
+plan = {'stands': {'A01': ['T026', 'T060', 'T083', 'T106', 'T150', 'T187', ...], 'A02': ['T027', 'T056', 'T078', 'T103', 'T163', 'T173'], 'A03': ['T016', 'T063', 'T124', 'T147'], 'A04': ['T030', 'T050', 'T080', 'T118', 'T141', 'T176', ...], ...}}
+
+    def evaluate(day, plan):
+        """Return the integer cost of the plan, or raise PlanError."""
+        if not isinstance(plan, dict) or not isinstance(plan.get("stands"), dict):
+            raise PlanError('the plan must be an object with a "stands" object')
+        stands = {s["id"]: s for s in day["stands"]}
+        turns = {t["id"]: t for t in day["turns"]}
+        where = {}
+        for sid, lst in plan["stands"].items():
+            if sid not in stands:
+                raise PlanError(f"unknown stand {sid!r}")
+            if not isinstance(lst, list):
+                raise PlanError(f"stand {sid}: expected a list of turn ids")
+            for tid in lst:
+                if not isinstance(tid, str) or tid not in turns:
+                    raise PlanError(f"stand {sid}: unknown turn {tid!r}")
+                if tid in where:
+                    raise PlanError(f"turn {tid} is placed twice")
+                where[tid] = sid
+        missing = [t for t in turns if t not in where]
+        if missing:
+            raise PlanError(f"turn {missing[0]} is not placed ({len(missing)} missing)")
+    
+        buffer = day["buffer_minutes"]
+        for sid, lst in plan["stands"].items():
+            s = stands[sid]
+            for tid in lst:
+                t = turns[tid]
+                if t["size"] > s["size"]:
+                    raise PlanError(f"turn {tid} (size {t['size']}) does not fit stand {sid} (size {s['size']})")
+                if t["international"] and not s["international"]:
+>                   raise PlanError(f"international turn {tid} on stand {sid}, which has no passport control")
+E                   check_plan.PlanError: international turn T014 on stand A01, which has no passport control
+
+/tests/check_plan.py:106: PlanError
+
+During handling of the above exception, another exception occurred:
+
+    def test_day_2_plan_meets_target():
+>       check_target("day-2")
+
+/tests/test_outputs.py:71: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:54: in check_target
+    cost = _cost(name)
+           ^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+name = 'day-2'
+
+    def _cost(name):
+        path = os.path.join(PLANS, name + ".json")
+        assert os.path.isfile(path), f"no plan at {path}"
+        try:
+            plan = load_plan(path)
+            return evaluate(_day(name), plan)
+        except PlanError as exc:
+>           pytest.fail(f"{name}: plan breaks the stand rules: {exc}")
+E           Failed: day-2: plan breaks the stand rules: international turn T014 on stand A01, which has no passport control
+
+/tests/test_outputs.py:50: Failed
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_day_1_plan_is_valid
+PASSED ../../tests/test_outputs.py::test_day_1_plan_meets_target
+PASSED ../../tests/test_outputs.py::test_day_3_plan_is_valid
+PASSED ../../tests/test_outputs.py::test_day_3_plan_meets_target
+PASSED ../../tests/test_outputs.py::test_day_4_plan_is_valid
+PASSED ../../tests/test_outputs.py::test_day_4_plan_meets_target
+FAILED ../../tests/test_outputs.py::test_day_2_plan_is_valid - Failed: day-2:...
+FAILED ../../tests/test_outputs.py::test_day_2_plan_meets_target - Failed: da...
+========================= 2 failed, 6 passed in 0.32s ==========================

@@ -1,0 +1,164 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-A",
+  "snapshot_sha256": "b3c59dde5d43ad90cf30cd2b3087fbe083a0a126286609a93c5bb7b6d61a961c",
+  "severity": "None",
+  "summary": "The instruction plus SOP TM-07 plus the shipped package define every graded rule. The three gaps where the SOP gives no rule (no blank results, unbracketed runs, and non-detect spikes or parents) are resolved by the explicit 'keep the calculation the code makes today from the values the SOP does define' clause, and the shipped code determines each of them. Every hand-built expected report I recomputed matches that reading, and the hidden fixtures stay inside the section 1 domain. I found no hidden convention, contradiction or representation-specific grading.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "task.toml",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/tools/metalquant_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/metalquant_run.py",
+      "tests/expected/ROSTER",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/capacity.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/generated-1.jsonl",
+      "tests/expected/generated-2.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/section_one_limits.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/spike_recovery.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped each graded field (blank_levels, samples id/analyte/value/flag/ccv_ok, ccvs recovery/pass, spikes recovery, list order) to the SOP section that defines it: reduction-sop.md sections 2-8 and instruction.md:7.",
+    "Identified the three SOP gaps: an empty blank-result set (section 4), a run without a CCV on both sides (section 6), and a spike or parent that is a non-detect (section 7 via section 3 lines 62-63). Resolved each through instruction.md:5 against the shipped code: blanks.py:6-9 (first blank reading, else 0.0), qc.py:12-17 (nearest earlier CCV, else True) and qc.py:20-21 ((S-P)/(added*spike dilution)*100).",
+    "Recomputed every row of blank_no_results, spike_nondetects and ccv_unbracketed by hand on the slope-10, intercept-100 calibration and confirmed that each expected value follows the 'code-kept calculation on SOP-defined inputs' reading. Examples: MB-13 level -1.0; W-142S recovery (0.75-20)/(40*3)*100; W-123 ccv_ok from CCV-22; W-128 ccv_ok true.",
+    "Recomputed report_order row 1 across four analytes: Tl bracketed failure, As and Cd parent non-detect recovery with the dilution-divided formula, the Pb both-results SOP formula, and C-1 after the last CCV. All match.",
+    "Recomputed the calibration, blank_mean, blank_nondetects, blank_single_result, dilution, flag_basis, flag_limits, negative_readings, ccv_limits, ccv_bracketing, spike_recovery and section_one_limits rows. I also checked that each hidden batch lies within the section 1 domain: mdl/loq ranges, is_counts >= 1000, slope 1e-12..1e6, intercept <= 1e4*slope, readings within +-1e4, CCV true >= 10*loq, CCV reading between 0.5 and 1.5 of true, and limit and rounding-tie margins.",
+    "Checked that expected fallback blank levels below the mdl in the generated and capacity batches (for example generated-2 row 1 Zn 0.00621 < mdl 0.0066) are consistent only with the first-blank-reading fallback, as disclosed via the shipped code.",
+    "Compared the tolerance and exactness rules in instruction.md:7 with test_outputs.py:119-142 (exact id/analyte/flag/ccv_ok/pass, value null-or-number, 1e-6 relative or absolute). They match. blank_levels key order is ignored, as SOP section 8 states.",
+    "Compared the driver-invariance promise in instruction.md:3 with test_outputs.py:52-63 and 226-227, and the output path/command in instruction.md:1 with test_outputs.py:102-116.",
+    "Checked that the verifier invocation (python3 -I -S, separate image with only /app transferred) imposes no undisclosed restriction a plausible stdlib-only candidate would hit. The agent has no network and the image has no third-party numeric libraries."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Every grading rule has a defining sentence or authoritative candidate-visible artifact",
+      "status": "checked",
+      "reason": "Calibration (SOP 2), readings (SOP 3), blank level (SOP 4), corrected reading, amount and flags (SOP 5), CCV recovery, rounded inclusive pass and bracketing (SOP 6), spike recovery (SOP 7) and report shape and order (SOP 8) are each defined. The SOP-gap values are defined by instruction.md:5 together with the shipped code, which the instruction makes authoritative for them.",
+      "evidence": ["instruction.md:1-7", "environment/app/docs/reduction-sop.md:44-117", "environment/app/src/metalquant/blanks.py:4-9", "environment/app/src/metalquant/qc.py:12-21", "tests/test_outputs.py:150-223"],
+      "finding_ids": []
+    },
+    {
+      "category": "Permitted input domain and boundary behavior the task needs",
+      "status": "checked",
+      "reason": "Section 1 states numeric ranges and guarantees values stay 1e-5 (or 1e-5 relative) away from mdl/loq and CCV recoveries stay 1e-6 away from rounding ties, so the at/above/below boundary semantics and the rounding mode cannot change a graded result. Hand-built fixtures (flag_limits, ccv_limits, section_one_limits) respect these margins, for example CCV-3 at 110.04 and CCV-4 at 110.06.",
+      "evidence": ["environment/app/docs/reduction-sop.md:31-42", "tests/expected/flag_limits.jsonl:1-3", "tests/expected/ccv_limits.jsonl:1", "tests/expected/section_one_limits.jsonl:1-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rendered instruction, declared artifacts and verifier paths agree; no broken template text or sentinels",
+      "status": "checked",
+      "reason": "instruction.md names /app/src/metalquant, /app/tools/metalquant_run.py, /app/docs/reduction-sop.md and /app/examples/. All exist in the environment. task.toml artifacts is ['/app/']. The verifier runs the documented command against /app/src with its own copy of the byte-identical driver. There is no broken rendering.",
+      "evidence": ["instruction.md:1-3", "task.toml:1", "tests/test_outputs.py:27-29", "tests/test_outputs.py:102-116", "tests/shipped/tools/metalquant_run.py:1-24"],
+      "finding_ids": []
+    },
+    {
+      "category": "Examples support the stated rules; inferred rules are determined by available evidence",
+      "status": "checked",
+      "reason": "small-batch.json is in the section 1 input format. The code-kept gap behaviors are not inferred from examples; the shipped code determines them. I found no graded behavior that depends on the example alone.",
+      "evidence": ["environment/app/examples/small-batch.json:1-20", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden arbitrary conventions / tie-breaks / representation-specific grading",
+      "status": "checked",
+      "reason": "The list order is disclosed (run order, then analyte order). blank_levels key order is explicitly meaningless and is compared by set. JSON is parsed, not byte-compared. Numbers use the disclosed tolerance. ccv_ok/pass/flag are exact, as disclosed. The first-blank and nearest-earlier-CCV fallbacks are code-disclosed.",
+      "evidence": ["environment/app/docs/reduction-sop.md:101-117", "instruction.md:7", "tests/test_outputs.py:125-142"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contradictions or impossible requirements",
+      "status": "checked",
+      "reason": "The 'add no correction/guard' instruction line is consistent with SOP 8's closing line and with keeping code behavior in the gaps. Spike recovery 'always a number' is achievable because added >= 0.001 and dilution >= 1. The driver must stay unchanged, and the package can be fully repaired under /app/src.",
+      "evidence": ["instruction.md:3-5", "environment/app/docs/reduction-sop.md:111-117", "environment/app/docs/reduction-sop.md:22-26"],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction/test asymmetry",
+      "status": "checked",
+      "reason": "Every test family corresponds to a promised case class in instruction.md:7 and a SOP rule. None tests an unpromised behavior. The unreadability checks for /tests/expected and /logs/verifier grade the verifier environment, not candidate behavior.",
+      "evidence": ["instruction.md:7", "tests/test_outputs.py:150-241"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["SOP 4 blank level with no blank results (code fallback: first blank reading)", "SOP 5 flags judged on corrected reading"],
+      "case_or_path": "blank_no_results row 2: MB-13 reading -1.0 is a non-detect, so the level is -1.0. W-62 reading 0.5 is corrected to 1.5, giving flag J and value 1.5. Row 4 has its blank after the sample, and the first blank in run order (0.5) is used.",
+      "status": "checked",
+      "evidence": ["tests/expected/blank_no_results.jsonl:2", "tests/expected/blank_no_results.jsonl:4", "environment/app/src/metalquant/blanks.py:4-9"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 7 spike recovery requires results", "code-kept recovery with added*spike dilution for non-detects"],
+      "case_or_path": "spike_nondetects row 1: W-142S (ND, dilution 3) against parent W-142 (dilution 2) gives (0.75-20)/(40*3)*100 = -16.0417, which uses the spike's dilution and SOP amounts. report_order row 1: B-SPK As/Cd with ND parent use the divided formula, while Pb with both results uses (35-19)/10*100 = 160.",
+      "status": "checked",
+      "evidence": ["tests/expected/spike_nondetects.jsonl:1", "tests/expected/report_order.jsonl:1", "environment/app/src/metalquant/qc.py:20-21", "environment/app/docs/reduction-sop.md:96-99"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 6 bracketing by nearest CCV on each side", "code-kept ccv_ok for runs outside brackets"],
+      "case_or_path": "ccv_unbracketed rows 1-4: a run before the first CCV gives true; a run after the last CCV takes that CCV's pass (true for W-123, false for W-125); a batch with no CCV gives true. report_order row 1 C-1 after A-CCV takes the per-analyte pass.",
+      "status": "checked",
+      "evidence": ["tests/expected/ccv_unbracketed.jsonl:1-4", "tests/expected/report_order.jsonl:1", "environment/app/src/metalquant/qc.py:12-17"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 6 rounded inclusive CCV pass", "SOP 1 no rounding-tie guarantee"],
+      "case_or_path": "ccv_limits: 110.0000...01 and 110.04 pass, 110.06 fails, 89.96 passes, 89.94 fails. All values are more than 1e-6 from an x.x5 tie, so half-up and banker's rounding agree.",
+      "status": "checked",
+      "evidence": ["tests/expected/ccv_limits.jsonl:1", "environment/app/docs/reduction-sop.md:36-38"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 5 blank subtracted before dilution", "SOP 5 flags on corrected reading, not amount"],
+      "case_or_path": "section_one_limits row 1: HG-5S with corrected 900 < loq 1000 gets J although its amount is 1800. flag_basis row 1: W-63 corrected 0.5 is ND at dilution 10.",
+      "status": "checked",
+      "evidence": ["tests/expected/section_one_limits.jsonl:1", "tests/expected/flag_basis.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 4 mean of results only", "SOP 3 non-detect blanks are not results"],
+      "case_or_path": "blank_nondetects row 1: the blank readings are MB-6 -1.5 (ND), MB-7 2.0, MB-8 0.5 (ND, since mdl is 1) and MB-9 3.0. The mean of the results (2.0, 3.0) is 2.5, which is the expected level. Generated and capacity analytes with some ND blanks use the per-analyte fallback only when that analyte has no blank results.",
+      "status": "checked",
+      "evidence": ["tests/expected/blank_nondetects.jsonl:1", "tests/expected/generated-2.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,1843 @@
+[?2004hroot@e84d2eaa0413:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@e84d2eaa0413:/app# clear
+[?2004l[H[J[3J[?2004hroot@e84d2eaa0413:/app# ls -la /app && find /app -maxdepth 3 -type f -printf '%p %s bytes\n' | sort
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Sep 24 16:45 .
+drwxr-xr-x 1 root root 4096 Sep 24 17:24 ..
+-rw-r--r-- 1 root root  211 Sep 24 16:41 README.md
+drwxr-xr-x 2 root root 4096 Sep 24 16:45 docs
+drwxr-xr-x 2 root root 4096 Sep 24 06:30 pybc
+/app/README.md 211 bytes
+/app/docs/bc.txt 38285 bytes
+/app/pybc/bc.py 256 bytes
+[?2004hroot@e84d2eaa0413:/app# ls -la /app/pybc 2>/dev/null || true; sed -n '1,240p' /app/docs/bc.txt
+[?2004ltotal 12
+drwxr-xr-x 2 root root 4096 Sep 24 06:30 .
+drwxr-xr-x 1 root root 4096 Sep 24 16:45 ..
+-rw-r--r-- 1 root root  256 Sep 24 16:41 bc.py
+bc(1)                       General Commands Manual                      bc(1)
+
+NAME
+     bc - An arbitrary precision calculator language
+
+SYNTAX
+     bc [ -hlwsqv ] [long-options] [  file ... ]
+
+DESCRIPTION
+     bc is a language that supports arbitrary precision numbers with
+     interactive execution of statements.  There are some similarities in the
+     syntax to the C programming language.  A standard math library is
+     available by command line option.  If requested, the math library is
+     defined before processing any files.  bc starts by processing code from
+     all the files listed on the command line in the order listed.  After all
+     files have been processed, bc reads from the standard input.  All code is
+     executed as it is read.  (If a file contains a command to halt the
+     processor, bc will never read from the standard input.)
+
+     This version of bc contains several extensions beyond traditional bc
+     implementations and the POSIX draft standard.  Command line options can
+     cause these extensions to print a warning or to be rejected.  This
+     document describes the language accepted by this processor.  Extensions
+     will be identified as such.
+
+   OPTIONS
+     -h, --help
+            Print the usage and exit.
+
+     -i, --interactive
+            Force interactive mode.
+
+     -l, --mathlib
+            Define the standard math library.
+
+     -w, --warn
+            Give warnings for extensions to POSIX bc.
+
+     -s, --standard
+            Process exactly the POSIX bc language.
+
+     -q, --quiet
+            Do not print the normal GNU bc welcome.
+
+     -v, --version
+            Print the version number and copyright and quit.
+
+   NUMBERS
+     The most basic element in bc is the number.  Numbers are arbitrary
+     precision numbers.  This precision is both in the integer part and the
+     fractional part.  All numbers are represented internally in decimal and
+     all computation is done in decimal.  (This version truncates results from
+     divide and multiply operations.)  There are two attributes of numbers,
+     the length and the scale.  The length is the total number of decimal
+     digits used by bc to represent a number and the scale is the total number
+     of decimal digits after the decimal point.  For example:
+             .000001 has a length of 6 and scale of 6.
+             1935.000 has a length of 7 and a scale of 3.
+
+   VARIABLES
+     Numbers are stored in two types of variables, simple variables and
+     arrays.  Both simple variables and array variables are named.  Names
+     begin with a letter followed by any number of letters, digits and
+     underscores.  All letters must be lower case.  (Full alpha-numeric names
+     are an extension. In POSIX bc all names are a single lower case letter.)
+     The type of variable is clear by the context because all array variable
+     names will be followed by brackets ([]).
+
+     There are four special variables, scale, ibase, obase, and last.  scale
+     defines how some operations use digits after the decimal point.  The
+     default value of scale is 0. ibase and obase define the conversion base
+     for input and output numbers.  The default for both input and output is
+     base 10.  last (an extension) is a variable that has the value of the
+     last printed number.  These will be discussed in further detail where
+     appropriate.  All of these variables may have values assigned to them as
+     well as used in expressions.
+
+   COMMENTS
+     Comments in bc start with the characters /* and end with the characters
+     */.  Comments may start anywhere and appear as a single space in the
+     input.  (This causes comments to delimit other input items.  For example,
+     a comment can not be found in the middle of a variable name.)  Comments
+     include any newlines (end of line) between the start and the end of the
+     comment.
+
+     To support the use of scripts for bc, a single line comment has been
+     added as an extension.  A single line comment starts at a # character and
+     continues to the next end of the line.  The end of line character is not
+     part of the comment and is processed normally.
+
+   EXPRESSIONS
+     The numbers are manipulated by expressions and statements.  Since the
+     language was designed to be interactive, statements and expressions are
+     executed as soon as possible.  There is no "main" program.  Instead, code
+     is executed as it is encountered.  (Functions, discussed in detail later,
+     are defined when encountered.)
+
+     A simple expression is just a constant. bc converts constants into
+     internal decimal numbers using the current input base, specified by the
+     variable ibase. (There is an exception in functions.)  The legal values
+     of ibase are 2 through 36. (Bases greater than 16 are an extension.)
+     Assigning a value outside this range to ibase will result in a value of 2
+     or 36.  Input numbers may contain the characters 0-9 and A-Z. (Note: They
+     must be capitals.  Lower case letters are variable names.)  Single digit
+     numbers always have the value of the digit regardless of the value of
+     ibase. (i.e. A = 10.)  For multi-digit numbers, bc changes all input
+     digits greater or equal to ibase to the value of ibase-1.  This makes the
+     number ZZZ always be the largest 3 digit number of the input base.
+
+     Full expressions are similar to many other high level languages.  Since
+     there is only one kind of number, there are no rules for mixing types.
+     Instead, there are rules on the scale of expressions.  Every expression
+     has a scale.  This is derived from the scale of original numbers, the
+     operation performed and in many cases, the value of the variable scale.
+     Legal values of the variable scale are 0 to the maximum number
+     representable by a C integer.
+
+     In the following descriptions of legal expressions, "expr" refers to a
+     complete expression and "var" refers to a simple or an array variable.  A
+     simple variable is just a
+            name
+     and an array variable is specified as
+            name[expr]
+     Unless specifically mentioned the scale of the result is the maximum
+     scale of the expressions involved.
+
+     - expr The result is the negation of the expression.
+
+     ++ var The variable is incremented by one and the new value is the result
+            of the expression.
+
+     -- var The variable is decremented by one and the new value is the result
+            of the expression.
+
+     var ++  The result of the expression is the value of the variable and
+            then the variable is incremented by one.
+
+     var -- The result of the expression is the value of the variable and then
+            the variable is decremented by one.
+
+     expr + expr
+            The result of the expression is the sum of the two expressions.
+
+     expr - expr
+            The result of the expression is the difference of the two
+            expressions.
+
+     expr * expr
+            The result of the expression is the product of the two
+            expressions.
+
+     expr / expr
+            The result of the expression is the quotient of the two
+            expressions.  The scale of the result is the value of the variable
+            scale.
+
+     expr % expr
+            The result of the expression is the "remainder" and it is computed
+            in the following way.  To compute a%b, first a/b is computed to
+            scale digits.  That result is used to compute a-(a/b)*b to the
+            scale of the maximum of scale+scale(b) and scale(a).  If scale is
+            set to zero and both expressions are integers this expression is
+            the integer remainder function.
+
+     expr ^ expr
+            The result of the expression is the value of the first raised to
+            the second. The second expression must be an integer.  (If the
+            second expression is not an integer, a warning is generated and
+            the expression is truncated to get an integer value.)  The scale
+            of the result is scale if the exponent is negative.  If the
+            exponent is positive the scale of the result is the minimum of the
+            scale of the first expression times the value of the exponent and
+            the maximum of scale and the scale of the first expression.  (e.g.
+            scale(a^b) = min(scale(a)*b, max( scale, scale(a))).)  It should
+            be noted that expr^0 will always return the value of 1.
+
+     ( expr )
+            This alters the standard precedence to force the evaluation of the
+            expression.
+
+     var = expr
+            The variable is assigned the value of the expression.
+
+     var <op>= expr
+            This is equivalent to "var = var <op> expr" with the exception
+            that the "var" part is evaluated only once.  This can make a
+            difference if "var" is an array.
+
+     Relational expressions are a special kind of expression that always
+     evaluate to 0 or 1, 0 if the relation is false and 1 if the relation is
+     true.  These may appear in any legal expression.  (POSIX bc requires that
+     relational expressions are used only in if, while, and for statements and
+     that only one relational test may be done in them.)  The relational
+     operators are
+
+     expr1 < expr2
+            The result is 1 if expr1 is strictly less than expr2.
+
+     expr1 <= expr2
+            The result is 1 if expr1 is less than or equal to expr2.
+
+     expr1 > expr2
+            The result is 1 if expr1 is strictly greater than expr2.
+
+     expr1 >= expr2
+            The result is 1 if expr1 is greater than or equal to expr2.
+
+     expr1 == expr2
+            The result is 1 if expr1 is equal to expr2.
+
+     expr1 != expr2
+            The result is 1 if expr1 is not equal to expr2.
+
+     Boolean operations are also legal.  (POSIX bc does NOT have boolean
+     operations). The result of all boolean operations are 0 and 1 (for false
+     and true) as in relational expressions.  The boolean operators are:
+
+     !expr  The result is 1 if expr is 0.
+
+     expr && expr
+            The result is 1 if both expressions are non-zero.
+
+     expr || expr
+            The result is 1 if either expression is non-zero.
+
+     The expression precedence is as follows: (lowest to highest)
+            || operator, left associative
+            && operator, left associative
+            ! operator, nonassociative
+            Relational operators, left associative
+            Assignment operator, right associative
+            + and - operators, left associative
+            *, / and % operators, left associative
+            ^ operator, right associative
+            unary - operator, nonassociative
+            ++ and -- operators, nonassociative
+
+     This precedence was chosen so that POSIX compliant bc programs will run
+     correctly. This will cause the use of the relational and logical
+     operators to have some unusual behavior when used with assignment
+[?2004hroot@e84d2eaa0413:/app# cat /app/pybc/bc.py; grep -nE '^   (STATEMENTS|FUNCTIONS|MATH LIBRARY|SPECIAL|READLINE|DIFFERENCES)|^     (scale|ibase|obase|last|length|sqrt|print|for|while|if|define|auto|return|quit|halt|break|continue)' /app/docs/bc.txt
+[?2004l"""pybc: a GNU bc 1.07.1 replacement in pure Python.
+
+Usage: python3 /app/pybc/bc.py [FILE]...
+"""
+
+import sys
+
+
+def main(argv):
+    sys.stderr.write("pybc: not implemented yet\n")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+14:     defined before processing any files.  bc starts by processing code from
+70:     defines how some operations use digits after the decimal point.  The
+72:     for input and output numbers.  The default for both input and output is
+74:     last printed number.  These will be discussed in further detail where
+88:     continues to the next end of the line.  The end of line character is not
+106:     ibase. (i.e. A = 10.)  For multi-digit numbers, bc changes all input
+125:     scale of the expressions involved.
+253:     defined functions.  The standard functions are:
+255:     length ( expression )
+269:     scale ( expression )
+273:     sqrt ( expression )
+278:   STATEMENTS
+329:     print list
+347:     if ( expression ) statement1 [else statement2]
+354:     while ( expression ) statement
+360:     for ( [expression1] ; [expression2] ; [expression3] ) statement
+379:     break  This statement causes a forced exit of the most recent enclosing
+382:     continue
+386:     halt   The halt statement (an extension) is an executed statement that
+391:     return Return the value 0 from a function.  (See the section on
+394:     return ( expression )
+406:     quit   When the quit statement is read, the bc processor is terminated,
+413:   FUNCTIONS
+430:     for number parameters.  The same notation is used for passing arrays as
+431:     for defining array parameters.  The named array is passed by value to the
+502:   MATH LIBRARY
+506:     defines the following functions:
+596:   READLINE AND LIBEDIT OPTIONS
+610:   DIFFERENCES
+638:     last   POSIX bc does not have a last variable.  Some implementations of
+647:     if statement, else clause
+650:     for statement
+660:     print statement
+663:     continue statement
+666:     return statement
+[?2004hroot@e84d2eaa0413:/app# sed -n '220,620p' /app/docs/bc.txt
+[?2004l     expr && expr
+            The result is 1 if both expressions are non-zero.
+
+     expr || expr
+            The result is 1 if either expression is non-zero.
+
+     The expression precedence is as follows: (lowest to highest)
+            || operator, left associative
+            && operator, left associative
+            ! operator, nonassociative
+            Relational operators, left associative
+            Assignment operator, right associative
+            + and - operators, left associative
+            *, / and % operators, left associative
+            ^ operator, right associative
+            unary - operator, nonassociative
+            ++ and -- operators, nonassociative
+
+     This precedence was chosen so that POSIX compliant bc programs will run
+     correctly. This will cause the use of the relational and logical
+     operators to have some unusual behavior when used with assignment
+     expressions.  Consider the expression:
+            a = 3 < 5
+
+     Most C programmers would assume this would assign the result of "3 < 5"
+     (the value 1) to the variable "a".  What this does in bc is assign the
+     value 3 to the variable "a" and then compare 3 to 5.  It is best to use
+     parenthesis when using relational and logical operators with the
+     assignment operators.
+
+     There are a few more special expressions that are provided in bc.  These
+     have to do with user defined functions and standard functions.  They all
+     appear as "name(parameters)".  See the section on functions for user
+     defined functions.  The standard functions are:
+
+     length ( expression )
+            The value of the length function is the number of significant
+            digits in the expression.
+
+     read ( )
+            The read function (an extension) will read a number from the
+            standard input, regardless of where the function occurs.   Beware,
+            this can cause problems with the mixing of data and program in the
+            standard input.  The best use for this function is in a previously
+            written program that needs input from the user, but never allows
+            program code to be input from the user.  The value of the read
+            function is the number read from the standard input using the
+            current value of the variable ibase for the conversion base.
+
+     scale ( expression )
+            The value of the scale function is the number of digits after the
+            decimal point in the expression.
+
+     sqrt ( expression )
+            The value of the sqrt function is the square root of the
+            expression.  If the expression is negative, a run time error is
+            generated.
+
+   STATEMENTS
+     Statements (as in most algebraic languages) provide the sequencing of
+     expression evaluation.  In bc statements are executed "as soon as
+     possible."  Execution happens when a newline in encountered and there is
+     one or more complete statements.  Due to this immediate execution,
+     newlines are very important in bc. In fact, both a semicolon and a
+     newline are used as statement separators.  An improperly placed newline
+     will cause a syntax error.  Because newlines are statement separators, it
+     is possible to hide a newline by using the backslash character.  The
+     sequence "\<nl>", where <nl> is the newline appears to bc as whitespace
+     instead of a newline.  A statement list is a series of statements
+     separated by semicolons and newlines.  The following is a list of bc
+     statements and what they do: (Things enclosed in brackets ([]) are
+     optional parts of the statement.)
+
+     expression
+            This statement does one of two things.  If the expression starts
+            with "<variable> <assignment> ...", it is considered to be an
+            assignment statement.  If the expression is not an assignment
+            statement, the expression is evaluated and printed to the output.
+            After the number is printed, a newline is printed.  For example,
+            "a=1" is an assignment statement and "(a=1)" is an expression that
+            has an embedded assignment.  All numbers that are printed are
+            printed in the base specified by the variable obase. The legal
+            values for  obase are 2 through BC_BASE_MAX.  (See the section
+            LIMITS.)  For bases 2 through 16, the usual method of writing
+            numbers is used.  For bases greater than 16, bc uses a multi-
+            character digit method of printing the numbers where each higher
+            base digit is printed as a base 10 number.  The multi-character
+            digits are separated by spaces.  Each digit contains the number of
+            characters required to represent the base ten value of "obase-1".
+            Since numbers are of arbitrary precision, some numbers may not be
+            printable on a single output line.  These long numbers will be
+            split across lines using the "\" as the last character on a line.
+            The maximum number of characters printed per line is 70.  Due to
+            the interactive nature of bc, printing a number causes the side
+            effect of assigning the printed value to the special variable
+            last. This allows the user to recover the last value printed
+            without having to retype the expression that printed the number.
+            Assigning to last is legal and will overwrite the last printed
+            value with the assigned value.  The newly assigned value will
+            remain until the next number is printed or another value is
+            assigned to last.  (Some installations may allow the use of a
+            single period (.) which is not part of a number as a short hand
+            notation for for last.)
+
+     string The string is printed to the output.  Strings start with a double
+            quote character and contain all characters until the next double
+            quote character.  All characters are take literally, including any
+            newline.  No newline character is printed after the string.
+
+     print list
+            The print statement (an extension) provides another method of
+            output.  The "list" is a list of strings and expressions separated
+            by commas.  Each string or expression is printed in the order of
+            the list.  No terminating newline is printed.  Expressions are
+            evaluated and their value is printed and assigned to the variable
+            last. Strings in the print statement are printed to the output and
+            may contain special characters.  Special characters start with the
+            backslash character (\).  The special characters recognized by bc
+            are "a" (alert or bell), "b" (backspace), "f" (form feed), "n"
+            (newline), "r" (carriage return), "q" (double quote), "t" (tab),
+            and "\" (backslash).  Any other character following the backslash
+            will be ignored.
+
+     { statement_list }
+            This is the compound statement.  It allows multiple statements to
+            be grouped together for execution.
+
+     if ( expression ) statement1 [else statement2]
+            The if statement evaluates the expression and executes statement1
+            or statement2 depending on the value of the expression.  If the
+            expression is non-zero, statement1 is executed.  If statement2 is
+            present and the value of the expression is 0, then statement2 is
+            executed.  (The else clause is an extension.)
+
+     while ( expression ) statement
+            The while statement will execute the statement while the
+            expression is non-zero.  It evaluates the expression before each
+            execution of the statement.   Termination of the loop is caused by
+            a zero expression value or the execution of a break statement.
+
+     for ( [expression1] ; [expression2] ; [expression3] ) statement
+            The for statement controls repeated execution of the statement.
+            Expression1 is evaluated before the loop.  Expression2 is
+            evaluated before each execution of the statement.  If it is non-
+            zero, the statement is evaluated.  If it is zero, the loop is
+            terminated.  After each execution of the statement, expression3 is
+            evaluated before the reevaluation of expression2.  If expression1
+            or expression3 are missing, nothing is evaluated at the point they
+            would be evaluated.  If expression2 is missing, it is the same as
+            substituting the value 1 for expression2.  (The optional
+            expressions are an extension. POSIX bc requires all three
+            expressions.)  The following is equivalent code for the for
+            statement:
+            expression1;
+            while (expression2) {
+               statement;
+               expression3;
+            }
+
+     break  This statement causes a forced exit of the most recent enclosing
+            while statement or for statement.
+
+     continue
+            The continue statement (an extension)  causes the most recent
+            enclosing for statement to start the next iteration.
+
+     halt   The halt statement (an extension) is an executed statement that
+            causes the bc processor to quit only when it is executed.  For
+            example, "if (0 == 1) halt" will not cause bc to terminate because
+            the halt is not executed.
+
+     return Return the value 0 from a function.  (See the section on
+            functions.)
+
+     return ( expression )
+            Return the value of the expression from a function.  (See the
+            section on functions.)  As an extension, the parenthesis are not
+            required.
+
+   PSEUDO STATEMENTS
+     These statements are not statements in the traditional sense.  They are
+     not executed statements.  Their function is performed at "compile" time.
+
+     limits Print the local limits enforced by the local version of bc.  This
+            is an extension.
+
+     quit   When the quit statement is read, the bc processor is terminated,
+            regardless of where the quit statement is found.  For example, "if
+            (0 == 1) quit" will cause bc to terminate.
+
+     warranty
+            Print a longer warranty notice.  This is an extension.
+
+   FUNCTIONS
+     Functions provide a method of defining a computation that can be executed
+     later.  Functions in bc always compute a value and return it to the
+     caller.  Function definitions are "dynamic" in the sense that a function
+     is undefined until a definition is encountered in the input.  That
+     definition is then used until another definition function for the same
+     name is encountered.  The new definition then replaces the older
+     definition.  A function is defined as follows:
+            define name ( parameters ) { newline
+                auto_list   statement_list }
+     A function call is just an expression of the form "name(parameters)".
+
+     Parameters are numbers or arrays (an extension).  In the function
+     definition, zero or more parameters are defined by listing their names
+     separated by commas.  All parameters are call by value parameters.
+     Arrays are specified in the parameter definition by the notation
+     "name[]".   In the function call, actual parameters are full expressions
+     for number parameters.  The same notation is used for passing arrays as
+     for defining array parameters.  The named array is passed by value to the
+     function.  Since function definitions are dynamic, parameter numbers and
+     types are checked when a function is called.  Any mismatch in number or
+     types of parameters will cause a runtime error.  A runtime error will
+     also occur for the call to an undefined function.
+
+     The auto_list is an optional list of variables that are for "local" use.
+     The syntax of the auto list (if present) is "auto name, ... ;".  (The
+     semicolon is optional.)  Each name is the name of an auto variable.
+     Arrays may be specified by using the same notation as used in parameters.
+     These variables have their values pushed onto a stack at the start of the
+     function.  The variables are then initialized to zero and used throughout
+     the execution of the function.  At function exit, these variables are
+     popped so that the original value (at the time of the function call) of
+     these variables are restored.  The parameters are really auto variables
+     that are initialized to a value provided in the function call.  Auto
+     variables are different than traditional local variables because if
+     function A calls function B, B may access function A's auto variables by
+     just using the same name, unless function B has called them auto
+     variables.  Due to the fact that auto variables and parameters are pushed
+     onto a stack, bc supports recursive functions.
+
+     The function body is a list of bc statements.  Again, statements are
+     separated by semicolons or newlines.  Return statements cause the
+     termination of a function and the return of a value.  There are two
+     versions of the return statement.  The first form, "return", returns the
+     value 0 to the calling expression.  The second form, "return ( expression
+     )", computes the value of the expression and returns that value to the
+     calling expression.  There is an implied "return (0)" at the end of every
+     function.  This allows a function to terminate and return 0 without an
+     explicit return statement.
+
+     Functions also change the usage of the variable ibase.  All constants in
+     the function body will be converted using the value of ibase at the time
+     of the function call.  Changes of ibase will be ignored during the
+     execution of the function except for the standard function read, which
+     will always use the current value of ibase for conversion of numbers.
+
+     Several extensions have been added to functions.  First, the format of
+     the definition has been slightly relaxed.  The standard requires the
+     opening brace be on the same line as the define keyword and all other
+     parts must be on following lines.  This version of bc will allow any
+     number of newlines before and after the opening brace of the function.
+     For example, the following definitions are legal.
+            define d (n) { return (2*n); }
+            define d (n)
+              { return (2*n); }
+
+     Functions may be defined as void.  A void funtion returns no value and
+     thus may not be used in any place that needs a value.  A void function
+     does not produce any output when called by itself on an input line.  The
+     key word void is placed between the key word define and the function
+     name.  For example, consider the following session.
+            define py (y) { print "--->", y, "<---", "\n"; }
+            define void px (x) { print "--->", x, "<---", "\n"; }
+            py(1)
+            --->1<---
+            0
+            px(1)
+            --->1<---
+     Since py is not a void function, the call of py(1) prints the desired
+     output and then prints a second line that is the value of the function.
+     Since the value of a function that is not given an explicit return
+     statement is zero, the zero is printed.  For px(1), no zero is printed
+     because the function is a void function.
+
+     Also, call by variable for arrays was added.  To declare a call by
+     variable array, the declaration of the array parameter in the function
+     definition looks like "*name[]".  The call to the function remains the
+     same as call by value arrays.
+
+   MATH LIBRARY
+     If bc is invoked with the -l option, a math library is preloaded and the
+     default scale is set to 20.   The math functions will calculate their
+     results to the scale set at the time of their call.  The math library
+     defines the following functions:
+
+     s (x)  The sine of x, x is in radians.
+
+     c (x)  The cosine of x, x is in radians.
+
+     a (x)  The arctangent of x, arctangent returns radians.
+
+     l (x)  The natural logarithm of x.
+
+     e (x)  The exponential function of raising e to the value x.
+
+     j (n,x)
+            The Bessel function of integer order n of x.
+
+   EXAMPLES
+     In /bin/sh,  the following will assign the value of "pi" to the shell
+     variable pi.
+             pi=$(echo "scale=10; 4*a(1)" | bc -l)
+
+     The following is the definition of the exponential function used in the
+     math library.  This function is written in POSIX bc.
+            scale = 20
+
+            /* Uses the fact that e^x = (e^(x/2))^2
+               When x is small enough, we use the series:
+                 e^x = 1 + x + x^2/2! + x^3/3! + ...
+            */
+
+            define e(x) {
+              auto  a, d, e, f, i, m, v, z
+
+              /* Check the sign of x. */
+              if (x<0) {
+                m = 1
+                x = -x
+              }
+
+              /* Precondition x. */
+              z = scale;
+              scale = 4 + z + .44*x;
+              while (x > 1) {
+                f += 1;
+                x /= 2;
+              }
+
+              /* Initialize the variables. */
+              v = 1+x
+              a = x
+              d = 1
+
+              for (i=2; 1; i++) {
+                e = (a *= x) / (d *= i)
+                if (e == 0) {
+                  if (f>0) while (f--)  v = v*v;
+                  scale = z
+                  if (m) return (1/v);
+                  return (v/1);
+                }
+                v += e
+              }
+            }
+
+     The following is code that uses the extended features of bc to implement
+     a simple program for calculating checkbook balances.  This program is
+     best kept in a file so that it can be used many times without having to
+     retype it at every use.
+            scale=2
+            print "\nCheck book program!\n"
+            print "  Remember, deposits are negative transactions.\n"
+            print "  Exit by a 0 transaction.\n\n"
+
+            print "Initial balance? "; bal = read()
+            bal /= 1
+            print "\n"
+            while (1) {
+              "current balance = "; bal
+              "transaction? "; trans = read()
+              if (trans == 0) break;
+              bal -= trans
+              bal /= 1
+            }
+            quit
+
+     The following is the definition of the recursive factorial function.
+            define f (x) {
+              if (x <= 1) return (1);
+              return (f(x-1) * x);
+            }
+
+   READLINE AND LIBEDIT OPTIONS
+     GNU bc can be compiled (via a configure option) to use the GNU readline
+     input editor library or the BSD libedit library.  This allows the user to
+     do editing of lines before sending them to bc.  It also allows for a
+     history of previous lines typed.  When this option is selected, bc has
+     one more special variable.  This special variable, history is the number
+     of lines of history retained.  For readline, a value of -1 means that an
+     unlimited number of history lines are retained.  Setting the value of
+     history to a positive number restricts the number of history lines to the
+     number given.  The value of 0 disables the history feature.  The default
+     value is 100. For more information, read the user manuals for the GNU
+     readline, history and BSD libedit libraries.  One can not enable both
+     readline and libedit at the same time.
+
+   DIFFERENCES
+     This version of bc was implemented from the POSIX P1003.2/D11 draft and
+     contains several differences and extensions relative to the draft and
+     traditional implementations.  It is not implemented in the traditional
+     way using dc(1).  This version is a single process which parses and runs
+     a byte code translation of the program.  There is an "undocumented"
+     option (-c) that causes the program to output the byte code to the
+     standard output instead of running it.  It was mainly used for debugging
+     the parser and preparing the math library.
+
+     A major source of differences is extensions, where a feature is extended
+[?2004hroot@e84d2eaa0413:/app# cat > /app/pybc/bc.py <<'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import sys, re, math
+[?2004l[?2004h> 
+[?2004l[?2004h> class Num:
+[?2004l[?2004h>     __slots__=('v','s')
+[?2004l[?2004h>     def __init__(self,v=0,s=0): self.v=int(v); self.s=max(0,int(s))
+[?2004l[?2004h>     def copy(self): return Num(self.v,self.s)
+[?2004l[?2004h>     def trunc(self,s):
+[?2004l[?2004h>         s=max(0,int(s))
+[?2004l[?2004h>         if s>=self.s: return Num(self.v*10**(s-self.s),s)
+[?2004l[?2004h>         return Num(tdiv(self.v,10**(self.s-s)),s)
+[?2004l[?2004h>     def integer(self): return tdiv(self.v,10**self.s)
+[?2004l[?2004h>     def nz(self): return self.v!=0
+[?2004l[?2004h> 
+[?2004l[?2004h> def tdiv(a,b):
+[?2004l[?2004h>     if b==0: raise RunError()
+[?2004l[?2004h>     q=abs(a)//abs(b)
+[?2004l[?2004h>     return -q if (a<0) != (b<0) else q
+[?2004l[?2004h> 
+[?2004l[?2004h> def align(a,b):
+[?2004l[?2004h>     s=max(a.s,b.s); return a.v*10**(s-a.s),b.v*10**(s-b.s),s
+[?2004l[?2004h> 
+[?2004l[?2004h> def add(a,b,neg=False):
+[?2004l[?2004h>     x,y,s=align(a,b); return Num(x-y if neg else x+y,s)
+[?2004l[?2004h> def mul(a,b,sc):
+[?2004l[?2004h>     rs=min(a.s+b.s,max(sc,a.s,b.s)); return Num(tdiv(a.v*b.v,10**(a.s+b.s-rs)),rs)
+[?2004l[?2004h> def divn(a,b,sc):
+[?2004l[?2004h>     if b.v==0: raise RunError()
+[?2004l[?2004h>     return Num(tdiv(a.v*10**(b.s+sc),b.v*10**a.s),sc)
+[?2004l[?2004h> def remn(a,b,sc):
+[?2004l[?2004h>     if b.v==0: raise RunError()
+[?2004l[?2004h>     q=divn(a,b,sc); p=mul(q,b,max(sc+b.s,a.s)); return add(a,p,True).trunc(max(sc+b.s,a.s))
+[?2004l[?2004h> def cmpn(a,b):
+[?2004l[?2004h>     x,y,_=align(a,b); return (x>y)-(x<y)
+[?2004l[?2004h> 
+[?2004l[?2004h> def pown(a,b,sc):
+[?2004l[?2004h>     n=b.integer()
+[?2004l[?2004h>     if n==0:return Num(1,0)
+[?2004l[?2004h>     if a.v==0 and n<0: raise RunError()
+[?2004l[?2004h>     if n>0:
+[?2004l[?2004h>         rs=min(a.s*n,max(sc,a.s)); raw=pow(a.v,n)
+[?2004l[?2004h>         return Num(tdiv(raw,10**(a.s*n-rs)),rs)
+[?2004l[?2004h>     rs=sc
+[?2004l[?2004h>     den=pow(abs(a.v),-n); num=10**(a.s*(-n)+rs)
+[?2004l[?2004h>     v=tdiv(num,den); v=-v if a.v<0 and (-n)%2 else v
+[?2004l[?2004h>     return Num(v,rs)
+[?2004l[?2004h> 
+[?2004l[?2004h> class RunError(Exception): pass
+[?2004l[?2004h> class Halt(Exception): pass
+[?2004l[?2004h> class Flow(Exception):
+[?2004l[?2004h>     def __init__(self,k,v=None): self.k=k; self.v=v
+[?2004l[?2004h> 
+[?2004l[?2004h> # token: kind/value. Newlines are syntactically meaningful separators.
+[?2004l[?2004h> pat=re.compile(r'''(?P<WS>[ \t\r]+)|(?P<NL>\n)|(?P<BC>/\*.*?\*/)|(?P<LC>\#[^\n]*)|(?P<STR>"(?:\\.|[^"\\])*")|(?P<NUM>(?:[0-9A-F]+(?:\.[0-9A-F]*)?|\.[0-9A-F]+))|(?P<ID>[a-z][a-z0-9_]*)|(?P<OP>\+\+|--|\+=|-=|\*=|/=|%=|\^=|==|!=|<=|>=|&&|\|\||.)''',re.S)
+[?2004l[?2004h> 
+[?2004l[?2004h> def lex(src):
+[?2004l[?2004h>     out=[]; p=0
+[?2004l[?2004h>     while p<len(src):
+[?2004l[?2004h>         m=pat.match(src,p)
+[?2004l[?2004h>         if not m: p+=1; continue
+[?2004l[?2004h>         p=m.end(); k=m.lastgroup; v=m.group()
+[?2004l[?2004h>         if k in ('WS','LC'): continue
+[?2004l[?2004h>         if k=='BC':
+[?2004l[?2004h>             # A comment acts as whitespace; preserve contained newlines.
+[?2004l[?2004h>             out.extend([('NL','\n')]*v.count('\n')); continue
+[?2004l[?2004h>         if k=='STR': out.append(('STR',v[1:-1]))
+[?2004l[?2004h>         elif k=='NUM': out.append(('NUM',v))
+[?2004l[?2004h>         elif k=='ID': out.append(('ID',v))
+[?2004l[?2004h>         elif k=='NL': out.append(('NL',v))
+[?2004l[?2004h>         else: out.append((v,v))
+[?2004l[?2004h>     out.append(('EOF','EOF')); return out
+[?2004l[?2004h> 
+[?2004l[?2004h> class Parser:
+[?2004l[?2004h>     def __init__(self,s): self.t=lex(s); self.i=0
+[?2004lue:
+                    n=self.pop()[1]; arr=False
+                    if self.pk('['): self.pop(); self.pop(']'); arr=True
+                    xs.append((n,arr))
+                    if not self.pk(','): break
+                    self.pop()
+                return ('auto',xs)
+        if self.pk()[0]=='STR': return ('string',self.pop()[1])
+        e=self.expr(); return ('expr',e)
+    def func(self):
+        self.pop(); void=False
+        if self.pk('ID') and self.pk()[1]=='void': self.pop(); void=True
+        name=self.pop()[1]; self.pop('('); ps=[]
+        if not self.pk(')'):
+            while True:
+                ref=False
+                if self.pk('*'): self.pop(); ref=True
+                n=self.pop()[1]; arr=False
+                if self.pk('['): self.pop(); self.pop(']'); arr=True
+                ps.append((n,arr,ref))
+                if not self.pk(','): break
+                self.pop()
+        self.pop(')'); self.softnl(); self.pop('{'); body=self.program('}'); self.pop('}')
+        return ('define',name,ps,body,void)
+    # Pratt parser, binding powers match GNU bc's documented unusual order.
+    def expr(self,minp=0):
+        if self.pk('-'):
+            self.pop(); x=('neg',self.expr(9))
+        elif self.pk('!'):
+            self.pop(); x=('not',self.expr(3))
+        elif self.pk('++') or self.pk('--'):
+            op=self.pop()[1]; x=('pre',op,self.expr(10))
+        elif self.pk('('):
+            self.pop(); x=self.expr(); self.pop(')')
+        elif self.pk()[0]=='NUM': x=('const',self.pop()[1])
+        elif self.pk('.'):
+            self.pop(); x=('var','last')
+        elif self.pk()[0]=='ID':
+            n=self.pop()[1]
+            if self.pk('('):
+                self.pop(); aa=[]
+    [?2004h>     def pk(self,v=None):
+[?2004l[?2004h>         z=self.t[self.i]; return z[1]==v if v is not None else z
+[?2004l[?2004h>     def pop(self,v=None):
+[?2004l[?2004h>         z=self.t[self.i]
+[?2004l[?2004h>         if v is not None and z[1]!=v: raise SyntaxError((v,z))
+[?2004l[?2004h>         self.i+=1; return z
+[?2004l[?2004h>     def seps(self):
+[?2004l[?2004h>         while self.pk('\n') or self.pk(';'): self.i+=1
+[?2004l[?2004h>     def softnl(self):
+[?2004l[?2004h>         while self.pk('\n'): self.i+=1
+[?2004l[?2004h>     def program(self,end=None):
+[?2004l[?2004h>         a=[]; self.seps()
+[?2004l[?2004h>         while not self.pk('EOF') and not (end and self.pk(end)):
+[?2004l[?2004h>             a.append(self.stmt()); self.seps()
+[?2004llf.expr(); self.pop(']');[?2004h>         return a
+[?2004l[?2004h>     def stmt(self):
+[?2004l[?2004h>         if self.pk('{'):
+[?2004l[?2004h>             self.pop(); a=self.program('}'); self.pop('}'); return ('block',a)
+[?2004l[?2004h>         if self.pk('ID'):
+[?2004l[?2004h>             w=self.pk()[1]
+[?2004l[?2004h>             if w=='define': return self.func()
+[?2004l[?2004h>             if w=='if':
+[?2004l[?2004h>                 self.pop(); self.softnl(); self.pop('('); e=self.expr(); self.pop(')'); self.softnl(); a=self.stmt()
+[?2004l[?2004h>                 save=self.i; self.seps()
+[?2004l[?2004h>                 if self.pk('ID') and self.pk()[1]=='else': self.pop(); self.softnl(); b=self.stmt()
+[?2004l[?2004h>                 else: self.i=save; b=None
+[?2004l[?2004h>                 return ('if',e,a,b)
+[?2004l[?2004h>             if w=='while':
+[?2004l[?2004h>                 self.pop(); self.softnl(); self.pop('('); e=self.expr(); self.pop(')'); self.softnl(); return ('while',e,self.stmt())
+[?2004l[?2004h>             if w=='for':
+[?2004l[?2004h>                 self.pop(); self.softnl(); self.pop('(')
+[?2004l       op=self.pk()[1]
+            if op in ('++','--'):
+                if 10<minp: break
+                self.pop(); x=('post',op,x); continue
+            prec={'||':1,'&&':2,'<':4,'<=':4,'>':4,'>=':4,'==':4,'!=':4,
+                  '=':5,'+=':5,'-=':5,'*=':5,'/=':5,'%=':5,'^=':5,
+                  '+':6,'-':6,'*':7,'/':7,'%':7,'^':8}.get(op,-1)
+            if prec<minp: break
+            self.pop(); right=self.expr(prec if op in ('=','+=','-=','*=','/=','%=','^=','^') else prec+1)
+            x=('assign',op,x,right) if '=' in op and op not in ('==','!=','<=','>=') else ('bin',op,x,right)
+        return x
+
+class Env:
+    def __init__(self):
+        self.g={}; self.ga={}; self.frames=[]; self.funcs={}
+        self.spe[?2004h>                 a=None if self.pk(';') else self.expr(); self.pop(';')
+[?2004l[?2004h>                 b=None if self.pk(';') else self.expr(); self.pop(';')
+[?2004l[?2004h>                 c=None if self.pk(')') else self.expr(); self.pop(')'); self.softnl()
+[?2004l[?2004h>                 return ('for',a,b,c,self.stmt())
+[?2004l[?2004h>             if w in ('break','continue','halt','quit'):
+[?2004l[?2004h>                 self.pop(); return (w,)
+[?2004l[?2004h>             if w=='return':
+[?2004l[?2004h>                 self.pop()
+[?2004l[?2004h>                 if self.pk('('): self.pop(); e=self.expr(); self.pop(')'); return ('return',e)
+[?2004l[?2004h>                 return ('return',None)
+[?2004l[?2004h>             if w=='print':
+[?2004l[?2004h>                 self.pop(); xs=[]
+[?2004l[?2004h>                 while True:
+[?2004l[?2004h>                     if self.pk()[0]=='STR': xs.append(('str',self.pop()[1]))
+[?2004l[?2004h>                     else: xs.append(('num',self.expr()))
+[?2004l[?2004h>                     if not self.pk(','): break
+[?2004l[?2004h>                     self.pop()
+[?2004l[?2004h>                 return ('print',xs)
+[?2004l[?2004h>             if w=='auto':
+[?2004l[?2004h>                 self.pop(); xs=[]
+[?2004l[?2004h>                 while True:
+[?2004l[?2004h>                     n=self.pop()[1]; arr=False
+[?2004l[?2004h>                     if self.pk('['): self.pop(); self.pop(']'); arr=True
+[?2004l[?2004h>                     xs.append((n,arr))
+[?2004l[?2004h>                     if not self.pk(','): break
+[?2004l[?2004h>                     self.pop()
+[?2004l[?2004h>                 return ('auto',xs)
+[?2004l[?2004h>         if self.pk()[0]=='STR': return ('string',self.pop()[1])
+[?2004l[?2004h>         e=self.expr(); return ('expr',e)
+[?2004l[?2004h>     def func(self):
+[?2004l[?2004h>         self.pop(); void=False
+[?2004l[?2004h>         if self.pk('ID') and self.pk()[1]=='void': self.pop(); void=True
+[?2004l[?2004h>         name=self.pop()[1]; self.pop('('); ps=[]
+[?2004l[?2004h>         if not self.pk(')'):
+[?2004l[?2004h>             while True:
+[?2004l[?2004h>                 ref=False
+[?2004l[?2004h>                 if self.pk('*'): self.pop(); ref=True
+[?2004l[?2004h>                 n=self.pop()[1]; arr=False
+[?2004l[?2004h>                 if self.pk('['): self.pop(); self.pop(']'); arr=True
+[?2004l[?2004h>                 ps.append((n,arr,ref))
+[?2004l[?2004h>                 if not self.pk(','): break
+[?2004l[?2004h>                 self.pop()
+[?2004l[?2004h>         self.pop(')'); self.softnl(); self.pop('{'); body=self.program('}'); self.pop('}')
+[?2004l[?2004h>         return ('define',name,ps,body,void)
+[?2004l[?2004h>     # Pratt parser, binding powers match GNU bc's documented unusual order.
+[?2004l[?2004h>     def expr(self,minp=0):
+[?2004l[?2004h>         if self.pk('-'):
+[?2004l[?2004h>             self.pop(); x=('neg',self.expr(9))
+[?2004l[?2004h>         elif self.pk('!'):
+[?2004l[?2004h>             self.pop(); x=('not',self.expr(3))
+[?2004l[?2004h>         elif self.pk('++') or self.pk('--'):
+[?2004l[?2004h>             op=self.pop()[1]; x=('pre',op,self.expr(10))
+[?2004l[?2004h>         elif self.pk('('):
+[?2004l[?2004h>             self.pop(); x=self.expr(); self.pop(')')
+[?2004l[?2004h>         elif self.pk()[0]=='NUM': x=('const',self.pop()[1])
+[?2004l[?2004h>         elif self.pk('.'):
+[?2004l[?2004h>             self.pop(); x=('var','last')
+[?2004l[?2004h>         elif self.pk()[0]=='ID':
+[?2004l[?2004h>             n=self.pop()[1]
+[?2004l[?2004h>             if self.pk('('):
+[?2004l[?2004h>                 self.pop(); aa=[]
+[?2004l[?2004h>                 if not self.pk(')'):
+[?2004l[?2004h>                     while True:
+[?2004l[?2004h>                         if self.pk('ID') and self.t[self.i+1][1]=='[' and self.t[self.i+2][1]==']':
+[?2004l[?2004h>                             q=self.pop()[1]; self.pop('['); self.pop(']'); aa.append(('arrarg',q))
+[?2004l[?2004h>                         else: aa.append(self.expr())
+[?2004l'obase':Num(10),'last':Num(0)}
+    def local(self,n): return self.frames and n in self.frames[-1][0]
+    def geta(self,n):
+        if self.frames and n in self.frames[-1][1]: return self.frames[-1][1][n]
+        return self.ga.setdefault(n,{})
+    def get(self,n):
+        if n in self.special:return self.special[n]
+        if self.local(n): return self.frames[-1][0][n]
+        return self.g.setdefault(n,Num())
+    def set(self,n,v):
+        if n in self.special:
+            if n in ('scale','ibase','obase'):
+                q=v.integer()
+                if n=='scale': q=max(0,q)
+                elif n=='ibase': q=max(2,min(16,q))
+                else: q=max(2,min(999,q))
+                self.special[n]=Num(q)
+            else:self.special[n]=v.copy()
+        elif self.local(n): self.frames[-1][0][n]=v.copy()
+        else:self.g[n]=v.copy()
+
+class VM:
+    def __init__(self): self.e=Env(); self.col=0; self.stopped=False
+    def out(self,s):
+        for ch in s:
+            if ch=='\n': sys.stdout.write(ch); self.col=0; continue
+            if self.col==68: sys.stdout.write('\\\n'); self.col=0
+            sys.stdout.write(ch); self.col+=1
+        sys.stdout.flush()
+    def string(self,s):
+        mp={'n':'\n','t':'\t','r':'\r','b':'\b','f':'\f','\\':'\\','q':'"'}; o=''; i=0
+        while i<len(s):
+            if s[i]=='\\' and i+1<len(s): o+=mp.get(s[i+1],s[i+1]); i+=2
+            else:o+=s[i]; i+=1
+        return o
+    def const(self,z):
+        neg=False; parts=z.split('.'); ip=parts[0] or '0'; fp=parts[1] if len(parts)>1 else ''; base=self.e.get('ibase').integer()
+        def d(c): return ord(c)-48 if c<='9' else ord(c)-55
+        # Single digit integer part retains its own value.
+        iv=0
+        if len(ip)==1: iv=d(ip)
+        else:
+            for c in ip: iv=iv*base+min(d(c),base-1)
+        s=len(fp)
+        if not fp:return Num(iv,0)
+        num=0
+        for c in fp:num=num*base+min(d(c),base-1)
+        den=base**len(fp)
+        frac=tdiv(num*10**s,den)
+        return Num(iv*10**s+frac,s)
+    def ref(self,x):
+        if x[0]=='var':
+            n=x[1]; return (lambda:self.e.get(n),lambda v:self.e.set(n,v))
+        if x[0]=='array':
+            idx=self.ev(x[2])
+            if idx.v<0 or (idx.v>0 and idx.integer()==0): raise RunError()
+            i=idx.integer()
+            if i>=65536: raise RunError()
+            a=self.e.geta(x[1])
+            return (lambda:a.setdefault(i,Num()),lambda v:a.__setitem__(i,v.copy()))
+        raise RunError()
+    def ev(self,x):
+        k=x[0]
+        if k=='const':return self.const(x[1])
+        if k in ('var','array'):return self.ref(x)[0]().copy()
+        if k=='neg': q=self.ev(x[1]); return Num(-q.v,q.s)
+        if k=='not':return Num(0 if self.ev(x[1]).nz() else 1)
+        if k in ('pre','post'):
+            g,s=self.ref(x[2]); old=g().copy(); nv=add(old,Num(1),x[1]=='--'); s(nv); return nv if k=='pre' else old
+        if k=='assign':
+            g,s=self.ref(x[2]); op=x[1]; b=self.ev(x[3])
+[?2004h>                         if not self.pk(','): break
+[?2004l[?2004h>                         self.pop()
+[?2004l[?2004h>                 self.pop(')'); x=('call',n,aa)
+[?2004l[?2004h>             elif self.pk('['):
+[?2004l[?2004h>                 self.pop(); q=self.expr(); self.pop(']'); x=('array',n,q)
+[?2004l[?2004h>             else: x=('var',n)
+[?2004l[?2004h>         else: raise SyntaxError(self.pk())
+[?2004l[?2004h>         while True:
+[?2004l[?2004h>             op=self.pk()[1]
+[?2004l[?2004h>             if op in ('++','--'):
+[?2004l[?2004h>                 if 10<minp: break
+[?2004l[?2004h>                 self.pop(); x=('post',op,x); continue
+[?2004l[?2004h>             prec={'||':1,'&&':2,'<':4,'<=':4,'>':4,'>=':4,'==':4,'!=':4,
+[?2004l[?2004h>                   '=':5,'+=':5,'-=':5,'*=':5,'/=':5,'%=':5,'^=':5,
+[?2004l[?2004h>                   '+':6,'-':6,'*':7,'/':7,'%':7,'^':8}.get(op,-1)
+[?2004l[?2004h>             if prec<minp: break
+[?2004l[?2004h>             self.pop(); right=self.expr(prec if op in ('=','+=','-=','*=','/=','%=','^=','^') else prec+1)
+[?2004l[?2004h>             x=('assign',op,x,right) if '=' in op and op not in ('==','!=','<=','>=') else ('bin',op,x,right)
+[?2004l[?2004h>         return x
+[?2004l[?2004h> 
+[?2004l[?2004h> class Env:
+[?2004l[?2004h>     def __init__(self):
+[?2004l[?2004h>         self.g={}; self.ga={}; self.frames=[]; self.funcs={}
+[?2004l[?2004h>         self.special={'scale':Num(0),'ibase':Num(10),'obase':Num(10),'last':Num(0)}
+[?2004l[?2004h>     def local(self,n): return self.frames and n in self.frames[-1][0]
+[?2004l[?2004h>     def geta(self,n):
+[?2004l[?2004h>         if self.frames and n in self.frames[-1][1]: return self.frames[-1][1][n]
+[?2004l[?2004h>         return self.ga.setdefault(n,{})
+[?2004l[?2004h>     def get(self,n):
+[?2004l[?2004h>         if n in self.special:return self.special[n]
+[?2004l[?2004h>         if self.local(n): return self.frames[-1][0][n]
+[?2004l[?2004h>         return self.g.setdefault(n,Num())
+[?2004l[?2004h>     def set(self,n,v):
+[?2004l[?2004h>         if n in self.special:
+[?2004l[?2004h>             if n in ('scale','ibase','obase'):
+[?2004l[?2004h>                 q=v.integer()
+[?2004l[?2004h>                 if n=='scale': q=max(0,q)
+[?2004l[?2004h>                 elif n=='ibase': q=max(2,min(16,q))
+[?2004l[?2004h>                 else: q=max(2,min(999,q))
+[?2004l[?2004h>                 self.special[n]=Num(q)
+[?2004l[?2004h>             else:self.special[n]=v.copy()
+[?2004l[?2004h>         elif self.local(n): self.frames[-1][0][n]=v.copy()
+[?2004l[?2004h>         else:self.g[n]=v.copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> class VM:
+[?2004l[?2004h>     def __init__(self): self.e=Env(); self.col=0; self.stopped=False
+[?2004l[?2004h>     def out(self,s):
+[?2004l[?2004h>         for ch in s:
+[?2004l[?2004h>             if ch=='\n': sys.stdout.write(ch); self.col=0; continue
+[?2004l[?2004h>             if self.col==68: sys.stdout.write('\\\n'); self.col=0
+[?2004l[?2004h>             sys.stdout.write(ch); self.col+=1
+[?2004l[?2004h>         sys.stdout.flush()
+[?2004l[?2004h>     def string(self,s):
+[?2004l[?2004h>         mp={'n':'\n','t':'\t','r':'\r','b':'\b','f':'\f','\\':'\\','q':'"'}; o=''; i=0
+[?2004l[?2004h>         while i<len(s):
+[?2004l[?2004h>             if s[i]=='\\' and i+1<len(s): o+=mp.get(s[i+1],s[i+1]); i+=2
+[?2004l[?2004h>             else:o+=s[i]; i+=1
+[?2004l[?2004h>         return o
+[?2004l[?2004h>     def const(self,z):
+[?2004l[?2004h>         neg=False; parts=z.split('.'); ip=parts[0] or '0'; fp=parts[1] if len(parts)>1 else ''; base=self.e.get('ibase').integer()
+[?2004lself.execs(body)
+        except Flow as f:
+            if f.k=='return':rv=f.v or Num()
+            else: self.e.frames.pop(); raise
+        finally:
+            if self.e.frames and self.e.frames[-1][0] is scal:self.e.frames.pop()
+        return Num() if void else rv
+    def fmt(self,a):
+        if a.v==0:return '0'
+        base=self.e.get('obase').integer(); neg=a.v<0; av=abs(a.v)
+        if base==10:
+            q=str(av).rjust(a.s+1,'0')
+            z=(q[:-a.s]+'.'+q[-a.s:]) if a.s else q
+            if [?2004h>         def d(c): return ord(c)-48 if c<='9' else ord(c)-55
+[?2004l[?2004h>         # Single digit integer part retains its own value.
+[?2004l[?2004h>         iv=0
+[?2004l[?2004h>         if len(ip)==1: iv=d(ip)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             for c in ip: iv=iv*base+min(d(c),base-1)
+[?2004l[?2004h>         s=len(fp)
+[?2004l[?2004h>         if not fp:return Num(iv,0)
+[?2004l[?2004h>         num=0
+[?2004l[?2004h>         for c in fp:num=num*base+min(d(c),base-1)
+[?2004l[?2004h>         den=base**len(fp)
+[?2004l[?2004h>         frac=tdiv(num*10**s,den)
+[?2004l[?2004h>         return Num(iv*10**s+frac,s)
+[?2004l[?2004h>     def ref(self,x):
+[?2004l[?2004h>         if x[0]=='var':
+[?2004l[?2004h>             n=x[1]; return (lambda:self.e.get(n),lambda v:self.e.set(n,v))
+[?2004l[?2004h>         if x[0]=='array':
+[?2004l[?2004h>             idx=self.ev(x[2])
+[?2004l[?2004h>             if idx.v<0 or (idx.v>0 and idx.integer()==0): raise RunError()
+[?2004l[?2004h>             i=idx.integer()
+[?2004l[?2004h>             if i>=65536: raise RunError()
+[?2004l[?2004h>             a=self.e.geta(x[1])
+[?2004l[?2004h>             return (lambda:a.setdefault(i,Num()),lambda v:a.__setitem__(i,v.copy()))
+[?2004l[?2004h>         raise RunError()
+[?2004l[?2004h>     def ev(self,x):
+[?2004l[?2004h>         k=x[0]
+[?2004l[?2004h>         if k=='const':return self.const(x[1])
+[?2004l[?2004h>         if k in ('var','array'):return self.ref(x)[0]().copy()
+[?2004l[?2004h>         if k=='neg': q=self.ev(x[1]); return Num(-q.v,q.s)
+[?2004l[?2004h>         if k=='not':return Num(0 if self.ev(x[1]).nz() else 1)
+[?2004l[?2004h>         if k in ('pre','post'):
+[?2004l[?2004h>             g,s=self.ref(x[2]); old=g().copy(); nv=add(old,Num(1),x[1]=='--'); s(nv); return nv if k=='pre' else old
+[?2004l[?2004h>         if k=='assign':
+[?2004l[?2004h>             g,s=self.ref(x[2]); op=x[1]; b=self.ev(x[3])
+[?2004l[?2004h>             if op=='=':v=b
+[?2004l[?2004h>             else:v=self.calc(op[0],g().copy(),b)
+[?2004l[?2004h>             s(v); return v.copy()
+[?2004l[?2004h>         if k=='bin':
+[?2004l[?2004h>             op=x[1]; a=self.ev(x[2])
+[?2004l[?2004h>             if op=='&&': return Num(1 if a.nz() and self.ev(x[3]).nz() else 0)
+[?2004l[?2004h>             if op=='||': return Num(1 if a.nz() or self.ev(x[3]).nz() else 0)
+[?2004l[?2004h>             b=self.ev(x[3]); return self.calc(op,a,b)
+[?2004l[?2004h>         if k=='call': return self.call(x[1],x[2])
+[?2004l[?2004h>         raise RunError()
+[?2004l[?2004h>     def calc(self,op,a,b):
+[?2004l[?2004h>         sc=self.e.get('scale').integer()
+[?2004l[?2004h>         if op=='+':return add(a,b)
+[?2004l[?2004h>         if op=='-':return add(a,b,True)
+[?2004l[?2004h>         if op=='*':return mul(a,b,sc)
+[?2004l[?2004h>         if op=='/':return divn(a,b,sc)
+[?2004l[?2004h>         if op=='%':return remn(a,b,sc)
+[?2004l[?2004h>         if op=='^':return pown(a,b,sc)
+[?2004l[?2004h>         c=cmpn(a,b)
+[?2004l[?2004h>         return Num(int({'<':c<0,'<=':c<=0,'>':c>0,'>=':c>=0,'==':c==0,'!=':c!=0}[op]))
+[?2004l[?2004h>     def call(self,n,args):
+[?2004l[?2004h>         if n=='length':
+[?2004l[?2004h>             a=self.ev(args[0]); ip=abs(a.integer())
+[?2004l[?2004h>             if a.v==0:return Num(max(1,a.s))
+[?2004l[?2004h>             il=len(str(ip)) if ip else 0
+[?2004l[?2004h>             return Num(il+a.s)
+[?2004l[?2004h>         if n=='scale':return Num(self.ev(args[0]).s)
+[?2004l[?2004h>         if n=='sqrt':
+[?2004l[?2004h>             a=self.ev(args[0])
+[?2004l[?2004h>             if a.v<0:raise RunError()
+[?2004l[?2004h>             if a.v in (0,10**a.s) and a.integer() in (0,1):return Num(a.integer())
+[?2004l[?2004h>             rs=max(self.e.get('scale').integer(),a.s)
+[?2004l[?2004h>             # floor(sqrt(value)*10^rs) using integer square root.
+[?2004l[?2004h>             exp=2*rs-a.s
+[?2004l[?2004h>             if exp>=0:v=math.isqrt(a.v*10**exp)
+[?2004l[?2004h>             else:v=math.isqrt(a.v//10**(-exp))
+[?2004l[?2004h>             return Num(v,rs)
+[?2004l[?2004h>         if n not in self.e.funcs: raise RunError()
+[?2004l[?2004h>         ps,body,void=self.e.funcs[n]
+[?2004l[?2004h>         if len(ps)!=len(args):raise RunError()
+[?2004l[?2004h>         vals=[]
+[?2004l[?2004h>         for (pn,arr,ref),arg in zip(ps,args):
+[?2004l[?2004h>             if arr:
+[?2004l[?2004h>                 if arg[0]!='arrarg':raise RunError()
+[?2004l[?2004h>                 ar=self.e.geta(arg[1]); vals.append(ar if ref else {i:v.copy() for i,v in ar.items()})
+[?2004l[?2004h>             else: vals.append(self.ev(arg))
+[?2004l[?2004h>         scal={}; arrays={}
+[?2004l[?2004h>         for (pn,arr,ref),v in zip(ps,vals): (arrays if arr else scal).__setitem__(pn,v)
+[?2004l[?2004h>         self.e.frames.append((scal,arrays))
+[?2004l[?2004h>         rv=Num()
+[?2004l[?2004h>         try:self.execs(body)
+[?2004l[?2004h>         except Flow as f:
+[?2004l[?2004h>             if f.k=='return':rv=f.v or Num()
+[?2004l[?2004h>             else: self.e.frames.pop(); raise
+[?2004l[?2004h>         finally:
+[?2004l[?2004h>             if self.e.frames and self.e.frames[-1][0] is scal:self.e.frames.pop()
+[?2004l[?2004h>         return Num() if void else rv
+[?2004l[?2004h>     def fmt(self,a):
+[?2004l[?2004h>         if a.v==0:return '0'
+[?2004l[?2004h>         base=self.e.get('obase').integer(); neg=a.v<0; av=abs(a.v)
+[?2004l[?2004h>         if base==10:
+[?2004l[?2004h>             q=str(av).rjust(a.s+1,'0')
+[?2004l[?2004h>             z=(q[:-a.s]+'.'+q[-a.s:]) if a.s else q
+[?2004l[?2004h>             if a.s and q[:-a.s]=='0':z=z[1:]
+[?2004l[?2004h>             return ('-' if neg else '')+z
+[?2004l[?2004h>         den=10**a.s; integer=av//den; rem=av%den
+[?2004l[?2004h>         digs=[]
+[?2004l[?2004h>         if integer==0:digs=[0]
+[?2004l[?2004h>         while integer:digs.append(integer%base);integer//=base
+[?2004l[?2004h>         digs=digs[::-1]
+[?2004l[?2004h>         width=len(str(base-1))
+[?2004l[?2004h>         def fd(d,first=False):
+[?2004l[?2004h>             if base<=10:return str(d)
+[?2004l[?2004h>             if base<=16:return '0123456789ABCDEF'[d]
+[?2004l[?2004h>             return ('' if first else ' ')+str(d).zfill(width)
+[?2004l[?2004h>         ip=''.join(fd(d,i==0) for i,d in enumerate(digs))
+[?2004l[?2004h>         if base>16 and digs: ip=fd(digs[0],True)+''.join(fd(d) for d in digs[1:])
+[?2004l[?2004h>         frac=''
+[?2004l[?2004h>         if a.s:
+[?2004l[?2004h>             # minimum k with base^k >= 10^scale
+[?2004l[?2004h>             k=0;p=1
+[?2004l[?2004h>             while p<den:k+=1;p*=base
+[?2004l[?2004h>             ds=[]
+[?2004l[?2004h>             for _ in range(k): rem*=base; ds.append(rem//den); rem%=den
+[?2004l[?2004h>             if base>16: frac='.'+str(ds[0]).zfill(width)+''.join(' '+str(d).zfill(width) for d in ds[1:])
+[?2004l[?2004h>             else:frac='.'+''.join(fd(d,True) for d in ds)
+[?2004l[?2004h>         return ('-' if neg else '')+ip+frac
+[?2004l[?2004h>     def execs(self,ss):
+[?2004l[?2004h>         for s in ss:self.stmt(s)
+[?2004l[?2004h>     def stmt(self,s):
+[?2004l[?2004h>         k=s[0]
+[?2004l[?2004h>         if k=='block':self.execs(s[1])
+[?2004l[?2004h>         elif k=='define':self.e.funcs[s[1]]=(s[2],s[3],s[4])
+[?2004l[?2004h>         elif k=='expr':
+[?2004l[?2004h>             v=self.ev(s[1])
+[?2004l[?2004h>             if s[1][0]!='assign':self.out(self.fmt(v)+'\n');self.e.set('last',v)
+[?2004l[?2004h>         elif k=='string':self.out(self.string(s[1])+'\n')
+[?2004l[?2004h>         elif k=='print':
+[?2004l[?2004h>             for typ,x in s[1]:
+[?2004l[?2004h>                 if typ=='str':self.out(self.string(x))
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v=self.ev(x);self.out(self.fmt(v));self.e.set('last',v)
+[?2004l[?2004h>         elif k=='if':
+[?2004l[?2004h>             if self.ev(s[1]).nz():self.stmt(s[2])
+[?2004l[?2004h>             elif s[3]:self.stmt(s[3])
+[?2004l[?2004h>         elif k=='while':
+[?2004l[?2004h>             while self.ev(s[1]).nz():
+[?2004l[?2004h>                 try:self.stmt(s[2])
+[?2004l[?2004h>                 except Flow as f:
+[?2004l[?2004h>                     if f.k=='break':break
+[?2004l[?2004h>                     raise
+[?2004l[?2004h>         elif k=='for':
+[?2004l[?2004h>             if s[1]:self.ev(s[1])
+[?2004l[?2004h>             while True:
+[?2004l[?2004h>                 if s[2] and not self.ev(s[2]).nz():break
+[?2004l[?2004h>                 try:self.stmt(s[4])
+[?2004l[?2004h>                 except Flow as f:
+[?2004l[?2004h>                     if f.k=='break':break
+[?2004l[?2004h>                     if f.k!='continue':raise
+[?2004l[?2004h>                 if s[3]:self.ev(s[3])
+[?2004l[?2004h>         elif k in ('break','continue'):raise Flow(k)
+[?2004l[?2004h>         elif k=='return':raise Flow('return',self.ev(s[1]) if s[1] else Num())
+[?2004l[?2004h>         elif k=='halt' or k=='quit':raise Halt()
+[?2004l[?2004h>         elif k=='auto':
+[?2004l[?2004h>             if not self.e.frames:return
+[?2004l[?2004h>             for n,a in s[1]:
+[?2004l[?2004h>                 if a:self.e.frames[-1][1][n]={}
+[?2004l[?2004h>                 else:self.e.frames[-1][0][n]=Num()
+[?2004l[?2004h> 
+[?2004l[?2004h> def run_source(vm,src):
+[?2004l[?2004h>     try:p=Parser(src); ss=p.program()
+[?2004l[?2004h>     except SyntaxError:return
+[?2004l[?2004h>     for st in ss:
+[?2004l[?2004h>         try:vm.stmt(st)
+[?2004l[?2004h>         except RunError:continue
+[?2004l[?2004h>         except Flow:continue
+[?2004l[?2004h> 
+[?2004l[?2004h> def main(argv):
+[?2004l[?2004h>     vm=VM()
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         for fn in argv:
+[?2004l[?2004h>             with open(fn,encoding='latin1') as f:run_source(vm,f.read())
+[?2004l[?2004h>         if not vm.stopped:run_source(vm,sys.stdin.read())
+[?2004l[?2004h>     except Halt:pass
+[?2004l[?2004h>     except (OSError,KeyboardInterrupt):return 1
+[?2004l[?2004h>     return 0
+[?2004l[?2004h> if __name__=='__main__':sys.exit(main(sys.argv[1:]))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@e84d2eaa0413:/app# chmod +x /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 -m py_compile /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py <<'EOF'
+[?2004l[?2004h> 1+2
+[?2004l[?2004h> scale=3
+[?2004l[?2004h> 10/4
+[?2004l[?2004h> 2.50*3
+[?2004l[?2004h> length(.0010); scale(2.30); sqrt(2)
+[?2004l[?2004h> a=0
+[?2004l[?2004h> for(i=0;i<4;i++) a+=i
+[?2004l[?2004h> a
+[?2004l[?2004h> ibase=16
+[?2004l[?2004h> FF.8
+[?2004l[?2004h> obase=16
+[?2004l[?2004h> 255.5
+[?2004l[?2004h> print "x=",a," done\n"
+[?2004l[?2004h> define f(n) { if(n<=1) return(1); return(n*f(n-1)); }
+[?2004l[?2004h> f(10)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 - <<'PY'
+[?2004l[?2004h> import sys,traceback
+[?2004l[?2004h> sys.path.insert(0,'/app/pybc')
+[?2004l[?2004h> import bc
+[?2004l[?2004h> samples=['1+2\n','1+2\nscale=3\n10/4\n','for(i=0;i<4;i++) a+=i\n','define f(n) { if(n<=1) return(1); return(n*f(n-1)); }\nf(10)\n']
+[?2004l[?2004h> for s in samples:
+[?2004l[?2004h>  print('---',repr(s))
+[?2004l[?2004h>  try:
+[?2004l[?2004h>   p=bc.Parser(s); print(p.program()); print('at',p.i,p.pk())
+[?2004l[?2004h>  except Exception:
+[?2004l[?2004h>   traceback.print_exc(); print('at',p.i,p.pk(),p.t[max(0,p.i-5):p.i+5])
+[?2004l[?2004h> PY
+[?2004l--- '1+2\n'
+[('expr', ('bin', '+', ('const', '1'), ('const', '2')))]
+at 4 ('EOF', 'EOF')
+--- '1+2\nscale=3\n10/4\n'
+[('expr', ('bin', '+', ('const', '1'), ('const', '2'))), ('expr', ('assign', '=', ('var', 'scale'), ('const', '3'))), ('expr', ('bin', '/', ('const', '10'), ('const', '4')))]
+at 12 ('EOF', 'EOF')
+--- 'for(i=0;i<4;i++) a+=i\n'
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/app/pybc/bc.py", line 88, in program
+    a.append(self.stmt()); self.seps()
+             ~~~~~~~~~^^
+  File "/app/pybc/bc.py", line 134, in stmt
+    e=self.expr(); return ('expr',e)
+  File "/app/pybc/bc.py", line 174, in expr
+    self.pop(')'); x=('call',n,aa)
+    ~~~~~~~~^^^^^
+  File "/app/pybc/bc.py", line 79, in pop
+    if v is not None and z[1]!=v: raise SyntaxError((v,z))
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: (')', (';', ';'))
+at 5 (';', ';') [('ID', 'for'), ('(', '('), ('ID', 'i'), ('=', '='), ('NUM', '0'), (';', ';'), ('ID', 'i'), ('<', '<'), ('NUM', '4'), (';', ';')]
+--- 'define f(n) { if(n<=1) return(1); return(n*f(n-1)); }\nf(10)\n'
+[('expr', ('var', 'define')), ('expr', ('call', 'f', [('var', 'n')])), ('block', [('expr', ('call', 'if', [('bin', '<=', ('var', 'n'), ('const', '1'))])), ('expr', ('call', 'return', [('const', '1')])), ('expr', ('call', 'return', [('bin', '*', ('var', 'n'), ('call', 'f', [('bin', '-', ('var', 'n'), ('const', '1'))]))]))]), ('expr', ('call', 'f', [('const', '10')]))]
+at 36 ('EOF', 'EOF')
+[?2004hroot@e84d2eaa0413:/app# grep -n "pk('ID')\|pk('STR')\|pk('NUM')" /app/pybc/bc.py
+[?2004l93:        if self.pk('ID'):
+99:                if self.pk('ID') and self.pk()[1]=='else': self.pop(); self.softnl(); b=self.stmt()
+137:        if self.pk('ID') and self.pk()[1]=='void': self.pop(); void=True
+169:                        if self.pk('ID') and self.t[self.i+1][1]=='[' and self.t[self.i+2][1]==']':
+[?2004hroot@e84d2eaa0413:/app# sed -i "s/self\.pk('ID')/self.pk()[0]=='ID'/g; s/self\.pk('STR')/self.pk()[0]=='STR'/g; s/self\.pk('NUM')/self.pk()[0]=='NUM'/g" /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 -m py_compile /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 - <<'PY'
+[?2004l[?2004h> import sys
+[?2004l[?2004h> sys.path.insert(0,'/app/pybc'); import bc
+[?2004l[?2004h> for s in ['for(i=0;i<4;i++) a+=i\n','define f(n) { if(n<=1) return(1); return(n*f(n-1)); }\nf(10)\n']:
+[?2004l[?2004h>  p=bc.Parser(s); print(p.program())
+[?2004l[?2004h> PY
+[?2004l[('for', ('assign', '=', ('var', 'i'), ('const', '0')), ('bin', '<', ('var', 'i'), ('const', '4')), ('post', '++', ('var', 'i')), ('expr', ('assign', '+=', ('var', 'a'), ('var', 'i'))))]
+[('define', 'f', [('n', False, False)], [('if', ('bin', '<=', ('var', 'n'), ('const', '1')), ('return', ('const', '1')), None), ('return', ('bin', '*', ('var', 'n'), ('call', 'f', [('bin', '-', ('var', 'n'), ('const', '1'))])))], False), ('expr', ('call', 'f', [('const', '10')]))]
+[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py <<'EOF'
+[?2004l[?2004h> 1+2
+[?2004l[?2004h> scale=3
+[?2004l[?2004h> 10/4
+[?2004l[?2004h> 2.50*3
+[?2004l[?2004h> length(.0010); scale(2.30); sqrt(2)
+[?2004l[?2004h> a=0
+[?2004l[?2004h> for(i=0;i<4;i++) a+=i
+[?2004l[?2004h> a
+[?2004l[?2004h> ibase=16
+[?2004l[?2004h> FF.8
+[?2004l[?2004h> obase=16
+[?2004l[?2004h> 255.5
+[?2004l[?2004h> print "x=",a," done\n"
+[?2004l[?2004h> define f(n) { if(n<=1) return(1); return(n*f(n-1)); }
+[?2004l[?2004h> f(10)
+[?2004l[?2004h> EOF
+[?2004l3
+2.500
+7.50
+4
+2
+1.414
+6
+255.5
+01 05 03.06
+x=06 done
+17 07 06 01 00 10 18 19 06 00
+[?2004hroot@e84d2eaa0413:/app# sed -n '278,505p' /app/docs/bc.txt; command -v bc || true
+[?2004l   STATEMENTS
+     Statements (as in most algebraic languages) provide the sequencing of
+     expression evaluation.  In bc statements are executed "as soon as
+     possible."  Execution happens when a newline in encountered and there is
+     one or more complete statements.  Due to this immediate execution,
+     newlines are very important in bc. In fact, both a semicolon and a
+     newline are used as statement separators.  An improperly placed newline
+     will cause a syntax error.  Because newlines are statement separators, it
+     is possible to hide a newline by using the backslash character.  The
+     sequence "\<nl>", where <nl> is the newline appears to bc as whitespace
+     instead of a newline.  A statement list is a series of statements
+     separated by semicolons and newlines.  The following is a list of bc
+     statements and what they do: (Things enclosed in brackets ([]) are
+     optional parts of the statement.)
+
+     expression
+            This statement does one of two things.  If the expression starts
+            with "<variable> <assignment> ...", it is considered to be an
+            assignment statement.  If the expression is not an assignment
+            statement, the expression is evaluated and printed to the output.
+            After the number is printed, a newline is printed.  For example,
+            "a=1" is an assignment statement and "(a=1)" is an expression that
+            has an embedded assignment.  All numbers that are printed are
+            printed in the base specified by the variable obase. The legal
+            values for  obase are 2 through BC_BASE_MAX.  (See the section
+            LIMITS.)  For bases 2 through 16, the usual method of writing
+            numbers is used.  For bases greater than 16, bc uses a multi-
+            character digit method of printing the numbers where each higher
+            base digit is printed as a base 10 number.  The multi-character
+            digits are separated by spaces.  Each digit contains the number of
+            characters required to represent the base ten value of "obase-1".
+            Since numbers are of arbitrary precision, some numbers may not be
+            printable on a single output line.  These long numbers will be
+            split across lines using the "\" as the last character on a line.
+            The maximum number of characters printed per line is 70.  Due to
+            the interactive nature of bc, printing a number causes the side
+            effect of assigning the printed value to the special variable
+            last. This allows the user to recover the last value printed
+            without having to retype the expression that printed the number.
+            Assigning to last is legal and will overwrite the last printed
+            value with the assigned value.  The newly assigned value will
+            remain until the next number is printed or another value is
+            assigned to last.  (Some installations may allow the use of a
+            single period (.) which is not part of a number as a short hand
+            notation for for last.)
+
+     string The string is printed to the output.  Strings start with a double
+            quote character and contain all characters until the next double
+            quote character.  All characters are take literally, including any
+            newline.  No newline character is printed after the string.
+
+     print list
+            The print statement (an extension) provides another method of
+            output.  The "list" is a list of strings and expressions separated
+            by commas.  Each string or expression is printed in the order of
+            the list.  No terminating newline is printed.  Expressions are
+            evaluated and their value is printed and assigned to the variable
+            last. Strings in the print statement are printed to the output and
+            may contain special characters.  Special characters start with the
+            backslash character (\).  The special characters recognized by bc
+            are "a" (alert or bell), "b" (backspace), "f" (form feed), "n"
+            (newline), "r" (carriage return), "q" (double quote), "t" (tab),
+            and "\" (backslash).  Any other character following the backslash
+            will be ignored.
+
+     { statement_list }
+            This is the compound statement.  It allows multiple statements to
+            be grouped together for execution.
+
+     if ( expression ) statement1 [else statement2]
+            The if statement evaluates the expression and executes statement1
+            or statement2 depending on the value of the expression.  If the
+            expression is non-zero, statement1 is executed.  If statement2 is
+            present and the value of the expression is 0, then statement2 is
+            executed.  (The else clause is an extension.)
+
+     while ( expression ) statement
+            The while statement will execute the statement while the
+            expression is non-zero.  It evaluates the expression before each
+            execution of the statement.   Termination of the loop is caused by
+            a zero expression value or the execution of a break statement.
+
+     for ( [expression1] ; [expression2] ; [expression3] ) statement
+            The for statement controls repeated execution of the statement.
+            Expression1 is evaluated before the loop.  Expression2 is
+            evaluated before each execution of the statement.  If it is non-
+            zero, the statement is evaluated.  If it is zero, the loop is
+            terminated.  After each execution of the statement, expression3 is
+            evaluated before the reevaluation of expression2.  If expression1
+            or expression3 are missing, nothing is evaluated at the point they
+            would be evaluated.  If expression2 is missing, it is the same as
+            substituting the value 1 for expression2.  (The optional
+            expressions are an extension. POSIX bc requires all three
+            expressions.)  The following is equivalent code for the for
+            statement:
+            expression1;
+            while (expression2) {
+               statement;
+               expression3;
+            }
+
+     break  This statement causes a forced exit of the most recent enclosing
+            while statement or for statement.
+
+     continue
+            The continue statement (an extension)  causes the most recent
+            enclosing for statement to start the next iteration.
+
+     halt   The halt statement (an extension) is an executed statement that
+            causes the bc processor to quit only when it is executed.  For
+            example, "if (0 == 1) halt" will not cause bc to terminate because
+            the halt is not executed.
+
+     return Return the value 0 from a function.  (See the section on
+            functions.)
+
+     return ( expression )
+            Return the value of the expression from a function.  (See the
+            section on functions.)  As an extension, the parenthesis are not
+            required.
+
+   PSEUDO STATEMENTS
+     These statements are not statements in the traditional sense.  They are
+     not executed statements.  Their function is performed at "compile" time.
+
+     limits Print the local limits enforced by the local version of bc.  This
+            is an extension.
+
+     quit   When the quit statement is read, the bc processor is terminated,
+            regardless of where the quit statement is found.  For example, "if
+            (0 == 1) quit" will cause bc to terminate.
+
+     warranty
+            Print a longer warranty notice.  This is an extension.
+
+   FUNCTIONS
+     Functions provide a method of defining a computation that can be executed
+     later.  Functions in bc always compute a value and return it to the
+     caller.  Function definitions are "dynamic" in the sense that a function
+     is undefined until a definition is encountered in the input.  That
+     definition is then used until another definition function for the same
+     name is encountered.  The new definition then replaces the older
+     definition.  A function is defined as follows:
+            define name ( parameters ) { newline
+                auto_list   statement_list }
+     A function call is just an expression of the form "name(parameters)".
+
+     Parameters are numbers or arrays (an extension).  In the function
+     definition, zero or more parameters are defined by listing their names
+     separated by commas.  All parameters are call by value parameters.
+     Arrays are specified in the parameter definition by the notation
+     "name[]".   In the function call, actual parameters are full expressions
+     for number parameters.  The same notation is used for passing arrays as
+     for defining array parameters.  The named array is passed by value to the
+     function.  Since function definitions are dynamic, parameter numbers and
+     types are checked when a function is called.  Any mismatch in number or
+     types of parameters will cause a runtime error.  A runtime error will
+     also occur for the call to an undefined function.
+
+     The auto_list is an optional list of variables that are for "local" use.
+     The syntax of the auto list (if present) is "auto name, ... ;".  (The
+     semicolon is optional.)  Each name is the name of an auto variable.
+     Arrays may be specified by using the same notation as used in parameters.
+     These variables have their values pushed onto a stack at the start of the
+     function.  The variables are then initialized to zero and used throughout
+     the execution of the function.  At function exit, these variables are
+     popped so that the original value (at the time of the function call) of
+     these variables are restored.  The parameters are really auto variables
+     that are initialized to a value provided in the function call.  Auto
+     variables are different than traditional local variables because if
+     function A calls function B, B may access function A's auto variables by
+     just using the same name, unless function B has called them auto
+     variables.  Due to the fact that auto variables and parameters are pushed
+     onto a stack, bc supports recursive functions.
+
+     The function body is a list of bc statements.  Again, statements are
+     separated by semicolons or newlines.  Return statements cause the
+     termination of a function and the return of a value.  There are two
+     versions of the return statement.  The first form, "return", returns the
+     value 0 to the calling expression.  The second form, "return ( expression
+     )", computes the value of the expression and returns that value to the
+     calling expression.  There is an implied "return (0)" at the end of every
+     function.  This allows a function to terminate and return 0 without an
+     explicit return statement.
+
+     Functions also change the usage of the variable ibase.  All constants in
+     the function body will be converted using the value of ibase at the time
+     of the function call.  Changes of ibase will be ignored during the
+     execution of the function except for the standard function read, which
+     will always use the current value of ibase for conversion of numbers.
+
+     Several extensions have been added to functions.  First, the format of
+     the definition has been slightly relaxed.  The standard requires the
+     opening brace be on the same line as the define keyword and all other
+     parts must be on following lines.  This version of bc will allow any
+     number of newlines before and after the opening brace of the function.
+     For example, the following definitions are legal.
+            define d (n) { return (2*n); }
+            define d (n)
+              { return (2*n); }
+
+     Functions may be defined as void.  A void funtion returns no value and
+     thus may not be used in any place that needs a value.  A void function
+     does not produce any output when called by itself on an input line.  The
+     key word void is placed between the key word define and the function
+     name.  For example, consider the following session.
+            define py (y) { print "--->", y, "<---", "\n"; }
+            define void px (x) { print "--->", x, "<---", "\n"; }
+            py(1)
+            --->1<---
+            0
+            px(1)
+            --->1<---
+     Since py is not a void function, the call of py(1) prints the desired
+     output and then prints a second line that is the value of the function.
+     Since the value of a function that is not given an explicit return
+     statement is zero, the zero is printed.  For px(1), no zero is printed
+     because the function is a void function.
+
+     Also, call by variable for arrays was added.  To declare a call by
+     variable array, the declaration of the array parameter in the function
+     definition looks like "*name[]".  The call to the function remains the
+     same as call by value arrays.
+
+   MATH LIBRARY
+     If bc is invoked with the -l option, a math library is preloaded and the
+     default scale is set to 20.   The math functions will calculate their
+     results to the scale set at the time of their call.  The math library
+[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py <<'EOF'
+[?2004l[?2004h> "abc"
+[?2004l[?2004h> print "A",1,"B\n"
+[?2004l[?2004h> a[2]=7
+[?2004l[?2004h> a[2]
+[?2004l[?2004h> define cp(x[]) { x[0]=9; return(x[1]); }
+[?2004l[?2004h> define rf(*x[]) { x[0]=8; }
+[?2004l[?2004h> a[0]=1;a[1]=3
+[?2004l[?2004h> cp(a[]);a[0]
+[?2004l[?2004h> rf(a[]);a[0]
+[?2004l[?2004h> for(i=0;i<5;i++){if(i==2)continue;print i}
+[?2004l[?2004h> print "\n"
+[?2004l[?2004h> 1/0
+[?2004l[?2004h> 42
+[?2004l[?2004h> /* multi
+[?2004l[?2004h> line */ 43
+[?2004l[?2004h> EOF
+[?2004labc
+A1B
+7
+3
+1
+0
+8
+0134
+42
+43
+[?2004hroot@e84d2eaa0413:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pybc/bc.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("class Halt(Exception): pass\n", "class Halt(Exception): pass\nclass VoidResult: pass\nVOID=VoidResult()\n")
+[?2004l[?2004h> s=s.replace("    def local(self,n): return self.frames and n in self.frames[-1][0]\n    def geta(self,n):\n        if self.frames and n in self.frames[-1][1]: return self.frames[-1][1][n]\n        return self.ga.setdefault(n,{})\n    def get(self,n):\n        if n in self.special:return self.special[n]\n        if self.local(n): return self.frames[-1][0][n]\n        return self.g.setdefault(n,Num())\n", "    def scalar_frame(self,n):\n        for f in reversed(self.frames):\n            if n in f[0]: return f\n        return None\n    def array_frame(self,n):\n        for f in reversed(self.frames):\n            if n in f[1]: return f\n        return None\n    def geta(self,n):\n        f=self.array_frame(n)\n        return f[1][n] if f else self.ga.setdefault(n,{})\n    def get(self,n):\n        if n in self.special:return self.special[n]\n        f=self.scalar_frame(n)\n        return f[0][n] if f else self.g.setdefault(n,Num())\n")
+[?2004l[?2004h> s=s.replace("        elif self.local(n): self.frames[-1][0][n]=v.copy()\n        else:self.g[n]=v.copy()", "        else:\n            f=self.scalar_frame(n)\n            if f: f[0][n]=v.copy()\n            else: self.g[n]=v.copy()")
+[?2004l[?2004h> s=s.replace("    def __init__(self): self.e=Env(); self.col=0; self.stopped=False", "    def __init__(self): self.e=Env(); self.col=0; self.stopped=False; self.callbases=[]")
+[?2004l[?2004h> s=s.replace("base=self.e.get('ibase').integer()", "base=(self.callbases[-1] if self.callbases else self.e.get('ibase').integer())",1)
+[?2004l[?2004h> s=s.replace("        self.e.frames.append((scal,arrays))\n        rv=Num()", "        self.e.frames.append((scal,arrays))\n        self.callbases.append(self.e.get('ibase').integer())\n        rv=Num()")
+[?2004l[?2004h> s=s.replace("            if self.e.frames and self.e.frames[-1][0] is scal:self.e.frames.pop()\n        return Num() if void else rv", "            if self.e.frames and self.e.frames[-1][0] is scal:self.e.frames.pop()\n            self.callbases.pop()\n        return VOID if void else rv")
+[?2004l[?2004h> s=s.replace("            return ('' if first else ' ')+str(d).zfill(width)", "            return ' '+str(d).zfill(width)")
+[?2004l[?2004h> s=s.replace("        if base>16 and digs: ip=fd(digs[0],True)+''.join(fd(d) for d in digs[1:])", "        if base>16 and digs: ip=''.join(fd(d) for d in digs)")
+[?2004l[?2004h> s=s.replace("        elif k=='string':self.out(self.string(s[1])+'\\n')", "        elif k=='string':self.out(s[1])")
+[?2004l[?2004h> s=s.replace("            if s[1][0]!='assign':self.out(self.fmt(v)+'\\n');self.e.set('last',v)", "            if s[1][0]!='assign' and v is not VOID:self.out(self.fmt(v)+'\\n');self.e.set('last',v)")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 -m py_compile /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py <<'EOF'
+[?2004l[?2004h> "abc"
+[?2004l[?2004h> print "X\n"
+[?2004l[?2004h> define void v(x){print x,"\n";}
+[?2004l[?2004h> v(7)
+[?2004l[?2004h> define outer(x){auto y;y=4;return(inner());}
+[?2004l[?2004h> define inner(){y+=3;return(y);}
+[?2004l[?2004h> outer(0)
+[?2004l[?2004h> ibase=10
+[?2004l[?2004h> define base(x){ibase=2;return(11);}
+[?2004l[?2004h> base(0)
+[?2004l[?2004h> obase=20
+[?2004l[?2004h> 25
+[?2004l[?2004h> obase=10
+[?2004l[?2004h> scale=4
+[?2004l[?2004h> sqrt(0);sqrt(1);sqrt(2)
+[?2004l[?2004h> .5;-.25;0.00
+[?2004l[?2004h> length(0);length(0.00);length(.0010);length(100.00)
+[?2004l[?2004h> EOF
+[?2004labcX
+7
+7
+11
+11
+0
+1
+1.01101010000010
+0.1000
+-0.1100000
+0
+1
+10
+100
+11
+[?2004hroot@e84d2eaa0413:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pybc/bc.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("def lex(src):\n    out=[]; p=0", "def lex(src):\n    # Outside strings, backslash-newline is whitespace. Valid test input does\n    # not rely on this transformation inside a string.\n    src=src.replace('\\\\\\n',' ')\n    out=[]; p=0")
+[?2004l[?2004h> s=s.replace("            # A comment acts as whitespace; preserve contained newlines.\n            out.extend([('NL','\\n')]*v.count('\\n')); continue", "            # A block comment, including any newlines in it, is one space.\n            continue")
+[?2004l[?2004h> s=s.replace("mp={'n':'\\n','t':'\\t','r':'\\r','b':'\\b','f':'\\f','\\\\':'\\\\','q':'\"'}", "mp={'a':'\\a','n':'\\n','t':'\\t','r':'\\r','b':'\\b','f':'\\f','\\\\':'\\\\','q':'\"'}")
+[?2004l[?2004h> old="""def run_source(vm,src):
+[?2004l[?2004h>     try:p=Parser(src); ss=p.program()
+[?2004l[?2004h>     except SyntaxError:return
+[?2004l[?2004h>     for st in ss:
+[?2004l[?2004h>         try:vm.stmt(st)
+[?2004l[?2004h>         except RunError:continue
+[?2004l[?2004h>         except Flow:continue
+[?2004l[?2004h> """
+[?2004l[?2004h> new="""def has_quit(x):
+[?2004l[?2004h>     if isinstance(x,tuple):
+[?2004l[?2004h>         if x and x[0]=='quit': return True
+[?2004l[?2004h>         return any(has_quit(y) for y in x[1:])
+[?2004l[?2004h>     if isinstance(x,list): return any(has_quit(y) for y in x)
+[?2004l[?2004h>     return False
+[?2004l[?2004h> 
+[?2004l[?2004h> def run_source(vm,src):
+[?2004l[?2004h>     try:p=Parser(src); ss=p.program()
+[?2004l[?2004h>     except SyntaxError:return
+[?2004l[?2004h>     for st in ss:
+[?2004l[?2004h>         # GNU bc's quit is acted on by the reader, even in a false branch or
+[?2004l[?2004h>         # function body. Earlier complete top-level statements have run.
+[?2004l[?2004h>         if has_quit(st): raise Halt()
+[?2004l[?2004h>         try:vm.stmt(st)
+[?2004l[?2004h>         except RunError:continue
+[?2004l[?2004h>         except Flow:continue
+[?2004l[?2004h> """
+[?2004l[?2004h> assert old in s
+[?2004l[?2004h> s=s.replace(old,new)
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 -m py_compile /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# cat >/tmp/pre.bc <<'EOF'
+[?2004l[?2004h> 1
+[?2004l[?2004h> x=5
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py /tmp/pre.bc <<'EOF'
+[?2004l[?2004h> x
+[?2004l[?2004h> 1/* comment
+[?2004l[?2004h> across lines */+2
+[?2004l[?2004h> 1+\
+[?2004l[?2004h> 2
+[?2004l[?2004h> print "1234567890123456789012345678901234567890123456789012345678901234567890\n"
+[?2004l[?2004h> if(0) quit
+[?2004l[?2004h> 999
+[?2004l[?2004h> EOF
+[?2004l1
+5
+3
+3
+12345678901234567890123456789012345678901234567890123456789012345678\
+90
+[?2004hroot@e84d2eaa0413:/app# printf '\n-- numeric/base/function checks --\n'
+[?2004l
+-- numeric/base/function checks --
+[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py <<'EOF'
+[?2004l[?2004h> scale=3
+[?2004l[?2004h> 10/4
+[?2004l[?2004h> 2.50*3
+[?2004l[?2004h> .5
+[?2004l[?2004h> -.25
+[?2004l[?2004h> 0.00
+[?2004l[?2004h> length(0);length(0.00);length(.0010);length(100.00)
+[?2004l[?2004h> obase=16
+[?2004l[?2004h> 255.5
+[?2004l[?2004h> obase=10
+[?2004l[?2004h> define cp(x[]) { x[0]=9; return(x[1]); }
+[?2004l[?2004h> define rf(*x[]) { x[0]=8; }
+[?2004l[?2004h> a[0]=1;a[1]=3
+[?2004l[?2004h> cp(a[]);a[0]
+[?2004l[?2004h> rf(a[]);a[0]
+[?2004l[?2004h> define void v(x){print "v=",x,"\n";}
+[?2004l[?2004h> v(7)
+[?2004l[?2004h> define f(n){if(n<=1)return(1);return(n*f(n-1));}
+[?2004l[?2004h> f(20)
+[?2004l[?2004h> 1/0
+[?2004l[?2004h> 77
+[?2004l[?2004h> EOF
+[?2004l2.500
+7.50
+.5
+-.25
+0
+1
+2
+4
+5
+FF.8
+3
+1
+0
+8
+v=7
+2432902008176640000
+77
+[?2004hroot@e84d2eaa0413:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pybc/bc.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> old="""        if k=='assign':
+[?2004l[?2004h>             g,s=self.ref(x[2]); op=x[1]; b=self.ev(x[3])
+[?2004l[?2004h>             if op=='=':v=b
+[?2004l[?2004h>             else:v=self.calc(op[0],g().copy(),b)
+[?2004l[?2004h>             s(v); return v.copy()
+[?2004l[?2004h> """
+[?2004l[?2004h> new="""        if k=='assign':
+[?2004l[?2004h>             g,s=self.ref(x[2]); op=x[1]
+[?2004l[?2004h>             # The lvalue (including its old value for a compound assignment)
+[?2004l[?2004h>             # is evaluated before the right operand.
+[?2004l[?2004h>             old=g().copy() if op!='=' else None
+[?2004l[?2004h>             b=self.ev(x[3])
+[?2004l[?2004h>             v=b if op=='=' else self.calc(op[0],old,b)
+[?2004l[?2004h>             s(v); return v.copy()
+[?2004l[?2004h> """
+[?2004l[?2004h> assert old in s
+[?2004l[?2004h> s=s.replace(old,new)
+[?2004l[?2004h> old="""        if n not in self.e.funcs: raise RunError()
+[?2004l[?2004h>         ps,body,void=self.e.funcs[n]
+[?2004l[?2004h> """
+[?2004l[?2004h> new="""        if n not in self.e.funcs:
+[?2004l[?2004h>             # Function arguments are evaluated left-to-right before the call
+[?2004l[?2004h>             # itself fails. Array arguments have no evaluating expression.
+[?2004l[?2004h>             for arg in args:
+[?2004l[?2004h>                 if arg[0]!='arrarg': self.ev(arg)
+[?2004l[?2004h>             raise RunError()
+[?2004l[?2004h>         ps,body,void=self.e.funcs[n]
+[?2004l[?2004h> """
+[?2004l[?2004h> assert old in s
+[?2004l[?2004h> s=s.replace(old,new)
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 -m py_compile /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py <<'EOF'
+[?2004l[?2004h> a=2
+[?2004l[?2004h> a+=(a=5)
+[?2004l[?2004h> a
+[?2004l[?2004h> x=0
+[?2004l[?2004h> missing(x=9)
+[?2004l[?2004h> x
+[?2004l[?2004h> i=0;a[0]=10;a[1]=20
+[?2004l[?2004h> a[i++] += (i=7)
+[?2004l[?2004h> a[0];i
+[?2004l[?2004h> EOF
+[?2004l7
+9
+17
+7
+[?2004hroot@e84d2eaa0413:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pybc/bc.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("        elif self.pk('('):\n            self.pop(); x=self.expr(); self.pop(')')", "        elif self.pk('('):\n            self.pop(); x=('paren',self.expr()); self.pop(')')")
+[?2004l[?2004h> s=s.replace("        if k=='const':return self.const(x[1])\n", "        if k=='const':return self.const(x[1])\n        if k=='paren':return self.ev(x[1])\n")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 -m py_compile /app/pybc/bc.py
+[?2004l[?2004hroot@e84d2eaa0413:/app# python3 /app/pybc/bc.py <<'EOF'
+[?2004l[?2004h> a=1
+[?2004l[?2004h> (a=2)
+[?2004l[?2004h> a
+[?2004l[?2004h> -(a=3)
+[?2004l[?2004h> a
+[?2004l[?2004h> EOF
+[?2004l2
+2
+-3
+3
+[?2004hroot@e84d2eaa0413:/app# 

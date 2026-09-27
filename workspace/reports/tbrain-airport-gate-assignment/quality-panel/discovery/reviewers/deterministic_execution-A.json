@@ -1,0 +1,145 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-A",
+  "snapshot_sha256": "f9e2a843946feb803bea831bc197043b8ff4892295c4cbe2c5db018ff2b20e91",
+  "severity": "None",
+  "summary": "Grading is a pure function of the four submitted plan files and fixed, SHA-pinned verifier-side data: no randomness, clock, network, ordering sensitivity, or timing assumption can change the grade for a fixed submission.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/planner/plan_day.py",
+      "environment/app/tools/check_plan.py (byte-identical to tests/check_plan.py per manifest hash 603464e7...)",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json (sampled lines 1-80, 1270-1309, 2900-2929; whole-file scans of all four day files for key layout, non-integer numbers, negative numbers and any character outside [A-Za-z0-9 \",:[]{}_-])",
+      "environment/app/days/day-2.json (whole-file scans)",
+      "environment/app/days/day-3.json (whole-file scans)",
+      "environment/app/days/day-4.json (whole-file scans)",
+      "solution/solve.sh",
+      "solution/plans/day-1.json (lines 1-40 plus whole-file scans)",
+      "solution/plans/day-2.json (whole-file scans)",
+      "solution/plans/day-3.json (whole-file scans)",
+      "solution/plans/day-4.json (whole-file scans)",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/targets.json",
+      "tests/days/roster.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/days/day-{1..4}.json.gz are binary gzip and were not decompressed; their decompressed content is bound by tests/test_outputs.py:34-36 to roster SHA-256 values (tests/days/roster.json:6,12,18,24) which equal the manifest hashes of the readable environment/app/days/day-{1..4}.json (packet-manifest.json:12-15), so their graded content is fixed and was inspected via those files"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced tests/test.sh -> pytest tests/test_outputs.py -> check_plan.load_plan/evaluate for every graded test; identified all inputs to the reward: /app/plans/<day>.json, tests/days/*.json.gz, tests/days/roster.json, tests/targets.json.",
+    "Searched verifier, checker, solution and planner code for random, time/date, network, subprocess or environment-dependent calls; none affect grading (only a mktemp run directory at tests/test.sh:13 and an optional STAND_PLANS env default at tests/test_outputs.py:21, which the harness does not set).",
+    "Confirmed cost arithmetic is exact integer: whole-file scans found no decimal point, exponent or negative number in any day file or reference plan; evaluate sums int products (tests/check_plan.py:122-131) so iteration order cannot change the total; comparison cost <= target is exact integer (tests/test_outputs.py:55).",
+    "Confirmed validity checks are order-independent: per-stand occupancy is sorted before buffer checks (tests/check_plan.py:107), wingtip check is a symmetric all-pairs scan (tests/check_plan.py:112-118); plan list order is explicitly unconstrained by the contract (environment/app/docs/stand-rules.md:65-66) and accepted in any order.",
+    "Confirmed verifier data is local, fixed and hash-checked: gz days checked against roster SHA and counts (tests/test_outputs.py:30-40); roster hashes equal environment day hashes (tests/days/roster.json vs packet-manifest.json:12-15); tests/targets.json and environment targets are byte-identical (packet-manifest.json:16,34).",
+    "Checked dependency pinning: both images pin the base by digest (environment/Dockerfile:1, tests/Dockerfile:1); pytest==9.1.1 and pytest-json-ctrf==0.5.2 pinned (tests/Dockerfile:3); verifier runs with no network (task.toml:21) and needs no remote data. Transitive pytest deps (pluggy, iniconfig, packaging) are not pinned but are resolved at image build under pytest's own bounds and cannot alter pass/fail of these plain assert tests; not raised as a finding.",
+    "Checked timing: grading is a single-pass O(transfers + wingtip pairs * turns^2 per pair) computation on at most 360 turns and 1413 transfers, far inside timeout_sec=1800 (task.toml:19); no sleeps, waits or services.",
+    "Checked reference path: solve.sh copies static plan files and runs the checker (solution/solve.sh:14-18); no search is run at Oracle time, so the Oracle's grade is stable; plans are reported to sit exactly on targets (task.toml:15) with integer equality.",
+    "Checked pytest plugin/ordering influences: -I isolated mode, -p no:cacheprovider, -p no:randomly (tests/test.sh:15); tests are independent and read-only, so test order cannot change outcomes."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fresh random seeds / generated corpora; boundary cases as guaranteed fixtures",
+      "status": "checked",
+      "reason": "No generator or RNG in the verifier; the graded days are four committed files pinned by SHA-256 and element counts. The graded workload is identical on every run.",
+      "evidence": ["tests/test_outputs.py:30-40", "tests/days/roster.json:1-26", "packet-manifest.json:12-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Evaluation clock / current date or time",
+      "status": "checked",
+      "reason": "Times are integer minutes from midnight in fixed data; no wall-clock call in check_plan.py or test_outputs.py; no expiry or window relative to real time.",
+      "evidence": ["environment/app/docs/stand-rules.md:8-9", "tests/check_plan.py:76-131", "tests/test_outputs.py:1-87"],
+      "finding_ids": []
+    },
+    {
+      "category": "Pinned dependencies and local inputs",
+      "status": "checked",
+      "reason": "Base images pinned by digest; pytest and ctrf plugin pinned; verifier uses only stdlib json/gzip/hashlib plus its own checker copy and local data; verifier network disabled.",
+      "evidence": ["tests/Dockerfile:1-6", "environment/Dockerfile:1-7", "task.toml:18-21", "tests/test_outputs.py:9-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Filesystem / iteration ordering; sort where required, accept equivalent orderings otherwise",
+      "status": "checked",
+      "reason": "Contract allows turns in any order and stands may be omitted; checker sorts occupancy before buffer checks and computes an order-independent integer sum. Dict iteration follows the submission's own key order and only affects which error message is printed, not pass/fail.",
+      "evidence": ["environment/app/docs/stand-rules.md:63-67", "tests/check_plan.py:83-131"],
+      "finding_ids": []
+    },
+    {
+      "category": "Floating-point / numeric stability of the graded cost",
+      "status": "checked",
+      "reason": "All numeric values in day files are non-negative integers (whole-file scans found no '.', exponent or '-digit' outside the name field), so the cost is an exact Python int and the <= target comparison is exact.",
+      "evidence": ["tests/check_plan.py:120-131", "tests/test_outputs.py:53-55", "environment/app/docs/stand-rules.md:58-59"],
+      "finding_ids": []
+    },
+    {
+      "category": "Timing / readiness assumptions",
+      "status": "checked",
+      "reason": "No services, sleeps or waits; verifier is a bounded static computation well inside its 1800 s timeout. The agent's search time budget affects what the agent submits, not the grade of a fixed submission.",
+      "evidence": ["tests/test.sh:1-21", "task.toml:18-25"],
+      "finding_ids": []
+    },
+    {
+      "category": "Random temporary names and environment variables (D-3 style)",
+      "status": "checked",
+      "reason": "mktemp run directory only sets pytest's cwd; test paths are absolute (/tests/test_outputs.py, HERE-relative data). STAND_PLANS defaults to /app/plans and is not set by test.sh; neither value is compared as output.",
+      "evidence": ["tests/test.sh:13-15", "tests/test_outputs.py:17-23"],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated clean-run stability of correct and incorrect submissions",
+      "status": "checked",
+      "reason": "Static trace: for a fixed plan file the reward is a deterministic function of fixed bytes; the reference (static files) and the shipped first-free planner's plans (deterministic sort by (arrive,id), plan_day.py:31) both yield stable costs, so pass and fail outcomes are stable. Not executed.",
+      "evidence": ["solution/solve.sh:14-18", "environment/app/planner/plan_day.py:29-42", "tests/test_outputs.py:43-87"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["plan lists may be in any order (stand-rules.md:65-66)", "buffer rule between turns on one stand (stand-rules.md:38-40)"],
+      "case_or_path": "A valid plan listing a stand's turns out of time order: checker sorts by (arrive, depart, tid) before adjacent-pair buffer checks, so the same set of turns yields the same verdict regardless of list order.",
+      "status": "checked",
+      "evidence": ["tests/check_plan.py:107-110"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["stand may be omitted or empty (stand-rules.md:66-67)", "wingtip rule (stand-rules.md:41-44)"],
+      "case_or_path": "Plan omitting one stand of a wingtip pair: plan['stands'].get(a, []) yields an empty list deterministically; no KeyError or order effect.",
+      "status": "checked",
+      "evidence": ["tests/check_plan.py:112-118"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["verifier's own day copy (verification_explanation)", "candidate-visible day files define the contract"],
+      "case_or_path": "Verifier gz days are bound by SHA to roster, and roster hashes equal the environment day hashes, so the verifier and the candidate score the same fixed instance on every run; agent edits to /app/days cannot change the graded instance.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:30-40", "tests/days/roster.json:6,12,18,24", "packet-manifest.json:12-15"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["cost is a sum over turns and transfers (stand-rules.md:46-59)", "target threshold cost <= target (instruction.md:1)"],
+      "case_or_path": "Reference plans sit exactly on the targets; integer arithmetic makes the boundary comparison exact, so no rounding flake at equality.",
+      "status": "checked",
+      "evidence": ["tests/check_plan.py:122-131", "tests/test_outputs.py:55", "tests/targets.json:1-6", "task.toml:15"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

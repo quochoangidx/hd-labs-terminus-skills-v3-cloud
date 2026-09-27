@@ -1,0 +1,193 @@
+diff -ruN a/app/src/ddbill/dates.py b/app/src/ddbill/dates.py
+--- a/app/src/ddbill/dates.py	2026-09-27 14:35:45
++++ b/app/src/ddbill/dates.py	2026-09-27 14:36:09
+@@ -29,5 +29,9 @@
+     def is_holiday(self, day):
+         return day in self.holidays
+ 
++    def is_working_day(self, day):
++        """2.5: a Monday to Friday date that is not a port holiday."""
++        return day.weekday() < 5 and day not in self.holidays
++
+     def is_closure(self, day):
+         return day in self.closures
+diff -ruN a/app/src/ddbill/freetime.py b/app/src/ddbill/freetime.py
+--- a/app/src/ddbill/freetime.py	2026-09-27 14:35:45
++++ b/app/src/ddbill/freetime.py	2026-09-27 14:36:09
+@@ -1,14 +1,33 @@
+ """Free time and chargeable days (tariff rules sections 3 and 4)."""
+ 
+-from .dates import plus_days
+-from .stays import stage_days
++from .dates import ONE_DAY, plus_days
++from .stays import TERMINAL
+ 
+ 
+ def last_free_day(stage, free_days, calendar):
+     """The date on which the stage's last free day is used."""
+-    return plus_days(stage["first"], free_days - 1)
++    if stage["name"] != TERMINAL or free_days == 0:
++        return plus_days(stage["first"], free_days - 1)
++    day, used = stage["first"], 0
++    while True:
++        if calendar.is_working_day(day) and not calendar.is_closure(day):
++            used += 1
++            if used == free_days:
++                return day
++        day += ONE_DAY
+ 
+ 
++def chargeable_dates(stage, free_days, calendar):
++    """The stage's days after its free time, closure days left out at the terminal."""
++    out = []
++    day = last_free_day(stage, free_days, calendar) + ONE_DAY
++    while day <= stage["last"]:
++        if not (stage["name"] == TERMINAL and calendar.is_closure(day)):
++            out.append(day)
++        day += ONE_DAY
++    return out
++
++
+ def chargeable_days(stage, free_days, calendar):
+-    """How many of the stage's days fall after its free time."""
+-    return max(0, stage_days(stage) - free_days)
++    """How many of the stage's days are chargeable."""
++    return len(chargeable_dates(stage, free_days, calendar))
+diff -ruN a/app/src/ddbill/rates.py b/app/src/ddbill/rates.py
+--- a/app/src/ddbill/rates.py	2026-09-27 14:35:45
++++ b/app/src/ddbill/rates.py	2026-09-27 14:36:09
+@@ -1,23 +1,38 @@
+ """Rate sheets, scales and tier charges (tariff rules section 5)."""
+ 
++from .dates import parse
+ 
++
+ def current_revision(contract):
+-    """The contract's revision in force: the latest one on its rate sheet."""
++    """The latest revision on the contract's rate sheet."""
+     return contract["revisions"][-1]
+ 
+ 
+-def scale_for(contract, stage_name, size):
++def revision_in_force(contract, day):
++    """5.1: the latest revision effective on or before `day`, or None before the earliest one."""
++    found = None
++    for revision in contract["revisions"]:
++        if parse(revision["effective"]) <= day:
++            found = revision
++    return found
++
++
++def scale_for(contract, stage_name, size, first_chargeable):
+     """The tier list [[length, rate], ...] a stage of this size is charged on."""
+-    return current_revision(contract)["scales"][stage_name][size]
++    revision = revision_in_force(contract, first_chargeable)
++    if revision is None:
++        # 5.1 gives no rule here, so the package's own choice stands: the latest revision.
++        revision = current_revision(contract)
++    return revision["scales"][stage_name][size]
+ 
+ 
+ def tier_charge(count, scale):
+-    """What `count` chargeable days cost on the scale, in cents."""
+-    if count <= 0:
+-        return 0
+-    reached = 0
++    """What `count` chargeable days cost on the scale, in cents, each day at its own tier's rate."""
++    total, left = 0, count
+     for length, rate in scale:
+-        if length is None or count <= reached + length:
+-            return rate * count
+-        reached += length
+-    return rate * count
++        take = left if length is None else min(left, length)
++        total += take * rate
++        left -= take
++        if left <= 0:
++            break
++    return total
+diff -ruN a/app/src/ddbill/statement.py b/app/src/ddbill/statement.py
+--- a/app/src/ddbill/statement.py	2026-09-27 14:35:45
++++ b/app/src/ddbill/statement.py	2026-09-27 14:36:09
+@@ -1,7 +1,7 @@
+ """The billing statement (tariff rules sections 6 and 7)."""
+ 
+ from .dates import Calendar, parse, show
+-from .freetime import chargeable_days, last_free_day
++from .freetime import chargeable_dates, last_free_day
+ from .rates import scale_for, tier_charge
+ from .stays import MERCHANT, TERMINAL, stage_days, stages
+ 
+@@ -11,20 +11,26 @@
+ def stage_entry(stage, container, contract, calendar):
+     """One stage's figures for the statement."""
+     free_days = contract[FREE_DAYS_KEY[stage["name"]]]
+-    count = chargeable_days(stage, free_days, calendar)
+-    scale = scale_for(contract, stage["name"], container["size"])
++    dates = chargeable_dates(stage, free_days, calendar)
++    count = len(dates)
++    amount = 0
++    if dates:
++        amount = tier_charge(count, scale_for(contract, stage["name"], container["size"], dates[0]))
+     return {
+         "first_day": show(stage["first"]),
+         "last_free_day": show(last_free_day(stage, free_days, calendar)),
+         "days": stage_days(stage),
+         "chargeable": count,
+-        "amount": tier_charge(count, scale),
++        "amount": amount,
+         "status": "ended" if stage["ended"] else "running",
+     }
+ 
+ 
+-def discount_on(amount, percent):
++def discount_on(amount, percent, all_ended):
+     """The contract discount on a container's amount, in cents."""
++    if all_ended:
++        return (amount * percent + 50) // 100
++    # A running stage has no charge (5.4), so 6.2 gives no rule: the package's own step stands.
+     return amount * percent // 100
+ 
+ 
+@@ -32,10 +38,12 @@
+     """One container's statement entry."""
+     contract = job["contracts"][container["contract"]]
+     entries = {TERMINAL: None, MERCHANT: None}
++    all_ended = True
+     for stage in stages(container, cut_off):
+         entries[stage["name"]] = stage_entry(stage, container, contract, calendar)
++        all_ended = all_ended and stage["ended"]
+     amount = sum(entry["amount"] for entry in entries.values() if entry is not None)
+-    discount = discount_on(amount, contract["discount_percent"])
++    discount = discount_on(amount, contract["discount_percent"], all_ended)
+     return {
+         "id": container["id"],
+         "terminal": entries[TERMINAL],
+diff -ruN a/app/src/ddbill/stays.py b/app/src/ddbill/stays.py
+--- a/app/src/ddbill/stays.py	2026-09-27 14:35:45
++++ b/app/src/ddbill/stays.py	2026-09-27 14:36:09
+@@ -1,6 +1,6 @@
+ """A container's stages and their days (tariff rules section 2)."""
+ 
+-from .dates import ONE_DAY, parse
++from .dates import parse
+ 
+ TERMINAL = "terminal"
+ MERCHANT = "merchant"
+@@ -20,7 +20,7 @@
+     gate_out = found.get("GATE_OUT")
+     out = [_stage(TERMINAL, found["DISCHARGE"], gate_out, cut_off)]
+     if gate_out is not None:
+-        out.append(_stage(MERCHANT, gate_out + ONE_DAY, found.get("EMPTY_RETURN"), cut_off))
++        out.append(_stage(MERCHANT, gate_out, found.get("EMPTY_RETURN"), cut_off))
+     return out
+ 
+ 
+@@ -30,5 +30,5 @@
+ 
+ 
+ def stage_days(stage):
+-    """How many days the stage has run."""
+-    return (stage["last"] - stage["first"]).days
++    """How many days the stage has run, its first and last day both included."""
++    return (stage["last"] - stage["first"]).days + 1

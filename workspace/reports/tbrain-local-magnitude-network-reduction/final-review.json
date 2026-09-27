@@ -1,0 +1,82 @@
+{
+  "reviewer_turn": "final_review",
+  "visibility": "workspace/tasks/tbrain-local-magnitude-network-reduction/ (instruction.md, task.toml, environment/, solution/, tests/). Worked on scratchpad copies only; no Docker.",
+  "contract_delta_since_recheck": "Only NPM-4 1.2 'share one' -> 'have the same channel' (RC-1 applied). Environment and instruction otherwise identical to the rechecked text.",
+  "checks_run": [
+    "ROSTER sha256 sums verified for all 17 jsonl files (22 bulletins).",
+    "Resealed from solution/seal.py in a clean copy: tests/expected is byte-identical, so the expectations are reproducible.",
+    "fix.patch applied cleanly to a copy of environment/app; the patched driver is byte-identical to tests/shipped/tools/ml_bulletin.py.",
+    "My independent reference (written at contract review from NPM-4 alone, rv/ref.py + rv/ref2.py) reproduces every expected report within 1e-6: PASS on all 17 files. Patched package: PASS on all 17. Shipped package: FAIL on 17.",
+    "21 mutants run in-process against the expectations with the verifier's comparison semantics (see mutation_geometry).",
+    "Coverage census of all sealed bulletins (see coverage)."
+  ],
+  "mutation_geometry": {
+    "reverted_departures": {
+      "gain 2800": "fails 17 files", "no halving": "fails 17", "epicentral distance": "fails 13 incl. hypocentral", "log interpolation": "fails 14 incl. interpolation",
+      "subtract correction": "fails 16 incl. correction", "largest channel": "fails 12 incl. station_mean", "mean network": "fails 16 incl. median",
+      "no minimum count": "fails fewer_than_three, generated, limits, off_table, shared_station", "minimum of two": "fails fewer_than_three, generated, shared_station"
+    },
+    "natural_over_repairs": {
+      "linear extrapolation off table": "fails only off_table", "clamp to table ends": "fails only off_table",
+      "mean over every amplitude (no 3x filter)": "fails only readings", "strict > 3x": "fails only readings",
+      "per-recording station magnitudes (shipped loop kept)": "fails only shared_station", "pooled ml but median over rows": "fails only shared_station",
+      "mean of per-recording means": "fails only shared_station",
+      "lower / upper middle for even": "fail median_even and others", "strict table ends in contributes": "fails table_ends, gain, correction, limits"
+    },
+    "contract_valid_alternatives_accepted": ["math.hypot instead of sqrt: PASS", "amplitude/noise >= 3 instead of amplitude >= 3*noise: PASS (binary-exact ties only)"],
+    "verdict": "Every plausible partial fix fails. Each trap is isolated to its own test file, and no trap input leaks into broad or generated files: the verifier's CARRIERS check asserts the exact carried set per file, and seal.py asserts the same thing."
+  },
+  "coverage": {
+    "section_1_floors_and_ceilings": "depth 0 and 60; epi 0 and 1000; amplitude 0.1 and 1e8; noise 0.01 and 1e7; correction -1.0 and +1.0; 1 to 40 recordings; 50 events and 200 stations in limits.jsonl; code lengths 1-5; id lengths 1-20; channels per station 1-4; contributing counts 0,1,2,3,4 .. 12, 40 (odd and even).",
+    "not_reached": "A station table of exactly one station (minimum is 3). Low value, see FR-3.",
+    "boundaries": "10 and 600 km exactly are reached in table_ends, gain, correction and limits, only via exact pairs (numeric_discipline in seal.py enforces sqrt==hypot at the ends, or a margin of at least 1e-3 km). Three-times ties are binary-exact only (1.5/0.5, 300/100, 0.75/0.25, 40/20 excluded, 12/0.5) and non-ties sit at least 1e-9 away. CR-1 and CR-5 are closed on the verifier side.",
+    "envelope_phrases": "'a station sitting on the epicentre' (epi 0 in hypocentral and off_table), 'out to 1000 km' (off_table), 'sites whose broadband and strong-motion sensors arrive as separate recordings' (shared_station, including the two-station three-recording null event and a median shift), 'channels of every noise level' (readings), 'positive, zero and negative corrections' (correction), 'one, two, three or many contributing stations, odd and even' (fewer_than_three, three, median, median_even)."
+  },
+  "semantic_equivalence": "The tolerance is 1e-6 on distance_km and ml, as written. id, code, contributes, list lengths and order, and null are exact. Key sets are exact, as 6.2 requires. Numbers must be int or float, not bool; contributes must be a bool. No unstated order is enforced. The expected values are rounded to 1e-10 at sealing, well inside the band.",
+  "isolation_harness": "Separate verifier image; no-network. The delivered driver bytes are read at module import, before any candidate code runs, and the verifier's copy is then os.replace-d onto the documented path. Candidate code runs via setpriv as uid/gid 65534 with --no-new-privs and cleared groups, env -i, python3 -I -S, in its own session with group kill, from a fresh cwd, on a neutral /tmp/.../bulletin.json. No case label reaches the candidate. /tests and /logs/verifier are chmod 700 before the run, and a test asserts nobody cannot read /tests, the ROSTER, test_outputs.py or /logs/verifier. The driver is byte-checked before and after. Expectations are pinned by sha256 and row count, and every bulletin is re-validated against section 1 on load. One overall deadline of 1500 s is well within timeout_sec 1800; with 22 subprocess runs, the run should take seconds.",
+  "solution_correctness": "fix.patch matches NPM-4 on every rule. It keeps the shipped log end-segment extrapolation outside 10-600 km, fed with hypocentral distance. It pools a station's amplitudes across its recordings and reports that one value on each of its rows. It counts each station once in the median and the minimum of three. model.py agrees with my independently written reference on every sealed bulletin.",
+  "findings": [
+    {
+      "id": "FR-1",
+      "severity": "should_fix",
+      "location": "task folder root: .DS_Store",
+      "issue": "A macOS .DS_Store (6148 bytes) sits at the task root and would ship in the ZIP.",
+      "evidence": "find . -name .DS_Store -> ./.DS_Store",
+      "suggested_fix": "Delete it before zipping. The frozen snapshot hash may need recomputing if it covered this file."
+    },
+    {
+      "id": "FR-2",
+      "severity": "should_fix",
+      "location": "task.toml verification_explanation, last sentence",
+      "issue": "'Each departure reverted alone and each natural over-repair ... fails only its own test' is inaccurate for the reverted departures. Reverting gain, halving, correction sign, log interpolation, epicentral distance, the largest channel or the mean network value fails 12-17 of the 17 files. Only the over-repairs (linear or clamped extrapolation, averaging every amplitude, per-recording station magnitudes, median over recordings, mean of means) are confined to their own test.",
+      "evidence": "mutation_geometry.reverted_departures",
+      "suggested_fix": "Reword, e.g.: 'Each departure reverted alone fails its own test (the magnitude-wide ones fail most files); each natural over-repair (...) fails only its own test.' Also consider dropping 'lower middle value' from the over-repair list, or saying it fails median_even among others, since it fails 10 files."
+    },
+    {
+      "id": "FR-3",
+      "severity": "polish",
+      "location": "tests/expected coverage",
+      "issue": "The floor 'a station table of one ... station' (instruction and NPM-4 1.1) is never reached; the smallest table has 3 stations. It is not discriminating for any plausible implementation, so this is only for completeness of the range-floor audit.",
+      "evidence": "coverage census: n_stations min 3",
+      "suggested_fix": "Optionally add a one-station, one-event bulletin (null ml) to fewer_than_three.jsonl and reseal."
+    },
+    {
+      "id": "FR-4",
+      "severity": "polish",
+      "location": "tests/test_outputs.py run_unprivileged (python3 -I -S)",
+      "issue": "-S disables site-packages for the candidate's package. That is harmless here: the image is stdlib-only and the agent has no network. But it is an unstated constraint, and it would reject a solution that pip-installed a library into the agent image.",
+      "evidence": "reduce() argv",
+      "suggested_fix": "None required. Optionally mention it in verification_explanation, which already says 'python3 -I -S'."
+    }
+  ],
+  "prior_findings": {
+    "CR-1": "closed (verifier: binary-exact ties, 1e-9 margin enforced in seal.py)",
+    "CR-2": "closed", "CR-3": "closed", "CR-4": "closed",
+    "CR-5": "closed (verifier: exact end pairs, 1e-3 km margin enforced)", "CR-6": "closed",
+    "RC-1": "closed ('have the same channel')",
+    "RC-2": "closed (shared_station.jsonl has unequal reading counts, the two-station three-recording null event and a median shift; mean_of_means, per_recording and median_over_rows all fail it)"
+  },
+  "task_toml_consistency": "Category Science/Earth, tags, difficulty core, and the solution and difficulty explanations match the files. The difficulty explanation names both traps plus the reading filter. The only inaccuracy is FR-2. environment_mode separate, verifier and agent no-network, artifacts ['/app/'] match the harness.",
+  "style": "The instruction and manual prose read as a network's own documents, with no test or solution leakage. Test names are descriptive and hidden from the agent.",
+  "overall": "accept"
+}

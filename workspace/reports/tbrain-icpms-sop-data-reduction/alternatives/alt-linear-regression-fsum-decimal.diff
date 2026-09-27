@@ -1,0 +1,49 @@
+diff -ru /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/7f99967c-92a4-460b-bbd7-2f832e7f7790/scratchpad/oracle/app/src/metalquant/blanks.py app/src/metalquant/blanks.py
+--- /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/7f99967c-92a4-460b-bbd7-2f832e7f7790/scratchpad/oracle/app/src/metalquant/blanks.py	2026-09-26 17:43:53
++++ app/src/metalquant/blanks.py	2026-09-26 17:50:32
+@@ -5,7 +5,8 @@
+     """Blank level of one analyte; readings maps run id to its reading."""
+     results = [readings[run["id"]] for run in runs if run["kind"] == "blank" and readings[run["id"]] >= mdl]
+     if results:
+-        return sum(results) / len(results)
++        import math
++        return math.fsum(results) / len(results)
+     for run in runs:
+         if run["kind"] == "blank":
+             return readings[run["id"]]
+diff -ru /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/7f99967c-92a4-460b-bbd7-2f832e7f7790/scratchpad/oracle/app/src/metalquant/calib.py app/src/metalquant/calib.py
+--- /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/7f99967c-92a4-460b-bbd7-2f832e7f7790/scratchpad/oracle/app/src/metalquant/calib.py	2026-09-26 17:37:49
++++ app/src/metalquant/calib.py	2026-09-26 17:50:32
+@@ -9,12 +9,11 @@
+     """Return (slope, intercept) of the analyte's calibration line."""
+     xs = [std["conc"][analyte] for std in standards]
+     ys = [response(std["counts"][analyte], std["is_counts"]) for std in standards]
+-    mean_x = sum(xs) / len(xs)
+-    mean_y = sum(ys) / len(ys)
+-    sxy = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+-    sxx = sum((x - mean_x) ** 2 for x in xs)
+-    slope = sxy / sxx
+-    return slope, mean_y - slope * mean_x
++    import statistics
++    import sys
++    fit = statistics.linear_regression(xs, ys)
++    sys.stderr.write(f"fit {analyte}: {fit}\n")
++    return fit.slope, fit.intercept
+ 
+ 
+ def reading(run, analyte, line):
+Only in app/src/metalquant: extra
+diff -ru /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/7f99967c-92a4-460b-bbd7-2f832e7f7790/scratchpad/oracle/app/src/metalquant/qc.py app/src/metalquant/qc.py
+--- /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/7f99967c-92a4-460b-bbd7-2f832e7f7790/scratchpad/oracle/app/src/metalquant/qc.py	2026-09-26 17:40:26
++++ app/src/metalquant/qc.py	2026-09-26 17:50:32
+@@ -6,7 +6,9 @@
+ 
+ 
+ def ccv_passes(recovery):
+-    return 90.0 <= round(recovery, 1) <= 110.0
++    from decimal import Decimal, ROUND_HALF_UP
++    tenth = Decimal(repr(recovery)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
++    return Decimal("90.0") <= tenth <= Decimal("110.0")
+ 
+ 
+ def bracket_ok(runs, index, ccv_pass):

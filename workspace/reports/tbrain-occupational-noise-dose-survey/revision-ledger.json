@@ -1,0 +1,40 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-occupational-noise-dose-survey",
+ "report_path": "workspace/revision/12e6eda4-8ced-4dcd-928d-7abc22b133a9/v12/12e6eda4-8ced-4dcd-928d-7abc22b133a9.md",
+ "returned_snapshot_sha256": "de85f2417d0a0c5449708fa65430f173dde40352719beeb2b628b32fec378254",
+ "repaired_snapshot_sha256": "1b3babc7d5804e914c02375696378bc9d7fc0d3051c5e85533bd4798a1a0e489",
+ "findings": [
+  {
+   "id": "1",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "disputed",
+   "rationale": "Does not reproduce. limits_logs.jsonl is a single survey whose 1,500-run worker is followed by L-2880 and L-PEAKS, so every survey-wide 1,500-run budget drops their runs and fails the full-report comparison. The panel's variant and two siblings (workers omitted after the budget, budget over readings) all score reward 0 on the returned bytes. No change made.",
+   "contract_citation": {
+    "file": "environment/app/docs/noise-survey-manual.md",
+    "anchor": "a worker's log holds from 0 to 1,500 runs"
+   },
+   "counterexample": "revision-v12/repro/f1-survey-wide-run-budget.json",
+   "contested_in_channel": "NOT YET POSTED: draft at revision-v12/dispute-f1.md; the user must post it in #terminus-3-submissions",
+   "gate": {
+    "rule": "C5 survey-wide run-budget mutants (truncate, omit, readings-only) kept in the sweep catalog as regression"
+   }
+  },
+  {
+   "id": "2",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Reproduced: with /app/tools delivered at 0777, candidate code swapped the driver between reductions (65 of 66 runs) and restored it on the last one, scoring reward 1. The verifier now makes the whole delivered /app root-owned and unwritable by group or others (lchown, symlinks untouched) right after installing its driver and before any candidate code runs, and test_submitted_driver_unchanged asserts the driver, /app/tools and /app are root-owned and unwritable by others. The same probe then records 0 swaps and the correct package still scores 1. Tests-only: instruction, environment and solution are byte-identical.",
+   "reproduction": "revision-v12/receipts/f2-reproduction.json",
+   "closure": "revision-v12/receipts/f2-closure.json",
+   "gate": {
+    "rule": "candidate review_task/verifier_static_checks rule: a verifier-owned driver on a candidate path needs its parent directories sealed against the candidate's user, not only the file bytes checked before and after"
+   }
+  }
+ ],
+ "previous_findings": []
+}

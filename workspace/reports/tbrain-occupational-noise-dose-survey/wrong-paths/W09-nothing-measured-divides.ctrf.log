@@ -1,0 +1,87 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 22 items
+
+../../tests/test_outputs.py ........F.............                       [100%]
+
+=================================== FAILURES ===================================
+_____________ test_survey_that_measured_nothing_keeps_todays_dose ______________
+
+    def test_survey_that_measured_nothing_keeps_todays_dose():
+        """A survey that measured nothing keeps today's shift dose of nought."""
+>       check_family("measured_nothing")
+
+/tests/test_outputs.py:289: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0017', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [], ...}, {'id': 'A2', 'gr..., 'shift_minutes': 480, 'log': [[480, 90.0]], ...}, {'id': 'A3', 'group': 'G2', 'shift_minutes': 600, 'log': [], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 12, in worker_row
+E             dose = shift_dose(worker["log"], worker["shift_minutes"])
+E           File "/app/tools/../src/noisedose/shift.py", line 23, in shift_dose
+E             return measured * EIGHT_HOURS / sampled
+E                    ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~
+E         ZeroDivisionError: float division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db
+PASSED ../../tests/test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts
+PASSED ../../tests/test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold
+PASSED ../../tests/test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading
+PASSED ../../tests/test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift
+PASSED ../../tests/test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose
+PASSED ../../tests/test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters
+PASSED ../../tests/test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection
+PASSED ../../tests/test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged
+PASSED ../../tests/test_outputs.py::test_rule_5_2_impulse_at_140_dbc
+PASSED ../../tests/test_outputs.py::test_rule_4_1_twa_formula
+PASSED ../../tests/test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth
+PASSED ../../tests/test_outputs.py::test_rule_5_3_status_bands_at_82_and_85
+PASSED ../../tests/test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses
+PASSED ../../tests/test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean
+PASSED ../../tests/test_outputs.py::test_report_order_and_group_codes
+PASSED ../../tests/test_outputs.py::test_section_one_limits_reached
+PASSED ../../tests/test_outputs.py::test_generated_surveys
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose
+========================= 1 failed, 21 passed in 3.40s =========================

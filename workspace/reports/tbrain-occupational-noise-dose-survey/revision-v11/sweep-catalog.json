@@ -1,0 +1,515 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "c1-workers-sorted-by-id": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "workers = [worker_row(worker) for worker in load_workers(survey)]",
+     "new": "workers = sorted((worker_row(worker) for worker in load_workers(survey)), key=lambda r: r[\"id\"])"
+    }
+   ],
+   "expect_failing": [
+    "test_report_order_and_group_codes"
+   ],
+   "rationale": "README: workers in the order of the survey file"
+  },
+  "c1-survey-name-normalised": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "return {\"survey\": survey[\"survey\"],",
+     "new": "return {\"survey\": survey[\"survey\"].lower(),"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_surveys"
+   ],
+   "rationale": "README: the survey's name, as given"
+  },
+  "c2-shift-capped-1200": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "\"shift_minutes\": int(worker[\"shift_minutes\"]),",
+     "new": "\"shift_minutes\": min(int(worker[\"shift_minutes\"]), 1200),"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_3_partial_survey_projected_to_own_shift"
+   ],
+   "rationale": "1.4: shifts up to 1,440 minutes"
+  },
+  "c3-shift-floor-90": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "\"shift_minutes\": int(worker[\"shift_minutes\"]),",
+     "new": "\"shift_minutes\": max(int(worker[\"shift_minutes\"]), 90),"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_5_partial_survey_at_exactly_three_quarters"
+   ],
+   "rationale": "1.4: shifts from 60 minutes"
+  },
+  "c3-reading-floor-exclusive": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/noisedose/levels.py",
+     "old": "return level >= READING_FLOOR_DBA",
+     "new": "return level > READING_FLOOR_DBA"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_4_sampled_time_includes_readings_below_threshold"
+   ],
+   "rationale": "2.2: a run at 40.0 dBA is a reading"
+  },
+  "c3-peaks-above-160-ignored": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/noisedose/flags.py",
+     "old": "return any(peak >= IMPULSE_DBC for peak in peaks)",
+     "new": "return any(IMPULSE_DBC <= peak <= 160.0 for peak in peaks)"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_2_impulse_at_140_dbc"
+   ],
+   "rationale": "1.4: peaks up to 170.0 dBC"
+  },
+  "c4-empty-peaks-crash": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/noisedose/flags.py",
+     "old": "return any(peak >= IMPULSE_DBC for peak in peaks)",
+     "new": "return max(peaks) >= IMPULSE_DBC"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_2_impulse_at_140_dbc"
+   ],
+   "rationale": "1.4: a worker may have no peaks"
+  },
+  "c4-zero-dose-twa-nought": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/noisedose/twa.py",
+     "old": "    if dose <= 0.0:\n        return None\n",
+     "new": "    if dose <= 0.0:\n        return 0.0\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_twa_formula"
+   ],
+   "rationale": "4.1: a shift dose of nought has no TWA"
+  },
+  "c5-log-capped-1000": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/runs.py",
+     "old": "    for minutes, level in log:\n",
+     "new": "    for minutes, level in log[:1000]:\n"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: up to 1,500 runs"
+  },
+  "c5-workers-capped-256": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "workers = [worker_row(worker) for worker in load_workers(survey)]",
+     "new": "workers = [worker_row(worker) for worker in load_workers(survey)][:256]"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: up to 300 workers"
+  },
+  "c5-groups-capped-32": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "for code in sorted(members):",
+     "new": "for code in sorted(members)[:32]:"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: up to 40 group codes"
+  },
+  "c6-id-truncated-8": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "\"id\": worker[\"id\"],",
+     "new": "\"id\": worker[\"id\"][:8],"
+    }
+   ],
+   "expect_failing": [
+    "test_report_order_and_group_codes"
+   ],
+   "rationale": "1.4: ids of up to 12 characters"
+  },
+  "c6-code-truncated-6": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "\"group\": worker[\"group\"],",
+     "new": "\"group\": worker[\"group\"][:6],"
+    }
+   ],
+   "expect_failing": [
+    "test_report_order_and_group_codes"
+   ],
+   "rationale": "1.4: codes of up to 8 characters"
+  },
+  "c8-twa-rounded-up": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/noisedose/twa.py",
+     "old": "return math.floor(value * 10.0 + 0.5) / 10.0",
+     "new": "return math.ceil(value * 10.0) / 10.0"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_1_2_twa_rounded_to_nearest_tenth"
+   ],
+   "rationale": "1.2: nearest tenth, both sides"
+  },
+  "c9-letters-before-digits": {
+   "class": "C9",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "for code in sorted(members):",
+     "new": "for code in sorted(members, key=lambda c: (c[0].isdigit(), c)):"
+    }
+   ],
+   "expect_failing": [
+    "test_report_order_and_group_codes"
+   ],
+   "rationale": "README: digits before letters"
+  },
+  "c9-id-hyphen-dropped": {
+   "class": "C9",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "\"id\": worker[\"id\"],",
+     "new": "\"id\": worker[\"id\"].replace(\"-\", \"\"),"
+    }
+   ],
+   "expect_failing": [
+    "test_report_order_and_group_codes"
+   ],
+   "rationale": "1.4: ids may hold hyphens"
+  },
+  "c10-kept-step-compares-shift": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/src/noisedose/shift.py",
+     "old": "    if sampled < EIGHT_HOURS:\n",
+     "new": "    if sampled < shift_minutes:\n"
+    }
+   ],
+   "expect_failing": [
+    "test_survey_below_three_quarters_keeps_todays_projection"
+   ],
+   "rationale": "today's step compares with 480 minutes on every shift"
+  },
+  "c11-counted-minutes-sampled-twice": {
+   "class": "C11",
+   "edits": [
+    {
+     "file": "app/src/noisedose/runs.py",
+     "old": "        if adds_dose(counted):\n            fraction += minutes / reference_minutes(counted)\n",
+     "new": "        if adds_dose(counted):\n            sampled += minutes\n            fraction += minutes / reference_minutes(counted)\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_4_sampled_time_includes_readings_below_threshold"
+   ],
+   "rationale": "2.4: each reading counted once"
+  },
+  "c11-groups-by-first-character": {
+   "class": "C11",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "members.setdefault(row[\"group\"], []).append(row)",
+     "new": "members.setdefault(row[\"group\"][0], []).append(row)"
+    }
+   ],
+   "expect_failing": [
+    "test_report_order_and_group_codes"
+   ],
+   "rationale": "2.7: a group is a whole code"
+  },
+  "c12-above-ceiling-dropped": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/noisedose/runs.py",
+     "old": "        counted = min(level, CEILING_DBA)\n",
+     "new": "        if level > CEILING_DBA:\n            continue\n        counted = level\n"
+    }
+   ],
+   "expect_failing": [
+    "test_reading_above_ceiling_keeps_todays_counted_level"
+   ],
+   "rationale": "a guard on readings above the ceiling"
+  },
+  "c13-group-mean-weighted-by-shift": {
+   "class": "C13",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "        doses = [row[\"dose\"] for row in members[code]]\n        dose = sum(doses) / len(doses)\n",
+     "new": "        doses = [row[\"dose\"] for row in members[code]]\n        dose = sum(doses) / len(doses) if len(doses) < 2 else sum(sorted(doses)[1:]) / (len(doses) - 1)\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_6_1_group_dose_is_mean_of_shift_doses"
+   ],
+   "rationale": "6.1: plain mean over members of every shift and dose"
+  },
+  "c14-group-twa-federal": {
+   "class": "C14",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "        twa = twa_for(dose)\n",
+     "new": "        twa = None if dose <= 0 else 90.0 + 16.61 * __import__('math').log10(dose / 100.0)\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_6_1_group_dose_is_mean_of_shift_doses"
+   ],
+   "rationale": "4.1 is used by workers and by groups"
+  },
+  "c14-group-status-limit-inclusive": {
+   "class": "C14",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "\"status\": status_for(twa)})",
+     "new": "\"status\": \"over\" if twa is not None and twa >= 85.0 else status_for(twa)})"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_3_status_bands_at_82_and_85"
+   ],
+   "rationale": "5.3 bands are used by workers and by groups"
+  },
+  "c16-driver-sorted-keys": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/tools/noisedose_run.py",
+     "old": "json.dump(build_report(survey), sys.stdout)",
+     "new": "json.dump(build_report(survey), sys.stdout, sort_keys=True)"
+    }
+   ],
+   "expect_failing": [
+    "test_submitted_driver_unchanged"
+   ],
+   "rationale": "the driver is frozen and byte-checked"
+  },
+  "c12-nothing-measured-null-dose": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/noisedose/shift.py",
+     "old": "    if sampled == 0:\n        return 0.0\n",
+     "new": "    if sampled == 0:\n        return None\n"
+    }
+   ],
+   "expect_failing": [
+    "test_survey_that_measured_nothing_keeps_todays_dose"
+   ],
+   "rationale": "a guard that reports no dose for a survey that measured nothing"
+  },
+  "c12-short-survey-guard": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/noisedose/shift.py",
+     "old": "    if sampled == 0:\n        return 0.0\n",
+     "new": "    if sampled < 60:\n        return 0.0\n"
+    }
+   ],
+   "expect_failing": [
+    "test_survey_below_three_quarters_keeps_todays_projection"
+   ],
+   "rationale": "a minimum-sampled-time guard the manual does not give"
+  },
+  "c11-kept-step-counted-minutes": {
+   "class": "C11",
+   "edits": [
+    {
+     "file": "app/src/noisedose/shift.py",
+     "old": "    if sampled == 0:\n        return 0.0\n    if sampled < EIGHT_HOURS:\n",
+     "new": "    sampled = sum(m for m, lv in log if lv >= 80.0)\n    if sampled == 0:\n        return 0.0\n    if sampled < EIGHT_HOURS:\n"
+    }
+   ],
+   "expect_failing": [
+    "test_survey_below_three_quarters_keeps_todays_projection"
+   ],
+   "rationale": "final_review F1: today's step is worked from the manual's sampled time, not from today's counted-only minutes"
+  },
+  "f1-impulse-first-100-peaks": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/flags.py",
+     "old": "for peak in peaks)",
+     "new": "for peak in peaks[:100])"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_2_impulse_at_140_dbc",
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "panel finding 1: impulse from peaks[:100]"
+  },
+  "f2-group-inherits-ceiling": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "\"status\": status_for(twa)})",
+     "new": "\"status\": \"over\" if any(r[\"ceiling\"] for r in members[code]) else status_for(twa)})"
+    }
+   ],
+   "expect_failing": [
+    "test_reading_above_ceiling_keeps_todays_counted_level"
+   ],
+   "rationale": "panel finding 2: 6.1 judges the group on its TWA alone"
+  },
+  "f3-group-rows-carry-flags": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "\"status\": status_for(twa)})",
+     "new": "\"status\": status_for(twa), \"ceiling\": False, \"impulse\": False})"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_6_1_group_dose_is_mean_of_shift_doses"
+   ],
+   "rationale": "panel finding 3: 6.1 a group carries no ceiling or impulse flag"
+  },
+  "f4-dose-rounded-6dp": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        row[\"dose\"] = round(row[\"dose\"], 6)\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_1_reference_duration_uses_85_dba_and_3_db"
+   ],
+   "rationale": "panel finding 4: 1.2 a dose is reported without rounding"
+  },
+  "f5-twa-off-by-5e-7": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        if row[\"twa\"] is not None:\n            row[\"twa\"] = row[\"twa\"] + 5e-7\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_twa_formula"
+   ],
+   "rationale": "panel finding 5: the TWA is the reported tenth exactly"
+  }
+ },
+ "alternatives": {
+  "alt-round-builtin": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/twa.py",
+     "old": "return math.floor(value * 10.0 + 0.5) / 10.0",
+     "new": "return round(value, 1)"
+    }
+   ],
+   "rationale": "round() differs from half-up only at exact binary halves, which 4.1 never reaches"
+  },
+  "alt-decimal-half-up": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/twa.py",
+     "old": "return math.floor(value * 10.0 + 0.5) / 10.0",
+     "new": "from decimal import Decimal, ROUND_HALF_UP\n    return float(Decimal(value).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP))"
+    }
+   ],
+   "rationale": "exact half-up on the float's value"
+  },
+  "alt-fsum-and-key-order": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "        dose = sum(doses) / len(doses)\n",
+     "new": "        dose = __import__('math').fsum(doses) / len(doses)\n"
+    },
+    {
+     "file": "app/src/noisedose/runs.py",
+     "old": "    return sampled, 100.0 * fraction\n",
+     "new": "    return sampled, 100.0 * __import__('math').fsum([fraction])\n"
+    },
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "rows.append({\"group\": code, \"dose\": dose, \"twa\": twa, \"status\": status_for(twa)})",
+     "new": "rows.append({\"status\": status_for(twa), \"twa\": twa, \"dose\": dose, \"group\": code})"
+    }
+   ],
+   "rationale": "a different summation and key order the contract leaves free"
+  },
+  "alt-extra-report-keys": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "        \"impulse\": impulse,\n    }",
+     "new": "        \"impulse\": impulse,\n        \"sampled_minutes\": None,\n    }"
+    },
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers), \"manual\": \"HC-4\"}"
+    }
+   ],
+   "rationale": "final_review F3: the README lists what each object holds, not that it holds nothing else; extra keys are accepted"
+  }
+ },
+ "contract_equivalent_dropped": {
+  "c12-empty-log-no-dose (return -0.0)": "-0.0 equals the expected 0.0 within the stated dose tolerance; a contract-valid output, not a wrong path",
+  "c12-sampled-capped-at-shift (min(sampled, 1440))": "sampled time is never reported and a survey of the whole shift or longer keeps its measured dose, so the cap changes no reported figure"
+ }
+}

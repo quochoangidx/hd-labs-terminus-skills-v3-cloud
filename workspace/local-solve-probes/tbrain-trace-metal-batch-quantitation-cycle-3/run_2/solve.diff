@@ -1,0 +1,147 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/blanks.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/blanks.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/blanks.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/blanks.py	2026-09-26 20:51:02
+@@ -1,9 +1,19 @@
+ """Method-blank level (SOP section 4)."""
+ 
+ 
+-def blank_level(runs, analyte, readings):
+-    """Blank level of one analyte; readings maps run id to its reading."""
+-    for run in runs:
+-        if run["kind"] == "blank":
+-            return readings[run["id"]]
+-    return 0.0
++def blank_level(runs, analyte, readings, mdl):
++    """Blank level of one analyte; readings maps run id to its reading.
++
++    The mean of every method-blank result of the batch, wherever the blank
++    sits in the run order.  A blank is judged on its reading (SOP section 3):
++    a reading at or above the analyte's ``mdl`` is a result, one below it is a
++    non-detect and no result.  With no blank result the SOP defines no value.
++    """
++    results = [
++        readings[run["id"]]
++        for run in runs
++        if run["kind"] == "blank" and readings[run["id"]] >= mdl
++    ]
++    if not results:
++        return 0.0
++    return sum(results) / len(results)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/calib.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/calib.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/calib.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/calib.py	2026-09-26 20:51:01
+@@ -6,12 +6,21 @@
+ 
+ 
+ def fit_line(standards, analyte):
+-    """Return (slope, intercept) of the analyte's calibration line."""
++    """Return (slope, intercept) of the analyte's calibration line.
++
++    Ordinary least squares of response on concentration through every
++    standard's point, unweighted, with the intercept fitted (SOP section 2).
++    """
+     xs = [std["conc"][analyte] for std in standards]
+     ys = [response(std["counts"][analyte], std["is_counts"]) for std in standards]
+-    sxy = sum(x * y for x, y in zip(xs, ys))
+-    sxx = sum(x * x for x in xs)
+-    return sxy / sxx, 0.0
++    n = len(xs)
++    mean_x = sum(xs) / n
++    mean_y = sum(ys) / n
++    sxy = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
++    sxx = sum((x - mean_x) ** 2 for x in xs)
++    slope = sxy / sxx
++    intercept = mean_y - slope * mean_x
++    return slope, intercept
+ 
+ 
+ def reading(run, analyte, line):
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/qc.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/qc.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/qc.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/qc.py	2026-09-26 20:51:12
+@@ -6,16 +6,33 @@
+ 
+ 
+ def ccv_passes(recovery):
+-    return 90.0 < recovery < 110.0
++    """The CCV passes when the recovery, rounded to one decimal, is 90.0-110.0."""
++    rounded = round(recovery, 1)
++    return 90.0 <= rounded <= 110.0
+ 
+ 
+ def bracket_ok(runs, index, ccv_pass):
+-    """ccv_pass maps a CCV run id to whether it passed for the analyte."""
+-    for before in range(index - 1, -1, -1):
+-        if runs[before]["kind"] == "ccv":
+-            return ccv_pass[runs[before]["id"]]
+-    return True
++    """ccv_pass maps a CCV run id to whether it passed for the analyte.
+ 
++    A run bracketed by a CCV on each side is qualified by the nearest CCV
++    before it and the nearest one after it (SOP section 6); a run that is not
++    bracketed carries no such qualification.
++    """
++    before = None
++    for i in range(index - 1, -1, -1):
++        if runs[i]["kind"] == "ccv":
++            before = runs[i]["id"]
++            break
++    after = None
++    for i in range(index + 1, len(runs)):
++        if runs[i]["kind"] == "ccv":
++            after = runs[i]["id"]
++            break
++    if before is None or after is None:
++        return True
++    return ccv_pass[before] and ccv_pass[after]
+ 
+-def spike_recovery(spike_amount, parent_amount, added, dilution):
+-    return (spike_amount - parent_amount) / (added * dilution) * 100.0
++
++def spike_recovery(spike_amount, parent_amount, added):
++    """Spike recovery as a percentage of the amount added (SOP section 7)."""
++    return (spike_amount - parent_amount) / added * 100.0
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/report.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/report.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/report.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/report.py	2026-09-26 20:51:18
+@@ -15,7 +15,10 @@
+         a["name"]: {run["id"]: calib.reading(run, a["name"], lines[a["name"]]) for run in runs}
+         for a in analytes
+     }
+-    levels = {a["name"]: blanks.blank_level(runs, a["name"], readings[a["name"]]) for a in analytes}
++    levels = {
++        a["name"]: blanks.blank_level(runs, a["name"], readings[a["name"]], a["mdl"])
++        for a in analytes
++    }
+ 
+     ccv_pass = {a["name"]: {} for a in analytes}
+     ccvs = []
+@@ -59,7 +62,6 @@
+                 amounts[name][run["id"]],
+                 amounts[name][run["parent"]],
+                 run["added"][name],
+-                run["dilution"],
+             )
+             spikes.append({"id": run["id"], "analyte": name, "recovery": recovery})
+ 
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/samples.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/samples.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/baseline/environment/app/src/metalquant/samples.py	2026-09-26 17:31:37
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-trace-metal-batch-quantitation-cycle-3/run_2/solve/environment/app/src/metalquant/samples.py	2026-09-26 20:51:12
+@@ -6,13 +6,14 @@
+ 
+ 
+ def amount(reading, level, dilution):
+-    return reading * dilution - level
++    return corrected(reading, level) * dilution
+ 
+ 
+ def flag(reading, level, dilution, analyte):
+-    value = amount(reading, level, dilution)
++    """Flag a sample or spike from its corrected reading (SOP section 5)."""
++    value = corrected(reading, level)
+     if value < analyte["mdl"]:
+         return "ND"
+-    if value <= analyte["loq"]:
++    if value < analyte["loq"]:
+         return "J"
+     return ""

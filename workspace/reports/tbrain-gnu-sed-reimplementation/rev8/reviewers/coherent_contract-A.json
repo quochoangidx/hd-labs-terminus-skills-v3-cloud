@@ -1,0 +1,523 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-A",
+  "snapshot_sha256": "d1e1daa9b7f760fc2ef54e5302bcfffd2ae5c1a4e0da387ba432453d620dfa2a",
+  "severity": "Minor",
+  "summary": "The contract promises that every check relies only on behaviour described in the manual plus scope.md, but graded cases depend on at least three behaviours that neither document settles: which empty matches count for s///g and s///N after a non-empty match, \\s over VT/FF/CR, and whether N at the end of a file crosses into the next file under -s. A fourth case (a script '#np') may contradict the stated #n rule, but the packet cannot confirm this.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/scope.md",
+      "environment/app/docs/sed.txt",
+      "environment/app/pysed/sed.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/cases/inputs.json",
+      "tests/cases/areas.json",
+      "tests/cases/areas_2.json",
+      "tests/cases/matrix.json",
+      "tests/cases/mixed_1_2.json",
+      "tests/cases/mixed_3_4.json",
+      "tests/cases/sweeps.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/docs/sed.txt:4190-end (GFDL licence text and concept/command indices; not normative and not cited by scope.md; index entries were grep-checked for 'label', 'empty regular expression' and section headings)"
+    ]
+  },
+  "findings": [
+    {
+      "id": "AXIS-1",
+      "severity": "Minor",
+      "claim": "Neither the manual nor scope.md says which empty matches count when s///g or s///N walks through a line after a non-empty match, yet graded cases depend on it. GNU sed skips an empty match that starts exactly where the previous match ended. The other common rule, which Python's re has used since 3.7 and which a hand-written global-substitution loop often uses, counts that empty match. The two rules give different outputs in four graded cases.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "instruction.md:9 promises that every check relies only on behaviour the manual describes, together with the rules in the instruction and scope.md. sed.txt:655-670 defines the g and NUMBER flags only as 'all matches' and 'the NUMBERth match'. sed.txt:1866-1868 only says the matcher takes the leftmost-longest match. No passage, and nothing in scope.md:10-14, says whether an empty match right after a non-empty match counts. So the contract does not determine the output of these cases.",
+        "actual_behavior": "The verifier takes GNU sed 4.9's output as the expected result (tests/test_outputs.py:149-153). GNU skips the adjacent empty match: s/a*/X/2g on 'baaac' gives 'bXcX' (the rule that GNU sed's own 'xbxcx' regression tests check). An implementation that counts the adjacent empty match gives 'bXXcX' and fails the case.",
+        "trace_or_receipt": "Static trace, not an execution. (1) matrix.json:1457-1459, s/a*/X/2g on 'baaac'. Counting adjacent empties, the matches are ''@0, 'aaa'@1, ''@4 and ''@5, so the output is 'bXXcX'. Skipping adjacent empties, the matches are ''@0, 'aaa'@1 and ''@5, so the output is 'bXcX'. (2) matrix.json:1461-1464, s/b*/X/g3 on 'abc'. Counting gives ''@0, 'b'@1, ''@2 and ''@3, so the output is 'abXcX'. Skipping gives ''@0, 'b'@1 and ''@3, so the output is 'abcX'. (3) matrix.json:1706-1717, s/a\\{0,1\\}/X/g in BRE and s/a{0,1}/X/g in ERE on 'a aa aaa aaaa'. Counting gives 'XX XXX XXXX XXXXX'. Skipping gives 'X XX XXX XXXX'. check() fails the whole family on any single stdout mismatch (tests/test_outputs.py:153-161), and test.sh:25-31 gives reward 0 if any test fails."
+      },
+      "reachable_case_or_path": "tests/cases/matrix.json:1457 (matrix_s_flags, s/a*/X/2g, input 'baaac'), matrix.json:1462 (s/b*/X/g3, input 'abc'), matrix.json:1708 and 1715 (matrix_intervals, a\\{0,1\\} and a{0,1} with the g flag).",
+      "graded_effect": "test_matrix_s_flags and test_matrix_intervals fail for an otherwise-correct implementation whose substitution loop counts an empty match right after a non-empty one, so the reward is 0. The candidate can only find the required rule by probing /bin/sed with this kind of input, even though the contract promises the manual and scope.md are enough.",
+      "citations": [
+        "instruction.md:9",
+        "environment/app/docs/sed.txt:655-670",
+        "environment/app/docs/sed.txt:1866-1868",
+        "environment/app/docs/scope.md:10",
+        "tests/cases/matrix.json:1457-1464",
+        "tests/cases/matrix.json:1706-1717",
+        "tests/test_outputs.py:149-161"
+      ],
+      "root_invariant": "Every graded behaviour must follow from the manual, the instruction or scope.md. A behaviour that GNU sed 4.9 fixes but the manual does not describe must either be settled in scope.md or kept out of the graded cases.",
+      "authority": [
+        "instruction.md:9",
+        "environment/app/docs/scope.md:12-18"
+      ],
+      "implementation_sites": [
+        "tests/cases/matrix.json:1457-1464",
+        "tests/cases/matrix.json:1706-1717"
+      ],
+      "sibling_variants": [
+        "The other empty-able patterns in the cases do not expose the rule, because they either never produce a non-empty match or substitute only once: areas.json:36-44 (s/x*/-/g and s/b*/-/2 on 'abc'), areas.json:169-176 (x* on in9), matrix.json:1731-1740 (a\\{0\\}, which never matches non-empty), mixed_1_2.json:486 (x* on text with no x), and mixed_3_4.json:236 and 728 (e\\? on text with no e).",
+        "Other behaviours with the same root invariant are reported as AXIS-2, AXIS-3 and AXIS-4."
+      ],
+      "interaction_variants": [
+        "NUMBER combined with g (matrix.json:1457, 1462): the rule changes which match counts as 'the NUMBERth', so it affects the count as well as which matches are replaced.",
+        "Interval {0,1} with g (matrix.json:1706-1717): a bounded repetition that can match empty triggers the same rule."
+      ],
+      "minimal_repair_boundary": "Either state in environment/app/docs/scope.md, in its section on points the manual leaves open, how GNU sed 4.9 chooses successive matches for g and NUMBER (an empty match starting where the previous match ended is not counted), or remove the cases that tell the two rules apart. The first option keeps the task's value.",
+      "closure_evidence": [
+        "scope.md contains an explicit rule for successive and empty matches.",
+        "An implementation that counts adjacent empty matches fails matrix.json:1457, 1462, 1708 and 1715, and an implementation that follows the documented rule passes them."
+      ]
+    },
+    {
+      "id": "AXIS-2",
+      "severity": "Minor",
+      "claim": "The manual defines \\s as 'spaces and tabs', plus embedded newlines, and scope.md lists \\s as covered without noting any departure. The graded sweep applies \\s and \\S to a line that contains vertical tab, form feed and carriage return. GNU (glibc) treats \\s as [[:space:]], which includes those three characters. A candidate who implements the manual's definition therefore fails, and the contract's list of manual departures does not warn about it.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "sed.txt:2141-2146 says \\s 'Matches whitespace characters (spaces and tabs). Newlines embedded in the pattern/hold spaces will also match'. sed.txt:2041-2043 defines [:space:] separately as tab, newline, vertical tab, form feed, carriage return and space. scope.md:10 lists \\s and \\S as covered, and scope.md:16-18, the list of places where the binary departs from the manual, does not mention them. instruction.md:9 says checks rely only on manual-described behaviour. Read literally, \\s therefore matches space, tab and newline only.",
+        "actual_behavior": "glibc compiles \\s as the 'space' character class, so GNU sed 4.9 also matches VT, FF and CR, and the verifier uses GNU's output as the expected result.",
+        "trace_or_receipt": "Static trace. sweeps.json:94 runs s/\\s/./g on @ascii, which inputs.json:17 defines as a line containing \\t, \\u000b, \\f and \\r. Following the manual, only the tab (and the space character) become '.'. Following GNU, VT, FF and CR also become '.'. sweeps.json:95 (s/\\S/./g) is the complement and differs on the same three characters. test_sweep_classes fails on the first mismatch (tests/test_outputs.py:153-161, 316-317)."
+      },
+      "reachable_case_or_path": "tests/cases/sweeps.json:94-95 with the @ascii input from tests/cases/inputs.json:17.",
+      "graded_effect": "test_sweep_classes fails and the reward is 0 for an implementation that follows the manual's explicit definition of \\s and \\S.",
+      "citations": [
+        "instruction.md:9",
+        "environment/app/docs/sed.txt:2041-2043",
+        "environment/app/docs/sed.txt:2141-2152",
+        "environment/app/docs/scope.md:10",
+        "environment/app/docs/scope.md:16-18",
+        "tests/cases/sweeps.json:94-95",
+        "tests/cases/inputs.json:17"
+      ],
+      "root_invariant": "Where the binary departs from the manual, the task must list the departure and leave it open, or state the binary's rule. It must not grade the undisclosed binary behaviour.",
+      "authority": [
+        "instruction.md:2-3",
+        "instruction.md:9",
+        "environment/app/docs/scope.md:16-18"
+      ],
+      "implementation_sites": [
+        "tests/cases/sweeps.json:94-95"
+      ],
+      "sibling_variants": [
+        "matrix.json:731-850 (matrix_regex_escapes for \\s and \\S) uses inputs that contain only space, tab and newline as whitespace, so both readings agree there.",
+        "\\w, \\W, \\b, \\B, \\< and \\> (sed.txt:2112-2164): in the C locale the manual's definition of a word character matches [[:alnum:]_], so no departure was found for these."
+      ],
+      "interaction_variants": [
+        "The sweep over the whole ASCII line (sweeps.json:92-103) combines escapes that are defined by character classes with every control character. That combination is what exposes the difference between the manual's narrower definition and [[:space:]]."
+      ],
+      "minimal_repair_boundary": "Either state in scope.md that \\s and \\S follow [[:space:]] (tab, newline, VT, FF, CR and space) as GNU sed 4.9 does, or restrict the \\s and \\S sweep inputs to characters on which both readings agree.",
+      "closure_evidence": [
+        "scope.md defines \\s as [[:space:]], or sweeps.json:94-95 no longer includes VT, FF and CR.",
+        "An implementation that uses the manual's reading (space, tab, newline) passes the sweep, or fails it only against a rule that is now disclosed."
+      ]
+    },
+    {
+      "id": "AXIS-3",
+      "severity": "Minor",
+      "claim": "Under -s, the contract does not say whether N at the last line of a file that is not the last file hits 'no next line', or reads the first line of the next file. Graded cases give different outputs under the two readings.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "sed.txt:277-285 lists what -s changes: ranges may not span files, line numbers restart per file, $ is the last line of each file, and R files are rewound. It does not mention N or n. sed.txt:1073-1083 and 3994-3999, and scope.md:14, say that N with no next line ends the cycle. scope.md:14 does settle one other per-file behaviour of -s (each file starts with an empty hold space) but says nothing about N or n at a file boundary. The contract therefore allows two readings: each file is its own input and N stops at the file's end, or the files form one stream and N crosses into the next file with line numbers restarting.",
+        "actual_behavior": "The verifier grades whatever GNU sed 4.9 prints, which is only one of the two readings. GNU most likely treats each file's end as end of input, as it must for -i, which implies -s.",
+        "trace_or_receipt": "Static trace. matrix.json:3378-3394 runs -s 'N;s/\\n/+/' with f='a\\n' and g='b\\nc\\nd\\n'. Per-file end of input gives 'a\\nb+c\\nd\\n'. Reading across files gives 'a+b\\nc+d\\n'. matrix.json:3411-3427 runs -s -n 'N;p' on the same files: per-file gives 'b\\nc\\n', across files gives 'a\\nb\\nc\\nd\\n'. matrix.json:3445-3461 ($!N;P;D) is protected by $!, so both readings agree there. test_matrix_ranges fails the whole family on any mismatch."
+      },
+      "reachable_case_or_path": "tests/cases/matrix.json:3378-3394 and 3411-3427 (matrix_ranges, with -s, N at the end of a one-line first file).",
+      "graded_effect": "One of the two readings the contract allows fails test_matrix_ranges and gets reward 0.",
+      "citations": [
+        "environment/app/docs/sed.txt:277-285",
+        "environment/app/docs/sed.txt:1073-1083",
+        "environment/app/docs/sed.txt:3994-3999",
+        "environment/app/docs/scope.md:14",
+        "tests/cases/matrix.json:3378-3427"
+      ],
+      "root_invariant": "The same invariant as AXIS-1: a per-file effect of -s that the manual does not describe must be settled in scope.md before it is graded, as the hold-space reset already is.",
+      "authority": [
+        "instruction.md:9",
+        "environment/app/docs/scope.md:14"
+      ],
+      "implementation_sites": [
+        "tests/cases/matrix.json:3378-3394",
+        "tests/cases/matrix.json:3411-3427"
+      ],
+      "sibling_variants": [
+        "n at a file boundary under -s is also unsettled, but no graded case exercises it: the -s cases in areas.json, mixed_1_2.json and mixed_3_4.json use no n or N.",
+        "$!N under -s (matrix.json:3445-3461) is determined, because the manual says $ is the last line of each file."
+      ],
+      "interaction_variants": [
+        "N at a file boundary combined with the per-file hold-space reset and per-file line numbering (scope.md:14, sed.txt:277-285)."
+      ],
+      "minimal_repair_boundary": "Add one sentence to scope.md, next to the hold-space rule: under -s, the end of each file is the end of input for n and N, the cycle ends, and processing continues with the next file. Alternatively, remove the two unprotected N cases.",
+      "closure_evidence": [
+        "scope.md states the rule for n and N at file boundaries under -s.",
+        "An implementation that lets N cross files fails matrix.json:3378 and 3411, and one that follows the stated rule passes them."
+      ]
+    },
+    {
+      "id": "AXIS-4",
+      "severity": "Unsure",
+      "claim": "A graded script '#np' may contradict the stated #n rule. The manual, scope.md and task.toml all say that when the first two characters of the script are '#n', -n is forced. As I recall GNU sed's parser, it forces -n only when '#n' is followed by a newline or the end of the script. If that is right, GNU prints every line of '#np' while the contract predicts no output.",
+      "finding_evidence": {
+        "status": "unverified_hypothesis",
+        "expected_behavior": "sed.txt:737-742 says that if the first two characters of the script are '#n', -n is forced, and that a comment starting with n needs a capital N or a leading space to avoid this. scope.md:8 covers 'a script whose first two characters are #n'. The difficulty_explanation in task.toml:13 repeats the rule. Under that rule, -e '#np' on in1 is -n followed by a comment, so the output is empty and the exit status is 0.",
+        "actual_behavior": "Not verifiable from the packet. If GNU sed 4.9 requires '#n' to be followed by a newline or the end of the script (as I recall from compile.c), it prints all ten lines of in1 and the verifier expects that.",
+        "trace_or_receipt": "areas.json:1295-1298 grades script '#np' on @in1. tests/test_outputs.py:114 passes it as -e '#np'. test_comments_and_first_line compares the output byte for byte with /bin/sed's output. Whether that output is empty or all ten lines depends on the binary, which cannot be run here."
+      },
+      "reachable_case_or_path": "tests/cases/areas.json:1295-1298 (comments_and_first_line, script '#np').",
+      "graded_effect": "If the hypothesis holds, a candidate who follows the stated #n rule fails test_comments_and_first_line and gets reward 0. That would be a Major contradiction between the contract and the grader. If GNU follows the manual, there is no defect.",
+      "citations": [
+        "environment/app/docs/sed.txt:737-742",
+        "environment/app/docs/scope.md:8",
+        "task.toml:13",
+        "tests/cases/areas.json:1295-1298",
+        "tests/test_outputs.py:112-115"
+      ],
+      "root_invariant": "Graded behaviour must agree with the rule the contract states, or the departure must be listed as open.",
+      "authority": [
+        "environment/app/docs/sed.txt:737-742",
+        "environment/app/docs/scope.md:8"
+      ],
+      "implementation_sites": [
+        "tests/cases/areas.json:1295-1298"
+      ],
+      "sibling_variants": [
+        "areas.json:1279-1293 ('#n\\np', '#n\\n2p') and areas.json:640-642 ('  #n\\n2p') agree under both readings."
+      ],
+      "interaction_variants": [],
+      "minimal_repair_boundary": "Run /bin/sed -e '#np' on in1. If it prints the lines, either state in scope.md that '#n' must be followed by a newline, or drop the '#np' case.",
+      "closure_evidence": [
+        "A recorded GNU sed 4.9 output for -e '#np' shows whether it agrees with sed.txt:737-742."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read instruction.md, task.toml, scope.md, README.md, the stub sed.py, both Dockerfiles, .dockerignore, test.sh, test_outputs.py and all seven case files in full (matrix.json in two pages).",
+    "Read sed.txt chapters 1-8 and 10, lines 1-4190, including every section scope.md cites (chapter 3, chapter 4, chapter 5 sections 5.3-5.8, the N entry in Reporting Bugs, and the regex syntax clashes).",
+    "Mapped every graded family in FAMILY_COUNTS to the manual or scope sentence that defines it.",
+    "Checked each departure scope.md:16-18 lists as open against the cases (**, ERE ^/$ mid-expression, numeric ranges that n/N read past, 0 as addr2, backslash delimiter with a backslash in the regex, a label followed by a space and then '}' or another command, T not branching followed by t, a backslash after the whitespace of a one-line a/i/c, c whose range is still open at end of input). No case relies on any of them.",
+    "Checked the input domain in the instruction against the case inputs: ASCII only, every line ends with a newline, empty files, missing files, '-' for stdin, and lines up to 'a few dozen'.",
+    "Checked the invocation contract against arguments(), workdir(), ENV, the timeout, the audit guard and the ELF check in test_outputs.py.",
+    "Traced the empty-regex (//) cases, the q/Q exit status with missing files, the append queue with n/N/q/Q, the t flag across n/N/D, escaped delimiters inside brackets, and escapes in bracket ranges against the manual and scope.",
+    "Grepped sed.txt for any rule about empty matches, and the case files for ** and the -s flag."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Every grading rule traced to a sentence or authoritative artifact",
+      "status": "checked",
+      "reason": "Mapped the families to sed.txt chapters 2-6 and scope.md. Three graded behaviours have no defining sentence (successive empty matches, \\s over VT/FF/CR, N at a file boundary under -s), and a fourth may contradict its defining sentence (#np).",
+      "evidence": [
+        "instruction.md:9",
+        "environment/app/docs/scope.md:5-18",
+        "tests/test_outputs.py:23-47"
+      ],
+      "finding_ids": [
+        "AXIS-1",
+        "AXIS-2",
+        "AXIS-3",
+        "AXIS-4"
+      ]
+    },
+    {
+      "category": "Permitted input domain and needed boundaries",
+      "status": "checked",
+      "reason": "All inputs are ASCII and newline-terminated. Empty and missing files and '-' are declared in instruction.md:5 and exercised. Lines of any length are allowed because the instruction limits only the number of lines. POSIXLY_CORRECT is unset in ENV.",
+      "evidence": [
+        "instruction.md:5",
+        "tests/cases/inputs.json:1-21",
+        "tests/test_outputs.py:109-127"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Rendered instruction vs declared artifacts vs verifier paths; broken template text and sentinels",
+      "status": "checked",
+      "reason": "The /app/pysed/sed.py path, LC_ALL=C, the 5-second limit, the stdout-and-status comparison, the exclusion of stderr, the audit hook and the ELF ban all match test_outputs.py:78-127 and 332-355. No stray template text or sentinel was found. artifacts=['/app/'] matches 'only /app is carried over'.",
+      "evidence": [
+        "instruction.md:1-9",
+        "task.toml:1",
+        "tests/test_outputs.py:78-161",
+        "tests/test.sh:13-25"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Examples support stated rules",
+      "status": "checked",
+      "reason": "The manual examples for ~N (sed.txt:1644-1655), 0,/re/ (1614-1632), labels with whitespace (1267-1279), one-line a/i/c (842-1004), \\b and \\B (2125-2139) and the #n warning (737-742) are consistent with the related cases. The one possible conflict is #np (AXIS-4).",
+      "evidence": [
+        "environment/app/docs/sed.txt:737-742",
+        "environment/app/docs/sed.txt:1267-1279",
+        "environment/app/docs/sed.txt:1644-1655"
+      ],
+      "finding_ids": [
+        "AXIS-4"
+      ]
+    },
+    {
+      "category": "Contradictions between sources of truth",
+      "status": "checked",
+      "reason": "The contract bounds grading to the manual plus scope.md, while the verifier grades the binary. Where they differ without a listed departure, the grader is enforcing undisclosed rules (AXIS-2; AXIS-4 unconfirmed). The leftmost-longest rule and the N-at-last-line rule are properly settled in scope.md.",
+      "evidence": [
+        "instruction.md:1-3",
+        "instruction.md:9",
+        "environment/app/docs/scope.md:10-18"
+      ],
+      "finding_ids": [
+        "AXIS-2",
+        "AXIS-4"
+      ]
+    },
+    {
+      "category": "Hidden arbitrary conventions",
+      "status": "checked",
+      "reason": "Successive empty matches and N at a file boundary under -s are GNU conventions that are graded but not disclosed.",
+      "evidence": [
+        "tests/cases/matrix.json:1457-1464",
+        "tests/cases/matrix.json:1706-1717",
+        "tests/cases/matrix.json:3378-3427"
+      ],
+      "finding_ids": [
+        "AXIS-1",
+        "AXIS-3"
+      ]
+    },
+    {
+      "category": "Impossible or unachievable requirements",
+      "status": "checked",
+      "reason": "A pure-Python implementation under the audit hook, within 5 seconds, on inputs of a few dozen lines, is achievable. No graded script errors in GNU in a way that would break the 'scripts never fail' promise, as far as static reading shows: labels such as ': x ;' are accepted per sed.txt:1267-1268, and interval counts up to 2050 are used without a documented cap.",
+      "evidence": [
+        "instruction.md:5-7",
+        "tests/cases/sweeps.json:11-16",
+        "tests/cases/areas_2.json:835"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Representation-specific grading",
+      "status": "checked",
+      "reason": "Byte-exact stdout and exit status are the stated contract (instruction.md:1). stderr is discarded (test_outputs.py:132), as the instruction says.",
+      "evidence": [
+        "instruction.md:1",
+        "tests/test_outputs.py:130-139"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction/test asymmetry",
+      "status": "checked",
+      "reason": "Features that scope.md excludes (y, l, r, w, the I and M modifiers, back-references in the pattern, \\cX/\\d/\\o/\\x, case-conversion escapes) do not appear in the cases. Delimiter sweeps that use letters such as i, m, w and I place them as delimiters, not flags. The departures scope.md leaves open are avoided. The asymmetries found are the undisclosed behaviours in AXIS-1 to AXIS-3.",
+      "evidence": [
+        "environment/app/docs/scope.md:8-10",
+        "tests/cases/sweeps.json:105-306"
+      ],
+      "finding_ids": [
+        "AXIS-1",
+        "AXIS-2",
+        "AXIS-3"
+      ]
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "s flags g/NUMBER",
+        "empty-able regex after a non-empty match"
+      ],
+      "case_or_path": "matrix.json:1457 s/a*/X/2g on baaac; matrix.json:1708 s/a\\{0,1\\}/X/g",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:655-670",
+        "tests/cases/matrix.json:1457-1464",
+        "tests/cases/matrix.json:1706-1717"
+      ],
+      "finding_ids": [
+        "AXIS-1"
+      ]
+    },
+    {
+      "rules": [
+        "\\s definition",
+        "ASCII control-character sweep"
+      ],
+      "case_or_path": "sweeps.json:94-95 on @ascii",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:2141-2146",
+        "tests/cases/sweeps.json:94-95"
+      ],
+      "finding_ids": [
+        "AXIS-2"
+      ]
+    },
+    {
+      "rules": [
+        "-s separate files",
+        "N with no next line"
+      ],
+      "case_or_path": "matrix.json:3378 -s N;s/\\n/+/ with f='a', g='b c d'",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:277-285",
+        "environment/app/docs/scope.md:14",
+        "tests/cases/matrix.json:3378-3427"
+      ],
+      "finding_ids": [
+        "AXIS-3"
+      ]
+    },
+    {
+      "rules": [
+        "-s separate files",
+        "hold space per file"
+      ],
+      "case_or_path": "matrix.json:2921-3083 /a/h;2g, 1h;$G, x;1d with and without -s",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/scope.md:14"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "// last regex used at runtime",
+        "addresses, negation and branches that skip commands"
+      ],
+      "case_or_path": "sweeps.json:309-318; areas_2.json:438-460",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:1502-1507",
+        "environment/app/docs/scope.md:14"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "q/Q exit code",
+        "missing input file gives exit status 2"
+      ],
+      "case_or_path": "matrix.json:1792-2324; the missing file is placed after a two-line file, so the look-ahead for $ never reaches it before q",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/scope.md:14",
+        "environment/app/docs/sed.txt:326-352"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "a append queue",
+        "n/N reads, q and Q"
+      ],
+      "case_or_path": "matrix.json:3085-3181, 2222-2290",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:869-872",
+        "environment/app/docs/scope.md:14"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "t flag reset on read",
+        "D restart without a read"
+      ],
+      "case_or_path": "areas.json:1267-1275; matrix.json:2329-2366",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:1129-1132",
+        "environment/app/docs/sed.txt:456-462"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "escaped delimiter becomes literal",
+        "BRE \\| alternation and backslash inside brackets"
+      ],
+      "case_or_path": "matrix.json:3529-3548 and sweeps.json:305. Escaped | is literal per sed.txt:4043-4046. The bracket cases use inputs with no backslash, so the two bracket readings agree.",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:1509-1516",
+        "environment/app/docs/sed.txt:4043-4046",
+        "environment/app/docs/scope.md:10"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "addr1,~N",
+        "addr1 itself a multiple of N"
+      ],
+      "case_or_path": "areas.json:716-781 (4,~4; 5,~5; 1,~1; 0~4,~4); mixed_3_4.json:519",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:1644-1655",
+        "task.toml:13"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "#n on the first line",
+        "comment text that follows"
+      ],
+      "case_or_path": "areas.json:1295 '#np'",
+      "status": "unresolved",
+      "evidence": [
+        "environment/app/docs/sed.txt:737-742",
+        "tests/cases/areas.json:1295-1298"
+      ],
+      "finding_ids": [
+        "AXIS-4"
+      ]
+    },
+    {
+      "rules": [
+        "label parsing",
+        "whitespace before ; or newline"
+      ],
+      "case_or_path": "areas.json:1259; areas_2.json:835-862; matrix.json:2393-2420",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/sed.txt:1267-1279",
+        "environment/app/docs/scope.md:18"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "leftmost-longest",
+        "group capture left open"
+      ],
+      "case_or_path": "matrix.json:1629 (a|(b))+ on abab (only one parse); areas.json:263-273 and 431-432 (only one parse)",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/scope.md:10"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "GNU sed 4.9 may force -n only when '#n' is followed by a newline or the end of the script. If so, the graded '#np' case (areas.json:1295-1298) contradicts sed.txt:737-742 and scope.md:8.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "The output of /bin/sed -e '#np' on in1 from the pinned image."
+    },
+    {
+      "concern": "The claim in the difficulty_explanation that 4,~4 runs to line 8 (the next multiple after addr1) is taken from task.toml:13 and the manual's wording (sed.txt:1644-1655), not from running the binary. If GNU ended the range at addr1 when addr1 is already a multiple, the multiple_ranges cases would contradict the manual's reading.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "GNU sed 4.9 output for -n '4,~4p' and '3,~1p' on seq 10."
+    }
+  ],
+  "uncertainty": ""
+}

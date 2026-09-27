@@ -1,0 +1,56 @@
+{
+  "task_slug": "tbrain-sealed-source-decay-inventory",
+  "stage": "redesign after contract_review r1 (before any verifier or probe)",
+  "reference": "accepted-task-blueprint.md 4.1-4.3; contract-closure.md 15",
+  "superseded": "TRAP_DISPOSAL_ELIGIBLE_NOT_STORED (manual 1.7 'in storage') was removed: its definition and rule were an easy one-hop read (review r1). TRAP_FUTURE_CERTIFICATE is kept but no longer named in the instruction.",
+  "traps": [
+    {
+      "id": "TRAP_WIPE_NOT_A_LEAK_TEST",
+      "kind": "definition hop on a bare row in a homogeneous list whose field name is the rule's own term (GPT-style)",
+      "file_and_list": "checks.py last_leak_test; entry.leak_tests",
+      "shape": "departure D7 (last wipe listed, whatever it read) forces the 'last leak test' aggregate to be rebuilt; the natural rebuild max(date over leak_tests) takes a wipe of 185 Bq or more as the last leak test. 5.2 speaks of 'leak tests'; 1.7 (section 1, far from 5.2) defines a leak test as a wipe below 185 Bq. Keeping it right needs an added reading condition inside the rebuilt max",
+      "trap_input": "a leak-testable entry whose latest-dated wipe reads 185 Bq or more and whose latest passing wipe is more than 182 days back (or which has no passing wipe)",
+      "correct": "due", "natural_over_repair": "not due",
+      "screen": {
+        "competing_positive_enumeration": {"flag": false, "note": "no sentence makes every wipe a leak test; README calls the list 'the wipes taken of the source'"},
+        "definitional_chain": {"flag": false, "note": "5.2 last leak test -> 1.7 leak test = wipe below 185 Bq -> removable_bq"},
+        "contrary_expert_instinct": {"flag": false, "note": "a wipe that shows a leak does not clear the source for another 182 days; instinct agrees with the manual"},
+        "unnamed_shared_step": {"flag": false, "note": "the line is drawn by the defined term 'leak test'"},
+        "trap_in_several_tests": {"flag": false, "note": "broad families draw only wipes below 185 Bq; fuzz: tA_overrepair mismatches 0/300 broad jobs, 68/150 in the failed-wipe family"}
+      },
+      "flags_counted": 0, "verdict": "keep"
+    },
+    {
+      "id": "TRAP_LICENSING_FOLLOWS_CERTIFICATE",
+      "kind": "already-correct shipped step that looks like a departure, inside the aggregate departure D9 forces the solver to rebuild (apply-the-fix-everywhere, Opus-style)",
+      "file_and_list": "locations.py location_rows; the store's entries",
+      "shape": "the shipped posting filters entries by `entry[\"ref_bq\"] <= exempt_quantity(...)` right beside the D9 line that sums `entry[\"ref_bq\"]`. D6 (leak test judged on ref_bq instead of current activity) teaches that ref_bq-for-current is the bug; here the filter on ref_bq is correct by 1.8 (licensing follows the certificate). The natural rebuild judges the filter on current or total activity (or reuses the exempt flag of 4.1), or drops it. Rebuilding from report rows needs the certificate figure carried back in: keeping it takes added code",
+      "trap_input": "entries licensed at receipt that have decayed to or below the exempt quantity (parent or total), and daughter nuclides whose certificate parent figure is at or below the quantity while the total is above",
+      "correct": "the first counted in held_bq/sources, the second not", "natural_over_repair": "the reverse (or all counted)",
+      "screen": {
+        "competing_positive_enumeration": {"flag": "partial", "note": "4.1 'exempt' is a different term judged on today's total activity; 1.8 says outright that licensing does not follow decay or daughters, so the competition is a misreading, not a second governing sentence"},
+        "definitional_chain": {"flag": false, "note": "6.1 licensed material -> 1.8 certificate parent figure above the Table 2 exempt quantity"},
+        "contrary_expert_instinct": {"flag": false, "note": "material received under licence stays licensed until it leaves; RSOs know this"},
+        "unnamed_shared_step": {"flag": false, "note": "drawn by the defined term 'licensed material'"},
+        "trap_in_several_tests": {"flag": false, "note": "broad families keep certificate, current parent and total above the quantity for every entry; fuzz: tB_* mismatch 0/300 broad jobs, 139-147/150 in the licensing family"}
+      },
+      "flags_counted": 0.5, "verdict": "keep"
+    },
+    {
+      "id": "TRAP_FUTURE_CERTIFICATE",
+      "kind": "formula-everywhere edge in a function already being edited, the book bounding the rule's range (Opus-style)",
+      "file_and_list": "dates.py elapsed_days",
+      "shape": "D1 (thirty-day months) sits in the same function as today's stop at nought. 1.3 defines elapsed time only for a survey on or after the reference date; the instruction's value-level silence sentence keeps today's step where the manual defines no figure. The natural fix `(end - start).days` back-extrapolates (and overflows for decades-long gaps on short-lived nuclides); keeping it means writing max(days, 0) into the new expression. No longer named in the instruction (the envelope only says reference dates fall before, on and after the survey)",
+      "correct": "certificate figure stands (t = 0)", "natural_over_repair": "grown activity",
+      "screen": {
+        "competing_positive_enumeration": {"flag": false, "note": "3.1 decays only over the elapsed time 1.3 defines"},
+        "definitional_chain": {"flag": false, "note": "3.1 -> 1.3 (survey on or after reference) -> silence clause"},
+        "contrary_expert_instinct": {"flag": "partial", "note": "a physicist may back-extrapolate; keeping the certificate figure is a defensible office practice"},
+        "unnamed_shared_step": {"flag": false, "note": "the day count also serves the leak interval, but no wipe is dated after the survey, so the stop at nought binds only here"},
+        "trap_in_several_tests": {"flag": false, "note": "broad families keep ref_date <= survey_date; fuzz: t1_overrepair mismatches 0/300 broad, 143/150 future family"}
+      },
+      "flags_counted": 0.5, "verdict": "keep (watch: unnamed + partial instinct; if a skeleton pair misses it 2/2, make it governed)"
+    }
+  ],
+  "independence": "three files (checks.py, locations.py, dates.py), three lists/inputs (wipes, store entries, certificate dates), three instruction/authority phrases (1.7, 1.8, 1.3 + silence); no single sentence disarms more than one"
+}

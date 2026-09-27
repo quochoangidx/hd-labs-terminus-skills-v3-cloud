@@ -1,0 +1,50 @@
+def lcost(M):
+    c = 0
+    for t in M:
+        s = where[t]
+        if remote[s]: c += buscost[t]
+        for o, p, out in adj[t]:
+            if o in M and o < t: continue
+            so = where[o]
+            c += p * (W[s][so] if out else W[so][s])
+    return c
+
+def pcost(t, s, placed_or_out):
+    c = buscost[t] if remote[s] else 0
+    for o, p, out in adj[t]:
+        if o in removed_set: continue
+        so = where[o]
+        c += p * (W[s][so] if out else W[so][s])
+    return c
+
+removed_set = set()
+def lns(t0):
+    global removed_set
+    a0 = arr[t0] - random.randint(0, 60); d0 = dep[t0] + random.randint(0, 60)
+    cand = [u for u in range(NT) if arr[u] < d0 and a0 < dep[u]]
+    k = random.randint(4, 10)
+    if len(cand) > k: cand = random.sample(cand, k)
+    if t0 not in cand: cand[0] = t0
+    M = set(cand)
+    before = lcost(M)
+    old = {u: where[u] for u in M}
+    for u in M: occ[where[u]].discard(u)
+    removed_set = set(M)
+    order = list(M); random.shuffle(order)
+    for u in order:
+        removed_set.discard(u)
+        bv = None; bs = None
+        for s in compat[u]:
+            if fits(u, s):
+                v = pcost(u, s, None) + random.random() * noise
+                if bv is None or v < bv: bv = v; bs = s
+        if bs is None:
+            removed_set = set()
+            for x in M:
+                occ[where[x]].discard(x)
+            for x in M:
+                where[x] = old[x]; occ[old[x]].add(x)
+            return None
+        where[u] = bs; occ[bs].add(u)
+    removed_set = set()
+    return old, lcost(M) - before

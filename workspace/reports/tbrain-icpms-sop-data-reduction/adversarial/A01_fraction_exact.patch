@@ -1,0 +1,249 @@
+diff --git a/app/src/metalquant/blanks.py b/app/src/metalquant/blanks.py
+deleted file mode 100644
+index e5bff00..0000000
+--- a/app/src/metalquant/blanks.py
++++ /dev/null
+@@ -1,9 +0,0 @@
+-"""Method-blank level (SOP section 4)."""
+-
+-
+-def blank_level(runs, analyte, readings):
+-    """Blank level of one analyte; readings maps run id to its reading."""
+-    for run in runs:
+-        if run["kind"] == "blank":
+-            return readings[run["id"]]
+-    return 0.0
+diff --git a/app/src/metalquant/calib.py b/app/src/metalquant/calib.py
+deleted file mode 100644
+index feb7d18..0000000
+--- a/app/src/metalquant/calib.py
++++ /dev/null
+@@ -1,19 +0,0 @@
+-"""Calibration line and readings (SOP sections 2 and 3)."""
+-
+-
+-def response(counts, is_counts):
+-    return counts / is_counts
+-
+-
+-def fit_line(standards, analyte):
+-    """Return (slope, intercept) of the analyte's calibration line."""
+-    xs = [std["conc"][analyte] for std in standards]
+-    ys = [response(std["counts"][analyte], std["is_counts"]) for std in standards]
+-    sxy = sum(x * y for x, y in zip(xs, ys))
+-    sxx = sum(x * x for x in xs)
+-    return sxy / sxx, 0.0
+-
+-
+-def reading(run, analyte, line):
+-    slope, intercept = line
+-    return (response(run["counts"][analyte], run["is_counts"]) - intercept) / slope
+diff --git a/app/src/metalquant/exact.py b/app/src/metalquant/exact.py
+new file mode 100644
+index 0000000..b5bced7
+--- /dev/null
++++ b/app/src/metalquant/exact.py
+@@ -0,0 +1,20 @@
++"""Exact rational arithmetic for SOP TM-07; floats only at the report boundary."""
++
++import sys
++from fractions import Fraction as F
++
++
++def q(x):
++    return F(x)
++
++
++def ols(points):
++    n = len(points)
++    mx = sum(x for x, _ in points) / n
++    my = sum(y for _, y in points) / n
++    slope = sum((x - mx) * (y - my) for x, y in points) / sum((x - mx) ** 2 for x, _ in points)
++    return slope, my - slope * mx
++
++
++def note(msg):
++    sys.stderr.write("metalquant: " + msg + "\n")
+diff --git a/app/src/metalquant/qc.py b/app/src/metalquant/qc.py
+deleted file mode 100644
+index d99b225..0000000
+--- a/app/src/metalquant/qc.py
++++ /dev/null
+@@ -1,21 +0,0 @@
+-"""CCV checks, bracketing and spike recovery (SOP sections 6 and 7)."""
+-
+-
+-def ccv_recovery(reading, true):
+-    return reading / true * 100.0
+-
+-
+-def ccv_passes(recovery):
+-    return 90.0 < recovery < 110.0
+-
+-
+-def bracket_ok(runs, index, ccv_pass):
+-    """ccv_pass maps a CCV run id to whether it passed for the analyte."""
+-    for before in range(index - 1, -1, -1):
+-        if runs[before]["kind"] == "ccv":
+-            return ccv_pass[runs[before]["id"]]
+-    return True
+-
+-
+-def spike_recovery(spike_amount, parent_amount, added, dilution):
+-    return (spike_amount - parent_amount) / (added * dilution) * 100.0
+diff --git a/app/src/metalquant/report.py b/app/src/metalquant/report.py
+index 7be7bc9..37e20bb 100644
+--- a/app/src/metalquant/report.py
++++ b/app/src/metalquant/report.py
+@@ -1,66 +1,78 @@
+-"""Assemble the batch report (SOP section 8)."""
++"""Assemble the batch report (SOP section 8), computed exactly."""
+ 
+-from metalquant import blanks, calib, qc, samples
++from fractions import Fraction as F
+ 
+-REPORTED = ("sample", "spike")
++from metalquant.exact import note, ols, q
+ 
+ 
+ def reduce_batch(batch):
+     analytes = batch["analytes"]
+-    standards = batch["standards"]
+     runs = batch["runs"]
++    pos = {run["id"]: i for i, run in enumerate(runs)}
++    ccv_pos = [i for i, run in enumerate(runs) if run["kind"] == "ccv"]
++    note(f"{len(runs)} runs, {len(analytes)} analytes, {len(ccv_pos)} CCVs")
+ 
+-    lines = {a["name"]: calib.fit_line(standards, a["name"]) for a in analytes}
+-    readings = {
+-        a["name"]: {run["id"]: calib.reading(run, a["name"], lines[a["name"]]) for run in runs}
+-        for a in analytes
+-    }
+-    levels = {a["name"]: blanks.blank_level(runs, a["name"], readings[a["name"]]) for a in analytes}
++    per = {}
++    for a in analytes:
++        name = a["name"]
++        mdl, loq = q(a["mdl"]), q(a["loq"])
++        slope, icpt = ols([(q(s["conc"][name]), q(s["counts"][name]) / q(s["is_counts"])) for s in batch["standards"]])
++        rd = {run["id"]: (q(run["counts"][name]) / q(run["is_counts"]) - icpt) / slope for run in runs}
++        blank_ids = [run["id"] for run in runs if run["kind"] == "blank"]
++        res = [rd[i] for i in blank_ids if rd[i] >= mdl]
++        if res:
++            level = sum(res) / len(res)
++        elif blank_ids:
++            level = rd[blank_ids[0]]
++        else:
++            level = q(0)
++        passed = {}
++        rec = {}
++        for i in ccv_pos:
++            rid = runs[i]["id"]
++            r = rd[rid] / q(runs[i]["true"][name]) * 100
++            rec[rid] = r
++            # round half away from zero at one decimal; ties cannot occur (SOP 1)
++            tenths = (r * 10 + F(1, 2)).__floor__()
++            passed[rid] = 900 <= tenths <= 1100
++        corr = {rid: rd[rid] - level for rid in rd}
++        per[name] = dict(mdl=mdl, loq=loq, rd=rd, level=level, passed=passed, rec=rec, corr=corr)
+ 
+-    ccv_pass = {a["name"]: {} for a in analytes}
+-    ccvs = []
+-    for run in runs:
+-        if run["kind"] != "ccv":
+-            continue
+-        for a in analytes:
+-            name = a["name"]
+-            recovery = qc.ccv_recovery(readings[name][run["id"]], run["true"][name])
+-            passed = qc.ccv_passes(recovery)
+-            ccv_pass[name][run["id"]] = passed
+-            ccvs.append({"id": run["id"], "analyte": name, "recovery": recovery, "pass": passed})
++    def ok(i, name):
++        before = [j for j in ccv_pos if j < i]
++        after = [j for j in ccv_pos if j > i]
++        p = per[name]["passed"]
++        if before and after:
++            return p[runs[before[-1]]["id"]] and p[runs[after[0]]["id"]]
++        if before:
++            return p[runs[before[-1]]["id"]]
++        return True
+ 
+-    amounts = {a["name"]: {} for a in analytes}
+-    reported = []
+-    for index, run in enumerate(runs):
+-        if run["kind"] not in REPORTED:
+-            continue
++    out = {"blank_levels": {n: float(v["level"]) for n, v in per.items()}, "samples": [], "ccvs": [], "spikes": []}
++    for i, run in enumerate(runs):
+         for a in analytes:
+             name = a["name"]
+-            value = samples.amount(readings[name][run["id"]], levels[name], run["dilution"])
+-            amounts[name][run["id"]] = value
+-            mark = samples.flag(readings[name][run["id"]], levels[name], run["dilution"], a)
+-            reported.append(
+-                {
+-                    "id": run["id"],
+-                    "analyte": name,
+-                    "value": None if mark == "ND" else value,
+-                    "flag": mark,
+-                    "ccv_ok": qc.bracket_ok(runs, index, ccv_pass[name]),
+-                }
+-            )
+-
+-    spikes = []
++            d = per[name]
++            if run["kind"] == "ccv":
++                out["ccvs"].append({"id": run["id"], "analyte": name, "recovery": float(d["rec"][run["id"]]), "pass": d["passed"][run["id"]]})
++            elif run["kind"] in ("sample", "spike"):
++                c = d["corr"][run["id"]]
++                flag = "ND" if c < d["mdl"] else ("J" if c < d["loq"] else "")
++                out["samples"].append({"id": run["id"], "analyte": name, "value": None if flag == "ND" else float(c * run["dilution"]), "flag": flag, "ccv_ok": ok(i, name)})
+     for run in runs:
+         if run["kind"] != "spike":
+             continue
++        parent = runs[pos[run["parent"]]]
+         for a in analytes:
+             name = a["name"]
+-            recovery = qc.spike_recovery(
+-                amounts[name][run["id"]],
+-                amounts[name][run["parent"]],
+-                run["added"][name],
+-                run["dilution"],
+-            )
+-            spikes.append({"id": run["id"], "analyte": name, "recovery": recovery})
+-
+-    return {"blank_levels": levels, "samples": reported, "ccvs": ccvs, "spikes": spikes}
++            d = per[name]
++            cs, cp = d["corr"][run["id"]], d["corr"][parent["id"]]
++            s_amt, p_amt = cs * run["dilution"], cp * parent["dilution"]
++            added = q(run["added"][name])
++            if cs >= d["mdl"] and cp >= d["mdl"]:
++                r = (s_amt - p_amt) / added * 100
++            else:
++                r = (s_amt - p_amt) / (added * run["dilution"]) * 100
++            out["spikes"].append({"id": run["id"], "analyte": name, "recovery": float(r)})
++    note("done")
++    return out
+diff --git a/app/src/metalquant/samples.py b/app/src/metalquant/samples.py
+deleted file mode 100644
+index d94c157..0000000
+--- a/app/src/metalquant/samples.py
++++ /dev/null
+@@ -1,18 +0,0 @@
+-"""Amounts and flags for samples and spikes (SOP section 5)."""
+-
+-
+-def corrected(reading, level):
+-    return reading - level
+-
+-
+-def amount(reading, level, dilution):
+-    return reading * dilution - level
+-
+-
+-def flag(reading, level, dilution, analyte):
+-    value = amount(reading, level, dilution)
+-    if value < analyte["mdl"]:
+-        return "ND"
+-    if value <= analyte["loq"]:
+-        return "J"
+-    return ""

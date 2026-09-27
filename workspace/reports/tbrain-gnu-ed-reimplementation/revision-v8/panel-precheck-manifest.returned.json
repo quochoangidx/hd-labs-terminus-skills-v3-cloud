@@ -1,0 +1,732 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-gnu-ed-reimplementation",
+ "primary_outcome": "python3 /app/pyed/ed.py produces GNU ed 1.19's stdout, zero/non-zero exit status and resulting files for every retained command script",
+ "obligations": [
+  {
+   "id": "ADDRESSES",
+   "class": "core",
+   "contribution": "every line address and range form, including ; moving the current address and wrapping searches",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "every form of line address and address range"
+   },
+   "implementation_sites": [
+    "solution/pyed/ed.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream, exit status and file set ed produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_addresses",
+     "test_outputs.py::test_print_list_number"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (address 0, last line, empty buffer)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "2;+2p prints lines 2-4",
+   "wrong_but_plausible": "; treated like , so the second address is relative to the old current line",
+   "selfdescription_phrase": "line addressing (4)"
+  },
+  {
+   "id": "REGEX",
+   "class": "core",
+   "contribution": "BRE/ERE with bracket classes, back-references and bounded repeats, BRE \\| alternation, leftmost-longest matching",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "Matching is POSIX leftmost-longest"
+   },
+   "implementation_sites": [
+    "solution/pyed/posixre.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream, exit status and file set ed produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_regex",
+     "test_outputs.py::test_regex_extended",
+     "test_outputs.py::test_substitute"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (address 0, last line, empty buffer)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": ",s/\\(ab\\|a\\)\\(bc\\|c\\)/[\\1|\\2]/ on abc",
+   "wrong_but_plausible": "Python re leftmost-first alternation",
+   "selfdescription_phrase": "regular expressions (5)"
+  },
+  {
+   "id": "COMMANDS",
+   "class": "core",
+   "contribution": "buffer commands with exact current address, undo (and undo of undo), marks, m/t destinations, input-mode and print suffixes, the s repeat form",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "with the `n` and `p` suffixes and every `s` flag and form"
+   },
+   "implementation_sites": [
+    "solution/pyed/ed.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream, exit status and file set ed produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_append_insert_change",
+     "test_outputs.py::test_delete_join_move_copy",
+     "test_outputs.py::test_undo",
+     "test_outputs.py::test_substitute"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (address 0, last line, empty buffer)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "2d u u leaves line 2 deleted again",
+   "wrong_but_plausible": "u that cannot undo itself",
+   "selfdescription_phrase": "commands (6)"
+  },
+  {
+   "id": "GLOBAL",
+   "class": "core",
+   "contribution": "g/v over an active list that drops lines the command list touches; multi-line command lists; an s without a match inside a list is not an error",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "including the global commands"
+   },
+   "implementation_sites": [
+    "solution/pyed/ed.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream, exit status and file set ed produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_global_commands"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (address 0, last line, empty buffer)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "g/t/.,+1j joins pairs and skips lines already joined",
+   "wrong_but_plausible": "keep lines touched by the command list in the active list",
+   "selfdescription_phrase": "global active list"
+  },
+  {
+   "id": "DIAGNOSTICS",
+   "class": "core",
+   "contribution": "? on stdout, stop on first error for regular-file stdin, continue for pipes, modified-buffer warning at q/e/EOF, exit status with -l",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "After every command that fails"
+   },
+   "implementation_sites": [
+    "solution/pyed/ed.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream, exit status and file set ed produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_errors_and_exit",
+     "test_outputs.py::test_options"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (address 0, last line, empty buffer)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "-l with regular-file stdin exits 0 after a failed command",
+   "wrong_but_plausible": "exit non-zero after an error even with -l",
+   "selfdescription_phrase": "diagnostics (9)"
+  },
+  {
+   "id": "FILES",
+   "class": "core",
+   "contribution": "reading and writing files, byte counts unless -s, e/E/r/w/W/wq, default filename, a space or a tab before FILE",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "leave the same files with the same contents"
+   },
+   "implementation_sites": [
+    "solution/pyed/ed.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream, exit status and file set ed produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_files_and_write"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (address 0, last line, empty buffer)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "2W part.txt 4W part.txt appends",
+   "wrong_but_plausible": "W truncating the file like w",
+   "selfdescription_phrase": "invoking (3)"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "REGEX",
+    "to": "ADDRESSES"
+   },
+   {
+    "from": "REGEX",
+    "to": "COMMANDS"
+   },
+   {
+    "from": "REGEX",
+    "to": "GLOBAL"
+   },
+   {
+    "from": "ADDRESSES",
+    "to": "COMMANDS"
+   },
+   {
+    "from": "ADDRESSES",
+    "to": "GLOBAL"
+   },
+   {
+    "from": "COMMANDS",
+    "to": "GLOBAL"
+   },
+   {
+    "from": "FILES",
+    "to": "COMMANDS"
+   },
+   {
+    "from": "COMMANDS",
+    "to": "DIAGNOSTICS"
+   },
+   {
+    "from": "DIAGNOSTICS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "COMMANDS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "GLOBAL",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "FILES",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "generated-scripts",
+   "obligation_ids": [
+    "ADDRESSES",
+    "REGEX",
+    "COMMANDS",
+    "GLOBAL",
+    "DIAGNOSTICS",
+    "FILES"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_mixed_scripts_1",
+    "test_outputs.py::test_mixed_scripts_2",
+    "test_outputs.py::test_mixed_scripts_3",
+    "test_outputs.py::test_mixed_scripts_4",
+    "test_outputs.py::test_mixed_scripts_5",
+    "test_outputs.py::test_mixed_scripts_6",
+    "test_outputs.py::test_generated_1",
+    "test_outputs.py::test_generated_2",
+    "test_outputs.py::test_generated_3",
+    "test_outputs.py::test_generated_4",
+    "test_outputs.py::test_generated_5",
+    "test_outputs.py::test_generated_6",
+    "test_outputs.py::test_generated_7",
+    "test_outputs.py::test_generated_8"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "global-over-commands",
+   "obligation_ids": [
+    "GLOBAL",
+    "COMMANDS",
+    "REGEX"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_global_commands"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "behaves exactly like GNU ed 1.19"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Every check relies only on behaviour that the manual describes",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "with many command scripts"
+  }
+ },
+ "determinism": {
+  "seeds": [],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "X-stdlib-no-programs",
+   "statement": "Use only the Python standard library (its own compiled modules included), load no other native code (through `ctypes`, for example), and do not start other programs",
+   "enforced_by": [
+    "test_outputs.py::test_launcher_stops_delegation_and_foreign_code"
+   ],
+   "enforcement_level": "both",
+   "allowed_exceptions_disclosed": true,
+   "how": "every graded run goes through tests/guard.py, which ends the run on a process start, on native code (ctypes, or an extension module from outside the standard library), and on an import from outside the standard library and the delivered files, counting an installed package under the standard-library directory as outside it. Since revision-v6 the rules live only in the closure of the audit hook, built from interpreter functions captured before the program starts, so rebinding names in the launcher's module, os, posix or builtins changes nothing (v6 finding 28); the launcher replaces _posixsubprocess.fork_exec, which raises no audit event, stops a fresh import of that helper and stops gc.get_objects/get_referrers/get_referents. Nine probe programs, one per route, and one ordinary program check it. Revision-v7 states that the standard library's own compiled modules (math, _decimal, \u2026) are allowed, which the guard always permitted; plain.py imports math to show it."
+  }
+ ],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [
+  {
+   "id": "SIGNALS",
+   "reason": "not core: the task is a byte-exact ed, the verifier delivers no signal, and grading a timed interrupt would make the result depend on when it arrives",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "with these exceptions: shell commands, the options `-G` and `-v`, and the commands `h` and `H`"
+   },
+   "removed_in": "revision-v1",
+   "note": "the instruction now lists signals among the parts of the manual the program need not cover"
+  },
+  {
+   "id": "BINARY-FILES",
+   "reason": "not core: NUL-bearing and unterminated files are a corner of io.c that produced Major findings in three consecutive rounds (v3-v6) and is unrelated to the editor model the task tests",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "which is what the manual calls a binary file"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-8",
+    "v6-9",
+    "v6-10"
+   ]
+  },
+  {
+   "id": "LONG-LINES",
+   "reason": "not core: a 100,000-byte line bound invites fixed-cap coverage findings and says nothing about ed semantics; starting files and scripts are now bounded at 200 bytes a line",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "no line is longer than a hundred thousand bytes"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-7",
+    "v6-19",
+    "v6-27"
+   ]
+  },
+  {
+   "id": "LIST-COMMAND",
+   "reason": "not core: l's escaping and column wrapping are output formatting, not editor state",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "every other command, command suffix and `s` flag"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-2",
+    "v6-16"
+   ]
+  },
+  {
+   "id": "Z-COMMAND",
+   "reason": "not core: z's window size is a display default",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "every other command, command suffix and `s` flag"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-26"
+   ]
+  },
+  {
+   "id": "CUT-BUFFER-XY",
+   "reason": "not core: x and y observe a side buffer every modifying command writes; without them the buffer is unobservable and needs no contract",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "every other command, command suffix and `s` flag"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-24",
+    "v6-25"
+   ]
+  },
+  {
+   "id": "INTERACTIVE-GLOBAL",
+   "reason": "not core: G and V repeat g and v with command lists read from standard input; the active-list semantics stay graded through g and v",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "the interactive forms `G` and `V`"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-20"
+   ]
+  },
+  {
+   "id": "PROMPT-AND-OTHER-OPTIONS",
+   "reason": "not core: -p, -q, -r, the P command and GNU's long option spellings are invocation surface; -E, -l and -s stay because they change regex syntax, exit status and byte counts",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "the options `-E`, `-l`, `-p STRING`, `-q`, `-r` and `-s`, and no others, with GNU's own argument handling"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-1",
+    "v6-5"
+   ]
+  },
+  {
+   "id": "GNU-WORD-ESCAPES",
+   "reason": "not core: \\b \\B \\w \\W \\s \\S \\< \\> \\` \\' are GNU conveniences over the POSIX engine the task is about",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "basic and extended regular expressions. In basic ones"
+   },
+   "removed_in": "revision-v6",
+   "findings": [
+    "v6-22",
+    "v6-23"
+   ]
+  }
+ ],
+ "exact_output_requirements": [
+  {
+   "id": "BYTE-EXACT-STDOUT",
+   "domain_required": true,
+   "rationale": "a drop-in replacement for scripts that pipe edit commands into ed and read its output",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "the same standard output, byte for byte"
+   }
+  }
+ ],
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "loose-exit-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DIAGNOSTICS"
+   ],
+   "receipt": "wrong-paths/loose-exit-ignored.json"
+  },
+  {
+   "id": "pipe-stops-on-error",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DIAGNOSTICS"
+   ],
+   "receipt": "wrong-paths/pipe-stops-on-error.json"
+  },
+  {
+   "id": "eof-quits-quietly",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DIAGNOSTICS"
+   ],
+   "receipt": "wrong-paths/eof-quits-quietly.json"
+  },
+  {
+   "id": "semicolon-keeps-current",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ADDRESSES"
+   ],
+   "receipt": "wrong-paths/semicolon-keeps-current.json"
+  },
+  {
+   "id": "undo-not-undoable",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/undo-not-undoable.json"
+  },
+  {
+   "id": "leftmost-first-regex",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/leftmost-first-regex.json"
+  },
+  {
+   "id": "global-keeps-touched-lines",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "GLOBAL"
+   ],
+   "receipt": "wrong-paths/global-keeps-touched-lines.json"
+  },
+  {
+   "id": "delegate-to-system-ed",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/delegate-to-system-ed.json"
+  },
+  {
+   "id": "w-for-W",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/w-for-W.json"
+  },
+  {
+   "id": "short-initial-load",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/short-initial-load.json"
+  },
+  {
+   "id": "unescaped-brace-rejected",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/unescaped-brace-rejected.json"
+  },
+  {
+   "id": "reversed-range-rejected-for-a",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/reversed-range-rejected-for-a.json"
+  },
+  {
+   "id": "empty-append-keeps-undo",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/empty-append-keeps-undo.json"
+  },
+  {
+   "id": "ranged-s-current-last-addressed",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/ranged-s-current-last-addressed.json"
+  },
+  {
+   "id": "addressed-undo-accepted",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/addressed-undo-accepted.json"
+  },
+  {
+   "id": "zero-lower-bound-rejected",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/zero-lower-bound-rejected.json"
+  },
+  {
+   "id": "append-suffix-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/append-suffix-ignored.json"
+  },
+  {
+   "id": "tab-separator-rejected",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/tab-separator-rejected.json"
+  },
+  {
+   "id": "join-keeps-mark",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/join-keeps-mark.json"
+  },
+  {
+   "id": "open-s-prints-first-line",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/open-s-prints-first-line.json"
+  },
+  {
+   "id": "repeat-form-accepts-n",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/repeat-form-accepts-n.json"
+  },
+  {
+   "id": "E-count-ignores-s",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/E-count-ignores-s.json"
+  },
+  {
+   "id": "leading-hyphen-starts-range",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/leading-hyphen-starts-range.json"
+  },
+  {
+   "id": "global-s-without-match-fails",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "GLOBAL"
+   ],
+   "receipt": "wrong-paths/global-s-without-match-fails.json"
+  },
+  {
+   "id": "fork-exec-helper-delegation",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/fork-exec-helper-delegation.json"
+  },
+  {
+   "id": "stdin-line-cap-199",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/stdin-line-cap-199.json"
+  },
+  {
+   "id": "file-line-cap-199",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/file-line-cap-199.json"
+  },
+  {
+   "id": "ere-no-collating",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/ere-no-collating.json"
+  },
+  {
+   "id": "open-interval-unchecked",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/open-interval-unchecked.json"
+  },
+  {
+   "id": "repeat-rp-refused",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/repeat-rp-refused.json"
+  },
+  {
+   "id": "line-count-cap-4000",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMMANDS"
+   ],
+   "receipt": "wrong-paths/line-count-cap-4000.json"
+  },
+  {
+   "id": "nesting-depth-two",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REGEX"
+   ],
+   "receipt": "wrong-paths/nesting-depth-two.json"
+  },
+  {
+   "id": "filename-no-continuation",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/filename-no-continuation.json"
+  },
+  {
+   "id": "W-sets-default-filename",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILES"
+   ],
+   "receipt": "wrong-paths/W-sets-default-filename.json"
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "task_snapshot_sha256": "c9b156ca6e5248d6b42ab941b92e08443f4c4fb14ff073eb1029cc1f6a51631b",
+ "documented_exceptions": [
+  {
+   "id": "manual-versus-program",
+   "rule": "Where GNU ed 1.19 departs from its manual, the program decides",
+   "reason": "the contract grades against the binary, and environment/app/docs/ed-errata.txt lists each departure for the candidate; every entry was checked against the program and is pinned by a graded case (revision-v6/evidence/errata-map.json)"
+  }
+ ],
+ "retired_wrong_paths": [
+  {
+   "id": "unterminated-never-remembered",
+   "reason": "binary files left the contract in revision-v6 (BINARY-FILES)"
+  },
+  {
+   "id": "two-print-suffixes",
+   "reason": "with the l suffix out of the contract (LIST-COMMAND) only p and n remain, so a parser capped at two suffix letters behaves exactly like a correct one on every contract-valid script"
+  },
+  {
+   "id": "unicode-case-folding",
+   "reason": "scripts are ASCII text (revision-v7 contract, enforced by tests/scope.py), so Unicode and C-locale case folding agree on every contract-valid script; the reference folds ASCII only, checked against GNU ed on the finding's own byte script (revision-v7/receipts/repaired/reference-findings-12-13-14.json)"
+  }
+ ]
+}

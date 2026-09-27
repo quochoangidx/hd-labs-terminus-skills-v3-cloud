@@ -1,0 +1,250 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 20 items
+
+../../tests/test_outputs.py ...F.FF.F.....FFF...                         [100%]
+
+=================================== FAILURES ===================================
+____________________ test_rule_3_1_distance_is_hypocentral _____________________
+
+    def test_rule_3_1_distance_is_hypocentral():
+        """The distance reported, corrected for and tested against the table is the hypocentral distance."""
+>       check_file("hypocentral.jsonl")
+
+/tests/test_outputs.py:198: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:178: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:164: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 2.9639583
+where = 'hypocentral.jsonl bulletin 0 event ev000001 ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: hypocentral.jsonl bulletin 0 event ev000001 ml: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:152: AssertionError
+________________ test_rule_3_3_listed_distances_and_table_ends _________________
+
+    def test_rule_3_3_listed_distances_and_table_ends():
+        """At listed distances the correction is the listed value; stations just inside either end of the table contribute."""
+>       check_file("table_ends.jsonl")
+
+/tests/test_outputs.py:208: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:178: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:164: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 4.2815956
+where = 'table_ends.jsonl bulletin 0 event ev000005 ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: table_ends.jsonl bulletin 0 event ev000005 ml: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:152: AssertionError
+__________ test_station_beyond_the_table_keeps_the_shipped_correction __________
+
+    def test_station_beyond_the_table_keeps_the_shipped_correction():
+        """A station nearer than 10 km or beyond 600 km keeps today's correction calculation and does not contribute."""
+>       check_file("off_table.jsonl")
+
+/tests/test_outputs.py:213: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:178: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'events': [{'id': 'off-near', 'ml': 2.597896563095319, 'stations': [{'code': 'OFFB', 'distance_km': 5.0, 'ml': 1.4570...tributes': True}, {'code': 'OFFC', 'distance_km': 601.9975083004912, 'ml': 3.8121376303651306, 'contributes': True}]}]}
+expected = {'events': [{'id': 'off-near', 'ml': 2.5978966, 'stations': [{'code': 'OFFB', 'contributes': False, 'distance_km': 5.0... 602.9925373, 'ml': 4.9146739}, {'code': 'OFFC', 'contributes': False, 'distance_km': 601.9975083, 'ml': 3.8121376}]}]}
+label = 'off_table.jsonl bulletin 1'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == {"events"}, f"{label}: top-level keys"
+        got, want = actual["events"], expected["events"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(want)} events expected"
+        for event, ref in zip(got, want):
+            where = f"{label} event {ref['id']}"
+            assert isinstance(event, dict) and set(event) == {"id", "ml", "stations"}, f"{where}: keys"
+            assert type(event["id"]) is str and event["id"] == ref["id"], f"{where}: id {event['id']!r}"
+            _number(event["ml"], ref["ml"], f"{where} ml")
+            rows = event["stations"]
+            assert isinstance(rows, list) and len(rows) == len(ref["stations"]), f"{where}: station rows"
+            for index, (row, exp) in enumerate(zip(rows, ref["stations"])):
+                at = f"{where} station {index} ({exp['code']})"
+                assert isinstance(row, dict) and set(row) == {"code", "distance_km", "ml", "contributes"}, f"{at}: keys"
+                assert type(row["code"]) is str and row["code"] == exp["code"], f"{at}: code {row['code']!r}"
+                _number(row["distance_km"], exp["distance_km"], f"{at} distance_km")
+                _number(row["ml"], exp["ml"], f"{at} ml")
+>               assert type(row["contributes"]) is bool and row["contributes"] is exp["contributes"], f"{at}: contributes"
+E               AssertionError: off_table.jsonl bulletin 1 event off-deep station 0 (OFFA): contributes
+E               assert (<class 'bool'> is bool and False is True)
+E                +  where <class 'bool'> = type(False)
+
+/tests/test_outputs.py:173: AssertionError
+________ test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes _________
+
+    def test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes():
+        """A station's magnitude is the mean of its readings' channel magnitudes, whatever their channel codes, not its largest channel."""
+>       check_file("station_mean.jsonl")
+
+/tests/test_outputs.py:223: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:178: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:164: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 2.3842562
+where = 'station_mean.jsonl bulletin 0 event ev000002 ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: station_mean.jsonl bulletin 0 event ev000002 ml: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:152: AssertionError
+__________ test_rule_5_3_three_contributors_give_a_network_magnitude ___________
+
+    def test_rule_5_3_three_contributors_give_a_network_magnitude():
+        """Events with exactly three contributing stations get a network magnitude."""
+>       check_file("three.jsonl")
+
+/tests/test_outputs.py:253: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:178: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:164: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 2.9486813
+where = 'three.jsonl bulletin 0 event ev000002 ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: three.jsonl bulletin 0 event ev000002 ml: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:152: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """Fifty events, two hundred stations, forty recordings, and every amplitude, noise, depth and correction limit."""
+        rows = load("limits.jsonl")
+        bulletin = rows[0]["bulletin"]
+        assert len(bulletin["events"]) == 50 and len(bulletin["stations"]) == 200
+        assert max(len(e["recordings"]) for e in bulletin["events"]) == 40
+>       check_file("limits.jsonl")
+
+/tests/test_outputs.py:262: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:178: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'events': [{'id': 'LLLLLLLLLLLLLLLLLLLL', 'ml': 4.604748535724532, 'stations': [{'code': 'K2', 'distance_km': 80.4547...'stations': [{'code': '9QG0', 'distance_km': 129.69028490985744, 'ml': 5.342299482187891, 'contributes': True}]}, ...]}
+expected = {'events': [{'id': 'LLLLLLLLLLLLLLLLLLLL', 'ml': 4.6047485, 'stations': [{'code': 'K2', 'contributes': True, 'distance...', 'ml': None, 'stations': [{'code': '9QG0', 'contributes': True, 'distance_km': 129.6902849, 'ml': 5.3422995}]}, ...]}
+label = 'limits.jsonl bulletin 0'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == {"events"}, f"{label}: top-level keys"
+        got, want = actual["events"], expected["events"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(want)} events expected"
+        for event, ref in zip(got, want):
+            where = f"{label} event {ref['id']}"
+            assert isinstance(event, dict) and set(event) == {"id", "ml", "stations"}, f"{where}: keys"
+            assert type(event["id"]) is str and event["id"] == ref["id"], f"{where}: id {event['id']!r}"
+            _number(event["ml"], ref["ml"], f"{where} ml")
+            rows = event["stations"]
+            assert isinstance(rows, list) and len(rows) == len(ref["stations"]), f"{where}: station rows"
+            for index, (row, exp) in enumerate(zip(rows, ref["stations"])):
+                at = f"{where} station {index} ({exp['code']})"
+                assert isinstance(row, dict) and set(row) == {"code", "distance_km", "ml", "contributes"}, f"{at}: keys"
+                assert type(row["code"]) is str and row["code"] == exp["code"], f"{at}: code {row['code']!r}"
+                _number(row["distance_km"], exp["distance_km"], f"{at} distance_km")
+                _number(row["ml"], exp["ml"], f"{at} ml")
+>               assert type(row["contributes"]) is bool and row["contributes"] is exp["contributes"], f"{at}: contributes"
+E               AssertionError: limits.jsonl bulletin 0 event ev000005 station 0 (OXFIJ): contributes
+E               assert (<class 'bool'> is bool and False is True)
+E                +  where <class 'bool'> = type(False)
+
+/tests/test_outputs.py:173: AssertionError
+__________________ test_report_keeps_file_and_recording_order __________________
+
+    def test_report_keeps_file_and_recording_order():
+        """Events keep file order and station rows keep recording order, whatever the ids and codes, at any length they may have."""
+>       check_file("order.jsonl")
+
+/tests/test_outputs.py:267: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:178: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:164: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = 5.115697665553704, expected = 4.6426629
+where = 'order.jsonl bulletin 0 event v77vy7uvv97vu64 ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+        assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+>       assert abs(actual - expected) <= TOL, f"{where}: {actual!r}, expected {expected!r}"
+E       AssertionError: order.jsonl bulletin 0 event v77vy7uvv97vu64 ml: 5.115697665553704, expected 4.6426629
+E       assert 0.4730347655537033 <= 1.5e-06
+E        +  where 0.4730347655537033 = abs((5.115697665553704 - 4.6426629))
+
+/tests/test_outputs.py:153: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_2_2_record_amplitude_uses_magnification_2080
+PASSED ../../tests/test_outputs.py::test_rule_2_2_record_amplitude_is_half_peak_to_peak
+PASSED ../../tests/test_outputs.py::test_rule_2_3_station_mean_leaves_out_amplitudes_under_three_times_noise
+PASSED ../../tests/test_outputs.py::test_rule_3_3_correction_linear_between_listed_distances
+PASSED ../../tests/test_outputs.py::test_rule_4_2_station_correction_is_added
+PASSED ../../tests/test_outputs.py::test_two_sensors_of_one_site_are_one_station
+PASSED ../../tests/test_outputs.py::test_off_table_sub_noise_and_two_sensor_sites_together
+PASSED ../../tests/test_outputs.py::test_rule_5_2_network_magnitude_is_median_of_contributors
+PASSED ../../tests/test_outputs.py::test_rule_5_2_even_number_takes_mean_of_middle_two
+PASSED ../../tests/test_outputs.py::test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude
+PASSED ../../tests/test_outputs.py::test_generated_bulletins
+PASSED ../../tests/test_outputs.py::test_sandbox_cannot_read_ground_truth
+PASSED ../../tests/test_outputs.py::test_submitted_driver_matches_ours
+FAILED ../../tests/test_outputs.py::test_rule_3_1_distance_is_hypocentral - A...
+FAILED ../../tests/test_outputs.py::test_rule_3_3_listed_distances_and_table_ends
+FAILED ../../tests/test_outputs.py::test_station_beyond_the_table_keeps_the_shipped_correction
+FAILED ../../tests/test_outputs.py::test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes
+FAILED ../../tests/test_outputs.py::test_rule_5_3_three_contributors_give_a_network_magnitude
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+FAILED ../../tests/test_outputs.py::test_report_keeps_file_and_recording_order
+========================= 7 failed, 13 passed in 0.56s =========================

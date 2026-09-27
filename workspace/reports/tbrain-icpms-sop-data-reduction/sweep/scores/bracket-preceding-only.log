@@ -1,0 +1,230 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 20 items
+
+../../tests/test_outputs.py ..........FF..FFF...                         [100%]
+
+=================================== FAILURES ===================================
+______________________ test_bracketed_runs_need_both_ccvs ______________________
+
+    def test_bracketed_runs_need_both_ccvs():
+>       check_family("ccv_bracketing.jsonl")
+
+/tests/test_outputs.py:174: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:130: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'blank_levels': {'Pb': 0.0}, 'samples': [{'id': 'W-111', 'analyte': 'Pb', 'value': 12.0, 'flag': '', ...}, {'id': 'W-...', 'analyte': 'Pb', 'recovery': 98.0, 'pass': True}], 'spikes': [{'id': 'W-112S', 'analyte': 'Pb', 'recovery': 100.0}]}
+expected = {'blank_levels': {'Pb': 0.0}, 'samples': [{'id': 'W-111', 'analyte': 'Pb', 'value': 12.0, 'flag': '', ...}, {'id': 'W-...', 'analyte': 'Pb', 'recovery': 98.0, 'pass': True}], 'spikes': [{'id': 'W-112S', 'analyte': 'Pb', 'recovery': 100.0}]}
+label = 'ccv_bracketing.jsonl batch 0'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == TOP_KEYS, f"{label}: top-level keys {sorted(actual) if isinstance(actual, dict) else actual!r}"
+        levels = actual["blank_levels"]
+        assert isinstance(levels, dict) and set(levels) == set(expected["blank_levels"]), f"{label}: blank_levels keys"
+        for name, value in expected["blank_levels"].items():
+            _number(levels[name], value, f"{label} blank_levels[{name}]")
+        for section, keys in ENTRY_KEYS.items():
+            got, want = actual[section], expected[section]
+            assert isinstance(got, list) and len(got) == len(want), f"{label}: {section} has {len(got) if isinstance(got, list) else got!r} entries, expected {len(want)}"
+            for index, (entry, ref) in enumerate(zip(got, want)):
+                where = f"{label} {section}[{index}] ({ref['id']}, {ref['analyte']})"
+                assert isinstance(entry, dict) and set(entry) == set(keys), f"{where}: keys {entry!r}"
+                for key in keys:
+                    a, e = entry[key], ref[key]
+                    if key in ("recovery",) or (key == "value" and e is not None):
+                        _number(a, e, f"{where} {key}")
+                    else:
+>                       assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E                       AssertionError: ccv_bracketing.jsonl batch 0 samples[0] (W-111, Pb) ccv_ok: True, expected False
+E                       assert (<class 'bool'> is <class 'bool'> and True == False)
+E                        +  where <class 'bool'> = type(True)
+E                        +  and   <class 'bool'> = type(False)
+
+/tests/test_outputs.py:125: AssertionError
+___________________ test_unbracketed_runs_keep_shipped_check ___________________
+
+    def test_unbracketed_runs_keep_shipped_check():
+>       check_family("ccv_unbracketed.jsonl")
+
+/tests/test_outputs.py:178: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:130: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'blank_levels': {'Pb': 0.0}, 'samples': [{'id': 'W-124', 'analyte': 'Pb', 'value': 12.0, 'flag': '', ...}, {'id': 'W-... 'analyte': 'Pb', 'recovery': 120.0, 'pass': False}], 'spikes': [{'id': 'W-125S', 'analyte': 'Pb', 'recovery': 100.0}]}
+expected = {'blank_levels': {'Pb': 0.0}, 'samples': [{'id': 'W-124', 'analyte': 'Pb', 'value': 12.0, 'flag': '', ...}, {'id': 'W-... 'analyte': 'Pb', 'recovery': 120.0, 'pass': False}], 'spikes': [{'id': 'W-125S', 'analyte': 'Pb', 'recovery': 100.0}]}
+label = 'ccv_unbracketed.jsonl batch 1'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == TOP_KEYS, f"{label}: top-level keys {sorted(actual) if isinstance(actual, dict) else actual!r}"
+        levels = actual["blank_levels"]
+        assert isinstance(levels, dict) and set(levels) == set(expected["blank_levels"]), f"{label}: blank_levels keys"
+        for name, value in expected["blank_levels"].items():
+            _number(levels[name], value, f"{label} blank_levels[{name}]")
+        for section, keys in ENTRY_KEYS.items():
+            got, want = actual[section], expected[section]
+            assert isinstance(got, list) and len(got) == len(want), f"{label}: {section} has {len(got) if isinstance(got, list) else got!r} entries, expected {len(want)}"
+            for index, (entry, ref) in enumerate(zip(got, want)):
+                where = f"{label} {section}[{index}] ({ref['id']}, {ref['analyte']})"
+                assert isinstance(entry, dict) and set(entry) == set(keys), f"{where}: keys {entry!r}"
+                for key in keys:
+                    a, e = entry[key], ref[key]
+                    if key in ("recovery",) or (key == "value" and e is not None):
+                        _number(a, e, f"{where} {key}")
+                    else:
+>                       assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E                       AssertionError: ccv_unbracketed.jsonl batch 1 samples[0] (W-124, Pb) ccv_ok: True, expected False
+E                       assert (<class 'bool'> is <class 'bool'> and True == False)
+E                        +  where <class 'bool'> = type(True)
+E                        +  and   <class 'bool'> = type(False)
+
+/tests/test_outputs.py:125: AssertionError
+_________________________ test_report_order_and_types __________________________
+
+    def test_report_order_and_types():
+>       check_family("report_order.jsonl")
+
+/tests/test_outputs.py:190: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:130: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'blank_levels': {'Tl': 0.625, 'As': 0.75, 'Pb': 2.5, 'Cd': 0.75}, 'samples': [{'id': 'Z-9', 'analyte': 'Tl', 'value':...very': 47.5}, {'id': 'B-SPK', 'analyte': 'Pb', 'recovery': 160.0}, {'id': 'B-SPK', 'analyte': 'Cd', 'recovery': 50.0}]}
+expected = {'blank_levels': {'Tl': 0.625, 'As': 0.75, 'Pb': 2.5, 'Cd': 0.75}, 'samples': [{'id': 'Z-9', 'analyte': 'Tl', 'value':...very': 47.5}, {'id': 'B-SPK', 'analyte': 'Pb', 'recovery': 160.0}, {'id': 'B-SPK', 'analyte': 'Cd', 'recovery': 50.0}]}
+label = 'report_order.jsonl batch 0'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == TOP_KEYS, f"{label}: top-level keys {sorted(actual) if isinstance(actual, dict) else actual!r}"
+        levels = actual["blank_levels"]
+        assert isinstance(levels, dict) and set(levels) == set(expected["blank_levels"]), f"{label}: blank_levels keys"
+        for name, value in expected["blank_levels"].items():
+            _number(levels[name], value, f"{label} blank_levels[{name}]")
+        for section, keys in ENTRY_KEYS.items():
+            got, want = actual[section], expected[section]
+            assert isinstance(got, list) and len(got) == len(want), f"{label}: {section} has {len(got) if isinstance(got, list) else got!r} entries, expected {len(want)}"
+            for index, (entry, ref) in enumerate(zip(got, want)):
+                where = f"{label} {section}[{index}] ({ref['id']}, {ref['analyte']})"
+                assert isinstance(entry, dict) and set(entry) == set(keys), f"{where}: keys {entry!r}"
+                for key in keys:
+                    a, e = entry[key], ref[key]
+                    if key in ("recovery",) or (key == "value" and e is not None):
+                        _number(a, e, f"{where} {key}")
+                    else:
+>                       assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E                       AssertionError: report_order.jsonl batch 0 samples[0] (Z-9, Tl) ccv_ok: True, expected False
+E                       assert (<class 'bool'> is <class 'bool'> and True == False)
+E                        +  where <class 'bool'> = type(True)
+E                        +  and   <class 'bool'> = type(False)
+
+/tests/test_outputs.py:125: AssertionError
+____________________________ test_generated_batches ____________________________
+
+    def test_generated_batches():
+>       check_family("generated-1.jsonl")
+
+/tests/test_outputs.py:194: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:130: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'blank_levels': {'As': -0.034441567245808984, 'Ba': 0.017023391726752674, 'V': -0.01176668618956434}, 'samples': [{'i...nalyte': 'Ba', 'recovery': 2570.2374349938095}, {'id': 'R278-6', 'analyte': 'V', 'recovery': -4.497247766925997}, ...]}
+expected = {'blank_levels': {'As': -0.034441567245808984, 'Ba': 0.017023391726752674, 'V': -0.01176668618956434}, 'samples': [{'i...nalyte': 'Ba', 'recovery': 2570.2374349938095}, {'id': 'R278-6', 'analyte': 'V', 'recovery': -4.497247766925997}, ...]}
+label = 'generated-1.jsonl batch 3'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == TOP_KEYS, f"{label}: top-level keys {sorted(actual) if isinstance(actual, dict) else actual!r}"
+        levels = actual["blank_levels"]
+        assert isinstance(levels, dict) and set(levels) == set(expected["blank_levels"]), f"{label}: blank_levels keys"
+        for name, value in expected["blank_levels"].items():
+            _number(levels[name], value, f"{label} blank_levels[{name}]")
+        for section, keys in ENTRY_KEYS.items():
+            got, want = actual[section], expected[section]
+            assert isinstance(got, list) and len(got) == len(want), f"{label}: {section} has {len(got) if isinstance(got, list) else got!r} entries, expected {len(want)}"
+            for index, (entry, ref) in enumerate(zip(got, want)):
+                where = f"{label} {section}[{index}] ({ref['id']}, {ref['analyte']})"
+                assert isinstance(entry, dict) and set(entry) == set(keys), f"{where}: keys {entry!r}"
+                for key in keys:
+                    a, e = entry[key], ref[key]
+                    if key in ("recovery",) or (key == "value" and e is not None):
+                        _number(a, e, f"{where} {key}")
+                    else:
+>                       assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E                       AssertionError: generated-1.jsonl batch 3 samples[0] (R476-1, As) ccv_ok: True, expected False
+E                       assert (<class 'bool'> is <class 'bool'> and True == False)
+E                        +  where <class 'bool'> = type(True)
+E                        +  and   <class 'bool'> = type(False)
+
+/tests/test_outputs.py:125: AssertionError
+_____________________________ test_capacity_batch ______________________________
+
+    def test_capacity_batch():
+        rows = load("capacity.jsonl")
+        batch = rows[0]["batch"]
+        assert len(batch["runs"]) == 80 and len(batch["analytes"]) == 4 and len(batch["standards"]) == 8
+>       check_family("capacity.jsonl")
+
+/tests/test_outputs.py:202: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:130: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'blank_levels': {'Mo': 1.3978274605455168, 'Ba': 0.007849291769627485, 'V': 0.024848843398473028, 'Sb': 0.43837386275...yte': 'Mo', 'recovery': 1.8621542622850091}, {'id': 'R206-37', 'analyte': 'Ba', 'recovery': 0.12384035051609932}, ...]}
+expected = {'blank_levels': {'Mo': 1.3978274605455168, 'Ba': 0.007849291769627485, 'V': 0.024848843398473028, 'Sb': 0.43837386275...yte': 'Mo', 'recovery': 1.8621542622850091}, {'id': 'R206-37', 'analyte': 'Ba', 'recovery': 0.12384035051609932}, ...]}
+label = 'capacity.jsonl batch 0'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == TOP_KEYS, f"{label}: top-level keys {sorted(actual) if isinstance(actual, dict) else actual!r}"
+        levels = actual["blank_levels"]
+        assert isinstance(levels, dict) and set(levels) == set(expected["blank_levels"]), f"{label}: blank_levels keys"
+        for name, value in expected["blank_levels"].items():
+            _number(levels[name], value, f"{label} blank_levels[{name}]")
+        for section, keys in ENTRY_KEYS.items():
+            got, want = actual[section], expected[section]
+            assert isinstance(got, list) and len(got) == len(want), f"{label}: {section} has {len(got) if isinstance(got, list) else got!r} entries, expected {len(want)}"
+            for index, (entry, ref) in enumerate(zip(got, want)):
+                where = f"{label} {section}[{index}] ({ref['id']}, {ref['analyte']})"
+                assert isinstance(entry, dict) and set(entry) == set(keys), f"{where}: keys {entry!r}"
+                for key in keys:
+                    a, e = entry[key], ref[key]
+                    if key in ("recovery",) or (key == "value" and e is not None):
+                        _number(a, e, f"{where} {key}")
+                    else:
+>                       assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E                       AssertionError: capacity.jsonl batch 0 samples[4] (R801-5, Mo) ccv_ok: True, expected False
+E                       assert (<class 'bool'> is <class 'bool'> and True == False)
+E                        +  where <class 'bool'> = type(True)
+E                        +  and   <class 'bool'> = type(False)
+
+/tests/test_outputs.py:125: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_calibration_line_has_fitted_intercept
+PASSED ../../tests/test_outputs.py::test_blank_level_is_mean_of_results_anywhere
+PASSED ../../tests/test_outputs.py::test_nondetect_blanks_stay_out_of_the_mean
+PASSED ../../tests/test_outputs.py::test_single_blank_result_is_the_level
+PASSED ../../tests/test_outputs.py::test_batch_without_blank_results_keeps_shipped_level
+PASSED ../../tests/test_outputs.py::test_blank_comes_off_before_dilution
+PASSED ../../tests/test_outputs.py::test_flags_judged_on_corrected_reading
+PASSED ../../tests/test_outputs.py::test_flags_at_exact_mdl_and_loq
+PASSED ../../tests/test_outputs.py::test_readings_below_nought_are_not_clamped
+PASSED ../../tests/test_outputs.py::test_ccv_pass_on_rounded_recovery_inclusive
+PASSED ../../tests/test_outputs.py::test_spike_recovery_of_results
+PASSED ../../tests/test_outputs.py::test_nondetect_spikes_keep_shipped_recovery
+PASSED ../../tests/test_outputs.py::test_driver_is_unchanged
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_expected_reports
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_logs
+FAILED ../../tests/test_outputs.py::test_bracketed_runs_need_both_ccvs - Asse...
+FAILED ../../tests/test_outputs.py::test_unbracketed_runs_keep_shipped_check
+FAILED ../../tests/test_outputs.py::test_report_order_and_types - AssertionEr...
+FAILED ../../tests/test_outputs.py::test_generated_batches - AssertionError: ...
+FAILED ../../tests/test_outputs.py::test_capacity_batch - AssertionError: cap...
+========================= 5 failed, 15 passed in 0.63s =========================

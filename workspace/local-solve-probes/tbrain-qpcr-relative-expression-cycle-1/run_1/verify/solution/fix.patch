@@ -1,0 +1,127 @@
+--- a/src/qpcrrel/curve.py
++++ b/src/qpcrrel/curve.py
+@@ -1,8 +1,6 @@
+ """Standard curves and amplification factors."""
+ 
+ import math
+-
+-from .replicates import NO_CALL_CT
+ 
+ PERFECT_DOUBLING = 2.0
+ 
+@@ -11,8 +9,13 @@
+     """(log10 quantity, mean Ct) of each dilution level, lowest quantity first."""
+     levels = {}
+     for quantity, ct in standards:
+-        levels.setdefault(quantity, []).append(NO_CALL_CT if ct is None else ct)
+-    return [(math.log10(quantity), sum(cts) / len(cts)) for quantity, cts in sorted(levels.items())]
++        if ct is not None:
++            levels.setdefault(quantity, []).append(ct)
++    return [
++        (math.log10(quantity), sum(cts) / len(cts))
++        for quantity, cts in sorted(levels.items())
++        if len(cts) >= 2
++    ]
+ 
+ 
+ def slope(points):
+@@ -28,6 +31,8 @@
+ def amplification_factor(standards):
+     """Amplification per cycle of one gene's assay."""
+     points = curve_points(standards)
++    if len(points) >= 3:
++        return 10 ** (-1.0 / slope(points))
+     if len(points) < 2:
+         return PERFECT_DOUBLING
+     return min(10 ** (-1.0 / slope(points)), PERFECT_DOUBLING)
+--- a/src/qpcrrel/expression.py
++++ b/src/qpcrrel/expression.py
+@@ -1,4 +1,6 @@
+ """Relative quantities, normalisation and fold change for one result."""
++
++import math
+ 
+ from .replicates import detected, mean_ct
+ 
+@@ -17,22 +19,21 @@
+ 
+ 
+ def fold_change(plate, factors, sample, target):
+-    """Target quantity relative to the calibrator, over the reference genes' shift."""
++    """Target quantity relative to the calibrator, over the sample's normalisation factor."""
+     cal = plate.calibrator
+-    factor = factors[target]
+-    shifts = [
+-        mean_ct(plate.replicates(cal, gene)) - mean_ct(plate.replicates(sample, gene))
+-        for gene in plate.reference_genes
+-    ]
+-    shift = sum(shifts) / len(shifts)
+-    delta = mean_ct(plate.replicates(cal, target)) - mean_ct(plate.replicates(sample, target))
+-    return factor ** delta / factor ** shift
++
++    def relative_quantity(gene):
++        delta = mean_ct(plate.replicates(cal, gene)) - mean_ct(plate.replicates(sample, gene))
++        return factors[gene] ** delta
++
++    logs = [math.log(relative_quantity(gene)) for gene in plate.reference_genes]
++    return relative_quantity(target) / math.exp(sum(logs) / len(logs))
+ 
+ 
+ def result(plate, factors, contaminated, sample, target):
+     """One row of the report."""
+     flags = flags_for(plate, contaminated, sample, target)
+-    fold = None if "ntc" in flags else fold_change(plate, factors, sample, target)
++    fold = None if flags else fold_change(plate, factors, sample, target)
+     return {
+         "sample": sample,
+         "gene": target,
+--- a/src/qpcrrel/ntc.py
++++ b/src/qpcrrel/ntc.py
+@@ -1,6 +1,8 @@
+ """No-template control wells."""
++
++from .replicates import CUTOFF_CYCLE
+ 
+ 
+ def contaminated(ntc_cts):
+     """Whether a gene's no-template controls show template on the plate."""
+-    return any(ct is not None for ct in ntc_cts)
++    return any(ct is not None and ct <= CUTOFF_CYCLE for ct in ntc_cts)
+--- a/src/qpcrrel/replicates.py
++++ b/src/qpcrrel/replicates.py
+@@ -3,13 +3,13 @@
+ import statistics
+ 
+ CUTOFF_CYCLE = 35.0
+-NO_CALL_CT = 40.0  # the run length, used where a gene gives no usable Ct
++EARLIEST_CYCLE = 10.0
+ STRAY_CYCLES = 0.5
+ 
+ 
+ def reportable(cts):
+     """The replicate Cts that count toward a sample's result."""
+-    return [ct for ct in cts if ct is not None and ct < CUTOFF_CYCLE]
++    return [ct for ct in cts if ct is not None and EARLIEST_CYCLE <= ct <= CUTOFF_CYCLE]
+ 
+ 
+ def detected(cts):
+@@ -23,14 +23,15 @@
+         return list(cts)
+     centre = statistics.median(cts)
+     stray = [ct for ct in cts if abs(ct - centre) > STRAY_CYCLES]
+-    if len(stray) == 1:
++    if len(stray) < len(cts):
+         return [ct for ct in cts if abs(ct - centre) <= STRAY_CYCLES]
+     return list(cts)
+ 
+ 
+ def mean_ct(cts):
+     """Mean Ct of one sample's replicates of one gene."""
+-    usable = kept(reportable(cts))
+-    if not usable:
+-        return NO_CALL_CT
++    replicates = reportable(cts)
++    if not replicates:
++        return None
++    usable = kept(replicates)
+     return sum(usable) / len(usable)

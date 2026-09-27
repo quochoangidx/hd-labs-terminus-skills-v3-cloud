@@ -1,0 +1,1338 @@
+"""pybc: a GNU bc 1.07.1 replacement in pure Python.
+
+Usage: python3 /app/pybc/bc.py [FILE]...
+"""
+
+import sys
+
+LONG_MAX = 2 ** 63 - 1
+REF_STR = "0123456789ABCDEF"
+
+
+# --------------------------------------------------------------------------- numbers
+
+class Num:
+    """A bc number: sign, magnitude digits and scale; value = sign * mag / 10**scale."""
+
+    __slots__ = ("neg", "mag", "scale")
+
+    def __init__(self, mag=0, scale=0, neg=False):
+        self.mag, self.scale, self.neg = mag, scale, neg
+
+    @property
+    def n_len(self):
+        ip = self.mag // 10 ** self.scale
+        return len(str(ip)) if ip else 1
+
+    def digits(self):
+        """The n_len + n_scale digit characters of the number."""
+        ip, fp = divmod(self.mag, 10 ** self.scale)
+        s = str(ip) if ip else "0"
+        if self.scale:
+            s += str(fp).rjust(self.scale, "0")
+        return s
+
+    def is_zero(self):
+        return self.mag == 0
+
+    def signed(self, s):
+        """Signed integer value scaled to s fraction digits (s >= self.scale)."""
+        v = self.mag * 10 ** (s - self.scale)
+        return -v if self.neg else v
+
+
+def ZERO():
+    return Num(0, 0)
+
+
+def ONE():
+    return Num(1, 0)
+
+
+def int2num(v):
+    return Num(abs(v), 0, v < 0)
+
+
+def mag_cmp(a, b):
+    s = max(a.scale, b.scale)
+    x, y = a.mag * 10 ** (s - a.scale), b.mag * 10 ** (s - b.scale)
+    return (x > y) - (x < y)
+
+
+def num_compare(a, b):
+    if a.neg != b.neg:
+        return 1 if not a.neg else -1
+    c = mag_cmp(a, b)
+    return -c if a.neg else c
+
+
+def _do_add(a, b, scale_min):
+    s = max(a.scale, b.scale)
+    mag = a.mag * 10 ** (s - a.scale) + b.mag * 10 ** (s - b.scale)
+    rs = max(s, scale_min)
+    return Num(mag * 10 ** (rs - s), rs)
+
+
+def _do_sub(a, b, scale_min):
+    s = max(a.scale, b.scale)
+    mag = a.mag * 10 ** (s - a.scale) - b.mag * 10 ** (s - b.scale)
+    rs = max(s, scale_min)
+    return Num(mag * 10 ** (rs - s), rs)
+
+
+def num_add(a, b, scale_min=0):
+    if a.neg == b.neg:
+        r = _do_add(a, b, scale_min)
+        r.neg = a.neg
+        return r
+    c = mag_cmp(a, b)
+    if c < 0:
+        r = _do_sub(b, a, scale_min)
+        r.neg = b.neg
+        return r
+    if c == 0:
+        return Num(0, max(scale_min, a.scale, b.scale))
+    r = _do_sub(a, b, scale_min)
+    r.neg = a.neg
+    return r
+
+
+def num_sub(a, b, scale_min=0):
+    if a.neg != b.neg:
+        r = _do_add(a, b, scale_min)
+        r.neg = a.neg
+        return r
+    c = mag_cmp(a, b)
+    if c < 0:
+        r = _do_sub(b, a, scale_min)
+        r.neg = not b.neg
+        return r
+    if c == 0:
+        return Num(0, max(scale_min, a.scale, b.scale))
+    r = _do_sub(a, b, scale_min)
+    r.neg = a.neg
+    return r
+
+
+def num_mul(a, b, scale):
+    full = a.scale + b.scale
+    ps = min(full, max(scale, a.scale, b.scale))
+    mag = (a.mag * b.mag) // 10 ** (full - ps)
+    return Num(mag, ps, (a.neg != b.neg) and mag != 0)
+
+
+def num_div(a, b, scale):
+    """Truncated quotient with `scale` fraction digits, or None on division by zero."""
+    if b.is_zero():
+        return None
+    num = a.mag * 10 ** (scale + b.scale)
+    den = b.mag * 10 ** a.scale
+    q = num // den
+    return Num(q, scale, (a.neg != b.neg) and q != 0)
+
+
+def num_divmod(a, b, scale):
+    if b.is_zero():
+        return None
+    rscale = max(a.scale, b.scale + scale)
+    q = num_div(a, b, scale)
+    t = num_mul(q, b, rscale)
+    return q, num_sub(a, t, rscale)
+
+
+def num2long(n):
+    val = 0
+    ip = n.digits()[:n.n_len]
+    i = len(ip)
+    k = 0
+    while i > 0 and val <= LONG_MAX // 10:
+        val = val * 10 + int(ip[k])
+        k += 1
+        i -= 1
+    if i > 0 or val > LONG_MAX:
+        val = 0
+    return -val if n.neg else val
+
+
+def num_raise(a, b, scale):
+    if b.scale:
+        rt_warn("non-zero scale in exponent")
+    e = num2long(b)
+    if e == 0 and (b.n_len > 1 or b.digits()[0] != "0"):
+        raise RTError("exponent too large in raise")
+    if e == 0:
+        return ONE()
+    if e < 0:
+        neg, ue, rscale = True, -e, scale
+    else:
+        neg, ue = False, e
+        rscale = min(a.scale * ue, max(scale, a.scale))
+    power = Num(a.mag, a.scale, a.neg)
+    pwrscale = a.scale
+    while ue & 1 == 0:
+        pwrscale <<= 1
+        power = num_mul(power, power, pwrscale)
+        ue >>= 1
+    temp = Num(power.mag, power.scale, power.neg)
+    calcscale = pwrscale
+    ue >>= 1
+    while ue > 0:
+        pwrscale <<= 1
+        power = num_mul(power, power, pwrscale)
+        if ue & 1:
+            calcscale = pwrscale + calcscale
+            temp = num_mul(temp, power, calcscale)
+        ue >>= 1
+    if neg:
+        # a failed division leaves the zero the result was initialised to
+        r = num_div(ONE(), temp, rscale)
+        return r if r is not None else ZERO()
+    if temp.scale > rscale:
+        # the scale is cut in place: the sign survives even if the value becomes zero
+        temp = Num(temp.mag // 10 ** (temp.scale - rscale), rscale, temp.neg)
+    return temp
+
+
+def is_near_zero(n, scale):
+    if scale > n.scale:
+        scale = n.scale
+    d = n.digits()[:n.n_len + scale]
+    count = len(d)
+    k = 0
+    while count > 0 and d[k] == "0":
+        k += 1
+        count -= 1
+    return count == 0 or (count == 1 and d[k] == "1")
+
+
+def num_sqrt(n, scale):
+    c = num_compare(n, ZERO())
+    if c < 0:
+        return None
+    if c == 0:
+        return ZERO()
+    c = num_compare(n, ONE())
+    if c == 0:
+        return ONE()
+    rscale = max(scale, n.scale)
+    point5 = Num(5, 1)
+    if c < 0:
+        guess = ONE()
+        cscale = n.scale
+    else:
+        g1 = num_mul(int2num(n.n_len), point5, 0)
+        g1 = Num(g1.mag // 10 ** g1.scale, 0, g1.neg)
+        guess = num_raise(int2num(10), g1, 0)
+        cscale = 3
+    while True:
+        guess1 = guess
+        guess = num_div(n, guess, cscale)
+        guess = num_add(guess, guess1, 0)
+        guess = num_mul(guess, point5, cscale)
+        diff = num_sub(guess, guess1, cscale + 1)
+        if is_near_zero(diff, cscale):
+            if cscale < rscale + 1:
+                cscale = min(cscale * 3, rscale + 1)
+            else:
+                break
+    return num_div(guess, ONE(), rscale)
+
+
+# --------------------------------------------------------------------------- lexer
+
+KEYWORDS = {"define", "break", "quit", "length", "return", "for", "if", "while", "sqrt", "scale",
+            "ibase", "obase", "auto", "else", "read", "random", "halt", "last", "void", "history",
+            "warranty", "continue", "print", "limits"}
+DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+LOWER = "abcdefghijklmnopqrstuvwxyz"
+
+
+class SyntaxErr(Exception):
+    pass
+
+
+class Quit(Exception):
+    pass
+
+
+class Tok:
+    __slots__ = ("kind", "val")
+
+    def __init__(self, kind, val=None):
+        self.kind, self.val = kind, val
+
+    def __repr__(self):
+        return "Tok(%r,%r)" % (self.kind, self.val)
+
+
+def tokens(text):
+    """Yield tokens the way bc's flex scanner does (longest match, first rule on ties)."""
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == "#":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if c == "\n":
+            yield Tok("NL")
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n and text[i + 1] == "\n":
+            i += 2
+            continue
+        if c in " \t":
+            i += 1
+            continue
+        if text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            if j < 0:
+                sys.stderr.write("EOF encountered in a comment.\n")
+                i = n
+            else:
+                i = j + 2
+            continue
+        if c in LOWER:
+            j = i + 1
+            while j < n and (text[j] in LOWER or text[j].isdigit() or text[j] == "_"):
+                j += 1
+            w = text[i:j]
+            i = j
+            if w in KEYWORDS and w != "history":
+                yield Tok(w)
+            else:
+                yield Tok("NAME", w)
+            continue
+        if c in DIGITS or (c == "." and _num_after_dot(text, i + 1)):
+            j = i
+            while j < n and (text[j] in DIGITS or text.startswith("\\\n", j)):
+                j += 2 if text[j] == "\\" else 1
+            if j < n and text[j] == ".":
+                j += 1
+                while j < n and (text[j] in DIGITS or text.startswith("\\\n", j)):
+                    j += 2 if text[j] == "\\" else 1
+            raw = text[i:j].replace("\\\n", "")
+            i = j
+            if raw.endswith("."):
+                raw = raw[:-1]
+            k = 0
+            while k < len(raw) and raw[k] == "0":
+                k += 1
+            if k == len(raw):
+                k -= 1
+            yield Tok("NUMBER", raw[k:])
+            continue
+        if c == ".":
+            yield Tok("last")
+            i += 1
+            continue
+        if c == '"':
+            j = text.find('"', i + 1)
+            if j < 0:
+                raise SyntaxErr("unterminated string")
+            yield Tok("STRING", text[i + 1:j])
+            i = j + 1
+            continue
+        two = text[i:i + 2]
+        if two in ("&&", "||"):
+            yield Tok(two)
+            i += 2
+            continue
+        if two in ("==", "<=", ">=", "!="):
+            yield Tok("REL", two)
+            i += 2
+            continue
+        if two in ("+=", "-=", "*=", "/=", "%=", "^="):
+            yield Tok("ASSIGN", two[0])
+            i += 2
+            continue
+        if two in ("=+", "=-", "=*", "=/", "=%", "=^"):
+            yield Tok("ASSIGN", "=")
+            i += 1
+            continue
+        if two in ("++", "--"):
+            yield Tok("INCR", two[0])
+            i += 2
+            continue
+        if c == "=":
+            yield Tok("ASSIGN", "=")
+            i += 1
+            continue
+        if c in "<>":
+            yield Tok("REL", c)
+            i += 1
+            continue
+        if c == "!":
+            yield Tok("!")
+            i += 1
+            continue
+        if c in "+-;(){}[],^*/%&":
+            yield Tok(c)
+            i += 1
+            continue
+        raise SyntaxErr("illegal character: %s" % c)
+
+
+def _num_after_dot(text, j):
+    while text.startswith("\\\n", j):
+        j += 2
+    return j < len(text) and text[j] in DIGITS
+
+
+# --------------------------------------------------------------------------- parser / code generator
+
+EX_ASSGN, EX_REG, EX_COMP, EX_PAREN, EX_VOID = 0, 1, 2, 4, 8
+SPECIAL = {"ibase": 0, "obase": 1, "scale": 2, "last": 4}
+BINPREC = {"||": 1, "&&": 2, "REL": 4, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7, "^": 8}
+RIGHT = {"^"}
+RELCODE = {"==": "=", "!=": "#", "<": "<", "<=": "{", ">": ">", ">=": "}"}
+
+
+class Label:
+    __slots__ = ("addr",)
+
+    def __init__(self):
+        self.addr = None
+
+
+class Func:
+    def __init__(self, name):
+        self.name = name
+        self.defined = False
+        self.void = False
+        self.params = []   # list of (name, is_array, by_var)
+        self.autos = []    # list of (name, is_array)
+        self.code = []
+
+
+class Parser:
+    def advance(self):
+        try:
+            self.tok = next(self.toks)
+        except StopIteration:
+            self.tok = Tok("EOF")
+
+    def peek(self, kind):
+        return self.tok.kind == kind
+
+    def expect(self, kind):
+        if self.tok.kind != kind:
+            raise SyntaxErr("expected %s, got %r" % (kind, self.tok))
+        t = self.tok
+        self.advance()
+        return t
+
+    def gen(self, *ins):
+        self.code.append(ins)
+
+    def place(self, label):
+        label.addr = len(self.code)
+
+    # ---- input items
+    def input_item(self):
+        """Parse one input item and run it. Returns False at end of input."""
+        if self.peek("EOF"):
+            return False
+        if self.peek("define"):
+            self.function()
+            return True
+        self.code = []
+        self.semicolon_list()
+        if self.peek("EOF"):
+            raise SyntaxErr("unexpected end of input")
+        self.expect("NL")
+        self.bc.run(self.code)
+        return True
+
+    def semicolon_list(self):
+        if not self.peek("NL") and not self.peek(";") and not self.peek("EOF"):
+            self.statement()
+        while self.peek(";"):
+            self.advance()
+            if not self.peek("NL") and not self.peek(";") and not self.peek("EOF"):
+                self.statement()
+
+    def statement_list(self):
+        """Statements separated by newlines or semicolons, up to '}'."""
+        while True:
+            if self.peek("}"):
+                return
+            if self.peek("NL") or self.peek(";"):
+                self.advance()
+                continue
+            self.statement()
+            if not (self.peek("NL") or self.peek(";") or self.peek("}")):
+                raise SyntaxErr("statement separator expected")
+
+    def opt_newline(self):
+        if self.peek("NL"):
+            self.advance()
+
+    def statement(self):
+        t = self.tok
+        k = t.kind
+        if k == "STRING":
+            self.advance()
+            self.gen("w", t.val)
+        elif k == "break":
+            self.advance()
+            if self.break_label is None:
+                raise SyntaxErr("Break outside a for/while")
+            self.gen("J", self.break_label)
+        elif k == "continue":
+            self.advance()
+            if self.continue_label is None:
+                raise SyntaxErr("Continue outside a for")
+            self.gen("J", self.continue_label)
+        elif k == "quit":
+            raise Quit()
+        elif k == "halt":
+            self.advance()
+            self.gen("h")
+        elif k == "return":
+            self.advance()
+            if self.in_func is None:
+                raise SyntaxErr("Return outside of a function.")
+            if self.peek("NL") or self.peek(";") or self.peek("}") or self.peek("EOF") or self.peek("else"):
+                self.gen("0")
+            else:
+                flags = self.expression()
+                if flags & EX_VOID:
+                    raise SyntaxErr("return requires non-void expression")
+                if self.in_func.void:
+                    raise SyntaxErr("Return expression in a void function.")
+            self.gen("R")
+        elif k == "for":
+            self.advance()
+            self.for_statement()
+        elif k == "if":
+            self.advance()
+            self.expect("(")
+            flags = self.expression()
+            if flags & EX_VOID:
+                raise SyntaxErr("void expression")
+            self.expect(")")
+            end = Label()
+            self.gen("Z", end)
+            self.opt_newline()
+            self.statement()
+            if self.peek("else"):
+                self.advance()
+                end2 = Label()
+                self.gen("J", end2)
+                self.place(end)
+                end = end2
+                self.opt_newline()
+                self.statement()
+            self.place(end)
+        elif k == "while":
+            self.advance()
+            saved = self.break_label, self.continue_label
+            top, brk = Label(), Label()
+            self.continue_label = top
+            self.place(top)
+            self.expect("(")
+            flags = self.expression()
+            if flags & EX_VOID:
+                raise SyntaxErr("void expression")
+            self.break_label = brk
+            self.gen("Z", brk)
+            self.expect(")")
+            self.opt_newline()
+            self.statement()
+            self.gen("J", top)
+            self.place(brk)
+            self.break_label, self.continue_label = saved
+        elif k == "{":
+            self.advance()
+            self.statement_list()
+            self.expect("}")
+        elif k == "print":
+            self.advance()
+            while True:
+                if self.peek("STRING"):
+                    self.gen("O", self.tok.val)
+                    self.advance()
+                else:
+                    flags = self.expression()
+                    if flags & EX_VOID:
+                        raise SyntaxErr("void expression in print")
+                    self.gen("P")
+                if not self.peek(","):
+                    break
+                self.advance()
+        elif k in ("limits", "warranty"):
+            raise SyntaxErr("not supported")
+        else:
+            flags = self.expression()
+            if flags & EX_REG:
+                self.gen("W")
+            else:
+                self.gen("p")
+
+    def for_statement(self):
+        saved_break = self.break_label
+        self.break_label = Label()
+        self.expect("(")
+        if not self.peek(";"):
+            flags = self.expression()
+            if flags & EX_VOID:
+                raise SyntaxErr("first expression is void")
+            self.gen("p")
+        self.expect(";")
+        top = Label()
+        self.place(top)
+        if not self.peek(";"):
+            flags = self.expression()
+            if flags & EX_VOID:
+                raise SyntaxErr("second expression is void")
+        else:
+            self.gen("1")
+        self.expect(";")
+        body = Label()
+        self.gen("B", body)
+        self.gen("J", self.break_label)
+        saved_continue = self.continue_label
+        self.continue_label = Label()
+        self.place(self.continue_label)
+        if not self.peek(")"):
+            flags = self.expression()
+            if flags & EX_VOID:
+                raise SyntaxErr("third expression is void")
+            self.gen("p")
+        self.gen("J", top)
+        self.place(body)
+        self.expect(")")
+        self.opt_newline()
+        self.statement()
+        self.gen("J", self.continue_label)
+        self.place(self.break_label)
+        self.break_label = saved_break
+        self.continue_label = saved_continue
+
+    # ---- functions
+    def function(self):
+        self.expect("define")
+        void = False
+        if self.peek("void"):
+            self.advance()
+            void = True
+        name = self.expect("NAME").val
+        self.expect("(")
+        params = []
+        if not self.peek(")"):
+            params = self.define_list(True)
+        self.expect(")")
+        self.opt_newline()
+        self.expect("{")
+        while self.peek("NL"):
+            self.advance()
+        autos = []
+        if self.peek("auto"):
+            self.advance()
+            autos = [(n, a) for n, a, _v in self.define_list(True)]
+            if self.peek("NL") or self.peek(";"):
+                self.advance()
+            else:
+                raise SyntaxErr("auto list must end")
+        f = Func(name)
+        f.void = void
+        f.params = params
+        f.autos = autos
+        self.code = f.code
+        self.in_func = f
+        saved = self.break_label, self.continue_label
+        self.break_label = self.continue_label = None
+        self.statement_list()
+        self.expect("}")
+        self.gen("0")
+        self.gen("R")
+        self.break_label, self.continue_label = saved
+        self.in_func = None
+        f.defined = True
+        self.bc.functions[name] = f
+        self.code = []
+        self.bc.run(self.code)
+
+    def define_list(self, allow_var):
+        out = []
+        while True:
+            byvar = False
+            if self.peek("*") or self.peek("&"):
+                self.advance()
+                byvar = True
+            name = self.expect("NAME").val
+            if self.peek("["):
+                self.advance()
+                self.expect("]")
+                out.append((name, True, byvar))
+            else:
+                if byvar:
+                    raise SyntaxErr("call by variable needs an array")
+                out.append((name, False, False))
+            if not self.peek(","):
+                return out
+            self.advance()
+
+    # ---- expressions
+    def expression(self, min_prec=1):
+        flags = self.unary()
+        while True:
+            k = self.tok.kind
+            op = "REL" if k == "REL" else k
+            prec = BINPREC.get(op)
+            if prec is None or prec < min_prec:
+                return flags
+            rel = self.tok.val
+            self.advance()
+            nxt = prec if op in RIGHT else prec + 1
+            if op == "&&":
+                lab = Label()
+                self.gen("D")
+                self.gen("Z", lab)
+                self.gen("p")
+                f2 = self.expression(nxt)
+                self.gen("D")
+                self.gen("Z", lab)
+                self.gen("p")
+                self.gen("1")
+                self.place(lab)
+                flags = (flags | f2) & ~EX_PAREN
+            elif op == "||":
+                lab, end = Label(), Label()
+                self.gen("B", lab)
+                f2 = self.expression(nxt)
+                self.gen("B", lab)
+                self.gen("0")
+                self.gen("J", end)
+                self.place(lab)
+                self.gen("1")
+                self.place(end)
+                flags = (flags | f2) & ~EX_PAREN
+            elif op == "REL":
+                self.expression(nxt)
+                self.gen(RELCODE[rel])
+                flags = EX_REG | EX_COMP
+            else:
+                f2 = self.expression(nxt)
+                self.gen(op)
+                flags = (flags | f2) & ~EX_PAREN
+
+    def unary(self):
+        k = self.tok.kind
+        if k == "!":
+            self.advance()
+            f = self.expression(BINPREC["REL"])
+            self.gen("!")
+            return f & ~EX_PAREN
+        if k == "-":
+            self.advance()
+            f = self.unary()
+            self.gen("n")
+            return f & ~EX_PAREN
+        return self.primary()
+
+    def named(self):
+        """Parse a named expression; returns ('var', name) or ('arr', name) with index code emitted."""
+        k = self.tok.kind
+        if k in SPECIAL:
+            self.advance()
+            return ("var", k)
+        if k == "NAME":
+            name = self.tok.val
+            self.advance()
+            if self.peek("["):
+                self.advance()
+                f = self.expression()
+                if f & EX_VOID:
+                    raise SyntaxErr("void expression as subscript")
+                self.expect("]")
+                return ("arr", name)
+            return ("var", name)
+        raise SyntaxErr("name expected")
+
+    def primary(self):
+        k = self.tok.kind
+        if k == "NUMBER":
+            v = self.tok.val
+            self.advance()
+            if v == "0":
+                self.gen("0")
+            elif v == "1":
+                self.gen("1")
+            else:
+                self.gen("K", v)
+            return EX_REG
+        if k == "(":
+            self.advance()
+            f = self.expression()
+            if f & EX_VOID:
+                raise SyntaxErr("void expression in parenthesis")
+            self.expect(")")
+            return f | EX_REG | EX_PAREN
+        if k == "INCR":
+            op = self.tok.val
+            self.advance()
+            kind, name = self.named()
+            if kind == "arr":
+                self.gen("D")
+                self.gen("A" if op == "+" else "M", name)
+                self.gen("L", name)
+            else:
+                self.gen("i" if op == "+" else "d", name)
+                self.gen("l", name)
+            return EX_REG
+        if k in ("length", "sqrt") or (k == "scale" and self._next_is_paren()):
+            self.advance()
+            self.expect("(")
+            f = self.expression()
+            if f & EX_VOID:
+                raise SyntaxErr("void expression")
+            self.expect(")")
+            self.gen("c", {"length": "L", "sqrt": "R", "scale": "S"}[k])
+            return EX_REG
+        if k in ("read", "random"):
+            raise SyntaxErr("not supported")
+        if k == "NAME" and self._next_is_paren():
+            name = self.tok.val
+            self.advance()
+            self.expect("(")
+            args = []
+            if not self.peek(")"):
+                while True:
+                    if self.peek("NAME") and self._array_arg():
+                        aname = self.tok.val
+                        self.advance()
+                        self.expect("[")
+                        self.expect("]")
+                        self.gen("K@", aname)
+                        args.append(True)
+                    else:
+                        f = self.expression()
+                        if f & EX_VOID:
+                            raise SyntaxErr("void argument")
+                        args.append(False)
+                    if not self.peek(","):
+                        break
+                    self.advance()
+            self.expect(")")
+            self.gen("C", name, args)
+            fn = self.bc.functions.get(name)
+            return EX_VOID if fn is not None and fn.void else EX_REG
+        kind, name = self.named()
+        if self.peek("ASSIGN"):
+            op = self.tok.val
+            self.advance()
+            if op != "=":
+                if kind == "arr":
+                    self.gen("D")
+                    self.gen("L", name)
+                else:
+                    self.gen("l", name)
+            f = self.expression(5)
+            if f & EX_VOID:
+                raise SyntaxErr("Assignment of a void expression")
+            if op != "=":
+                self.gen(op)
+            self.gen("S" if kind == "arr" else "s", name)
+            return EX_ASSGN
+        if self.peek("INCR"):
+            op = self.tok.val
+            self.advance()
+            if kind == "arr":
+                self.gen("D")
+                self.gen("L", name)
+                self.gen("x")
+                self.gen("A" if op == "+" else "M", name)
+            else:
+                self.gen("l", name)
+                self.gen("i" if op == "+" else "d", name)
+            return EX_REG
+        self.gen("L" if kind == "arr" else "l", name)
+        return EX_REG
+
+    def _next_is_paren(self):
+        return self._lookahead(1) == "("
+
+    def _array_arg(self):
+        return self._lookahead(1) == "[" and self._lookahead(2) == "]"
+
+    def _lookahead(self, n):
+        buf = getattr(self, "_buf", None)
+        if buf is None:
+            buf = self._buf = []
+        while len(buf) < n:
+            try:
+                buf.append(next(self._raw))
+            except StopIteration:
+                buf.append(Tok("EOF"))
+        return buf[n - 1].kind
+
+
+# --------------------------------------------------------------------------- interpreter
+
+class RTError(Exception):
+    pass
+
+
+def rt_warn(msg):
+    sys.stderr.write("Runtime warning: %s\n" % msg)
+
+
+INT_MAX = 2 ** 31 - 1
+
+
+class BC:
+    def __init__(self):
+        self.functions = {}
+        self.vars = {}      # name -> list (stack) of Num
+        self.arrays = {}    # name -> list (stack) of [dict, is_param]
+        self.ibase = 10
+        self.obase = 10
+        self.scale = 0
+        self.col = 0
+        self.line_size = 70
+        self.out = []
+
+    # ---- output
+    def out_char(self, ch):
+        if ch == "\n":
+            self.col = 0
+            self.out.append("\n")
+        else:
+            self.col += 1
+            if self.col == self.line_size - 1 and self.line_size != 0:
+                self.out.append("\\\n")
+                self.col = 1
+            self.out.append(ch)
+
+    def out_num(self, n):
+        oc = self.out_char
+        obase = self.obase
+        if n.neg:
+            oc("-")
+        if n.is_zero():
+            oc("0")
+            return
+        if obase == 10:
+            d = n.digits()
+            if n.n_len > 1 or d[0] != "0":
+                for k in range(n.n_len):
+                    oc(d[k])
+            if n.scale > 0:
+                oc(".")
+                for ch in d[n.n_len:]:
+                    oc(ch)
+            return
+        ip, fp = divmod(n.mag, 10 ** n.scale)
+        width = len(str(obase - 1))
+        digs = []
+        while ip:
+            ip, r = divmod(ip, obase)
+            digs.append(r)
+        for dgt in reversed(digs):
+            if obase <= 16:
+                oc(REF_STR[dgt])
+            else:
+                oc(" ")
+                for ch in str(dgt).rjust(width, "0"):
+                    oc(ch)
+        if n.scale > 0:
+            oc(".")
+            pre_space = False
+            t = 1
+            lim = 10 ** n.scale
+            f = fp
+            while t < lim:
+                f *= obase
+                dgt, f = divmod(f, 10 ** n.scale)
+                if obase <= 16:
+                    oc(REF_STR[dgt])
+                else:
+                    if pre_space:
+                        oc(" ")
+                    for ch in str(dgt).rjust(width, "0"):
+                        oc(ch)
+                    pre_space = True
+                t *= obase
+
+    def out_str(self, s, escapes):
+        oc = self.out_char
+        if not escapes:
+            for ch in s:
+                oc(ch)
+            return
+        i, n = 0, len(s)
+        while i < n:
+            ch = s[i]
+            i += 1
+            if ch != "\\":
+                oc(ch)
+                continue
+            if i >= n:
+                break
+            e = s[i]
+            i += 1
+            m = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "q": '"', "r": "\r", "t": "\t", "\\": "\\"}.get(e)
+            if m is not None:
+                oc(m)
+
+    # ---- variables
+    def load_var(self, name):
+        if name == "ibase":
+            return int2num(self.ibase)
+        if name == "obase":
+            return int2num(self.obase)
+        if name == "scale":
+            return int2num(self.scale)
+        st = self.vars.get(name)
+        return st[-1] if st else ZERO()
+
+    def store_var(self, name, v):
+        if name not in ("ibase", "obase", "scale"):
+            st = self.vars.setdefault(name, [])
+            if not st:
+                st.append(ZERO())
+            st[-1] = v
+            return
+        toobig = False
+        temp = 0
+        if v.neg:
+            temp = {"ibase": 2, "obase": 2, "scale": 0}[name]
+            rt_warn("negative %s" % name)
+        else:
+            temp = num2long(v)
+            if not v.is_zero() and temp == 0:
+                toobig = True
+        if name == "ibase":
+            if temp < 2 and not toobig:
+                self.ibase = 2
+            elif temp > 16 or toobig:
+                self.ibase = 36 if (temp > 36 or toobig) else temp
+            else:
+                self.ibase = temp
+        elif name == "obase":
+            if temp < 2 and not toobig:
+                self.obase = 2
+            elif temp > INT_MAX or toobig:
+                self.obase = INT_MAX
+            else:
+                self.obase = temp
+        else:
+            self.scale = INT_MAX if (temp > INT_MAX or toobig) else temp
+
+    def incr_var(self, name, d):
+        if name == "ibase":
+            if d > 0 and self.ibase < 16:
+                self.ibase += 1
+            elif d < 0 and self.ibase > 2:
+                self.ibase -= 1
+        elif name == "obase":
+            if d > 0 and self.obase < INT_MAX:
+                self.obase += 1
+            elif d < 0 and self.obase > 2:
+                self.obase -= 1
+        elif name == "scale":
+            if d > 0 and self.scale < INT_MAX:
+                self.scale += 1
+            elif d < 0 and self.scale > 0:
+                self.scale -= 1
+        else:
+            st = self.vars.setdefault(name, [])
+            if not st:
+                st.append(ZERO())
+            st[-1] = (num_add if d > 0 else num_sub)(st[-1], ONE(), 0)
+
+    def array(self, name):
+        st = self.arrays.get(name)
+        if not st:
+            st = self.arrays[name] = [[{}, False]]
+        return st[-1][0]
+
+    def index(self, name, v):
+        idx = num2long(v)
+        if idx < 0 or idx > 16777215 or (idx == 0 and not v.is_zero()):
+            raise RTError("Array %s subscript out of bounds." % name)
+        return idx
+
+    # ---- constants
+    def constant(self, text, base):
+        if base == 10:
+            ip, _, fp = text.partition(".")
+            if len(ip) == 1 and not fp:
+                return int2num(DIGITS.index(ip))
+            ds = "".join("9" if c not in "0123456789" else c for c in ip + fp)
+            return Num(int(ds) if ds else 0, len(fp))
+        chars = [DIGITS.index(c) if c in DIGITS else 46 for c in text] + [58]
+        pos = [0]
+
+        def nxt():
+            c = chars[pos[0]]
+            pos[0] += 1
+            return c
+        mult = int2num(base)
+        build = ZERO()
+        in_ch = nxt()
+        if in_ch < 36:
+            first = in_ch
+            in_ch = nxt()
+            if in_ch < 36 and first >= base:
+                first = base - 1
+            build = int2num(first)
+        while in_ch < 36:
+            if in_ch >= base:
+                in_ch = base - 1
+            build = num_add(num_mul(build, mult, 0), int2num(in_ch), 0)
+            in_ch = nxt()
+        if in_ch == 46:
+            in_ch = nxt()
+            if in_ch >= base:
+                in_ch = base - 1
+            divisor = ONE()
+            result = ZERO()
+            digits = 0
+            while in_ch < 36:
+                result = num_add(num_mul(result, mult, 0), int2num(in_ch), 0)
+                divisor = num_mul(divisor, mult, 0)
+                digits += 1
+                in_ch = nxt()
+                if in_ch < 36 and in_ch >= base:
+                    in_ch = base - 1
+            result = num_div(result, divisor, digits)
+            build = num_add(build, result, 0)
+        return build
+
+    # ---- execution
+    def run(self, code):
+        stack = []
+        frames = []   # (code, pc, ibase_at_call, func)
+        pc = 0
+        func = None
+        try:
+            while pc < len(code):
+                ins = code[pc]
+                pc += 1
+                op = ins[0]
+                if op == "K":
+                    base = self.ibase if func is None else frames[-1][2]
+                    stack.append(self.constant(ins[1], base))
+                elif op == "0":
+                    stack.append(ZERO())
+                elif op == "1":
+                    stack.append(ONE())
+                elif op == "l":
+                    stack.append(self.load_var(ins[1]))
+                elif op == "s":
+                    self.store_var(ins[1], stack[-1])
+                elif op == "i":
+                    self.incr_var(ins[1], 1)
+                elif op == "d":
+                    self.incr_var(ins[1], -1)
+                elif op == "L":
+                    idx = self.index(ins[1], stack[-1])
+                    stack[-1] = self.array(ins[1]).get(idx, ZERO())
+                elif op == "S":
+                    idx = self.index(ins[1], stack[-2])
+                    v = stack.pop()
+                    self.array(ins[1])[idx] = v
+                    stack[-1] = v
+                elif op in ("A", "M"):
+                    idx = self.index(ins[1], stack[-1])
+                    stack.pop()
+                    a = self.array(ins[1])
+                    a[idx] = (num_add if op == "A" else num_sub)(a.get(idx, ZERO()), ONE(), 0)
+                elif op == "D":
+                    stack.append(stack[-1])
+                elif op == "x":
+                    stack[-1], stack[-2] = stack[-2], stack[-1]
+                elif op == "p":
+                    stack.pop()
+                elif op in ("W", "P"):
+                    v = stack.pop()
+                    self.out_num(v)
+                    if op == "W":
+                        self.out_char("\n")
+                    self.store_var("last", v)
+                elif op == "w":
+                    self.out_str(ins[1], False)
+                elif op == "O":
+                    self.out_str(ins[1], True)
+                elif op in ("B", "Z"):
+                    nz = not stack.pop().is_zero()
+                    if nz == (op == "B"):
+                        pc = ins[1].addr
+                elif op == "J":
+                    pc = ins[1].addr
+                elif op == "n":
+                    stack[-1] = num_sub(ZERO(), stack[-1], 0)
+                elif op == "!":
+                    stack[-1] = ONE() if stack[-1].is_zero() else ZERO()
+                elif op in "=#<{>}":
+                    b = stack.pop()
+                    c = num_compare(stack[-1], b)
+                    r = {"=": c == 0, "#": c != 0, "<": c == -1, "{": c <= 0, ">": c == 1, "}": c >= 0}[op]
+                    stack[-1] = ONE() if r else ZERO()
+                elif op == "+":
+                    b = stack.pop()
+                    stack[-1] = num_add(stack[-1], b, 0)
+                elif op == "-":
+                    b = stack.pop()
+                    stack[-1] = num_sub(stack[-1], b, 0)
+                elif op == "*":
+                    b = stack.pop()
+                    stack[-1] = num_mul(stack[-1], b, self.scale)
+                elif op == "/":
+                    r = num_div(stack[-2], stack[-1], self.scale)
+                    if r is None:
+                        raise RTError("Divide by zero")
+                    stack.pop()
+                    stack[-1] = r
+                elif op == "%":
+                    if stack[-1].is_zero():
+                        raise RTError("Modulo by zero")
+                    b = stack.pop()
+                    stack[-1] = num_divmod(stack[-1], b, self.scale)[1]
+                elif op == "^":
+                    r = num_raise(stack[-2], stack[-1], self.scale)
+                    if stack[-2].is_zero() and stack[-1].neg:
+                        raise RTError("divide by zero")
+                    stack.pop()
+                    stack[-1] = r
+                elif op == "c":
+                    v = stack[-1]
+                    if ins[1] == "L":
+                        if v.n_len == 1 and v.scale != 0 and v.digits()[0] == "0":
+                            stack[-1] = int2num(v.scale)
+                        else:
+                            stack[-1] = int2num(v.n_len + v.scale)
+                    elif ins[1] == "S":
+                        stack[-1] = int2num(v.scale)
+                    else:
+                        r = num_sqrt(v, self.scale)
+                        if r is None:
+                            raise RTError("Square root of a negative number")
+                        stack[-1] = r
+                elif op == "K@":
+                    stack.append(("array", ins[1]))
+                elif op == "C":
+                    f = self.functions.get(ins[1])
+                    if f is None or not f.defined:
+                        raise RTError("Function %s not defined." % ins[1])
+                    self.call(f, ins[2], stack)
+                    frames.append((code, pc, self.ibase, f))
+                    code, pc, func = f.code, 0, f
+                elif op == "R":
+                    self.pop_vars(func)
+                    code, pc, _ib, _f = frames.pop()
+                    func = frames[-1][3] if frames else None
+                elif op == "h":
+                    raise Quit()
+                else:
+                    raise RTError("bad instruction")
+        except RTError as e:
+            sys.stderr.write("Runtime error: %s\n" % e)
+            while frames:
+                self.pop_vars(func)
+                frames.pop()
+                func = frames[-1][3] if frames else None
+
+    def call(self, f, argtypes, stack):
+        """process_params: bind the pushed arguments (last argument on top) to the parameters."""
+        n = len(argtypes)
+        if n != len(f.params):
+            del stack[len(stack) - n:]
+            raise RTError("Parameter number mismatch")
+        vals = stack[len(stack) - n:]
+        del stack[len(stack) - n:]
+        pushed = []
+        try:
+            for (pname, is_arr, byvar), is_arr_arg, v in zip(f.params, argtypes, vals):
+                if is_arr != is_arr_arg:
+                    raise RTError("Parameter type mismatch, parameter %s." % pname)
+                if not is_arr:
+                    self.vars.setdefault(pname, []).append(v)
+                    pushed.append(("v", pname))
+                else:
+                    src_name = v[1]
+                    self.array(src_name)
+                    src = self.arrays[src_name][-1]
+                    if byvar:
+                        self.arrays.setdefault(pname, []).append([src[0], True])
+                    else:
+                        self.arrays.setdefault(pname, []).append([dict(src[0]), False])
+                    pushed.append(("a", pname))
+        except RTError:
+            for kind, name in pushed:
+                (self.vars if kind == "v" else self.arrays)[name].pop()
+            raise
+        for name, is_arr in f.autos:
+            if is_arr:
+                self.arrays.setdefault(name, []).append([{}, False])
+            else:
+                self.vars.setdefault(name, []).append(ZERO())
+
+    def pop_vars(self, f):
+        for name, is_arr in f.autos:
+            st = (self.arrays if is_arr else self.vars).get(name)
+            if st:
+                st.pop()
+        for name, is_arr, _v in f.params:
+            st = (self.arrays if is_arr else self.vars).get(name)
+            if st:
+                st.pop()
+
+
+# --------------------------------------------------------------------------- main
+
+def main(argv):
+    if hasattr(sys, "set_int_max_str_digits"):
+        sys.set_int_max_str_digits(0)
+    files = []
+    for a in argv:
+        if a in ("-q", "--quiet"):
+            continue
+        files.append(a)
+    text = []
+    for name in files:
+        try:
+            with open(name, "rb") as fh:
+                text.append(fh.read().decode("latin-1"))
+        except OSError:
+            sys.stderr.write("File %s is unavailable.\n" % name)
+            return 1
+    text.append(sys.stdin.buffer.read().decode("latin-1"))
+    bc = BC()
+    raw = tokens("".join(text))
+    p = Parser.__new__(Parser)
+    p.bc = bc
+    p._raw = raw
+    p._buf = []
+
+    def feed():
+        while True:
+            if p._buf:
+                yield p._buf.pop(0)
+            else:
+                try:
+                    yield next(raw)
+                except StopIteration:
+                    return
+    p.toks = feed()
+    p.code = None
+    p.break_label = p.continue_label = None
+    p.in_func = None
+    status = 0
+    try:
+        p.advance()
+        while p.input_item():
+            pass
+    except Quit:
+        pass
+    except SyntaxErr as e:
+        sys.stderr.write("(standard_in): syntax error (%s)\n" % e)
+    sys.stdout.buffer.write("".join(bc.out).encode("latin-1"))
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

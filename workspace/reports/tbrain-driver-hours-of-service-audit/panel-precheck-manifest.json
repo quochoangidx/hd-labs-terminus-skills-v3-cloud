@@ -1,0 +1,517 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-driver-hours-of-service-audit",
+ "primary_outcome": "the audit report the fixed driver prints for one driver log follows FM-4: per-day driving and on-duty minutes, per-day violation minutes under rules 3.1-3.4, and time left at the end of the log",
+ "obligations": [
+  {
+   "id": "DRIVING_TIME",
+   "class": "core",
+   "contribution": "driving time is the driving status plus yard moves (on-duty time in a stretch covering one mile or more); rest stays rest whatever the truck's miles",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "A yard move is on-duty time in a stretch in which the truck covers one"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/stretches.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_3_yard_moves_count_as_driving_time",
+     "test_outputs.py::test_moving_truck_rest_stays_rest"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_3_yard_move_at_exactly_one_mile"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "on stretches at 0.9 and 1.0 miles; a sleeper stretch of a team truck covering 480 miles that makes a reset; an off-duty personal-conveyance stretch that makes a break",
+   "wrong_but_plausible": "count every stretch in which the truck covers a mile or more as driving time, sleeper and off-duty included",
+   "selfdescription_phrase": "driving time"
+  },
+  {
+   "id": "SHIFT",
+   "class": "core",
+   "contribution": "a shift opens at the first on-duty minute after a reset, not the first driving minute",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "A shift begins at the first minute of on-duty time after a reset"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/shifts.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_5_shift_opens_at_first_on_duty_minute"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_reset_exactly_ten_hours"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a shift that opens with 90 minutes of pre-trip on-duty time before driving, run close to its window; rest periods of 599 and 600 minutes",
+   "wrong_but_plausible": "keep opening the shift at the first driving minute",
+   "selfdescription_phrase": "shift start"
+  },
+  {
+   "id": "WINDOW",
+   "class": "core",
+   "contribution": "the 14-hour window runs on the clock from the shift start, rest included, both for violations and for time left",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "The window runs on the clock"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/limits.py",
+    "environment/app/src/hoslog/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_window_runs_on_the_clock"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_2_driving_starting_at_hour_fourteen"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a shift with a 3-hour rest in the middle that drives into its 14th clock hour; a log ending 13h59 into a shift",
+   "wrong_but_plausible": "count only on-duty minutes toward the window, or fix the walk but not the time-left figure",
+   "selfdescription_phrase": "window"
+  },
+  {
+   "id": "BREAK",
+   "class": "core",
+   "contribution": "only a rest period of 30 minutes or more is a break; on-duty-not-driving time is not",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "A break is a rest period of 30 minutes or more"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/shifts.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_6_break_needs_thirty_minutes_of_rest"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_3_break_limit_at_exactly_eight_hours"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "45 minutes of on-duty fuelling between two driving stretches; a 29-minute and a 30-minute rest mixing off and sleeper time",
+   "wrong_but_plausible": "keep accepting any 30 non-driving minutes, or require the break to be a single status",
+   "selfdescription_phrase": "break"
+  },
+  {
+   "id": "DRIVING_LIMIT",
+   "class": "core",
+   "contribution": "10 hours of driving time per shift",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "A driver may drive 10 hours in a shift"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/limits.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_ten_hour_driving_limit"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_1_limit_reached_exactly"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "shifts driving 599, 600, 601 and 660 minutes",
+   "wrong_but_plausible": "keep the federal 11-hour limit",
+   "selfdescription_phrase": "driving limit"
+  },
+  {
+   "id": "CYCLE",
+   "class": "core",
+   "contribution": "the cycle total is this day's earlier on-duty time plus the six days before, against 60 hours, with recap days",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "The cycle total at a minute is the driver's on-duty time earlier on that"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/cycle.py",
+    "environment/app/src/hoslog/report.py",
+    "environment/app/src/hoslog/limits.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_7_cycle_is_sixty_hours_over_seven_days"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_4_cycle_reached_mid_day"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a recap whose oldest day is heavy, and a day on which the cycle total reaches exactly 3600 minutes mid-stretch",
+   "wrong_but_plausible": "keep 70 hours over eight days, or count only whole earlier days",
+   "selfdescription_phrase": "cycle"
+  },
+  {
+   "id": "DAY_ATTRIBUTION",
+   "class": "core",
+   "contribution": "a violation minute counts on the calendar day it falls in",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "counts on the day it falls in"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/limits.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_violation_minutes_on_the_day_they_fall"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_stretch_across_midnight"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a shift that starts at 20:00 and runs past the driving limit after midnight",
+   "wrong_but_plausible": "attribute a shift's violation minutes to the day the shift began",
+   "selfdescription_phrase": "violation day"
+  },
+  {
+   "id": "TIME_LEFT",
+   "class": "core",
+   "contribution": "time left from nought up is reported rounded down to a tenth of an hour; for time left the manual does not provide for, the minutes follow the manual and the shipped conversion to hours stands",
+   "authority": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "rounded down to a tenth of an hour"
+   },
+   "implementation_sites": [
+    "environment/app/src/hoslog/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the classification or limit feeds the violation minutes and time left of the same audit report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_2_time_left_rounded_down_to_a_tenth"
+    ],
+    "boundary": [
+     "test_outputs.py::test_time_left_past_a_limit_keeps_todays_conversion"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "time left of 3, 5, 6 and 59 minutes; time left of -7, -35 and -660 minutes under each limit (never -1 or -2, where the shipped conversion prints -0.0)",
+   "wrong_but_plausible": "round every time-left figure down, or clamp it at nought",
+   "selfdescription_phrase": "time left"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "DRIVING_TIME",
+    "to": "SHIFT"
+   },
+   {
+    "from": "DRIVING_TIME",
+    "to": "DRIVING_LIMIT"
+   },
+   {
+    "from": "DRIVING_TIME",
+    "to": "BREAK"
+   },
+   {
+    "from": "SHIFT",
+    "to": "WINDOW"
+   },
+   {
+    "from": "SHIFT",
+    "to": "DRIVING_LIMIT"
+   },
+   {
+    "from": "BREAK",
+    "to": "DAY_ATTRIBUTION"
+   },
+   {
+    "from": "WINDOW",
+    "to": "DAY_ATTRIBUTION"
+   },
+   {
+    "from": "DRIVING_LIMIT",
+    "to": "DAY_ATTRIBUTION"
+   },
+   {
+    "from": "CYCLE",
+    "to": "DAY_ATTRIBUTION"
+   },
+   {
+    "from": "WINDOW",
+    "to": "TIME_LEFT"
+   },
+   {
+    "from": "DRIVING_LIMIT",
+    "to": "TIME_LEFT"
+   },
+   {
+    "from": "CYCLE",
+    "to": "TIME_LEFT"
+   },
+   {
+    "from": "DAY_ATTRIBUTION",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "TIME_LEFT",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "yard-move-opens-and-fills-shift",
+   "obligation_ids": [
+    "DRIVING_TIME",
+    "SHIFT",
+    "DRIVING_LIMIT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_3_yard_moves_count_as_driving_time"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "shift-start-sets-window",
+   "obligation_ids": [
+    "SHIFT",
+    "WINDOW"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_5_shift_opens_at_first_on_duty_minute"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "break-rest-only-and-window-clock",
+   "obligation_ids": [
+    "BREAK",
+    "WINDOW"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_2_window_runs_on_the_clock"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "limits-attributed-by-minute-day",
+   "obligation_ids": [
+    "DRIVING_LIMIT",
+    "DAY_ATTRIBUTION",
+    "CYCLE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_1_violation_minutes_on_the_day_they_fall"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "limits-feed-time-left",
+   "obligation_ids": [
+    "WINDOW",
+    "CYCLE",
+    "TIME_LEFT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_time_left_past_a_limit_keeps_todays_conversion"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Every rule in the manual holds for every log within the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the manual gives no rule for a value the package reports",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Logs of one to fourteen days will be audited"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/seal.py SEED constant (authoring only; graded logs are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "Leave /app/tools/hoslog_run.py exactly as it is",
+   "enforced_by": [
+    "test_outputs.py::test_driver_is_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_driver_is_unchanged": "restriction witness (DRIVER-UNCHANGED)",
+  "test_outputs.py::test_candidate_cannot_read_expected_reports": "isolation witness",
+  "test_outputs.py::test_generated_logs": "seeded trap-free logs across section 1; exercises all obligations together",
+  "test_outputs.py::test_capacity_log": "14 days, 2000 entries: the section 1 maxima"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the safety team's findings tool reads this JSON; keys and day order are fixed by FM-4 section 6",
+   "authority_anchor": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "The audit prints one JSON object with the keys"
+   }
+  },
+  {
+   "id": "RULE-KEYS",
+   "domain_required": true,
+   "rationale": "violation minutes are keyed by the manual's rule numbers",
+   "authority_anchor": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "maps each of `\"3.1\"`"
+   }
+  },
+  {
+   "id": "TIME-LEFT-ROUNDING",
+   "domain_required": true,
+   "rationale": "dispatch quotes time left conservatively, to the tenth of an hour below",
+   "authority_anchor": {
+    "file": "environment/app/docs/hours-manual.md",
+    "anchor": "rounded down to a tenth of an hour"
+   }
+  },
+  {
+   "id": "TIME-LEFT-TOLERANCE",
+   "domain_required": true,
+   "rationale": "stated comparison band for hours",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "time left is compared as a number to within 0.001"
+   }
+  }
+ ],
+ "wrong_paths": [
+  {
+   "id": "miles-make-driving",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DRIVING_TIME"
+   ],
+   "receipt": "wrong-paths/miles-make-driving.json"
+  },
+  {
+   "id": "shift-from-first-driving",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SHIFT"
+   ],
+   "receipt": "wrong-paths/shift-from-first-driving.json"
+  },
+  {
+   "id": "window-on-duty-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "WINDOW"
+   ],
+   "receipt": "wrong-paths/window-on-duty-only.json"
+  },
+  {
+   "id": "break-any-non-driving",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "BREAK"
+   ],
+   "receipt": "wrong-paths/break-any-non-driving.json"
+  },
+  {
+   "id": "eleven-hour-limit",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DRIVING_LIMIT"
+   ],
+   "receipt": "wrong-paths/eleven-hour-limit.json"
+  },
+  {
+   "id": "cycle-eight-days",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CYCLE"
+   ],
+   "receipt": "wrong-paths/cycle-eight-days.json"
+  },
+  {
+   "id": "violations-on-shift-day",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DAY_ATTRIBUTION"
+   ],
+   "receipt": "wrong-paths/violations-on-shift-day.json"
+  },
+  {
+   "id": "floor-every-time-left",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIME_LEFT"
+   ],
+   "receipt": "wrong-paths/floor-every-time-left.json"
+  },
+  {
+   "id": "driver-shim",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/driver-shim.json"
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json"
+}

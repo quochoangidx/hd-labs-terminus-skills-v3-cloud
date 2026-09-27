@@ -1,0 +1,7 @@
+Our minimal images ship without `bc`, and the build scripts that pipe calculations into it are being pointed at `/app/pybc/bc.py` instead. Implement it so that `python3 /app/pybc/bc.py`, reading a program on standard input, behaves exactly like GNU bc 1.07.1 run as `bc` with no options and `LC_ALL=C`: the same standard output, byte for byte, and the same exit status. What goes to standard error is not compared. The GNU bc manual is in `/app/docs/bc.txt`.
+
+It has to cover the language of chapters 2 to 5 of the manual except `read()`, `limits`, `warranty`, the `-l` math library and the environment variables, none of which is set: numbers in any `ibase`, output in any `obase`, the scale rules, every expression and statement, strings and `print`, functions with `auto` variables, array parameters and `void` functions, comments, `quit` and `halt`. Two rules that the manual leaves out apply as well: the scale of a product `a*b` is `min(scale(a)+scale(b), max(scale, scale(a), scale(b)))`, and a number whose magnitude is below 1 is printed without a leading `0` (for example `.5` and `-.25`).
+
+Programs never cause a runtime error and always finish, and any number printed with an `obase` other than 10 is an integer. Use only the Python standard library and do not start other programs.
+
+It will be checked against GNU bc 1.07.1 itself with many programs, from single expressions to function libraries, including very long numbers.

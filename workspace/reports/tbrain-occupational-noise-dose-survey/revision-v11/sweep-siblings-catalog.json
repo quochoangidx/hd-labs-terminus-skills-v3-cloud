@@ -1,0 +1,126 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "s1-impulse-all-but-last-peak": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/flags.py",
+     "old": "for peak in peaks)",
+     "new": "for peak in peaks[:-1])"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "sibling of finding 1: the last peak dropped"
+  },
+  "s2-group-inherits-impulse": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "\"status\": status_for(twa)})",
+     "new": "\"status\": \"over\" if any(r[\"impulse\"] for r in members[code]) else status_for(twa)})"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_2_impulse_at_140_dbc"
+   ],
+   "rationale": "sibling of finding 2: 6.1 no impulse inheritance"
+  },
+  "s2-group-inherits-worker-status": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "\"status\": status_for(twa)})",
+     "new": "\"status\": \"over\" if any(r[\"status\"] == \"over\" for r in members[code]) else status_for(twa)})"
+    }
+   ],
+   "expect_failing": [
+    "test_reading_above_ceiling_keeps_todays_counted_level",
+    "test_rule_5_2_impulse_at_140_dbc"
+   ],
+   "rationale": "sibling of finding 2"
+  },
+  "s4-dose-biased-2e-10": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        row[\"dose\"] = row[\"dose\"] * (1 + 2e-10) if row[\"dose\"] >= 1 else row[\"dose\"] + 2e-10\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_1_reference_duration_uses_85_dba_and_3_db"
+   ],
+   "rationale": "reject bound: more than 1e-10 off fails"
+  },
+  "s4-dose-rounded-9dp": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        row[\"dose\"] = round(row[\"dose\"], 9)\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_surveys"
+   ],
+   "rationale": "sibling of finding 4"
+  },
+  "s5-twa-off-by-1e-12": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        if row[\"twa\"] is not None:\n            row[\"twa\"] = row[\"twa\"] + 1e-12\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_twa_formula"
+   ],
+   "rationale": "sibling of finding 5"
+  },
+  "s4-zero-dose-tiny-2e-10": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/noisedose/shift.py",
+     "old": "    if sampled == 0:\n        return 0.0",
+     "new": "    if sampled == 0:\n        return 2e-10"
+    }
+   ],
+   "expect_failing": [
+    "test_survey_that_measured_nothing_keeps_todays_dose"
+   ],
+   "rationale": "kept step: nought stays nought (beyond the reject bound)"
+  }
+ },
+ "alternatives": {
+  "alt-dose-biased-5e-12": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        row[\"dose\"] = row[\"dose\"] * (1 + 5e-12) if row[\"dose\"] >= 1 else row[\"dose\"] + 5e-12\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "rationale": "accept bound: within 1e-11 passes"
+  },
+  "alt-twa-integral-as-int": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        if row[\"twa\"] is not None and row[\"twa\"] == int(row[\"twa\"]):\n            row[\"twa\"] = int(row[\"twa\"])\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "rationale": "85 and 85.0 are the same tenth"
+  }
+ }
+}

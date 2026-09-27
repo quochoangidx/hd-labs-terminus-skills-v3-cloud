@@ -1,0 +1,121 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 21 items
+
+../../tests/test_outputs.py ...............FFF...                        [100%]
+
+=================================== FAILURES ===================================
+_________________________ test_report_order_and_types __________________________
+
+    def test_report_order_and_types():
+>       check_family("report_order.jsonl")
+
+/tests/test_outputs.py:211: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:147: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'blank_levels': {'Tl': 0.625, 'As': 0.7500076293945312, 'Pb': 2.5, 'Cd': 0.75}, 'samples': [{'id': 'Z-9', 'analyte': ...': 50.0}, {'id': 'A-SPK', 'analyte': 'Tl', 'recovery': 87.5}, {'id': 'A-SPK', 'analyte': 'As', 'recovery': 50.0}, ...]}
+expected = {'blank_levels': {'Tl': 0.625, 'As': 0.7500076293945312, 'Pb': 2.5, 'Cd': 0.75}, 'samples': [{'id': 'Z-9', 'analyte': ...': 50.0}, {'id': 'A-SPK', 'analyte': 'Tl', 'recovery': 87.5}, {'id': 'A-SPK', 'analyte': 'As', 'recovery': 50.0}, ...]}
+label = 'report_order.jsonl batch 0'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == TOP_KEYS, f"{label}: top-level keys {sorted(actual) if isinstance(actual, dict) else actual!r}"
+        levels = actual["blank_levels"]
+        assert isinstance(levels, dict) and set(levels) == set(expected["blank_levels"]), f"{label}: blank_levels keys"
+        for name, value in expected["blank_levels"].items():
+            _number(levels[name], value, f"{label} blank_levels[{name}]")
+        for section, keys in ENTRY_KEYS.items():
+            got, want = actual[section], expected[section]
+            assert isinstance(got, list) and len(got) == len(want), f"{label}: {section} has {len(got) if isinstance(got, list) else got!r} entries, expected {len(want)}"
+            for index, (entry, ref) in enumerate(zip(got, want)):
+                where = f"{label} {section}[{index}] ({ref['id']}, {ref['analyte']})"
+                assert isinstance(entry, dict) and set(entry) == set(keys), f"{where}: keys {entry!r}"
+                for key in keys:
+                    a, e = entry[key], ref[key]
+                    if key in ("recovery",) or (key == "value" and e is not None):
+                        _number(a, e, f"{where} {key}")
+                    else:
+>                       assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E                       AssertionError: report_order.jsonl batch 0 samples[3] (Z-9, Cd) value: 0.5, expected None
+E                       assert (<class 'float'> is <class 'NoneType'>)
+E                        +  where <class 'float'> = type(0.5)
+E                        +  and   <class 'NoneType'> = type(None)
+
+/tests/test_outputs.py:142: AssertionError
+____________________________ test_generated_batches ____________________________
+
+    def test_generated_batches():
+>       check_family("generated-1.jsonl")
+
+/tests/test_outputs.py:215: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:147: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+/tests/test_outputs.py:140: in compare
+    _number(a, e, f"{where} {key}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 0.3927020006812875
+where = 'generated-1.jsonl batch 2 samples[4] (L2602, Cd) value'
+
+    def _number(actual, expected, where):
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: generated-1.jsonl batch 2 samples[4] (L2602, Cd) value: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:120: AssertionError
+_____________________________ test_capacity_batch ______________________________
+
+    def test_capacity_batch():
+        rows = load("capacity.jsonl")
+        batch = rows[0]["batch"]
+        assert len(batch["runs"]) == 80 and len(batch["analytes"]) == 4 and len(batch["standards"]) == 8
+>       check_family("capacity.jsonl")
+
+/tests/test_outputs.py:223: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:147: in check_family
+    compare(reduce(row["batch"]), row["report"], f"{name} batch {number}")
+/tests/test_outputs.py:140: in compare
+    _number(a, e, f"{where} {key}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 0.10925348452540312
+where = 'capacity.jsonl batch 0 samples[6] (L2606, V) value'
+
+    def _number(actual, expected, where):
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: capacity.jsonl batch 0 samples[6] (L2606, V) value: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:120: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_calibration_line_has_fitted_intercept
+PASSED ../../tests/test_outputs.py::test_blank_level_is_mean_of_results_anywhere
+PASSED ../../tests/test_outputs.py::test_nondetect_blanks_stay_out_of_the_mean
+PASSED ../../tests/test_outputs.py::test_single_blank_result_is_the_level
+PASSED ../../tests/test_outputs.py::test_batch_without_blank_results_keeps_shipped_level
+PASSED ../../tests/test_outputs.py::test_blank_comes_off_before_dilution
+PASSED ../../tests/test_outputs.py::test_flags_judged_on_corrected_reading
+PASSED ../../tests/test_outputs.py::test_flags_just_either_side_of_mdl_and_loq
+PASSED ../../tests/test_outputs.py::test_readings_below_nought_are_not_clamped
+PASSED ../../tests/test_outputs.py::test_ccv_pass_on_rounded_recovery_inclusive
+PASSED ../../tests/test_outputs.py::test_bracketed_runs_need_both_ccvs
+PASSED ../../tests/test_outputs.py::test_unbracketed_runs_keep_shipped_check
+PASSED ../../tests/test_outputs.py::test_spike_recovery_of_results
+PASSED ../../tests/test_outputs.py::test_nondetect_spikes_keep_shipped_recovery
+PASSED ../../tests/test_outputs.py::test_section_one_limits_reached
+PASSED ../../tests/test_outputs.py::test_driver_is_unchanged
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_expected_reports
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_logs
+FAILED ../../tests/test_outputs.py::test_report_order_and_types - AssertionEr...
+FAILED ../../tests/test_outputs.py::test_generated_batches - AssertionError: ...
+FAILED ../../tests/test_outputs.py::test_capacity_batch - AssertionError: cap...
+========================= 3 failed, 18 passed in 4.52s =========================

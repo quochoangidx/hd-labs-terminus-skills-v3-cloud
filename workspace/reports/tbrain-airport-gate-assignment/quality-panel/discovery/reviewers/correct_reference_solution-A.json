@@ -1,0 +1,128 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "f9e2a843946feb803bea831bc197043b8ff4892295c4cbe2c5db018ff2b20e91",
+  "severity": "Unsure",
+  "summary": "The reference only copies four precomputed plans and runs the visible checker on them. I found no defect: the day-1 plan passed every validity rule I checked. I could not statically confirm the reward-deciding property, that each plan's cost is at or below its target in targets.json. The cost sums over hundreds of transfers per day need execution, and I did not fully read the day-2 to day-4 inputs.",
+  "input_completeness": {
+    "status": "incomplete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/tools/check_plan.py",
+      "environment/app/planner/plan_day.py",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json (lines 1-479 and 1250-4249)",
+      "solution/solve.sh",
+      "solution/plans/day-1.json",
+      "solution/plans/day-2.json",
+      "solution/plans/day-3.json",
+      "solution/plans/day-4.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/days/day-1.json lines 480-1249 (most walk_metres rows)",
+      "environment/app/days/day-1.json lines 4250-end (the rest of the transfers list)",
+      "environment/app/days/day-2.json (entire file)",
+      "environment/app/days/day-3.json (entire file)",
+      "environment/app/days/day-4.json (entire file)"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced solution/solve.sh:13-18. It sets `set -euo pipefail`, copies /solution/plans/*.json to /app/plans/, then runs check_plan.py on each day. check_plan.py returns 1 when a plan is invalid (check_plan.py:143-145), so an invalid plan makes solve.sh fail. solve.sh does not compare the printed cost with targets.json.",
+    "Checked that the plan file format matches stand-rules.md:61-74: an object with a 'stands' object whose values are lists of turn-id strings. All four plan files have this shape.",
+    "Day-1 international rule (stand-rules.md:36-37): every international turn I read in day-1.json (T005 through T178) is on a C or R stand, and those stands are international at day-1.json:150-253.",
+    "Day-1 size rule (stand-rules.md:35): every size-3 turn is on a size-3 stand (B01, B03, B06, C01, C02, C04, C06, R*). The size-1 stands A01-A04 hold only size-1 turns. The size-2 stands A05, A07, C03, C05 and C07 hold no size-3 turns.",
+    "Day-1 wingtip pair C01/C02 (day-1.json:1280-1285): size-3 turns on C01 are T018, T055, T075 and T178; on C02 they are T103 and T134. No two of them overlap in time.",
+    "Day-1 buffer on C01 (buffer 15): T018 departs 506 and T039 arrives 529; T039 580 / T055 610; T055 724 / T075 739 (exactly on the boundary; allowed because the rule says 'no later than'); T075 924 / T107 945; T107 998 / T117 1028; T117 1105 / T142 1123; T142 1181 / T155 1227; T155 1278 / T178 1308. All pass.",
+    "Compared how check_plan.py:120-131 computes cost with stand-rules.md:46-59: bus cost for remote stands, the diagonal walk entry for same-stand transfers, and walk cost charged on top of bus cost. They agree.",
+    "Checked that instruction.md:1 ('costs no more than the day's target') agrees with the solve.sh comment (lines 9-12) that each target is the cost of the cheapest plan found."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "unresolved",
+      "reason": "The reference has no algorithm; it is four fixed plans. For day 1 I checked the international, size, wingtip and buffer rules, including one exact buffer boundary (T055 then T075 on C01). Day 1 is checked for international, size and wingtip rules, but for buffer only on C01. I did not check days 2-4 against their day files, which I did not read.",
+      "evidence": ["solution/solve.sh:13-18", "solution/plans/day-1.json:135-145", "environment/app/days/day-1.json:1776-1778", "environment/app/days/day-1.json:1955-1958"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, padding, delimiters and paths",
+      "status": "checked",
+      "reason": "Output paths /app/plans/<day>.json match instruction.md:1. The plans are plain UTF-8 JSON with string turn ids and no repeated keys, and are far below the size and depth limits in stand-rules.md:69-74.",
+      "evidence": ["instruction.md:1", "solution/solve.sh:14-15", "environment/app/docs/stand-rules.md:61-74"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches (deletion, expiry, replacement, identifier reuse)",
+      "status": "not_applicable",
+      "reason": "The reference only copies static files. It updates no state and has no identifier lifecycle.",
+      "evidence": ["solution/solve.sh:13-18"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or durability promises.",
+      "evidence": ["instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Core objective: plan cost at or below each day's target",
+      "status": "unresolved",
+      "reason": "Confirming this means summing bus costs plus hundreds of passenger x walk_metres products per day. I cannot do that reliably without running check_plan.py. solve.sh prints the cost but never compares it with targets.json.",
+      "evidence": ["environment/app/days/targets.json:1-6", "environment/app/tools/check_plan.py:120-131", "solution/solve.sh:16-18"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["buffer separation (rule 3)", "wingtip clash without buffer (rule 4)"],
+      "case_or_path": "Day-1 C01/C02: size-3 turns on C01 and C02 never overlap, and consecutive C01 turns meet the 15-minute buffer, including T055 then T075 exactly at the boundary.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:38-44", "solution/plans/day-1.json:135-156", "environment/app/days/day-1.json:1280-1285"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["international stand requirement (rule 2)", "size limit (rule 1)"],
+      "case_or_path": "Day-1 international size-3 turns (for example T017, T088, T141) are placed on international size-3 C or R stands, never on B stands.",
+      "status": "checked",
+      "evidence": ["environment/app/days/day-1.json:1431-1439", "solution/plans/day-1.json:168-198"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["remote bus cost", "walk cost charged on top of bus cost"],
+      "case_or_path": "The remote placements in all four plans incur both charges. I confirmed the charging rules match between the rules document and the checker, but did not recompute the day totals.",
+      "status": "unresolved",
+      "evidence": ["environment/app/docs/stand-rules.md:50-58", "environment/app/tools/check_plan.py:122-131"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["all four days in scope", "validity rules on days 2-4"],
+      "case_or_path": "The day-2, day-3 and day-4 plans cover stand sets up to A18, B18, C14 and R13, but I did not read those days' input files to check them.",
+      "status": "unresolved",
+      "evidence": ["solution/plans/day-2.json:1-327", "solution/plans/day-3.json:1-403", "solution/plans/day-4.json:1-485"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "Whether each shipped plan's cost is at or below its target (day-1 7241380, day-2 9017700, day-3 10098740, day-4 15505590).",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "Output of `python3 /app/tools/check_plan.py /app/days/<day>.json /app/plans/<day>.json` for each day after solve.sh runs, compared with targets.json."
+    },
+    {
+      "concern": "Whether the day-2, day-3 and day-4 plans meet every validity rule (coverage, size, international, buffer, wingtip) and whether the rest of day 1 meets the buffer rule.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "A full read of day-2, day-3 and day-4.json, or an Oracle run showing check_plan.py prints 'valid' for all four days (solve.sh's set -e would stop on an invalid one)."
+    }
+  ],
+  "uncertainty": "This reference is made of data, not an algorithm. Whether it is correct depends entirely on the numbers: whether each fixed plan is valid and costs at or below its target. I checked the day-1 plan against the international, size and wingtip rules, and the buffer rule on C01, and found no violation. Checking the cost targets means summing hundreds of transfer products per day, which needs execution. Two things would settle this axis: an Oracle or check_plan.py run showing each day's cost is at or below its target, and a validity check of days 2-4."
+}

@@ -1,0 +1,387 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "d1e1daa9b7f760fc2ef54e5302bcfffd2ae5c1a4e0da387ba432453d620dfa2a",
+  "severity": "Major",
+  "summary": "The reference crashes (empty stdout, exit 1) on a range whose second address is a FIRST~STEP address. It also mis-parses backslashes inside bracket expressions in two ways: it keeps the backslash of an escaped delimiter such as [\\/], and it reads [\\n] as backslash plus newline. Each of these gives the wrong output for a contract-valid script.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/scope.md",
+      "environment/app/docs/sed.txt (lines 1-4178: chapters 1-10 in full)",
+      "environment/app/pysed/sed.py",
+      "solution/solve.sh",
+      "solution/pysed/sed.py",
+      "solution/pysed/posixre.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/docs/sed.txt from line 4178 to the end: the GNU FDL license appendix and the concept/command indices. These are not normative and scope.md does not cite them. Every chapter that scope.md cites (2, 3, 4, 5) and chapters 6, 7 and 10 were read in full."
+    ]
+  },
+  "findings": [
+    {
+      "id": "CRS-1",
+      "severity": "Major",
+      "claim": "A range whose second address is a FIRST~STEP address crashes the reference once the range is active. The step tuple is passed to the regex path, and `int.search` raises AttributeError. Because output is buffered, stdout is empty and the exit status is 1 instead of GNU sed's output and 0.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "Chapter 4 says a range is two addresses separated by a comma and that addresses may be numeric, regular expressions or a mix of both (sed.txt:1425-1426). FIRST~STEP is one of the numeric address forms (sed.txt:1450-1469). A range matches from where the first address matches until the second address matches, inclusive (sed.txt:1587-1590). scope.md:9 covers every address form in chapter 4. So `seq 10 | sed -n '2,1~4p'` should print 2,3,4,5 and exit 0, because 1~4 first matches line 5 after the range starts.",
+        "actual_behavior": "The reference prints line 2 into its buffer, then raises an uncaught AttributeError on line 3. The buffer is never written, so stdout is empty and the exit status is 1.",
+        "trace_or_receipt": "Parser: after ',' the next character is not '+' or '~', so the second address comes from self.address() (solution/pysed/sed.py:223-228). address() sees a digit followed by '~' and returns ('step', 1, 4) (sed.py:125-131). The line-0 check does not apply (sed.py:229). Line 2: match_first() starts the range. a2[0] is 'step', which is not 'line', 'plus', 'mult' or 'last', so the else branch sets range_active = True (sed.py:463-477). Line 3: selected() sees range_active; the kind is again none of the handled ones, so it takes the else branch `self.regex(cmd.a2[1]).search(ps)` (sed.py:440-441). regex(1) returns the int 1 because it is not None (sed.py:400-406), so 1.search raises AttributeError. Sed.run is outside the try block in main (sed.py:691-698), and stdout is written only after run returns (sed.py:699). Static trace, not executed."
+      },
+      "reachable_case_or_path": "seq 10 | python3 /app/pysed/sed.py -n '2,1~4p'  (also '/x/,0~3d', '$!N' combined with '3,2~5s/a/b/', and so on)",
+      "graded_effect": "The contract promises byte-exact stdout and exit status against GNU sed 4.9. For any graded script that uses FIRST~STEP as a range's second address and has a line after the range starts, the reference fails the whole case: stdout is empty and the status is 1 instead of 0. If the verifier includes such a case, the Oracle fails; if it does not, the reference still violates a covered address form.",
+      "citations": [
+        "solution/pysed/sed.py:125-131",
+        "solution/pysed/sed.py:220-228",
+        "solution/pysed/sed.py:421-445",
+        "solution/pysed/sed.py:447-478",
+        "solution/pysed/sed.py:400-406",
+        "solution/pysed/sed.py:691-700",
+        "environment/app/docs/scope.md:9",
+        "environment/app/docs/sed.txt:1425-1426",
+        "environment/app/docs/sed.txt:1450-1469",
+        "environment/app/docs/sed.txt:1587-1590"
+      ],
+      "root_invariant": "Every address form that parses as a range's second address must be handled both when the range starts (match_first) and while it is active (selected). The 'step' kind is handled for the first address (match_addr) but for neither of these second-address paths.",
+      "authority": [
+        "environment/app/docs/scope.md:9",
+        "environment/app/docs/sed.txt:1425-1426",
+        "environment/app/docs/sed.txt:1450-1469",
+        "environment/app/docs/sed.txt:1587-1590"
+      ],
+      "implementation_sites": [
+        "solution/pysed/sed.py:436-441",
+        "solution/pysed/sed.py:463-477"
+      ],
+      "sibling_variants": [
+        "A regex, '$' or step first address with a step second address, e.g. '/a/,0~2p' or '1~3,2~5d': the same else branch crashes on the first line after the range starts",
+        "A negated range with a step second address, e.g. '2,1~4!d': the same crash",
+        "A step second address inside a block, e.g. '2,1~4{s/x/y/}': the same crash",
+        "Side effect: regex() stores the int in last_regex (sed.py:405), which would also corrupt a later '//'"
+      ],
+      "interaction_variants": [
+        "Under -s the range is reset at each file start (sed.py:499-507), but the crash still happens on the second line of any file where the range becomes active",
+        "If the range starts on the last input line, no later line is evaluated, so there is no crash; this is why a fixture that ends on the start line would hide the defect",
+        "'c' over such a range never reaches its range-end logic (sed.py:533-539) because the process aborts first"
+      ],
+      "minimal_repair_boundary": "Give the 'step' kind its own branch in both second-address paths of selected()/match_first(). At range start the second address is not checked on the start line; while the range is active it closes on the first line where match_addr(a2) is true. A cheaper option is to route every non-'re' second address through match_addr.",
+      "closure_evidence": [
+        "seq 10 | sed -n '2,1~4p' gives 2,3,4,5 with exit 0 under both GNU sed and pysed",
+        "seq 10 | sed -n '/3/,0~4p' gives 3,4",
+        "seq 10 | sed '2,1~4!d' gives 2,3,4,5",
+        "A mutant that routes step through the regex branch fails these cases"
+      ]
+    },
+    {
+      "id": "CRS-2",
+      "severity": "Minor",
+      "claim": "When a bracket expression contains an escaped delimiter (e.g. [\\/] or [^\\/]), the reference copies the bracket text raw and keeps the backslash. The bracket then also matches '\\', whereas GNU sed removes the backslash before the delimiter and matches only the delimiter.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "The delimiter can appear inside the REGEXP only if it is preceded by a backslash (sed.txt:609-612, 1492-1495, 1509-1516). That backslash is script syntax that escapes the delimiter, not part of the regular expression. The manual's own example shows the backslash being dropped: s|abc\\|def||g removes the literal string 'abc|def' (sed.txt:4043-4051). So 's/[\\/]/X/' has the regex [/], and on input 'a\\b/c' GNU sed outputs 'a\\bXc'. Likewise 's/[^\\/]*$//' on 'a\\b' outputs an empty line.",
+        "actual_behavior": "The reference outputs 'aXb/c' for the first case and 'a\\' for the second.",
+        "trace_or_receipt": "read_delimited() reaches '[' and runs the bracket scan (solution/pysed/sed.py:97-112). The scan walks from '[' to the first ']' and appends the raw slice self.s[i:j+1], so '[\\/]' keeps its backslash. The '\\'+delim unescaping at sed.py:84-92 applies only outside this scan. conv_escapes leaves '\\/' unchanged (sed.py:19-36). Parser.bracket() adds '\\' and '/' as separate members (solution/pysed/posixre.py:220-236), because scope.md:10 makes a non-5.8 backslash ordinary inside a bracket. With leftmost-longest search, the first match on 'a\\b/c' is the '\\' at index 1. Static trace."
+      },
+      "reachable_case_or_path": "printf 'a\\\\b/c\\n' | python3 /app/pysed/sed.py 's/[\\/]/X/'  ;  printf 'C:\\\\dir\\\\f\\n' | python3 /app/pysed/sed.py 's/[^\\/]*$//'",
+      "graded_effect": "Any graded case that escapes the delimiter inside a bracket expression, on input with a backslash anywhere before the intended match, gets different stdout from GNU sed, so the reference output is wrong for a covered feature ('any delimiter', scope.md:9, plus bracket expressions, scope.md:10). Rated Minor because it needs an escaped delimiter inside a bracket and a backslash in the input.",
+      "citations": [
+        "solution/pysed/sed.py:69-114",
+        "solution/pysed/sed.py:19-36",
+        "solution/pysed/posixre.py:193-237",
+        "environment/app/docs/scope.md:9",
+        "environment/app/docs/scope.md:10",
+        "environment/app/docs/sed.txt:609-612",
+        "environment/app/docs/sed.txt:1492-1495",
+        "environment/app/docs/sed.txt:1509-1516",
+        "environment/app/docs/sed.txt:4043-4051"
+      ],
+      "root_invariant": "The script-level '\\<delim>' escape must be removed before the regex text is built, wherever it appears in the delimited field, including inside a bracket expression.",
+      "authority": [
+        "environment/app/docs/sed.txt:609-612",
+        "environment/app/docs/sed.txt:1509-1516",
+        "environment/app/docs/sed.txt:4043-4051"
+      ],
+      "implementation_sites": [
+        "solution/pysed/sed.py:97-112"
+      ],
+      "sibling_variants": [
+        "Address regexes with the same bracket scan, e.g. '/[\\/]/p' and '\\,[\\,],d'",
+        "Other delimiters, e.g. 's|[\\|]|X|' and 's,[^\\,]*,,'",
+        "The bracket scan is also used for the s command's regex field (sed.py:262), so every s delimiter is affected"
+      ],
+      "interaction_variants": [
+        "With the g flag the extra '\\' member changes every replacement position, not only the first",
+        "In a negated bracket [^\\/] the extra member excludes '\\' from the class, which shortens leftmost-longest matches such as [^\\/]*$"
+      ],
+      "minimal_repair_boundary": "In read_delimited's bracket scan, unescape '\\'+delim to delim while copying the bracket text (the same rule as sed.py:86-87). Leave every other backslash unchanged.",
+      "closure_evidence": [
+        "'s/[\\/]/X/' on 'a\\b/c' gives 'a\\bXc'",
+        "'s/[^\\/]*$//' on 'a\\b' gives an empty line",
+        "'s/[\\t]/X/' still matches a TAB",
+        "'/[\\n]/' still matches a newline after N"
+      ]
+    },
+    {
+      "id": "CRS-3",
+      "severity": "Minor",
+      "claim": "Inside a bracket expression the reference reads '\\\\n' as backslash plus NEWLINE, but reads '\\\\t' as backslash plus 't'. This is inconsistent, and it differs from GNU sed, which treats '\\\\' as a pair and so gives backslash plus 'n'.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "Escapes are processed as backslash pairs (sed.txt:2301-2330, scope.md:10). GNU sed's '[\\\\n]' is the set {'\\\\', 'n'}, the same pairwise treatment the reference itself gives '[\\\\t]' -> {'\\\\', 't'}. So `echo fun | sed 's/[\\\\n]/X/'` should output 'fuX'.",
+        "actual_behavior": "The reference outputs 'fun' unchanged, because its set is {'\\\\', '\\n'}. Under the other possible reading, where the first backslash is ordinary and '\\n' is an escape, the reference would instead be wrong for '[\\\\t]', which it leaves as {'\\\\', 't'} rather than {'\\\\', TAB}. The two cases cannot both be right.",
+        "trace_or_receipt": "conv_escapes keeps pairs: '\\\\' followed by 'n' becomes '\\\\' + 'n', and a regex '\\n' is deliberately left for the parser (sed.py:19-36). Parser.bracket() reads one character at a time. The first '\\\\' is added (its next character is '\\\\', not 'n'). At the second '\\\\', peek() == 'n', so lo becomes '\\n' (posixre.py:220-224). '[\\\\t]' instead becomes '\\\\','\\\\','t' at conv_escapes, so the parser gives {'\\\\','t'}. Static trace."
+      },
+      "reachable_case_or_path": "echo fun | python3 /app/pysed/sed.py 's/[\\\\n]/X/'   (GNU: fuX; reference: fun)",
+      "graded_effect": "A graded bracket expression containing a backslash followed by 'n' gets the wrong character set, so the substitution or address selects different text than GNU sed does. Rated Minor because the pattern is uncommon.",
+      "citations": [
+        "solution/pysed/sed.py:19-36",
+        "solution/pysed/posixre.py:193-237",
+        "environment/app/docs/scope.md:10",
+        "environment/app/docs/sed.txt:2074-2081",
+        "environment/app/docs/sed.txt:2301-2330"
+      ],
+      "root_invariant": "Backslash escapes inside a bracket must be tokenised in pairs, exactly once. The reference tokenises pairs in conv_escapes but re-scans single characters for '\\n' in Parser.bracket, so a pair can be split.",
+      "authority": [
+        "environment/app/docs/scope.md:10",
+        "environment/app/docs/sed.txt:2301-2330"
+      ],
+      "implementation_sites": [
+        "solution/pysed/posixre.py:220-231",
+        "solution/pysed/sed.py:28"
+      ],
+      "sibling_variants": [
+        "A range end at posixre.py:229-231 has the same split, e.g. '[a-\\\\n]'",
+        "Negated brackets, e.g. '[^\\\\n]', invert the wrong set"
+      ],
+      "interaction_variants": [
+        "With the g flag and multi-line pattern spaces after N/G, the wrong member (newline instead of 'n') changes which positions are replaced"
+      ],
+      "minimal_repair_boundary": "Convert regex '\\n' to a newline in the same pairwise pass as the other 5.8 escapes (conv_escapes or read_delimited, as GNU's match_slash does), and remove the separate '\\n' re-scan from Parser.bracket.",
+      "closure_evidence": [
+        "'s/[\\\\n]/X/' on 'fun' gives 'fuX'",
+        "'s/[\\n]/X/' on a two-line pattern space replaces the newline",
+        "'s/[\\\\t]/X/' on 'at' gives 'aX'"
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read all of instruction.md, scope.md, README.md, Dockerfile, solve.sh, solution sed.py (705 lines) and posixre.py (382 lines), and the environment stub sed.py",
+    "Read sed.txt chapters 1-10 (lines 1-4178), covering every chapter scope.md cites",
+    "Traced option parsing, -e joining, the #n check and the script-as-first-argument rule (sed.py:658-700)",
+    "Traced the parser for addresses, ranges, '!', blocks, labels, a/i/c text, q/Q codes, s-command fields and flags (sed.py:52-321)",
+    "Traced every range-start and range-end branch of selected() and match_first() for each second-address kind: line, plus, mult, last, re and step",
+    "Traced the execution cycle: autoprint, the append queue, n/N at end of input and under -s, D restart and the t flag, q/Q, c over ranges and with negation (sed.py:488-610)",
+    "Traced substitute() empty-match handling against the manual examples, e.g. \\B on 'abc %-= def.' (sed.txt:2138-2139); checked the N+g flag interaction",
+    "Traced the posixre parser and Pike VM for leftmost-longest matching, anchors, word assertions, intervals, classes and bracket parsing",
+    "Traced Input for per-file bounds, lazy opening, missing-file status 2, and $ detection with and without -s"
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Ordinary s///g, address and range cases and their boundaries (empty matches, line 0, N/n at end of input, -s file boundaries) were traced. The FIRST~STEP second-address boundary crashes.",
+      "evidence": [
+        "solution/pysed/sed.py:421-478",
+        "solution/pysed/sed.py:613-642"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "category": "Check output bytes (delimiters, newlines, exit status)",
+      "status": "checked",
+      "reason": "Output is buffered and written latin-1 after run; every emitted line gets a trailing newline; the exit status is 'inp.status or code'. Output is lost on an uncaught runtime error (CRS-1).",
+      "evidence": [
+        "solution/pysed/sed.py:480-486",
+        "solution/pysed/sed.py:696-700"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "category": "Check every branch that updates state (range state, hold space, t flag, append queue)",
+      "status": "checked",
+      "reason": "Range activation and closing for each second-address kind, a1 replaced by 'never' for numeric starts, the -s reset, the t flag reset on reads and its carry-over across D, hold/pattern swaps, and append-queue flushing on n/N, end of cycle and Q. The step second-address branch is unhandled.",
+      "evidence": [
+        "solution/pysed/sed.py:427-478",
+        "solution/pysed/sed.py:496-610"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no durability or recovery promises. The nearest equivalent, q/Q and end-of-input termination, was traced.",
+      "evidence": [
+        "instruction.md:5"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Regular-expression parsing and escapes (scope chapter 5)",
+      "status": "checked",
+      "reason": "Checked BRE/ERE operators, anchors, groups, intervals, classes, \\w \\W \\s \\S \\b \\B \\< \\>, and the 5.8 escapes inside and outside brackets. Found two defects in how backslashes are handled at the delimiter and bracket boundary.",
+      "evidence": [
+        "solution/pysed/posixre.py:20-237",
+        "solution/pysed/sed.py:19-36",
+        "solution/pysed/sed.py:69-114"
+      ],
+      "finding_ids": [
+        "CRS-2",
+        "CRS-3"
+      ]
+    },
+    {
+      "category": "Leftmost-longest matching and s-command replacement semantics",
+      "status": "checked",
+      "reason": "The Pike VM records the furthest match end from each start position, and search moves left to right. Empty-match adjacency, the N flag with g, & and \\0-\\9 expansion, and non-participating groups all behave as the contract requires.",
+      "evidence": [
+        "solution/pysed/posixre.py:258-326",
+        "solution/pysed/sed.py:613-655"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "range addresses (4.4)",
+        "FIRST~STEP address form (4.2)"
+      ],
+      "case_or_path": "2,1~4p over 10 lines",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:436-441",
+        "solution/pysed/sed.py:463-477"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "rules": [
+        "custom/escaped delimiter (3.3, 4.3)",
+        "bracket expressions (5.5)"
+      ],
+      "case_or_path": "s/[\\/]/X/ and s/[^\\/]*$// on input with a backslash",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:84-112"
+      ],
+      "finding_ids": [
+        "CRS-2"
+      ]
+    },
+    {
+      "rules": [
+        "5.8 escapes inside brackets",
+        "ordinary backslash inside brackets (5.5)"
+      ],
+      "case_or_path": "[\\\\n] versus [\\\\t]",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:19-36",
+        "solution/pysed/posixre.py:220-231"
+      ],
+      "finding_ids": [
+        "CRS-3"
+      ]
+    },
+    {
+      "rules": [
+        "-s separate files",
+        "n/N with no next line, $ and hold space reset"
+      ],
+      "case_or_path": "N on the last line of file 1 under -s; 0,/re/ and numeric-start ranges restored per file",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:363-391",
+        "solution/pysed/sed.py:499-507",
+        "solution/pysed/sed.py:560-564"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "a append queue",
+        "n/N read, q, Q"
+      ],
+      "case_or_path": "a text queued, then n or N flushes it before the next line is read; q prints then flushes; Q drops it",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:529-582",
+        "solution/pysed/sed.py:603-609"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "c over a range",
+        "negation and 0,/re/, +N, line<=a1"
+      ],
+      "case_or_path": "2,4c, 2,4!c, 0,/re/c when line 1 matches, 2,+0c",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:533-539"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "s///g empty matches",
+        "word-boundary and anchor assertions"
+      ],
+      "case_or_path": "s/b*/X/g on abc; s/\\B/X/g on the manual example; s/^a/X/g on aaa",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:613-642",
+        "solution/pysed/posixre.py:240-248"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "missing input file (exit 2)",
+        "q/Q exit codes"
+      ],
+      "case_or_path": "q5 before a missing file is reached (status 5); after it is reached (status 2)",
+      "status": "checked",
+      "evidence": [
+        "solution/pysed/sed.py:343-366",
+        "solution/pysed/sed.py:700"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "addr1,~N when addr1's line number is already a multiple of N. The reference runs the range to the next multiple strictly after it, e.g. 4,~4 selects lines 4-8 (sed.py:470-473). If GNU sed 4.9 rounds up to a multiple greater than or equal to the line, it selects only line 4. The manual wording 'until the next line whose input line number is a multiple of N' (sed.txt:1644-1653) supports the reference's reading, and its only example does not cover this case.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "GNU sed 4.9 output for `seq 10 | sed -n '4,~4p'`; the packet contains no binary receipt."
+    },
+    {
+      "concern": "'#n' followed by more text on the first line, e.g. '#nope\\np'. The reference forces -n whenever the script starts with '#n' (sed.py:689-690), which matches the manual's wording (sed.txt:737-742) and scope.md:8. GNU sed may require '#n' to be followed by a newline or the end of the script.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "GNU sed 4.9 output for `printf 'a\\n' | sed '#nope\np'`. If it differs, this is a contract/manual conflict rather than a reference defect."
+    },
+    {
+      "concern": "c over a range whose second address is $ when the first address matches the last line, e.g. `seq 3 | sed '3,$c\\X'`. The reference prints X because the range is never activated (sed.py:474-475, 536). GNU sed may mark the range active and print nothing. It is unclear whether this counts as the scope's excluded 'c whose range is still open when the input ends' (scope.md:18).",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "GNU sed 4.9 output for `seq 3 | sed '3,$c\\X'`."
+    }
+  ],
+  "uncertainty": ""
+}

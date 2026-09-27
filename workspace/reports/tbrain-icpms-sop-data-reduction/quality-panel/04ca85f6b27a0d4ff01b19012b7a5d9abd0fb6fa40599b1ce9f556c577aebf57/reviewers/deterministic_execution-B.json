@@ -1,0 +1,211 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-B",
+  "snapshot_sha256": "04ca85f6b27a0d4ff01b19012b7a5d9abd0fb6fa40599b1ce9f556c577aebf57",
+  "severity": "None",
+  "summary": "No determinism defect found. Every graded batch and expected report is a frozen file whose SHA-256 and row count are pinned in the ROSTER and checked before use. The generated corpus was drawn once at seal time from a fixed seed and is not regenerated at grading. Boundary cases (exact MDL/LOQ, rounding limits for CCV recovery, blank placement, unbracketed runs, non-detect spikes) are hand-built fixtures, not random draws. No clock, network or remote data affects the grade. Order-sensitive lists are compared in the order SOP section 8 requires, and blank_levels keys are compared as a set. The verifier image and pytest are pinned, and each candidate run is a synchronous subprocess with no sleep-based readiness.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/tools/metalquant_run.py",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/seal.py",
+      "solution/jobgen.py",
+      "solution/fixtures.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/metalquant_run.py",
+      "tests/expected/ROSTER",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/spike_recovery.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/report_order.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/expected/generated.jsonl.gz and tests/expected/capacity.jsonl.gz are gzip binaries that the read-only tool could not decode. This is recorded as an unsupported format. Their contents are not needed for this axis: whether they stay stable across runs is set by solution/seal.py:32-33,101-105,121-132 (fixed SEED, gzip mtime=0, written once) and by tests/test_outputs.py:50-59 (SHA-256 and row-count pin against ROSTER lines 6 and 13, checked before use). Grading only reads them and never regenerates them."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced every graded input to its source. check_family and load read only files in tests/expected, whose SHA-256 and row count are pinned in ROSTER (tests/test_outputs.py:39-59,129-131). No generator, RNG or seal code runs at grading time (tests/test.sh:18-20; solution/seal.py:10-11).",
+    "Confirmed the generated and capacity corpora come from random.Random(SEED=20260926) with fixed SIZES, and that gzip is written with mtime=0 (solution/seal.py:32-33,104,121-127).",
+    "Confirmed the boundary cases are guaranteed hand-built fixtures, not random draws. These cover exact MDL/LOQ and hair-off values, mdl=loq, rounding limits for CCV recovery, blanks anywhere, no blank results, unbracketed runs, non-detect spikes and report order (solution/fixtures.py:88-273). The fixed expected rows are visible in tests/expected/flag_limits.jsonl:1-3 and ccv_limits.jsonl:1. jobgen keeps generated values at least 1e-5 away from limits (solution/jobgen.py:18-22,111-154).",
+    "Searched the verifier for clock use. time.monotonic is used only for a 1500 s aggregate subprocess budget (tests/test_outputs.py:29,96-98) inside the 1800 s verifier timeout (task.toml:19). About 57 short driver invocations are far from that bound, and no graded value depends on the date or time.",
+    "Checked randomness in the verifier. tempfile.mkdtemp names (tests/test_outputs.py:88-92) are scratch paths only; the batch always sits at <stage>/batch.json and paths are never compared. This matches judge example D-3.",
+    "Checked ordering. The samples, ccvs and spikes lists are compared by index (tests/test_outputs.py:115-126), which matches SOP section 8 run order and analyte order (environment/app/docs/reduction-sop.md:109). blank_levels is compared by key set, as SOP 8 says its key order carries no meaning (reduction-sop.md:100-101; tests/test_outputs.py:111-114).",
+    "Checked dependencies. The verifier image is pinned by digest, as are pytest==9.1.1 and pytest-json-ctrf==0.5.2 (tests/Dockerfile:1-3). The driver copy is baked into the image (tests/Dockerfile:6-12). Verifier and agent network are off (task.toml:21,25). The candidate runs with python3 -I -S and a cleared env, with no site-packages or remote inputs (tests/test_outputs.py:28,98).",
+    "Checked readiness and timing. Each reduction is a synchronous Popen.communicate with a timeout and a process-group kill (tests/test_outputs.py:62-83). There are no sleeps, services or polling.",
+    "Checked test-order independence. Each test reduces its own family in fresh temp dirs, and the pytest random-order plugin is disabled with -p no:randomly (tests/test.sh:20). Only the shared DEADLINE couples tests, and that budget is not approached.",
+    "Checked floating-point stability. Candidate code runs in the same pinned CPython 3.13 image on every run. Only IEEE basic arithmetic and round() are involved, both deterministic on a given package. The hand-built limit fixtures are exactly representable, as checked in solution/seal.py:36-57. Numeric comparison uses a fixed 1e-6 tolerance (tests/test_outputs.py:30,103-106).",
+    "Checked filesystem-state determinism. test.sh sets /tests and /logs/verifier to 700 and runs chmod -R a+rX /app before any candidate code (tests/test.sh:15-16). The unreadability probes therefore see the same modes on every run (tests/test_outputs.py:209-220).",
+    "Confirmed that tests/shipped/tools/metalquant_run.py and environment/app/tools/metalquant_run.py are identical (manifest hashes 2b8b03... at packet-manifest.json:20,48, and read in full), so test_driver_is_unchanged is a stable byte comparison."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fresh random seeds / unpinned generated corpora",
+      "status": "checked",
+      "reason": "The only RNG is in seal-time generation, with a fixed seed. Outputs are frozen in tests/expected, pinned by SHA-256 and row count, and never regenerated at grading.",
+      "evidence": [
+        "solution/seal.py:32-33",
+        "solution/seal.py:121-132",
+        "tests/test_outputs.py:39-59",
+        "tests/expected/ROSTER:1-17"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Boundary cases guaranteed as fixtures rather than drawn",
+      "status": "checked",
+      "reason": "Hand-built families pin the exact-limit, rounding-limit, blank-placement, bracketing and non-detect-spike cases. The generated batches avoid limits by construction.",
+      "evidence": [
+        "solution/fixtures.py:142-237",
+        "solution/jobgen.py:1-8",
+        "tests/expected/flag_limits.jsonl:1-3",
+        "tests/expected/ccv_limits.jsonl:1",
+        "tests/test_outputs.py:134-195"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Current date or time / evaluation clock",
+      "status": "checked",
+      "reason": "The contract has no date or time-window semantics. The clock is used only for the monotonic subprocess budget, which a correct submission does not approach.",
+      "evidence": [
+        "tests/test_outputs.py:29",
+        "tests/test_outputs.py:96-98",
+        "task.toml:19"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Mutable remote data or dependencies; required inputs local",
+      "status": "checked",
+      "reason": "The verifier image is pinned by digest and pytest is version-pinned. The driver copy and goldens are local, and the network is off at verify and agent time. The environment's unpinned apt tools (tmux, asciinema, patch) are used only in the agent image and do not affect grading.",
+      "evidence": [
+        "tests/Dockerfile:1-13",
+        "environment/Dockerfile:1-6",
+        "task.toml:18-25"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Filesystem or iteration ordering; sorted where contract requires, equivalent orderings accepted otherwise",
+      "status": "checked",
+      "reason": "List order is contract-defined (run order, then analyte order) and compared by index. Dict key order in blank_levels is contract-free and compared as a set. Nothing is graded from directory listings.",
+      "evidence": [
+        "environment/app/docs/reduction-sop.md:100-109",
+        "tests/test_outputs.py:109-126"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Timing or readiness assumptions (sleep vs defined readiness)",
+      "status": "checked",
+      "reason": "There are no background services or sleeps. Each candidate run is synchronous, with a timeout and a process-group kill.",
+      "evidence": [
+        "tests/test_outputs.py:62-83"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated clean-run stability of correct and incorrect submissions (checklist item 6)",
+      "status": "checked",
+      "reason": "This was traced statically, not executed. The inputs, expected reports, interpreter, tolerance and permissions are fixed for the same package. Temp directory names are the only per-run variation, and they are not graded.",
+      "evidence": [
+        "tests/test.sh:13-26",
+        "tests/test_outputs.py:86-100"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "SOP 6 CCV pass on recovery rounded to one decimal, inclusive",
+        "floating-point evaluation of the recovery"
+      ],
+      "case_or_path": "ccv_limits CCV-2 has recovery 110.00000000000001 and CCV-3 has 110.04; both round to 110.0 and pass, while CCV-4 at 110.06 fails. The float results are deterministic in the pinned interpreter, so a given submission gets the same pass/fail on every run. SOP section 1 excludes near-tie recoveries, and jobgen enforces that margin for the generated batches.",
+      "status": "checked",
+      "evidence": [
+        "tests/expected/ccv_limits.jsonl:1",
+        "environment/app/docs/reduction-sop.md:34-37",
+        "solution/jobgen.py:139-142"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "SOP 5 flags at exact MDL/LOQ",
+        "blank-mean summation order"
+      ],
+      "case_or_path": "flag_limits and blank_nondetects use exactly representable readings. seal.py asserts that sum/len, fmean and the exact mean agree, so the limit decision does not depend on summation order or on any run-to-run factor.",
+      "status": "checked",
+      "evidence": [
+        "solution/seal.py:36-57",
+        "solution/fixtures.py:1-7",
+        "tests/expected/flag_limits.jsonl:1-3"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "Shared DEADLINE budget",
+        "per-batch subprocess timeout"
+      ],
+      "case_or_path": "DEADLINE is set once at import, and each reduce passes the remaining budget as its timeout. With about 57 short driver runs and a 1500 s budget inside an 1800 s verifier timeout, a correct submission cannot be pushed to a timeout-dependent result.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:29",
+        "tests/test_outputs.py:96-99",
+        "task.toml:19"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "Neutral staging path with random temp dirs",
+        "report comparison"
+      ],
+      "case_or_path": "The random mkdtemp names are passed to the driver as the batch path but never appear in, or get compared against, the report. This is the D-3 pattern and has no grading effect.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:86-100",
+        "environment/app/tools/metalquant_run.py:16-19"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

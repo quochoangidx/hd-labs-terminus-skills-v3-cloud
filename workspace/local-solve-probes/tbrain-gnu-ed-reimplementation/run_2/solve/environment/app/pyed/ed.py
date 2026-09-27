@@ -1,0 +1,1709 @@
+"""pyed: a GNU ed 1.19 replacement in pure Python.
+
+Usage: python3 /app/pyed/ed.py [OPTIONS] [FILE]
+"""
+
+import os
+import stat
+import sys
+
+
+# ---------------------------------------------------------------------------
+# POSIX regular expressions (glibc flavoured), leftmost-longest matching
+# ---------------------------------------------------------------------------
+
+class RegexError(Exception):
+    pass
+
+
+T_CHAR, T_ANY, T_BRACKET, T_OPEN, T_CLOSE, T_ALT, T_STAR, T_PLUS, T_QMARK, \
+    T_ODUP, T_CDUP, T_BREF, T_BOL, T_EOL, T_END = range(15)
+
+RE_DUP_MAX = 32767
+
+_CLASSES = {}
+
+
+def _mkclass(pred):
+    return frozenset(chr(i) for i in range(128) if pred(chr(i)))
+
+
+_CLASSES['alpha'] = _mkclass(lambda c: c.isalpha())
+_CLASSES['digit'] = _mkclass(lambda c: c.isdigit())
+_CLASSES['alnum'] = _mkclass(lambda c: c.isalnum())
+_CLASSES['upper'] = _mkclass(lambda c: c.isupper())
+_CLASSES['lower'] = _mkclass(lambda c: c.islower())
+_CLASSES['space'] = _mkclass(lambda c: c in ' \t\n\r\f\v')
+_CLASSES['blank'] = _mkclass(lambda c: c in ' \t')
+_CLASSES['cntrl'] = _mkclass(lambda c: ord(c) < 32 or ord(c) == 127)
+_CLASSES['print'] = _mkclass(lambda c: 32 <= ord(c) < 127)
+_CLASSES['graph'] = _mkclass(lambda c: 33 <= ord(c) < 127)
+_CLASSES['punct'] = _mkclass(lambda c: 33 <= ord(c) < 127 and not c.isalnum())
+_CLASSES['xdigit'] = _mkclass(lambda c: c in '0123456789abcdefABCDEF')
+
+_LOWER_TABLE = {i: i + 32 for i in range(65, 91)}
+
+
+def _lower(s):
+    return s.translate(_LOWER_TABLE)
+
+
+def _case_close(chars):
+    out = set(chars)
+    for c in chars:
+        if 'a' <= c <= 'z':
+            out.add(c.upper())
+        elif 'A' <= c <= 'Z':
+            out.add(c.lower())
+    return out
+
+
+class _Parser(object):
+    def __init__(self, pat, ere, icase):
+        self.pat = pat
+        self.n = len(pat)
+        self.ere = ere
+        self.icase = icase
+        self.pos = 0
+        self.ngroups = 0
+        self.completed = set()
+        self.has_backref = False
+        self.tok = None
+        self.tval = None
+
+    # token handling --------------------------------------------------------
+    def peek_token(self, pos, caret_here):
+        pat = self.pat
+        if pos >= self.n:
+            return (T_END, None, 0)
+        c = pat[pos]
+        if c == '\\':
+            if pos + 1 >= self.n:
+                raise RegexError('trailing backslash')
+            c2 = pat[pos + 1]
+            if '1' <= c2 <= '9':
+                return (T_BREF, int(c2), 2)
+            if not self.ere:
+                if c2 == '|':
+                    return (T_ALT, None, 2)
+                if c2 == '(':
+                    return (T_OPEN, None, 2)
+                if c2 == ')':
+                    return (T_CLOSE, None, 2)
+                if c2 == '+':
+                    return (T_PLUS, '+', 2)
+                if c2 == '?':
+                    return (T_QMARK, '?', 2)
+                if c2 == '{':
+                    return (T_ODUP, None, 2)
+                if c2 == '}':
+                    return (T_CDUP, None, 2)
+            return (T_CHAR, c2, 2)
+        if c == '*':
+            return (T_STAR, '*', 1)
+        if c == '.':
+            return (T_ANY, None, 1)
+        if c == '[':
+            return (T_BRACKET, None, 1)
+        if self.ere:
+            if c == '+':
+                return (T_PLUS, '+', 1)
+            if c == '?':
+                return (T_QMARK, '?', 1)
+            if c == '{':
+                return (T_ODUP, None, 1)
+            if c == '}':
+                return (T_CDUP, None, 1)
+            if c == '(':
+                return (T_OPEN, None, 1)
+            if c == ')':
+                return (T_CLOSE, None, 1)
+            if c == '|':
+                return (T_ALT, None, 1)
+            if c == '^':
+                return (T_BOL, None, 1)
+            if c == '$':
+                return (T_EOL, None, 1)
+            return (T_CHAR, c, 1)
+        if c == '^':
+            if pos == 0 or caret_here:
+                return (T_BOL, None, 1)
+            return (T_CHAR, c, 1)
+        if c == '$':
+            if pos + 1 == self.n:
+                return (T_EOL, None, 1)
+            nt = self.peek_token(pos + 1, False)
+            if nt[0] in (T_ALT, T_CLOSE):
+                return (T_EOL, None, 1)
+            return (T_CHAR, c, 1)
+        return (T_CHAR, c, 1)
+
+    def fetch(self, caret_here=False):
+        t, v, ln = self.peek_token(self.pos, caret_here)
+        self.pos += ln
+        self.tok = t
+        self.tval = v
+
+    # grammar ---------------------------------------------------------------
+    def parse(self):
+        self.fetch()
+        tree = self.parse_reg_exp(0)
+        if self.tok != T_END:
+            raise RegexError('bad')
+        return tree
+
+    def _branch_end(self, nest):
+        return self.tok in (T_ALT, T_END) or (nest and self.tok == T_CLOSE)
+
+    def parse_reg_exp(self, nest):
+        branches = []
+        if not self._branch_end(nest):
+            branches.append(self.parse_branch(nest))
+        else:
+            branches.append(('empty',))
+        while self.tok == T_ALT:
+            self.fetch(True)
+            if not self._branch_end(nest):
+                branches.append(self.parse_branch(nest))
+            else:
+                branches.append(('empty',))
+        if len(branches) == 1:
+            return branches[0]
+        return ('alt', branches)
+
+    def parse_branch(self, nest):
+        items = [self.parse_expression(nest)]
+        while not self._branch_end(nest):
+            items.append(self.parse_expression(nest))
+        return ('cat', items)
+
+    def lit(self, c):
+        if self.icase:
+            return ('set', frozenset(_case_close([c])), False)
+        return ('char', c)
+
+    def parse_expression(self, nest):
+        t = self.tok
+        if t == T_CHAR:
+            node = self.lit(self.tval)
+            self.fetch()
+        elif t == T_ANY:
+            node = ('any',)
+            self.fetch()
+        elif t == T_BRACKET:
+            node = self.parse_bracket()
+            self.fetch()
+        elif t == T_OPEN:
+            self.ngroups += 1
+            idx = self.ngroups
+            self.fetch(True)
+            if self.tok == T_CLOSE:
+                inner = ('empty',)
+            else:
+                inner = self.parse_reg_exp(nest + 1)
+                if self.tok != T_CLOSE:
+                    raise RegexError('unmatched (')
+            self.completed.add(idx)
+            node = ('group', idx, inner)
+            self.fetch()
+        elif t == T_BREF:
+            if self.tval not in self.completed:
+                raise RegexError('invalid back reference')
+            self.has_backref = True
+            node = ('bref', self.tval)
+            self.fetch()
+        elif t == T_BOL:
+            self.fetch()
+            return ('bol',)
+        elif t == T_EOL:
+            self.fetch()
+            return ('eol',)
+        elif t in (T_STAR, T_PLUS, T_QMARK):
+            if self.ere:
+                raise RegexError('bad repeat')
+            node = self.lit(self.tval)
+            self.fetch()
+        elif t == T_ODUP:
+            raise RegexError('bad repeat')
+        elif t == T_CLOSE:
+            if not self.ere:
+                raise RegexError('unmatched )')
+            node = self.lit(')')
+            self.fetch()
+        elif t == T_CDUP:
+            node = self.lit('}')
+            self.fetch()
+        else:
+            return ('empty',)
+        while self.tok in (T_STAR, T_PLUS, T_QMARK, T_ODUP):
+            node = self.parse_dup(node)
+            if not self.ere and self.tok in (T_STAR, T_ODUP):
+                raise RegexError('bad repeat')
+        return node
+
+    def fetch_number(self):
+        num = -1
+        while True:
+            self.fetch()
+            if self.tok == T_END:
+                return -2
+            if self.tok == T_CDUP or (self.tok == T_CHAR and self.tval == ','):
+                break
+            if self.tok != T_CHAR or not ('0' <= self.tval <= '9') or num == -2:
+                num = -2
+            elif num == -1:
+                num = ord(self.tval) - 48
+            else:
+                num = min(RE_DUP_MAX + 1, num * 10 + ord(self.tval) - 48)
+        return num
+
+    def parse_dup(self, node):
+        t = self.tok
+        if t == T_ODUP:
+            start = self.fetch_number()
+            end = 0
+            if start == -1:
+                if self.tok == T_CHAR and self.tval == ',':
+                    start = 0
+                else:
+                    raise RegexError('bad brace')
+            if start != -2:
+                if self.tok == T_CDUP:
+                    end = start
+                elif self.tok == T_CHAR and self.tval == ',':
+                    end = self.fetch_number()
+                else:
+                    end = -2
+            if start == -2 or end == -2:
+                raise RegexError('bad brace')
+            if (end != -1 and start > end) or self.tok != T_CDUP:
+                raise RegexError('bad brace')
+            if (start if end == -1 else end) > RE_DUP_MAX:
+                raise RegexError('too big')
+            self.fetch()
+            if start == 0 and end == 0:
+                return ('empty',)
+            return ('rep', node, start, None if end == -1 else end)
+        self.fetch()
+        if t == T_STAR:
+            return ('rep', node, 0, None)
+        if t == T_PLUS:
+            return ('rep', node, 1, None)
+        return ('rep', node, 0, 1)
+
+    # bracket expressions ---------------------------------------------------
+    def _peek_b(self, p):
+        pat = self.pat
+        if p >= self.n:
+            return ('END', None, 0)
+        c = pat[p]
+        if c == '[' and p + 1 < self.n and pat[p + 1] in '.=:':
+            return ('OPEN' + pat[p + 1], None, 2)
+        if c == '-':
+            return ('RANGE', '-', 1)
+        if c == ']':
+            return ('CLOSE', ']', 1)
+        return ('CHAR', c, 1)
+
+    def _parse_elem(self, tok, p, accept_hyphen):
+        p += tok[2]
+        kind = tok[0]
+        if kind.startswith('OPEN'):
+            delim = kind[4]
+            name = []
+            i = 0
+            while True:
+                if i >= 32:
+                    raise RegexError('bracket')
+                if p >= self.n:
+                    raise RegexError('bracket')
+                ch = self.pat[p]
+                p += 1
+                if p >= self.n:
+                    raise RegexError('bracket')
+                if ch == delim and self.pat[p] == ']':
+                    break
+                name.append(ch)
+                i += 1
+            p += 1
+            name = ''.join(name)
+            if delim == ':':
+                if name not in _CLASSES:
+                    raise RegexError('bad class')
+                return ('class', name), p
+            if len(name) != 1:
+                raise RegexError('bad collating element')
+            if delim == '=':
+                return ('equiv', name), p
+            return ('char', name), p
+        if kind == 'RANGE' and not accept_hyphen:
+            t2 = self._peek_b(p)
+            if t2[0] != 'CLOSE':
+                raise RegexError('bad range')
+        return ('char', tok[1]), p
+
+    def parse_bracket(self):
+        p = self.pos
+        neg = False
+        if p < self.n and self.pat[p] == '^':
+            neg = True
+            p += 1
+        chars = set()
+        tok = self._peek_b(p)
+        if tok[0] == 'CLOSE':
+            tok = ('CHAR', ']', 1)
+        first = True
+        while True:
+            if tok[0] == 'END':
+                raise RegexError('unmatched [')
+            start, p = self._parse_elem(tok, p, first)
+            first = False
+            tok = self._peek_b(p)
+            is_range = False
+            tok2 = None
+            if start[0] not in ('class', 'equiv'):
+                if tok[0] == 'RANGE':
+                    tok2 = self._peek_b(p + 1)
+                    if tok2[0] == 'CLOSE':
+                        tok = ('CHAR', '-', 1)
+                    else:
+                        is_range = True
+                        p += 1
+            if is_range:
+                if tok2[0] == 'END':
+                    raise RegexError('unmatched [')
+                end, p = self._parse_elem(tok2, p, True)
+                tok = self._peek_b(p)
+                if start[0] in ('class', 'equiv') or end[0] in ('class', 'equiv'):
+                    raise RegexError('bad range')
+                a, b = ord(start[1]), ord(end[1])
+                if a > b:
+                    raise RegexError('bad range')
+                for i in range(a, b + 1):
+                    chars.add(chr(i))
+            else:
+                if start[0] == 'class':
+                    chars.update(_CLASSES[start[1]])
+                else:
+                    chars.add(start[1])
+            if tok[0] == 'CLOSE':
+                p += 1
+                break
+        self.pos = p
+        if self.icase:
+            chars = _case_close(chars)
+        return ('set', frozenset(chars), neg)
+
+
+OP_CHAR, OP_ANY, OP_SET, OP_NSET, OP_SPLIT, OP_JMP, OP_SAVE, OP_BOL, OP_EOL, \
+    OP_BREF, OP_MATCH = range(11)
+
+
+class Regex(object):
+    def __init__(self, pat, ere, icase):
+        p = _Parser(pat, ere, icase)
+        tree = p.parse()
+        self.nsub = p.ngroups
+        self.icase = icase
+        self.has_backref = p.has_backref
+        self.ncap = 2 * (self.nsub + 1)
+        self.relaxed = None
+        if self.has_backref:
+            self.prog = []
+            self._gen(self._relax(tree))
+            self.prog.append((OP_MATCH,))
+            self.relaxed = self.prog
+        self.prog = []
+        self._gen(tree)
+        self.prog.append((OP_MATCH,))
+
+    def _relax(self, node):
+        t = node[0]
+        if t == 'bref':
+            return ('rep', ('any',), 0, None)
+        if t in ('cat', 'alt'):
+            return (t, [self._relax(x) for x in node[1]])
+        if t == 'group':
+            return ('group', node[1], self._relax(node[2]))
+        if t == 'rep':
+            return ('rep', self._relax(node[1]), node[2], node[3])
+        return node
+
+    def _gen(self, node):
+        prog = self.prog
+        t = node[0]
+        if t == 'char':
+            prog.append((OP_CHAR, node[1]))
+        elif t == 'any':
+            prog.append((OP_ANY,))
+        elif t == 'set':
+            prog.append((OP_NSET if node[2] else OP_SET, node[1]))
+        elif t == 'bol':
+            prog.append((OP_BOL,))
+        elif t == 'eol':
+            prog.append((OP_EOL,))
+        elif t == 'bref':
+            prog.append((OP_BREF, node[1]))
+        elif t == 'empty':
+            pass
+        elif t == 'cat':
+            for x in node[1]:
+                self._gen(x)
+        elif t == 'group':
+            prog.append((OP_SAVE, 2 * node[1]))
+            self._gen(node[2])
+            prog.append((OP_SAVE, 2 * node[1] + 1))
+        elif t == 'alt':
+            branches = node[1]
+            jmps = []
+            for i, b in enumerate(branches):
+                if i < len(branches) - 1:
+                    sp = len(prog)
+                    prog.append(None)
+                    self._gen(b)
+                    jmps.append(len(prog))
+                    prog.append(None)
+                    prog[sp] = (OP_SPLIT, sp + 1, len(prog))
+                else:
+                    self._gen(b)
+            for j in jmps:
+                prog[j] = (OP_JMP, len(prog))
+        elif t == 'rep':
+            sub, mn, mx = node[1], node[2], node[3]
+            for _ in range(mn):
+                self._gen(sub)
+            if mx is None:
+                L = len(prog)
+                prog.append(None)
+                self._gen(sub)
+                prog.append((OP_JMP, L))
+                prog[L] = (OP_SPLIT, L + 1, len(prog))
+            else:
+                splits = []
+                for _ in range(mx - mn):
+                    splits.append(len(prog))
+                    prog.append(None)
+                    self._gen(sub)
+                end = len(prog)
+                for s in splits:
+                    prog[s] = (OP_SPLIT, s + 1, end)
+        else:
+            raise RegexError('internal')
+
+    def search(self, text, notbol=False):
+        """Return (start, end, groups) or None; offsets relative to text."""
+        mtext = _lower(text) if self.icase else text
+        if self.has_backref:
+            full = self.prog
+            self.prog = self.relaxed
+            try:
+                pre = self._pike(mtext, notbol)
+            finally:
+                self.prog = full
+            if pre is None:
+                return None
+            res = self._backtrack(mtext, notbol, pre[0])
+        else:
+            res = self._pike(mtext, notbol)
+        if res is None:
+            return None
+        s, e, caps = res
+        groups = []
+        for k in range(1, self.nsub + 1):
+            a, b = caps[2 * k], caps[2 * k + 1]
+            if a is None or b is None:
+                groups.append(None)
+            else:
+                groups.append((a, b))
+        return (s, e, groups)
+
+    def _pike(self, text, notbol):
+        prog = self.prog
+        n = len(text)
+        init = (None,) * self.ncap
+        best = None
+        clist = []
+        cvis = set()
+
+        def addthread(lst, vis, pc, caps, pos):
+            stack = [(pc, caps)]
+            while stack:
+                pc, caps = stack.pop()
+                if pc in vis:
+                    continue
+                vis.add(pc)
+                op = prog[pc]
+                k = op[0]
+                if k == OP_JMP:
+                    stack.append((op[1], caps))
+                elif k == OP_SPLIT:
+                    stack.append((op[2], caps))
+                    stack.append((op[1], caps))
+                elif k == OP_SAVE:
+                    i = op[1]
+                    stack.append((pc + 1, caps[:i] + (pos,) + caps[i + 1:]))
+                elif k == OP_BOL:
+                    if pos == 0 and not notbol:
+                        stack.append((pc + 1, caps))
+                elif k == OP_EOL:
+                    if pos == n:
+                        stack.append((pc + 1, caps))
+                else:
+                    lst.append((pc, caps))
+
+        for pos in range(n + 1):
+            if best is None:
+                addthread(clist, cvis, 0, (pos, None) + init[2:], pos)
+            if not clist:
+                if best is not None:
+                    break
+                continue
+            nlist = []
+            nvis = set()
+            ch = text[pos] if pos < n else None
+            for pc, caps in clist:
+                if best is not None and caps[0] > best[0]:
+                    continue
+                op = prog[pc]
+                k = op[0]
+                if k == OP_MATCH:
+                    s = caps[0]
+                    if best is None or s < best[0] or (s == best[0] and pos > best[1]):
+                        best = (s, pos, caps)
+                    continue
+                if ch is None:
+                    continue
+                if k == OP_CHAR:
+                    ok = op[1] == ch
+                elif k == OP_ANY:
+                    ok = True
+                elif k == OP_SET:
+                    ok = ch in op[1]
+                elif k == OP_NSET:
+                    ok = ch not in op[1]
+                else:
+                    ok = False
+                if ok:
+                    addthread(nlist, nvis, pc + 1, caps, pos + 1)
+            clist, cvis = nlist, nvis
+        if best is None:
+            return None
+        s, e, caps = best
+        caps = (s, e) + caps[2:]
+        return (s, e, caps)
+
+    def _backtrack(self, text, notbol, first=0):
+        prog = self.prog
+        n = len(text)
+        init = (None,) * self.ncap
+        for start in range(first, n + 1):
+            best = None
+            seen = set()
+            stack = [(0, start, init)]
+            while stack:
+                pc, pos, caps = stack.pop()
+                key = (pc, pos, caps)
+                if key in seen:
+                    continue
+                seen.add(key)
+                op = prog[pc]
+                k = op[0]
+                if k == OP_MATCH:
+                    if best is None or pos > best[1]:
+                        best = (start, pos, caps)
+                        if pos == n:
+                            break
+                elif k == OP_JMP:
+                    stack.append((op[1], pos, caps))
+                elif k == OP_SPLIT:
+                    stack.append((op[2], pos, caps))
+                    stack.append((op[1], pos, caps))
+                elif k == OP_SAVE:
+                    i = op[1]
+                    stack.append((pc + 1, pos, caps[:i] + (pos,) + caps[i + 1:]))
+                elif k == OP_BOL:
+                    if pos == 0 and not notbol:
+                        stack.append((pc + 1, pos, caps))
+                elif k == OP_EOL:
+                    if pos == n:
+                        stack.append((pc + 1, pos, caps))
+                elif k == OP_BREF:
+                    a, b = caps[2 * op[1]], caps[2 * op[1] + 1]
+                    if a is None or b is None:
+                        continue
+                    ln = b - a
+                    if text[pos:pos + ln] == text[a:b] and pos + ln <= n:
+                        stack.append((pc + 1, pos + ln, caps))
+                elif pos < n:
+                    ch = text[pos]
+                    if k == OP_CHAR:
+                        ok = op[1] == ch
+                    elif k == OP_ANY:
+                        ok = True
+                    elif k == OP_SET:
+                        ok = ch in op[1]
+                    elif k == OP_NSET:
+                        ok = ch not in op[1]
+                    else:
+                        ok = False
+                    if ok:
+                        stack.append((pc + 1, pos + 1, caps))
+            if best is not None:
+                s, e, caps = best
+                return (s, e, (s, e) + caps[2:])
+        return None
+
+
+# ---------------------------------------------------------------------------
+# The editor
+# ---------------------------------------------------------------------------
+
+class EdError(Exception):
+    pass
+
+
+ERR = -1
+EMOD = -3
+QUIT = -4
+
+PF_L, PF_N, PF_P = 1, 2, 4
+
+
+class Line(object):
+    __slots__ = ('text',)
+
+    def __init__(self, text):
+        self.text = text
+
+
+def isdigit(c):
+    return c != '' and '0' <= c <= '9'
+
+
+def isspace(c):
+    return c != '' and c in ' \t\n\r\f\v'
+
+
+class Ed(object):
+    def __init__(self, data, regular_stdin, ere, loose, script):
+        self.inp = data
+        self.ipos = 0
+        self.regular_stdin = regular_stdin
+        self.ere = ere
+        self.loose = loose
+        self.script = script
+        self.out = []
+        self.lines = []
+        self.cur = 0
+        self.modified = False
+        self.def_filename = ''
+        self.marks = {}
+        self.u_lines = None
+        self.u_cur = -1
+        self.u_mod = False
+        self.u_atoms = False
+        self.last_regex = None
+        self.subst_regex = None
+        self.rbuf = None
+        self.s_pflags = 0
+        self.s_pmask = PF_P
+        self.s_snum = 1
+        self.active = None
+        self.active_set = None
+        self.buf = ''
+        self.bi = 0
+        self.first_addr = 0
+        self.second_addr = 0
+
+    # -- output / input ------------------------------------------------------
+    def write(self, s):
+        self.out.append(s)
+
+    def flush(self):
+        if self.out:
+            data = ''.join(self.out).encode('latin-1')
+            self.out = []
+            try:
+                sys.stdout.buffer.write(data)
+                sys.stdout.buffer.flush()
+            except Exception:
+                pass
+
+    def get_stdin_line(self):
+        if self.ipos >= len(self.inp):
+            return ''
+        j = self.inp.find('\n', self.ipos)
+        if j < 0:
+            s = self.inp[self.ipos:] + '\n'
+            self.ipos = len(self.inp)
+        else:
+            s = self.inp[self.ipos:j + 1]
+            self.ipos = j + 1
+        return s
+
+    def peek(self, off=0):
+        i = self.bi + off
+        if i < len(self.buf):
+            return self.buf[i]
+        return ''
+
+    def getc(self):
+        c = self.peek()
+        self.bi += 1
+        return c
+
+    def skip_blanks(self):
+        while True:
+            c = self.peek()
+            if c != '' and c in ' \t\r\f\v':
+                self.bi += 1
+            else:
+                break
+
+    @property
+    def last(self):
+        return len(self.lines)
+
+    # -- undo ---------------------------------------------------------------
+    def clear_undo(self):
+        self.u_lines = list(self.lines)
+        self.u_cur = self.cur
+        self.u_mod = self.modified
+        self.u_atoms = False
+
+    def reset_undo(self):
+        self.u_lines = None
+        self.u_cur = -1
+        self.u_mod = False
+        self.u_atoms = False
+
+    def touch(self):
+        self.modified = True
+        self.u_atoms = True
+
+    # -- global active list -----------------------------------------------
+    def unset_active(self, objs):
+        if self.active_set is not None:
+            for o in objs:
+                self.active_set.discard(id(o))
+
+    # -- addresses ------------------------------------------------------------
+    def parse_int(self):
+        j = self.bi
+        while isdigit(self.peek(j - self.bi)):
+            j += 1
+        n = int(self.buf[self.bi:j])
+        self.bi = j
+        return n
+
+    def invalid_address(self):
+        raise EdError('Invalid address')
+
+    def extract_addresses(self):
+        first = True
+        self.first_addr = self.second_addr = -1
+        self.skip_blanks()
+        while True:
+            ch = self.peek()
+            if isdigit(ch):
+                n = self.parse_int()
+                if first:
+                    first = False
+                    self.second_addr = n
+                else:
+                    self.second_addr += n
+            elif ch in (' ', '\t'):
+                self.bi += 1
+                self.skip_blanks()
+            elif ch in ('+', '-'):
+                if first:
+                    first = False
+                    self.second_addr = self.cur
+                if isdigit(self.peek(1)):
+                    self.bi += 1
+                    n = self.parse_int()
+                    if ch == '-':
+                        n = -n
+                else:
+                    self.bi += 1
+                    n = -1 if ch == '-' else 1
+                self.second_addr += n
+            elif ch in ('.', '$'):
+                if not first:
+                    self.invalid_address()
+                first = False
+                self.bi += 1
+                self.second_addr = self.cur if ch == '.' else self.last
+            elif ch in ('/', '?'):
+                if not first:
+                    self.invalid_address()
+                self.second_addr = self.next_matching_node_addr()
+                first = False
+            elif ch == "'":
+                if not first:
+                    self.invalid_address()
+                first = False
+                self.bi += 1
+                m = self.getc()
+                self.second_addr = self.get_marked_node_addr(m)
+            elif ch in (',', ';', '%'):
+                if first:
+                    if self.first_addr < 0:
+                        self.first_addr = self.cur if ch == ';' else 1
+                        self.second_addr = self.last
+                else:
+                    if self.second_addr < 0 or self.second_addr > self.last:
+                        self.invalid_address()
+                    if ch == ';':
+                        self.cur = self.second_addr
+                    self.first_addr = self.second_addr
+                    first = True
+                self.bi += 1
+            else:
+                if not first and (self.second_addr < 0 or self.second_addr > self.last):
+                    self.invalid_address()
+                cnt = 0
+                if self.second_addr >= 0:
+                    cnt = 2 if self.first_addr >= 0 else 1
+                if cnt <= 0:
+                    self.second_addr = self.cur
+                if cnt <= 1:
+                    self.first_addr = self.second_addr
+                return cnt
+
+    def get_marked_node_addr(self, m):
+        if not ('a' <= m <= 'z') or len(m) != 1:
+            raise EdError('Invalid mark character')
+        if not self.lines:
+            return 0
+        obj = self.marks.get(m)
+        if obj is not None:
+            for i, o in enumerate(self.lines):
+                if o is obj:
+                    return i + 1
+        self.invalid_address()
+
+    def compile(self, pat, icase):
+        try:
+            rx = Regex(pat, self.ere, icase)
+        except RegexError:
+            raise EdError('Invalid regex')
+        except RecursionError:
+            raise EdError('Invalid regex')
+        self.last_regex = rx
+        return rx
+
+    def extract_pattern(self, delim):
+        start = self.bi
+        buf = self.buf
+        i = self.bi
+        n = len(buf)
+        while i < n and buf[i] != delim and buf[i] != '\n':
+            if buf[i] == '[':
+                i = self.parse_char_class(i + 1)
+                if i < 0:
+                    raise EdError('Unbalanced brackets')
+            elif buf[i] == '\\':
+                i += 1
+                if i >= n or buf[i] == '\n':
+                    raise EdError('Trailing backslash')
+            i += 1
+        self.bi = i
+        return buf[start:i]
+
+    def parse_char_class(self, p):
+        buf = self.buf
+        n = len(buf)
+
+        def at(k):
+            return buf[k] if k < n else '\n'
+        if at(p) == '^':
+            p += 1
+        if at(p) == ']':
+            p += 1
+        while at(p) != ']' and at(p) != '\n':
+            if at(p) == '[' and at(p + 1) in '.:=':
+                d = at(p + 1)
+                p += 2
+                c = at(p)
+                while at(p) != ']' or c != d:
+                    c = at(p)
+                    if c == '\n':
+                        return -1
+                    p += 1
+            p += 1
+        return p if at(p) == ']' else -1
+
+    def get_compiled_regex(self, test_delimiter):
+        """For addresses and g/v: parses /RE/[I], consuming closing delim."""
+        delim = self.peek()
+        if delim == ' ' or delim == '\n':
+            raise EdError('Invalid pattern delimiter')
+        self.bi += 1
+        if self.peek() in ('\n', delim):
+            if self.last_regex is None:
+                raise EdError('No previous pattern')
+            if self.peek() == delim:
+                self.bi += 1
+                if self.peek() == 'I':
+                    raise EdError('Invalid pattern')
+            return self.last_regex
+        pat = self.extract_pattern(delim)
+        if test_delimiter and self.peek() != delim:
+            raise EdError('Missing pattern delimiter')
+        icase = False
+        if self.peek() == delim:
+            self.bi += 1
+            if self.peek() == 'I':
+                icase = True
+                self.bi += 1
+        return self.compile(pat, icase)
+
+    def next_matching_node_addr(self):
+        forward = self.peek() == '/'
+        rx = self.get_compiled_regex(False)
+        addr = self.cur
+        last = self.last
+        while True:
+            if forward:
+                addr = 0 if addr >= last else addr + 1
+            else:
+                addr = last if addr <= 0 else addr - 1
+            if addr and rx.search(self.lines[addr - 1].text) is not None:
+                return addr
+            if addr == self.cur:
+                raise EdError('No match')
+
+    # -- checks --------------------------------------------------------------
+    def check_addr_range(self, n, m, addr_cnt):
+        if addr_cnt == 0:
+            self.first_addr = n
+            self.second_addr = m
+        if self.first_addr < 1 or self.first_addr > self.second_addr or \
+                self.second_addr > self.last:
+            self.invalid_address()
+
+    def check_addr_range2(self, addr_cnt):
+        self.check_addr_range(self.cur, self.cur, addr_cnt)
+
+    def check_second_addr(self, addr, addr_cnt):
+        if addr_cnt == 0:
+            self.second_addr = addr
+        if self.second_addr < 1 or self.second_addr > self.last:
+            self.invalid_address()
+
+    def get_command_suffix(self):
+        pf = 0
+        while True:
+            ch = self.peek()
+            if ch == 'l' and not pf & PF_L:
+                pf |= PF_L
+            elif ch == 'n' and not pf & PF_N:
+                pf |= PF_N
+            elif ch == 'p' and not pf & PF_P:
+                pf |= PF_P
+            else:
+                break
+            self.bi += 1
+        if self.getc() != '\n':
+            raise EdError('Invalid command suffix')
+        return pf
+
+    def unexpected_address(self, addr_cnt):
+        if addr_cnt > 0:
+            raise EdError('Unexpected address')
+
+    def unexpected_command_suffix(self):
+        if not isspace(self.peek()):
+            raise EdError('Unexpected command suffix')
+
+    def get_filename(self):
+        self.skip_blanks()
+        if self.peek() != '\n':
+            j = self.buf.find('\n', self.bi)
+            if j < 0:
+                j = len(self.buf)
+            name = self.buf[self.bi:j]
+            self.bi = j + 1
+            return name
+        if not self.def_filename:
+            raise EdError('No current filename')
+        self.bi += 1
+        return ''
+
+    def get_third_addr(self):
+        o1, o2 = self.first_addr, self.second_addr
+        self.extract_addresses()
+        if self.second_addr < 0 or self.second_addr > self.last:
+            self.invalid_address()
+        addr = self.second_addr
+        self.first_addr, self.second_addr = o1, o2
+        return addr
+
+    # -- buffer operations ----------------------------------------------------
+    def print_lines(self, frm, to, pflags):
+        if frm == 0:
+            self.invalid_address()
+        for a in range(frm, to + 1):
+            text = self.lines[a - 1].text
+            if pflags & PF_N:
+                self.write('%d\t' % a)
+            if pflags & PF_L:
+                self.write(self.list_text(text))
+            else:
+                self.write(text + '\n')
+        self.cur = to
+
+    def list_text(self, text):
+        out = []
+        col = 0
+        esc = {'\\': '\\\\', '\a': '\\a', '\b': '\\b', '\f': '\\f', '\n': '\\n',
+               '\r': '\\r', '\t': '\\t', '\v': '\\v', '$': '\\$'}
+        for c in text:
+            if c in esc:
+                s = esc[c]
+            elif 32 <= ord(c) < 127:
+                s = c
+            else:
+                s = '\\%03o' % ord(c)
+            if col + len(s) > 71:
+                out.append('\\\n')
+                col = 0
+            out.append(s)
+            col += len(s)
+        out.append('$\n')
+        return ''.join(out)
+
+    def delete_lines(self, frm, to, isglobal):
+        removed = self.lines[frm - 1:to]
+        if isglobal:
+            self.unset_active(removed)
+        del self.lines[frm - 1:to]
+        self.cur = frm - 1
+        self.touch()
+
+    def append_lines(self, addr, insert, isglobal):
+        after = addr - 1 if (insert and addr > 0) else addr
+        self.cur = addr
+        while True:
+            if not isglobal:
+                s = self.get_stdin_line()
+                if s == '':
+                    return
+            else:
+                if self.bi >= len(self.buf):
+                    return
+                j = self.buf.find('\n', self.bi)
+                if j < 0:
+                    j = len(self.buf) - 1
+                s = self.buf[self.bi:j + 1]
+                self.bi = j + 1
+            if s == '.\n':
+                return
+            self.lines.insert(after, Line(s[:-1] if s.endswith('\n') else s))
+            after += 1
+            self.cur = after
+            self.touch()
+
+    def read_file(self, name, addr):
+        try:
+            with open(name, 'rb') as f:
+                data = f.read()
+        except Exception:
+            raise EdError('Cannot open input file')
+        text = data.decode('latin-1')
+        parts = text.split('\n')
+        if text.endswith('\n'):
+            parts.pop()
+        elif text == '':
+            parts = []
+        objs = [Line(p) for p in parts]
+        self.lines[addr:addr] = objs
+        self.cur = addr + len(objs)
+        if not self.script:
+            self.write('%d\n' % len(data))
+        return len(objs)
+
+    def write_file(self, name, mode, frm, to):
+        data = ''.join(self.lines[i].text + '\n' for i in range(frm - 1, to)) if frm > 0 else ''
+        try:
+            with open(name, mode + 'b') as f:
+                f.write(data.encode('latin-1'))
+        except Exception:
+            raise EdError('Cannot open output file')
+        if not self.script:
+            self.write('%d\n' % len(data))
+        return (to - frm + 1) if frm > 0 else 0
+
+    # -- substitution ---------------------------------------------------------
+    def extract_replacement(self, isglobal):
+        delim = self.peek()
+        self.bi += 1
+        if self.peek() == '%' and self.peek(1) in (delim, '\n'):
+            self.bi += 1
+            if self.rbuf is None:
+                raise EdError('No previous substitution')
+            return
+        r = []
+        while self.peek() != delim:
+            ch = self.peek()
+            if ch == '':
+                break
+            if ch == '\n' and (not isglobal or self.bi + 1 >= len(self.buf)):
+                break
+            r.append(ch)
+            self.bi += 1
+            if ch == '\\':
+                ch2 = self.getc()
+                r.append(ch2)
+                if ch2 == '\n' and not isglobal:
+                    s = self.get_stdin_line()
+                    if s == '':
+                        raise EdError('Unexpected end-of-file')
+                    self.buf = s
+                    self.bi = 0
+        self.rbuf = ''.join(r)
+
+    def apply_template(self, txt, m, nsub):
+        t = self.rbuf
+        out = []
+        i = 0
+        n = len(t)
+        while i < n:
+            ch = t[i]
+            if ch == '&':
+                out.append(txt[m[0]:m[1]])
+            elif ch == '\\' and i + 1 < n and '1' <= t[i + 1] <= '9' and \
+                    int(t[i + 1]) <= nsub:
+                g = m[2][int(t[i + 1]) - 1]
+                if g is not None:
+                    out.append(txt[g[0]:g[1]])
+                i += 1
+            else:
+                if ch == '\\' and i + 1 < n:
+                    i += 1
+                    ch = t[i]
+                out.append(ch)
+            i += 1
+        return ''.join(out)
+
+    def substitute_line(self, rx, text, snum):
+        m = rx.search(text, False)
+        if m is None:
+            return None
+        out = []
+        changed = 0
+        matchno = 0
+        tpos = 0
+        last_eo = m[1]
+        while True:
+            txt = text[tpos:]
+            so, eo = m[0], m[1]
+            last_eo = eo
+            if snum == 0:
+                take = True
+            else:
+                matchno += 1
+                take = matchno == snum
+            if take:
+                changed += 1
+                out.append(txt[:so])
+                out.append(self.apply_template(txt, m, rx.nsub))
+            else:
+                out.append(txt[:eo])
+            tpos += eo
+            if not (tpos < len(text) and (not changed or (snum == 0 and eo != 0))):
+                break
+            m = rx.search(text[tpos:], True)
+            if m is None:
+                break
+        rest = text[tpos:]
+        if len(rest) > 0 and last_eo == 0 and snum == 0:
+            raise EdError('Infinite substitution loop')
+        out.append(rest)
+        if not changed:
+            return None
+        return ''.join(out)
+
+    def search_and_replace(self, rx, frm, to, snum, isglobal):
+        xa = self.cur
+        nsubs = 0
+        self.cur = frm - 1
+        for _ in range(to - frm + 1):
+            self.cur += 1
+            line = self.lines[self.cur - 1]
+            new = self.substitute_line(rx, line.text, snum)
+            if new is not None:
+                idx = self.cur - 1
+                if isglobal:
+                    self.unset_active([line])
+                parts = new.split('\n')
+                self.lines[idx:idx + 1] = [Line(p) for p in parts]
+                self.cur = idx + len(parts)
+                self.touch()
+                nsubs += 1
+                xa = self.cur
+        self.cur = xa
+        if nsubs == 0 and not isglobal:
+            raise EdError('No match')
+
+    def command_s(self, addr_cnt, isglobal):
+        self.check_addr_range2(addr_cnt)
+        sflags = set()
+        while True:
+            ch = self.peek()
+            err = False
+            if isdigit(ch):
+                n = self.parse_int()
+                sflags.add('none')
+                self.s_snum = n
+                if n <= 0:
+                    err = True
+            elif ch == '\n':
+                sflags.add('none')
+            elif ch in ('g', 'p', 'r'):
+                if ch in sflags:
+                    err = True
+                sflags.add(ch)
+                self.bi += 1
+            else:
+                if sflags:
+                    err = True
+            if err:
+                raise EdError('Invalid command suffix')
+            if not (sflags and self.peek() != '\n'):
+                break
+        if sflags:
+            if self.subst_regex is None:
+                raise EdError('No previous substitution')
+            if 'g' in sflags:
+                self.s_snum = 1 if self.s_snum == 0 else 0
+            if 'p' in sflags:
+                self.s_pflags ^= self.s_pmask
+            rx = self.subst_regex
+            if 'r' in sflags and self.last_regex is not None:
+                rx = self.last_regex
+            if self.getc() != '\n':
+                raise EdError('Invalid command suffix')
+        else:
+            delim = self.peek()
+            if delim == ' ' or delim == '\n' or delim == '':
+                raise EdError('Invalid pattern delimiter')
+            self.bi += 1
+            empty = False
+            if self.peek() == delim:
+                empty = True
+                pat = None
+            elif self.peek() == '\n':
+                raise EdError('Missing pattern delimiter')
+            else:
+                pat = self.extract_pattern(delim)
+                if self.peek() != delim:
+                    raise EdError('Missing pattern delimiter')
+            if empty and self.last_regex is None:
+                raise EdError('No previous pattern')
+            self.extract_replacement(isglobal)
+            pflags = 0
+            snum = 1
+            icase = False
+            omitted = False
+            if self.peek() == '\n' or self.peek() == '':
+                pflags = PF_P
+                omitted = True
+            else:
+                self.bi += 1
+                have_num = False
+                have_g = False
+                while True:
+                    ch = self.peek()
+                    if isdigit(ch):
+                        if have_num or have_g:
+                            raise EdError('Invalid command suffix')
+                        snum = self.parse_int()
+                        have_num = True
+                        if snum <= 0:
+                            raise EdError('Invalid command suffix')
+                        continue
+                    elif ch == 'g':
+                        if have_g or have_num:
+                            raise EdError('Invalid command suffix')
+                        have_g = True
+                        snum = 0
+                    elif ch == 'p':
+                        if pflags & PF_P:
+                            raise EdError('Invalid command suffix')
+                        pflags |= PF_P
+                    elif ch == 'l':
+                        if pflags & PF_L:
+                            raise EdError('Invalid command suffix')
+                        pflags |= PF_L
+                    elif ch == 'n':
+                        if pflags & PF_N:
+                            raise EdError('Invalid command suffix')
+                        pflags |= PF_N
+                    elif ch in ('I', 'i'):
+                        icase = True
+                    else:
+                        break
+                    self.bi += 1
+                if self.peek() != '\n':
+                    raise EdError('Invalid command suffix')
+                self.bi += 1
+            if empty:
+                if icase:
+                    raise EdError('Invalid pattern')
+                rx = self.last_regex
+            else:
+                rx = self.compile(pat, icase)
+            self.subst_regex = rx
+            self.s_pflags = pflags
+            self.s_pmask = pflags if pflags else PF_P
+            self.s_snum = snum
+        if not isglobal:
+            self.clear_undo()
+        self.search_and_replace(rx, self.first_addr, self.second_addr,
+                                self.s_snum, isglobal)
+        return self.s_pflags
+
+    # -- global --------------------------------------------------------------
+    def get_extended_line(self):
+        j = self.buf.find('\n', self.bi)
+        if j < 0:
+            j = len(self.buf) - 1
+        line = self.buf[self.bi:j + 1]
+        self.bi = j + 1
+
+        def trailing_escape(s):
+            # s ends with '\n'
+            k = len(s) - 2
+            cnt = 0
+            while k >= 0 and s[k] == '\\':
+                cnt += 1
+                k -= 1
+            return cnt % 2 == 1
+        if len(line) < 2 or not trailing_escape(line):
+            return line
+        res = line[:-2] + '\n'
+        while True:
+            s = self.get_stdin_line()
+            if s == '':
+                raise EdError('Unexpected end-of-file')
+            if len(s) >= 2 and trailing_escape(s):
+                res += s[:-2] + '\n'
+            else:
+                res += s
+                break
+        return res
+
+    def exec_global(self, match_mode):
+        cmd = self.get_extended_line()
+        self.clear_undo()
+        active = self.active
+        try:
+            for obj in active:
+                if self.active_set is None:
+                    break
+                if id(obj) not in self.active_set:
+                    continue
+                self.active_set.discard(id(obj))
+                addr = -1
+                for i, o in enumerate(self.lines):
+                    if o is obj:
+                        addr = i + 1
+                        break
+                if addr < 0:
+                    raise EdError('Invalid address')
+                self.cur = addr
+                self.buf = cmd
+                self.bi = 0
+                while self.bi < len(self.buf):
+                    st = self.exec_command(0, True)
+                    if st == QUIT or st == EMOD:
+                        return st
+        finally:
+            self.active = None
+            self.active_set = None
+        return 0
+
+    # -- main command dispatcher ---------------------------------------------
+    def exec_command(self, prev_status, isglobal):
+        addr_cnt = self.extract_addresses()
+        self.skip_blanks()
+        c = self.getc()
+        pflags = 0
+        if c == 'a' or c == 'i':
+            pflags = self.get_command_suffix()
+            if not isglobal:
+                self.clear_undo()
+            self.append_lines(self.second_addr, c == 'i', isglobal)
+        elif c == 'c':
+            if self.first_addr == 0:
+                self.first_addr = 1
+            if self.second_addr == 0:
+                self.second_addr = 1
+            self.check_addr_range2(addr_cnt)
+            pflags = self.get_command_suffix()
+            if not isglobal:
+                self.clear_undo()
+            frm = self.first_addr
+            self.delete_lines(self.first_addr, self.second_addr, isglobal)
+            self.cur = min(frm, self.last)
+            self.append_lines(self.cur, self.cur >= frm, isglobal)
+        elif c == 'd':
+            self.check_addr_range2(addr_cnt)
+            pflags = self.get_command_suffix()
+            if not isglobal:
+                self.clear_undo()
+            self.delete_lines(self.first_addr, self.second_addr, isglobal)
+            self.cur = min(self.cur + 1, self.last)
+        elif c == 'e' or c == 'E':
+            if c == 'e' and self.modified and prev_status != EMOD:
+                return EMOD
+            self.unexpected_address(addr_cnt)
+            self.unexpected_command_suffix()
+            fnp = self.get_filename()
+            self.lines = []
+            self.cur = 0
+            if fnp:
+                self.def_filename = fnp
+            self.modified = False
+            self.reset_undo()
+            self.read_file(fnp if fnp else self.def_filename, 0)
+            self.modified = False
+            self.reset_undo()
+        elif c == 'f':
+            self.unexpected_address(addr_cnt)
+            self.unexpected_command_suffix()
+            fnp = self.get_filename()
+            if fnp:
+                self.def_filename = fnp
+            self.write(self.def_filename + '\n')
+        elif c in ('g', 'v', 'G', 'V'):
+            if isglobal:
+                raise EdError('Cannot nest global commands')
+            if c in ('G', 'V'):
+                raise EdError('Unsupported')
+            self.check_addr_range(1, self.last, addr_cnt)
+            rx = self.get_compiled_regex(True)
+            want = c == 'g'
+            active = []
+            for a in range(self.first_addr, self.second_addr + 1):
+                o = self.lines[a - 1]
+                if (rx.search(o.text) is not None) == want:
+                    active.append(o)
+            self.active = active
+            self.active_set = set(id(o) for o in active)
+            st = self.exec_global(want)
+            if st:
+                return st
+        elif c == 'h' or c == 'H':
+            self.unexpected_address(addr_cnt)
+            pflags = self.get_command_suffix()
+        elif c == 'j':
+            self.check_addr_range(self.cur, self.cur + 1, addr_cnt)
+            pflags = self.get_command_suffix()
+            if not isglobal:
+                self.clear_undo()
+            if self.first_addr < self.second_addr:
+                frm, to = self.first_addr, self.second_addr
+                text = ''.join(o.text for o in self.lines[frm - 1:to])
+                self.delete_lines(frm, to, isglobal)
+                self.lines.insert(frm - 1, Line(text))
+                self.cur = frm
+                self.touch()
+        elif c == 'k':
+            m = self.getc()
+            if self.second_addr == 0:
+                self.invalid_address()
+            pflags = self.get_command_suffix()
+            if not ('a' <= m <= 'z') or len(m) != 1:
+                raise EdError('Invalid mark character')
+            self.marks[m] = self.lines[self.second_addr - 1]
+        elif c in ('l', 'n', 'p'):
+            n = PF_L if c == 'l' else (PF_N if c == 'n' else PF_P)
+            self.check_addr_range2(addr_cnt)
+            pflags = self.get_command_suffix()
+            self.print_lines(self.first_addr, self.second_addr, pflags | n)
+            pflags = 0
+        elif c == 'm':
+            self.check_addr_range2(addr_cnt)
+            addr = self.get_third_addr()
+            if addr >= self.first_addr and addr < self.second_addr:
+                raise EdError('Invalid destination')
+            pflags = self.get_command_suffix()
+            if not isglobal:
+                self.clear_undo()
+            frm, to = self.first_addr, self.second_addr
+            block = self.lines[frm - 1:to]
+            if addr == frm - 1 or addr == to:
+                self.cur = to
+            else:
+                del self.lines[frm - 1:to]
+                if addr < frm:
+                    self.lines[addr:addr] = block
+                    self.cur = addr + (to - frm + 1)
+                else:
+                    ins = addr - (to - frm + 1)
+                    self.lines[ins:ins] = block
+                    self.cur = addr
+                self.u_atoms = True
+            if isglobal:
+                self.unset_active(block)
+            self.modified = True
+        elif c == 'P':
+            self.unexpected_address(addr_cnt)
+            pflags = self.get_command_suffix()
+        elif c == 'q' or c == 'Q':
+            self.unexpected_address(addr_cnt)
+            pflags = self.get_command_suffix()
+            if c == 'q' and self.modified and prev_status != EMOD:
+                return EMOD
+            return QUIT
+        elif c == 'r':
+            self.unexpected_command_suffix()
+            if addr_cnt == 0:
+                self.second_addr = self.last
+            fnp = self.get_filename()
+            if not self.def_filename and fnp:
+                self.def_filename = fnp
+            if not isglobal:
+                self.clear_undo()
+            n = self.read_file(fnp if fnp else self.def_filename, self.second_addr)
+            if n:
+                self.touch()
+        elif c == 's':
+            pflags = self.command_s(addr_cnt, isglobal)
+        elif c == 't':
+            self.check_addr_range2(addr_cnt)
+            addr = self.get_third_addr()
+            pflags = self.get_command_suffix()
+            if not isglobal:
+                self.clear_undo()
+            block = [Line(o.text) for o in self.lines[self.first_addr - 1:self.second_addr]]
+            self.lines[addr:addr] = block
+            self.cur = addr + len(block)
+            self.touch()
+        elif c == 'u':
+            self.unexpected_address(addr_cnt)
+            pflags = self.get_command_suffix()
+            if not self.u_atoms or self.u_lines is None or self.u_cur < 0:
+                raise EdError('Nothing to undo')
+            self.lines, self.u_lines = self.u_lines, self.lines
+            self.cur, self.u_cur = self.u_cur, self.cur
+            self.modified, self.u_mod = self.u_mod, self.modified
+            if isglobal and self.active_set is not None:
+                self.active_set.clear()
+        elif c == 'w' or c == 'W':
+            n = self.peek()
+            if n in ('q', 'Q'):
+                self.bi += 1
+            self.unexpected_command_suffix()
+            fnp = self.get_filename()
+            if addr_cnt == 0 and self.last == 0:
+                self.first_addr = self.second_addr = 0
+            else:
+                self.check_addr_range(1, self.last, addr_cnt)
+            if not self.def_filename and fnp:
+                self.def_filename = fnp
+            cnt = self.write_file(fnp if fnp else self.def_filename,
+                                  'a' if c == 'W' else 'w',
+                                  self.first_addr, self.second_addr)
+            if cnt == self.last:
+                self.modified = False
+            elif n == 'q' and self.modified and prev_status != EMOD:
+                return EMOD
+            if n in ('q', 'Q'):
+                return QUIT
+        elif c == '=':
+            pflags = self.get_command_suffix()
+            self.write('%d\n' % (self.second_addr if addr_cnt else self.last))
+        elif c == '\n':
+            self.first_addr = 1
+            self.check_second_addr(self.cur + (0 if isglobal else 1), addr_cnt)
+            self.print_lines(self.second_addr, self.second_addr, 0)
+        elif c == '#':
+            j = self.buf.find('\n', self.bi)
+            self.bi = len(self.buf) if j < 0 else j + 1
+        else:
+            raise EdError('Unknown command')
+        if pflags:
+            self.print_lines(self.cur, self.cur, pflags)
+        return 0
+
+    def main_loop(self):
+        status = 0
+        err_status = 0
+        while True:
+            self.flush()
+            line = self.get_stdin_line()
+            if line == '':
+                line = 'q\n'
+            self.buf = line
+            self.bi = 0
+            try:
+                status = self.exec_command(status, False)
+            except EdError:
+                status = ERR
+            except RecursionError:
+                status = ERR
+            except (IndexError, ValueError, TypeError, KeyError):
+                status = ERR
+            if status == 0:
+                continue
+            if status == QUIT:
+                return err_status
+            self.write('?\n')
+            if not self.loose and err_status == 0:
+                err_status = 1
+            if self.regular_stdin:
+                return err_status
+
+
+def main(argv):
+    ere = loose = script = False
+    fname = None
+    for a in argv:
+        if len(a) > 1 and a[0] == '-':
+            for ch in a[1:]:
+                if ch == 'E':
+                    ere = True
+                elif ch == 'l':
+                    loose = True
+                elif ch == 's':
+                    script = True
+                else:
+                    sys.stderr.write('ed: invalid option -- %s\n' % ch)
+                    return 1
+        else:
+            fname = a
+    try:
+        data = sys.stdin.buffer.read()
+    except Exception:
+        data = b''
+    try:
+        regular = stat.S_ISREG(os.fstat(0).st_mode)
+    except Exception:
+        regular = False
+    ed = Ed(data.decode('latin-1'), regular, ere, loose, script)
+    if fname is not None:
+        ed.def_filename = fname
+        try:
+            ed.read_file(fname, 0)
+        except EdError:
+            sys.stderr.write('%s: No such file or directory\n' % fname)
+            if regular:
+                ed.flush()
+                return 2
+        ed.cur = ed.last
+        ed.modified = False
+        ed.reset_undo()
+    try:
+        rc = ed.main_loop()
+    finally:
+        ed.flush()
+    return rc
+
+
+if __name__ == '__main__':
+    sys.setrecursionlimit(10000)
+    sys.exit(main(sys.argv[1:]))

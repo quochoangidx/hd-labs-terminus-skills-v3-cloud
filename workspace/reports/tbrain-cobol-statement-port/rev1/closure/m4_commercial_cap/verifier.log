@@ -1,0 +1,234 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 54 items
+
+../../tests/test_outputs.py .........F................................F. [ 81%]
+..........                                                               [100%]
+
+=================================== FAILURES ===================================
+________________________ test_large_commercial_accounts ________________________
+
+    def test_large_commercial_accounts():
+>       check("large_commercial_accounts")
+
+/tests/test_outputs.py:188: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/large_commercial_accounts.dat'
+payments_source = '/tests/cases/large_commercial_accounts.pay'
+tag = 'large_commercial_accounts'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 360, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 344, in main
+E                 one_account(rec, out, totals)
+E                 ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+E               File "/app/port/wbill.py", line 169, in one_account
+E                 raise ValueError("usage over cap")
+E             ValueError: usage over cap
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_14 _______________________________
+
+    def test_generated_14():
+>       check("generated_14")
+
+/tests/test_outputs.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_14.dat'
+payments_source = '/tests/cases/generated_14.pay', tag = 'generated_14'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 360, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 344, in main
+E                 one_account(rec, out, totals)
+E                 ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+E               File "/app/port/wbill.py", line 169, in one_account
+E                 raise ValueError("usage over cap")
+E             ValueError: usage over cap
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_every_case_has_an_expected_statement
+PASSED ../../tests/test_outputs.py::test_band_boundaries
+PASSED ../../tests/test_outputs.py::test_credit_balances
+PASSED ../../tests/test_outputs.py::test_date_and_region
+PASSED ../../tests/test_outputs.py::test_district_run
+PASSED ../../tests/test_outputs.py::test_empty_file
+PASSED ../../tests/test_outputs.py::test_header_missing
+PASSED ../../tests/test_outputs.py::test_header_only
+PASSED ../../tests/test_outputs.py::test_header_out_of_place
+PASSED ../../tests/test_outputs.py::test_long_run
+PASSED ../../tests/test_outputs.py::test_meter_rollover
+PASSED ../../tests/test_outputs.py::test_names_of_every_shape
+PASSED ../../tests/test_outputs.py::test_postings_amount_forms
+PASSED ../../tests/test_outputs.py::test_postings_empty
+PASSED ../../tests/test_outputs.py::test_postings_kinds_and_accounts
+PASSED ../../tests/test_outputs.py::test_postings_memos
+PASSED ../../tests/test_outputs.py::test_postings_ordinary
+PASSED ../../tests/test_outputs.py::test_postings_rounding_modes
+PASSED ../../tests/test_outputs.py::test_postings_with_fewer_fields
+PASSED ../../tests/test_outputs.py::test_rejected_records
+PASSED ../../tests/test_outputs.py::test_rounding_boundaries
+PASSED ../../tests/test_outputs.py::test_short_lines
+PASSED ../../tests/test_outputs.py::test_two_headers
+PASSED ../../tests/test_outputs.py::test_zero_amounts
+PASSED ../../tests/test_outputs.py::test_other_record_types
+PASSED ../../tests/test_outputs.py::test_short_header
+PASSED ../../tests/test_outputs.py::test_header_date_and_part_region
+PASSED ../../tests/test_outputs.py::test_blank_line_first
+PASSED ../../tests/test_outputs.py::test_generated_01
+PASSED ../../tests/test_outputs.py::test_generated_02
+PASSED ../../tests/test_outputs.py::test_generated_03
+PASSED ../../tests/test_outputs.py::test_generated_04
+PASSED ../../tests/test_outputs.py::test_generated_05
+PASSED ../../tests/test_outputs.py::test_generated_06
+PASSED ../../tests/test_outputs.py::test_generated_07
+PASSED ../../tests/test_outputs.py::test_generated_08
+PASSED ../../tests/test_outputs.py::test_generated_09
+PASSED ../../tests/test_outputs.py::test_generated_10
+PASSED ../../tests/test_outputs.py::test_generated_11
+PASSED ../../tests/test_outputs.py::test_generated_12
+PASSED ../../tests/test_outputs.py::test_generated_13
+PASSED ../../tests/test_outputs.py::test_generated_15
+PASSED ../../tests/test_outputs.py::test_generated_16
+PASSED ../../tests/test_outputs.py::test_generated_17
+PASSED ../../tests/test_outputs.py::test_generated_18
+PASSED ../../tests/test_outputs.py::test_generated_19
+PASSED ../../tests/test_outputs.py::test_generated_20
+PASSED ../../tests/test_outputs.py::test_generated_21
+PASSED ../../tests/test_outputs.py::test_generated_22
+PASSED ../../tests/test_outputs.py::test_generated_23
+PASSED ../../tests/test_outputs.py::test_generated_24
+PASSED ../../tests/test_outputs.py::test_supplied_production_sample
+FAILED ../../tests/test_outputs.py::test_large_commercial_accounts - Assertio...
+FAILED ../../tests/test_outputs.py::test_generated_14 - AssertionError: the p...
+========================= 2 failed, 52 passed in 1.28s =========================

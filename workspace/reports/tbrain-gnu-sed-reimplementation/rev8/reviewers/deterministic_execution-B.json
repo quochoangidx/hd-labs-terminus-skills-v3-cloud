@@ -1,0 +1,209 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-B",
+  "snapshot_sha256": "d1e1daa9b7f760fc2ef54e5302bcfffd2ae5c1a4e0da387ba432453d620dfa2a",
+  "severity": "None",
+  "summary": "No determinism defect found. All 1,606 cases are fixed committed fixtures, so nothing is drawn at random. Expected results come from GNU sed 4.9 in a digest-pinned image run with LC_ALL=C. No clock, network, seed or filesystem ordering reaches grading. Random temp directory names are D-3-style scratch space. By static cost estimate, the reference runs well inside the 5 s per-run limit, including on the long-line sweep.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "task.toml",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/cases/inputs.json",
+      "tests/cases/areas.json",
+      "tests/cases/areas_2.json",
+      "tests/cases/mixed_1_2.json",
+      "tests/cases/mixed_3_4.json",
+      "tests/cases/matrix.json",
+      "tests/cases/sweeps.json",
+      "solution/solve.sh",
+      "solution/pysed/sed.py",
+      "solution/pysed/posixre.py",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/pysed/sed.py",
+      "environment/app/docs/scope.md",
+      "environment/app/docs/sed.txt"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/docs/sed.txt:2841-3924 (chapter 7 sample scripts) and 4124-end (footnotes, FDL licence, indices). scope.md does not cite these parts, and the brief limits the required reading to the cited sections. Lines 1-2840 (chapters 1-6) and 3925-4124 (chapters 8-10, including the N-on-last-line entry) were read."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled every file listed in packet-manifest.json against the files read. All 23 task files and both panel docs were opened, and sed.txt was read in pages covering the sections scope.md cites.",
+    "Traced load_cases (tests/test_outputs.py:50-73). Cases come only from the committed JSON files plus inputs.json aliases. A FAMILY_COUNTS roster assertion fixes the case set, and there is no generator, seed, or draw.",
+    "Traced the expected-result source (tests/test_outputs.py:142-161). For each case, /bin/sed from the verifier image runs at test time. tests/Dockerfile:1 pins that image to the same sha256 digest as environment/Dockerfile:1, so the sed binary is fixed.",
+    "Checked the process environment (tests/test_outputs.py:109). Both the reference sed and the candidate get LC_ALL=C and fixed PATH and HOME. No TZ, date or clock value is used anywhere in the tests or the solution.",
+    "Traced tempfile.mkdtemp (tests/test_outputs.py:118-127). The random directory is only the cwd. Case file names are fixed relative names such as f1 and m, and only stderr (discarded at line 132) could contain the path, so the random name cannot change graded stdout or exit status (examples D-3).",
+    "Checked missing-file and '-' entries. A null text is never created inside a fresh per-case directory (line 122-123), so absence is guaranteed on every run. stdin is the same fixed bytes for both runs.",
+    "Checked pipe and IO races. The largest input (the long alias in inputs.json:14) is a few KB, below any pipe buffer. communicate() tolerates early exit after q or Q, stderr goes to DEVNULL, and the process-group kill on timeout is deterministic.",
+    "Checked the reference for hash-seed dependence, since PYTHONHASHSEED is unset in ENV. posixre.py uses sets only for membership (seen at lines 277-283, frozenset char classes). Threads are kept in ordered lists, and sed.py never iterates a set or dict to build output. The reference output therefore does not vary with hash randomization.",
+    "Estimated reference cost against TIMEOUT=5 (tests/test_outputs.py:108) on the long-line sweep (sweeps.json:2-17). Per-start matching in posixre.py:258-265 fails at the first character or the bol assertion for every start except the matching one. a\\{2050\\} and (ab){700} each run as a single linear thread. s/b/X/4000 and h;G;G;s/\\n/+/g are linear in pattern-space size. Every other case uses inputs of a few dozen short lines. No case comes near the limit, and this is a static estimate, not a timed run.",
+    "Checked GNU sed timing on the same sweep. Address regexes and &-only substitutions need at most one register, and GNU sed is compiled C. The expected side would need to hit the 5 s timeout for a timeout-based nondeterminism to occur, and nothing suggests that it does.",
+    "Checked test ordering. The tests are independent: each case builds and removes its own directory, and CASES is read-only. pytest runs with -p no:randomly and no cacheprovider (tests/test.sh:25), and no test depends on another test's state.",
+    "Checked dependencies. The base images are digest-pinned, pytest and its plugin are pinned by version (tests/Dockerfile:3), and grading needs no network (task.toml verifier network_mode no-network). Everything the candidate needs is under /app or in the standard library. The apt packages in environment/Dockerfile:3 are unpinned but only affect the agent image; they do not affect the verifier image or GNU sed.",
+    "Checked readiness and sleeps. No services are started, no sleeps are used, and every wait is a subprocess completion with an explicit timeout.",
+    "Checked the whole-verifier budget. The 1,606 sequential cases at typical Python startup (~0.1 s) plus sed stay well under verifier timeout_sec=3600 (task.toml:19). This budget could only bind for a candidate averaging more than about 2.2 s per case, which the fixture sizes make implausible, so it is not treated as a finding.",
+    "Checked the guard and permission setup (tests/test.sh:15-21; tests/test_outputs.py:85-107, 332-355). chmod and setpriv are applied the same way on every run. The audit-hook decision depends only on the import path, not on timing or ordering."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fixed fixtures / explicit stable seed; boundary cases guaranteed",
+      "status": "checked",
+      "reason": "Every graded case is a literal JSON row. No generator or RNG exists, and the roster assertion pins the family counts, so boundary cases (long lines, missing files, '-', q/Q codes, empty files) are always present.",
+      "evidence": [
+        "tests/test_outputs.py:20-76",
+        "tests/cases/sweeps.json:2-17",
+        "tests/cases/matrix.json:1779-2324",
+        "tests/cases/inputs.json:1-21"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Evaluation clock fixed when expiry or time windows are graded",
+      "status": "not_applicable",
+      "reason": "No graded rule depends on dates or time. No date or time API appears in the tests or the reference.",
+      "evidence": [
+        "tests/test_outputs.py:12-17",
+        "solution/pysed/sed.py:6-10"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Pinned dependencies and local inputs",
+      "status": "checked",
+      "reason": "Both images are pinned to the same digest, so the expected results come from the same GNU sed 4.9 each time. pytest versions are pinned, the verifier has no network, and all inputs are local JSON.",
+      "evidence": [
+        "tests/Dockerfile:1-3",
+        "environment/Dockerfile:1-6",
+        "task.toml:18-21"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Ordering sorted where required; equivalent orderings accepted where not",
+      "status": "checked",
+      "reason": "The contract requires byte-exact stdout matching GNU sed, which is inherently ordered and deterministic. No directory listing or set iteration feeds any comparison. The os.walk at line 337 only feeds an existence check for ELF files.",
+      "evidence": [
+        "instruction.md:1",
+        "tests/test_outputs.py:153-154",
+        "tests/test_outputs.py:336-342"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Readiness condition instead of fixed sleep / timing assumptions",
+      "status": "checked",
+      "reason": "There are no sleeps or services. The per-run 5 s limit is stated in the contract, and the reference is far below it by static cost analysis. The whole-run budget of 3600 s leaves more than a tenfold margin for the reference.",
+      "evidence": [
+        "instruction.md:5",
+        "tests/test_outputs.py:108",
+        "tests/test_outputs.py:130-139",
+        "solution/pysed/posixre.py:258-326",
+        "task.toml:19"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated clean-run stability of correct and incorrect submissions",
+      "status": "checked",
+      "reason": "Static trace: the case set, expected outputs, environment, and comparison are identical across clean runs, and the only random value is a scratch directory name that is never graded. The reference is free of hash-seed effects, so the same submission gets the same verdict. No runs were executed.",
+      "evidence": [
+        "tests/test.sh:23-31",
+        "tests/test_outputs.py:118-161"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Filesystem and iteration ordering; mutable state between cases",
+      "status": "checked",
+      "reason": "Each case gets a fresh directory that is removed afterwards. /app is root-owned and not writable by the candidate uid, and CASES is never mutated.",
+      "evidence": [
+        "tests/test.sh:20-21",
+        "tests/test_outputs.py:146-152"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "per-run five-second limit",
+        "long-line sweep and interval repetitions up to 2050"
+      ],
+      "case_or_path": "sweeps.json:16 's/.*/&&/;s/a\\{2050\\}/two/' on @long and sweeps.json:12 '/^(ab){700}c$/=' through posixre _compile/_longest_at. Traced: one live thread per start, early failure at every other start, and linear total work.",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/sweeps.json:12",
+        "tests/cases/sweeps.json:16",
+        "solution/pysed/posixre.py:258-316",
+        "solution/pysed/posixre.py:358-375"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "a named file may not exist",
+        "per-case fresh working directory"
+      ],
+      "case_or_path": "matrix.json q/Q cases with file 'm' null. The file is never created in a new mkdtemp directory, so absence and exit status 2 are stable on every run.",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/matrix.json:1792-1806",
+        "tests/test_outputs.py:118-127"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "'-' among files reads standard input",
+        "stdin supplied through communicate"
+      ],
+      "case_or_path": "matrix_files cases with '-' in first, middle and last position. The same stdin bytes go to both sed and the candidate, the '-' entry is never created as a file, and there is no race.",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/matrix.json:2626-2920",
+        "tests/test_outputs.py:131-134"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "candidate run without PYTHONHASHSEED",
+        "byte-exact stdout comparison"
+      ],
+      "case_or_path": "Checked whether any set or dict iteration in the reference reaches output or match choice. The seen sets are membership-only and the thread lists are ordered, so no hash-order effect can reach output.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:109",
+        "solution/pysed/posixre.py:277-316",
+        "solution/pysed/sed.py:488-610"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "LC_ALL=C for both runs",
+        "bracket ranges and character classes over all ASCII"
+      ],
+      "case_or_path": "sweep_classes over @ascii. GNU sed runs in the C locale fixed by ENV, so class membership is stable across runs.",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/sweeps.json:61-104",
+        "tests/test_outputs.py:109"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,32 @@
+artifacts = ["/app/plans/"]
+name = "tbrain-bakery-fleet-dispatch"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Operations"
+subcategory = "Logistics"
+languages = ["python"]
+tags = ["vehicle-routing", "time-windows", "heterogeneous-fleet", "metaheuristics", "dispatch-planning"]
+expert_time_estimate_hours = 6
+difficulty_explanation = "Each morning is a heterogeneous-fleet vehicle routing problem with hard delivery windows, per-kind capacity, pace, shift length and range limits, fixed costs that dominate distance costs, and a limited count of each vehicle kind. The targets are the best plans found by several hours of multi-seed large-neighbourhood search, so a plan that is merely good fails. A routing engineer has to build a search that trades vehicle count against vehicle kind and distance at the same time, because the cheapest route on one kind is often not the cheapest plan once the fleet counts bind; has to choose departure times so long routes stay inside a shift without making an early-window stop late; and has to keep improving past the plateau where insertion heuristics and single-customer relocation stop, which takes moves that remove and rebuild several routes at once. The orders are synthetic but modelled on a wholesale bakery: clustered city customers, early market-hall windows, cafes with narrow morning windows, cargo bikes, vans and trucks. In practice this is the work of an operations-research or logistics engineer who builds and tunes route-optimisation for a distribution or last-mile delivery fleet."
+solution_explanation = "The reference plans come from a slack-induced string-removal search over the dispatch rules: remove short strings of consecutive customers from routes near a random customer, reinsert them at their cheapest feasible positions (a new route of any vehicle kind with spare count being one option), move each route to the cheapest kind that can run it and swap kinds between routes, and accept by simulated annealing; many seeds were run for a few hours in total and the cheapest plan kept. Departure times are the latest start that removes waiting without making any stop late, which keeps route duration inside the shift. The search is shipped as solution/search/sisr.py; solve.sh copies the four plans it produced and runs the checker on each."
+verification_explanation = "The verifier reads the four plan files as JSON data and evaluates them with its own copy of the dispatch rules and its own copies of the orders and targets, so nothing the agent edits in /app/tools or /app/orders affects grading and no candidate code runs. For each morning one test checks that the plan is runnable (every customer served exactly once, windows, capacity, shift, range, fleet counts, integer departures) and one checks that its integer cost is at or below the target. Plans are read as strict JSON through the checker's own loader, which rejects repeated keys, NaN and Infinity, and keys the plan format does not define. The reference plans pass all eight tests; the plans from the shipped planner fail (two mornings miss customers, the other two cost 30-45 percent over target)."
+relevant_experience = "Operations research on vehicle routing and fleet sizing: building and tuning large-neighbourhood and string-removal searches for time-windowed routing with heterogeneous fleets, and validating plans against depot operating rules."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 5400
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

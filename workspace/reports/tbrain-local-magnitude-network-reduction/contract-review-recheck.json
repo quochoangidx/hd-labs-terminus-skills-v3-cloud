@@ -1,0 +1,62 @@
+{
+  "reviewer_turn": "contract_review_recheck",
+  "changes_seen": [
+    "instruction.md: precedence sentence reworded ('keep the present calculation; every other step it passes through still follows NPM-4'); coverage paragraph adds 'sites whose broadband and strong-motion sensors arrive as separate recordings'",
+    "NPM-4 1.2 rewritten: a recording is one sensor's share of an event at a station; one or two amplitudes per recording; a station has one or two recordings per event, with equal epi_km; channel codes distinct per station per event",
+    "NPM-4 3.2: 'this part gives no correction for a distance outside it'",
+    "sample: CLDW's HNE/HNN channels removed (no station now has two recordings in the sample)",
+    "mlnet/*.py and tools/ml_bulletin.py unchanged (diffed against my earlier copy)"
+  ],
+  "prior_findings_status": [
+    {"id": "CR-1", "status": "open_verifier_side", "note": "2.3 wording unchanged; this is fine provided the verifier uses only binary-exact ties (1.5/0.5, 3/1, 0.75/0.25) and keeps other amplitudes at least ~1e-9 relative from 3x noise. Carry to verifier review, not a contract defect."},
+    {"id": "CR-2", "status": "closed", "note": "3.2 now states outright that no correction is given outside 10-600 km. With the instruction's silence clause and its no clamp/guard ban, keeping the shipped log-distance end-segment extrapolation (fed with hypocentral distance) follows from definitions. 3.3's 'the network does not' is now scoped by 'Between two listed distances' plus the explicit silence in 3.2."},
+    {"id": "CR-3", "status": "closed", "note": "Second independent trap added (recording vs station, see NEW-TRAP below). It is a different kind from CR-2 (aggregate/definitional, not silent-region preservation)."},
+    {"id": "CR-4", "status": "closed", "note": "Sentence now reads 'For such a value, keep the present calculation; every other step it passes through still follows NPM-4.'"},
+    {"id": "CR-5", "status": "open_verifier_side", "note": "Unchanged; the verifier must place 10/600 km boundary cases only on exact pairs (e.g. (6,8), (600,0), (360,480))."},
+    {"id": "CR-6", "status": "closed", "note": "No action needed; the crash at epi 0 goes away once hypocentral distance (>= 1 km) is used."}
+  ],
+  "reopened": [],
+  "new_text_review": {
+    "NEW-TRAP (1.2 + 4.3 + 5.2/5.3 + 6.1)": "Definitional chain: a recording is one sensor's share at a station (1.2); a station's magnitude is the mean of the channel magnitudes of its readings (4.3), so readings are pooled across both of the station's recordings as one flat mean (not a mean of per-sensor means); the report has one object per recording, and each carries the station magnitude (6.1), so both rows of a two-sensor station show the same ml; the median and the fewer-than-three rule count stations, not recordings (5.2, 5.3). Shipped bulletin.py collects one ml per recording row, so the natural fix double-counts a station in the median and in the count. I find it decidable. Every term is defined, 1.2 guarantees equal epi_km (so both rows share distance and contributes), and the coverage paragraph names the input shape. Two careful readers should agree. The contrary expert habit of treating each sensor stream as its own station is overruled by 1.2's explicit 'at a station' and 'a station has one or two recordings'.",
+    "ambiguity_check": [
+      "Pooled flat mean vs mean of per-recording means: 4.3's 'mean of the channel magnitudes of its readings' is flat. Determined.",
+      "Is a two-sensor station's contributes/distance possibly split? No: 1.2 fixes equal epi_km and depth is per event. Determined.",
+      "Could the silence clause be read as keeping shipped per-recording behaviour? No: NPM-4 governs station magnitude (4.3) and the median (5.2), so it is not a value without a rule. Determined.",
+      "1.2 now allows one or two amplitudes per recording, and up to two recordings per station, giving one to four channels per station, consistent with the instruction's 'one to four horizontal channels'.",
+      "1.1 'one to forty recordings' remains compatible with up to two per station.",
+      "Report order: rows per recording in file order, duplicate codes allowed, exact comparison of `code` works. Determined.",
+      "Recordings of one station need not be adjacent; nothing depends on adjacency. Determined."
+    ],
+    "new_findings": [
+      {"id": "RC-1", "severity": "polish", "location": "NPM-4 1.2", "issue": "'no two amplitudes of a station in one event share one' is worded slightly awkwardly ('share one' = share a channel code).", "suggested_fix": "Optional: 'no two amplitudes of one station in one event have the same channel'."},
+      {"id": "RC-2", "severity": "polish", "location": "verifier planning", "issue": "For the new trap to discriminate, verifier events need (a) two-sensor stations whose recordings carry unequal numbers of readings (to separate a pooled mean from a mean of means), (b) a two-station, three-recording event (null vs non-null), and (c) an event where double-counting shifts the median (e.g. an even/odd flip). Also cover a two-sensor station outside the table so both traps interact.", "suggested_fix": "Include witnesses RW1 and RW2 below or equivalents."}
+    ]
+  },
+  "findings": [
+    {"id": "RC-1", "severity": "polish", "location": "NPM-4 1.2", "issue": "Awkward phrase 'share one'.", "evidence": "1.2 text", "suggested_fix": "'have the same channel'"},
+    {"id": "RC-2", "severity": "polish", "location": "verifier planning", "issue": "Trap-2 witnesses must separate pooled mean from mean of means and station count from recording count.", "evidence": "RW1/RW2 below", "suggested_fix": "Add the witness shapes listed."}
+  ],
+  "witnesses": [
+    {"id": "RW0", "input": "repaired sample", "expected": "brsn2026gxqa ml 3.127131 (CLDW now two channels); brsn2026gxra ml 2.378985", "derivation": "same chain as before; no multi-recording station in the sample", "determined": true},
+    {"id": "RW1 (two stations, three recordings)", "input": "depth 0, corr 0; A epi 100 [HHE 1000/1, HHN 1000/1]; B epi 100 [HHE 100/1]; A epi 100 [HNE 10/1]", "expected": "rows A 2.350367, B 2.017033, A 2.350367, all contributes true; event ml null (2 contributing stations)", "derivation": "4.3 pooled mean of (3.017033, 3.017033, 1.017033); 5.3 counts stations. Per-recording reading gives rows 3.017/2.017/1.017 and ml 2.017033; mean of per-sensor means gives A = 2.017033", "determined": true},
+    {"id": "RW2 (median shift)", "input": "RW1 plus C epi 100 [HHE 300/1]", "expected": "event ml 2.350367 = median of {2.017033, 2.350367, 2.494155}; C row 2.494155", "derivation": "5.2 over three stations; double-counting gives an even median of four values, 2.255594", "determined": true},
+    {"id": "RW3 (silent near, carried)", "input": "depth 3, epi 4, 1000 nm, corr +0.1", "expected": "distance 5.0, contributes false, ml 1.457033 (kept log extrapolation, -log A0(5)=1.340)", "derivation": "3.2 explicit silence + instruction clause", "determined": true},
+    {"id": "RW4 (silent far, carried)", "input": "depth 0, epi 1000, 10 nm noise 1, corr 0", "expected": "ml 3.591533 (-log A0(1000)=5.574500)", "derivation": "same", "determined": true},
+    {"id": "RW5 (earlier W3/W6/W7/W8)", "input": "as in contract-review.json", "expected": "unchanged: 1.717033; 1.994155 (now needs its three channels split over two recordings, since a recording holds at most two amplitudes); W7 null; W8 2.597033", "derivation": "unchanged rules", "determined": true}
+  ],
+  "solver_path_screen": {
+    "pre_mortem": "The solver maps NPM-4 rules to modules as before and repairs gain, halving, readings, hypocentral distance, linear interpolation, correction sign, mean, median and the fewer-than-three rule. It writes a reference from the manual and differential-tests with self-generated bulletins. Two places escape that loop. (1) If it edits minus_log_a0 to linear, extrapolation turns linear too, and a reference written from 3.3 agrees. The explicit silence sentence in 3.2 now makes it more likely a careful solver keeps the log extrapolation. (2) If it reads the report's 'one object per recording' as per-recording magnitudes, it keeps bulletin.py's per-row counting, so a two-sensor station is double-counted in the median and the three-station count. Its own fuzzer, built on the same reading and on a sample that no longer contains a two-sensor station, will not flag this. The coverage-paragraph mention and the 1.2 definition make trap 2 findable, so Opus 5.5 locally will probably get both. Platform Opus 5 has two independent chances to miss.",
+    "scores": {
+      "reference_unreachable": 2,
+      "authority_incomplete_for_grading": 3,
+      "hidden_state_not_closed_form": 1,
+      "restraint_traps": 4,
+      "fuzz_blind_spot": 4
+    },
+    "self_verification_resistance": 4,
+    "prediction": "resists",
+    "confidence": "low",
+    "decisive_reason": "Two independent traps of different kinds now sit where self-built references share the solver's reading: a silent-region preservation inside the interpolation function, and a recording-vs-station pooling inside the median/count aggregate. Both are fair by definitional chain, but each is easy to miss when fixing the obvious departure."
+  },
+  "overall": "accept"
+}

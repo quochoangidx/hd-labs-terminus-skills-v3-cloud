@@ -1,0 +1,253 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "c2ad3e96418987aad8d954bcfb2e671206078dd8de61827a107ffba60bba49fe",
+  "severity": "Advisory",
+  "summary": "The verifier compares the complete report of every graded survey against sealed goldens, and it has an isolating case for every manual rule and for each figure the manual leaves to today's code (below-three-quarters projection including the sampled>=480 branch, above-ceiling counting, and measured-nothing). It also runs shift- and level-invariance differentials against the shipped copy. No plausible wrong implementation that passes and no contract-valid output that fails was found. One advisory: the sealing-control assertion depends on candidate-controlled /app/README.md.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/noise-survey-manual.md",
+      "environment/app/examples/press-shop-day.json",
+      "environment/app/tools/noisedose_run.py",
+      "environment/app/src/noisedose/__init__.py",
+      "environment/app/src/noisedose/flags.py",
+      "environment/app/src/noisedose/groups.py",
+      "environment/app/src/noisedose/levels.py",
+      "environment/app/src/noisedose/report.py",
+      "environment/app/src/noisedose/runs.py",
+      "environment/app/src/noisedose/shift.py",
+      "environment/app/src/noisedose/survey.py",
+      "environment/app/src/noisedose/twa.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/above_ceiling.jsonl",
+      "tests/expected/below_three_quarters.jsonl",
+      "tests/expected/ceiling_level.jsonl",
+      "tests/expected/differential-above_ceiling.jsonl",
+      "tests/expected/differential-below_three_quarters.jsonl",
+      "tests/expected/differential-measured_nothing.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/groups.jsonl",
+      "tests/expected/impulse.jsonl",
+      "tests/expected/limits_logs.jsonl",
+      "tests/expected/limits_workers.jsonl",
+      "tests/expected/measured_nothing.jsonl",
+      "tests/expected/partial_surveys.jsonl",
+      "tests/expected/paused_runs.jsonl",
+      "tests/expected/quiet_members.jsonl",
+      "tests/expected/reference_duration.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/rounding.jsonl",
+      "tests/expected/sampled_time.jsonl",
+      "tests/expected/status.jsonl",
+      "tests/expected/three_quarters.jsonl",
+      "tests/expected/threshold.jsonl",
+      "tests/expected/twa.jsonl",
+      "tests/expected/whole_shift.jsonl",
+      "tests/shipped/app/tools/noisedose_run.py",
+      "tests/shipped/app/src/noisedose/__init__.py",
+      "tests/shipped/app/src/noisedose/flags.py",
+      "tests/shipped/app/src/noisedose/groups.py",
+      "tests/shipped/app/src/noisedose/levels.py",
+      "tests/shipped/app/src/noisedose/report.py",
+      "tests/shipped/app/src/noisedose/runs.py",
+      "tests/shipped/app/src/noisedose/shift.py",
+      "tests/shipped/app/src/noisedose/survey.py",
+      "tests/shipped/app/src/noisedose/twa.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "SOUND_VERIFIER-1",
+      "severity": "Advisory",
+      "claim": "test_candidate_cannot_read_verifier_state uses the candidate-controlled file /app/README.md as its positive control. A submission that deletes or moves that file fails the test and earns reward 0, even when every reduced report is correct.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "The grade should depend on the reports printed by the documented driver and on the driver bytes (instruction.md:1). The contract does not say that /app/README.md must remain.",
+        "actual_behavior": "If /app/README.md is absent, the control probe gets an OSError and exits 0. _unreadable_by_candidate therefore returns True, `assert not ...` fails, pytest exits non-zero, and test.sh writes reward 0.",
+        "trace_or_receipt": "tests/test_outputs.py:334-337: the probe opens the target and calls sys.exit(0) on OSError, and code==0 means 'unreadable'. tests/test_outputs.py:344 asserts that /app/README.md is NOT unreadable. On a missing file, open() raises FileNotFoundError, the probe exits 0, and the assertion fails. tests/test.sh:20-27 then sets reward 1 only when rc==0. Static trace; not executed."
+      },
+      "reachable_case_or_path": "A candidate fixes the package correctly and also deletes or renames /app/README.md, for example while tidying docs. All reduction tests pass and test_candidate_cannot_read_verifier_state fails, so the reward is 0.",
+      "graded_effect": "A correct reduction can be rejected because of an unrelated file. It is kept as Advisory, not Minor, because instruction.md:2 says 'Only change what the manual governs', which arguably excludes deleting the README. Such a submission is also an unusual action rather than a plausible implementation choice.",
+      "citations": [
+        "tests/test_outputs.py:334-344",
+        "tests/test.sh:20-27",
+        "instruction.md:1-2"
+      ],
+      "root_invariant": "A verifier self-check control should depend on verifier-owned state, not on files that the candidate can alter.",
+      "authority": [
+        "instruction.md:1-2",
+        "_panel_docs/quality-panel-judge-guide.md:179-190"
+      ],
+      "implementation_sites": [
+        "tests/test_outputs.py:344"
+      ],
+      "sibling_variants": [
+        "The other probe targets (/tests, ROSTER, SHIPPED_RUN, /logs/verifier) are verifier-owned and 0700 (tests/test.sh:15, tests/test_outputs.py:74-81), so the candidate cannot flip them. No sibling is candidate-dependent."
+      ],
+      "interaction_variants": [
+        "tests/test.sh:16 `chmod -R a+rX /app` restores read permission, so only deletion or replacement of the control file (not a mode change) triggers this path."
+      ],
+      "minimal_repair_boundary": "Point the positive control at a verifier-created world-readable temporary file instead of /app/README.md.",
+      "closure_evidence": [
+        "A correct submission with /app/README.md removed passes.",
+        "The sealed targets remain unreadable to uid 65534."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Mapped every manual rule (2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 4.1, 1.2 rounding, 5.1, 5.2, 5.3, 6.1) and the README ordering to a family test plus a golden case whose outcome changes when the rule is wrong. Hand-recomputed representative goldens: reference_duration A1-A7, threshold A1/A2/A3, sampled_time A1/B1/B2, paused_runs A1, partial_surveys A1/B2/B3, whole_shift A1/A3/B1, three_quarters A2/B2, below_three_quarters X1/X2/Y1-Y5/V1/V2, above_ceiling Y1/Z1/Z2, rounding R0-R4, status S1-S4/T0-T3, groups G1, quiet_members G1, measured_nothing G1.",
+    "Traced wrong-implementation mutants against the goldens. Each is rejected: federal 90/5 criterion; threshold >80 (threshold A1); quiet readings excluded from sampled time (sampled_time A1, below_three_quarters V1); paused runs counted as readings (paused_runs A1/A2); projection to 480 instead of the own shift (partial_surveys A1/B3); projecting surveys at or above the shift (whole_shift A1/B2); below-three-quarters projected to the shift (below_three_quarters X1/Y1, differential pairs); always x480/sampled for sampled>=480 (below_three_quarters Y1/X2); today's counted-only sampled time in the kept step (V1); above-ceiling counted at own level (above_ceiling, differential); ceiling flag at >=115 (ceiling_level); impulse >140 (impulse A2); floor/ceil instead of half-up rounding (rounding R0/R1/R4); status on unrounded TWA (status T0/T1/T3); group mean of TWAs (groups G1); quiet members skipped in group mean (quiet_members G1); flag-driven group status (status H9, measured_nothing G2); wrong group sort (report_order).",
+    "Checked the comparator in both directions. It parses JSON and compares by key (extra keys ignored), and it checks value types (bool for flags, str for status, None for a null twa). Dose tolerance matches instruction.md:5 (relative 1e-6 at or above 1, absolute 1e-6 below 1). twa is compared to 1e-6 against a tenth. List order is enforced, as the contract requires.",
+    "Checked the float-rounding fragility of the tenth-rounded TWA. Exact .x5 halves are mathematically unreachable for rational doses. The designed boundary cases sit at least about 0.004 dB from a rounding edge (rounding R0-R4, status T0-T3, limits L280 at 84.9549).",
+    "Checked that each differential pair is truly on the kept branch for both surveys. All 5 below-three-quarters pairs have 4*sampled < 3*shift on both sides. The above-ceiling pairs differ only in a level of 115.0 or more. The measured-nothing pairs have no readings.",
+    "Confirmed that tests/shipped/app is byte-identical to environment/app via the manifest hashes and by reading both copies. The differential therefore uses today's code.",
+    "Checked that the load() gates (roster digest and count, section 1.4 limits, TRAP_INPUTS) keep open inputs out of families that do not declare them.",
+    "Checked driver-integrity grading. test_submitted_driver_unchanged and the test.sh cmp both match instruction.md:1 ('match ours byte for byte').",
+    "task.toml is not present in this packet (metadata is withheld for this axis by design). tests/Dockerfile was read."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Every manual rule and README ordering rule has a dedicated family test with a discriminating golden case (see checks_performed).",
+      "evidence": ["tests/test_outputs.py:225-331", "environment/app/docs/noise-survey-manual.md:13-103"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result (values, membership, uniqueness, required outputs)",
+      "status": "checked",
+      "reason": "compare() checks the survey name, row counts, and every README key of every worker and group row, in order.",
+      "evidence": ["tests/test_outputs.py:184-209", "environment/app/README.md:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rules each have a case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "Isolating cases exist for the threshold at 80.0 vs 79.9, the ceiling at 115.0 vs 115.1, the impulse at 140.0 vs 139.9, three quarters exactly, the status bands at 82.0 and 85.0 on rounded vs unrounded TWA, quiet readings in sampled time, paused runs, and group mean of doses vs TWAs.",
+      "evidence": ["tests/expected/threshold.jsonl:1", "tests/expected/ceiling_level.jsonl:1", "tests/expected/impulse.jsonl:1", "tests/expected/three_quarters.jsonl:1-2", "tests/expected/status.jsonl:1", "tests/expected/groups.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Each mutant listed in checks_performed changes at least one compared field in a graded golden.",
+      "evidence": ["tests/expected/below_three_quarters.jsonl:1-3", "tests/expected/sampled_time.jsonl:1-2", "tests/expected/rounding.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives for formatting, ordering and implementation choices are accepted",
+      "status": "checked",
+      "reason": "Output is parsed as JSON and extra keys are ignored. Numeric tolerances follow instruction.md:5. int or float is accepted for dose and twa. Float-evaluation-order differences stay far inside the tolerances and away from rounding edges. One candidate-state-dependent control is noted as advisory.",
+      "evidence": ["tests/test_outputs.py:178-194", "tests/test_outputs.py:344", "instruction.md:5"],
+      "finding_ids": ["SOUND_VERIFIER-1"]
+    },
+    {
+      "category": "Figures left to today's code (kept steps) are graded against today's behaviour without over-constraining",
+      "status": "checked",
+      "reason": "Goldens fix values for the below-three-quarters projection (both the sampled<480 and sampled>=480 branches), above-ceiling counting at 115.0, and sampled==0. The differentials check invariance against the shipped copy, and every pair was verified to lie on the kept branch.",
+      "evidence": ["tests/test_outputs.py:212-222", "tests/expected/differential-below_three_quarters.jsonl:1-5", "tests/expected/differential-above_ceiling.jsonl:1-4", "tests/expected/differential-measured_nothing.jsonl:1-2", "environment/app/src/noisedose/shift.py:17-22", "environment/app/src/noisedose/runs.py:18-23"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle behavior enforced (driver unchanged)",
+      "status": "checked",
+      "reason": "The delivered driver bytes are recorded before replacement and compared to the shipped driver, and test.sh re-checks after the run.",
+      "evidence": ["tests/test_outputs.py:63-71", "tests/test_outputs.py:347-350", "tests/test.sh:22-27", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries, proxy behaviour, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "The candidate runs fresh on each survey through the verifier's own driver. Goldens are sealed and digest-pinned. The differential compares candidate a against candidate b only as an invariance check, while values are fixed by goldens elsewhere. load() rejects out-of-domain graded surveys.",
+      "evidence": ["tests/test_outputs.py:112-129", "tests/test_outputs.py:163-175"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities / sign partitions",
+      "status": "checked",
+      "reason": "Both signs of log2(D/100) are graded: TWAs well below 85 (53.3, 65.9, 71.x) and above 85, with status bands on both sides.",
+      "evidence": ["tests/expected/twa.jsonl:1", "tests/expected/generated.jsonl:1", "tests/expected/status.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization-to-first-event transition",
+      "status": "not_applicable",
+      "reason": "The reduction is a stateless per-worker sum plus a group mean. There is no event state machine in the contract.",
+      "evidence": ["environment/app/docs/noise-survey-manual.md:62-103"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding / representation",
+      "status": "checked",
+      "reason": "Only parsed JSON values are compared, and whitespace and key order are free. The contract keeps a byte-exact promise only for the driver, and the verifier enforces bytes only there.",
+      "evidence": ["tests/test_outputs.py:129", "tests/test_outputs.py:349", "instruction.md:1"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.4 sampled time includes quiet readings", "kept below-three-quarters projection"],
+      "case_or_path": "below_three_quarters V1: 120 min at 88 dBA plus 120 min at 70 dBA on a 480-minute shift. The correct dose is 100; a counted-only sampled time gives 200.",
+      "status": "checked",
+      "evidence": ["tests/expected/below_three_quarters.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.5 partial survey", "kept projection's 480-minute guard"],
+      "case_or_path": "below_three_quarters Y1: 500 min at 85 dBA on a 720-minute shift is below three quarters but sampled >= 480, so the dose is 104.1667 unprojected.",
+      "status": "checked",
+      "evidence": ["tests/expected/below_three_quarters.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2 paused runs", "2.5/3.3 partial projection"],
+      "case_or_path": "paused_runs A1: 370 reading minutes plus 105 paused on a 480-minute shift, projected by 480/370.",
+      "status": "checked",
+      "evidence": ["tests/expected/paused_runs.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.3 flagged worker is over", "6.1 group carries no flag"],
+      "case_or_path": "status U1/H9 (impulse member, group below) and measured_nothing A3/G2 (impulse with no TWA, group below).",
+      "status": "checked",
+      "evidence": ["tests/expected/status.jsonl:1", "tests/expected/measured_nothing.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["kept above-ceiling counting", "3.3 partial projection"],
+      "case_or_path": "above_ceiling Y1: 20 min at 118.5 counted at 115 plus 400 at 90 on a 480-minute shift, projected by 480/420.",
+      "status": "checked",
+      "evidence": ["tests/expected/above_ceiling.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 status on reported TWA", "6.1 group TWA from mean dose"],
+      "case_or_path": "measured_nothing HC4-0018 G1: mean dose 94.494 gives group TWA 84.8, action. quiet_members HC4-0028 G1: mean 66.67 gives 83.2, action.",
+      "status": "checked",
+      "evidence": ["tests/expected/measured_nothing.jsonl:2", "tests/expected/quiet_members.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["verifier sealing control", "candidate freedom over /app files"],
+      "case_or_path": "Deleting /app/README.md makes the positive control fail.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:334-344"],
+      "finding_ids": ["SOUND_VERIFIER-1"]
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

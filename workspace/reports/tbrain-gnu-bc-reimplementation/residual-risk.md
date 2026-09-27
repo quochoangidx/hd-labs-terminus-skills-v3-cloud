@@ -1,0 +1,7 @@
+# Residual risk — tbrain-gnu-bc-reimplementation (2026-09-25)
+
+- **Filtered, not stated.** Four readings are enforced by dropping programs instead of by a sentence: the manual's literal assignment-statement printing rule, clean 0/1 results from `&&` and `||`, the manual's base limits, and a negative zero from `^`. The instruction names the first and the last. A solver who picks either reading loses nothing on the retained programs.
+- **Contradictions between the manual and the binary are not graded.** The manual gives input bases 2..36 in one place and at most 16 in another, and output bases up to 999 while GNU accepts up to INT_MAX. The instruction keeps every case inside 16 and 999. `++ibase` stops at 16 while assignment allows 36; no case touches either edge.
+- **Syntax errors are out of scope.** GNU bc recovers from a syntax error and discards the block. The reference stops at the first one. No retained program contains one, and the instruction says programs are valid.
+- **The probe ran on a copy.** Both the agent and verifier networks were public, and pip was removed. Both artifacts were regraded offline with the final verifier. The trajectories show no install, network use or ctypes.
+- **Solvability.** 18 all-or-nothing behaviour tests with 67–130 programs each. Both counted GPT-5.6 runs failed on rules the manual or instruction states. A careful solver can pass, but one misread printing rule fails most families at once.

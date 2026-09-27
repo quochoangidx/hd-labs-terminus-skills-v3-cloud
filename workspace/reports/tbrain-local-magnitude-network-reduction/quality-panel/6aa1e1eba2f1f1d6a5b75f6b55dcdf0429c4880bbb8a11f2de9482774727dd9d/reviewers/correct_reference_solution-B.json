@@ -1,0 +1,160 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "6aa1e1eba2f1f1d6a5b75f6b55dcdf0429c4880bbb8a11f2de9482774727dd9d",
+  "severity": "None",
+  "summary": "The reference patch (solution/fix.patch applied by solve.sh) implements every NPM-4 rule in scope. It uses the 2080 magnification, half of the peak-to-peak value, the reading test at three times the noise, hypocentral distance, linear interpolation inside 10-600 km, the added station correction, the mean over readings, and one vote per station pooled across its recordings. It also takes the median and returns null below three contributors. Off-table corrections keep the shipped log-distance end-segment calculation, fed with the hypocentral distance, as the instruction requires. I found no incorrect behavior on normal, boundary or interaction paths.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/manual/npm4-local-magnitude.md",
+      "environment/app/mlnet/__init__.py",
+      "environment/app/mlnet/amplitude.py",
+      "environment/app/mlnet/distance.py",
+      "environment/app/mlnet/attenuation.py",
+      "environment/app/mlnet/station.py",
+      "environment/app/mlnet/network.py",
+      "environment/app/mlnet/bulletin.py",
+      "environment/app/tools/ml_bulletin.py",
+      "environment/app/samples/brsn-2026-04-12.json",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/seal.py",
+      "solution/jobgen.py",
+      "solution/fixtures.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced the patch application: solve.sh runs `cd /` and `patch -p1`, which maps a/app/mlnet/*.py to /app/mlnet/*.py. The Dockerfile installs `patch` and copies app/ to /app. The driver tools/ml_bulletin.py is not in the patch.",
+    "Compared every hunk header and its context lines with the shipped files. The pre-image line ranges and context text for amplitude.py 3-17, attenuation.py 32-37, bulletin.py 13-29, distance.py 1-10, network.py 16-22 and station.py 9-15 and 18-22 match the shipped sources. This is a static comparison only; I did not execute it.",
+    "Rule 2.2: the patched record_amplitude_mm returns amplitude_nm / 2 * 2080 * 1e-6, which matches the formula in NPM-4 2.2.",
+    "Rule 2.3 / 2.1: the reading test is amplitude_nm >= 3 * noise_nm. Both values are peak to peak under 2.1, so the comparison is like for like. Section 1.2 keeps every amplitude clear of the exact threshold by one part in a thousand.",
+    "Rule 3.1: distance is sqrt(epi^2 + depth^2). It feeds distance_km, the correction and contributes().",
+    "Rules 3.2/3.3: inside [10, 600] the correction is interpolated linearly in distance. I traced d=10 (segment 0, 1.700), d=20 (segment 0, t=1, 2.060) and d=600 (the loop ends, last segment 500-600, 4.790). _segment returns the correct bracketing segment for every in-table distance.",
+    "Off-table correction (the value NPM-4 gives no rule for): for d<10 and d>600 the patch falls through to the shipped log10-distance formula on the end segment (0 or last) that _segment already selected, fed with the hypocentral distance. This matches the instruction's 'keep the present calculation ... fed with the quantities NPM-4 does define'. Hypocentral distance is at least 1 km under section 1.2, so log10 is defined.",
+    "Rules 4.1/4.2: the correction is now added, not subtracted.",
+    "Rule 4.3: the mean of the channel magnitudes over readings. Rule 1.3 guarantees at least one reading per recording, so the list is never empty.",
+    "Rules 1.2/4.3/5.2/5.3 interaction (one station with two recordings): bulletin.py pools the amplitudes of both recordings per code, computes one station magnitude from the shared epi_km (equal under 1.2), reports it on each recording row in recording order, and counts each station once in the median and in the three-station minimum.",
+    "Rules 5.2/5.3: sorted values. Fewer than 3 returns None. An odd count takes the middle value; an even count takes the mean of the two middle values.",
+    "Rule 5.1: contributes() is unchanged at 10 <= d <= 600 with both ends included, now evaluated on the hypocentral distance.",
+    "Section 6: the event keys are id, ml and stations. Each row has code, distance_km, ml and contributes, one per recording in file order. There are no extra keys and no rounding (rule 0.3).",
+    "Compared the reference with the independent authoring model (solution/model.py) rule by rule. I did not treat their agreement as proof: each rule was checked against the NPM-4 text directly.",
+    "Traced the sample bulletin (brsn-2026-04-12.json): every amplitude is a reading, every hypocentral distance is inside the table, and both events have 3 or more contributors, so the ordinary path is exercised."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced ordinary in-table stations, the listed table nodes, both table ends, off-table below 10 km and beyond 600 km, depth 0 and depth 60, hypocentral distance at least 1 km, 1-2 channels, and 1, 2, 3, odd and even contributor counts.",
+      "evidence": [
+        "solution/fix.patch:22",
+        "solution/fix.patch:33-35",
+        "solution/fix.patch:89",
+        "solution/fix.patch:99-106",
+        "solution/fix.patch:115",
+        "solution/fix.patch:125-130",
+        "environment/app/mlnet/attenuation.py:22-38",
+        "environment/app/manual/npm4-local-magnitude.md:56-60",
+        "environment/app/manual/npm4-local-magnitude.md:66-94",
+        "environment/app/manual/npm4-local-magnitude.md:98-119"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, padding, delimiters, paths",
+      "status": "checked",
+      "reason": "The report is emitted by the unchanged driver with json.dump. Values are unrounded (rule 0.3). Keys match section 6. The number tolerance is 1e-6 per the instruction.",
+      "evidence": [
+        "environment/app/tools/ml_bulletin.py:16-19",
+        "environment/app/manual/npm4-local-magnitude.md:18-20",
+        "environment/app/manual/npm4-local-magnitude.md:123-130",
+        "solution/fix.patch:59-70",
+        "instruction.md:5"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state, including replacement and identifier reuse",
+      "status": "checked",
+      "reason": "A station code reused across two recordings in one event is pooled via setdefault/extend. epi_km is taken from the first recording, and 1.2 guarantees the two are equal. Every row is an independent dict copy. The corrections map is keyed by distinct station codes (1.1). Nothing is carried between events except the read-only corrections.",
+      "evidence": [
+        "solution/fix.patch:48-69",
+        "environment/app/manual/npm4-local-magnitude.md:33-42",
+        "environment/app/mlnet/bulletin.py:8-10"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract is a pure computation from a bulletin file to a JSON report. There are no persistence, recovery or durability promises.",
+      "evidence": [
+        "instruction.md:1-5",
+        "environment/app/manual/npm4-local-magnitude.md:121-130"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction constraints on the change (driver untouched, no added guards, unruled values keep the shipped calculation)",
+      "status": "checked",
+      "reason": "The patch touches only mlnet modules and adds no clamp, exclusion or guard. The off-table branch keeps the shipped expression exactly, and only its distance input changes to the NPM-4 hypocentral distance.",
+      "evidence": [
+        "instruction.md:1-3",
+        "solution/fix.patch:33-38",
+        "solution/solve.sh:10-12",
+        "solution/solve.sh:27-32"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["3.1 hypocentral distance", "5.1 contributes / 3.2 table range"],
+      "case_or_path": "Depth 12 km, epi 6 km gives a hypocentral distance of 13.4 km, which is in the table and contributes. Depth 60 km, epi 600 km gives 603 km, which is off the table and does not contribute. The patched distance feeds contributes() in bulletin.py.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:58-64", "solution/fix.patch:89", "environment/app/mlnet/network.py:9-11"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 no correction off the table (instruction: keep present calculation)", "3.1 hypocentral distance, 2.2, 4.1-4.3"],
+      "case_or_path": "For an off-table station, the ml is still reported, using the shipped log extrapolation at the hypocentral distance. It also uses the corrected record amplitude, the added station correction and the mean over readings.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:33-38", "solution/fix.patch:115", "solution/fix.patch:125-130", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 two recordings per station", "4.3 station mean, 5.2 median, 5.3 fewer than three"],
+      "case_or_path": "Take one station with two recordings plus one other station. The reference counts 2 stations, so the network ml is null. With a third station added, the count is 3 and the median is taken over 3 values, not 4.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:48-69", "solution/fix.patch:99-106"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 reading test", "4.3 mean over readings"],
+      "case_or_path": "A recording with one sub-noise channel and one reading gives a station magnitude from the single reading only. A reading on each of two pooled recordings gives the mean over all readings of the station.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:125-130", "environment/app/manual/npm4-local-magnitude.md:47", "environment/app/manual/npm4-local-magnitude.md:62"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.2 even median", "5.3 minimum of three"],
+      "case_or_path": "With exactly 3 contributors the result is the middle value. With 4 it is the mean of sorted[1] and sorted[2]. With 2 it is None.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:99-106"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

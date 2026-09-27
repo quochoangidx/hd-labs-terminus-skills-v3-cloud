@@ -1,0 +1,177 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "9157208d95100765d2c5d6735d478c4fc366a4c2313e87acdfd3915049193a5d",
+  "severity": "None",
+  "summary": "The verifier reads each of the four candidate layouts as data. It checks each one with a sealed copy of check_layout.py against sealed copies of the edition and target files, and all of these are byte-identical to the candidate-visible authorities. Every numbered rule, cost term and file-format clause in makeup-rules.md maps to an enforcing branch in the checker. Rule-violating or over-target layouts are rejected, and contract-valid layouts at or under target are accepted. No confirmed false acceptance or false rejection was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/planner/plan_edition.py",
+      "environment/app/editions/mon.json",
+      "environment/app/editions/wed.json",
+      "environment/app/editions/fri.json",
+      "environment/app/editions/sat.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_layout.py",
+      "tests/targets.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "I did not open these files separately because their manifest SHA-256 matches a file I read in full: environment/app/tools/check_layout.py (matches tests/check_layout.py, 3b155924...), environment/app/editions/targets.json (matches tests/targets.json, c8a4f2ba...), and tests/editions/{mon,wed,fri,sat}.json (each matches its environment/app/editions counterpart; packet-manifest.json:13-27)."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped makeup-rules.md rules 1-5 (makeup-rules.md:32-41) to checker branches: inside the page and no overlap (tests/check_layout.py:91-100), resting on the foot of the page or on ads across the full width (102-108), page-1 strip and per-page cell limits with floor division (110-117), competitor groups by page and spread with page 1 alone and p//2 pairing (119-132), and booked ads placed (134-136).",
+    "Mapped the cost terms (makeup-rules.md:45-55) to tests/check_layout.py:138-152. Each ad is floored separately, and the wrong-section and left-hand penalties can both apply to one ad.",
+    "Mapped the file-format clauses (makeup-rules.md:59-72) to load_layout and evaluate. The 2,000,000-byte limit is inclusive (61-62). A UTF-8 BOM is rejected because json.loads raises on a leading U+FEFF (66-69). NaN and Infinity are rejected via parse_constant (22-23, 66). Numbers with more than 4300 digits are rejected in both the int and float paths (26-37). Duplicate names are rejected at every level (40-46). Depth is limited to 64 with the top level as level 1 (49-56, 70-72). Page, column and row must be exact ints, which excludes bools and floats (87-88). Unknown ad ids are an error (85-86). Extra keys are ignored because only three keys are read via .get (87, 90).",
+    "Confirmed that test_outputs.py grades only verifier-owned inputs: HERE/check_layout.py, HERE/editions/*.json and HERE/targets.json (tests/test_outputs.py:15-26). The manifest hashes show these are byte-identical to the candidate-visible /app copies, so the grading authority matches the contract the candidate sees and candidate edits to /app copies cannot affect grading.",
+    "Checked the pass condition: each edition must produce a valid layout with cost <= its target (tests/test_outputs.py:29-41). test.sh awards reward 1 only when all eight tests pass (tests/test.sh:15-21), which matches the instruction's requirement for all four editions (instruction.md:1).",
+    "Traced plausible wrong implementations through the checker. Each is rejected: a layout that leaves a booked ad out; competitors placed on facing pages 2 and 3; an ad floating over an empty cell; page 1 used above the six-row strip; a page over 151 cells (60*42*6//100); coordinates written as floats or strings; the current planner's output if it exceeds target. Its cost is not derivable statically, but it is graded by the same comparison.",
+    "Traced contract-valid alternatives: any key order, extra ignored keys, whitespace, omitted optional ads, negative zero as an integer, a 4300-digit integer in an ignored field, and a file of exactly 2,000,000 bytes. None hits a rejection path the contract does not state.",
+    "Checked for crash paths outside LayoutError on contract-valid input. None was found: page, column and row are validated as ints before indexing, and huge ints fail the range checks with a LayoutError."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Every rule and cost term maps to a checker branch that raises LayoutError or adds cost. The tests call the full evaluate() on the candidate artifact and compare the cost to target.",
+      "evidence": ["environment/app/docs/makeup-rules.md:32-55", "tests/check_layout.py:84-152", "tests/test_outputs.py:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check full core result, not existence/keys/row count",
+      "status": "checked",
+      "reason": "The graded quantity is the full cost of the whole layout, computed from all placements and all ads. The layout must also pass every validity rule. Existence alone is not sufficient: the isfile check is only a precondition.",
+      "evidence": ["tests/test_outputs.py:29-41", "tests/check_layout.py:138-152"],
+      "finding_ids": []
+    },
+    {
+      "category": "Each named domain rule has a case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "The grader applies the complete rule set to the candidate's own optimized layout. A candidate that misapplies spread pairing, resting, the front-page strip, the cell cap or booked handling produces a layout that the corresponding checker branch rejects. Misreading cost rounding cannot help, because the verifier recomputes cost itself. All four editions contain competitor groups, booked ads, section and right-hand requests, and 6-column pages under the 151-cell cap.",
+      "evidence": ["tests/check_layout.py:102-136", "environment/app/editions/mon.json:28-667"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solution rejected",
+      "status": "checked",
+      "reason": "Rule-violating layouts raise LayoutError, which pytest.fail turns into a failure. A valid layout over target fails the cost assertion. The reward is all-or-nothing across eight tests.",
+      "evidence": ["tests/test_outputs.py:35-41", "tests/test.sh:15-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, ordering, implementation choice)",
+      "status": "checked",
+      "reason": "Parsing is structural JSON with no byte comparison. Key order, whitespace, extra keys and the choice of how to produce the layout are unconstrained, and the verifier imposes no such constraint. Every rejection path corresponds to a documented clause.",
+      "evidence": ["tests/check_layout.py:59-73", "tests/check_layout.py:78-90", "environment/app/docs/makeup-rules.md:57-72", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle behavior enforced",
+      "status": "checked",
+      "reason": "The only restriction on process is that no network or installs are available, and the task grades only output data (instruction.md:3). No lifecycle, recovery or cleanup behavior is promised.",
+      "evidence": ["instruction.md:3", "tests/test_outputs.py:1-7"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons",
+      "status": "checked",
+      "reason": "No candidate code runs. The checker, editions and targets come from /tests copies that are hash-identical to the /app authorities. No comparison is against a candidate-supplied value, and there is no binary to go stale.",
+      "evidence": ["tests/test_outputs.py:15-26", "packet-manifest.json:13-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases / target attainability",
+      "status": "not_applicable",
+      "reason": "The verifier's comparison is a threshold (cost <= target). Whether each numeric target can be reached depends on a witness layout withheld from this axis; per the brief, the solution is not reconstructed here. A rough capacity bound for mon (about 2726 ad cells against 2301 of capacity, at a minimum of about 8 per cell for omitted ads) gives a lower bound near 3.4k, below the 4635 target. For wed, fri and sat, the ads too large to place (6x42 = 252 cells > 151) cost less than their targets. Nothing suggests a target sits below a trivial bound.",
+      "evidence": ["tests/targets.json:1-6", "environment/app/editions/wed.json:370-380", "environment/app/editions/fri.json:513-523", "environment/app/editions/sat.json:216-226", "environment/app/editions/sat.json:491-501"],
+      "finding_ids": []
+    },
+    {
+      "category": "State machine initialization-to-first-event transition",
+      "status": "not_applicable",
+      "reason": "The graded artifact is a static layout. No evolving state is graded.",
+      "evidence": ["tests/check_layout.py:76-152"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities / sign partitions",
+      "status": "not_applicable",
+      "reason": "Cost is a sum of non-negative floored terms. No signed quantity is graded.",
+      "evidence": ["tests/check_layout.py:138-152"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding/representation promises",
+      "status": "checked",
+      "reason": "The contract keeps encoding promises: UTF-8, no BOM, standard JSON, the size, digit and depth limits, and native JSON integers. The checker enforces exactly these and adds no other representation constraint.",
+      "evidence": ["environment/app/docs/makeup-rules.md:61-72", "tests/check_layout.py:17-73", "tests/check_layout.py:87-88"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localization",
+      "status": "checked",
+      "reason": "Validity and target are separate tests for each edition, and failure messages name the edition and the broken rule or the cost against target.",
+      "evidence": ["tests/test_outputs.py:36-73"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["Rule 3 front-page strip", "Rule 2 resting"],
+      "case_or_path": "An ad on page 1 sits in the bottom 6 rows but is stacked on a gap. It is rejected by the resting branch; an ad reaching above row 36 is rejected by the strip branch. The two checks are independent and both apply.",
+      "status": "checked",
+      "evidence": ["tests/check_layout.py:102-117"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 4 competitor spreads", "Page 1 stands alone / even last page faces nothing"],
+      "case_or_path": "Two same-group ads on pages 1 and 2 map to spreads 0 and 1, so the layout is accepted. Ads on pages 2 and 3 both map to spread 1 and are rejected. Two on page 1 map to spread 0 and are rejected (same page). On the last page (even in all four editions), p//2 is unique.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:11-13", "tests/check_layout.py:119-132"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Wrong-section penalty", "Left-hand penalty"],
+      "case_or_path": "A right_hand ad with a section, placed on an even page outside its section, incurs both floored terms, as the contract states.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:47-54", "tests/check_layout.py:144-151"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 5 booked must be placed", "Rule 3 cell cap"],
+      "case_or_path": "The four 6x42 ads (252 cells > the 151-cell cap and > the 36-cell front strip) cannot be placed. None is booked (wed AD032, fri AD045, sat AD018 and AD043), so the booked rule creates no impossible case.",
+      "status": "checked",
+      "evidence": ["environment/app/editions/wed.json:370-380", "environment/app/editions/fri.json:513-523", "environment/app/editions/sat.json:216-226", "environment/app/editions/sat.json:491-501", "tests/check_layout.py:110-114"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["File-format: JSON integers only", "Digit limit"],
+      "case_or_path": "A page written as 3.0 or 3e0 reaches parse_float, yields a float and is rejected; this matches the contract, which requires JSON integers. A page written as a 4300-digit int is parsed, then fails the 1..pages range check with a LayoutError, not a crash.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:62-70", "tests/check_layout.py:26-37", "tests/check_layout.py:87-92"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Verifier uses sealed copies", "Candidate may edit /app/editions or /app/tools"],
+      "case_or_path": "The candidate lowers a rate or raises a target in /app. The verifier reads only /tests copies, so its grading is unchanged.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:15-26"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

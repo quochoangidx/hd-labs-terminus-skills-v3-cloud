@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-trace-metal-batch-quantitation"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Science"
+subcategory = "Chemistry"
+languages = ["python"]
+tags = ["analytical-chemistry", "icp-ms", "calibration", "blank-correction", "quality-control"]
+expert_time_estimate_hours = 3
+difficulty_explanation = "This is the data-reduction work an analytical chemist or ICP-MS laboratory data reviewer does when a quantitation package drifts from the laboratory's SOP: internal-standard ratios, an unweighted least-squares calibration with a fitted intercept, method-blank correction applied at the instrument level before the dilution factor, detection and quantitation flags judged on the blank-corrected reading, CCV recovery with bracketing, and matrix-spike recovery. Each departure is ordinary for someone who has reduced ICP-MS batches, but the stages interact: the blank level decides which samples are non-detects, detection decides which values a spike recovery may use, and a CCV decides the qualifier of every run it brackets. The hard part is deciding where the SOP stops. Its rules are written in terms of results, so a batch whose blanks are all non-detects, a run with a CCV on only one side, and a spike or parent that is a non-detect fall outside them, and the existing calculation has to stay there even where it looks wrong to a chemist. Negative readings, values a hair either side of a detection or quantitation limit, readings far above the top standard and CCV recoveries next to the rounding limits make a careless fix visible. The batches are synthetic, drawn to resemble real ICP-MS run lists: analyte counts from hundreds to millions, internal-standard counts in the tens of thousands that vary from run to run, dilutions from 1 to 1000, low-level blanks around the detection limit, and hand-built batches with exactly representable readings for the cases next to a limit."
+solution_explanation = "The reference patch fits the calibration line with its intercept, takes the blank level as the mean of the blank readings at or above the MDL from every blank in the batch, subtracts it before multiplying by the dilution, judges ND/J/unflagged on the corrected reading with J only below the LOQ, passes a CCV on its recovery rounded to one decimal from 90.0 to 110.0 inclusive, requires both nearest CCVs to pass for a run with one on each side, and computes spike recovery as the spike amount less the parent amount over the amount added when both are results. Where the SOP gives no rule (no blank result, a run without a CCV on both sides, a spike or parent that is a non-detect) it keeps today's calculation: the first blank's reading (nought with no blank), the nearest earlier CCV, and the recovery divided by added times dilution. The driver is untouched."
+verification_explanation = "A separate verifier image records the delivered driver's bytes, puts its own copy of the fixed driver on the documented path /app/tools/metalquant_run.py and runs the documented command against the delivered /app/src, as an unprivileged user with an isolated interpreter, on each batch staged under the same neutral name in a fresh directory, and compares the complete report: ids, analytes, flags, ccv_ok and pass exactly, values and recoveries to 1e-6 relative (1e-6 absolute below one). Expected reports were written ahead of time into tests/expected by a model written from the SOP that never imports the package, and are pinned by SHA-256 and row count. One named test per SOP rule over hand-built batches (values a hair either side of each limit, every section 1 range reached at both ends, from detection limits of 0.0001 and added amounts of 0.001 to slopes of 10^-12 and 10^6, CCV true concentrations up to 10^4 and readings of plus and minus 10^4, blanks anywhere, no blank results, unbracketed runs, non-detect spikes), plus 8 generated batches, an 80-run four-analyte capacity batch, a byte check that the delivered driver is unchanged, and a check that the candidate user cannot read the expectations or the verifier logs."
+relevant_experience = "Several years reducing and reviewing ICP-MS and ICP-OES trace-metal batches in an environmental testing laboratory: calibration and internal-standard correction, method blanks and detection limits, CCV bracketing and matrix-spike QC under EPA-style methods, and maintaining the data-reduction scripts that produce reported results."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 3600
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

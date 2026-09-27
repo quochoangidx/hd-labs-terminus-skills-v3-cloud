@@ -1,0 +1,32 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-qpcr-relative-expression",
+ "stage": "redesign 1/1 after contract_review r1 (svr 2) and skeleton cycle-1 (discarded); governed traps only, no graded silent region",
+ "traps": [
+  {
+   "id": "T1_curve_point_is_the_plain_mean_of_every_determined_standard",
+   "semantic_node": "curve-point Ct -> standard curve -> amplification factor (SOP 2.4, 2.5, 3.1)",
+   "kind": "shared aggregate: the kept behaviour is an implicit consequence of a helper the solver rewrites for a departure. curve.curve_points() takes each level's Ct from replicates.mean_ct(), which sample_ct() also uses. The departures 2.2 (10.00 floor) and 4.1 (outliers against the lower median) are missing features of the sample mean, and the natural place to add them is mean_ct(). Once they are there, a concentrated standard earlier than 10.00, a dilute one past 35.00, or a stray well in a level of three or four changes the curve point, the slope and every factor.",
+   "uniquely_derivable": "2.4: a curve point's Ct is the arithmetic mean of the Cts of its determined wells. No window and no outlier rule applies to standards: 2.2 and 4.1 speak only of unknown wells of a sample.",
+   "why_not_found_by_one_pass_search": "It is not a place where the SOP stops short: 2.4 fully governs it. It is not a place where the code breaks the SOP either: shipped curve points are already right for such levels, so a blind reviewer listing defects does not name it. It shows only if the solver checks every caller of the helper it edits, or fuzzes standards with a stray well or a Ct outside 10-35.",
+   "properties": {"inside_rebuilt_aggregate": "yes (mean_ct is rewritten for 2.2/4.1)", "keeping_requires": "leaving mean_ct plain and putting the replicate rules in sample_ct or a new helper", "one_routing_decision": "no; kept arithmetic (plain mean), governed"},
+   "screen": {"competing_positive_enumeration": "none: 2.2/4.1 are about a sample's replicates", "no_definitional_chain": "no: 2.4 directly", "contrary_expert_instinct": "low to moderate (some analysts also trim a stray standard well; the SOP does not)", "unnamed_shared_step": "no: 'curve point' is a defined term", "trap_in_several_tests": "no: T1 inputs only in family T1 (jobgen predicate model.trap_inputs)"},
+   "flags": "0 hard, 1 soft",
+   "natural_over_repairs": {"T1_outliers_in_shared_mean": "fails T1 only", "T1_pipeline_in_shared_mean": "fails T1 only"}
+  },
+  {
+   "id": "T2_early_ntc_contaminates",
+   "semantic_node": "gene contamination -> ntc flag -> fold change (SOP 2.6, 6.3, 5.4)",
+   "kind": "shared routing predicate: plate.called() (determined, at or below 35.00) decides both which unknown wells count (sample_ct/detected) and whether an NTC contaminates. The 2.2 departure (the 10.00 floor for reportable replicates) is naturally added to called(), which then clears an NTC well at Ct 5.00-9.99. One in/out decision on the bare Ct value in the unlabelled NTC Ct list.",
+   "uniquely_derivable": "2.6: contaminated when one of its NTC wells has a Ct at or below the cut-off cycle; only undetermined or later-than-cut-off NTC wells do not contaminate. 2.2's floor is stated for 'a reportable replicate', an unknown well.",
+   "why_not_found_by_one_pass_search": "It is governed, not silent, and the shipped NTC test is already right, so it is not on the list of places where the code breaks the SOP. It breaks only when the solver edits the shared predicate for 2.2 without re-reading 2.6.",
+   "properties": {"inside_rebuilt_aggregate": "no; the shared predicate is edited for a departure", "one_routing_decision": "yes", "keeping_requires": "a separate reportable() for 2.2"},
+   "screen": {"competing_positive_enumeration": "soft: 2.2's sentence that a Ct under 10.00 is a baseline/saturation fault could be carried over by analogy (reviewer r1 F4 noted it and found 2.6 clear)", "no_definitional_chain": "no: 2.6 directly", "contrary_expert_instinct": "low: an NTC at cycle 8 is heavy template contamination", "unnamed_shared_step": "no", "trap_in_several_tests": "no: early NTCs only in family T2"},
+   "flags": "0 hard, 1 soft",
+   "natural_over_repairs": {"T2_floor_in_called": "fails T2 only", "T2_ntc_uses_reportable": "fails T2 only"}
+  }
+ ],
+ "independence": "T1: curve.py consumer of replicates.mean_ct, arithmetic, triggered by the 4.1/2.2 repairs. T2: ntc.py consumer of plate.called, routing, triggered by the 2.2 floor. Different helpers, figures, files and SOP sections. One diligent habit (check every caller of an edited helper) still disarms both: residual collapse risk.",
+ "dropped": ["TA (all-outlier mean): made impossible by the lower-median rule (F2)", "TB (2-point factor): made governed by 2.5/3.1 (F1)"],
+ "verdict": "no hard flags; one soft flag each. The skeleton pair re-screens."
+}

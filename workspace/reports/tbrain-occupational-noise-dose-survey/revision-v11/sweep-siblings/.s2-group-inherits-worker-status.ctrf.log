@@ -1,0 +1,374 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 22 items
+
+../../tests/test_outputs.py ........FF.FF.F.F.FF..                       [100%]
+
+=================================== FAILURES ===================================
+_____________ test_survey_that_measured_nothing_keeps_todays_dose ______________
+
+    def test_survey_that_measured_nothing_keeps_todays_dose():
+        """A survey that measured nothing keeps today's shift dose of nought."""
+>       check_family("measured_nothing")
+
+/tests/test_outputs.py:278: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'G2', 'dose': 0.0, 'twa': None, 'status': 'over'}
+expected = {'group': 'G2', 'dose': 0.0, 'twa': None, 'status': 'below'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'measured_nothing HC4-0017 groups[1] (G2)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: measured_nothing HC4-0017 groups[1] (G2) status: 'over', expected 'below'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'below'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('below')
+E                 
+E                 - below
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+____________ test_reading_above_ceiling_keeps_todays_counted_level _____________
+
+    def test_reading_above_ceiling_keeps_todays_counted_level():
+        """A reading above the ceiling level is counted where today's step counts it, and flags the ceiling."""
+>       check_family("above_ceiling")
+
+/tests/test_outputs.py:284: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'G1', 'dose': 71.11111111111111, 'twa': 83.5, 'status': 'over'}
+expected = {'group': 'G1', 'dose': 71.1111111111, 'twa': 83.5, 'status': 'action'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'above_ceiling HC4-0038 groups[0] (G1)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: above_ceiling HC4-0038 groups[0] (G1) status: 'over', expected 'action'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'action'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('action')
+E                 
+E                 - action
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+_______________________ test_rule_5_2_impulse_at_140_dbc _______________________
+
+    def test_rule_5_2_impulse_at_140_dbc():
+        """A peak of 140.0 dBC is an impulse and makes the worker "over"; 139.9 dBC is not."""
+>       check_family("impulse")
+
+/tests/test_outputs.py:295: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'G1', 'dose': 39.68502629920499, 'twa': 81.0, 'status': 'over'}
+expected = {'group': 'G1', 'dose': 39.6850262992, 'twa': 81.0, 'status': 'below'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'impulse HC4-0022 groups[0] (G1)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: impulse HC4-0022 groups[0] (G1) status: 'over', expected 'below'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'below'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('below')
+E                 
+E                 - below
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+__________________________ test_rule_4_1_twa_formula ___________________________
+
+    def test_rule_4_1_twa_formula():
+        """The TWA is 85 + 3 log2(D / 100); a dose of nought has no TWA."""
+>       check_family("twa")
+
+/tests/test_outputs.py:300: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'G1', 'dose': 100.0, 'twa': 85.0, 'status': 'over'}
+expected = {'group': 'G1', 'dose': 100.0, 'twa': 85.0, 'status': 'action'}
+keys = {'dose', 'group', 'status', 'twa'}, where = 'twa HC4-0023 groups[0] (G1)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: twa HC4-0023 groups[0] (G1) status: 'over', expected 'action'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'action'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('action')
+E                 
+E                 - action
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+___________________ test_rule_5_3_status_bands_at_82_and_85 ____________________
+
+    def test_rule_5_3_status_bands_at_82_and_85():
+        """Status bands at 82.0 and 85.0 dB on the reported TWA, and "over" for a flagged worker."""
+>       check_family("status")
+
+/tests/test_outputs.py:310: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'H9', 'dose': 39.68502629920499, 'twa': 81.0, 'status': 'over'}
+expected = {'group': 'H9', 'dose': 39.6850262992, 'twa': 81.0, 'status': 'below'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'status HC4-0025 groups[8] (H9)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: status HC4-0025 groups[8] (H9) status: 'over', expected 'below'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'below'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('below')
+E                 
+E                 - below
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+_______________ test_rule_6_1_quiet_member_counts_in_group_mean ________________
+
+    def test_rule_6_1_quiet_member_counts_in_group_mean():
+        """A quiet member's shift dose of nought counts in the group mean."""
+>       check_family("quiet_members")
+
+/tests/test_outputs.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'G1', 'dose': 66.66666666666667, 'twa': 83.2, 'status': 'over'}
+expected = {'group': 'G1', 'dose': 66.6666666667, 'twa': 83.2, 'status': 'action'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'quiet_members HC4-0028 groups[0] (G1)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: quiet_members HC4-0028 groups[0] (G1) status: 'over', expected 'action'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'action'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('action')
+E                 
+E                 - action
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """300 workers under 40 codes, a 1,500-run log, a 2,880-minute log, 500 peaks and the range ends."""
+        rows = load("limits_workers") + load("limits_logs")
+        workers = rows[0]["survey"]["workers"]
+        assert len(workers) == 300 and len({w["group"] for w in workers}) == 40
+        logs = rows[1]["survey"]["workers"]
+        assert len(logs[0]["log"]) == 1500 and sum(m for m, _ in logs[1]["log"]) == 2880 and len(logs[2]["peaks"]) == 500
+>       check_family("limits_workers")
+
+/tests/test_outputs.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'D', 'dose': 30.15297201819852, 'twa': 79.8, 'status': 'over'}
+expected = {'group': 'D', 'dose': 30.1529720182, 'twa': 79.8, 'status': 'below'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'limits_workers HC4-0030 groups[4] (D)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: limits_workers HC4-0030 groups[4] (D) status: 'over', expected 'below'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'below'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('below')
+E                 
+E                 - below
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+____________________________ test_generated_surveys ____________________________
+
+    def test_generated_surveys():
+        """Seeded surveys over the rest of the section 1 domain, as sealed and under fresh labels."""
+>       check_family("generated")
+
+/tests/test_outputs.py:363: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'MOXEK302', 'dose': 44.97844577029981, 'twa': 81.5, 'status': 'over'}
+expected = {'group': 'MOXEK302', 'dose': 44.9784457703, 'twa': 81.5, 'status': 'below'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'generated HC4-0035 groups[1] (MOXEK302)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: generated HC4-0035 groups[1] (MOXEK302) status: 'over', expected 'below'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'below'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('below')
+E                 
+E                 - below
+E                 + over)
+
+/tests/test_outputs.py:204: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db
+PASSED ../../tests/test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts
+PASSED ../../tests/test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold
+PASSED ../../tests/test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading
+PASSED ../../tests/test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift
+PASSED ../../tests/test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose
+PASSED ../../tests/test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters
+PASSED ../../tests/test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged
+PASSED ../../tests/test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth
+PASSED ../../tests/test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses
+PASSED ../../tests/test_outputs.py::test_report_order_and_group_codes
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose
+FAILED ../../tests/test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level
+FAILED ../../tests/test_outputs.py::test_rule_5_2_impulse_at_140_dbc - Assert...
+FAILED ../../tests/test_outputs.py::test_rule_4_1_twa_formula - AssertionErro...
+FAILED ../../tests/test_outputs.py::test_rule_5_3_status_bands_at_82_and_85
+FAILED ../../tests/test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+FAILED ../../tests/test_outputs.py::test_generated_surveys - AssertionError: ...
+========================= 8 failed, 14 passed in 5.39s =========================

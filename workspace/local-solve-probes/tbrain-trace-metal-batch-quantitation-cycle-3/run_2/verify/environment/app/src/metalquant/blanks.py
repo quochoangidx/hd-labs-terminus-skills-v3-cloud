@@ -1,0 +1,19 @@
+"""Method-blank level (SOP section 4)."""
+
+
+def blank_level(runs, analyte, readings, mdl):
+    """Blank level of one analyte; readings maps run id to its reading.
+
+    The mean of every method-blank result of the batch, wherever the blank
+    sits in the run order.  A blank is judged on its reading (SOP section 3):
+    a reading at or above the analyte's ``mdl`` is a result, one below it is a
+    non-detect and no result.  With no blank result the SOP defines no value.
+    """
+    results = [
+        readings[run["id"]]
+        for run in runs
+        if run["kind"] == "blank" and readings[run["id"]] >= mdl
+    ]
+    if not results:
+        return 0.0
+    return sum(results) / len(results)

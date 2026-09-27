@@ -1,0 +1,702 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-local-magnitude-network-reduction",
+ "task_snapshot_sha256": "a508257f4c308181a4d2ef4766bc36598c0153657e69c9054d97aae7e71f180f",
+ "primary_outcome": "the NPM-4 bulletin report (per event: station ML, hypocentral distance, contributor flag, network ML) printed by the frozen driver",
+ "obligations": [
+  {
+   "id": "WA_GAIN",
+   "class": "core",
+   "contribution": "record amplitude at static magnification 2080",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "a record of static magnification 2080"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/amplitude.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_2_record_amplitude_uses_magnification_2080"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "amplitudes at 0.1 nm and 10^8 nm on a plain in-table station",
+   "wrong_but_plausible": "keep Richter's nominal magnification 2800",
+   "selfdescription_phrase": "magnification 2080"
+  },
+  {
+   "id": "HALF_P2P",
+   "class": "core",
+   "contribution": "record amplitude is half the peak-to-peak measurement",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "half of its peak-to-peak value"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/amplitude.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_2_record_amplitude_is_half_peak_to_peak"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a single-reading station whose ML differs by log10(2) under the full value",
+   "wrong_but_plausible": "use the full peak-to-peak value",
+   "selfdescription_phrase": "half of peak-to-peak"
+  },
+  {
+   "id": "HYPOCENTRAL",
+   "class": "core",
+   "contribution": "distance is the hypocentral distance, feeding correction, contributor flag and distance_km",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "the square root of the sum\nof the squares"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/distance.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_distance_is_hypocentral"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "epi 6 km at depth 12 km (hypocentral 13.4 km contributes) and epi 0 km under a 60 km event",
+   "wrong_but_plausible": "keep epicentral distance",
+   "selfdescription_phrase": "hypocentral distance"
+  },
+  {
+   "id": "LINEAR_INTERP",
+   "class": "core",
+   "contribution": "between listed distances the correction is interpolated linearly in distance",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "Between two listed\ndistances it is interpolated linearly in distance"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/attenuation.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_correction_linear_between_listed_distances"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_3_listed_distances_and_table_ends"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "stations at 15, 62.5 and 450 km; stations just inside the table at 10.01 and 599.99 km",
+   "wrong_but_plausible": "keep log-distance interpolation",
+   "selfdescription_phrase": "linear in distance"
+  },
+  {
+   "id": "OFF_TABLE_KEPT",
+   "class": "core",
+   "contribution": "TRAP T2: the correction for a distance the table does not reach keeps the shipped end-segment log-distance extrapolation, fed with the hypocentral distance",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "this part gives no correction for a\ndistance outside it"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/attenuation.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_station_beyond_the_table_keeps_the_shipped_correction",
+     "test_outputs.py::test_off_table_sub_noise_and_two_sensor_sites_together"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "the silent region is the two open intervals outside [10, 600]; section 1 keeps every station more than a metre from either end, and the near-end stations inside are witnessed by test_rule_3_3_listed_distances_and_table_ends"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "an event with >=3 in-table contributors plus one station at hypocentral 3 km and one at 850 km; expected station ml mirrors the shipped segment formula (Shipped step comment in solution/model.py)",
+   "wrong_but_plausible": "linear-in-distance extrapolation of the end segments, or clamping to the end values",
+   "selfdescription_phrase": "beyond the table"
+  },
+  {
+   "id": "CORRECTION_SIGN",
+   "class": "core",
+   "contribution": "station correction is added",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "A station's correction is added as it stands in the table"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/station.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_station_correction_is_added"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "corrections of -1.0, 0.0, +0.37 and +1.0",
+   "wrong_but_plausible": "keep subtracting the correction",
+   "selfdescription_phrase": "correction is added"
+  },
+  {
+   "id": "STATION_MEAN",
+   "class": "core",
+   "contribution": "station ML is the mean of the channel magnitudes of its readings",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "A station's magnitude is the mean of the channel magnitudes of its readings"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/station.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "stations with two, three and four readings of unequal size, all well above noise, including readings under channel codes XYZ, HHZ, 123, a_b, 'Z Z', ?!. beside familiar ones",
+   "wrong_but_plausible": "keep the largest channel alone",
+   "selfdescription_phrase": "mean of the channel magnitudes"
+  },
+  {
+   "id": "READINGS",
+   "class": "core",
+   "contribution": "departure D9 (formerly trap T1): only amplitudes at least three times their channel's noise enter the station mean",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "A reading is an amplitude at least three times the noise of its channel"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/station.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_3_station_mean_leaves_out_amplitudes_under_three_times_noise",
+     "test_outputs.py::test_off_table_sub_noise_and_two_sensor_sites_together"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_3_station_mean_leaves_out_amplitudes_under_three_times_noise"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a recording with one reading and one sub-noise amplitude (both larger and smaller than the reading), and amplitudes just either side of three times their noise (1.51/0.5, 300.5/100, 2990/1000, 1.49/0.5)",
+   "wrong_but_plausible": "average every amplitude of the recording",
+   "selfdescription_phrase": "reading"
+  },
+  {
+   "id": "NETWORK_MEDIAN",
+   "class": "core",
+   "contribution": "network ML is the median of contributors, mean of the middle two when even",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "the median of the station magnitudes of\nits contributing stations"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/network.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_2_network_magnitude_is_median_of_contributors"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_2_even_number_takes_mean_of_middle_two"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "odd and even contributor counts with one outlying station",
+   "wrong_but_plausible": "keep the mean; or the lower middle value for an even count",
+   "selfdescription_phrase": "median"
+  },
+  {
+   "id": "MIN_THREE",
+   "class": "core",
+   "contribution": "an event with fewer than three contributors has no network magnitude",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "fewer than three contributing stations has no network\nmagnitude"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/network.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the station or network magnitude of the same event report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_3_three_contributors_give_a_network_magnitude"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "events with one and two contributors (null) and exactly three (a number)",
+   "wrong_but_plausible": "report the value of one or two stations",
+   "selfdescription_phrase": "fewer than three"
+  },
+  {
+   "id": "STATION_GROUPING",
+   "class": "core",
+   "contribution": "TRAP T3: a station's readings are those of all its recordings in the event (two sensors of one site); one station magnitude reported on each of its recordings, and one vote in the median and the count of three",
+   "authority": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "A station's magnitude is the mean of the channel magnitudes of its readings"
+   },
+   "implementation_sites": [
+    "environment/app/mlnet/bulletin.py",
+    "environment/app/mlnet/station.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the grouping decides the station magnitude and the contributor set that the median and the three-station minimum are formed over"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_two_sensors_of_one_site_are_one_station",
+     "test_outputs.py::test_off_table_sub_noise_and_two_sensor_sites_together"
+    ],
+    "boundary": [
+     "test_outputs.py::test_two_sensors_of_one_site_are_one_station"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "events where one or two stations send a broadband and a strong-motion recording (1+2 readings, so pooled mean differs from a mean of recording means), including a two-station event whose three recordings must still give null",
+   "wrong_but_plausible": "treat each recording as a station (per-recording magnitude, counted per recording), or pool readings but take the median/count over recordings",
+   "selfdescription_phrase": "all its recordings"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "frozen JSON driver",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/ml_bulletin.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_matches_ours"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "WA_GAIN",
+    "to": "STATION_MEAN"
+   },
+   {
+    "from": "HALF_P2P",
+    "to": "STATION_MEAN"
+   },
+   {
+    "from": "READINGS",
+    "to": "STATION_MEAN"
+   },
+   {
+    "from": "CORRECTION_SIGN",
+    "to": "STATION_MEAN"
+   },
+   {
+    "from": "HYPOCENTRAL",
+    "to": "LINEAR_INTERP"
+   },
+   {
+    "from": "HYPOCENTRAL",
+    "to": "OFF_TABLE_KEPT"
+   },
+   {
+    "from": "HYPOCENTRAL",
+    "to": "NETWORK_MEDIAN"
+   },
+   {
+    "from": "LINEAR_INTERP",
+    "to": "STATION_MEAN"
+   },
+   {
+    "from": "OFF_TABLE_KEPT",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STATION_MEAN",
+    "to": "NETWORK_MEDIAN"
+   },
+   {
+    "from": "STATION_MEAN",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "NETWORK_MEDIAN",
+    "to": "MIN_THREE"
+   },
+   {
+    "from": "MIN_THREE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "NETWORK_MEDIAN",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STATION_GROUPING",
+    "to": "STATION_MEAN"
+   },
+   {
+    "from": "STATION_GROUPING",
+    "to": "NETWORK_MEDIAN"
+   },
+   {
+    "from": "STATION_GROUPING",
+    "to": "MIN_THREE"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "station-chain",
+   "obligation_ids": [
+    "WA_GAIN",
+    "HALF_P2P",
+    "READINGS",
+    "STATION_MEAN",
+    "CORRECTION_SIGN"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_generated_bulletins"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "distance-chain",
+   "obligation_ids": [
+    "HYPOCENTRAL",
+    "LINEAR_INTERP",
+    "OFF_TABLE_KEPT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_1_distance_is_hypocentral",
+    "test_outputs.py::test_station_beyond_the_table_keeps_the_shipped_correction"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "contributors-median",
+   "obligation_ids": [
+    "HYPOCENTRAL",
+    "STATION_MEAN",
+    "NETWORK_MEDIAN",
+    "MIN_THREE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_generated_bulletins",
+    "test_outputs.py::test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "grouping-median-count",
+   "obligation_ids": [
+    "STATION_GROUPING",
+    "STATION_MEAN",
+    "NETWORK_MEDIAN",
+    "MIN_THREE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_two_sensors_of_one_site_are_one_station"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "trap-classes-together",
+   "obligation_ids": [
+    "READINGS",
+    "OFF_TABLE_KEPT",
+    "STATION_GROUPING",
+    "STATION_MEAN"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_off_table_sub_noise_and_two_sensor_sites_together"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "read each of its rules as holding for every bulletin inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where it gives no rule for a value, that value is still computed the way the code computes it today",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The bulletins we reduce hold one to fifty events"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED constant (authoring only; graded bulletins are sealed files under tests/expected)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "expected_source_policy": "every core witness compares against expectations sealed by solution/model.py, written from NPM-4 before the Oracle and never importing mlnet; the T2 silent branch mirrors the shipped end-segment log-distance formula with a 'Shipped step' comment",
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "R-driver-frozen",
+   "statement": "leave /app/tools/ml_bulletin.py identical to ours",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_matches_ours"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_sandbox_cannot_read_ground_truth": "harness isolation witness (protected_ground_truth); claimed by no domain obligation",
+  "test_outputs.py::test_generated_bulletins": "broad trap-free envelope sweep over every rule at once; no single obligation owns it",
+  "test_outputs.py::test_report_keeps_file_and_recording_order": "report order/shape witness for exact_output_requirements REPORT-ORDER and REPORT-KEYS; shipped-correct, no departure"
+ },
+ "removed_obligations": [
+  {
+   "id": "TIE_AT_THREE_TIMES_NOISE",
+   "reason": "platform v9 finding 2: a decimal tie (0.3 vs 3 x 0.1) is decided differently in binary and exact arithmetic; tie handling is not core (the task is about which amplitudes a station mean admits), so section 1 now keeps every amplitude a part in a thousand clear of three times its noise and no tie is graded",
+   "former_anchor": {
+    "file": "tests/test_outputs.py",
+    "anchor": "exact ties included"
+   }
+  },
+  {
+   "id": "TABLE_END_EXACT",
+   "reason": "platform v9 finding 3: a hypocentral distance a hair beyond 600 km rounds onto 600 in doubles; the inclusive end is not core, so section 1 now keeps every station more than a metre from 10 and 600 km and no station on an end is graded",
+   "former_anchor": {
+    "file": "tests/test_outputs.py",
+    "anchor": "10 km and 600 km included"
+   }
+  },
+  {
+   "id": "TOLERANCE_EXACT_EDGE",
+   "reason": "platform v10 finding 2: a single 1e-6 edge cannot be graded exactly against rounded expectations (v9 finding 4 was the opposite sliver); the instruction now passes numbers within 1e-6 and fails those more than 2e-6 away, leaving the band between open, and the verifier accepts 1.5e-6",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "every other number must agree with the expected one to within 10^-6"
+   }
+  }
+ ],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-KEYS",
+   "domain_required": true,
+   "rationale": "the bulletin publisher reads these keys",
+   "authority_anchor": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "The report carries no other keys."
+   }
+  },
+  {
+   "id": "REPORT-ORDER",
+   "domain_required": true,
+   "rationale": "analysts read events and stations in locator and recording order",
+   "authority_anchor": {
+    "file": "environment/app/manual/npm4-local-magnitude.md",
+    "anchor": "listing the\nbulletin's events in file order"
+   }
+  },
+  {
+   "id": "TOLERANCE",
+   "domain_required": true,
+   "rationale": "magnitudes are unrounded floats",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "passes when it is within 10^-6 of the expected one"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "revert-d1-gain",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "WA_GAIN"
+   ],
+   "receipt": "wrong-paths/revert-d1-gain.json"
+  },
+  {
+   "id": "revert-d2-half",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "HALF_P2P"
+   ],
+   "receipt": "wrong-paths/revert-d2-half.json"
+  },
+  {
+   "id": "revert-d3-epicentral",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "HYPOCENTRAL"
+   ],
+   "receipt": "wrong-paths/revert-d3-epicentral.json"
+  },
+  {
+   "id": "revert-d4-log-interpolation",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "LINEAR_INTERP"
+   ],
+   "receipt": "wrong-paths/revert-d4-log-interpolation.json"
+  },
+  {
+   "id": "t2-linear-extrapolation",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "OFF_TABLE_KEPT"
+   ],
+   "receipt": "wrong-paths/t2-linear-extrapolation.json"
+  },
+  {
+   "id": "t2-clamp-to-table-ends",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "OFF_TABLE_KEPT"
+   ],
+   "receipt": "wrong-paths/t2-clamp-to-table-ends.json"
+  },
+  {
+   "id": "revert-d5-correction-subtracted",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CORRECTION_SIGN"
+   ],
+   "receipt": "wrong-paths/revert-d5-correction-subtracted.json"
+  },
+  {
+   "id": "revert-d6-largest-channel",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STATION_MEAN"
+   ],
+   "receipt": "wrong-paths/revert-d6-largest-channel.json"
+  },
+  {
+   "id": "t1-mean-over-every-amplitude",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "READINGS"
+   ],
+   "receipt": "wrong-paths/t1-mean-over-every-amplitude.json"
+  },
+  {
+   "id": "revert-d7-mean",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "NETWORK_MEDIAN"
+   ],
+   "receipt": "wrong-paths/revert-d7-mean.json"
+  },
+  {
+   "id": "median-lower-middle",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "NETWORK_MEDIAN"
+   ],
+   "receipt": "wrong-paths/median-lower-middle.json"
+  },
+  {
+   "id": "revert-d8-no-minimum",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MIN_THREE"
+   ],
+   "receipt": "wrong-paths/revert-d8-no-minimum.json"
+  },
+  {
+   "id": "t3-recording-is-a-station",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STATION_GROUPING"
+   ],
+   "receipt": "wrong-paths/t3-recording-is-a-station.json"
+  },
+  {
+   "id": "t3-median-over-recordings",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STATION_GROUPING"
+   ],
+   "receipt": "wrong-paths/t3-median-over-recordings.json"
+  },
+  {
+   "id": "driver-side-shim",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/driver-side-shim.json"
+  }
+ ]
+}

@@ -1,0 +1,118 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "ec8842ae5638641cfcd13d969c7fe78de9cd771f41feffe107ba18ae6ad8ee8d",
+  "severity": "None",
+  "summary": "No concrete reference defect found. solve.sh copies four saved plans into /app/plans and fails loudly unless the candidate-visible checker, which matches stand-rules.md rule for rule, reports each plan valid at a cost no higher than targets.json. The targets equal the recorded reference costs. Static spot traces of the day-1 and day-4 plans, including exact-buffer boundaries and every day-4 wingtip pair, found no rule violation.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/tools/check_plan.py",
+      "environment/app/planner/plan_day.py",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json (lines 1-2914 read line by line: header, all 31 stands, full walk_metres matrix, wingtip_pairs, all 180 turns, start of transfers; lines 2908-6485 transfers inspected by whole-file pattern search)",
+      "environment/app/days/day-2.json (whole-file pattern searches: section offsets, turn-id count, buffer/bus constants, numeric-type scan)",
+      "environment/app/days/day-3.json (whole-file pattern searches: section offsets, turn-id count, buffer/bus constants, numeric-type scan)",
+      "environment/app/days/day-4.json (lines 1-20 and 4600-4640 read: header, wingtip_pairs; whole-file multiline search extracting every size-3 turn with arrive/depart; turn-id count, constants, numeric-type scan)",
+      "solution/solve.sh",
+      "solution/search.py",
+      "solution/plans/day-1.json",
+      "solution/plans/day-4.json",
+      "solution/plans/day-2.json (whole-file turn-id count)",
+      "solution/plans/day-3.json (whole-file turn-id count)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped every rule in environment/app/docs/stand-rules.md:33-59 (placement exactly once, size, international, same-stand buffer, wingtip clash, bus and walk cost with the diagonal charged) and the file format at :61-74 to environment/app/tools/check_plan.py:76-131 and :59-73. The checker implements each rule as written. Its buffer check on consecutive sorted intervals (:107-110) is equivalent to the pairwise rule because every turn has arrive <= depart. The wingtip test (:112-118) uses strict overlap with no buffer, as documented.",
+    "Traced solution/solve.sh:24-36. It runs with set -euo pipefail, copies the plans, and then runs check_plan.py for each day. The script aborts when the checker exits non-zero (inside a command substitution under set -e), when the output is not 'valid, cost N' (cost == out), or when N > target. A reference that exits 0 therefore has four plans that are valid under the checker and within their targets.",
+    "Compared targets.json:2-5 (7241380, 9017700, 10098740, 15505590) with the checker-output table in solve.sh:15-19. They agree, which matches instruction.md:1 ('Each target is the cost of the best plan the office has found').",
+    "Output path and format: plans are written to /app/plans/<day>.json (instruction.md:1, Dockerfile:7, solve.sh:25-26). The plans are JSON objects with one 'stands' key, stand-id keys, lists of turn-id strings, empty lists where allowed (stand-rules.md:63-67), and no duplicate keys or non-finite numbers.",
+    "Completeness: turn-id occurrence counts in the plans (180/240/300/360) equal the turn counts in the day files (180/240/300/360). Day-1 plan keys (31: A01-A09, B01-B09, C01-C07, R01-R06) and day-4 plan keys (63: A01-A18, B01-B18, C01-C14, R01-R13) cover exactly the stands listed.",
+    "Day-1 static validity trace of the size, international and buffer rules on stands A01, A02, A03, A04, A05, A07, B01, B02, C01, C02 and R01 found no violation. It includes exact-boundary cases that the rule allows: A03 T154 departs 1283 and 1283 + 15 = 1298 = T177 arrive; C01 T055 departs 724 and 724 + 15 = 739 = T075 arrive. Also checked a domestic turn on an international stand (T075 on C01), which rule 2 allows.",
+    "Day-1 wingtip pair C01/C02: the size-3 turns on C01 (T018, T055, T075, T178) and on C02 (T103, T134) never overlap strictly.",
+    "Day-4 wingtip pairs B16/B17, C01/C02, C02/C03, C03/C04 and C11/C12, including the C02-C03-C04 chain: extracted every size-3 turn with its times from day-4.json and checked every size-3 turn on each paired stand in solution/plans/day-4.json:246-405. No strict overlap. Closest margins are T128 departing 867 on B16 against T201 arriving 872 on B17, and T147 departing 885 on C04 against T219 arriving 897 on C03.",
+    "Numeric-type scan of all day files: no negative numbers, decimals or nulls, so costs are whole numbers as stand-rules.md:58-59 states. buffer_minutes is 15 and bus_cost_per_passenger is 300 on all four days.",
+    "solution/search.py is documentation of how the plans were produced and is not run by solve.sh. Its conflict and wingtip predicates (:85-103) match the rules, and save() (:242-257) asserts that the checker's cost equals the search's best cost. No defect in it affects the shipped plans.",
+    "Limitation (method, not scope): I cannot execute anything, so I did not hand-sum the full transfer and bus cost totals or check every buffer interval on days 2 and 3. The solve.sh gate enforces those at run time and would fail loudly rather than leave a silently wrong plan."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced ordinary same-stand sequences and exact-buffer equality boundaries on day-1, wingtip strict-overlap margins on day-1 and day-4, and the solve.sh gate logic that ties each shipped plan to the checker and target.",
+      "evidence": ["solution/plans/day-1.json:18-24", "solution/plans/day-1.json:135-156", "environment/app/days/day-1.json:2665-2878", "solution/plans/day-4.json:246-405", "solution/solve.sh:27-36", "environment/app/docs/stand-rules.md:38-44"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes, widths, precision, delimiters and paths",
+      "status": "checked",
+      "reason": "Plans go to /app/plans/<day>.json. The format has one 'stands' object whose values are lists of string ids, as stand-rules.md defines. No numeric formatting is involved.",
+      "evidence": ["instruction.md:1", "solution/solve.sh:25-26", "environment/app/docs/stand-rules.md:61-74", "solution/plans/day-1.json:1-243"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-update branches (deletion, expiry, replacement, identifier reuse)",
+      "status": "checked",
+      "reason": "The reference is static data, so the only state is the assignment. Each turn id occurs exactly once per plan: the per-day occurrence counts equal the turn counts, and the checker rejects duplicates at run time. No identifier reuse or replacement semantics apply.",
+      "evidence": ["environment/app/tools/check_plan.py:88-96", "environment/app/docs/stand-rules.md:33"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or durability promise. The deliverable is four static files.",
+      "evidence": ["instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reference meets the target threshold (cost <= targets.json)",
+      "status": "checked",
+      "reason": "Targets equal the reference costs recorded in solve.sh. The gate fails when the cost exceeds the target. The checker's cost formula matches the documented cost rules, including the diagonal and remote-walk charges.",
+      "evidence": ["environment/app/days/targets.json:2-5", "solution/solve.sh:15-19", "solution/solve.sh:30-35", "environment/app/tools/check_plan.py:120-131", "environment/app/docs/stand-rules.md:46-59"],
+      "finding_ids": []
+    },
+    {
+      "category": "Loop state, tie-breaks, precision loss (guide watch-list)",
+      "status": "checked",
+      "reason": "The graded artifact has no tie-break or precision concern because all values are integers. search.py loop state (apply/revert) matters only to how the plans were produced, and save() cross-checks the result against the checker.",
+      "evidence": ["solution/search.py:105-142", "solution/search.py:242-248"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 3 same-stand buffer", "rule 4 wingtip clash (no buffer, size 3 only)"],
+      "case_or_path": "Day-4 C02-C03-C04 chain: T125 (C02, departs 808) and T219 (C03, 897-1033) do not overlap, and T266 (C02) arrives 1066. On C04, T147 departs 885 and T259 arrives 1047, both clear of T219. The wingtip rule applies no buffer, and the plans respect the strict-overlap test.",
+      "status": "checked",
+      "evidence": ["environment/app/days/day-4.json:4608-4628", "solution/plans/day-4.json:276-305"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2 international placement", "cost rule for remote stands (bus plus walk)"],
+      "case_or_path": "Day-1 remote stands R01-R06 are international and size 3. Domestic size-3 T093 on R01 is allowed by rule 2 and bus-charged. The checker adds the bus charge and still charges the walk entry for transfers, as stand-rules.md:55-58 requires.",
+      "status": "checked",
+      "evidence": ["environment/app/days/day-1.json:206-253", "solution/plans/day-1.json:209-213", "environment/app/tools/check_plan.py:123-130"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 3 buffer boundary 'no later than'", "rule 2 domestic turn on international stand"],
+      "case_or_path": "C01: T055 departs 724, and 724 + 15 = 739 = arrival of domestic T075, which is allowed at equality. C01 is international, which a domestic turn may use.",
+      "status": "checked",
+      "evidence": ["environment/app/days/day-1.json:1775-1778", "environment/app/days/day-1.json:1955-1958", "solution/plans/day-1.json:135-145", "environment/app/tools/check_plan.py:109"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

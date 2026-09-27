@@ -1,0 +1,1134 @@
+[?2004hroot@4c62d36b2fbb:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@4c62d36b2fbb:/app# clear
+[?2004l[H[J[3J[?2004hroot@4c62d36b2fbb:/app# find /app -maxdepth 3 -type f -printf '%p %s bytes\n' | sort
+[?2004l/app/README.md 201 bytes
+/app/docs/sed.txt 203819 bytes
+/app/pysed/sed.py 309 bytes
+[?2004hroot@4c62d36b2fbb:/app# ls -la /app /app/pysed 2>&1
+[?2004l/app:
+total 20
+drwxr-xr-x 1 root root 4096 Sep 25 11:41 .
+drwxr-xr-x 1 root root 4096 Sep 25 11:42 ..
+-rw-r--r-- 1 root root  201 Sep 25 03:07 README.md
+drwxr-xr-x 2 root root 4096 Sep 24 04:37 docs
+drwxr-xr-x 2 root root 4096 Sep 24 04:37 pysed
+
+/app/pysed:
+total 12
+drwxr-xr-x 2 root root 4096 Sep 24 04:37 .
+drwxr-xr-x 1 root root 4096 Sep 25 11:41 ..
+-rw-r--r-- 1 root root  309 Sep 24 04:37 sed.py
+[?2004hroot@4c62d36b2fbb:/app# python3 --version; sed --version | head -1
+[?2004lPython 3.13.12
+bash: sed: command not found
+[?2004hroot@4c62d36b2fbb:/app# cat /app/README.md; echo '--- sed.py ---'; cat /app/pysed/sed.py
+[?2004l# pysed
+
+A Python replacement for GNU sed 4.9, for the minimal images that ship
+without sed.
+
+- `pysed/sed.py` — the command (`python3 /app/pysed/sed.py ...`)
+- `docs/sed.txt` — the GNU sed manual
+--- sed.py ---
+"""pysed: a GNU sed 4.9 replacement in pure Python.
+
+Usage: python3 /app/pysed/sed.py [OPTION]... {script-only-if-no-other-script} [input-file]...
+"""
+
+import sys
+
+
+def main(argv):
+    sys.stderr.write("pysed: not implemented yet\n")
+    return 4
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+[?2004hroot@4c62d36b2fbb:/app# grep -nE '^3\.|^4\.|^5\.|The "s" Command|Regexp Addresses|Range Addresses' /app/docs/sed.txt | head -80
+[?2004lgrep: /app/docs/sed.txt: binary file matches
+361:* The "s" Command::          ‘sed’’s Swiss Army Knife
+368:3.1 ‘sed’ script overview
+427:3.2 ‘sed’ commands summary
+588:3.3 The ‘s’ Command
+601:Regexp Addresses.
+720:3.4 Often-Used Commands
+816:3.5 Less Frequently-Used Commands
+1111:3.6 Commands for ‘sed’ gurus
+1134:3.7 Commands Specific to GNU ‘sed’
+1223:3.8 Multiple commands syntax
+1281:3.8.1 Commands Requiring a newline
+1398:* Regexp Addresses::                  selecting lines by text matching
+1399:* Range Addresses::                   selecting a range of lines
+1402:4.1 Addresses overview
+1447:4.2 Selecting lines by numbers
+1483:4.3 selecting lines by text matching
+1584:4.4 Range Addresses
+1657:4.5 Zero Address
+1686:5.1 Overview of regular expression in ‘sed’
+1724:5.2 Basic (BRE) and extended (ERE) regular expression
+1756:5.3 Overview of basic regular expression syntax
+1928:5.4 Overview of extended regular expression syntax
+1965:5.5 Character Classes and Bracket Expressions
+2102:5.6 regular expression extensions
+2106:(used in *note addresses: Regexp Addresses. and the ‘s’ command).
+2186:5.7 Back-references and Subexpressions
+2197:‘s’ command (*note Regular Expression Addresses: Regexp Addresses. and
+2198:*note The "s" Command::).
+2243:5.8 Escape Sequences - specifying special characters
+2301:5.8.1 Escaping Precedence
+2338:5.9 Multibyte characters and Locale Considerations
+2366:5.9.1 Invalid multibyte characters
+2441:5.9.2 Upper/Lower case conversion
+2454:*Note The "s" Command::.
+2456:5.9.3 Multibyte regexp character classes
+[?2004hroot@4c62d36b2fbb:/app# cat > /app/pysed/sed.py <<'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> """Small, pure-Python implementation of the documented GNU sed subset."""
+[?2004l[?2004h> import os
+[?2004li; c = self.s[self.i]
+        if c.isdigit():
+            while self.i < len(self.s) and self.s[self.i].isdigit(): [?2004h> import re
+[?2004l[?2004h> import sys
+[?2004l[?2004h> 
+[?2004l[?2004h> CLASSES = {
+[?2004l[?2004h>     'alnum': 'A-Za-z0-9', 'alpha': 'A-Za-z', 'blank': ' \\t',
+[?2004l[?2004h>     'cntrl': '\\x00-\\x1f\\x7f', 'digit': '0-9', 'graph': '\\x21-\\x7e',
+[?2004l[?2004h>     'lower': 'a-z', 'print': '\\x20-\\x7e', 'punct': '!-/:-@[-`{-~',
+[?2004l[?2004h>     'space': ' \\t\\r\\n\\v\\f', 'upper': 'A-Z', 'xdigit': 'A-Fa-f0-9'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def expand_classes(s):
+[?2004l[?2004h>     for k, v in CLASSES.items():
+[?2004l[?2004h>         s = s.replace('[:' + k + ':]', v)
+[?2004l[?2004h>     return s
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def regex_translate(src, extended=False):
+[?2004l[?2004h>     """Translate the requested GNU ASCII BRE/ERE subset to Python syntax."""
+[?2004l[?2004h>     out = []
+[?2004l[?2004h>     i = 0
+[?2004l[?2004h>     in_class = False
+[?2004l[?2004h>     while i < len(src):
+[?2004l[?2004h>         c = src[i]
+[?2004l[?2004h>         if c == '[' and not in_class:
+[?2004l[?2004h>             j = i + 1
+[?2004l[?2004h>             if j < len(src) and src[j] == '^': j += 1
+[?2004l[?2004h>             if j < len(src) and src[j] == ']': j += 1
+[?2004l[?2004h>             while j < len(src):
+[?2004l[?2004h>                 if src[j] == ']' and not (j and src[j-1] == '\\'):
+[?2004l[?2004h>                     break
+[?2004l[?2004h>                 j += 1
+[?2004l[?2004h>             if j < len(src):
+[?2004l[?2004h>                 z = expand_classes(src[i:j+1])
+[?2004l[?2004h>                 out.append(z); i = j + 1; continue
+[?2004l[?2004h>         if c == '\\' and i + 1 < len(src):
+[?2004l[?2004h>             d = src[i+1]; i += 2
+[?2004l[?2004h>             escapes = {'a':'\\a','f':'\\f','n':'\\n','r':'\\r','t':'\\t','v':'\\v',
+[?2004l[?2004h>                        'w':'[A-Za-z0-9_]','W':'[^A-Za-z0-9_]','s':'[ \\t\\r\\n\\v\\f]',
+[?2004l[?2004h>                        'S':'[^ \\t\\r\\n\\v\\f]','b':'(?:(?<=\\w)(?!\\w)|(?<!\\w)(?=\\w))',
+[?2004l[?2004h>                        'B':'(?:(?<=\\w)(?=\\w)|(?<!\\w)(?!\\w))',
+[?2004l[?2004h>                        '<':'(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])',
+[?2004l[?2004h>                        '>':'(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])'}
+[?2004l[?2004h>             if d in escapes: out.append(escapes[d])
+[?2004l[?2004h>             elif not extended and d in '()+?|': out.append(d)
+[?2004l[?2004h>             elif not extended and d == '{': out.append('{')
+[?2004lrn Addr('num', n)
+        if c == '$': self.i += 1; return Addr('last')
+        if c == '/':
+            z = self.delimited('/'); return Addr('rx', z)
+        if c == '\\' and self.i + 1 < len(self.s):
+            d = self.s[self.i+1]
+            if not d.isalnum() and d != '\\':
+                self.i += 1; z = self.delimited(d); return Addr('rx', z)
+        return None
+
+    def linearg(self):
+        st = self.i
+        while self.i < len(self.s) and self.s[self.i] not in '\n;': self.i += 1
+        return self.s[st:self.i].strip()
+
+    def textarg(self):
+        # one-line: command whitespace text.  Traditional: command \ newline,
+        # with backslash-newline continuing embedded text lines.
+        while self.i < len(self.s) and self.s[self.i] in ' \t': self.i += 1
+        if self.i < len(self.s) and self.s[self.i] == '\\' and self.i+1 < len(self.s) and self.s[self.i+1] == '\n':
+            self.i += 2; out = []
+            while self.i < len(self.s):
+                j = self.s.find('\n', self.i)
+                if j < 0: out.append(self.s[self.i:]); self.i = len(self.s); break
+                part = self.s[self.i:j]
+                if part.endswith('\\'):
+                    out.append(part[:-1]); out.append('\n'); self.i = j + 1
+                else:
+                    out.append(part); self.i = j; break
+            return ''.join(out)
+        st = self.i
+        while self.i < len(self.s) and self.s[self.i] != '\n': self.i += 1
+  [?2004h>             elif not extended and d == '}': out.append('}')
+[?2004l[?2004h>             elif d.isdigit(): out.append('\\' + d)
+[?2004l[?2004h>             else: out.append(re.escape(d))
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if not extended and c in '()+?|{}': out.append('\\' + c)
+[?2004l[?2004h>         elif extended and c in '(){}+?|': out.append(c)
+[?2004l[?2004h>         elif c == '\x00': out.append('\\x00')
+[?2004l[?2004h>         else: out.append(c)
+[?2004l[?2004h>         i += 1
+[?2004l[?2004h>     return ''.join(out)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class RX:
+[?2004l[?2004h>     def __init__(self, source, extended):
+[?2004l[?2004h>         self.source = source
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             self.r = re.compile(regex_translate(source, extended), re.ASCII)
+[?2004l[?2004h>         except re.error:
+[?2004l[?2004h>             self.r = re.compile(r'(?!x)x')
+[?2004l[?2004h> 
+[?2004l[?2004h>     def search(self, text, start=0):
+[?2004l[?2004h>         # Determine POSIX leftmost-longest by fixing each possible start and
+[?2004l[?2004h>         # trying all endpoints longest first. fullmatch(pos,endpos) keeps
+[?2004l[?2004h>         # anchors relative to the original string.
+[?2004l[?2004h>         for a in range(start, len(text) + 1):
+[?2004l[?2004h>             for b in range(len(text), a - 1, -1):
+[?2004l[?2004h>                 m = self.r.fullmatch(text, a, b)
+[?2004l[?2004h>                 if m is not None:
+[?2004l[?2004h>                     return m
+[?2004l[?2004h>         return None
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class Addr:
+[?2004l[?2004h>     def __init__(self, kind, val=None): self.kind, self.val = kind, val
+[?2004l[?2004h> 
+[?2004l[?2004h> class Command:
+[?2004l[?2004h>     def __init__(self):
+[?2004l[?2004h>         self.a1 = self.a2 = None; self.neg = False; self.op = ''
+[?2004l[?2004h>         self.arg = None; self.range_on = False; self.zero_range = False
+[?2004l = Addr('plus' if k == '+' else 'tilde', int[?2004h> 
+[?2004l([?2004h> 
+[?2004l[?2004h> class Parser:
+[?2004l[?2004h>     def __init__(self, s, extended):
+[?2004l[?2004h>         self.s, self.i, self.extended = s, 0, extended
+[?2004l[?2004h>         self.commands = []; self.labels = {}; self.last_rx = None
+[?2004l[?2004h> 
+[?2004l[?2004h>     def ws(self):
+[?2004l[?2004h>         while self.i < len(self.s) and self.s[self.i] in ' \t\r': self.i += 1
+[?2004l[?2004h> 
+[?2004l[?2004h>     def delimited(self, delim):
+[?2004l[?2004h>         out = []; self.i += 1
+[?2004l[?2004h>         while self.i < len(self.s):
+[?2004l[?2004h>             c = self.s[self.i]; self.i += 1
+[?2004l[?2004h>             if c == delim: return ''.join(out)
+[?2004l[?2004h>             if c == '\\' and self.i < len(self.s):
+[?2004l[?2004h>                 d = self.s[self.i]; self.i += 1
+[?2004l[?2004h>                 if d == delim: out.append(delim)
+[?2004l[?2004h>                 else: out.extend(('\\', d))
+[?2004l[?2004h>             else: out.append(c)
+[?2004l[?2004h>         return ''.join(out)
+[?2004l[?2004h> 
+[?2004l[?2004h>     def addr(self):
+[?2004l[?2004h>         self.ws()
+[?2004l[?2004h>         if self.i >= len(self.s): return None
+[?2004l[?2004h>         st = self.i; c = self.s[self.i]
+[?2004l[?2004h>         if c.isdigit():
+[?2004l[?2004h>             while self.i < len(self.s) and self.s[self.i].isdigit(): self.i += 1
+[?2004l[?2004h>             n = int(self.s[st:self.i])
+[?2004l[?2004h>             if self.i < len(self.s) and self.s[self.i] == '~':
+[?2004l[?2004h>                 self.i += 1; q = self.i
+[?2004l[?2004h>                 while self.i < len(self.s) and self.s[self.i].isdigit(): self.i += 1
+[?2004l[?2004h>                 return Addr('step', (n, int(self.s[q:self.i])))
+[?2004l[?2004h>             return Addr('num', n)
+[?2004l[?2004h>         if c == '$': self.i += 1; return Addr('last')
+[?2004l[?2004h>         if c == '/':
+[?2004l[?2004h>             z = self.delimited('/'); return Addr('rx', z)
+[?2004l else: c.a2 = self.addr()
+            else: self.i = save
+            self.ws()
+            if self.i < len(self.s) and self.s[self.i] == '!': c.neg = True; self.i += 1; self.ws()
+            if self.i >= len(self.s): break
+            c.op = self.s[self.i]; self.i += 1
+            idx = len(self.commands); self.commands.append(c)
+            if c.op == '{': depth.append(idx)
+            elif c.op == ':':
+                c.arg = self.linearg(); self.labels[c.arg] = idx
+            elif c.op in 'btT': c.arg = self.linearg()
+            elif c.op in 'aic': c.arg = self.textarg()
+            elif c.op == 's': c.arg = self.subst()
+            elif c.op in 'qQ':
+                self.ws(); q = self.i
+                while self.i < len(self.s) and self.s[self.i].isdigit(): self.i += 1
+                c.arg = int(self.s[q:self.i] or '0')
+            elif c.op not in '=dDgGhHxnNpPz':
+                self.linearg()
+        for o in depth: self.commands[o].arg = len(self.commands)
+        return self.commands, self.labels
+
+
+class Engine:
+    def __init__(self, cmds, labels, extended=False, quiet=False):
+        self.cs, self.labels, self.extended, self.quiet = cmds, labels, extended, quiet
+        self.hold = ''; self.last_regex = None; self.out = []; self.status = 0
+        self.subbed = False; self.appendq = []
+
+    def rx(self, source):
+        if [?2004h>         if c == '\\' and self.i + 1 < len(self.s):
+[?2004l[?2004h>             d = self.s[self.i+1]
+[?2004l[?2004h>             if not d.isalnum() and d != '\\':
+[?2004l[?2004h>                 self.i += 1; z = self.delimited(d); return Addr('rx', z)
+[?2004l[?2004h>         return None
+[?2004l[?2004h> 
+[?2004l[?2004h>     def linearg(self):
+[?2004l[?2004h>         st = self.i
+[?2004l[?2004h>         while self.i < len(self.s) and self.s[self.i] not in '\n;': self.i += 1
+[?2004l[?2004h>         return self.s[st:self.i].strip()
+[?2004l[?2004h> 
+[?2004l[?2004h>     def textarg(self):
+[?2004l[?2004h>         # one-line: command whitespace text.  Traditional: command \ newline,
+[?2004l[?2004h>         # with backslash-newline continuing embedded text lines.
+[?2004l[?2004h>         while self.i < len(self.s) and self.s[self.i] in ' \t': self.i += 1
+[?2004l[?2004h>         if self.i < len(self.s) and self.s[self.i] == '\\' and self.i+1 < len(self.s) and self.s[self.i+1] == '\n':
+[?2004l elif c.a2 is None: v =[?2004h>             self.i += 2; out = []
+[?2004lat, num, last)[?2004h>             while self.i < len(self.s):
+[?2004l
+        else:
+            if not c.rang[?2004h>                 j = self.s.find('\n', self.i)
+[?2004l[?2004h>                 if j < 0: out.append(self.s[self.i:]); self.i = len(self.s); break
+[?2004l[?2004h>                 part = self.s[self.i:j]
+[?2004lc[?2004h>                 if part.endswith('\\'):
+[?2004l[?2004h>                     out.append(part[:-1]); out.append('\n'); self.i = j + 1
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     out.append(part); self.i = j; break
+[?2004l[?2004h>             return ''.join(out)
+[?2004l[?2004h>         st = self.i
+[?2004l[?2004h>         while self.i < len(self.s) and self.s[self.i] != '\n': self.i += 1
+[?2004l[?2004h>         return self.s[st:self.i]
+[?2004l[?2004h> 
+[?2004l[?2004h>     def subst(self):
+[?2004l  [?2004h>         delim = self.s[self.i]; pat = self.delimited(delim)
+[?2004l[?2004h>         rep = self.delimited(delim)
+[?2004l[?2004h>         st = self.i
+[?2004l            if num == c.range_start and c.a2.kind == 'rx': test = False
+   [?2004h>         while self.i < len(self.s) and self.s[self.i] not in ';\n}': self.i += 1
+[?2004l[?2004h>         flags = self.s[st:self.i].strip()
+[?2004l[?2004h>         return (pat, rep, flags)
+[?2004l[?2004h> 
+[?2004l[?2004h>     def parse(self):
+[?2004l[?2004h>         depth = []
+[?2004l[?2004h>         while self.i < len(self.s):
+[?2004l[?2004h>             self.ws()
+[?2004l[?2004h>             if self.i >= len(self.s): break
+[?2004l[?2004h>             if self.s[self.i] in '\n;': self.i += 1; continue
+[?2004l[?2004h>             if self.s[self.i] == '#':
+[?2004l[?2004h>                 j = self.s.find('\n', self.i); self.i = len(self.s) if j < 0 else j; continue
+[?2004l[?2004h>             if self.s[self.i] == '}':
+[?2004l[?2004h>                 self.i += 1
+[?2004l[?2004h>                 if depth:
+[?2004l[?2004h>                     o = depth.pop(); self.commands[o].arg = len(self.commands)
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             c = Command(); save = self.i; c.a1 = self.addr()
+[?2004l[?2004h>             if c.a1:
+[?2004l[?2004h>                 self.ws()
+[?2004l[?2004h>                 if self.i < len(self.s) and self.s[self.i] == ',':
+[?2004l[?2004h>                     self.i += 1; self.ws()
+[?2004l[?2004h>                     if self.i < len(self.s) and self.s[self.i] in '+~':
+[?2004l[?2004h>                         k = self.s[self.i]; self.i += 1; q = self.i
+[?2004l[?2004h>                         while self.i < len(self.s) and self.s[self.i].isdigit(): self.i += 1
+[?2004l[?2004h>                         c.a2 = Addr('plus' if k == '+' else 'tilde', int(self.s[q:self.i]))
+[?2004l[?2004h>                     else: c.a2 = self.addr()
+[?2004l[?2004h>             else: self.i = save
+[?2004l([?2004h>             self.ws()
+[?2004lend(self.r[?2004h>             if self.i < len(self.s) and self.s[self.i] == '!': c.neg = True; self.i += 1; self.ws()
+[?2004l[?2004h>             if self.i >= len(self.s): break
+[?2004l[?2004h>             c.op = self.s[self.i]; self.i += 1
+[?2004lif m.end()[?2004h>             idx = len(self.commands); self.commands.append(c)
+[?2004l[?2004h>             if c.op == '{': depth.append(idx)
+[?2004l[?2004h>             elif c.op == ':':
+[?2004l[?2004h>                 c.arg = self.linearg(); self.labels[c.arg] = idx
+[?2004l[?2004h>             elif c.op in 'btT': c.arg = self.linearg()
+[?2004l[?2004h>             elif c.op in 'aic': c.arg = self.textarg()
+[?2004l[?2004h>             elif c.op == 's': c.arg = self.subst()
+[?2004lf, recor[?2004h>             elif c.op in 'qQ':
+[?2004l[?2004h>                 self.ws(); q = self.i
+[?2004lof (text, number, is_last)
+        k=0[?2004h>                 while self.i < len(self.s) and self.s[self.i].isdigit(): self.i += 1
+[?2004l[?2004h>                 c.arg = int(self.s[q:self.i] or '0')
+[?2004l[?2004h>             elif c.op not in '=dDgGhHxnNpPz':
+[?2004l          while pc < len(self.cs):
+                c=self.cs[pc]
+[?2004h>                 self.linearg()
+[?2004l[?2004h>         for o in depth: self.commands[o].arg = len(self.commands)
+[?2004l[?2004h>         return self.commands, self.labels
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class Engine:
+[?2004l      elif o=='[?2004h>     def __init__(self, cmds, labels, extended=False, quiet=False):
+[?2004l[?2004h>         self.cs, self.labels, self.extended, self.quiet = cmds, labels, extended, quiet
+[?2004l[?2004h>         self.hold = ''; self.last_regex = None; self.out = []; self.status = 0
+[?2004l[?2004h>         self.subbed = False; self.appendq = []
+[?2004l[?2004h> 
+[?2004l [?2004h>     def rx(self, source):
+[?2004l[?2004h>         if source == '':
+[?2004l[?2004h>             return self.last_regex
+[?2004l[?2004h>         self.last_regex = RX(source, self.extended); return self.last_regex
+[?2004l[?2004h> 
+[?2004l [?2004h>     def amatch(self, a, pat, num, last, start_num=None):
+[?2004l[?2004h>         if a.kind == 'num': return num == a.val
+[?2004l[?2004h>         if a.kind == 'last': return last
+[?2004l[?2004h>         if a.kind == 'step':
+[?2004l[?2004h>             first, step = a.val
+[?2004l[?2004h>             return num >= first and (num-first) % step == 0
+[?2004l[?2004h>         if a.kind == 'rx':
+[?2004l.hold=[?2004h>             r = self.rx(a.val); return r is not None and r.search(pat) is not None
+[?2004l[?2004h>         if a.kind == 'plus': return num >= start_num + a.val
+[?2004l[?2004h>         if a.kind == 'tilde': return num % a.val == 0
+[?2004l[?2004h>         return False
+[?2004l   [?2004h> 
+[?2004l[?2004h>     def selected(self, c, pat, num, last):
+[?2004l[?2004h>         if c.a1 is None: v = True
+[?2004l[?2004h>         elif c.a2 is None: v = self.amatch(c.a1, pat, num, last)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if not c.range_on:
+[?2004l[?2004h>                 # GNU special 0,/re/ begins active before line 1.
+[?2004l[?2004h>                 if c.a1.kind == 'num' and c.a1.val == 0:
+[?2004l[?2004h>                     c.range_on = True; c.range_start = 0
+[?2004l[?2004h>                 elif self.amatch(c.a1, pat, num, last):
+[?2004l[?2004h>                     c.range_on = True; c.range_start = num
+[?2004l[?2004h>                     if c.a2.kind == 'num' and c.a2.val <= num: c.range_on = False
+[?2004l[?2004h>                     v = True
+[?2004l[?2004h>                     return not v if c.neg else v
+[?2004l[?2004h>             if c.range_on:
+[?2004l[?2004h>                 v = True
+[?2004l[?2004h>                 test = True
+[?2004l[?2004h>                 if num == c.range_start and c.a2.kind == 'rx': test = False
+[?2004l[?2004h>                 if test and self.amatch(c.a2, pat, num, last, c.range_start): c.range_on = False
+[?2004l[?2004h>             else: v = False
+[?2004l[?2004h>         return not v if c.neg else v
+[?2004l[?2004h> 
+[?2004l[?2004h>     def replacement(self, rep, m):
+[?2004l[?2004h>         out=[]; i=0
+[?2004l[?2004h>         while i < len(rep):
+[?2004l[?2004h>             if rep[i] == '&': out.append(m.group(0)); i += 1
+[?2004l[?2004h>             elif rep[i] == '\\' and i+1 < len(rep):
+[?2004l[?2004h>                 d=rep[i+1]; i += 2
+[?2004l[?2004h>                 if d.isdigit():
+[?2004l[?2004h>                     try: out.append(m.group(int(d)) or '')
+[?2004l[?2004h>                     except IndexError: pass
+[?2004l[?2004h>                 elif d in 'afnrtv': out.append({'a':'\a','f':'\f','n':'\n','r':'\r','t':'\t','v':'\v'}[d])
+[?2004l[?2004h>                 else: out.append(d)
+[?2004l[?2004h>             else: out.append(rep[i]); i += 1
+[?2004l[?2004h>         return ''.join(out)
+[?2004l[?2004h> 
+[?2004l[?2004h>     def substitute(self, pat, spec):
+[?2004l[?2004h>         source, rep, flags = spec; r = self.rx(source)
+[?2004l[?2004h>         if r is None: return pat, False
+[?2004l[?2004h>         g = 'g' in flags; pflag = 'p' in flags
+[?2004l[?2004h>         nums = [int(x) for x in re.findall(r'\d+', flags)]
+[?2004l[?2004h>         nth = nums[-1] if nums else None
+[?2004l[?2004h>         out=[]; pos=0; count=0; changed=False; last_empty=-1
+[?2004l[?2004h>         while pos <= len(pat):
+[?2004l[?2004h>             m = r.search(pat, pos)
+[?2004l[?2004h>             if not m: break
+[?2004l[?2004h>             count += 1
+[?2004lnded=separate=False; scripts=[]; i=0
+    while i<len(argv) and argv[i] in ('-n','-E','-s','-e'):
+        if argv[i]=='-n': quiet=True; i+=1
+        elif argv[i]=='-E': extended=True; i+=1
+        elif argv[i]=='-s': separate=True; i+=1
+        else:
+            if i+1>=len(argv): return 1
+            scripts.append(argv[i+1]); i+=2
+    if not scripts:
+        if i>=len(argv): return 1
+        scripts=[argv[i]]; i+=1
+    script='\n'.join(scripts)
+    if script.startswith('#n'): quie[?2004h>             use = (nth is None or count >= nth) and (g or nth is None or count == nth)
+[?2004l[?2004h>             if use:
+[?2004l[?2004h>                 out.append(pat[pos:m.start()]); out.append(self.replacement(rep,m)); changed=True
+[?2004l[?2004h>                 pos=m.end()
+[?2004l[?2004h>                 if not g: break
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 out.append(pat[pos:m.end()]); pos=m.end()
+[?2004l[?2004h>             if m.end() == m.start():
+[?2004l[?2004h>                 if pos >= len(pat): break
+[?2004l[?2004h>                 out.append(pat[pos]); pos += 1
+[?2004l[?2004h>         out.append(pat[pos:]); new=''.join(out)
+[?2004l[?2004h>         if changed and pflag: self.out.append(new+'\n')
+[?2004l[?2004h>         return new, changed
+[?2004ls:
+            if f=='-': chunks.append(sys.std[?2004h> 
+[?2004l[?2004h>     def flushq(self):
+[?2004l[?2004h>         for x in self.appendq: self.out.append(x + '\n')
+[?2004l[?2004h>         self.appendq=[]
+[?2004l[?2004h> 
+[?2004ltr(e)+'\n'); bad=True
+    eng=Engine(cmds,labels,extended,quiet)
+    if separate:
+        for data in chu[?2004h>     def run(self, records):
+[?2004lnks:
+            for c in cm[?2004h>         # records is list of (text, number, is_last)
+[?2004l[?2004h>         k=0; pat=''
+[?2004l[?2004h>         while k < len(records):
+[?2004l[?2004h>             pat,num,last=records[k]; self.subbed=False; pc=0; deleted=False
+[?2004l[?2004h>             while pc < len(self.cs):
+[?2004l[?2004h>                 c=self.cs[pc]
+[?2004l[?2004h>                 if not self.selected(c,pat,num,last): pc += 1; continue
+[?2004l[?2004h>                 o=c.op
+[?2004l[?2004h>                 if o=='{': pc += 1
+[?2004l[?2004h>                 elif o=='}' or o==':': pc += 1
+[?2004l[?2004h>                 elif o=='a': self.appendq.append(c.arg); pc += 1
+[?2004l[?2004h>                 elif o=='i': self.out.append(c.arg+'\n'); pc += 1
+[?2004l[?2004h>                 elif o=='c':
+[?2004l[?2004h>                     # A range emits once, when it closes (or one-address line).
+[?2004l[?2004h>                     if c.a2 is None or not c.range_on: self.out.append(c.arg+'\n')
+[?2004l[?2004h>                     deleted=True; break
+[?2004l[?2004h>                 elif o=='d': deleted=True; break
+[?2004l[?2004h>                 elif o=='D':
+[?2004l[?2004h>                     q=pat.find('\n')
+[?2004l[?2004h>                     if q<0: deleted=True; break
+[?2004l[?2004h>                     pat=pat[q+1:]; pc=0
+[?2004l[?2004h>                 elif o=='g': pat=self.hold; pc += 1
+[?2004l[?2004h>                 elif o=='G': pat += '\n'+self.hold; pc += 1
+[?2004l[?2004h>                 elif o=='h': self.hold=pat; pc += 1
+[?2004l[?2004h>                 elif o=='H': self.hold += '\n'+pat; pc += 1
+[?2004l[?2004h>                 elif o=='x': pat,self.hold=self.hold,pat; pc += 1
+[?2004l[?2004h>                 elif o=='p': self.out.append(pat+'\n'); pc += 1
+[?2004l[?2004h>                 elif o=='P': self.out.append(pat.split('\n',1)[0]+'\n'); pc += 1
+[?2004l[?2004h>                 elif o=='=': self.out.append(str(num)+'\n'); pc += 1
+[?2004l[?2004h>                 elif o=='z': pat=''; pc += 1
+[?2004l[?2004h>                 elif o=='s':
+[?2004l[?2004h>                     pat,ch=self.substitute(pat,c.arg); self.subbed |= ch; pc += 1
+[?2004l[?2004h>                 elif o in 'btT':
+[?2004l[?2004h>                     take = o=='b' or (o=='t' and self.subbed) or (o=='T' and not self.subbed)
+[?2004l[?2004h>                     if o in 'tT': self.subbed=False
+[?2004l[?2004h>                     if take:
+[?2004l[?2004h>                         pc = self.labels.get(c.arg, len(self.cs)) if c.arg else len(self.cs)
+[?2004l[?2004h>                     else: pc += 1
+[?2004l[?2004h>                 elif o in 'qQ':
+[?2004l[?2004h>                     if o=='q' and not self.quiet: self.out.append(pat+'\n')
+[?2004l[?2004h>                     self.flushq(); self.status=c.arg; return
+[?2004l[?2004h>                 elif o=='n':
+[?2004l[?2004h>                     if not self.quiet: self.out.append(pat+'\n')
+[?2004l[?2004h>                     self.flushq(); k += 1
+[?2004l[?2004h>                     if k>=len(records): return
+[?2004l[?2004h>                     pat,num,last=records[k]; self.subbed=False; pc += 1
+[?2004l[?2004h>                 elif o=='N':
+[?2004l[?2004h>                     k += 1
+[?2004l[?2004h>                     if k>=len(records):
+[?2004l[?2004h>                         if not self.quiet: self.out.append(pat+'\n')
+[?2004l[?2004h>                         self.flushq(); return
+[?2004l[?2004h>                     p2,n2,last2=records[k]; pat += '\n'+p2; num,last=n2,last2; pc += 1
+[?2004l[?2004h>                 else: pc += 1
+[?2004l[?2004h>             if not deleted and not self.quiet: self.out.append(pat+'\n')
+[?2004l[?2004h>             self.flushq(); k += 1
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main(argv):
+[?2004l[?2004h>     quiet=extended=separate=False; scripts=[]; i=0
+[?2004l[?2004h>     while i<len(argv) and argv[i] in ('-n','-E','-s','-e'):
+[?2004l[?2004h>         if argv[i]=='-n': quiet=True; i+=1
+[?2004l[?2004h>         elif argv[i]=='-E': extended=True; i+=1
+[?2004l[?2004h>         elif argv[i]=='-s': separate=True; i+=1
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if i+1>=len(argv): return 1
+[?2004l[?2004h>             scripts.append(argv[i+1]); i+=2
+[?2004l[?2004h>     if not scripts:
+[?2004l[?2004h>         if i>=len(argv): return 1
+[?2004l[?2004h>         scripts=[argv[i]]; i+=1
+[?2004l[?2004h>     script='\n'.join(scripts)
+[?2004l[?2004h>     if script.startswith('#n'): quiet=True
+[?2004l[?2004h>     try: cmds,labels=Parser(script,extended).parse()
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         sys.stderr.write('sed: '+str(e)+'\n'); return 1
+[?2004l[?2004h>     files=argv[i:]; chunks=[]; bad=False
+[?2004l[?2004h>     if not files:
+[?2004l[?2004h>         chunks=[sys.stdin.buffer.read().decode('latin1')]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         for f in files:
+[?2004l[?2004h>             if f=='-': chunks.append(sys.stdin.buffer.read().decode('latin1'))
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 try:
+[?2004l[?2004h>                     with open(f,'rb') as h: chunks.append(h.read().decode('latin1'))
+[?2004l[?2004h>                 except OSError as e:
+[?2004l[?2004h>                     sys.stderr.write('sed: cannot read '+f+': '+str(e)+'\n'); bad=True
+[?2004l[?2004h>     eng=Engine(cmds,labels,extended,quiet)
+[?2004l[?2004h>     if separate:
+[?2004l[?2004h>         for data in chunks:
+[?2004l[?2004h>             for c in cmds: c.range_on=False
+[?2004l[?2004h>             lines=data.splitlines()
+[?2004l[?2004h>             rec=[(x,j+1,j==len(lines)-1) for j,x in enumerate(lines)]
+[?2004l[?2004h>             eng.run(rec)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         lines=[]
+[?2004l[?2004h>         for data in chunks: lines.extend(data.splitlines())
+[?2004l[?2004h>         rec=[(x,j+1,j==len(lines)-1) for j,x in enumerate(lines)]
+[?2004l[?2004h>         eng.run(rec)
+[?2004l[?2004h>     sys.stdout.buffer.write(''.join(eng.out).encode('latin1'))
+[?2004l[?2004h>     return eng.status if eng.status else (2 if bad else 0)
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__':
+[?2004l[?2004h>     sys.exit(main(sys.argv[1:]))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@4c62d36b2fbb:/app# printf 'one\ntwo\nthree\n' | python3 /app/pysed/sed.py -n -e '2p' -e '$p'; printf '%s\n' '---'; printf 'abc abc\n' | python3 /app/pysed/sed.py 's/a./X/g'; printf '%s\n' '---'; printf 'a\nb\nc\nd\n' | python3 /app/pysed/sed.py -n '1,3{H;2,3p};$x;$p'
+[?2004ltwo
+three
+---
+c c
+---
+b
+c
+
+a
+b
+c
+d
+[?2004hroot@4c62d36b2fbb:/app# printf 'abbb\nab\nxyz\n' | python3 /app/pysed/sed.py -E -n '/a(b|bbb)/p'; printf '%s\n' '---'; printf '1\n2\n3\n4\n5\n' | python3 /app/pysed/sed.py -n '1~2p'; printf '%s\n' '---'; printf 'foo\nbar\nfoo\n' | python3 /app/pysed/sed.py -n '0,/foo/p'
+[?2004labbb
+ab
+---
+1
+3
+5
+---
+foo
+bar
+foo
+[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("        rep = self.delimited(delim)\n        st = self.i\n", "        # The pattern's closing delimiter also opens the replacement; scan\n        # replacement content from the current position to the next delimiter.\n        out = []\n        while self.i < len(self.s):\n            ch = self.s[self.i]; self.i += 1\n            if ch == delim: break\n            if ch == '\\\\' and self.i < len(self.s):\n                d = self.s[self.i]; self.i += 1\n                if d == delim: out.append(delim)\n                else: out.extend(('\\\\', d))\n            else: out.append(ch)\n        rep = ''.join(out)\n        st = self.i\n")
+[?2004l[?2004h> s=s.replace("                if not self.selected(c,pat,num,last): pc += 1; continue\n                o=c.op\n", "                chosen = self.selected(c,pat,num,last)\n                if not chosen:\n                    pc = c.arg if c.op == '{' else pc + 1\n                    continue\n                o=c.op\n")
+[?2004l[?2004h> s=s.replace("            lines=data.splitlines()\n", "            lines=data.split('\\n')\n            if lines and lines[-1] == '': lines.pop()\n")
+[?2004l[?2004h> s=s.replace("        for data in chunks: lines.extend(data.splitlines())\n", "        for data in chunks:\n            part=data.split('\\n')\n            if part and part[-1] == '': part.pop()\n            lines.extend(part)\n")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import importlib.util
+[?2004l[?2004h> sp=importlib.util.spec_from_file_location('ps','/app/pysed/sed.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)
+[?2004l[?2004h> for script in ['0,/foo/p','1,3{H;2,3p};$x;$p','s/a./X/g']:
+[?2004l[?2004h>  cs,ls=m.Parser(script,False).parse(); print(script,[(c.op, getattr(c.a1,'kind',None),getattr(c.a1,'val',None),getattr(c.a2,'kind',None),getattr(c.a2,'val',None),c.arg) for c in cs])
+[?2004l[?2004h> PY
+[?2004l0,/foo/p [('p', 'num', 0, 'rx', 'foo', None)]
+1,3{H;2,3p};$x;$p [('{', 'num', 1, 'num', 3, 3), ('H', None, None, None, None, None), ('p', 'num', 2, 'num', 3, None), ('x', 'last', None, None, None, None), ('p', 'last', None, None, None, None)]
+s/a./X/g [('s', None, None, None, None, ('a.', 'X', 'g'))]
+[?2004hroot@4c62d36b2fbb:/app# printf 'abc abc\n' | python3 /app/pysed/sed.py 's/a./X/g'; printf '%s\n' '--- block'; printf 'a\nb\nc\nd\n' | python3 /app/pysed/sed.py -n '1,3{H;2,3p};$x;$p'; printf '%s\n' '--- zero'; printf 'foo\nbar\nfoo\n' | python3 /app/pysed/sed.py -n '0,/foo/p'
+[?2004lXc Xc
+--- block
+b
+c
+
+a
+b
+c
+--- zero
+foo
+bar
+foo
+[?2004hroot@4c62d36b2fbb:/app# printf 'a\nb\nc\n' | python3 /app/pysed/sed.py -n 's/a/A/;t yes;d;:yes;p'; printf '%s\n' '--- NDP'; printf 'a\nb\nc\n' | python3 /app/pysed/sed.py -n 'N;P;D'; printf '%s\n' '--- text'; printf 'a\nb\n' | python3 /app/pysed/sed.py '1i BEFORE' | python3 /app/pysed/sed.py '2a AFTER'; printf '%s\n' '--- status'; printf 'x\n' | python3 /app/pysed/sed.py 'q 7' >/dev/null; echo $?
+[?2004lA
+--- NDP
+a
+b
+--- text
+BEFORE
+a
+AFTER
+b
+--- status
+7
+[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("'lower': 'a-z', 'print': '\\\\x20-\\\\x7e', 'punct': '!-/:-@[-`{-~',", "'lower': 'a-z', 'print': '\\\\x20-\\\\x7e', 'punct': '\\\\x21-\\\\x2f\\\\x3a-\\\\x40\\\\x5b-\\\\x60\\\\x7b-\\\\x7e',")
+[?2004l[?2004h> s=s.replace("                if src[j] == ']' and not (j and src[j-1] == '\\\\'):\n                    break\n", "                if src[j] == ']' and not (j and src[j-1] == '\\\\'):\n                    # The ] in a POSIX class such as [:alpha:] is internal.\n                    if j and src[j-1] == ':' and j+1 < len(src) and src[j+1] == ']':\n                        j += 1\n                    else:\n                        break\n")
+[?2004l[?2004h> start=s.index('class RX:')
+[?2004l[?2004h> end=s.index('\n\nclass Addr:', start)
+[?2004l[?2004h> new='''class RX:\n    def __init__(self, source, extended):\n        self.source = source\n        self.pattern = regex_translate(source, extended)\n        self.cache = {}\n        try:\n            re.compile(self.pattern, re.ASCII)\n            self.valid = True\n        except re.error:\n            self.valid = False\n\n    def search(self, text, start=0):\n        if not self.valid:\n            return None\n        # Force a proposed endpoint without passing endpos to re.  This keeps\n        # ^ and $ relative to the complete pattern space, unlike fullmatch's\n        # artificial end boundary.\n        for a in range(start, len(text) + 1):\n            for b in range(len(text), a - 1, -1):\n                suffix = text[b:]\n                r = self.cache.get(suffix)\n                if r is None:\n                    try:\n                        r = re.compile('(?:' + self.pattern + ')(?=' +\n                                       re.escape(suffix) + r'\\Z)', re.ASCII)\n                    except re.error:\n                        return None\n                    self.cache[suffix] = r\n                m = r.match(text, a)\n                if m is not None and m.end() == b:\n                    return m\n        return None\n'''
+[?2004l[?2004h> s=s[:start]+new+s[end:]
+[?2004l[?2004h> s=s.replace("        self.a1 = self.a2 = None; self.neg = False; self.op = ''\n        self.arg = None; self.range_on = False; self.zero_range = False\n", "        self.a1 = self.a2 = None; self.neg = False; self.op = ''\n        self.arg = None; self.range_on = False; self.zero_done = False\n")
+[?2004l[?2004h> s=s.replace("                if c.a1.kind == 'num' and c.a1.val == 0:\n                    c.range_on = True; c.range_start = 0\n", "                if c.a1.kind == 'num' and c.a1.val == 0 and not c.zero_done:\n                    c.range_on = True; c.range_start = 0\n")
+[?2004l[?2004h> s=s.replace("                if test and self.amatch(c.a2, pat, num, last, c.range_start): c.range_on = False\n", "                if test and self.amatch(c.a2, pat, num, last, c.range_start):\n                    c.range_on = False\n                    if c.a1.kind == 'num' and c.a1.val == 0: c.zero_done = True\n")
+[?2004l[?2004h> s=s.replace("            for c in cmds: c.range_on=False\n", "            for c in cmds: c.range_on=False; c.zero_done=False\n")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@4c62d36b2fbb:/app# printf 'foo\nbar\nfoo\n' | python3 /app/pysed/sed.py -n '0,/foo/p'; printf '%s\n' '--- anchors'; printf 'abc\na\nxa\n' | python3 /app/pysed/sed.py -n '/a$/p'; printf '%s\n' '--- longest'; printf 'abbb\n' | python3 /app/pysed/sed.py -E 's/(a(b|bbb))/[&]-\\1-\\2/'; printf '%s\n' '--- classes'; printf 'Az9! _\n' | python3 /app/pysed/sed.py -E 's/[[:alpha:]]+/X/g;s/[[:punct:]]/P/g'
+[?2004lfoo
+--- anchors
+a
+xa
+--- longest
+[abbb]-\1-\2
+--- classes
+/app/pysed/sed.py:72: FutureWarning: Possible nested set at position 1
+  re.compile(self.pattern, re.ASCII)
+/app/pysed/sed.py:89: FutureWarning: Possible nested set at position 4
+  r = re.compile('(?:' + self.pattern + ')(?=' +
+Az9! _
+[?2004hroot@4c62d36b2fbb:/app# printf '1\n2\n3\n4\n5\n6\n' | python3 /app/pysed/sed.py -n '2,+2p;4,~3p'; printf '%s\n' '--- BRE'; printf 'aaab ccc\n' | python3 /app/pysed/sed.py 's/\\(a\\{2,3\\}\\)b/<\\1>/;s/c\\+/C/'; printf '%s\n' '--- neg/block'; printf 'a\nb\nc\n' | python3 /app/pysed/sed.py -n '2!{s/.*/X/;p}'
+[?2004l2
+3
+4
+4
+5
+6
+--- BRE
+aaab ccc
+--- neg/block
+X
+X
+[?2004hroot@4c62d36b2fbb:/app# tmp=$(mktemp -d); printf 'a\nb\n' >$tmp/f1; : >$tmp/empty; printf 'c\nd\n' >$tmp/f2; python3 /app/pysed/sed.py -n '$=' $tmp/f1 $tmp/empty $tmp/f2; echo sep; python3 /app/pysed/sed.py -s -n '$=' $tmp/f1 $tmp/empty $tmp/f2; python3 /app/pysed/sed.py -n p $tmp/missing >/dev/null; echo missing_status=$?; rm -rf $tmp
+[?2004l4
+sep
+2
+2
+sed: cannot read /tmp/tmp.a3Mx2Sd6RR/missing: [Errno 2] No such file or directory: '/tmp/tmp.a3Mx2Sd6RR/missing'
+missing_status=2
+[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import importlib.util
+[?2004l[?2004h> s=importlib.util.spec_from_file_location('x','/app/pysed/sed.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+[?2004l[?2004h> for x,e in [('[[:alpha:]]+',1),('[[:punct:]]',1),('\\(a\\{2,3\\}\\)b',0),('c\\+',0)]: print(repr(x),'=>',repr(m.regex_translate(x,e)))
+[?2004l[?2004h> PY
+[?2004l'[[:alpha:]]+' => '[[:alpha:]]+'
+'[[:punct:]]' => '[[:punct:]]'
+'\\(a\\{2,3\\}\\)b' => '(a{2,3})b'
+'c\\+' => 'c+'
+[?2004hroot@4c62d36b2fbb:/app# grep -n 'while j < len(src)' -A14 /app/pysed/sed.py
+[?2004l32:            while j < len(src):
+33-                if src[j] == ']' and not (j and src[j-1] == '\\'):
+34-                    # The ] in a POSIX class such as [:alpha:] is internal.
+35-                    if j and src[j-1] == ':' and j+1 < len(src) and src[j+1] == ']':
+36-                        j += 1
+37-                    else:
+38-                        break
+39-                j += 1
+40-            if j < len(src):
+41-                z = expand_classes(src[i:j+1])
+42-                out.append(z); i = j + 1; continue
+43-        if c == '\\' and i + 1 < len(src):
+44-            d = src[i+1]; i += 2
+45-            escapes = {'a':'\\a','f':'\\f','n':'\\n','r':'\\r','t':'\\t','v':'\\v',
+46-                       'w':'[A-Za-z0-9_]','W':'[^A-Za-z0-9_]','s':'[ \\t\\r\\n\\v\\f]',
+[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py'; s=open(p).read()
+[?2004l[?2004h> a=s.index("        if c == '[' and not in_class:")
+[?2004l[?2004h> b=s.index("        if c == '\\\\' and i + 1 < len(src):",a)
+[?2004l[?2004h> new='''        if c == '[':\n            # Find the outer closing bracket, skipping complete POSIX class\n            # tokens (their own closing bracket is not the outer one).\n            j = i + 1\n            if j < len(src) and src[j] == '^': j += 1\n            if j < len(src) and src[j] == ']': j += 1\n            while j < len(src):\n                if src.startswith('[:', j):\n                    q = src.find(':]', j + 2)\n                    if q >= 0:\n                        j = q + 2; continue\n                if src[j] == ']' and src[j-1:j] != '\\\\': break\n                j += 1\n            if j < len(src):\n                out.append(expand_classes(src[i:j+1]))\n                i = j + 1; continue\n'''
+[?2004l[?2004h> s=s[:a]+new+s[b:]
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> import importlib.util
+[?2004l[?2004h> s=importlib.util.spec_from_file_location('x','/app/pysed/sed.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+[?2004l[?2004h> for x,e in [('[[:alpha:]]+',1),('[[:punct:]]',1),('\\(a\\{2,3\\}\\)b',0)]: print(repr(m.regex_translate(x,e)))
+[?2004l[?2004h> PY
+[?2004l'[A-Za-z]+'
+'[\\x21-\\x2f\\x3a-\\x40\\x5b-\\x60\\x7b-\\x7e]'
+'(a{2,3})b'
+[?2004hroot@4c62d36b2fbb:/app# printf 'Az9! _\n' | python3 /app/pysed/sed.py -E 's/[[:alpha:]]+/X/g;s/[[:punct:]]/P/g'; printf '%s\n' '--- backref'; printf 'abbb\n' | python3 /app/pysed/sed.py -E 's/(a(b|bbb))/[&]-\1-\2/'; printf '%s\n' '--- BRE'; printf 'aaab ccc\n' | python3 /app/pysed/sed.py 's/\(a\{2,3\}\)b/<\1>/;s/c\+/C/'
+[?2004lX9P P
+--- backref
+[abbb]-abbb-bbb
+--- BRE
+<aaa> C
+[?2004hroot@4c62d36b2fbb:/app# printf 'aaa\naba\n' | python3 /app/pysed/sed.py -n -e '/a.p/' -e '//p'; printf '%s\n' '--- flags'; printf 'aaaa\n' | python3 /app/pysed/sed.py 's/a/X/2g'; printf '%s\n' '--- delim'; printf 'a/b\nx\n' | python3 /app/pysed/sed.py -n '\|a/b|p'; printf '%s\n' '--- qQ'; printf 'a\nb\n' | python3 /app/pysed/sed.py '1a tail;ignored' | cat; printf 'a\nb\n' | python3 /app/pysed/sed.py '1a tail' >/tmp/o & wait $!; cat /tmp/o
+[?2004l--- flags
+aXXX
+--- delim
+a/b
+--- qQ
+a
+tail;ignored
+b
+[1] 353
+[1]+  Done                    printf 'a\nb\n' | python3 /app/pysed/sed.py '1a tail' > /tmp/o
+a
+tail
+b
+[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/docs/sed.txt'
+[?2004l[?2004h> data=open(p,'rb').read().decode('utf-8','replace')
+[?2004l[?2004h> for a,b in [(588,720),(1584,1668),(1756,1935),(1281,1390)]:
+[?2004l[?2004h>  print('\n---',a,b,'---')
+[?2004l[?2004h>  lines=data.splitlines()
+[?2004l[?2004h>  print('\n'.join(f'{i+1}: {lines[i]}' for i in range(a-1,min(b,len(lines))) if any(x in lines[i] for x in ['number','g flag','~N','+N','period','^',' $','backslash','a\\','i\\','c\\','newline'])))
+[?2004l[?2004h> PY
+[?2004l
+--- 588 720 ---
+603:    The REPLACEMENT can contain ‘\N’ (N being a number from 1 to 9,
+615: made of a backslash and one of the letters ‘L’, ‘l’, ‘U’, ‘u’, or ‘E’.
+651:    To include a literal ‘\’, ‘&’, or newline in the final replacement,
+652: be sure to precede the desired ‘\’, ‘&’, or newline in the REPLACEMENT
+696:      with its output.  A trailing newline is suppressed; results are
+709:      in ‘multi-line’ mode.  The modifier causes ‘^’ and ‘$’ to match
+711:      after a newline, and the empty string before a newline.  There are
+713:      beginning or the end of the buffer.  In addition, the period
+
+--- 1584 1668 ---
+1592:      $ seq 10 | sed -n '4,6p'
+1602:      $ seq 10 | sed -n '4,/[0-9]/p'
+1609:      $ seq 10 | sed -n '4,1p'
+1615:      A line number of ‘0’ can be used in an address specification like
+1627:           $ seq 10 | sed -n '1,/[0-9]/p'
+1631:           $ seq 10 | sed -n '0,/[0-9]/p'
+1634: ‘ADDR1,+N’
+1637:           $ seq 10 | sed -n '6,+2p'
+1642:      ADDR1 can be a line number or a regular expression.
+1644: ‘ADDR1,~N’
+1646:      whose input line number is a multiple of N.  The following command
+1650:           $ seq 10 | sed -n '6,~4p'
+1655:      ADDR1 can be a line number or a regular expression.
+
+--- 1756 1935 ---
+1776:      Matches any character, including newline.
+1778: ‘^’
+1785:      useful simplification to think of ‘^#include’ as matching only
+1791:      ‘^’ acts as a special character only at the beginning of the
+1793:      Portable scripts should avoid ‘^’ at the beginning of a
+1795:      ‘^’ as an ordinary character in that context.
+1798:      It is the same as ‘^’, but refers to end of pattern space.  ‘$’
+1804: ‘[^LIST]’
+1847:      binds more tightly than ‘\|’, ‘^’, and ‘$’, but less tightly than
+1853:      Subexpressions are implicitly numbered by counting occurrences of
+1857:      Matches the newline character.
+1860:      Matches CHAR, where CHAR is one of ‘$’, ‘*’, ‘.’, ‘[’, ‘\’, or ‘^’.
+1861:      Note that the only C-like backslash sequences that you can portably
+1878: ‘a\?b’
+1881: ‘a\+b\+’
+1892: ‘^main.*(.*)’
+1897: ‘^#’
+1901:      This matches a string ending with a single backslash.  The regexp
+1902:      contains two backslashes for escaping.
+1911: ‘[^ ‘<TAB>’]\+’
+1916: ‘^\(.*\)\n\1$’
+1918:      by a newline.
+1924: ‘^.\{15\}A’
+
+--- 1281 1390 ---
+1281: 3.8.1 Commands Requiring a newline
+1285: newline:
+1293:           $ seq 2 | sed '1aHello ; 2d'
+1298:      Separate the commands using ‘-e’ or a newline:
+1300:           $ seq 2 | sed -e 1aHello -e 2d
+1304:           $ seq 2 | sed '1aHello
+1313:           $ seq 2 | sed '1a\
+1321:      All characters following ‘#’ until the next newline are ignored.
+1323:           $ seq 3 | sed '# this is a comment ; 2d'
+1329:           $ seq 3 | sed '# this is a comment
+1340:           $ seq 2 | sed '1w hello.txt ; 2d'
+1344:           $ ls -log
+1348:           $ cat 'hello.txt ; 2d'
+1356:           $ echo x | sed '1rhello.txt ; N'
+1366:           $ echo a | sed '1e touch foo#bar'
+1369:           $ ls -1
+1372:           $ echo a | sed '1e touch foo ; s/a/b/'
+1381:      be terminated with a newline.  If whitespace, comments or
+1385:           $ echo a | sed 's/a/b/w1.txt#foo'
+1388:           $ ls -1
+[?2004hroot@4c62d36b2fbb:/app# grep -n -A18 -B5 'addr1,+N\|addr1,~N\|number.*g\|zero-length\|zero length' /app/docs/sed.txt | head -160
+[?2004lgrep: /app/docs/sed.txt: binary file matches
+379-
+380-     [addr]X[options]
+381-
+382-   X is a single-letter ‘sed’ command.  ‘[addr]’ is an optional line
+383-address.  If ‘[addr]’ is specified, the command X will be executed only
+384:on the matched lines.  ‘[addr]’ can be a single line number, a regular
+385-expression, or a range of lines (*note sed addresses::).  Additional
+386-‘[options]’ are used for some ‘sed’ commands.
+387-
+388-   The following example deletes lines 30 to 35 in the input.  ‘30,35’
+389-is an address range.  ‘d’ is the delete command:
+390-
+391-     sed '30,35d' input.txt > output.txt
+392-
+393-   The following example prints all input until a line starting with the
+394-string ‘foo’ is found.  If such line is found, ‘sed’ will terminate with
+395-exit status 42.  If such line was not found (and no other error
+396-occurred), ‘sed’ will exit with status 0.  ‘/^foo/’ is a
+397-regular-expression address.  ‘q’ is the quit command.  ‘42’ is the
+398-command option.
+399-
+400-     sed '/^foo/q42' input.txt > output.txt
+401-
+402-   Commands within a SCRIPT or SCRIPT-FILE can be separated by
+--
+578-
+579-‘{ CMD ; CMD ... }’
+580-     Group several commands together.
+581-
+582-‘=’
+583:     Print the current input line number (with a trailing newline).
+584-
+585-‘: LABEL’
+586-     Specify the location of LABEL for branch commands (‘b’, ‘t’, ‘T’).
+587-
+588-3.3 The ‘s’ Command
+589-===================
+590-
+591-The ‘s’ command (as in substitute) is probably the most important in
+592-‘sed’ and has a lot of different options.  The syntax of the ‘s’ command
+593-is ‘s/REGEXP/REPLACEMENT/FLAGS’.
+594-
+595-   Its basic concept is simple: the ‘s’ command attempts to match the
+596-pattern space against the supplied regular expression REGEXP; if the
+597-match is successful, then that portion of the pattern space which was
+598-matched is replaced with REPLACEMENT.
+599-
+600-   For details about REGEXP syntax *note Regular Expression Addresses:
+601-Regexp Addresses.
+--
+833-
+834-     Instances of the ‘/’ (or whatever other character is used in its
+835-     stead), ‘\’, or newlines can appear in the SOURCE-CHARS or
+836-     DEST-CHARS lists, provide that each instance is escaped by a ‘\’.
+837-     The SOURCE-CHARS and DEST-CHARS lists _must_ contain the same
+838:     number of characters (after de-escaping).
+839-
+840-     See the ‘tr’ command from GNU coreutils for similar functionality.
+841-
+842-‘a TEXT’
+843-     Appending TEXT after a line.  This is a GNU extension to the
+844-     standard ‘a’ command - see below for details.
+845-
+846-     Example: Add ‘hello’ after the second line:
+847-          $ seq 3 | sed '2a hello'
+848-          1
+849-          2
+850-          hello
+851-          3
+852-
+853-     Leading whitespace after the ‘a’ command is ignored.  The text to
+854-     add is read until the end of the line.
+855-
+856-‘a\’
+--
+1002-          3
+1003-
+1004-          $ sed -e '2c\' -e "$VAR"
+1005-
+1006-‘=’
+1007:     Print out the current input line number (with a trailing newline).
+1008-
+1009-          $ printf '%s\n' aaa bbb ccc | sed =
+1010-          1
+1011-          aaa
+1012-          2
+1013-          bbb
+1014-          3
+1015-          ccc
+1016-
+1017-     As a GNU extension, this command accepts two addresses.
+1018-
+1019-‘l N’
+1020-     Print the pattern space in an unambiguous form: non-printable
+1021-     characters (and the ‘\’ character) are printed in C-style escaped
+1022-     form; long lines are split, with a trailing ‘\’ character to
+1023-     indicate the split; the end of each line is marked with a ‘$’.
+1024-
+1025-     N specifies the desired line-wrap length; a length of 0 (zero)
+--
+1415-instance on each affected line.
+1416-
+1417-     sed 's/hello/world/' input.txt > output.txt
+1418-
+1419-   Addresses can contain regular expressions to match lines based on
+1420:content instead of line numbers.  The following command replaces ‘hello’
+1421-with ‘world’ only on lines containing the string ‘apple’:
+1422-
+1423-     sed '/apple/s/hello/world/' input.txt > output.txt
+1424-
+1425-   An address range is specified with two addresses separated by a comma
+1426-(‘,’).  Addresses can be numeric, regular expressions, or a mix of both.
+1427-The following command replaces ‘hello’ with ‘world’ only on lines 4 to
+1428-17 (inclusive):
+1429-
+1430-     sed '4,17s/hello/world/' input.txt > output.txt
+1431-
+1432-   Appending the ‘!’ character to the end of an address specification
+1433-(before the command letter) negates the sense of the match.  That is, if
+1434-the ‘!’ character follows an address or an address range, then only
+1435-lines which do _not_ match the addresses will be selected.  The
+1436-following command replaces ‘hello’ with ‘world’ only on lines _not_
+1437-containing the string ‘apple’:
+1438-
+--
+1637-          $ seq 10 | sed -n '6,+2p'
+1638-          6
+1639-          7
+1640-          8
+1641-
+1642:     ADDR1 can be a line number or a regular expression.
+1643-
+1644-‘ADDR1,~N’
+1645-     Matches ADDR1 and the lines following ADDR1 until the next line
+1646:     whose input line number is a multiple of N.  The following command
+1647-     prints starting at line 6, until the next line which is a multiple
+1648-     of 4 (i.e.  line 8):
+1649-
+1650-          $ seq 10 | sed -n '6,~4p'
+1651-          6
+1652-          7
+1653-          8
+1654-
+1655:     ADDR1 can be a line number or a regular expression.
+1656-
+1657-4.5 Zero Address
+1658-================
+1659-
+1660-As a GNU ‘sed’ extension, ‘0’ address can be used in two cases:
+1661-  1. In a regex range addresses as ‘0,/REGEXP/’ (*note Zero Address
+1662-     Regex Range::).
+1663-  2. With the ‘r’ command, inserting a file before the first line (*note
+1664-     Adding a header to multiple files::).
+1665-
+1666-   Note that these are the only places where the ‘0’ address makes
+1667-sense; Commands which are given the ‘0’ address in any other way will
+1668-give an error.
+1669-
+1670-5 Regular Expressions: selecting text
+1671-*************************************
+[?2004hroot@4c62d36b2fbb:/app# grep -n -A14 -B4 'The character . matches\|caret.*matches\|period.*matches\|empty matches' /app/docs/sed.txt | head -140
+[?2004l1705-alternatives and repetitions in the pattern.  These are encoded in the
+1706-pattern by the use of “special characters”, which do not stand for
+1707-themselves but instead are interpreted in some special way.
+1708-
+1709:   The character ‘^’ (caret) in a regular expression matches the
+1710-beginning of the line.  The character ‘.’ (dot) matches any single
+1711-character.  The following ‘sed’ command matches and prints lines which
+1712-start with the letter ‘b’, followed by any single character, followed by
+1713-the letter ‘d’:
+1714-
+1715-     $ printf "%s\n" abode bad bed bit bid byte body | sed -n '/^b.d/p'
+1716-     bad
+1717-     bed
+1718-     bid
+1719-     body
+1720-
+1721-   The following sections explain the meaning and usage of special
+1722-characters in regular expressions.
+1723-
+--
+1966-=============================================
+1967-
+1968-A “bracket expression” is a list of characters enclosed by ‘[’ and ‘]’.
+1969-It matches any single character in that list; if the first character of
+1970:the list is the caret ‘^’, then it matches any character *not* in the
+1971-list.  For example, the following command replaces the strings ‘gray’ or
+1972-‘grey’ with ‘blue’:
+1973-
+1974-     sed  's/gr[ae]y/blue/'
+1975-
+1976-   Bracket expressions can be used in both *note basic: BRE syntax. and
+1977-*note extended: ERE syntax. regular expressions (that is, with or
+1978-without the ‘-E’/‘-r’ options).
+1979-
+1980-   Within a bracket expression, a “range expression” consists of two
+1981-characters separated by a hyphen.  It matches any single character that
+1982-sorts between the two characters, inclusive.  In the default C locale,
+1983-the sorting sequence is the native character order; for example, ‘[a-d]’
+1984-is equivalent to ‘[abcd]’.
+[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py'; s=open(p).read()
+[?2004l[?2004h> # Dot includes newline in sed pattern space.
+[?2004l[?2004h> s=s.replace('re.compile(self.pattern, re.ASCII)', 're.compile(self.pattern, re.ASCII | re.DOTALL)')
+[?2004l[?2004h> s=s.replace("re.escape(suffix) + r'\\Z)', re.ASCII)", "re.escape(suffix) + r'\\Z)', re.ASCII | re.DOTALL)")
+[?2004l[?2004h> # Decode documented C-style escapes in text command payloads.
+[?2004l[?2004h> needle="""    def subst(self):
+[?2004l[?2004h> """
+[?2004l[?2004h> insert="""    def textesc(self, text):
+[?2004l[?2004h>         out=[]; i=0
+[?2004l[?2004h>         tab={'a':'\\a','f':'\\f','n':'\\n','r':'\\r','t':'\\t','v':'\\v'}
+[?2004l[?2004h>         while i < len(text):
+[?2004l[?2004h>             if text[i] == '\\\\' and i+1 < len(text):
+[?2004l[?2004h>                 d=text[i+1]; i += 2
+[?2004l[?2004h>                 out.append(tab.get(d, d if d == '\\\\' else '\\\\'+d))
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 out.append(text[i]); i += 1
+[?2004l[?2004h>         return ''.join(out)
+[?2004l[?2004h> 
+[?2004l[?2004h>     def subst(self):
+[?2004l[?2004h> """
+[?2004l[?2004h> s=s.replace(needle,insert)
+[?2004l[?2004h> s=s.replace("            elif c.op in 'aic': c.arg = self.textarg()\n", "            elif c.op in 'aic': c.arg = self.textesc(self.textarg())\n")
+[?2004l[?2004h> # Suppress terminal empty match directly after a nonempty global match.
+[?2004l[?2004h> s=s.replace("        out=[]; pos=0; count=0; changed=False; last_empty=-1\n", "        out=[]; pos=0; count=0; changed=False; previous_nonempty_end=-1\n")
+[?2004l[?2004h> s=s.replace("            count += 1\n            use =", "            if m.start() == m.end() == previous_nonempty_end:\n                if m.end() >= len(pat): break\n                out.append(pat[pos]); pos += 1; previous_nonempty_end=-1\n                continue\n            count += 1\n            use =")
+[?2004l[?2004h> s=s.replace("                pos=m.end()\n                if not g: break\n", "                pos=m.end()\n                previous_nonempty_end = m.end() if m.end() > m.start() else -1\n                if not g: break\n")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4c62d36b2fbb:/app# # Add BRE positional handling with a small source-level insertion.
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py'; s=open(p).read()
+[?2004l[?2004h> old="""        if not extended and c in '()+?|{}': out.append('\\\\' + c)
+[?2004l[?2004h>         elif extended and c in '(){}+?|': out.append(c)
+[?2004l[?2004h>         elif c == '\\x00': out.append('\\\\x00')
+[?2004l[?2004h>         else: out.append(c)
+[?2004l[?2004h> """
+[?2004l[?2004h> new="""        if not extended and c == '^' and i != 0:
+[?2004l[?2004h>             out.append('\\\\^')
+[?2004l[?2004h>         elif not extended and c == '$' and i+1 != len(src):
+[?2004l[?2004h>             # Before an escaped group close or alternation it is still an
+[?2004l[?2004h>             # end anchor; elsewhere a BRE dollar is literal.
+[?2004l[?2004h>             if not (i+2 < len(src) and src[i+1] == '\\\\' and src[i+2] in ')|'):
+[?2004l[?2004h>                 out.append('\\\\$')
+[?2004l[?2004h>             else: out.append('$')
+[?2004l[?2004h>         elif not extended and c in '()+?|{}': out.append('\\\\' + c)
+[?2004l[?2004h>         elif extended and c in '(){}+?|': out.append(c)
+[?2004l[?2004h>         elif c == '\\x00': out.append('\\\\x00')
+[?2004l[?2004h>         else: out.append(c)
+[?2004l[?2004h> """
+[?2004l[?2004h> if old not in s: print('anchor patch target not found')
+[?2004l[?2004h> else: s=s.replace(old,new)
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@4c62d36b2fbb:/app# printf 'a\nb\n' | python3 /app/pysed/sed.py -n 'N;/a.b/p'; printf '%s\n' '--- empty'; printf 'aaa\nb\nax\n' | python3 /app/pysed/sed.py 's/a*/X/g;s/x*/Y/g'; printf '%s\n' '--- anchors'; printf 'a^b\na$b\nab\n' | python3 /app/pysed/sed.py -n '/a^b/p;/a$b/p'; printf '%s\n' '--- textesc'; printf 'x\n' | python3 /app/pysed/sed.py 'a tab\there'
+[?2004la
+b
+--- empty
+YXY
+YXYbYXY
+YXYXY
+--- anchors
+a^b
+a$b
+--- textesc
+x
+tab	here
+[?2004hroot@4c62d36b2fbb:/app# printf 'foo\nbar\nfoo\n' | python3 /app/pysed/sed.py -n -e '0,/foo/p' -e 's//X/p'; printf '%s\n' '--- c-range'; printf '1\n2\n3\n4\n' | python3 /app/pysed/sed.py '2,3c changed'; printf '%s\n' '--- D'; printf 'a\nb\nc\n' | python3 /app/pysed/sed.py -n 'N;D'; printf '%s\n' '--- hash-n'; printf 'a\nb\n' | python3 /app/pysed/sed.py '#n
+[?2004l[?2004h> 2p'
+[?2004lfoo
+X
+X
+--- c-range
+1
+changed
+4
+--- D
+--- hash-n
+b
+[?2004hroot@4c62d36b2fbb:/app# grep -nE 'subprocess|ctypes|os\.system|popen|exec\(' /app/pysed/sed.py || true; find /app -type f \( -name '*.so' -o -perm /111 \) -print; rm -rf /app/pysed/__pycache__; python3 -m py_compile /app/pysed/sed.py && rm -rf /app/pysed/__pycache__; wc -l -c /app/pysed/sed.py
+[?2004l  461 19569 /app/pysed/sed.py
+[?2004hroot@4c62d36b2fbb:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py'; s=open(p).read()
+[?2004l[?2004h> s=s.replace("        self.subbed = False; self.appendq = []\n", "        self.subbed = False; self.appendq = []; self.halted = False\n")
+[?2004l[?2004h> s=s.replace("                if num == c.range_start and c.a2.kind == 'rx': test = False\n", "                if num == c.range_start and c.a2.kind in ('rx', 'tilde'): test = False\n")
+[?2004l[?2004h> s=s.replace("                    self.flushq(); self.status=c.arg; return\n", "                    self.flushq(); self.status=c.arg; self.halted=True; return\n")
+[?2004l[?2004h> s=s.replace("            eng.run(rec)\n    else:\n", "            eng.run(rec)\n            if eng.halted: break\n    else:\n")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4c62d36b2fbb:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@4c62d36b2fbb:/app# tmp=$(mktemp -d); printf 'a\nb\n' >$tmp/a; printf 'c\nd\n' >$tmp/b; python3 /app/pysed/sed.py -s '1q 9' $tmp/a $tmp/b; echo status=$?; rm -rf $tmp; printf '%s\n' '--- tilde'; printf '1\n2\n3\n4\n5\n6\n7\n8\n' | python3 /app/pysed/sed.py -n '4,~2p'
+[?2004la
+status=9
+--- tilde
+4
+5
+6
+[?2004hroot@4c62d36b2fbb:/app# rm -rf /app/pysed/__pycache__; python3 -m py_compile /app/pysed/sed.py && rm -rf /app/pysed/__pycache__; grep -nE 'subprocess|ctypes|os\.system|popen' /app/pysed/sed.py || true; find /app -type f \( -name '*.so' -o -perm /111 \) -print
+[?2004l[?2004hroot@4c62d36b2fbb:/app# 

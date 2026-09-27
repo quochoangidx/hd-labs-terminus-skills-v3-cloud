@@ -1,0 +1,122 @@
+--- a/app/src/coldchain/attribution.py
++++ b/app/src/coldchain/attribution.py
+@@ -1,7 +1,7 @@
+ """How long each logger reading stands for, and where the logger missed readings."""
+ 
+ HOLD_CAP_MINUTES = 60  # the longest stretch one logger reading is credited with
+-GAP_MINUTES = 60  # a spacing longer than this means the logger missed readings
++GAP_MINUTES = 30  # a spacing longer than this means the logger missed readings
+ 
+ 
+ def holds(readings):
+@@ -11,7 +11,7 @@
+         if index + 1 < len(readings):
+             span = readings[index + 1].minute - reading.minute
+         else:
+-            span = HOLD_CAP_MINUTES
++            span = 0
+         held.append(min(span, HOLD_CAP_MINUTES))
+     return held
+ 
+--- a/app/src/coldchain/bands.py
++++ b/app/src/coldchain/bands.py
+@@ -3,10 +3,13 @@
+ 
+ def band_of(temp, stability):
+     """Name of the band a reading is charged to, or None for a reading in range."""
+-    if stability.low <= temp < stability.high:
++    if stability.low <= temp <= stability.high:
+         return None
+     for band in sorted(stability.bands, key=lambda entry: entry.lower, reverse=True):
+-        if temp >= band.lower:
++        if band.lower >= stability.high:
++            if temp > band.lower:
++                break
++        elif temp >= band.lower:
+             break
+     return band.name
+ 
+--- a/app/src/coldchain/disposition.py
++++ b/app/src/coldchain/disposition.py
+@@ -5,30 +5,45 @@
+ from .kinetics import mean_kinetic_temperature
+ 
+ UNLOGGED_LIMIT_MINUTES = 120
++CHAIN_LIMIT_MINUTES = 2880
+ 
+ 
++def chained(lot):
++    """True when no handover between the lot's legs is longer than the chain limit."""
++    return all(
++        later.readings[0].minute - earlier.readings[-1].minute <= CHAIN_LIMIT_MINUTES
++        for earlier, later in zip(lot.legs, lot.legs[1:])
++    )
++
++
+ def lot_band_minutes(lot, stability):
+-    """Minutes the lot spent in each band, and its unlogged minutes."""
++    """Minutes the lot spent in each band, its unlogged minutes, and each reading's hold."""
+     per_leg = []
+     unlogged = 0
++    held = []
+     for leg in lot.legs:
+         minutes = holds(leg.readings)
++        held += minutes
+         per_leg.append(band_minutes(leg.readings, minutes, stability))
+         unlogged += unlogged_minutes(leg.readings)
+-    totals = {band.name: max(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
+-    return totals, unlogged
++    combine = sum if chained(lot) else max
++    totals = {band.name: combine(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
++    return totals, unlogged, held
+ 
+ 
+ def dispose(lot, stability):
+     """The QA figures and the disposition of one lot, times in minutes."""
+-    band_time, unlogged = lot_band_minutes(lot, stability)
+-    remaining = {band.name: band.allowance_h * 60 - band_time[band.name] for band in stability.bands}
++    band_time, unlogged, held = lot_band_minutes(lot, stability)
++    remaining = {
++        band.name: band.allowance_h * 60 - lot.prior_minutes.get(band.name, 0) - band_time[band.name]
++        for band in stability.bands
++    }
+     readings = lot.readings()
+-    mkt = mean_kinetic_temperature([reading.temp for reading in readings], stability.ratio)
++    mkt = mean_kinetic_temperature([reading.temp for reading in readings], held, stability.ratio)
+     frozen = any(reading.temp < stability.freeze_point for reading in readings)
+     if frozen or any(left < 0 for left in remaining.values()):
+         decision = "reject"
+-    elif round(mkt, 1) > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
++    elif mkt > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
+         decision = "quarantine"
+     else:
+         decision = "release"
+--- a/app/src/coldchain/kinetics.py
++++ b/app/src/coldchain/kinetics.py
+@@ -5,7 +5,7 @@
+ KELVIN_OFFSET = 273.15
+ 
+ 
+-def mean_kinetic_temperature(temps, ratio):
+-    """Arrhenius mean of temperatures in degrees Celsius; ratio is the activation ratio in kelvin."""
+-    total = sum(math.exp(-ratio / (temp + KELVIN_OFFSET)) for temp in temps)
+-    return ratio / -math.log(total / len(temps)) - KELVIN_OFFSET
++def mean_kinetic_temperature(temps, weights, ratio):
++    """Arrhenius mean of temperatures in degrees Celsius, each weighted; ratio is the activation ratio in kelvin."""
++    total = math.fsum(weight * math.exp(-ratio / (temp + KELVIN_OFFSET)) for temp, weight in zip(temps, weights))
++    return ratio / -math.log(total / math.fsum(weights)) - KELVIN_OFFSET
+--- a/app/src/coldchain/report.py
++++ b/app/src/coldchain/report.py
+@@ -1,11 +1,8 @@
+ """The disposition report the driver prints."""
+ 
+-import math
+-
+-
+ def hours(minutes):
+     """Minutes as hours to the hundredth."""
+-    return math.trunc(minutes / 60 * 100) / 100
++    return round(minutes / 60, 2)
+ 
+ 
+ def build_report(stability, results):

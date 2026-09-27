@@ -1,0 +1,494 @@
+{
+ "schema_version": 3,
+ "task": "tbrain-gnu-sed-reimplementation",
+ "verdict": "pass",
+ "contract_source_files": [
+  {
+   "path": "instruction.md",
+   "sha256": "851d9ec86b481e79fcd935dfd14120708080fb3f439b4eb811beafbedeb1bd9c"
+  },
+  {
+   "path": "environment/app/docs/sed.txt",
+   "sha256": "5ef4c0df4375a7f227f70f57af291dc44150d6690958cef55a8462611459d840"
+  },
+  {
+   "path": "environment/app/README.md",
+   "sha256": "b15a6914185b2dae2d367d97bcc6ec595e9eebf43469a2234a3744d95244c4c7"
+  },
+  {
+   "path": "environment/app/pysed/sed.py",
+   "sha256": "d1a0f7786404fbba0a781c4deed845cbaac047abbfbc33759a8c5588af4b1d01"
+  }
+ ],
+ "explicit_contract": [
+  {
+   "id": "CLI",
+   "requirement": "python3 /app/pysed/sed.py ARGS behaves like GNU sed 4.9 with LC_ALL=C: same stdout bytes and exit status",
+   "test_selectors": [
+    "test_*"
+   ],
+   "source_locator": "instruction.md:the same standard output, byte for byte, and the same exit status"
+  },
+  {
+   "id": "OPTIONS",
+   "requirement": "-n -E -s, -e pieces joined by newlines, script as first non-option argument, files or stdin",
+   "test_selectors": [
+    "test_options_and_script_argument",
+    "test_several_files",
+    "test_empty_input"
+   ],
+   "source_locator": "instruction.md:the options `-n`, `-E` and `-s`"
+  },
+  {
+   "id": "MATCH",
+   "requirement": "POSIX leftmost-longest matching; tied group captures not checked",
+   "test_selectors": [
+    "test_leftmost_longest_matching"
+   ],
+   "source_locator": "instruction.md:Matching is POSIX leftmost-longest"
+  },
+  {
+   "id": "PYTHON-ONLY",
+   "requirement": "the editing is done in Python: no other processes or programs, no ctypes native code, no compiled executables or shared libraries under /app; enforced by an audit hook",
+   "test_selectors": [
+    "test_editing_is_done_in_python"
+   ],
+   "source_locator": "instruction.md:The editing has to be done in Python itself"
+  },
+  {
+   "id": "TIME",
+   "requirement": "each run finishes within five seconds",
+   "test_selectors": [
+    "test_leftmost_longest_matching"
+   ],
+   "source_locator": "instruction.md:Each run has to finish within five seconds"
+  },
+  {
+   "id": "UNCHECKED",
+   "requirement": "places where GNU sed 4.9 departs from its manual are not checked",
+   "test_selectors": [
+    "test_*"
+   ],
+   "source_locator": "instruction.md:Where GNU sed 4.9 itself departs from its manual, nothing is checked"
+  }
+ ],
+ "inference_families": [
+  {
+   "id": "TEXT",
+   "inferred_model": "a/i/c take one-line or backslash-newline text, the text runs to end of line (a ; is text), \\\\ gives one backslash, pieces may be split across -e, appended text flushes at end of cycle or when N/n reads; section 5.8 escapes (numeric ones read up to 3/3/2 digits) are processed in multi-line text; a continuation block ends at the first line without a trailing backslash",
+   "reasoning_chain": "manual 3.x a/i/c sections describe both forms, GNU extensions and -e splitting with worked examples",
+   "competing_interpretation": "; ends the text like other commands; one-line i/c unsupported",
+   "evidence_discriminator": "manual examples `1aHello ; 2d` and `-e '2c\\' -e hello`",
+   "test_selectors": [
+    "test_append_insert_change"
+   ],
+   "evidence_sources": [
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:842-1004 (a/i/c), 1293-1332",
+     "role": "definition and examples"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "SFLAGS",
+   "inferred_model": "s flags g p N Ng I/i M/m, any delimiter, backslash-newline in replacement; any delimiter including backslash itself; escaped delimiters in regexp and replacement; short numeric escapes stop at the first non-digit",
+   "reasoning_chain": "manual s command section lists every flag and spelling",
+   "competing_interpretation": "only uppercase I/M; M only changes anchors",
+   "evidence_discriminator": "sed.txt:700-715 states i/I, m/M and dot vs newline in M mode",
+   "test_selectors": [
+    "test_substitution_and_regex_escapes",
+    "test_multiline_commands"
+   ],
+   "evidence_sources": [
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:589-715",
+     "role": "s command and flags"
+    },
+    {
+     "path": "instruction.md",
+     "locator": "instruction.md:8",
+     "role": "numeric escape digit rule"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "REGEX",
+   "inferred_model": "GNU BRE/ERE with POSIX leftmost-longest (instruction), literal ^/$ off anchor position in BRE, leading * literal in a group, inclusive ranges, leading - literal, C-locale equivalence class = the character, back-references also case-folded under I; all twelve POSIX classes and negations; anchors at subexpression/alternative boundaries; I folds back-references (stated); leftmost-longest overrides the manual's \\| prose (stated)",
+   "reasoning_chain": "chapter 5 tables and bracket section; instruction pins leftmost-longest and [=c=]",
+   "competing_interpretation": "Python re leftmost-first; ERE/BRE operator confusion",
+   "evidence_discriminator": "instruction.md regex bullet + sed.txt 1733-1801, 1982-2087, 2186-2240",
+   "test_selectors": [
+    "test_leftmost_longest_matching",
+    "test_back_references",
+    "test_bracket_expressions",
+    "test_substitution_and_regex_escapes"
+   ],
+   "evidence_sources": [
+    {
+     "path": "instruction.md",
+     "locator": "instruction.md:8",
+     "role": "matching rule and [=c=]"
+    },
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:1725-2240",
+     "role": "regex chapter"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "CASECONV",
+   "inferred_model": "\\L \\U end each other or at \\E; \\l \\u apply to the next character even across an empty group",
+   "reasoning_chain": "manual worked example `s/\\(b\\?\\)-/x\\u\\1/g` gives axxB",
+   "competing_interpretation": "one-char conversion consumed by an empty group",
+   "evidence_discriminator": "sed.txt:616-650 worked examples",
+   "test_selectors": [
+    "test_case_conversion"
+   ],
+   "evidence_sources": [
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:614-650",
+     "role": "replacement escapes"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "ADDR",
+   "inferred_model": "line, $, first~step, /re/ and \\cREc with I/M, ranges incl. addr1,+N addr1,~N (next multiple strictly after addr1) and 0,/re/",
+   "reasoning_chain": "chapter 4 definitions and examples",
+   "competing_interpretation": "addr1,~N ends at addr1 when it is a multiple; /x/id read as a modifier",
+   "evidence_discriminator": "sed.txt:1455-1669, the /b/Id vs /b/id example",
+   "test_selectors": [
+    "test_step_and_regex_addresses",
+    "test_plus_ranges",
+    "test_multiple_ranges",
+    "test_zero_address"
+   ],
+   "evidence_sources": [
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:1448-1669",
+     "role": "address chapter"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "CYCLE",
+   "inferred_model": "pattern/hold space, n N D P at end of input, t/T flag reset by a read or a taken branch (kept across D), q/Q codes, =, z, y with section 5.8 escapes; y lists take section 5.8 escapes including numeric ones, escaped delimiters and \\\\",
+   "reasoning_chain": "manual command descriptions plus instruction clause for y escapes",
+   "competing_interpretation": "t flag sticky; D clears it; y lists raw",
+   "evidence_discriminator": "sed.txt:2678-2686 flag definition; instruction.md:6 y clause",
+   "test_selectors": [
+    "test_hold_space",
+    "test_multiline_commands",
+    "test_branching_and_t_flag",
+    "test_quit_and_exit_status",
+    "test_y_z_and_line_numbers"
+   ],
+   "evidence_sources": [
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:449-553, 2637-2839, 3984-4023",
+     "role": "cycle commands"
+    },
+    {
+     "path": "instruction.md",
+     "locator": "instruction.md:6",
+     "role": "y escapes"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "FILES",
+   "inferred_model": "several files as one stream, -s per-file numbering and $, ranges not spanning files, empty file, missing file exit 2, - is stdin",
+   "reasoning_chain": "manual options chapter",
+   "competing_interpretation": "empty file ends input; - opened literally",
+   "evidence_discriminator": "sed.txt:92-113, 277-315, 339-342",
+   "test_selectors": [
+    "test_several_files",
+    "test_empty_input"
+   ],
+   "evidence_sources": [
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:92-342",
+     "role": "invocation and exit status"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "LCMD",
+   "inferred_model": "l escapes (C escapes, three-digit octal otherwise); before adding each character's escaped form the line is ended with \\ if it would exceed N-1 characters (stated); default 70, l 0 never wraps",
+   "reasoning_chain": "instruction pins the wrap rule; manual shows escapes",
+   "competing_interpretation": "N characters before the backslash; never wrap by default",
+   "evidence_discriminator": "instruction.md:6 and sed.txt:1019-1028, 2413-2429",
+   "test_selectors": [
+    "test_l_command"
+   ],
+   "evidence_sources": [
+    {
+     "path": "instruction.md",
+     "locator": "instruction.md:6",
+     "role": "wrap rule"
+    },
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:1019-1028",
+     "role": "l command"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  },
+  {
+   "id": "SCRIPT",
+   "inferred_model": "#n first two characters, comments to end of line (; inside is comment), leading whitespace, options, -e joined by newlines, script as first non-option argument; spaces and tabs before commands, after addresses, around ! { }",
+   "reasoning_chain": "manual chapter 2/3 script rules",
+   "competing_interpretation": "#n needs a newline; ; ends a comment",
+   "evidence_discriminator": "sed.txt:737-742, 1313-1326, 402-425",
+   "test_selectors": [
+    "test_comments_and_first_line",
+    "test_options_and_script_argument",
+    "test_mixed_scripts_*"
+   ],
+   "evidence_sources": [
+    {
+     "path": "environment/app/docs/sed.txt",
+     "locator": "sed.txt:402-425, 737-742, 1248-1332",
+     "role": "script syntax"
+    }
+   ],
+   "hidden_generalization": [
+    "new_instances",
+    "new_combinations",
+    "state_sequences"
+   ]
+  }
+ ],
+ "unobtainable_knowledge": {
+  "oracle_only_policies": [],
+  "unreachable_authorities": [],
+  "undocumented_exact_values": []
+ },
+ "oracle_alignment": {
+  "oracle_is_valid_realization": true,
+  "verifier_accepts_semantic_equivalents": false,
+  "equivalence_notes": "Expected output is GNU sed 4.9's own stdout and exit status at test time; byte-exact stdout is the domain requirement (a drop-in sed), so no alternative representation exists. Cases whose result depends on behaviour the manual leaves open were removed by alternative-reading variants."
+ },
+ "fairness_review": {
+  "reviewer_count": 2,
+  "reviewers": [
+   {
+    "reviewer_id": "fairness-C",
+    "runtime": "claude-code-subagent",
+    "model": "claude-opus",
+    "session_id": "ad64f89ba31ee2eac",
+    "transcript": "fairness/reviewer-C-opus-rev2.jsonl",
+    "transcript_sha256": "e77329c4e7d08f31ca47316f2e968099c69849ee891263f5589018e0cafa4c19",
+    "fresh_context": true,
+    "task_visible_only": true,
+    "reviewed_source_files": [
+     "environment/app/README.md",
+     "environment/app/docs/sed.txt",
+     "environment/app/pysed/sed.py",
+     "instruction.md"
+    ],
+    "review_passes": [
+     {
+      "phase": "contract_review"
+     },
+     {
+      "phase": "final_review"
+     }
+    ]
+   },
+   {
+    "reviewer_id": "fairness-D",
+    "runtime": "claude-code-subagent",
+    "model": "claude-sonnet",
+    "session_id": "af89e19cffa347f6f",
+    "transcript": "fairness/reviewer-D-sonnet-rev2.jsonl",
+    "transcript_sha256": "f79958dfad16944b03a48bcb21fd100ca44fcaf1ddbd4cee1cd14b4d4290d7a0",
+    "fresh_context": true,
+    "task_visible_only": true,
+    "reviewed_source_files": [
+     "environment/app/README.md",
+     "environment/app/docs/sed.txt",
+     "environment/app/pysed/sed.py",
+     "instruction.md"
+    ],
+    "review_passes": [
+     {
+      "phase": "contract_review"
+     },
+     {
+      "phase": "final_review"
+     }
+    ]
+   }
+  ],
+  "questions": [
+   {
+    "id": "Q-TEXT",
+    "question": "Is the graded TEXT behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "TEXT"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "environment/app/docs/sed.txt"
+    ]
+   },
+   {
+    "id": "Q-SFLAGS",
+    "question": "Is the graded SFLAGS behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "SFLAGS"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "environment/app/docs/sed.txt"
+    ]
+   },
+   {
+    "id": "Q-REGEX",
+    "question": "Is the graded REGEX behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "REGEX"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "instruction.md",
+     "environment/app/docs/sed.txt"
+    ]
+   },
+   {
+    "id": "Q-CASECONV",
+    "question": "Is the graded CASECONV behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "CASECONV"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "environment/app/docs/sed.txt"
+    ]
+   },
+   {
+    "id": "Q-ADDR",
+    "question": "Is the graded ADDR behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "ADDR"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "environment/app/docs/sed.txt"
+    ]
+   },
+   {
+    "id": "Q-CYCLE",
+    "question": "Is the graded CYCLE behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "CYCLE"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "environment/app/docs/sed.txt",
+     "instruction.md"
+    ]
+   },
+   {
+    "id": "Q-FILES",
+    "question": "Is the graded FILES behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "FILES"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "environment/app/docs/sed.txt"
+    ]
+   },
+   {
+    "id": "Q-LCMD",
+    "question": "Is the graded LCMD behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "LCMD"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "instruction.md",
+     "environment/app/docs/sed.txt"
+    ]
+   },
+   {
+    "id": "Q-SCRIPT",
+    "question": "Is the graded SCRIPT behaviour determinable from instruction.md and the manual?",
+    "family_ids": [
+     "SCRIPT"
+    ],
+    "inferability_supported": true,
+    "unresolved_goal_ambiguity": false,
+    "unobtainable_knowledge_required": false,
+    "evidence_locators": [
+     "environment/app/docs/sed.txt"
+    ]
+   }
+  ]
+ }
+}

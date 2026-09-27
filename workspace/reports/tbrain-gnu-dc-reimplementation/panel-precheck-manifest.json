@@ -1,0 +1,339 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-gnu-dc-reimplementation",
+ "primary_outcome": "python3 /app/pydc/dc.py prints GNU dc 1.4.1's stdout for every retained script",
+ "obligations": [
+  {
+   "id": "ARITH",
+   "class": "core",
+   "contribution": "bc scale and truncation rules of + - * / % ~ ^ | v",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "every printing, arithmetic, stack"
+   },
+   "implementation_sites": [
+    "solution/pydc/dc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream dc produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_arithmetic"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (zero, scale edges, empty stack)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "2k 1.5 2.25*p gives 3.375",
+   "wrong_but_plausible": "keep the full product scale",
+   "selfdescription_phrase": "arithmetic (4)"
+  },
+  {
+   "id": "OUTPUT",
+   "class": "core",
+   "contribution": "printing in every output radix, grouped digits above 16, non-decimal fractions, 70-column split",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "including the way long numbers are split across lines"
+   },
+   "implementation_sites": [
+    "solution/pydc/dc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream dc produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_printing",
+     "test_outputs.py::test_parameters"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (zero, scale edges, empty stack)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "16 o 255 p gives FF",
+   "wrong_but_plausible": "lowercase hexadecimal digits",
+   "selfdescription_phrase": "printing (3)"
+  },
+  {
+   "id": "STATE",
+   "class": "core",
+   "contribution": "main stack, register stacks with their arrays, R and r, parameters and their range checks",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "the register stacks and arrays"
+   },
+   "implementation_sites": [
+    "solution/pydc/dc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream dc produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_stack_control",
+     "test_outputs.py::test_registers",
+     "test_outputs.py::test_arrays",
+     "test_outputs.py::test_status_inquiry"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (zero, scale edges, empty stack)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "la p on an empty register prints 0",
+   "wrong_but_plausible": "l on an empty register pushes nothing",
+   "selfdescription_phrase": "stack control (5), registers (6), parameters (7)"
+  },
+  {
+   "id": "MACROS",
+   "class": "core",
+   "contribution": "macros, conditionals including !< != !>, tail calls, q/Q level counting, ?",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "including macros, conditional execution"
+   },
+   "implementation_sites": [
+    "solution/pydc/dc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream dc produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_strings_and_macros",
+     "test_outputs.py::test_misc_and_comments"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (zero, scale edges, empty stack)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "[pq]sq 1 2 3 lqx 9p prints 3",
+   "wrong_but_plausible": "q leaving only one level",
+   "selfdescription_phrase": "strings (8)"
+  },
+  {
+   "id": "INVOCATION",
+   "class": "core",
+   "contribution": "-e/-f/FILE order, stdin, errors that carry on",
+   "authority": {
+    "file": "instruction.md",
+    "anchor": "FILE arguments are processed after all"
+   },
+   "implementation_sites": [
+    "solution/pydc/dc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every obligation shapes the one output stream dc produces for a script"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_options_and_files",
+     "test_outputs.py::test_errors_and_recovery"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "cases inside the witness cover the boundaries (zero, scale edges, empty stack)"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "-e 5p - reads stdin after the expression",
+   "wrong_but_plausible": "run FILE arguments in command-line position",
+   "selfdescription_phrase": "invocation (2)"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "ARITH",
+    "to": "OUTPUT"
+   },
+   {
+    "from": "STATE",
+    "to": "MACROS"
+   },
+   {
+    "from": "ARITH",
+    "to": "MACROS"
+   },
+   {
+    "from": "INVOCATION",
+    "to": "MACROS"
+   },
+   {
+    "from": "MACROS",
+    "to": "OUTPUT"
+   },
+   {
+    "from": "OUTPUT",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STATE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "INVOCATION",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ARITH",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "MACROS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "generated-scripts",
+   "obligation_ids": [
+    "ARITH",
+    "OUTPUT",
+    "STATE",
+    "MACROS",
+    "INVOCATION"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_mixed_scripts_1",
+    "test_outputs.py::test_mixed_scripts_2",
+    "test_outputs.py::test_mixed_scripts_3",
+    "test_outputs.py::test_mixed_scripts_4",
+    "test_outputs.py::test_random_scripts_1",
+    "test_outputs.py::test_random_scripts_2",
+    "test_outputs.py::test_random_scripts_3",
+    "test_outputs.py::test_random_scripts_4",
+    "test_outputs.py::test_random_scripts_5",
+    "test_outputs.py::test_random_scripts_6",
+    "test_outputs.py::test_random_scripts_7",
+    "test_outputs.py::test_random_scripts_8"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "behaves exactly like GNU dc 1.4.1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Every check relies only on behaviour that the manual describes",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "with many scripts"
+  }
+ },
+ "determinism": {
+  "seeds": [],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "X-stdlib-no-programs",
+   "statement": "Use only the Python standard library and do not start other programs",
+   "enforced_by": [
+    "test_outputs.py::test_printing"
+   ],
+   "enforcement_level": "compiled",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "BYTE-EXACT-STDOUT",
+   "domain_required": true,
+   "rationale": "a drop-in replacement for scripts that consume dc's output",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "it must produce the same standard output, byte for byte"
+   }
+  }
+ ],
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "mul-full-scale",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ARITH"
+   ],
+   "receipt": "wrong-paths/mul-full-scale.json"
+  },
+  {
+   "id": "hex-lowercase",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "OUTPUT"
+   ],
+   "receipt": "wrong-paths/hex-lowercase.json"
+  },
+  {
+   "id": "no-line-split",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "OUTPUT"
+   ],
+   "receipt": "wrong-paths/no-line-split.json"
+  },
+  {
+   "id": "empty-register-l-nothing",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STATE"
+   ],
+   "receipt": "wrong-paths/empty-register-l-nothing.json"
+  },
+  {
+   "id": "Z-counts-leading-zeros",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STATE"
+   ],
+   "receipt": "wrong-paths/Z-counts-leading-zeros.json"
+  },
+  {
+   "id": "q-one-level",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MACROS"
+   ],
+   "receipt": "wrong-paths/q-one-level.json"
+  },
+  {
+   "id": "negcmp-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MACROS"
+   ],
+   "receipt": "wrong-paths/negcmp-ignored.json"
+  },
+  {
+   "id": "delegate-to-system-dc",
+   "kind": "harness_bypass",
+   "obligation_ids": [
+    "INVOCATION"
+   ],
+   "receipt": "wrong-paths/delegate-to-system-dc.json"
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "task_snapshot_sha256": "e69357948a99f33416308a8bf451025f45264d7ca7ac1dd9ba1deff357eda41e"
+}

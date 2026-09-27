@@ -1,0 +1,145 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/baseline/environment/app/src/looptune/controller.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/solve/environment/app/src/looptune/controller.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/baseline/environment/app/src/looptune/controller.py	2026-09-24 10:13:46
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/solve/environment/app/src/looptune/controller.py	2026-09-24 10:25:49
+@@ -1,4 +1,4 @@
+-"""The controller: one call to ``step`` per sample period."""
++"""The controller: one call to ``step`` per sample period (LT-7)."""
+ 
+ from .terms import (
+     derivative_update,
+@@ -16,6 +16,7 @@
+         self.integral = 0.0
+         self._d = 0.0
+         self._previous_error = 0.0
++        self._previous_measurement = None
+         self._previous_output = 0.0
+         self._last = None
+         self._manual = None
+@@ -27,24 +28,32 @@
+         y = float(measurement)
+         f = float(feedforward)
+         error = r - y
++        first = self._last is None
++        y_previous = y if self._previous_measurement is None else self._previous_measurement
+ 
+         p = proportional(t, r, y)
+-        self._d = derivative_update(t, self._d, error, self._previous_error)
++        self._d = derivative_update(t, self._d, error, self._previous_error,
++                                    y, y_previous)
+         d = self._d
+ 
+         if self._manual is not None:
+             u = self._manual
+-            self.integral = u - p
++            self.integral = u - p - d - f
+             i = self.integral
+-            v = p + i + d + f
++            v = u
+         else:
+-            self.integral += integral_increment(t, r, y)
+             i = self.integral
+-            v = p + i + d
+-            u = hold(slew(self._previous_output, v, t.slew, t.period), t.low, t.high) + f
+-            self.integral += tracking_increment(t, v, u)
++            v = p + i + d + f
++            w = hold(v, t.low, t.high)
++            if first and t.period > 0:
++                u = w
++            else:
++                u = slew(self._previous_output, w, t.slew, t.period)
++            self.integral = (i + integral_increment(t, r, y)
++                             + tracking_increment(t, v, u))
+ 
+         self._previous_error = error
++        self._previous_measurement = y
+         self._previous_output = u
+         self._last = (r, y)
+         self._terms = {"p": p, "i": i, "d": d, "f": f, "v": v, "u": u}
+@@ -65,5 +74,5 @@
+         new = old.with_changes(**changes)
+         if self._last is not None and ("gain" in changes or "setpoint_weight" in changes):
+             r, y = self._last
+-            self.integral += proportional(new, r, y) - proportional(old, r, y)
++            self.integral += proportional(old, r, y) - proportional(new, r, y)
+         self.tuning = new
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/baseline/environment/app/src/looptune/terms.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/solve/environment/app/src/looptune/terms.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/baseline/environment/app/src/looptune/terms.py	2026-09-24 10:15:05
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-discrete-pid-controller-p1/run_2/solve/environment/app/src/looptune/terms.py	2026-09-24 10:25:49
+@@ -1,34 +1,67 @@
+-"""The pieces a step is built from."""
++"""The pieces a step is built from.
+ 
++Each helper follows LT-7 (docs/control-note.md) for the setting values the
++note gives a rule for, and keeps its earlier result for the values it does not.
++"""
+ 
++
+ def proportional(t, setpoint, measurement):
+-    return t.gain * t.setpoint_weight * (setpoint - measurement)
++    b = t.setpoint_weight
++    if 0.0 <= b <= 1.0:
++        return t.gain * (b * setpoint - measurement)
++    return t.gain * b * (setpoint - measurement)
+ 
+ 
+ def integral_increment(t, setpoint, measurement):
+-    if t.integral_time == 0:
++    ti = t.integral_time
++    if ti > 0 and t.period > 0:
++        return t.gain * t.period / ti * (setpoint - measurement)
++    if ti == 0:
+         return 0.0
+-    return t.period / t.integral_time * (t.setpoint_weight * setpoint - measurement)
++    return t.period / ti * (t.setpoint_weight * setpoint - measurement)
+ 
+ 
+-def derivative_update(t, d, error, previous_error):
+-    if t.derivative_time == 0:
++def derivative_update(t, d, error, previous_error,
++                      measurement=None, previous_measurement=None):
++    td = t.derivative_time
++    n = t.filter_divisor
++    h = t.period
++    if td > 0 and n > 0 and h > 0:
++        a = td / (td + n * h)
++        if measurement is not None and previous_measurement is not None:
++            return a * d - t.gain * n * a * (measurement - previous_measurement)
++        return a * d + t.gain * n * a * (error - previous_error)
++    if td == 0:
+         return 0.0
+-    a = 1.0 - t.filter_divisor * t.period / t.derivative_time
+-    return a * d + t.gain * t.filter_divisor * (error - previous_error)
++    a = 1.0 - n * h / td
++    return a * d + t.gain * n * (error - previous_error)
+ 
+ 
+ def tracking_increment(t, v, u):
+-    if t.tracking_time == 0:
++    tt = t.tracking_time
++    if tt > 0 and t.period > 0:
++        return t.period / tt * (u - v)
++    if tt == 0:
+         return 0.0
+-    return t.period / t.tracking_time * (v - u)
++    return t.period / tt * (v - u)
+ 
+ 
+ def hold(x, low, high):
++    if low < high:
++        if x < low:
++            return low
++        if x > high:
++            return high
++        return x
++    if low >= high:
++        return high
+     return min(max(x, low), high)
+ 
+ 
+ def slew(previous, target, rate, period):
++    if rate > 0 and period > 0:
++        step = rate * period
++        return min(max(target, previous - step), previous + step)
+     if not rate:
+         return target
+     step = rate / period

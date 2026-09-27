@@ -1,0 +1,516 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-cold-chain-lot-disposition",
+ "primary_outcome": "the disposition report printed by /app/tools/coldchain_run.py gives, per lot, the disposition, band hours, remaining allowances, unlogged hours and MKT that QA-SOP-311 gives",
+ "obligations": [
+  {
+   "id": "LAST_READING",
+   "class": "core",
+   "contribution": "the last reading of an export holds nought and weighs nought in the MKT",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "and the last reading of an export, have a"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/attribution.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes holds, weights, band time, prior time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_7_last_reading_holds_nought"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_7_last_reading_holds_nought"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "exports whose last reading is far from the lot's other readings",
+   "wrong_but_plausible": "the last reading holds one 60-minute window (shipped)",
+   "selfdescription_phrase": "last reading"
+  },
+  {
+   "id": "GAP_OPENER_BAND_TIME",
+   "class": "core",
+   "contribution": "a reading that opens a logger gap holds nought, so it adds nothing to band time",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "A\nreading that opens a logger gap"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/attribution.py",
+    "environment/app/src/coldchain/disposition.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes holds, weights, band time, prior time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_7_reading_opening_a_logger_gap_holds_nought"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_7_reading_opening_a_logger_gap_holds_nought"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "excursion readings opening gaps of 31-1,440 minutes in lots of one temperature",
+   "wrong_but_plausible": "charge the whole spacing to the band (shipped)",
+   "selfdescription_phrase": "hold"
+  },
+  {
+   "id": "MKT_WEIGHT",
+   "class": "core",
+   "contribution": "MKT weights each reading by the minutes to the next reading of its export, logger gaps included, each export on its own",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "Each reading is weighted by the minutes from it to the"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/kinetics.py",
+    "environment/app/src/coldchain/disposition.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes holds, weights, band time, prior time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_mkt_weights_a_reading_by_the_minutes_to_the_next",
+     "test_outputs.py::test_mkt_of_a_lot_does_not_bridge_handovers"
+    ],
+    "boundary": [
+     "test_outputs.py::test_mkt_weights_a_reading_by_the_minutes_to_the_next",
+     "test_outputs.py::test_mkt_of_a_lot_does_not_bridge_handovers"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "gap openers of different temperatures; handovers of 1-2,880 minutes",
+   "wrong_but_plausible": "weigh by the band hold after writing 2.7 into the shared holds() (natural over-repair); weights across handovers",
+   "selfdescription_phrase": "MKT weight"
+  },
+  {
+   "id": "BAND_ENDS",
+   "class": "core",
+   "contribution": "labelled range includes both limits; an above-range band excludes its lower end and includes its upper end; a below-range band includes its lower end and excludes its upper end",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "A band above the range holds temperatures"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/bands.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes attributed minutes, band time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_5_band_ends"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_5_band_ends"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "readings exactly on the labelled limits and on every band end",
+   "wrong_but_plausible": "labelled range open at its upper limit and above-range bands closed at their lower end (shipped)",
+   "selfdescription_phrase": "band ends"
+  },
+  {
+   "id": "CARRY",
+   "class": "core",
+   "contribution": "a lot's time in a band is the total over its legs",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "lot's time in a band is the total of that band's time over every leg of the"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/disposition.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes holds, weights, band time, prior time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_band_time_carries_across_legs"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_band_time_carries_across_legs"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "three legs each under the warm allowance whose total exceeds it",
+   "wrong_but_plausible": "worst single leg (shipped)",
+   "selfdescription_phrase": "carried across legs"
+  },
+  {
+   "id": "PRIOR_TIME",
+   "class": "core",
+   "contribution": "prior time is the total of the certificate's excursion entries against a band",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "Prior time against a band is the total length of the excursion entries the"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/disposition.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes holds, weights, band time, prior time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_prior_time_counts_against_the_allowance"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_2_prior_time_counts_against_the_allowance"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "entries that bring a band's remaining allowance to exactly nought and one minute below",
+   "wrong_but_plausible": "ignore the certificate (shipped)",
+   "selfdescription_phrase": "prior time"
+  },
+  {
+   "id": "TRANSIENTS",
+   "class": "core",
+   "contribution": "an entry under 15 minutes records a transient and is not prior time",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "An excursion entry is an entry of the"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/disposition.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes holds, weights, band time, prior time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_certificate_transients_are_not_prior_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_certificate_transients_are_not_prior_time"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "entries of 1, 14 and 15 minutes",
+   "wrong_but_plausible": "total every certificate entry (natural over-repair)",
+   "selfdescription_phrase": "transient"
+  },
+  {
+   "id": "UNLOGGED",
+   "class": "core",
+   "contribution": "unlogged time is the total length of logger gaps (longer than 30 minutes) over every leg; more than 120 minutes quarantines",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "A leg's unlogged time is the total length of its logger gaps"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/attribution.py",
+    "environment/app/src/coldchain/disposition.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes attributed minutes, band time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_unlogged_time_counts_gaps_over_30_minutes"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_3_unlogged_time_counts_gaps_over_30_minutes"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "spacings of 30, 31, 60 and 61 minutes; lot totals of 120 and 121 unlogged minutes",
+   "wrong_but_plausible": "60-minute gap threshold (shipped)",
+   "selfdescription_phrase": "unlogged time"
+  },
+  {
+   "id": "DISPOSITION",
+   "class": "core",
+   "contribution": "reject on a frozen reading or a remaining allowance below nought; quarantine on unrounded MKT above the upper limit or unlogged time over 120 minutes; else release",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "A lot is rejected"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/disposition.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes attributed minutes, band time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_1_frozen_reading_or_exhausted_allowance_rejects",
+     "test_outputs.py::test_rule_6_2_mkt_compared_unrounded"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_2_mkt_compared_unrounded"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "MKT a few hundredths above the upper limit that rounds onto it; a reading exactly on the freeze point",
+   "wrong_but_plausible": "compare the rounded MKT (shipped)",
+   "selfdescription_phrase": "disposition"
+  },
+  {
+   "id": "HOURS_ROUNDING",
+   "class": "core",
+   "contribution": "reported hours rounded to the nearest hundredth",
+   "authority": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "Reported hours are rounded to the nearest"
+   },
+   "implementation_sites": [
+    "environment/app/src/coldchain/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "changes attributed minutes, band time, MKT or the disposition before the report is written"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_1_2_hours_rounded_to_the_hundredth"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_hours_rounded_to_the_hundredth"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "minute counts whose hours end in two thirds of a hundredth, negative remaining allowances",
+   "wrong_but_plausible": "truncate (shipped)",
+   "selfdescription_phrase": "hundredth of an hour"
+  },
+  {
+   "id": "JOB_LOADER",
+   "class": "support",
+   "contribution": "decode stability.json, lots.json and logger CSV exports",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/coldchain/records.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_generated_jobs"
+   ]
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed QA driver printing the report",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/coldchain_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_is_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "LAST_READING",
+    "to": "CARRY"
+   },
+   {
+    "from": "GAP_OPENER_BAND_TIME",
+    "to": "CARRY"
+   },
+   {
+    "from": "LAST_READING",
+    "to": "MKT_WEIGHT"
+   },
+   {
+    "from": "BAND_ENDS",
+    "to": "CARRY"
+   },
+   {
+    "from": "CARRY",
+    "to": "DISPOSITION"
+   },
+   {
+    "from": "TRANSIENTS",
+    "to": "PRIOR_TIME"
+   },
+   {
+    "from": "PRIOR_TIME",
+    "to": "DISPOSITION"
+   },
+   {
+    "from": "MKT_WEIGHT",
+    "to": "DISPOSITION"
+   },
+   {
+    "from": "UNLOGGED",
+    "to": "DISPOSITION"
+   },
+   {
+    "from": "DISPOSITION",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "HOURS_ROUNDING",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "PRIOR_TIME",
+    "to": "HOURS_ROUNDING"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "holds-feed-bands-and-mkt",
+   "obligation_ids": [
+    "LAST_READING",
+    "GAP_OPENER_BAND_TIME",
+    "MKT_WEIGHT",
+    "CARRY"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_mkt_weights_a_reading_by_the_minutes_to_the_next",
+    "test_outputs.py::test_rule_2_7_reading_opening_a_logger_gap_holds_nought"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "certificate-carry-disposition",
+   "obligation_ids": [
+    "BAND_ENDS",
+    "CARRY",
+    "PRIOR_TIME",
+    "TRANSIENTS",
+    "DISPOSITION"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_2_prior_time_counts_against_the_allowance",
+    "test_outputs.py::test_certificate_transients_are_not_prior_time"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "gaps-unlogged-quarantine",
+   "obligation_ids": [
+    "UNLOGGED",
+    "DISPOSITION",
+    "HOURS_ROUNDING"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_3_unlogged_time_counts_gaps_over_30_minutes"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "holds for every job within the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Leave alone whatever the SOP does not govern",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Jobs of one to two hundred lots will be disposed"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED (authoring only; graded jobs are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [
+  {
+   "id": "OFF_TABLE_KEPT",
+   "reason": "contract review r1 F2: readings beyond the table's span read as governed; now outside SOP 1.4 (every reading lies within the table's span)",
+   "former_anchor": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "An excursion reading is a reading outside the labelled range and within the table's span."
+   }
+  },
+  {
+   "id": "KELVIN_273",
+   "reason": "departure dropped in the redesign (tiny effect, shipped now uses 273.15)",
+   "former_anchor": {
+    "file": "environment/app/src/coldchain/kinetics.py",
+    "anchor": "KELVIN_OFFSET = 273.0"
+   }
+  },
+  {
+   "id": "GAP_OPENER_HOLD_KEPT",
+   "reason": "skeleton cycle-1 2/2: a silent kept hold was enumerated and kept by both solvers; the hold of a gap opener is now governed (2.7, nought)",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "Where the SOP names a figure but gives it no value"
+   }
+  },
+  {
+   "id": "UNCHAINED_KEPT",
+   "reason": "skeleton cycle-1 2/2: the 'chained lot' qualifier was visible; carry is now universal",
+   "former_anchor": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "A chained lot is a lot none of whose handovers"
+   }
+  }
+ ],
+ "exact_output_requirements": [
+  {
+   "id": "HOURS-HUNDREDTH",
+   "domain_required": true,
+   "rationale": "QA reports excursion time to the hundredth of an hour",
+   "authority_anchor": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "Reported hours are rounded to the nearest"
+   }
+  },
+  {
+   "id": "MKT-TENTH",
+   "domain_required": true,
+   "rationale": "MKT is reported to a tenth of a degree",
+   "authority_anchor": {
+    "file": "environment/app/docs/qa-sop-lot-disposition.md",
+    "anchor": "and the mean kinetic temperature to the nearest tenth of a"
+   }
+  },
+  {
+   "id": "REPORT-LAYOUT",
+   "domain_required": true,
+   "rationale": "the QA system reads the report keys and lot order",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "one object per lot, in the"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": []
+}
