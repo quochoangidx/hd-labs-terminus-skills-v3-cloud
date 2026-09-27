@@ -262,8 +262,8 @@ take-back became 8/8 platform misses; IFTA's 6/6 was a flagged risk. Treat a tra
 that every local solver misses as a contract defect to resolve before upload, not
 as difficulty. The healthy local shape is split misses across two or more traps,
 judged trap by trap: a split pair total does not excuse one trap that every run
-missed, and a trap whose inputs also sit in broad or generated tests must be
-isolated first (`task-batch` execution-profiles step 7).
+missed, and a trap whose inputs also sit in broad or generated tests is better
+isolated when cheap (`task-batch` execution-profiles step 7).
 Local probes do not predict per-model splits or the tier: royalty's local
 Opus 5.5 kept the repayment trap 4/4 while platform Opus 5 failed it 8/8, and a
 local 1/2 on a one-trap shape went BASE 7/8 on the platform (midi, retired).

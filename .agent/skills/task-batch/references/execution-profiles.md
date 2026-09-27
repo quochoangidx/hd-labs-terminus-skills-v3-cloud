@@ -114,10 +114,10 @@ Required path:
    and solution, and repair the contract **before any verifier exists**. The
    same turn scores the
    [solver-path screen](../../task-miner/solver_path_screen.md) on the written
-   instruction; `self_verification_resistance` of 2 or lower stops here to
-   redesign the causal core or replace the candidate, the cheapest point to
-   catch a task that will come back 2/2. One redesign is allowed; a second score
-   of 2 or lower replaces the candidate. A
+   instruction. Only `self_verification_resistance` 1 stops here (every task scored
+   1 collapsed); a score of 2 is advisory and the skeleton pair decides, because
+   rejecting at 2 also drops resisting tasks (workers-comp scored 2 and cleared
+   CORE+; user decision 2026-09-27: loosen screens so candidates reach the probe). A
    contract finding after the receipts forces the whole wrong-path matrix to
    rerun.
 4. Build the independent expectation model, then the Oracle, **in that order**.
@@ -129,8 +129,14 @@ Required path:
    `environment/` and the shipped package, run two fresh `terminus-probe` solvers
    (Opus 5, launched without a `model` argument), and score each diff with the
    model on generated inputs (`task-local-solve-probe` *Exploratory skeleton
-   mode*). **2/2 → redesign the causal core or replace the candidate** before
-   building anything else; one redesign, a second 2/2 replaces it. 0/2 or 1/2
+   mode*). **Run the pair only after `contract_review` has no blocking or
+   should-fix finding on the trap wording; never launch it in parallel with the
+   review.** A pair run on wording the review then finds ambiguous is discarded
+   (batch-8, 2026-09-27: four of five candidates lost a pair this way). **2/2 → one
+   strengthening or redesign, then a second 2/2 replaces the candidate.** Allow
+   exactly one: it saved workers-comp (2/2 → 1/2) and trace-metal (2/2 → 0/2),
+   while repeated rewording after that never did (3PL billing spent six pairs and
+   still went 2/2). 0/2 or 1/2
    with semantic failures → continue. A trap every solver misses goes through
    the blueprint §4.3 0/8 screen now, while fixing the contract is still cheap.
    Keep both solver diffs: step 7 rescores them. **A pair discarded as ambiguity
@@ -202,17 +208,17 @@ Required path:
    same. Run the blueprint §4.3 screen on it (competing positive enumeration, no
    definitional chain, contrary expert instinct, unnamed shared step, the trap
    inside several tests). Judge each trap on its own, never only the pair's total:
-   - **Isolation is a precondition** (blueprint §4.2 rule 3): named broad,
-     generated and capacity families carry no trap input, checked by a predicate
-     over every broad fixture. A trap that also fails `generated`, `capacity` or
-     `report_order` multiplies a platform 0/8 across tests; move its inputs out
-     before accepting.
+   - **Prefer isolation** (blueprint §4.2 rule 3): keep trap inputs out of broad,
+     generated and capacity families when that is cheap, since a trap threaded
+     through them multiplies a platform 0/8 across tests. It is not a blocker
+     (icpms was accepted with its trap in three tests).
    - A trap missed by every solver on the current contract, or by at least three
      of four local runs, with **two or more** §4.3 flags (for example contrary
-     expert instinct plus no isolation) is resolved before upload: make the case
-     governed in the authority or reroute it, then rescore. Recording it as a
-     risk is not enough (trace-metal, 2026-09-26: Opus 5 missed the non-detect
-     spike trap 2/2 with both flags, and the task was packaged anyway).
+     expert instinct plus no isolation) is a 0/8 risk to report with the package,
+     not a blocker: the icpms non-detect spike trap had exactly that local profile
+     (Opus 5 2/2 missed, contrary instinct, threaded into three tests) and the
+     platform accepted the task. Isolate it if that is cheap; answer a real
+     platform 0/8 by governing the case, never by disclosing it.
    - Otherwise accept when the misses split across two or more independent
      traps, or when the screen is clean and the trap is isolated in its own test. Probes run on the `opus` alias (Opus 5.5, all probes before
    2026-09-26) did not predict the platform's per-model split or its tier: a local
