@@ -1,0 +1,335 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "w1-every-day-begun": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/time_charge.py",
+     "old": "        return minutes // DAY + (1 if minutes % DAY > 59 else 0)",
+     "new": "        return -(-minutes // DAY)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_whole_days_and_59_minutes_free"
+   ],
+   "rationale": "2.3 grace"
+  },
+  "w1b-grace-60": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/time_charge.py",
+     "old": "minutes % DAY > 59",
+     "new": "minutes % DAY > 60"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_whole_days_and_59_minutes_free"
+   ],
+   "rationale": "59 minutes free, not 60"
+  },
+  "w1c-grace-58": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/time_charge.py",
+     "old": "minutes % DAY > 59",
+     "new": "minutes % DAY >= 59"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_whole_days_and_59_minutes_free"
+   ],
+   "rationale": "59 minutes free inclusive"
+  },
+  "w2-allowance-100": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/mileage.py",
+     "old": "MILES_PER_ALLOWANCE_DAY = 150",
+     "new": "MILES_PER_ALLOWANCE_DAY = 100"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_allowance_150_miles_a_day"
+   ],
+   "rationale": "3.2"
+  },
+  "w2b-allowance-inclusive": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/mileage.py",
+     "old": "max(0, miles(agreement) - allowance)",
+     "new": "max(0, miles(agreement) - allowance + 1)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_allowance_150_miles_a_day"
+   ],
+   "rationale": "beyond the allowance"
+  },
+  "w3-no-turnover": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/mileage.py",
+     "old": "return driven + TURNOVER if driven < 0 else driven",
+     "new": "return driven"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_4_odometer_turns_over"
+   ],
+   "rationale": "2.4"
+  },
+  "w3b-turnover-999999": {
+   "class": "C7",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/mileage.py",
+     "old": "TURNOVER = 1000000",
+     "new": "TURNOVER = 999999"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_4_odometer_turns_over"
+   ],
+   "rationale": "turns over to 0"
+  },
+  "w4-no-fee": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/fuel.py",
+     "old": "REFUELLING_FEE = 1500",
+     "new": "REFUELLING_FEE = 0"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_3_refuelling_fee"
+   ],
+   "rationale": "3.3 fee"
+  },
+  "w4b-fee-once-per-eighth": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/fuel.py",
+     "old": "return short * agreement[\"fuel_rate\"] + REFUELLING_FEE",
+     "new": "return short * (agreement[\"fuel_rate\"] + REFUELLING_FEE)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_3_refuelling_fee"
+   ],
+   "rationale": "fee once"
+  },
+  "w5-fuel-taxed": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "tax(charges[\"time_charge\"] + charges[\"mileage_charge\"])",
+     "new": "tax(sum(charges.values()))"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_4_1_fuel_is_not_taxed"
+   ],
+   "rationale": "4.1"
+  },
+  "w6-tax-floor": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/tax.py",
+     "old": "(taxable * RATE_BASIS_POINTS + 5000) // 10000",
+     "new": "taxable * RATE_BASIS_POINTS // 10000"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_tax_half_cent_goes_up"
+   ],
+   "rationale": "1.2 half up"
+  },
+  "w6b-tax-half-even": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/tax.py",
+     "old": "(taxable * RATE_BASIS_POINTS + 5000) // 10000",
+     "new": "round(taxable * RATE_BASIS_POINTS / 10000)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_tax_half_cent_goes_up"
+   ],
+   "rationale": "half up not even"
+  },
+  "w6c-tax-half-down": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/tax.py",
+     "old": "(taxable * RATE_BASIS_POINTS + 5000) // 10000",
+     "new": "(taxable * RATE_BASIS_POINTS + 4999) // 10000"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_tax_half_cent_goes_up"
+   ],
+   "rationale": "exact half"
+  },
+  "ta-grace-for-everyone": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/time_charge.py",
+     "old": "    if minutes >= DAY:\n",
+     "new": "    if True:\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rental_under_a_day_keeps_todays_days"
+   ],
+   "rationale": "no days rule under a day"
+  },
+  "ta-at-least-zero": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/time_charge.py",
+     "old": "    return -(-minutes // DAY)\n\n\ndef time",
+     "new": "    return 0\n\n\ndef time"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rental_under_a_day_keeps_todays_days"
+   ],
+   "rationale": "not nought"
+  },
+  "tc-no-credit": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/fuel.py",
+     "old": "    return short * agreement[\"fuel_rate\"]\n",
+     "new": "    return 0\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_car_back_as_full_or_fuller_keeps_todays_fuel_charge"
+   ],
+   "rationale": "no rule: today's credit"
+  },
+  "c5-bills-capped-199": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "bills = [bill(a) for a in agreements[\"agreements\"][:199]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_3_limits_reached"
+   ],
+   "rationale": "200 agreements"
+  },
+  "c5-length-capped-30-days": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/time_charge.py",
+     "old": "    minutes = length(agreement)\n",
+     "new": "    minutes = min(length(agreement), 30 * DAY)\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_3_limits_reached"
+   ],
+   "rationale": "60 days"
+  },
+  "c15-bills-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "bills = sorted((bill(a) for a in agreements[\"agreements\"]), key=lambda b: b[\"id\"])"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_bill_order_and_file_totals"
+   ],
+   "rationale": "file order"
+  },
+  "c10-branch-fixed": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "\"branch\": agreements[\"branch\"],",
+     "new": "\"branch\": \"RC3-0001\","
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_whole_days_and_59_minutes_free"
+   ],
+   "rationale": "branch echoed"
+  },
+  "c4-revenue-without-fuel": {
+   "class": "C11",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "\"revenue\": sum(b[\"total\"] for b in bills),",
+     "new": "\"revenue\": sum(b[\"total\"] - b[\"fuel_charge\"] for b in bills),"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_bill_order_and_file_totals"
+   ],
+   "rationale": "4.3"
+  },
+  "c7-mile-rate-cap": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/mileage.py",
+     "old": "* agreement[\"mile_rate\"]",
+     "new": "* min(agreement[\"mile_rate\"], 499)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_allowance_150_miles_a_day"
+   ],
+   "rationale": "mile rate to 500"
+  }
+ },
+ "alternatives": {
+  "alt-fraction-tax": {
+   "edits": [
+    {
+     "file": "app/src/rentcharge/tax.py",
+     "old": "    return (taxable * RATE_BASIS_POINTS + 5000) // 10000",
+     "new": "    from fractions import Fraction\n    import math\n    return math.floor(Fraction(taxable * RATE_BASIS_POINTS, 10000) + Fraction(1, 2))"
+    }
+   ],
+   "rationale": "exact"
+  },
+  "alt-extra-keys": {
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "        \"total\": sum(charges.values()) + owed,\n",
+     "new": "        \"total\": sum(charges.values()) + owed,\n        \"note\": \"x\",\n"
+    }
+   ],
+   "rationale": "extra keys ignored"
+  }
+ }
+}

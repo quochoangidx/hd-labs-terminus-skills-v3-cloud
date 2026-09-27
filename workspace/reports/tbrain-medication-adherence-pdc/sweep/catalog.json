@@ -1,0 +1,637 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "w1-start-day-after": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "        start = fill.date\n",
+     "new": "        start = fill.date + 1\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_fill_starts_on_its_fill_date"
+   ],
+   "rationale": "3.1: start on the fill date (shipped: the day after)"
+  },
+  "w2-no-carry-over": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "        if fill.date < after_last.get(fill.drug, fill.date):\n            start = after_last[fill.drug]\n",
+     "new": ""
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_refill_of_same_drug_carries_over"
+   ],
+   "rationale": "3.2 carry-over (shipped: none)"
+  },
+  "w3-carry-over-across-drugs": {
+   "class": "C14",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "        if fill.date < after_last.get(fill.drug, fill.date):\n            start = after_last[fill.drug]\n",
+     "new": "        if fill.date < after_last.get(\"*\", fill.date):\n            start = after_last[\"*\"]\n"
+    },
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "        after_last[fill.drug] = max(after_last.get(fill.drug, end), end)\n",
+     "new": "        after_last[\"*\"] = max(after_last.get(\"*\", end), end)\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_other_drugs_never_move_one_another"
+   ],
+   "rationale": "3.2 other drugs never move one another"
+  },
+  "w4-measure-counts-lines": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "len({fill.date for fill in fills if fill.days}) >= 2",
+     "new": "sum(1 for fill in fills if fill.days) >= 2"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_4_fills_on_two_different_dates"
+   ],
+   "rationale": "2.4 two different fill dates"
+  },
+  "w5-no-october-cutoff": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": " and index_date(fills) <= year_end(year) - 90",
+     "new": ""
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october"
+   ],
+   "rationale": "2.4 index by 2 October"
+  },
+  "w5b-cutoff-3-october": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "year_end(year) - 90",
+     "new": "year_end(year) - 89"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october"
+   ],
+   "rationale": "2.4 at its end"
+  },
+  "w5c-cutoff-1-october": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "year_end(year) - 90",
+     "new": "year_end(year) - 91"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october"
+   ],
+   "rationale": "2.4 at its end"
+  },
+  "w5d-cutoff-day-274": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "year_end(year) - 90",
+     "new": "year_end(year - 1) + 275"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october"
+   ],
+   "rationale": "2 October as day 275 fails in leap years"
+  },
+  "w6-period-to-last-covered": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "    if in_measure(fills, year):\n        return first, year_end(year)\n",
+     "new": ""
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_5_treatment_period_runs_to_year_end"
+   ],
+   "rationale": "2.5 treatment period to 31 December"
+  },
+  "w7-stays-kept-in-period": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/pdc.py",
+     "old": "    if measured:\n        span -= sum(1 for d in range(first, last + 1) if d in stays)\n",
+     "new": ""
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_4_1_stay_days_leave_period_and_covered_days"
+   ],
+   "rationale": "4.1 stays leave the period days"
+  },
+  "w8-rounding-floor": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/rounding.py",
+     "old": "math.floor(value * 10 + 0.5) / 10",
+     "new": "math.floor(value * 10) / 10"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_percentages_round_half_up"
+   ],
+   "rationale": "1.2 half up (shipped: floor)"
+  },
+  "w8b-rounding-half-even": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/rounding.py",
+     "old": "math.floor(value * 10 + 0.5) / 10",
+     "new": "round(value, 1)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_percentages_round_half_up"
+   ],
+   "rationale": "1.2 a half goes up, not to even"
+  },
+  "w8c-rounding-below-half": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/rounding.py",
+     "old": "math.floor(value * 10 + 0.5) / 10",
+     "new": "math.floor(value * 10 + 0.4999) / 10"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_percentages_round_half_up"
+   ],
+   "rationale": "1.2 exact half"
+  },
+  "w8d-rounding-tenth-off": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/rounding.py",
+     "old": "math.floor(value * 10 + 0.5) / 10",
+     "new": "(math.floor(value * 10 + 0.5) + 1e-9) / 10"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_percentages_round_half_up"
+   ],
+   "rationale": "the reported tenth, exactly"
+  },
+  "w9-adherent-above-80": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/pdc.py",
+     "old": "measured and pdc >= ADHERENT_PDC",
+     "new": "measured and pdc > ADHERENT_PDC"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_4_2_adherent_at_80_and_only_in_the_measure"
+   ],
+   "rationale": "4.2 80.0 or more"
+  },
+  "w9b-adherent-outside": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/pdc.py",
+     "old": "measured and pdc >= ADHERENT_PDC",
+     "new": "pdc >= ADHERENT_PDC"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_4_2_adherent_at_80_and_only_in_the_measure"
+   ],
+   "rationale": "4.2 only in the measure"
+  },
+  "w10-rate-over-members": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/classes.py",
+     "old": "(measured if measured >= REPORTABLE else members)",
+     "new": "members"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_5_1_reportable_class_rate_over_its_rate_base"
+   ],
+   "rationale": "5.1 rate base"
+  },
+  "w10b-reportable-from-11": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/classes.py",
+     "old": "measured >= REPORTABLE",
+     "new": "measured > REPORTABLE"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_5_1_reportable_class_rate_over_its_rate_base"
+   ],
+   "rationale": "2.7 ten or more"
+  },
+  "t1a-period-to-year-end-for-everyone": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "    if in_measure(fills, year):\n        return first, year_end(year)\n",
+     "new": "    return first, year_end(year)\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_member_outside_the_measure_keeps_todays_span"
+   ],
+   "rationale": "no period days for a member outside the measure"
+  },
+  "t1b-stays-out-of-every-span": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/pdc.py",
+     "old": "    if measured:\n        span -= sum",
+     "new": "    if True:\n        span -= sum"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_member_outside_the_measure_keeps_todays_span"
+   ],
+   "rationale": "today's span keeps stay days"
+  },
+  "t1c-outside-pdc-zero": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/pdc.py",
+     "old": "    pdc = tenth(100 * counted / span)\n",
+     "new": "    pdc = tenth(100 * counted / span) if measured else 0.0\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_member_outside_the_measure_keeps_todays_span"
+   ],
+   "rationale": "no blanking of the figure"
+  },
+  "t2a-rate-base-for-every-class": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/classes.py",
+     "old": "(measured if measured >= REPORTABLE else members)",
+     "new": "(measured or members)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_class_that_is_not_reportable_keeps_todays_divisor"
+   ],
+   "rationale": "no rate base below ten"
+  },
+  "t2b-small-class-rate-zero": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/classes.py",
+     "old": "\"rate\": tenth(100 * adherent / (measured if measured >= REPORTABLE else members)),",
+     "new": "\"rate\": tenth(100 * adherent / measured) if measured >= REPORTABLE else 0.0,"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_class_that_is_not_reportable_keeps_todays_divisor"
+   ],
+   "rationale": "no blanking of the rate"
+  },
+  "t3a-full-supply-above-limit": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "end = start + min(fill.days, SUPPLY_LIMIT)",
+     "new": "end = start + fill.days"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage"
+   ],
+   "rationale": "no length for a fill above the limit: today's 100 days"
+  },
+  "t3b-above-limit-covers-nothing": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "end = start + min(fill.days, SUPPLY_LIMIT)",
+     "new": "end = start + (fill.days if fill.days <= SUPPLY_LIMIT else 1)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage"
+   ],
+   "rationale": "3.1 at least one day; today's 100"
+  },
+  "t3c-limit-exclusive": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "end = start + min(fill.days, SUPPLY_LIMIT)",
+     "new": "end = start + (fill.days if fill.days < SUPPLY_LIMIT else SUPPLY_LIMIT - 1)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage"
+   ],
+   "rationale": "a fill of exactly 100 days is within the limit"
+  },
+  "c5-members-capped-99": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/report.py",
+     "old": "    for record in claims[\"members\"]:\n",
+     "new": "    for record in claims[\"members\"][:99]:\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_3_limits_reached"
+   ],
+   "rationale": "1.3 up to 100 members"
+  },
+  "c5-fills-capped-399": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/claims.py",
+     "old": "for position, line in enumerate(record[\"fills\"])",
+     "new": "for position, line in enumerate(record[\"fills\"][:399])"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_3_limits_reached"
+   ],
+   "rationale": "1.3 up to 400 fills"
+  },
+  "c6-class-code-7": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/claims.py",
+     "old": "Fill(day(line[\"date\"]), line[\"drug\"], line[\"class\"], line[\"days\"], position)",
+     "new": "Fill(day(line[\"date\"]), line[\"drug\"], line[\"class\"][:7], line[\"days\"], position)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_report_order_and_codes"
+   ],
+   "rationale": "class codes of 8 characters"
+  },
+  "c6-drug-code-10": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/claims.py",
+     "old": "Fill(day(line[\"date\"]), line[\"drug\"], line[\"class\"], line[\"days\"], position)",
+     "new": "Fill(day(line[\"date\"]), line[\"drug\"][-10:], line[\"class\"], line[\"days\"], position)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_other_drugs_never_move_one_another"
+   ],
+   "rationale": "drug codes of 11 digits: two codes sharing their last ten digits are two drugs"
+  },
+  "c12-stay-exclusive-end": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/claims.py",
+     "old": "out.update(range(admission, discharge + 1))",
+     "new": "out.update(range(admission, discharge))"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_4_1_stay_days_leave_period_and_covered_days"
+   ],
+   "rationale": "2.6 a stay includes its discharge day"
+  },
+  "c12-stays-capped-9": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/claims.py",
+     "old": "for admission, discharge in record[\"stays\"]]",
+     "new": "for admission, discharge in record[\"stays\"][:9]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_3_limits_reached"
+   ],
+   "rationale": "1.3 up to 10 stays"
+  },
+  "c15-classes-reversed": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/report.py",
+     "old": "for code in sorted({r[\"class\"] for r in rows})]",
+     "new": "for code in sorted({r[\"class\"] for r in rows}, reverse=True)]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_report_order_and_codes"
+   ],
+   "rationale": "README class order"
+  },
+  "c15-members-sorted-by-id": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/report.py",
+     "old": "    for record in claims[\"members\"]:\n",
+     "new": "    for record in sorted(claims[\"members\"], key=lambda r: r[\"id\"]):\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_report_order_and_codes"
+   ],
+   "rationale": "README member order"
+  },
+  "c11-carry-over-previous-fill-only": {
+   "class": "C11",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "        after_last[fill.drug] = max(after_last.get(fill.drug, end), end)\n",
+     "new": "        after_last[fill.drug] = fill.date + min(fill.days, SUPPLY_LIMIT)\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_refill_of_same_drug_carries_over"
+   ],
+   "rationale": "3.2 the last day the earlier fills cover, not the previous fill's own supply"
+  },
+  "c9-year-end-fixed": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "return first, year_end(year)",
+     "new": "return first, year_end(2024)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_5_treatment_period_runs_to_year_end"
+   ],
+   "rationale": "the measurement year varies"
+  },
+  "c17-plan-echo-fixed": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/report.py",
+     "old": "return {\"plan\": claims[\"plan\"], ",
+     "new": "return {\"plan\": \"AM2-0001\", "
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_fill_starts_on_its_fill_date"
+   ],
+   "rationale": "plan echoed"
+  },
+  "w11-index-first-listed": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "return min(fill.date for fill in fills if fill.days)",
+     "new": "return next(fill.date for fill in fills if fill.days)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_index_date_is_the_earliest_fill_date"
+   ],
+   "rationale": "2.3 earliest fill date (shipped: first listed)"
+  },
+  "n1-index-from-any-line": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "return min(fill.date for fill in fills if fill.days)",
+     "new": "return min(fill.date for fill in fills)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_line_with_no_days_supply_is_not_a_fill"
+   ],
+   "rationale": "2.1 a line with no days supply is not a fill (natural rewrite of the index date)"
+  },
+  "n2-measure-dates-from-any-line": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/measure.py",
+     "old": "len({fill.date for fill in fills if fill.days}) >= 2",
+     "new": "len({fill.date for fill in fills}) >= 2"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_line_with_no_days_supply_is_not_a_fill"
+   ],
+   "rationale": "2.1 (natural rewrite of the measure test)"
+  },
+  "n3-class-of-adjustments-listed": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/claims.py",
+     "old": "    return {code: group for code, group in groups.items() if any(fill.days for fill in group)}\n",
+     "new": "    return groups\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_line_with_no_days_supply_is_not_a_fill"
+   ],
+   "rationale": "README: rows and classes only for classes with a fill"
+  }
+ },
+ "alternatives": {
+  "alt-exact-fraction-rounding": {
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/rounding.py",
+     "old": "import math\n",
+     "new": "import math\nfrom fractions import Fraction\n"
+    },
+    {
+     "file": "app/src/pdcmeasure/rounding.py",
+     "old": "    return math.floor(value * 10 + 0.5) / 10\n",
+     "new": "    return float(Fraction(math.floor(Fraction(value) * 10 + Fraction(1, 2)), 10))\n"
+    }
+   ],
+   "rationale": "exact half-up rounding"
+  },
+  "alt-extra-keys-and-int-pdc": {
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/pdc.py",
+     "old": "        \"adherent\": measured and pdc >= ADHERENT_PDC,\n",
+     "new": "        \"adherent\": measured and pdc >= ADHERENT_PDC,\n        \"note\": \"extra\",\n"
+    },
+    {
+     "file": "app/src/pdcmeasure/pdc.py",
+     "old": "    pdc = tenth(100 * counted / span)\n",
+     "new": "    pdc = tenth(100 * counted / span)\n    pdc = int(pdc) if pdc == int(pdc) else pdc\n"
+    }
+   ],
+   "rationale": "extra keys ignored; an integral PDC written as an integer"
+  },
+  "alt-interval-carry-over": {
+   "edits": [
+    {
+     "file": "app/src/pdcmeasure/coverage.py",
+     "old": "        start = fill.date\n        if fill.date < after_last.get(fill.drug, fill.date):\n            start = after_last[fill.drug]\n",
+     "new": "        start = max(fill.date, after_last.get(fill.drug, fill.date))\n"
+    }
+   ],
+   "rationale": "carry-over written as a max"
+  }
+ },
+ "untouched_class_reasons": {
+  "C2": "rule 1.3 states a floor and a ceiling for every number, count, span and list; the ends are graded under C3/C5",
+  "C4": "empties and zeros graded by name: a member with no claim lines, a class with no member in the measure, a PDC of nought, days supply 0 (adjustment lines)",
+  "C7": "Python integers; every count and day total stays below 2^17",
+  "C9": "class codes of one and eight characters with digits before letters, drug codes of one and eleven digits, ids with hyphens (report_order, limits, generated relabelled at run time)",
+  "C13": "the generated family crosses drugs per class, several classes per member, stays and refill cadences; the relabelled run moves year, codes and order",
+  "C16": "no frozen API beyond the byte-checked driver; the package is graded through the documented command only",
+  "C17": "driver byte-checked before and after candidate code, /app sealed, prefix-less staging, same file name for every job, test_candidate_cannot_read_verifier_state",
+  "C18": "model and generators in solution/; tests/ loads sealed JSONL pinned by ROSTER",
+  "w9c-adherent-unrounded (removed)": "equivalent mutant: with at most 366 period days no PDC lies in [79.95, 80), so judging the unrounded PDC never differs from judging the reported one"
+ }
+}

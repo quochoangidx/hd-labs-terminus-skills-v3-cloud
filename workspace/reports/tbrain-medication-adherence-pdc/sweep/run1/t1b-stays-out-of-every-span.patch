@@ -1,0 +1,96 @@
+diff --git a/app/src/pdcmeasure/classes.py b/app/src/pdcmeasure/classes.py
+--- a/app/src/pdcmeasure/classes.py
++++ b/app/src/pdcmeasure/classes.py
+@@ -1,6 +1,8 @@
+ """Class rows of the report."""
+ 
+ from .rounding import tenth
++
++REPORTABLE = 10
+ 
+ 
+ def class_row(code, rows):
+@@ -13,5 +15,5 @@
+         "members": members,
+         "in_measure": measured,
+         "adherent": adherent,
+-        "rate": tenth(100 * adherent / members),
++        "rate": tenth(100 * adherent / (measured if measured >= REPORTABLE else members)),
+     }
+diff --git a/app/src/pdcmeasure/coverage.py b/app/src/pdcmeasure/coverage.py
+--- a/app/src/pdcmeasure/coverage.py
++++ b/app/src/pdcmeasure/coverage.py
+@@ -6,7 +6,12 @@
+ def covered(fills):
+     """The set of days the fills cover."""
+     days = set()
++    after_last = {}
+     for fill in sorted(fills, key=lambda f: (f.date, f.position)):
+-        start = fill.date + 1
+-        days.update(range(start, start + min(fill.days, SUPPLY_LIMIT)))
++        start = fill.date
++        if fill.date < after_last.get(fill.drug, fill.date):
++            start = after_last[fill.drug]
++        end = start + min(fill.days, SUPPLY_LIMIT)
++        days.update(range(start, end))
++        after_last[fill.drug] = max(after_last.get(fill.drug, end), end)
+     return days
+diff --git a/app/src/pdcmeasure/measure.py b/app/src/pdcmeasure/measure.py
+--- a/app/src/pdcmeasure/measure.py
++++ b/app/src/pdcmeasure/measure.py
+@@ -4,17 +4,19 @@
+ 
+ 
+ def index_date(fills):
+-    """The fill date of the first line that dispensed a supply."""
+-    return next(fill.date for fill in fills if fill.days)
++    """The fill date of the earliest line that dispensed a supply."""
++    return min(fill.date for fill in fills if fill.days)
+ 
+ 
+ def in_measure(fills, year):
+     """Whether the member counts in the measure for the class."""
+-    return sum(1 for fill in fills if fill.days) >= 2
++    return len({fill.date for fill in fills if fill.days}) >= 2 and index_date(fills) <= year_end(year) - 90
+ 
+ 
+ def period(fills, covered, year):
+     """(first, last) day of the span the PDC is taken over."""
+     first = index_date(fills)
++    if in_measure(fills, year):
++        return first, year_end(year)
+     last = min(max(covered, default=first), year_end(year))
+     return first, last
+diff --git a/app/src/pdcmeasure/pdc.py b/app/src/pdcmeasure/pdc.py
+--- a/app/src/pdcmeasure/pdc.py
++++ b/app/src/pdcmeasure/pdc.py
+@@ -10,15 +10,18 @@
+ def figures(fills, stays, year):
+     """The report figures of one member for one class, from the member's fills of that class."""
+     days = covered_days(fills)
++    measured = in_measure(fills, year)
+     first, last = period(fills, days, year)
+     span = last - first + 1
++    if True:
++        span -= sum(1 for d in range(first, last + 1) if d in stays)
+     counted = sum(1 for d in range(first, last + 1) if d in days and d not in stays)
+     pdc = tenth(100 * counted / span)
+     return {
+         "index": index_date(fills),
+-        "in_measure": in_measure(fills, year),
++        "in_measure": measured,
+         "period": span,
+         "covered": counted,
+         "pdc": pdc,
+-        "adherent": pdc > ADHERENT_PDC,
++        "adherent": measured and pdc >= ADHERENT_PDC,
+     }
+diff --git a/app/src/pdcmeasure/rounding.py b/app/src/pdcmeasure/rounding.py
+--- a/app/src/pdcmeasure/rounding.py
++++ b/app/src/pdcmeasure/rounding.py
+@@ -5,4 +5,4 @@
+ 
+ def tenth(value):
+     """A percentage as reported, to the tenth."""
+-    return math.floor(value * 10) / 10
++    return math.floor(value * 10 + 0.5) / 10

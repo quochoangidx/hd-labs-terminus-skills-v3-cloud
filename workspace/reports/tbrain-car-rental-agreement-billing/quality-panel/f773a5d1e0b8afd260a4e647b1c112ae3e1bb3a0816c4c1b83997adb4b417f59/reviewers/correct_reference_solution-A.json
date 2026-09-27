@@ -1,0 +1,142 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "f773a5d1e0b8afd260a4e647b1c112ae3e1bb3a0816c4c1b83997adb4b417f59",
+  "severity": "None",
+  "summary": "The reference (solve.sh applying fix.patch) implements every RC-3 rule the instruction names: rule 2.2/2.3 grace days for day rentals, 150-mile allowance per charged day, odometer turnover, the refuelling fee on refuelling rentals only, a tax base of time plus mileage, and half-up tax rounding. Where the manual has no rule (days for a rental under a day, the fuel figure for a car back as full or fuller), it keeps today's step as instruction.md:3 requires. The driver is untouched and output keys, types and order are unchanged. No concrete incorrect behaviour was found within the rule 1.3 domain.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/rental-charges-manual.md",
+      "environment/app/examples/counter-2031-05.json",
+      "environment/app/tools/rentcharge_run.py",
+      "environment/app/src/rentcharge/__init__.py",
+      "environment/app/src/rentcharge/clock.py",
+      "environment/app/src/rentcharge/time_charge.py",
+      "environment/app/src/rentcharge/mileage.py",
+      "environment/app/src/rentcharge/fuel.py",
+      "environment/app/src/rentcharge/tax.py",
+      "environment/app/src/rentcharge/run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Compared the manifest's 22 files with the files read; all were read in full, with no truncation.",
+    "Traced solve.sh: runs `cd /` and then `patch -p1` with fix.patch. Its paths a/app/src/rentcharge/*.py resolve to /app/src/rentcharge/*.py, and no hunk touches tools/rentcharge_run.py, so the byte-for-byte driver requirement (instruction.md:1) is kept. The Dockerfile installs `patch` (environment/Dockerfile:4).",
+    "Checked each hunk's header line counts and context lines against the shipped sources: fuel.py 1-5, mileage.py 2-14, run.py 12-18, tax.py 5-8 and time_charge.py 4-11 all match, and the new counts match the added lines.",
+    "Days (manual 2.2/2.3): patched days() is `minutes // 1440 + (1 if minutes % 1440 > 59 else 0)` for minutes >= 1440. 3d+0 gives 3, 3d+20 gives 3 (the instruction's twenty-minute customer), 3d+59 gives 3, 3d+60 gives 4, 3d+1439 gives 4, and exactly 1440 gives 1. For minutes < 1440 the manual gives no rule, so the ceiling (1 day) is kept (fix.patch:71-78).",
+    "Miles (2.4): `driven + 1000000 if driven < 0`. odo 999999 to 0 gives 1, equal readings give 0, and odo 990000 to 10000 gives 20000 (fix.patch:31-34). The `miles` output key uses the same function (run.py:19).",
+    "Mileage charge (3.2): allowance is 150 * days(). The charge is max(0, miles - allowance) * mile_rate. The max(0, .) was already shipped and matches 'beyond the allowance'. Weekly case: 7d with 1050 miles gives 0 and 1051 gives 1 * rate (fix.patch:37-40).",
+    "Fuel (2.5/3.3): when fuel_out - fuel_in > 0, the charge is short * fuel_rate + 1500. With fuel_rate 0 it is exactly 1500. Otherwise the shipped expression is kept, per instruction.md:3 ('keeps working the figure out the way it does today') (fix.patch:12-17).",
+    "Tax base (4.1): run.py now taxes time_charge + mileage_charge only (fix.patch:49-50). Total (4.2): `sum(charges.values()) + owed` still includes fuel. File revenue and tax (4.3) are unchanged sums (run.py:22,31-32).",
+    "Tax rounding (1.2): `(taxable*825 + 5000) // 10000`. 200 gives 16.5, rounded to 17. 1212 gives 99.99, rounded to 100. 100 gives 8.25, rounded to 8. The taxable amount is never negative, because time_charge >= 100 and mileage_charge >= 0, so floor-plus-half is exact half-up. All values are Python ints, so JSON integers are emitted.",
+    "Clock: minutes() uses datetime deltas from 2000-01-01, which handles month, year and leap-day ends (2012-02-28, 2024-02-28, 2044-12-31) correctly for times in 2000-2099 (clock.py:8-16).",
+    "Worked the shipped example through the patched code. RA-10441: 3d25m gives 3 days, time 14700, 435 miles (allowance 450) so mileage 0, fuel 2*650+1500=2800, tax 14700*0.0825=1212.75 rounded to 1213, total 18713. RA-10442: 5h30m gives 1 day (shipped step), time 3900, 80 miles so mileage 0, fuel 0, tax 321.75 rounded to 322, total 4222.",
+    "Cross-checked model.py against the patched package for every branch. Their logic is equivalent: turnover is tested as in<out rather than driven<0, which is the same condition, and tax is computed with Fraction floor(x+1/2), which equals the integer form.",
+    "Out-of-axis observation, not a reference defect: jobgen.limits() can draw a length up to 60*1440+1439 minutes, which exceeds rule 1.3's 86,400. seal.within_limits would assert on such a draw. This affects only whether sealing succeeds, not solve.sh behaviour, so it is left to the other axes. Some comments in model.py/jobgen.py cite the wrong rule number (TURNOVER '2.5', refuelling '2.6'); these are comments only."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced the example file plus the boundaries for grace (0/1/59/60/61/1439 minutes past whole days, exactly 1440), the allowance (exactly at, one over, and under), turnover (wrap, equal, max 20000), fuel (short by 1 to 8, rate 0, equal, fuller) and tax half-cent values.",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:35-65", "solution/fix.patch:12-17", "solution/fix.patch:31-40", "solution/fix.patch:62-78", "environment/app/examples/counter-2031-05.json:4-7"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths, JSON integer types, key set and order",
+      "status": "checked",
+      "reason": "The driver is unchanged and emits json.dump of bill_run. Every figure is int arithmetic (`//`, `*`, `+`), so no floats appear. Keys match the README, and bills keep file order through a list comprehension.",
+      "evidence": ["environment/app/tools/rentcharge_run.py:16-19", "environment/app/src/rentcharge/run.py:9-33", "environment/app/README.md:26-34"],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state or selects a rule (day vs sub-day rental, refuelling vs not, turnover vs not)",
+      "status": "checked",
+      "reason": "Each patched conditional matches the manual's definitional predicate (2.2 length >= 1440; 2.4 reading back smaller; 2.5 fewer eighths back). The else branches keep today's step as instruction.md:3 requires for figures the manual leaves open.",
+      "evidence": ["solution/fix.patch:15-17", "solution/fix.patch:34", "solution/fix.patch:76-78", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or durability promises. The task is a stateless, pure computation over one input file.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction constraints on the repair itself (driver byte-identical, no extra clamps or guards, only manual-governed changes)",
+      "status": "checked",
+      "reason": "The patch touches only src files, adds no clamp or guard outside the manual's predicates, and leaves unmanaged figures on today's step.",
+      "evidence": ["solution/fix.patch:1-82", "solution/solve.sh:17-21", "instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Precision and rounding (rule 1.2)",
+      "status": "checked",
+      "reason": "Only the tax is rounded, half-up, on an exact integer numerator. No other division occurs anywhere in the charge path.",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:16-18", "solution/fix.patch:62-63"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.3 grace days", "3.2 allowance per charged day"],
+      "case_or_path": "7d+59m with 1051 miles: 7 days, allowance 1050, 1 mile charged. 7d+60m with 1201 miles: 8 days, allowance 1200, 1 mile charged. The allowance uses the patched days() through its import in mileage.py.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:24", "solution/fix.patch:37-40", "solution/fix.patch:71-78"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 turnover", "3.2 mileage charge"],
+      "case_or_path": "odo 999950 back at 350 over 2 days: miles 400, allowance 300, so 100 miles are charged. The negative raw difference no longer reaches max(0, .), which had previously zeroed the charge.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:31-40"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 fuel charge", "4.1 fuel not taxed / 4.2 total"],
+      "case_or_path": "Refuelling rental: the fuel charge, including the 1500 fee, is excluded from the tax base but included in the total.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:49-50", "environment/app/src/rentcharge/run.py:22"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["sub-day rental (no manual rule, today's step)", "3.2 allowance"],
+      "case_or_path": "300-minute rental with 151 miles: days 1 (shipped ceiling), allowance 150, 1 mile charged. This is consistent with 'every other step still follows the manual'.",
+      "status": "checked",
+      "evidence": ["instruction.md:3", "solution/fix.patch:76-78", "environment/app/docs/rental-charges-manual.md:55-56"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 half-up tax", "4.3 file tax sum"],
+      "case_or_path": "The file tax is the sum of the already-rounded per-bill taxes. It is not re-rounded on a file-level base.",
+      "status": "checked",
+      "evidence": ["environment/app/src/rentcharge/run.py:31-32", "environment/app/docs/rental-charges-manual.md:70-71"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 length", "month/year/leap-day ends"],
+      "case_or_path": "2012-02-28T10:00 + 2d59m and 2044-12-31T23:30 + 1d20m: the datetime subtraction in clock.minutes spans Feb 29 and the year end correctly.",
+      "status": "checked",
+      "evidence": ["environment/app/src/rentcharge/clock.py:8-16"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,856 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-medication-adherence-pdc",
+ "primary_outcome": "the report printed by /app/tools/pdc_run.py gives every member's index date, measure status, period days, covered days, PDC and adherence for each class, and every class's counts and adherence rate, as specification AM-2 gives them",
+ "obligations": [
+  {
+   "id": "FILL",
+   "class": "core",
+   "contribution": "a claim line with no days supply is not a fill: it sets no index date, adds no fill date and lists no class",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "A fill is a claim line that dispensed a supply"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/measure.py",
+    "environment/app/src/pdcmeasure/claims.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides the index date, the measure test and which rows exist"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_1_line_with_no_days_supply_is_not_a_fill"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_1_line_with_no_days_supply_is_not_a_fill"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "an adjustment line dated before the first fill; an adjustment before 2 October with the first fill after it; one fill date plus an adjustment on another date; a class of adjustment lines only",
+   "wrong_but_plausible": "take the earliest claim line as the index date, or count its date toward the two fill dates (natural rewrites of the index date and the measure test)",
+   "selfdescription_phrase": "fill"
+  },
+  {
+   "id": "INDEX_DATE",
+   "class": "core",
+   "contribution": "the index date is the earliest fill date, whatever the export order",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "index date for a class is the fill date of the member's"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/measure.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the index date starts the treatment period and decides the 2 October test"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_3_index_date_is_the_earliest_fill_date"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_3_index_date_is_the_earliest_fill_date"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "lines exported out of date order, the earliest fill listed last",
+   "wrong_but_plausible": "the first line with a supply in file order (shipped)",
+   "selfdescription_phrase": "index date"
+  },
+  {
+   "id": "START_DAY",
+   "class": "core",
+   "contribution": "a fill starts on its fill date",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "Every fill covers one or more consecutive days"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/coverage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every covered day"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_fill_starts_on_its_fill_date"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_1_fill_starts_on_its_fill_date"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "fills on 1 January, 29 February and 31 December",
+   "wrong_but_plausible": "start the day after the fill date (shipped)",
+   "selfdescription_phrase": "start day"
+  },
+  {
+   "id": "CARRY_OVER",
+   "class": "core",
+   "contribution": "a fill whose date an earlier fill of the same drug covers starts the day after that coverage; fills of one date in file order; other drugs never move it",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "then its start day is the day after the last day that the member's"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/coverage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "covered days feed the PDC"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_refill_of_same_drug_carries_over",
+     "test_outputs.py::test_rule_3_2_other_drugs_never_move_one_another"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_2_refill_of_same_drug_carries_over"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a refill one day early, months early, two fills of one drug on one day, a chain past 31 December; two drugs overlapping in one class",
+   "wrong_but_plausible": "no carry-over (shipped); carry-over across drugs; carry-over from the previous fill only",
+   "selfdescription_phrase": "carry-over"
+  },
+  {
+   "id": "SUPPLY_LIMIT",
+   "class": "core",
+   "contribution": "a fill within the limit covers its days supply; the specification gives no length for a fill above it, so today's 100 days stand",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "A fill within the limit covers as many days as its days supply"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/coverage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the coverage length feeds covered days and carry-over"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage"
+    ],
+    "boundary": [
+     "test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage",
+     "test_outputs.py::test_rule_1_3_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "fills of 101, 102, 120, 150, 180, 200 and 365 days followed by refills of the same drug; a 100-day fill",
+   "wrong_but_plausible": "cover the full supply, or one day, above the limit (natural over-repairs)",
+   "selfdescription_phrase": "supply limit"
+  },
+  {
+   "id": "MEASURE",
+   "class": "core",
+   "contribution": "in the measure: fills on two or more different fill dates and an index date no later than 2 October",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "no later than 2 October of the measurement year"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/measure.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides the treatment period, adherence and the rate base"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_fills_on_two_different_dates",
+     "test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "two and three fills on one day; index 1, 2 and 3 October in 2000, 2023 and 2024",
+   "wrong_but_plausible": "count lines (shipped); no index test (shipped); 1 or 3 October; day 275",
+   "selfdescription_phrase": "in the measure"
+  },
+  {
+   "id": "TREATMENT_PERIOD",
+   "class": "core",
+   "contribution": "a member in the measure is measured to 31 December; the specification gives no period for a member outside it, so today's span stands",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "The treatment period of a member in the measure runs from the index date"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/measure.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the PDC denominator"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_5_treatment_period_runs_to_year_end",
+     "test_outputs.py::test_member_outside_the_measure_keeps_todays_span"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_5_treatment_period_runs_to_year_end",
+     "test_outputs.py::test_member_outside_the_measure_keeps_todays_span"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "members who stop in February; a fill on 31 December; members outside the measure with stays inside and after their coverage",
+   "wrong_but_plausible": "period to the last covered day (shipped); a year-end period or stay-free span for everyone (natural over-repairs)",
+   "selfdescription_phrase": "treatment period"
+  },
+  {
+   "id": "STAYS",
+   "class": "core",
+   "contribution": "stay days leave both the period days and the covered days",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "A member's period days for a class are the days of the treatment period"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/pdc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the PDC denominator and numerator"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_stay_days_leave_period_and_covered_days"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_stay_days_leave_period_and_covered_days"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a stay before the index date, one across it, one of a single day, one on 31 December, sixty stay days in ten stays",
+   "wrong_but_plausible": "stay days out of covered days only (shipped); a stay's discharge day left out",
+   "selfdescription_phrase": "period days"
+  },
+  {
+   "id": "ROUNDING",
+   "class": "core",
+   "contribution": "every PDC and rate to the nearest tenth, an exact half going up",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "an exact half going up"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/rounding.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "adherence is judged on the reported PDC"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_1_2_percentages_round_half_up"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_percentages_round_half_up",
+     "test_outputs.py::test_rule_5_1_reportable_class_rate_over_its_rate_base"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "PDCs of 1.25, 33.75, 66.67, 70.79; a rate of 43.75",
+   "wrong_but_plausible": "floor (shipped); round() half to even",
+   "selfdescription_phrase": "rounded"
+  },
+  {
+   "id": "ADHERENT",
+   "class": "core",
+   "contribution": "adherent: in the measure and a reported PDC of 80.0 or more",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "A member is adherent for a class when the member is in the measure"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/pdc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the class counts and rate"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_adherent_at_80_and_only_in_the_measure"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_2_adherent_at_80_and_only_in_the_measure"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "PDC exactly 80.0 twice, 79.4; fully covered members outside the measure",
+   "wrong_but_plausible": "above 80.0 (shipped); adherent outside the measure (shipped)",
+   "selfdescription_phrase": "adherent"
+  },
+  {
+   "id": "CLASS_RATE",
+   "class": "core",
+   "contribution": "a reportable class divides by its rate base; a class below ten has no rate base in the specification, so today's divisor stands",
+   "authority": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "A class's adherence rate is 100 times the number of members adherent for"
+   },
+   "implementation_sites": [
+    "environment/app/src/pdcmeasure/classes.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the class rows"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_1_reportable_class_rate_over_its_rate_base",
+     "test_outputs.py::test_class_that_is_not_reportable_keeps_todays_divisor"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_1_reportable_class_rate_over_its_rate_base",
+     "test_outputs.py::test_class_that_is_not_reportable_keeps_todays_divisor"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "classes with 10, 11 and 16 members in the measure beside members outside it; classes with 9, 5, 3, 1 and 0 in the measure",
+   "wrong_but_plausible": "divide by every member (shipped); divide by members in the measure, or zero, for every class (natural over-repairs)",
+   "selfdescription_phrase": "rate base"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver printing the report",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/pdc_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  },
+  {
+   "id": "CLAIMS_LOADER",
+   "class": "support",
+   "contribution": "decodes claim lines and stays",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/pdcmeasure/claims.py",
+    "environment/app/src/pdcmeasure/days.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_generated_claims_files"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "FILL",
+    "to": "INDEX_DATE"
+   },
+   {
+    "from": "FILL",
+    "to": "MEASURE"
+   },
+   {
+    "from": "INDEX_DATE",
+    "to": "MEASURE"
+   },
+   {
+    "from": "INDEX_DATE",
+    "to": "TREATMENT_PERIOD"
+   },
+   {
+    "from": "START_DAY",
+    "to": "CARRY_OVER"
+   },
+   {
+    "from": "SUPPLY_LIMIT",
+    "to": "CARRY_OVER"
+   },
+   {
+    "from": "CARRY_OVER",
+    "to": "TREATMENT_PERIOD"
+   },
+   {
+    "from": "MEASURE",
+    "to": "TREATMENT_PERIOD"
+   },
+   {
+    "from": "TREATMENT_PERIOD",
+    "to": "STAYS"
+   },
+   {
+    "from": "STAYS",
+    "to": "ROUNDING"
+   },
+   {
+    "from": "ROUNDING",
+    "to": "ADHERENT"
+   },
+   {
+    "from": "MEASURE",
+    "to": "ADHERENT"
+   },
+   {
+    "from": "ADHERENT",
+    "to": "CLASS_RATE"
+   },
+   {
+    "from": "MEASURE",
+    "to": "CLASS_RATE"
+   },
+   {
+    "from": "CLASS_RATE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ADHERENT",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ROUNDING",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "fills-decide-the-index-and-the-measure",
+   "obligation_ids": [
+    "FILL",
+    "INDEX_DATE",
+    "MEASURE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_1_line_with_no_days_supply_is_not_a_fill",
+    "test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "coverage-feeds-the-pdc",
+   "obligation_ids": [
+    "START_DAY",
+    "CARRY_OVER",
+    "SUPPLY_LIMIT",
+    "STAYS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_2_refill_of_same_drug_carries_over",
+    "test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage",
+    "test_outputs.py::test_generated_claims_files"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "measure-sets-period-and-adherence",
+   "obligation_ids": [
+    "MEASURE",
+    "TREATMENT_PERIOD",
+    "ADHERENT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_5_treatment_period_runs_to_year_end",
+    "test_outputs.py::test_rule_4_2_adherent_at_80_and_only_in_the_measure",
+    "test_outputs.py::test_member_outside_the_measure_keeps_todays_span"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "adherence-makes-the-class-rate",
+   "obligation_ids": [
+    "ADHERENT",
+    "MEASURE",
+    "CLASS_RATE",
+    "ROUNDING"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_1_reportable_class_rate_over_its_rate_base",
+    "test_outputs.py::test_class_that_is_not_reportable_keeps_todays_divisor"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each of its rules holds for every claims file within the limits of its rule 1.3"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the specification gives no rule for a figure that one of the package's steps works out",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/adherence-measure-spec.md",
+     "anchor": "The treatment period of a member in the measure runs from the index date",
+     "witness_ids": [
+      "test_outputs.py::test_member_outside_the_measure_keeps_todays_span",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    },
+    {
+     "file": "environment/app/docs/adherence-measure-spec.md",
+     "anchor": "The rate base of a reportable class is the number of members in the measure",
+     "witness_ids": [
+      "test_outputs.py::test_class_that_is_not_reportable_keeps_todays_divisor",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    },
+    {
+     "file": "environment/app/docs/adherence-measure-spec.md",
+     "anchor": "A fill within the limit covers as many days as its days supply",
+     "witness_ids": [
+      "test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Claims files of one to a hundred members with fills under one to forty class codes will be measured"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED=20260927 (authoring only; graded files are sealed)",
+   "tests/test_outputs.py RELABEL_SEED from os.urandom: relabels the generated family only (plan, member ids, drug and class codes with their order kept, member and line order, the year moved 28 years), a transformation that leaves every expected figure unchanged; the seed is printed with any failure"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave that driver exactly as it is; the file you leave there has to match ours byte for byte",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED), checked before and after candidate code",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness: the candidate user cannot read /tests, the sealed expectations, the shipped copy or /logs/verifier (with a readable control)",
+  "test_outputs.py::test_generated_claims_files": "seeded files with every member in the measure and every fill within the limit, as sealed and relabelled at run time",
+  "test_outputs.py::test_rule_1_3_limits_reached": "100 members, 40 class codes of one to eight characters, a 400-line member, 10 stays of 60 days in a leap year",
+  "test_outputs.py::test_report_order_and_codes": "README order of members and classes, a member with no claim lines, codes of one and eight characters",
+  "test_outputs.py::test_figures_left_to_todays_code_together": "the three figures left to today's code in one file (outside the measure, above the limit, a class below ten)"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the plan's quality reporting reads this JSON report; keys and list order are fixed by the README data contract",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "in ascending character order of their codes (digits before letters)"
+   }
+  },
+  {
+   "id": "PERCENT-ROUNDING",
+   "domain_required": true,
+   "rationale": "adherence is judged on the PDC as reported to a tenth",
+   "authority_anchor": {
+    "file": "environment/app/docs/adherence-measure-spec.md",
+    "anchor": "an exact half going up"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight/preflight.json",
+ "wrong_paths": [
+  {
+   "id": "w1-start-day-after",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "START_DAY"
+   ],
+   "receipt": "sweep/run1/w1-start-day-after.json"
+  },
+  {
+   "id": "w2-no-carry-over",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CARRY_OVER"
+   ],
+   "receipt": "sweep/run1/w2-no-carry-over.json"
+  },
+  {
+   "id": "w3-carry-over-across-drugs",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CARRY_OVER"
+   ],
+   "receipt": "sweep/run1/w3-carry-over-across-drugs.json"
+  },
+  {
+   "id": "w4-measure-counts-lines",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEASURE"
+   ],
+   "receipt": "sweep/run1/w4-measure-counts-lines.json"
+  },
+  {
+   "id": "w5-no-october-cutoff",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEASURE"
+   ],
+   "receipt": "sweep/run1/w5-no-october-cutoff.json"
+  },
+  {
+   "id": "w5b-cutoff-3-october",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEASURE"
+   ],
+   "receipt": "sweep/run1/w5b-cutoff-3-october.json"
+  },
+  {
+   "id": "w5c-cutoff-1-october",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEASURE"
+   ],
+   "receipt": "sweep/run1/w5c-cutoff-1-october.json"
+  },
+  {
+   "id": "w5d-cutoff-day-274",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEASURE"
+   ],
+   "receipt": "sweep/run1/w5d-cutoff-day-274.json"
+  },
+  {
+   "id": "w6-period-to-last-covered",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TREATMENT_PERIOD"
+   ],
+   "receipt": "sweep/run1/w6-period-to-last-covered.json"
+  },
+  {
+   "id": "w7-stays-kept-in-period",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STAYS"
+   ],
+   "receipt": "sweep/run1/w7-stays-kept-in-period.json"
+  },
+  {
+   "id": "w8-rounding-floor",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ROUNDING"
+   ],
+   "receipt": "sweep/run1/w8-rounding-floor.json"
+  },
+  {
+   "id": "w8b-rounding-half-even",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ROUNDING"
+   ],
+   "receipt": "sweep/run1/w8b-rounding-half-even.json"
+  },
+  {
+   "id": "w8c-rounding-below-half",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ROUNDING"
+   ],
+   "receipt": "sweep/run1/w8c-rounding-below-half.json"
+  },
+  {
+   "id": "w8d-rounding-tenth-off",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ROUNDING"
+   ],
+   "receipt": "sweep/run1/w8d-rounding-tenth-off.json"
+  },
+  {
+   "id": "w9-adherent-above-80",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ADHERENT"
+   ],
+   "receipt": "sweep/run1/w9-adherent-above-80.json"
+  },
+  {
+   "id": "w9b-adherent-outside",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ADHERENT"
+   ],
+   "receipt": "sweep/run1/w9b-adherent-outside.json"
+  },
+  {
+   "id": "w10-rate-over-members",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CLASS_RATE"
+   ],
+   "receipt": "sweep/run1/w10-rate-over-members.json"
+  },
+  {
+   "id": "w10b-reportable-from-11",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CLASS_RATE"
+   ],
+   "receipt": "sweep/run1/w10b-reportable-from-11.json"
+  },
+  {
+   "id": "t1a-period-to-year-end-for-everyone",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TREATMENT_PERIOD"
+   ],
+   "receipt": "sweep/run1/t1a-period-to-year-end-for-everyone.json"
+  },
+  {
+   "id": "t1b-stays-out-of-every-span",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TREATMENT_PERIOD"
+   ],
+   "receipt": "sweep/run1/t1b-stays-out-of-every-span.json"
+  },
+  {
+   "id": "t1c-outside-pdc-zero",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TREATMENT_PERIOD"
+   ],
+   "receipt": "sweep/run1/t1c-outside-pdc-zero.json"
+  },
+  {
+   "id": "t2a-rate-base-for-every-class",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CLASS_RATE"
+   ],
+   "receipt": "sweep/run1/t2a-rate-base-for-every-class.json"
+  },
+  {
+   "id": "t2b-small-class-rate-zero",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CLASS_RATE"
+   ],
+   "receipt": "sweep/run1/t2b-small-class-rate-zero.json"
+  },
+  {
+   "id": "t3a-full-supply-above-limit",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SUPPLY_LIMIT"
+   ],
+   "receipt": "sweep/run1/t3a-full-supply-above-limit.json"
+  },
+  {
+   "id": "t3b-above-limit-covers-nothing",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SUPPLY_LIMIT"
+   ],
+   "receipt": "sweep/run1/t3b-above-limit-covers-nothing.json"
+  },
+  {
+   "id": "t3c-limit-exclusive",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SUPPLY_LIMIT"
+   ],
+   "receipt": "sweep/run1/t3c-limit-exclusive.json"
+  },
+  {
+   "id": "c12-stay-exclusive-end",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STAYS"
+   ],
+   "receipt": "sweep/run1/c12-stay-exclusive-end.json"
+  },
+  {
+   "id": "c12-stays-capped-9",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "STAYS"
+   ],
+   "receipt": "sweep/run1/c12-stays-capped-9.json"
+  },
+  {
+   "id": "c11-carry-over-previous-fill-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CARRY_OVER"
+   ],
+   "receipt": "sweep/run1/c11-carry-over-previous-fill-only.json"
+  },
+  {
+   "id": "w11-index-first-listed",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "INDEX_DATE"
+   ],
+   "receipt": "sweep/run1/w11-index-first-listed.json"
+  },
+  {
+   "id": "n1-index-from-any-line",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILL"
+   ],
+   "receipt": "sweep/run1/n1-index-from-any-line.json"
+  },
+  {
+   "id": "n2-measure-dates-from-any-line",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILL"
+   ],
+   "receipt": "sweep/run1/n2-measure-dates-from-any-line.json"
+  },
+  {
+   "id": "n3-class-of-adjustments-listed",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FILL"
+   ],
+   "receipt": "sweep/run1/n3-class-of-adjustments-listed.json"
+  },
+  {
+   "id": "harness-bypass",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/harness-bypass.json"
+  }
+ ]
+}

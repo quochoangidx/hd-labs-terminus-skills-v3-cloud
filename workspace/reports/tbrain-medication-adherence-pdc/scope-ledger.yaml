@@ -1,0 +1,31 @@
+# Bounded scope ledger (bounded-task-design.md), written before the verifier.
+primary_outcome: >
+  The measure report printed by /app/tools/pdc_run.py gives, for every member and class, the index date,
+  whether the member is in the measure, the period days, covered days, PDC and adherence, and for every class
+  its counts and adherence rate, as specification AM-2 gives them.
+causal_core: >
+  fills -> per-drug start days with carry-over (3.2) and coverage lengths (3.1, supply limit 2.2) -> days covered
+  for the class (3.3) -> index date (2.3) and the measure test (2.4: two distinct fill dates, index by 2 October)
+  -> treatment period and period days less stay days (2.5, 2.6, 4.1) -> covered days (3.4) -> PDC rounded half up
+  (1.2, 4.1) -> adherent (4.2) -> class counts and rate over members in the measure for reportable classes (2.7, 5.1).
+  Where AM-2 is silent (members outside the measure; classes that are not reportable; fills above the supply limit)
+  the shipped step stays, fed by the figures AM-2 defines.
+core_obligations:
+  - {id: START_DAY, contribution: "a fill starts on its fill date", authority: "3.1, 3.2", witness: test_rule_3_1_fill_starts_on_its_fill_date, plausible_wrong: "start the day after (shipped)"}
+  - {id: CARRY_OVER, contribution: "a fill whose date an earlier fill of the same drug covers starts the day after that coverage; other drugs never move", authority: "3.2", witness: "test_rule_3_2_refill_of_same_drug_carries_over; test_rule_3_2_other_drugs_never_move_one_another", plausible_wrong: "union without shifting (shipped) / shift across every drug of the class"}
+  - {id: SUPPLY_LIMIT, contribution: "a fill within the limit covers its days supply; one above keeps today's 100-day coverage (silent)", authority: "2.2, 3.1; instruction silence clause", witness: test_fill_above_supply_limit_keeps_todays_coverage, plausible_wrong: "cover the full days supply (natural over-repair)"}
+  - {id: MEASURE, contribution: "two or more distinct fill dates and an index date no later than 2 October", authority: "2.4", witness: "test_rule_2_4_two_fills_on_one_day_are_not_enough; test_rule_2_4_index_date_by_2_october", plausible_wrong: "count claim lines (shipped); no index-date test (shipped); off-by-one at 2 October"}
+  - {id: TREATMENT_PERIOD, contribution: "treatment period to 31 December for a member in the measure; a member outside keeps today's span (silent)", authority: "2.5; instruction silence clause", witness: "test_rule_2_5_treatment_period_runs_to_year_end; test_member_outside_the_measure_keeps_todays_span", plausible_wrong: "period to last covered day (shipped) / year-end period or null for everyone (natural over-repair)"}
+  - {id: STAYS, contribution: "stay days leave both the period days and the covered days", authority: "2.6, 3.4, 4.1", witness: test_rule_4_1_stay_days_leave_period_and_covered_days, plausible_wrong: "take stays out of covered days only (shipped)"}
+  - {id: ROUNDING, contribution: "every PDC and rate to the nearest tenth, a half going up", authority: "1.2", witness: test_rule_1_2_percentages_round_half_up, plausible_wrong: "floor (shipped); round() half-even"}
+  - {id: ADHERENT, contribution: "in the measure and PDC 80.0 or more, on the reported PDC", authority: "4.2", witness: test_rule_4_2_adherent_at_80_and_in_measure_only, plausible_wrong: "pdc > 80 (shipped); adherent outside the measure (shipped)"}
+  - {id: CLASS_RATE, contribution: "a reportable class's rate over members in the measure; a class below ten keeps today's divisor (silent)", authority: "2.7, 5.1; instruction silence clause", witness: "test_rule_5_1_reportable_class_rate_over_members_in_measure; test_class_that_is_not_reportable_keeps_todays_rate", plausible_wrong: "divide by every member (shipped) / divide by members in the measure, or null, for every class (natural over-repair)"}
+support_obligations:
+  - {id: CLAIMS_LOADER, supplied_boundary: "src/pdcmeasure/claims.py decodes fills and stays", why_not_core: "decoding is complete and not a repair surface"}
+  - {id: DRIVER, supplied_boundary: "tools/pdc_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: REPORT_LAYOUT, supplied_boundary: "README report keys and list order, already produced by report.py", why_not_core: "serialization already right"}
+non_goals:
+  - malformed or out-of-range claims files (left entirely open in the instruction)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - national-measure rules the specification does not adopt (exclusions, hospice, combination products)

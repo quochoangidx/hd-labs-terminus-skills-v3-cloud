@@ -1,0 +1,87 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 21 items
+
+../../tests/test_outputs.py ....F................                        [100%]
+
+=================================== FAILURES ===================================
+_____________ test_rule_2_1_line_with_no_days_supply_is_not_a_fill _____________
+
+    def test_rule_2_1_line_with_no_days_supply_is_not_a_fill():
+        """A claim line with no days supply sets no index date, adds no fill date and lists no class."""
+>       check_family("adjustment_lines")
+
+/tests/test_outputs.py:288: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:249: in check_family
+    compare(measure(row["claims"]), row["report"], f"{name} {row['claims']['plan']}", grades)
+            ^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+claims = {'plan': 'AM2-0016', 'year': 2026, 'members': [{'id': 'N3', 'fills': [{'date': '2026-03-01', 'drug': '2', 'class': 'DI...'drug': '9', 'class': 'ZZ', 'days': 0}, {'date': '2026-02-04', 'drug': '9', 'class': 'ZZ', 'days': 30}], 'stays': []}]}
+shipped = False
+
+    def measure(claims, shipped=False):
+        """Run the driver on one claims file (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "claims.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(claims, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "pdc_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/pdc_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/pdc_run.py", line 18, in main
+E             json.dump(build_report(claims), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/pdcmeasure/report.py", line 17, in build_report
+E             row = figures(groups[code], stays, year)
+E           File "/app/tools/../src/pdcmeasure/pdc.py", line 14, in figures
+E             first, last = period(fills, days, year)
+E                           ~~~~~~^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/pdcmeasure/measure.py", line 18, in period
+E             first = index_date(fills)
+E           File "/app/tools/../src/pdcmeasure/measure.py", line 8, in index_date
+E             return min(fill.date for fill in fills if fill.days)
+E         ValueError: min() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:158: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_fill_starts_on_its_fill_date
+PASSED ../../tests/test_outputs.py::test_rule_3_2_refill_of_same_drug_carries_over
+PASSED ../../tests/test_outputs.py::test_rule_3_2_other_drugs_never_move_one_another
+PASSED ../../tests/test_outputs.py::test_rule_2_3_index_date_is_the_earliest_fill_date
+PASSED ../../tests/test_outputs.py::test_rule_2_4_fills_on_two_different_dates
+PASSED ../../tests/test_outputs.py::test_rule_2_4_index_date_no_later_than_2_october
+PASSED ../../tests/test_outputs.py::test_rule_2_5_treatment_period_runs_to_year_end
+PASSED ../../tests/test_outputs.py::test_rule_4_1_stay_days_leave_period_and_covered_days
+PASSED ../../tests/test_outputs.py::test_rule_1_2_percentages_round_half_up
+PASSED ../../tests/test_outputs.py::test_rule_4_2_adherent_at_80_and_only_in_the_measure
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reportable_class_rate_over_its_rate_base
+PASSED ../../tests/test_outputs.py::test_report_order_and_codes
+PASSED ../../tests/test_outputs.py::test_rule_1_3_limits_reached
+PASSED ../../tests/test_outputs.py::test_member_outside_the_measure_keeps_todays_span
+PASSED ../../tests/test_outputs.py::test_class_that_is_not_reportable_keeps_todays_divisor
+PASSED ../../tests/test_outputs.py::test_fill_above_the_supply_limit_keeps_todays_coverage
+PASSED ../../tests/test_outputs.py::test_figures_left_to_todays_code_together
+PASSED ../../tests/test_outputs.py::test_generated_claims_files
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_2_1_line_with_no_days_supply_is_not_a_fill
+========================= 1 failed, 20 passed in 2.47s =========================

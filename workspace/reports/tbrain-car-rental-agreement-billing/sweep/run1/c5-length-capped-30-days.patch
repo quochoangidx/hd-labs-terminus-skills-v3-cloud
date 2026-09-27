@@ -1,0 +1,76 @@
+diff --git a/app/src/rentcharge/fuel.py b/app/src/rentcharge/fuel.py
+--- a/app/src/rentcharge/fuel.py
++++ b/app/src/rentcharge/fuel.py
+@@ -1,5 +1,11 @@
+ """The fuel charge."""
+ 
+ 
++REFUELLING_FEE = 1500
++
++
+ def fuel_charge(agreement):
+-    return (agreement["fuel_out"] - agreement["fuel_in"]) * agreement["fuel_rate"]
++    short = agreement["fuel_out"] - agreement["fuel_in"]
++    if short > 0:
++        return short * agreement["fuel_rate"] + REFUELLING_FEE
++    return short * agreement["fuel_rate"]
+diff --git a/app/src/rentcharge/mileage.py b/app/src/rentcharge/mileage.py
+--- a/app/src/rentcharge/mileage.py
++++ b/app/src/rentcharge/mileage.py
+@@ -2,13 +2,15 @@
+ 
+ from .time_charge import days
+ 
+-MILES_PER_DAY = 100
++MILES_PER_ALLOWANCE_DAY = 150
++TURNOVER = 1000000
+ 
+ 
+ def miles(agreement):
+-    return agreement["odometer_in"] - agreement["odometer_out"]
++    driven = agreement["odometer_in"] - agreement["odometer_out"]
++    return driven + TURNOVER if driven < 0 else driven
+ 
+ 
+ def mileage_charge(agreement):
+-    allowance = MILES_PER_DAY * days(agreement)
++    allowance = MILES_PER_ALLOWANCE_DAY * days(agreement)
+     return max(0, miles(agreement) - allowance) * agreement["mile_rate"]
+diff --git a/app/src/rentcharge/run.py b/app/src/rentcharge/run.py
+--- a/app/src/rentcharge/run.py
++++ b/app/src/rentcharge/run.py
+@@ -12,7 +12,7 @@
+         "mileage_charge": mileage_charge(agreement),
+         "fuel_charge": fuel_charge(agreement),
+     }
+-    owed = tax(sum(charges.values()))
++    owed = tax(charges["time_charge"] + charges["mileage_charge"])
+     return {
+         "id": agreement["id"],
+         "days": days(agreement),
+diff --git a/app/src/rentcharge/tax.py b/app/src/rentcharge/tax.py
+--- a/app/src/rentcharge/tax.py
++++ b/app/src/rentcharge/tax.py
+@@ -5,4 +5,4 @@
+ 
+ def tax(taxable):
+     """8.25 per cent of a taxable amount in cents."""
+-    return taxable * RATE_BASIS_POINTS // 10000
++    return (taxable * RATE_BASIS_POINTS + 5000) // 10000
+diff --git a/app/src/rentcharge/time_charge.py b/app/src/rentcharge/time_charge.py
+--- a/app/src/rentcharge/time_charge.py
++++ b/app/src/rentcharge/time_charge.py
+@@ -4,8 +4,11 @@
+ 
+ 
+ def days(agreement):
+-    """The days a rental is charged for: every day begun."""
+-    return -(-length(agreement) // DAY)
++    """The days a rental is charged for: a day rental's whole days, and one more past 59 minutes over."""
++    minutes = min(length(agreement), 30 * DAY)
++    if minutes >= DAY:
++        return minutes // DAY + (1 if minutes % DAY > 59 else 0)
++    return -(-minutes // DAY)
+ 
+ 
+ def time_charge(agreement):
