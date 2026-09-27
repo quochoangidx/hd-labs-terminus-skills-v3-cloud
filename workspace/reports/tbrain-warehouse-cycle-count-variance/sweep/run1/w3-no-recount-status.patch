@@ -1,0 +1,46 @@
+diff --git a/app/src/cyclecount/report.py b/app/src/cyclecount/report.py
+--- a/app/src/cyclecount/report.py
++++ b/app/src/cyclecount/report.py
+@@ -18,11 +18,11 @@
+         "tolerance": tolerance(line),
+         "status": status(line, off),
+         "value": off * line["unit_cost"],
+-        "booked": line["count"] - line["system"],
++        "booked": off if status(line, off) == "adjust" else line["count"] - line["system"],
+     }
+ 
+ 
+ def variance_report(sheet):
+     rows = [report_line(line) for line in sheet["lines"]]
+-    shrink = -sum(row["value"] for row in rows if row["status"] == "adjust")
++    shrink = -sum(row["value"] for row in rows if row["status"] == "adjust" and row["variance"] < 0)
+     return {"sheet": sheet["sheet"], "lines": rows, "shrink": shrink}
+diff --git a/app/src/cyclecount/tolerance.py b/app/src/cyclecount/tolerance.py
+--- a/app/src/cyclecount/tolerance.py
++++ b/app/src/cyclecount/tolerance.py
+@@ -1,10 +1,13 @@
+ """Count tolerances."""
+ 
+ TOLERANCE_PERCENT = 5
++GRADED_PERCENT = {"A": 0, "B": 2, "C": 5}
+ 
+ 
+ def tolerance(line):
+     """The units a count may be off before it is questioned."""
++    if line["class"] in GRADED_PERCENT:
++        return line["system"] * GRADED_PERCENT[line["class"]] // 100
+     return round(line["system"] * TOLERANCE_PERCENT / 100)
+ 
+ 
+diff --git a/app/src/cyclecount/variance.py b/app/src/cyclecount/variance.py
+--- a/app/src/cyclecount/variance.py
++++ b/app/src/cyclecount/variance.py
+@@ -2,7 +2,7 @@
+ 
+ 
+ def final_count(line):
+-    return line["count"]
++    return line["recount"] if line["recount"] is not None else line["count"]
+ 
+ 
+ def variance(line):

@@ -1,0 +1,178 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "32cc2b9888f1e82df4bb6b01762931ee70ee708a9c1e346ca32270975b4ba6f4",
+  "severity": "None",
+  "summary": "The verifier runs the documented command on sealed CC-2 sheets and compares every README key exactly, as the correct type and in line order. Each procedure rule has fixtures that isolate it and reject plausible wrong implementations: recount 0 treated as falsy, today's 5% rounded tolerance, round or ceil instead of floor, strict versus non-strict edge, 'adjust' without 'recount', booked taken from the count, shrink netting surpluses, shrink clamping or counting unadjusted shortages, and sorted lines. The two figures the procedure leaves open (other-class tolerance and booked on lines that are not adjusted) are graded only in their own families and match today's code. I found no false rejection of a contract-valid implementation and no acceptance of a plausible wrong one.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "instruction.md",
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/cycle-count-procedure.md",
+      "environment/app/examples/aisle-14.json",
+      "environment/app/src/cyclecount/__init__.py",
+      "environment/app/src/cyclecount/variance.py",
+      "environment/app/src/cyclecount/tolerance.py",
+      "environment/app/src/cyclecount/report.py",
+      "environment/app/tools/cyclecount_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-recounts.jsonl",
+      "tests/expected/02-graded_tolerance.jsonl",
+      "tests/expected/03-status.jsonl",
+      "tests/expected/04-shrink.jsonl",
+      "tests/expected/05-value_and_order.jsonl",
+      "tests/expected/06-other_classes.jsonl",
+      "tests/expected/07-booked_not_adjusted.jsonl",
+      "tests/expected/08-together.jsonl",
+      "tests/expected/09-generated.jsonl",
+      "tests/expected/10-limits.jsonl",
+      "tests/shipped/app/tools/cyclecount_run.py (identical by manifest hash to environment/app/tools/cyclecount_run.py, which was read)",
+      "tests/shipped/app/src/cyclecount/*.py (identical by manifest hash to the environment copies, which were read)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read 10-limits.jsonl in two parts: the first 44,298 characters (the full 300-line sheet and the report through L202) with Read, and the rest of the report (L202 to LAST and shrink) with Grep -o. All 300 report lines and the shrink were inspected.",
+    "Checked the expected values by hand against CC-2 for every line of CC2-0001 to CC2-0012, all four generated sheets' tolerances, and the CC2-0013 shrink (224398083). For limits, checked the boundary lines (L147, L151, L179, LAST) and the sampled tolerances.",
+    "Traced compare(): top-level sheet and shrink are compared exactly with type identity. The line count and line order are checked by index, and every key in LINE_KEYS is compared with type identity. booked on lines that are not adjusted is skipped unless the family grades it. Extra keys are ignored.",
+    "Traced report(): the verifier's own copy of the driver is os.replace-d into place. The run uses python3 -I -S as uid 65534 in a fresh working directory, on a sheet with a neutral name, and requires exit 0 and stdout that parses as JSON.",
+    "Traced the reward: test.sh writes 1 only if pytest exits 0 and the driver on /app still matches the shipped copy byte for byte. test_submitted_driver_unchanged checks the delivered bytes, which the instruction requires.",
+    "Checked that load() enforces rule 1.3 limits on every sealed sheet, and that other-class lines appear only in families that grade other-class tolerance (GRADES)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Rule 2.1 final count = recount when taken (including recount 0)",
+      "status": "checked",
+      "reason": "R4 has recount 0 with count 100, and R5 has recount 0 with count 3. A 'recount or count' truthiness bug gives variance 0 or 3 and fails. R2 and R3 catch taking variance or status from the count.",
+      "evidence": ["tests/expected/01-recounts.jsonl:1", "tests/test_outputs.py:204-206", "environment/app/docs/cycle-count-procedure.md:28-29"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 2.3 graded tolerances: class rates, fraction dropped, edge and one past",
+      "status": "checked",
+      "reason": "A has system 1000 and tolerance 0, where today's 5% would give 50. B1/B2 and C1-C4 sit on the edge and one past, in both signs. B3/B4 (1049 gives 20.98) and C3/C4 (119 gives 5.95) reject round or ceil. C8 is a B shortage exactly on the edge. B5 and C5 check that a fraction drops to 0.",
+      "evidence": ["tests/expected/02-graded_tolerance.jsonl:1-2", "environment/app/docs/cycle-count-procedure.md:34-40"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 3.1 status ok / recount / adjust",
+      "status": "checked",
+      "reason": "S1, S3 and S5 are outside tolerance with no recount, so 'recount'. S2 and S6 are outside with a recount, so 'adjust'. S6 has recount equal to count. S4 and R3 are brought back inside by the recount, so 'ok'. Today's always-'adjust' status and a 'recount present means adjust' shortcut both fail.",
+      "evidence": ["tests/expected/03-status.jsonl:1", "tests/expected/01-recounts.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 3.3 adjusted lines book variance",
+      "status": "checked",
+      "reason": "booked is always compared on lines the reference marks 'adjust' (test_outputs.py:193). Today's count-minus-system is caught by R2 (-1 vs -2) and R4 (-100 vs 0).",
+      "evidence": ["tests/test_outputs.py:190-195", "tests/expected/01-recounts.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 3.4 shrink: adjusted shortages only, surplus does not reduce",
+      "status": "checked",
+      "reason": "Today's netted sum gives -41000 against the expected 2000 in CC2-0002 and 2600-style nets in CC2-0006. A max(0, ...) clamp gives 0 against 2000. Including 'recount' or 'ok' shortages gives 15000 against 3000 in CC2-0004. Summing absolute values including surpluses gives 2600 against 0 in CC2-0006. Leaving out adjusted other-class shortages misses T2 in CC2-0012.",
+      "evidence": ["tests/expected/04-shrink.jsonl:1-2", "tests/expected/03-status.jsonl:1", "tests/expected/02-graded_tolerance.jsonl:1", "tests/expected/08-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 3.2 value and line order",
+      "status": "checked",
+      "reason": "value is compared on every line and uses the final-count variance (R2, R3). Order is compared by index. CC2-0007 has SKUs that are not sorted, and the relabelled generated sheets are shuffled, so a sorting implementation fails. A hard-coded sheet name fails under the fresh relabelled names.",
+      "evidence": ["tests/expected/05-value_and_order.jsonl:1", "tests/test_outputs.py:250-272"],
+      "finding_ids": []
+    },
+    {
+      "category": "Figures left to today's code: other-class tolerance, booked on lines that are not adjusted",
+      "status": "checked",
+      "reason": "Other-class tolerance is round(system*5/100) with Python's round-half-even. X1 (12.5 gives 12), X3 (17.5 gives 18) and X7 (1.5 gives 2) reject floor, half-up and class-C treatment. EG and EH show that status still follows 3.1 for other classes. For booked on lines that are not adjusted, N4-N8 differ from the variance, so the value stays count minus system. This matches the instruction's keep-today's-step rule (instruction.md:3). Neither figure leaks into other families.",
+      "evidence": ["tests/expected/06-other_classes.jsonl:1-2", "tests/expected/07-booked_not_adjusted.jsonl:1", "environment/app/src/cyclecount/tolerance.py:8", "environment/app/src/cyclecount/report.py:21", "instruction.md:3", "tests/test_outputs.py:40-42,173-174"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 1.3 limits and input domain",
+      "status": "checked",
+      "reason": "within_limits is asserted on every sealed and relabelled sheet. The limits sheet has 300 lines, 12-character and 1-character SKUs, a leading-hyphen SKU (-X5BCG0), quantities 0 and 100000, and costs 1 and 1000000. It includes 1e11 values, which exercise integer range. No fixture falls outside the contract domain.",
+      "evidence": ["tests/test_outputs.py:149-160,244-247", "tests/expected/10-limits.jsonl:1", "tests/expected/05-value_and_order.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Representation and false rejection (types, key order, extra keys, stdout)",
+      "status": "checked",
+      "reason": "Output is parsed JSON. Key order and extra keys are accepted, and integers and strings require type identity, as instruction.md:5 and README.md:28-32 require. Only a single JSON object on stdout is required, as the README states. The -I -S interpreter and the read-only /app do not affect a stdlib package fix.",
+      "evidence": ["tests/test_outputs.py:142-146,178-195", "environment/app/README.md:8-11,23-32", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binary / self-controlled comparison / driver identity",
+      "status": "checked",
+      "reason": "The verifier replaces the driver with its own copy before any run and checks the delivered bytes against the shipped driver, which the instruction requires. Expectations are sealed files pinned by SHA-256 in ROSTER. The shipped-copy runner is never used for grading, so there is no self-comparison.",
+      "evidence": ["tests/test_outputs.py:57-65,88-90,163-175,288-294", "tests/test.sh:23-27", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localization",
+      "status": "checked",
+      "reason": "There is one test per rule family. Failure messages name the family, sheet, line index, SKU, key, actual and expected values, and the relabel seed.",
+      "evidence": ["tests/test_outputs.py:178-201,272"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reachability of graded cases",
+      "status": "checked",
+      "reason": "Every family is read and run, and the ROSTER row counts are asserted. No graded fixture is unreachable, and none is outside rule 1.3.",
+      "evidence": ["tests/expected/ROSTER:1-10", "tests/test_outputs.py:163-175"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.1 recount", "3.4 shrink"],
+      "case_or_path": "S4 (count outside, recount back inside) must not add to shrink. R4 (recount 0, adjusted shortage) must add 100000.",
+      "status": "checked",
+      "evidence": ["tests/expected/03-status.jsonl:1", "tests/expected/01-recounts.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["other-class tolerance (today's)", "3.1 status / 3.4 shrink"],
+      "case_or_path": "T2 is class N with tolerance 18, recount variance -19, status adjust, and shrink contribution 19000 in CC2-0012. EG is outside tolerance with no recount, so 'recount'.",
+      "status": "checked",
+      "evidence": ["tests/expected/08-together.jsonl:1", "tests/expected/06-other_classes.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 within tolerance (absolute value)", "2.2 sign partitions"],
+      "case_or_path": "Edge and one-past cases in both signs: B1/B2 and C3/C4 for surplus, C1/C2 and C7/C8 for shortage. Variance 0 for system 0 lines. Signed-only or strict comparisons fail.",
+      "status": "checked",
+      "evidence": ["tests/expected/02-graded_tolerance.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 booked for adjusted lines", "booked on lines that are not adjusted (today's)"],
+      "case_or_path": "Adjusted lines are always graded as variance. Lines that are not adjusted are graded as count minus system only in 07/08, where N4-N8 separate the two readings.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:192-195", "tests/expected/07-booked_not_adjusted.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 class A zero tolerance", "1.3 extreme quantities and costs"],
+      "case_or_path": "SKU '0' and ABCDEFGHIJKL are A lines with system 100000 recounted to 0 and cost 1000000, giving value -1e11 and shrink of at least 1e11.",
+      "status": "checked",
+      "evidence": ["tests/expected/05-value_and_order.jsonl:1", "tests/expected/10-limits.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

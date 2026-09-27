@@ -1,0 +1,241 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "w1-ignore-recount": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/variance.py",
+     "old": "return line[\"recount\"] if line[\"recount\"] is not None else line[\"count\"]",
+     "new": "return line[\"count\"]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_recount_replaces_the_count"
+   ],
+   "rationale": "2.1"
+  },
+  "w2-tolerance-5-for-all": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/tolerance.py",
+     "old": "GRADED_PERCENT = {\"A\": 0, \"B\": 2, \"C\": 5}",
+     "new": "GRADED_PERCENT = {\"A\": 5, \"B\": 5, \"C\": 5}"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_graded_tolerances_on_the_edge"
+   ],
+   "rationale": "2.3"
+  },
+  "w2b-a-one-percent": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/tolerance.py",
+     "old": "\"A\": 0,",
+     "new": "\"A\": 1,"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_graded_tolerances_on_the_edge"
+   ],
+   "rationale": "A nought"
+  },
+  "w2c-round-not-floor": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/tolerance.py",
+     "old": "return line[\"system\"] * GRADED_PERCENT[line[\"class\"]] // 100",
+     "new": "return round(line[\"system\"] * GRADED_PERCENT[line[\"class\"]] / 100)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_graded_tolerances_on_the_edge"
+   ],
+   "rationale": "fraction dropped"
+  },
+  "w2d-within-strict": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/tolerance.py",
+     "old": "return abs(off) <= tolerance(line)",
+     "new": "return abs(off) < tolerance(line)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_graded_tolerances_on_the_edge"
+   ],
+   "rationale": "2.4 no more than"
+  },
+  "w3-no-recount-status": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "return \"adjust\" if line[\"recount\"] is not None else \"recount\"",
+     "new": "return \"adjust\""
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_recount_or_adjust"
+   ],
+   "rationale": "3.1"
+  },
+  "w4-booked-raw": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "\"booked\": off if status(line, off) == \"adjust\" else line[\"count\"] - line[\"system\"],",
+     "new": "\"booked\": line[\"count\"] - line[\"system\"],"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_recount_replaces_the_count"
+   ],
+   "rationale": "3.3 adjusted books variance"
+  },
+  "w5-shrink-net": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "if row[\"status\"] == \"adjust\" and row[\"variance\"] < 0)",
+     "new": "if row[\"status\"] == \"adjust\")"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_4_shrink_counts_adjusted_shortages_only"
+   ],
+   "rationale": "3.4"
+  },
+  "w5b-shrink-all-shortages": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "if row[\"status\"] == \"adjust\" and row[\"variance\"] < 0)",
+     "new": "if row[\"variance\"] < 0)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_4_shrink_counts_adjusted_shortages_only"
+   ],
+   "rationale": "adjusted only"
+  },
+  "tx-other-class-nought": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/tolerance.py",
+     "old": "    return round(line[\"system\"] * TOLERANCE_PERCENT / 100)",
+     "new": "    return 0"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_line_of_another_class_keeps_todays_tolerance"
+   ],
+   "rationale": "today's 5 per cent"
+  },
+  "tx-other-class-floor": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/tolerance.py",
+     "old": "    return round(line[\"system\"] * TOLERANCE_PERCENT / 100)",
+     "new": "    return line[\"system\"] * TOLERANCE_PERCENT // 100"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_line_of_another_class_keeps_todays_tolerance"
+   ],
+   "rationale": "today's round"
+  },
+  "ty-booked-variance-everywhere": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "\"booked\": off if status(line, off) == \"adjust\" else line[\"count\"] - line[\"system\"],",
+     "new": "\"booked\": off,"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_line_not_adjusted_keeps_todays_booked_units"
+   ],
+   "rationale": "today's step"
+  },
+  "ty-booked-nought": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "\"booked\": off if status(line, off) == \"adjust\" else line[\"count\"] - line[\"system\"],",
+     "new": "\"booked\": off if status(line, off) == \"adjust\" else 0,"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_line_not_adjusted_keeps_todays_booked_units"
+   ],
+   "rationale": "not nought"
+  },
+  "c5-lines-capped-299": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "rows = [report_line(line) for line in sheet[\"lines\"]]",
+     "new": "rows = [report_line(line) for line in sheet[\"lines\"][:299]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_3_limits_reached"
+   ],
+   "rationale": "300 lines"
+  },
+  "c15-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "rows = [report_line(line) for line in sheet[\"lines\"]]",
+     "new": "rows = sorted((report_line(line) for line in sheet[\"lines\"]), key=lambda r: r[\"sku\"])"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_value_and_line_order"
+   ],
+   "rationale": "sheet order"
+  },
+  "c7-value-capped": {
+   "class": "C7",
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "\"value\": off * line[\"unit_cost\"],",
+     "new": "\"value\": max(-2**31, min(2**31 - 1, off * line[\"unit_cost\"])),"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_value_and_line_order"
+   ],
+   "rationale": "large values"
+  }
+ },
+ "alternatives": {
+  "alt-extra-keys": {
+   "edits": [
+    {
+     "file": "app/src/cyclecount/report.py",
+     "old": "\"sku\": line[\"sku\"],",
+     "new": "\"sku\": line[\"sku\"], \"note\": \"x\","
+    }
+   ],
+   "rationale": "extra keys ignored"
+  }
+ }
+}

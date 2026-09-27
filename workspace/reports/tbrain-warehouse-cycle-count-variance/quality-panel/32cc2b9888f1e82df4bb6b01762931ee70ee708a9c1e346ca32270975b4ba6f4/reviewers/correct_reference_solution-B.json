@@ -1,0 +1,222 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "32cc2b9888f1e82df4bb6b01762931ee70ee708a9c1e346ca32270975b4ba6f4",
+  "severity": "Advisory",
+  "summary": "The reference patch correctly implements CC-2 rules 2.1-2.4 and 3.1-3.4 and keeps today's steps where the procedure is silent, and it leaves the driver untouched. There is no concrete incorrect behavior under the reference's literal reading. One Advisory: the booked figure for a non-adjusted line that has a recount depends on how the 'keep today's step, fed by the figures the procedure defines' clause is read, and the solution's own jobgen docstring states the reading the reference does not implement.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/cycle-count-procedure.md",
+      "environment/app/examples/aisle-14.json",
+      "environment/app/src/cyclecount/__init__.py",
+      "environment/app/src/cyclecount/report.py",
+      "environment/app/src/cyclecount/tolerance.py",
+      "environment/app/src/cyclecount/variance.py",
+      "environment/app/tools/cyclecount_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "CRS-1",
+      "severity": "Advisory",
+      "claim": "For a line that is not adjusted but has a recount (an 'ok' line whose recount differs from its count), the reference books count less system. A second reading of instruction.md:2 books the procedure's variance (final count less system). The solution's own jobgen docstring describes that second reading, which contradicts model.py and fix.patch.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "instruction.md:2 says that where the procedure gives no rule, the step 'keeps working the figure out the way it does today, from the figures the procedure does define'. CC-2 3.3 (cycle-count-procedure.md:50-51) gives booked only for adjusted lines. Today's step is report.py:21, `line[\"count\"] - line[\"system\"]`. Its operands are the raw count and the system quantity, which rule 1.3 does define. Today, count less system also equals the package's variance, because variance.py:4-5 returns the count as the final count.",
+        "actual_behavior": "fix.patch:19 books `off` (the variance) for 'adjust' lines and `line[\"count\"] - line[\"system\"]` otherwise, and model.py:39-41 matches it. The docstring at jobgen.py:76 says 'today's step (its variance) stands'. For sheet line N5 (class C, system 1000, count 1049, recount 1003), the reference books 49, but 'its variance' is 3.",
+        "trace_or_receipt": "N5: final count 1003 -> variance 3; tolerance 1000*5//100 = 50; |3| <= 50 -> 'ok'; fix.patch:19 takes the non-adjust branch -> booked = 1049 - 1000 = 49. Under the variance reading, booked = 3. The same split applies to N4 (A, 20, 17, recount 20: reference -3, variance 0), N6 and similar lines. Lines with status 'recount' have no recount, so both readings agree on them. Static trace only; nothing was executed."
+      },
+      "reachable_case_or_path": "Any line within 1.3 whose recount is not null, whose recount differs from its count, and whose final variance is within tolerance. instruction.md:5 names 'recounts that bring a line back inside its tolerance'. Example: jobgen.py:77-78 lines N4, N5 and N6.",
+      "graded_effect": "No incorrect reference behavior is shown under the literal reading the reference adopts. However, the booked figure on these lines depends on which reading of instruction.md:2 is taken, and the reference's own documentation names the other reading. This is Advisory on this axis and should be checked on coherent_contract: whether instruction.md makes 'count less system' rather than 'variance' the determinate retained step.",
+      "citations": [
+        "instruction.md:2",
+        "environment/app/docs/cycle-count-procedure.md:50-51",
+        "environment/app/src/cyclecount/report.py:21",
+        "environment/app/src/cyclecount/variance.py:4-5",
+        "solution/fix.patch:19",
+        "solution/model.py:36-41",
+        "solution/jobgen.py:75-79",
+        "solution/solve.sh:10-12"
+      ],
+      "root_invariant": "When the procedure is silent on a figure, the retained step and its inputs must be determined by the contract. The reference, its model and its documentation must all state the same reading.",
+      "authority": [
+        "instruction.md:2",
+        "environment/app/docs/cycle-count-procedure.md:28-29",
+        "environment/app/docs/cycle-count-procedure.md:50-51"
+      ],
+      "implementation_sites": [
+        "solution/fix.patch:19",
+        "solution/model.py:36-41",
+        "solution/jobgen.py:76",
+        "solution/solve.sh:10-12"
+      ],
+      "sibling_variants": [
+        "The other figure the procedure leaves open, the tolerance of a non-graded class (fix.patch:43, model.py:24-26), keeps round(system*5/100). Its only input is the system quantity, which has a single meaning, so no split in reading arises there."
+      ],
+      "interaction_variants": [
+        "2.1 (the recount replaces the count) meets the retained booked step. The two readings differ only when a recount exists and the line is not adjusted.",
+        "The combined 'together' sheet (jobgen.py:84-85, line T2: class N, 350, 330, recount 331) mixes a non-graded tolerance with a non-adjusted booked line that has a recount. The reference books -20 there, where the variance reading books -19."
+      ],
+      "minimal_repair_boundary": "Make instruction.md state explicitly which figure a non-adjusted line books, or confirm the literal reading. Align the docstring at jobgen.py:76 with model.py and fix.patch.",
+      "closure_evidence": [
+        "The contract text determines booked for N5 as either 49 or 3, and the reference, model and docs all agree with it."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Checked that fix.patch hunks apply against the shipped report.py, tolerance.py and variance.py: context lines and line counts match, and the -p1 paths resolve from / to /app/src.",
+    "Checked that solve.sh uses patch, which the Dockerfile installs, and does not touch tools/cyclecount_run.py.",
+    "Traced 2.1 final count: fix.patch:55 returns the recount when it is not null, otherwise the count.",
+    "Traced 2.3 tolerance: A=0, B=system*2//100, C=system*5//100 by floor division, so a fraction is dropped for non-negative values. Other classes keep the shipped round(system*5/100).",
+    "Traced 2.4 and 3.1: abs(variance) <= tolerance gives 'ok'; otherwise 'adjust' with a recount and 'recount' without one.",
+    "Traced 3.2: value = final-count variance times unit cost.",
+    "Traced 3.3: an adjusted line books its variance.",
+    "Traced 3.4: shrink = -sum of value over adjusted lines with variance < 0. It is non-negative, and a surplus is excluded.",
+    "Traced the example aisle-14. PAL-00412 (A, 240, 238, recount 239): variance -1, tol 0, adjust, value -18450, booked -1. CTN-7781 (B, 1200, 1188, no recount): variance -12, tol 24, ok, booked -12. BLK-5 (C, 90, 97, recount 96): variance 6, tol 4, adjust, value 450, booked 6. Shrink 18450.",
+    "Traced boundaries. B 1049 gives tol 20 (20.98 floored); a variance of 20 is ok and 21 is past. C 19 gives tol 0. System 0 gives tol 0 for every graded class. At 100,000 with cost 1,000,000, the integer arithmetic is exact.",
+    "Checked output types: every figure is a Python int. round() with one argument returns an int, and floor division of ints returns an int.",
+    "Checked float exactness of the retained round() for system up to 100,000: half values are exactly representable, and banker's rounding is kept.",
+    "Compared model.py with fix.patch behavior line by line; they are equivalent."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced the example sheet and the 2.3 edge and one-past cases for A, B and C, including fractional tolerances, system 0 and the 100,000 limits.",
+      "evidence": [
+        "solution/fix.patch:36-43",
+        "environment/app/docs/cycle-count-procedure.md:34-40",
+        "environment/app/examples/aisle-14.json:4-6"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "All README keys are emitted as ints or strings by the unchanged driver's json.dump. No precision is lost, because every figure is integer arithmetic (1.2 unrounded) and the only float is the retained non-graded round().",
+      "evidence": [
+        "environment/app/README.md:23-32",
+        "environment/app/tools/cyclecount_run.py:16-19",
+        "solution/fix.patch:42-43"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Every state-updating branch (status branches, booked branches, shrink filter)",
+      "status": "checked",
+      "reason": "Covered the three status outcomes, the adjust and non-adjust booked branches, and the shrink filter on adjust with variance < 0. The non-adjust booked branch keeps today's step; see the CRS-1 Advisory on the reading.",
+      "evidence": [
+        "solution/fix.patch:10",
+        "solution/fix.patch:19",
+        "solution/fix.patch:26"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "category": "Recovery/durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The task is a pure report computation with no persistence or recovery promise.",
+      "evidence": [
+        "instruction.md:1-5"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Driver preservation and procedure-silent figures kept as today",
+      "status": "checked",
+      "reason": "The patch touches only src/cyclecount. Non-graded tolerance and non-adjusted booked keep the shipped expressions, and no clamps or guards are added.",
+      "evidence": [
+        "solution/fix.patch:1-58",
+        "instruction.md:1-2"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "category": "Reference packaging/applicability (solve.sh, patch context, environment tools)",
+      "status": "checked",
+      "reason": "Patch contexts match the shipped files, patch is installed in the image, and --no-backup-if-mismatch prevents stray files.",
+      "evidence": [
+        "solution/solve.sh:19-21",
+        "environment/Dockerfile:4-9"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "2.1 recount replaces count",
+        "2.4/3.1 status"
+      ],
+      "case_or_path": "A recount brings a line inside tolerance (N4: A 20/17/20 -> variance 0, ok), and a recount leaves it outside (S2: A 50/48/47 -> adjust).",
+      "status": "checked",
+      "evidence": [
+        "solution/fix.patch:10",
+        "solution/fix.patch:55"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "3.1 adjust",
+        "3.4 shrink excludes surplus"
+      ],
+      "case_or_path": "The same sheet has an adjusted shortage and an adjusted surplus. Shrink counts only the shortage, and an out-of-tolerance shortage with status 'recount' is excluded.",
+      "status": "checked",
+      "evidence": [
+        "solution/fix.patch:26",
+        "environment/app/docs/cycle-count-procedure.md:53-55"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "retained booked step",
+        "2.1 recount"
+      ],
+      "case_or_path": "A non-adjusted line with a recount that differs from its count (N5) is booked as count - system, not as the variance.",
+      "status": "checked",
+      "evidence": [
+        "solution/fix.patch:19",
+        "solution/jobgen.py:76"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "rules": [
+        "retained non-graded tolerance",
+        "3.1 status"
+      ],
+      "case_or_path": "A class D line (250/262/262): round(12.5) = 12 by banker's rounding, variance 12 -> ok. Class N (350/368/368): round(17.5) = 18, variance 18 -> ok.",
+      "status": "checked",
+      "evidence": [
+        "solution/fix.patch:43",
+        "solution/model.py:24-26"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

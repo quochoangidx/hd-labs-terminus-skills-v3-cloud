@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-warehouse-cycle-count-variance"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Operations"
+subcategory = "Supply chain"
+languages = ["python"]
+tags = ["inventory-control", "cycle-counting", "warehouse-operations", "stock-variance", "shrink-reporting"]
+expert_time_estimate_hours = 2
+difficulty_explanation = "This is the work of an inventory controller who keeps a distribution centre's cycle-count tooling honest against its written procedure. The package carries slips real count software makes. It ignores the recount the team walked back to take, and applies one 5 per cent tolerance to every class where the procedure gives A nought, B 2 per cent and C 5 per cent with fractions dropped. It also posts every out-of-tolerance line to stock instead of sending an uncounted one back for a recount, books an adjusted line's first-count difference instead of its variance, and nets surpluses against shrink. The harder half is knowing where the procedure stops. It gives tolerances only for graded items (classes A, B and C) and a booked figure only for adjusted lines. For a line of any other class, the step the code takes today, 5 per cent with Python's round, has to stay. For a line that is not adjusted, today's step books the count less the system quantity, whatever the recount. The natural repair of the booking step writes the variance for every line, which moves the booked units of a line brought back inside tolerance by its recount, and a hand-built reference fuzzed against the package will not flag the difference. No real stock data is used. The count sheets are synthetic, shaped like handheld count exports, with hand-built sheets that sit on every limit."
+solution_explanation = "The reference patch takes the recount as the final count when one was taken. It gives graded items a tolerance of nought (A), 2 per cent (B) or 5 per cent (C) of the system quantity with the fraction dropped, marks an out-of-tolerance line with no recount 'recount' and one with a recount 'adjust', books an adjusted line's variance, and sums shrink over adjusted shortages only. Where the procedure gives no rule it keeps today's step: a line of another class keeps round(system × 5 / 100), and a line that is not adjusted keeps booking its count less its system quantity. All figures are integers, so nothing depends on floating point beyond the kept round(). The driver is untouched."
+verification_explanation = "A separate verifier image records the delivered driver's bytes, puts its own copy on /app/tools/cyclecount_run.py, seals /app as root-owned, and runs the documented command against the delivered /app/src. Each run is made as an unprivileged user in its own session with an isolated interpreter, on each sheet staged under one neutral name. It compares every README key as a JSON integer or string, and the line order. Expected reports were sealed ahead of time into tests/expected by solution/seal.py from solution/model.py, a model written from the procedure that never imports the package, and are pinned by SHA-256 and row count in tests/expected/ROSTER. There are 12 tests over 10 sealed files: one named test per rule, one for each of the two figures left to today's code, one combining them, a limits test, a seeded family and two harness tests. Lines of other classes appear only in the tests that grade them, and the booked units of a line that is not adjusted are compared only in their own tests. Named sheets put variances exactly on each tolerance and one unit past it, fractional tolerances at 19, 49, 119 and 1,049 units, and recounts that bring a line back inside tolerance and ones that do not. They also include half-unit tolerances of other classes at 250 and 350 units, and shrink sheets mixing shortages, surpluses and lines awaiting recount. Every rule 1.3 limit is reached: 300 lines, quantities of 0 and 100,000, and unit costs of 1 and 1,000,000. The seeded family is also reported under run-time labels drawn from os.urandom: new SKUs and a new name, with lines shuffled. Locally the Oracle scores 1 and the unfixed package 0. Sixteen one-edit mutants of the reference each fail their own test, among them every departure reverted, a strict tolerance comparison, rounding instead of dropping the fraction, nought or floored tolerances for other classes, booked units of nought or of the variance on lines that are not adjusted, and a 299-line cap. A contract-valid alternative scores 1, and a test proves the candidate cannot read /tests, the expectations, the shipped copy or /logs/verifier."
+relevant_experience = "Warehouse and distribution-centre inventory control: cycle-count programmes, ABC count tolerances, recount workflows, stock adjustments and shrink reporting, and the handheld-count software behind them."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 3600
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

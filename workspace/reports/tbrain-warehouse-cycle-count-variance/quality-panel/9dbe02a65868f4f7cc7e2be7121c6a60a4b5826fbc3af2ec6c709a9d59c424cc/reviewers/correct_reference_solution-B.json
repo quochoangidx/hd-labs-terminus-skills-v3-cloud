@@ -1,0 +1,131 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "9dbe02a65868f4f7cc7e2be7121c6a60a4b5826fbc3af2ec6c709a9d59c424cc",
+  "severity": "None",
+  "summary": "The reference patch (solution/fix.patch applied by solution/solve.sh) implements every CC-2 rule (2.1-2.4, 3.1-3.4, 1.2 flooring) over the rule 1.3 domain. It keeps the shipped step for the two figures CC-2 does not govern (tolerance of non-A/B/C classes, booked units of non-adjusted lines), as instruction.md:2 requires. The patch applies cleanly to the shipped files and leaves the driver untouched. No concrete incorrect behavior found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/cycle-count-procedure.md",
+      "environment/app/examples/aisle-14.json",
+      "environment/app/src/cyclecount/__init__.py",
+      "environment/app/src/cyclecount/report.py",
+      "environment/app/src/cyclecount/tolerance.py",
+      "environment/app/src/cyclecount/variance.py",
+      "environment/app/tools/cyclecount_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 18 manifest files with the files actually read; every file was read in full.",
+    "Checked patch applicability. solve.sh runs `cd /; patch -p1 < /solution/fix.patch`, so a/app/src/... resolves to /app/src/.... The context of every hunk matches the shipped files: report.py lines 7-13 and 18-28, tolerance.py lines 1-10, variance.py lines 2-8. The Dockerfile installs `patch`.",
+    "Confirmed that the driver tools/cyclecount_run.py does not appear in fix.patch, so it stays byte-identical as instruction.md:1 requires.",
+    "Traced examples/aisle-14.json through the patched package. PAL-00412: var -1, tol 0, adjust, value -18450, booked -1. CTN-7781: var -12, tol 24, ok, value -3840, booked -12. BLK-5: var 6, tol floor(4.5)=4, adjust, value 450, booked 6. Shrink is 18450; the BLK-5 surplus does not reduce it. Every figure matches CC-2 2.1-3.4.",
+    "Checked the tolerance boundaries (2.3/2.4). B at system 1049 gives floor(20.98)=20: variance 20 is ok, 21 is outside. C at 119 gives floor(5.95)=5. A gives 0, so variance +/-1 is outside. system*pct//100 on non-negative ints equals floor. Because the variance is an integer, comparing it with the floored tolerance gives the same result as comparing with the unrounded one, so rule 1.2 holds.",
+    "Checked status (3.1) for all three cases. Within tolerance gives ok. Outside tolerance with recount null gives recount. Outside with a recount present, including recount 0, gives adjust; the patch tests `is not None`, so a recount of 0 is not treated as missing.",
+    "Checked the final count (2.1). The patch uses `recount if recount is not None else count`, so a recount of 0 is honoured.",
+    "Checked shrink (3.4). The patch sums -value over adjust rows with variance<0. Surpluses are excluded, so shrink is always >= 0.",
+    "Checked booked (3.3). Adjusted lines book off, the procedure's variance. Non-adjusted lines keep the shipped `count - system`, which is allowed by the instruction.md:2 no-rule clause.",
+    "Checked non-graded classes (D-Z). The shipped round(system*5/100) with half-to-even is kept. For system up to 100000 the float quotient is exact at .5 points, so the result is deterministic.",
+    "Checked the integer range. The largest value, 100000*1000000 = 1e11, and the largest shrink, below 3e13, are exact Python ints and serialize as JSON integers. The output keys sku, variance, tolerance, status, value and booked are unchanged, and lines stay in sheet order.",
+    "Checked solution/model.py against the patched package, rule by rule: identical semantics. seal.py/jobgen.py only generate verifier material and are not executed by solve.sh."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced the example sheet. Traced tolerance edges exactly on the limit and one unit past it, for classes A/B/C and fractional tolerances. Traced system 0, recount 0, and the maximum quantity 100000.",
+      "evidence": ["solution/fix.patch:36-43", "environment/app/docs/cycle-count-procedure.md:34-40", "environment/app/examples/aisle-14.json:4-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check output bytes: keys, types, ordering, paths",
+      "status": "checked",
+      "reason": "Report keys and integer types are unchanged from the shipped report_line, which matches README 27-32. Lines are built with a list comprehension in sheet order. The driver's json.dump is untouched.",
+      "evidence": ["environment/app/src/cyclecount/report.py:13-28", "environment/app/README.md:25-32", "environment/app/tools/cyclecount_run.py:18"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check every branch that updates state or selects a figure (final count, status, booked, shrink)",
+      "status": "checked",
+      "reason": "Checked: final count for recount null vs non-null (including 0); the status branches ok/recount/adjust; booked for adjust vs not adjusted; shrink for shortage vs surplus among adjusted lines, with non-adjusted shortages excluded.",
+      "evidence": ["solution/fix.patch:10", "solution/fix.patch:19", "solution/fix.patch:26", "solution/fix.patch:55", "environment/app/docs/cycle-count-procedure.md:28-55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Figures the procedure leaves ungoverned (instruction no-rule clause)",
+      "status": "checked",
+      "reason": "Non-A/B/C tolerance keeps the shipped round(system*5/100). Booked for non-adjusted lines keeps the shipped count-system. The patch adds no clamps or guards beyond those the procedure gives.",
+      "evidence": ["instruction.md:3", "solution/fix.patch:41-43", "solution/fix.patch:19", "solution/solve.sh:4-18"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery/durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract has no durability or crash-recovery obligations; the task is a pure function from a sheet to a report.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reference delivery: solve.sh applies cleanly and the driver stays byte-identical",
+      "status": "checked",
+      "reason": "Hunk contexts match the shipped files line for line, the -p1 path from / is correct, and the patch has no hunk for tools/cyclecount_run.py.",
+      "evidence": ["solution/solve.sh:19-21", "solution/fix.patch:1-58", "environment/Dockerfile:4-9"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.1 final count", "3.1 status / 2.4 within"],
+      "case_or_path": "B, system 500, count 480, recount 505: the recount brings the line back within tolerance (5 <= 10), so the status is ok and not adjust. A, system 240, count 238, recount 239: variance -1 > tol 0, so the status is adjust.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:10", "solution/fix.patch:55", "environment/app/src/cyclecount/tolerance.py:11-12"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 booked", "2.1 final count"],
+      "case_or_path": "Adjusted line A, system 10, count 8, recount 8 books -2, its variance. A line that is ok with count 17 and recount 20 on system 20 books count-system = -3, the shipped step allowed by the no-rule clause.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:19", "environment/app/docs/cycle-count-procedure.md:50-51", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.4 shrink", "3.1 status"],
+      "case_or_path": "In a sheet with an adjusted shortage, an adjusted surplus and a recount-status shortage, only the adjusted shortage contributes |value|. The surplus and the non-adjusted shortage are excluded.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:26", "environment/app/docs/cycle-count-procedure.md:53-55"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 tolerance fractions", "1.2 unrounded figures"],
+      "case_or_path": "C, system 19: the tolerance is floor(0.95)=0, so variance -1 gives adjust or recount. Because variance is an integer, comparing it with the floored tolerance gives the same result as comparing with the unrounded tolerance.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:42", "environment/app/docs/cycle-count-procedure.md:14", "environment/app/docs/cycle-count-procedure.md:34-40"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["non-graded class tolerance (no rule)", "3.1 status / 3.4 shrink"],
+      "case_or_path": "Class D, system 250, count 262, recount 262: the shipped tolerance is round(12.5)=12, so 12 < 12 is false and variance 12 is ok. At 263 the line is adjust with a surplus and adds nothing to shrink. The procedure's 2.4/3.1/3.4 rules still apply to these lines.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:43", "environment/app/src/cyclecount/report.py:7-10"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

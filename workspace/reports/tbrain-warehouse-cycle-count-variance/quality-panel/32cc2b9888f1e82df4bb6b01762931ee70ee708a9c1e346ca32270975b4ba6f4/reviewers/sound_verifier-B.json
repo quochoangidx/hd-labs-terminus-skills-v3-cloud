@@ -1,0 +1,303 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "32cc2b9888f1e82df4bb6b01762931ee70ee708a9c1e346ca32270975b4ba6f4",
+  "severity": "Minor",
+  "summary": "The verifier checks every CC-2 rule with isolating cases, and it rejects every plausible wrong implementation I traced: ignoring the recount, treating a recount of 0 as falsy, rounding graded tolerances, using a strict edge comparison, skipping the recount status, booking count minus system on adjusted lines, letting surplus reduce shrink, and sorting lines. The sealed expectations I spot-checked agree with the procedure. One narrow false-rejection path remains: the unreadability-control assertion depends on the candidate-owned /app/README.md still existing, so a submission that deletes or renames that file (no rule forbids this) fails the whole run.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/cycle-count-procedure.md",
+      "environment/app/examples/aisle-14.json",
+      "environment/app/src/cyclecount/__init__.py",
+      "environment/app/src/cyclecount/report.py",
+      "environment/app/src/cyclecount/tolerance.py",
+      "environment/app/src/cyclecount/variance.py",
+      "environment/app/tools/cyclecount_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-recounts.jsonl",
+      "tests/expected/02-graded_tolerance.jsonl",
+      "tests/expected/03-status.jsonl",
+      "tests/expected/04-shrink.jsonl",
+      "tests/expected/05-value_and_order.jsonl",
+      "tests/expected/06-other_classes.jsonl",
+      "tests/expected/07-booked_not_adjusted.jsonl",
+      "tests/expected/08-together.jsonl",
+      "tests/expected/09-generated.jsonl",
+      "tests/expected/10-limits.jsonl",
+      "tests/shipped/app/** (5 files; packet-manifest hashes identical to the environment/app counterparts that were read)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "SV-1",
+      "severity": "Minor",
+      "claim": "test_candidate_cannot_read_verifier_state uses the candidate-owned /app/README.md as its positive control. If the submission has deleted or renamed that file, the control assertion fails and the reward is 0, even when every report is correct.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "instruction.md:1-3 asks the candidate to change the package so reports follow CC-2, and to leave only /app/tools/cyclecount_run.py byte-identical. No rule requires /app/README.md to stay in place, so a correct package with README.md removed should earn full reward.",
+        "actual_behavior": "_unreadable_by_candidate('/app/README.md') opens a missing file. That raises FileNotFoundError, which is an OSError, so the probe exits 0 and the helper returns True. The assertion 'assert not _unreadable_by_candidate(\"/app/README.md\")' then fails, pytest exits non-zero, and test.sh writes reward 0.",
+        "trace_or_receipt": "tests/test_outputs.py:275-278: the probe calls os.listdir or open(...).read(); 'except OSError: sys.exit(0)' makes a missing file look 'unreadable'. tests/test_outputs.py:285 asserts the control is readable. tests/test.sh:16 (chmod -R a+rX /app) cannot recreate a deleted file. tests/test.sh:23-27 grants reward 1 only when pytest rc == 0. This is a static trace, not an execution."
+      },
+      "reachable_case_or_path": "The candidate fixes variance.py, tolerance.py and report.py correctly, leaves the driver untouched, and deletes or renames /app/README.md, for example while tidying docs or replacing it with its own notes under another name. Every report comparison passes, but test_candidate_cannot_read_verifier_state fails at line 285.",
+        "graded_effect": "A contract-valid submission scores 0 because of a file the contract never protects. Plausibility is low but nonzero. Severity is Minor because the effect on grading is demonstrable while the trigger is uncommon.",
+        "citations": [
+          "tests/test_outputs.py:275-278",
+          "tests/test_outputs.py:281-285",
+          "tests/test.sh:16",
+          "tests/test.sh:20-27",
+          "instruction.md:1-3"
+        ],
+        "root_invariant": "A verifier self-check (positive control) must depend only on verifier-owned state, not on candidate-mutable files the contract does not protect.",
+        "authority": [
+          "instruction.md:1-3",
+          "_panel_docs/quality-panel-judge-guide.md:183-190"
+        ],
+        "implementation_sites": [
+          "tests/test_outputs.py:285"
+        ],
+        "sibling_variants": [
+          "tests/test_outputs.py:288-294 also checks /app, /app/tools and the driver ownership and modes. The contract does protect the driver, and _seal_app (tests/test_outputs.py:78-85) normalises ownership and modes first, so that sibling is contract-backed and not a defect.",
+          "The probe also treats any other OSError on the control path (for example a candidate-made dangling symlink at /app/README.md) as unreadable, which triggers the same failure."
+        ],
+        "interaction_variants": [
+          "tests/test.sh:16 (chmod -R a+rX /app) repairs only modes, not absence, so the chmod does not close a deletion."
+        ],
+        "minimal_repair_boundary": "Use a verifier-created world-readable control file, for example one written by the test into a fresh 0755 temporary directory, or check that /app/README.md exists before using it as the control.",
+        "closure_evidence": [
+          "A correct package with /app/README.md deleted earns reward 1.",
+          "A probe run on a verifier-created world-readable file still reports it readable, and /tests stays unreadable."
+        ]
+      }
+    }
+  ],
+  "checks_performed": [
+    "Read the whole packet. For 10-limits.jsonl I read the first 44 KB, then extracted every report row from L200 to LAST plus the shrink field with regex, so all 300 sheet lines and all report rows were covered.",
+    "Mapped each CC-2 rule (2.1, 2.2, 2.3 A/B/C with fraction dropped, 2.4 inclusive edge, 3.1 ok/recount/adjust, 3.2 value, 3.3 booked=variance for adjusted lines, 3.4 shrink over adjusted shortages only) to the fixture lines whose outcome changes when the rule is wrong.",
+    "Checked expected values by hand for every line in 01-08, including shrink totals for every sheet in 01-08. For 09 I checked several lines per sheet plus the full shrink sum for CC2-0013 and CC2-0015. For 10 I checked about 15 lines, including the fractional B and C tolerances L4, L9, L18, L147, L151, L179, L207 and LAST. I did not re-sum the 300-line shrink total by hand.",
+    "Traced these wrong mutants to a failing assertion: recount ignored (R1, R2), recount-or-count with a falsy 0 (R4, R5), round or ceil for graded tolerances (B3/B4, C3/C4, B5, C5), strict '<' comparison (A1, B1, C1, C6), no 'recount' status (R6, S1, S3, S5), booked=count-system on adjusted lines (R2), shrink clamped at 0 or reduced by surpluses (04 CC2-0004), shrink including recount or ok shortages (S1, S3), tolerance taken from the final count (B3 tolerance), lines sorted instead of kept in sheet order (CC2-0007 and the relabelled shuffle), other classes treated as C with floor (X1 tolerance 12 vs 12, X3/X4 17 vs 18), and booked zeroed on non-adjusted lines (07, 08).",
+    "Checked the comparator: 'type(actual) is type(expected)' rejects bool and float stand-ins, extra keys are ignored, and the booked skip for non-adjusted lines applies only outside the families that grade it (tests/test_outputs.py:182-195, 42).",
+    "Checked the execution path: the verifier's copy of the driver is installed with os.replace, /app is sealed, the driver runs under 'python3 -I -S' as uid 65534, and -P isolation keeps /app/tools off sys.path. A stdlib-only package is unaffected.",
+    "Checked the roster digests and row counts, rule 1.3 enforcement on every graded sheet, and the relabel preservation of shrink and sheet order."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Each of rules 2.1-3.4 has a dedicated family with lines that isolate the rule. The full-report compare means a reversed rule changes at least one compared key.",
+      "evidence": [
+        "tests/test_outputs.py:204-247",
+        "tests/expected/01-recounts.jsonl:1",
+        "tests/expected/02-graded_tolerance.jsonl:1-2",
+        "tests/expected/03-status.jsonl:1",
+        "tests/expected/04-shrink.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result: values, membership, order, required outputs",
+      "status": "checked",
+      "reason": "The verifier compares sheet, shrink, line count, and each line's sku, variance, tolerance, status and value exactly, in index order. It compares booked on adjusted lines everywhere, and on all lines in the booked families.",
+      "evidence": [
+        "tests/test_outputs.py:182-195"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rules each have an outcome-changing case, not only held-out variation",
+      "status": "checked",
+      "reason": "The fixtures include tolerance edge and one-past cases for A, B and C, fractional tolerances, recounts that bring a line back inside tolerance and ones that do not, a recount of 0, system 0, surplus plus shortage on one sheet, and the non-graded round-half-even boundary (X1, X3, X4, X7).",
+      "evidence": [
+        "tests/expected/02-graded_tolerance.jsonl:1-2",
+        "tests/expected/06-other_classes.jsonl:2",
+        "tests/expected/01-recounts.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Every traced mutant fails a specific fixture line (see checks_performed). No accepted wrong implementation was found.",
+      "evidence": [
+        "tests/expected/04-shrink.jsonl:1",
+        "tests/expected/01-recounts.jsonl:1",
+        "tests/expected/05-value_and_order.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (format, ordering, implementation choices)",
+      "status": "checked",
+      "reason": "JSON is parsed rather than byte-compared, extra keys are allowed, and booked on non-adjusted lines is graded only where the contract fixes it to today's step. The one false rejection found is the README control dependency.",
+      "evidence": [
+        "tests/test_outputs.py:146",
+        "tests/test_outputs.py:182-195",
+        "tests/test_outputs.py:285"
+      ],
+      "finding_ids": [
+        "SV-1"
+      ]
+    },
+    {
+      "category": "Documented restrictions and lifecycle (driver unchanged, rule 1.3 domain, figures left to today's code)",
+      "status": "checked",
+      "reason": "The byte-identical driver requirement is enforced (tests/test_outputs.py:288-291, test.sh:23). Every graded sheet is checked against rule 1.3 (tests/test_outputs.py:149-175). Other-class tolerance (round() of 5 per cent) and non-adjusted booked (count minus system) are graded only in their own families, as the instruction's today's-step rule states.",
+      "evidence": [
+        "instruction.md:1-3",
+        "tests/test_outputs.py:42",
+        "tests/test_outputs.py:149-175",
+        "tests/expected/07-booked_not_adjusted.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries, self-controlled comparisons, Oracle-specific representation",
+      "status": "checked",
+      "reason": "The verifier's copy of the driver replaces the delivered one before any run, the expectations are sealed and pinned by ROSTER digests, and no candidate-produced value is used as an expectation.",
+      "evidence": [
+        "tests/test_outputs.py:57-90",
+        "tests/test_outputs.py:163-175"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: sign partitions discriminated",
+      "status": "checked",
+      "reason": "Variance, value and booked are exercised with negative, zero and positive signs. Shrink covers adjusted shortage, adjusted surplus, and a shortage with recount status on the same sheet (CC2-0004), plus sheets with only surplus adjustments (CC2-0006, CC2-0010) where shrink must be 0, not negative.",
+      "evidence": [
+        "tests/expected/04-shrink.jsonl:1",
+        "tests/expected/05-value_and_order.jsonl:2",
+        "tests/expected/06-other_classes.jsonl:2"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization-to-first-event transition",
+      "status": "not_applicable",
+      "reason": "Each line is reported independently from its own fields. There is no state carried across lines except the shrink sum, which is covered above.",
+      "evidence": [
+        "environment/app/docs/cycle-count-procedure.md:28-55"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Representation vs semantic content (encoding, key order, native types)",
+      "status": "checked",
+      "reason": "The contract fixes JSON integers and strings (instruction.md:5, README.md:28-32). The verifier enforces the native type and ignores key order, whitespace and extra keys, so it imposes no representation beyond the contract.",
+      "evidence": [
+        "instruction.md:5",
+        "environment/app/README.md:23-32",
+        "tests/test_outputs.py:178-195"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Reachability of all graded cases",
+      "status": "checked",
+      "reason": "All fixtures satisfy rule 1.3, and the load() check confirms that. Classes other than A, B and C appear only in families that grade them. The relabelled sheets stay within the limits (tests/test_outputs.py:271).",
+      "evidence": [
+        "tests/test_outputs.py:163-175",
+        "tests/test_outputs.py:250-272"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "2.1 final count",
+        "3.1 status"
+      ],
+      "case_or_path": "Count within tolerance but recount outside (R4: count 100 = system, recount 0) must be adjust. Count outside but recount back inside (R1, S4, N4) must be ok.",
+      "status": "checked",
+      "evidence": [
+        "tests/expected/01-recounts.jsonl:1",
+        "tests/expected/03-status.jsonl:1",
+        "tests/expected/07-booked_not_adjusted.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "3.3 booked for adjusted lines",
+        "today's booked for non-adjusted lines"
+      ],
+      "case_or_path": "An adjusted line whose count differs from its recount (R2: booked -1, not -2), and non-adjusted lines with a recount (N4-N8), where booked = count - system.",
+      "status": "checked",
+      "evidence": [
+        "tests/expected/01-recounts.jsonl:1",
+        "tests/expected/07-booked_not_adjusted.jsonl:1",
+        "tests/test_outputs.py:193-194"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "1.2 unrounded figures",
+        "today's non-graded tolerance plus 2.4 within"
+      ],
+      "case_or_path": "X4: class N, system 350, variance 18, today's tolerance round(17.5) = 18. Expected status ok, which compares against the reported tolerance. I judged this the natural reading of 2.4 'its tolerance'. Any residual ambiguity is a contract-axis matter, not a verifier mechanism defect.",
+      "status": "checked",
+      "evidence": [
+        "tests/expected/06-other_classes.jsonl:2",
+        "environment/app/docs/cycle-count-procedure.md:14",
+        "environment/app/docs/cycle-count-procedure.md:39-40",
+        "environment/app/src/cyclecount/tolerance.py:6-12"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "3.4 shrink",
+        "3.1 status"
+      ],
+      "case_or_path": "A sheet with shortages in recount status, an adjusted shortage and an adjusted surplus (CC2-0004): shrink 3000 only.",
+      "status": "checked",
+      "evidence": [
+        "tests/expected/04-shrink.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "line order",
+        "relabelled generated sheets"
+      ],
+      "case_or_path": "Shuffled order with fresh SKUs. The expected rows follow the same permutation, and shrink is invariant.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:250-272"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "verifier self-checks",
+        "candidate freedom over non-driver /app files"
+      ],
+      "case_or_path": "Deleting /app/README.md flips the positive control in test_candidate_cannot_read_verifier_state.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:275-285",
+        "instruction.md:1-3"
+      ],
+      "finding_ids": [
+        "SV-1"
+      ]
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

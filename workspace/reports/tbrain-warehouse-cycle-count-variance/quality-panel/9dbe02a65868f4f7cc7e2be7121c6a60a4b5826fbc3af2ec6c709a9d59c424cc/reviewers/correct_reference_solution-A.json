@@ -1,0 +1,119 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "9dbe02a65868f4f7cc7e2be7121c6a60a4b5826fbc3af2ec6c709a9d59c424cc",
+  "severity": "None",
+  "summary": "The reference patch implements every rule of CC-2 (2.1 final count, 2.2 variance, 2.3 floored graded tolerance, 2.4 within, 3.1 status, 3.2 value, 3.3 booked for adjusted lines, 3.4 shrink over adjusted shortages only). It keeps the shipped step for the two figures CC-2 gives no rule for (tolerance of non-A/B/C classes; booked for non-adjusted lines), as instruction.md directs. It leaves the driver untouched and emits native integers. The patch context matches the shipped files, so it applies cleanly. No concrete incorrect behavior was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/cycle-count-procedure.md",
+      "environment/app/examples/aisle-14.json",
+      "environment/app/src/cyclecount/__init__.py",
+      "environment/app/src/cyclecount/report.py",
+      "environment/app/src/cyclecount/tolerance.py",
+      "environment/app/src/cyclecount/variance.py",
+      "environment/app/tools/cyclecount_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked each fix.patch hunk's context and line numbers against the shipped report.py, tolerance.py and variance.py. The line counts in all hunk headers are consistent, and solve.sh runs `cd /` then `patch -p1` against a/app/... paths. The Dockerfile installs `patch`.",
+    "Traced the aisle-14 example through the patched code. PAL-00412: A, system 240, count 238, recount 239. Variance -1, tolerance 0, status adjust, value -18450, booked -1. CTN-7781: B, system 1200, count 1188, no recount. Variance -12, tolerance 24, status ok, value -3840, booked -12 (shipped step). BLK-5: C, system 90, count 97, recount 96. Variance 6, tolerance 4, status adjust, value 450, booked 6. Shrink 18450, and the surplus does not reduce it.",
+    "Boundary traces. A recount of 0 is detected with `is not None`, not by truthiness (fix.patch:10,55). B system 1049 gives tolerance 20 by floor; the shipped round would give 21. Variance exactly equal to the tolerance is ok (<=), and one unit past it is outside. System 0 gives tolerance 0 for all graded classes.",
+    "Checked that each output field is a native int. Integer floor division, Python round() and int multiplication all return int. The driver is unchanged and json.dump emits integers.",
+    "Checked that the non-graded class tolerance keeps round(system*5/100), as instruction.md:3 directs for a figure CC-2 does not define. A half value such as system/20 = x.5 is exactly representable, so round-half-even behaves as it does in the shipped code.",
+    "Checked that booked for non-adjusted lines keeps the shipped `count - system`. CC-2 3.3 defines booked only for adjusted lines, instruction.md:3 keeps today's step and forbids invented rules, and instruction.md:1 names only adjusted lines as wrong.",
+    "Compared model.py with fix.patch. The two encode the same semantics, so the sealed expectations and the shipped patch agree. Agreement between them is not treated as independent proof."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced the aisle-14 example, both sides of the tolerance edge for B and C, the fraction-dropped tolerance, class A zero tolerance, system 0, recount 0 and recount null.",
+      "evidence": ["solution/fix.patch:36-43", "solution/fix.patch:55", "environment/app/docs/cycle-count-procedure.md:28-40", "environment/app/examples/aisle-14.json:4-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, types, key set, order",
+      "status": "checked",
+      "reason": "The README keys sku, variance, tolerance, status, value, booked and shrink are all produced. Every figure except status is an int. Line order follows the sheet through a list comprehension. The driver's json.dump is unchanged.",
+      "evidence": ["environment/app/README.md:23-32", "environment/app/src/cyclecount/report.py:13-28", "environment/app/tools/cyclecount_run.py:18"],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state or derives a figure (status, booked, shrink)",
+      "status": "checked",
+      "reason": "Status covers ok, recount and adjust (3.1). Booked is the variance for adjust (3.3) and keeps the shipped step otherwise. Shrink negates value only for rows that are adjusted with variance < 0 (3.4). Value is variance*unit_cost for all lines (3.2).",
+      "evidence": ["solution/fix.patch:7-26", "environment/app/docs/cycle-count-procedure.md:44-55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Figures without a procedure rule keep today's step (instruction constraint)",
+      "status": "checked",
+      "reason": "The non-A/B/C tolerance and the non-adjusted booked figure keep the shipped formulas. No clamp, guard or exception is added.",
+      "evidence": ["instruction.md:3", "solution/fix.patch:41-43", "solution/fix.patch:19"],
+      "finding_ids": []
+    },
+    {
+      "category": "Driver preservation and patch applicability",
+      "status": "checked",
+      "reason": "fix.patch touches only src/cyclecount files, and tools/cyclecount_run.py is untouched. The hunk contexts match the shipped files line by line.",
+      "evidence": ["instruction.md:1", "solution/solve.sh:19-21", "environment/Dockerfile:4-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery/durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The task is a pure stateless report computation with no durability or recovery contract.",
+      "evidence": ["environment/app/docs/cycle-count-procedure.md:1-55"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.1 recount replaces count", "3.1 status / 3.3 booked"],
+      "case_or_path": "A line whose recount brings it within tolerance is ok, and booked keeps the shipped count-system. A line whose recount is still outside is adjust, and booked equals the recount-based variance.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:10", "solution/fix.patch:19", "solution/fix.patch:55"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.4 shrink", "surplus on same sheet"],
+      "case_or_path": "An adjusted surplus is excluded by variance < 0, and a recount-status shortage is excluded by status == adjust. Shrink is therefore never negative.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:26", "environment/app/docs/cycle-count-procedure.md:53-55"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 graded tolerance floor", "non-graded class keeps shipped round"],
+      "case_or_path": "At system 250, class C gives 12 and class D gives round(12.5) = 12. At system 350, class C gives 17 and class D gives round(17.5) = 18. The two branches are dispatched by class membership.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:36-43"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 within tolerance", "non-graded class status"],
+      "case_or_path": "2.4 and 3.1 apply to every line, so non-graded lines get ok, recount or adjust from the shipped tolerance and the recount-aware variance.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/cycle-count-procedure.md:39-46", "solution/fix.patch:7-10"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}
