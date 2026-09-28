@@ -457,7 +457,8 @@ rather than discovered at packaging.
     clear findings, then freeze the full task/verifier snapshot.
 17. Run counted real-agent trials. Package only after the difficulty gate;
     then write and separately style-audit reviewer-facing Difficulty, Solution,
-    and Verification explanations outside the task folder.
+    and Verification explanations in `task.toml` `[metadata]` (never in the
+    `SUBMISSION-<slug>.md` packet).
 
 > Terminus 3 explicitly values domain inference, live state, native artifacts,
 > and interacting constraints. The archetypes in
@@ -1414,9 +1415,14 @@ available solve probes are stable.
      actual oracle/nop results.
    - Relevant Experience: concrete domain, toolchain, or repository background
      that supports the task design, without invented credentials.
-2. Produce the complete platform packet at
+2. Write the Difficulty, Solution and Verification explanations into
+   `task.toml` `[metadata]` (`difficulty_explanation`, `solution_explanation`,
+   `verification_explanation`) and `relevant_experience`.
+3. Produce the platform packet at
    `workspace/submissions/SUBMISSION-<slug>.md` (the single canonical name, shared with
-   `task-batch`) containing, beyond the four explanation fields:
+   `task-batch`). Do **not** write the Difficulty, Solution or Verification
+   Explanation into it. It contains only:
+   - **Relevant Experience**.
    - **Metadata**: "Does this task use an approved canonical base image?"
      Yes/No + the exact digest-pinned image from the Dockerfile; "Did you use
      a Task Inspiration from the Task Gallery?" Yes/No + the Inspiration ID
@@ -1429,29 +1435,26 @@ available solve probes are stable.
      penalties, no test paths, fixture values, oracle outputs, root-cause hints,
      or implementation recipe.
    - **File zip name**: the matching zip in `workspace/submissions/`.
-3. Apply the human-writing rules from `terminus-regular-task-authoring` only as
+4. Apply the human-writing rules from `terminus-regular-task-authoring` only as
    an editorial pass. Do not add claims, remove thresholds, or change technical
    meaning.
-4. Compare the final version with `instruction.md`, `solution/fix.patch`,
-   `tests/test_outputs.py`, and validation reports.
-5. Keep the source notes and the packet outside the task ZIP.
+5. Compare the final `task.toml` explanations with `instruction.md`,
+   `solution/fix.patch`, `tests/test_outputs.py`, and validation reports.
+6. Keep the source notes and the packet outside the task ZIP.
 
-Use this structure in both files:
+The source notes may use Difficulty/Solution/Verification/Relevant Experience
+headings. The packet uses this structure:
 
 ```md
-# Difficulty Explanation
-
-...
-
-# Solution Explanation
-
-...
-
-# Verification Explanation
-
-...
-
 # Relevant Experience
+
+...
+
+# Metadata
+
+...
+
+# Rubrics
 
 ...
 ```
