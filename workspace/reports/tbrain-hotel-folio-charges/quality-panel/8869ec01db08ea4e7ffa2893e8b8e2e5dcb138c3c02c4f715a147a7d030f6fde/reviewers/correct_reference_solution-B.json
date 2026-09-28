@@ -1,0 +1,129 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "8869ec01db08ea4e7ffa2893e8b8e2e5dcb138c3c02c4f715a147a7d030f6fde",
+  "severity": "None",
+  "summary": "The reference patch correctly implements FC-3 rules 2.1-2.3 and 2.5, keeps today's steps for the two figures the rules leave open (city tax under 5,000 cents, service fee rate and rounding), leaves the driver untouched and applies cleanly from /. A static trace found no incorrect behaviour on normal, boundary or interaction cases.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/folio-charges-rules.md",
+      "environment/app/examples/harbourview-1102.json",
+      "environment/app/src/folio/__init__.py",
+      "environment/app/src/folio/charges.py",
+      "environment/app/src/folio/money.py",
+      "environment/app/src/folio/statement.py",
+      "environment/app/tools/folio_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked the fix.patch hunk header (-1,25 +1,35) against the shipped charges.py: 20 context lines, 5 removed and 15 added give old=25 and new=35, and the context lines match the shipped file. solve.sh runs 'cd / && patch -p1', so a/app/src/folio/charges.py resolves to /app/src/folio/charges.py (Dockerfile COPY app/ /app/), and the Dockerfile installs patch.",
+    "Rule 2.1: room = (n - n//7) * rate. Traced n=1->1, 6->6, 7->6, 8->7, 13->12, 14->12, 15->13 and 60->52 charged nights, which matches 'every seventh night free'.",
+    "Rule 2.2: when rate >= 5000 the city tax is 250*min(n,14). Traced n=13->3250, 14->3500, 15->3500 and 60->3500. The rate=5000 boundary takes the new branch; rate=4999 takes the old branch.",
+    "Rule 2.2 open region: for rate <5000 the old step is preserved (0 under 3000, else 200*n with no cap), as the instruction's keep-today's-step clause requires.",
+    "Rule 2.3: floor(Fraction(room)*135/1000 + 1/2). This is exact half-up for non-negative amounts. Traced room=5100 -> 688.5 -> 689 (round() would give 688). math.floor on a Fraction returns int.",
+    "Rule 2.4 open figure: service_fee and money.to_cents are unchanged, so the fee keeps 3.5% and banker's rounding, and it is fed with the rule 2.1 room charge. The half-up rounding is local to occupancy_tax and does not leak into to_cents.",
+    "Rule 2.5 and README: statement.py is unchanged, so total = room+tax+city+fee, the file total is the sum, folio order is the input order, and every value is a Python int that JSON serialises as an integer.",
+    "The driver tools/folio_run.py is untouched by the patch.",
+    "Cross-checked model.py formulas against the patch for algebraic equality, while treating model agreement as corroboration only.",
+    "Traced the example file HV-1102 through the patched code: R4480 has 9 nights at 14500, giving 8 charged nights, room 116000, occupancy 15660, city 2250 and fee 4060."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace ordinary case and each relevant boundary through reference logic",
+      "status": "checked",
+      "reason": "Checked 1/6/7/8/13/14/15/60 nights, rates at 1000/2999/3000/4999/5000/150000, and half-cent occupancy tax.",
+      "evidence": ["solution/fix.patch:27", "solution/fix.patch:31-36", "solution/fix.patch:41-42", "environment/app/docs/folio-charges-rules.md:24-33"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "Every figure is an int (the floor, round and integer products all return int), keys are unchanged, and the driver is unchanged. Nothing uses fixed width or padding.",
+      "evidence": ["environment/app/src/folio/statement.py:6-17", "environment/app/tools/folio_run.py:18", "environment/app/README.md:24-30"],
+      "finding_ids": []
+    },
+    {
+      "category": "Branches updating state (deletion, expiry, replacement, id reuse)",
+      "status": "not_applicable",
+      "reason": "The computation is stateless and per stay. Duplicate ids are explicitly left open by the instruction.",
+      "evidence": ["instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or durability claims.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reference application mechanics (solve.sh applies the patch to the right tree)",
+      "status": "checked",
+      "reason": "Patch paths, hunk counts, context and the installed patch tool are consistent. The driver is not modified.",
+      "evidence": ["solution/solve.sh:17-19", "solution/fix.patch:1-5", "environment/Dockerfile:4-8"],
+      "finding_ids": []
+    },
+    {
+      "category": "Minimal-change and keep-today's-step constraints",
+      "status": "checked",
+      "reason": "No clamps or guards are added. The open figures (city tax under 5000, service fee rounding) keep the shipped logic.",
+      "evidence": ["instruction.md:3", "solution/fix.patch:30-36", "environment/app/src/folio/money.py:6-8"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.1 free nights", "2.3 occupancy tax on room charge"],
+      "case_or_path": "occupancy_tax is computed from the rule 2.1 room charge (statement.py passes charge=room(stay)).",
+      "status": "checked",
+      "evidence": ["environment/app/src/folio/statement.py:7-8", "solution/fix.patch:27"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 half-up rounding", "2.4 service fee keeps today's banker's rounding"],
+      "case_or_path": "room=5100: occupancy 688.5 rounds to 689 (half-up), service fee 178.5 rounds to 178 (even). The rounding change is local to occupancy_tax, and to_cents is unchanged.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:39-42", "environment/app/src/folio/charges.py:25-26", "environment/app/src/folio/money.py:6-8"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2 cap at 14 nights for rate >= 5000", "old uncapped step for rate < 5000"],
+      "case_or_path": "rate=5000 with 15 nights gives 3500; rate=4999 with 15 nights gives 3000 (200*15, uncapped); rate=2999 gives 0.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:30-36", "environment/app/docs/folio-charges-rules.md:28-29"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 free nights", "2.4 service fee base"],
+      "case_or_path": "The service fee takes the reduced room charge (7 nights at 20000 gives 120000, so the fee is 4200).",
+      "status": "checked",
+      "evidence": ["environment/app/src/folio/statement.py:10"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.5 totals", "README file order"],
+      "case_or_path": "statement.py is unchanged. The total sums the four patched or preserved figures, and the list comprehension keeps file order.",
+      "status": "checked",
+      "evidence": ["environment/app/src/folio/statement.py:11-17"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

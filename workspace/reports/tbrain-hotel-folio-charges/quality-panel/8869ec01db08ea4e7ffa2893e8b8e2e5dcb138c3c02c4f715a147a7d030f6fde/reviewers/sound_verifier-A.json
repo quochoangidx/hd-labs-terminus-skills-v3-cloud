@@ -1,0 +1,153 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "8869ec01db08ea4e7ffa2893e8b8e2e5dcb138c3c02c4f715a147a7d030f6fde",
+  "severity": "None",
+  "summary": "The verifier compares every README key (native int/str types) and folio order against sealed goldens for rule-isolating fixtures. Every legal partition of rules 2.1, 2.2 and 2.3, and of the two figures left to today's code (cheap-room city tax, banker's-rounded 3.5% service fee on the new room charge), is covered by a fixture that a plausible wrong implementation fails. JSON is parsed, so formatting is not graded. I spot-checked the goldens by hand and they match the contract. No confirmed defect.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/folio-charges-rules.md",
+      "environment/app/examples/harbourview-1102.json",
+      "environment/app/src/folio/__init__.py",
+      "environment/app/src/folio/charges.py",
+      "environment/app/src/folio/money.py",
+      "environment/app/src/folio/statement.py",
+      "environment/app/tools/folio_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-free_nights.jsonl",
+      "tests/expected/02-city_tax.jsonl",
+      "tests/expected/03-occupancy_tax.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-service_fee.jsonl",
+      "tests/expected/06-city_tax_cheap.jsonl",
+      "tests/expected/07-generated.jsonl",
+      "tests/expected/08-limits.jsonl",
+      "tests/shipped/app/** (5 files; the manifest SHA-256 values are identical to the environment/app copies that were read)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped each rule (2.1 free nights, 2.2 city tax at >=5000, 2.3 13.5% half-up, 2.5 totals, README order and keys) and each instruction-preserved step (service fee, city tax under 5000) to a fixture and assertion that fails when the rule is missing or reversed",
+    "Occupancy rounding partitions: half cent with even floor (O1 5100 -> 689, O3 36300 -> 4901, S7 149900 -> 20237) rejects banker's rounding; half cent with odd floor (O2 5300 -> 716, O4 100100 -> 13514) rejects half-down; fraction below .5 (K7 8773.245 -> 8773, L69 4634.01 -> 4634) rejects ceil; fraction above .5 (O6 20249.865 -> 20250) rejects floor; exact values (O5, F-family)",
+    "Service fee: half-cent fees occur only when room = 100 mod 200 (same partition as occupancy). S1 178.5 -> 178, S3 192.5 -> 192, S5 1270.5 -> 1270 and S7 5246.5 -> 5246 reject a global switch of to_cents to half-up. S8 and F2 reject a fee computed from the old nights*rate room",
+    "City tax: rate 2999/3000 (K3/K5), 4999/5000 (K7, K8 vs K9, F8), cap at 13/14/15 nights (C2/C3/C4), 60 nights (C5, K8, K10 uncapped under today's step). These reject a >5000 threshold, a cap on cheap rooms, 250 on cheap rooms, paid-night counting (C2, C4) and off-by-one caps",
+    "Free nights: 6/7/8/13/14/15/60 (F1-F7) reject (n-1)//7, a single free night, and no free nights",
+    "Order: FC3-0004 has non-sorted ids, and relabel() shuffles stays while assigning ids that follow the original order, so a sort-by-id implementation fails",
+    "Comparator: json.loads parses the output; _same requires type(actual) is type(expected), which rejects floats and bools; extra keys are ignored; audit is echoed",
+    "Half-fee skip logic (test_outputs.py:189-205): skips only fee, total and file total for half-cent-fee stays outside the service_fee family, and the service_fee family grades them fully, so the skip opens no acceptance hole",
+    "Domain: within_limits enforces rule 1.2 on every sealed and relabelled file. load() keeps rooms under 5000 out of families that do not grade them. ROSTER digests match the manifest hashes and row counts (1,1,1,2,1,1,4,1). The limits file has 200 stays",
+    "Hand-recomputed goldens: all of FC3-0005, F7, K2, K3, K4, K6, K7, K8, K10, S1, S4-S9, T0, L6, L21, L199; no disagreement with the rules/instruction",
+    "Driver integrity: test_submitted_driver_unchanged compares the delivered bytes to the shipped copy, and test.sh runs cmp after pytest",
+    "Checked tests/Dockerfile (pytest pinned, /tests 700) and tests/test.sh (reward is 1 only when pytest passes and the driver is unchanged)"
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to a failing assertion",
+      "status": "checked",
+      "reason": "Each rule and each preserved step has a dedicated family with discriminating fixtures, and compare() checks all six folio keys plus audit and total",
+      "evidence": ["tests/test_outputs.py:185-247", "environment/app/docs/folio-charges-rules.md:24-37", "instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result, not existence or keys only",
+      "status": "checked",
+      "reason": "Values, native types, folio count, order and totals are all compared against sealed goldens",
+      "evidence": ["tests/test_outputs.py:189-205"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case per named domain rule, including rounding and threshold partitions",
+      "status": "checked",
+      "reason": "Occupancy half-up is split into its even-half, odd-half, below-half and above-half partitions. The city tax thresholds at 3000 and 5000 and the night cap at 13/14/15 are exercised. Free nights at 6/7/8/13/14/15/60. The service-fee banker's partition is covered",
+      "evidence": ["tests/expected/03-occupancy_tax.jsonl:1", "tests/expected/05-service_fee.jsonl:1", "tests/expected/06-city_tax_cheap.jsonl:1", "tests/expected/02-city_tax.jsonl:1", "tests/expected/01-free_nights.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected",
+      "status": "checked",
+      "reason": "Traced these wrong implementations and each fails at least one fixture: global half-up, banker's occupancy, floor, ceil, old-room fee, capped cheap city tax, >5000 threshold, paid-night city tax, sort-by-id, and per-night rounded occupancy (O3 would give 4902)",
+      "evidence": ["tests/expected/03-occupancy_tax.jsonl:1", "tests/expected/05-service_fee.jsonl:1", "tests/expected/06-city_tax_cheap.jsonl:1", "tests/test_outputs.py:250-272"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "Output is parsed JSON, so key order and whitespace are free, and extra keys are ignored. Running with python3 -I -S from a fresh cwd affects only stdlib-only code resolved relative to the driver, which is all the README contract needs",
+      "evidence": ["tests/test_outputs.py:146-150", "tests/test_outputs.py:193-201", "environment/app/tools/folio_run.py:7-18"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions (driver unchanged) enforced",
+      "status": "checked",
+      "reason": "The delivered bytes are captured before replacement and compared. test.sh also runs cmp after the run",
+      "evidence": ["tests/test_outputs.py:61-69", "tests/test_outputs.py:292-298", "tests/test.sh:23-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "No proxy, Oracle-specific representation, stale binary, self-controlled comparison or unreachable case",
+      "status": "checked",
+      "reason": "The goldens are sealed and pinned by digest. No expected value comes from candidate output (SHIPPED_RUN is used only for the read-permission probe). Every fixture is within the rule 1.2 limits. The Python source runs directly, with no build artifact",
+      "evidence": ["tests/test_outputs.py:49-58", "tests/test_outputs.py:159-182", "tests/expected/ROSTER:1-8"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localisation",
+      "status": "checked",
+      "reason": "Each test covers one rule. Cheap rooms appear only in the cheap family, and half-cent fees are graded only in the service_fee family, so a single wrong step fails its own named test",
+      "evidence": ["tests/test_outputs.py:11-15", "tests/test_outputs.py:44-46", "tests/test_outputs.py:214-247"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 2.3 half-up occupancy", "preserved banker's service fee (instruction.md:3)"],
+      "case_or_path": "Room 5100 (O1/S1): occupancy 688.5 must be 689 while the fee 178.5 must stay 178, so neither a single global rounding change nor no change passes",
+      "status": "checked",
+      "evidence": ["tests/expected/03-occupancy_tax.jsonl:1", "tests/expected/05-service_fee.jsonl:1", "tests/test_outputs.py:195-205"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.1 free nights", "preserved service fee from the room figure"],
+      "case_or_path": "S8 60x142300: fee 258986 comes from the 52-night room. An old-room fee (298830) fails",
+      "status": "checked",
+      "evidence": ["tests/expected/05-service_fee.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.2 cap by nights", "rule 2.1 free nights"],
+      "case_or_path": "C2 (13 nights) expects 3250 and C4 (15 nights) expects 3500, so counting paid nights instead of nights fails",
+      "status": "checked",
+      "evidence": ["tests/expected/02-city_tax.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.2 threshold 5000", "preserved city tax under 5000"],
+      "case_or_path": "K8 (4999 x 60 nights) expects the uncapped 12000 and K9 (5000 x 15) expects 3500",
+      "status": "checked",
+      "evidence": ["tests/expected/06-city_tax_cheap.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["README folio order", "relabelled generated files"],
+      "case_or_path": "relabel() shuffles stays and assigns sorted ids by original position, so id-sorted output mismatches the file order",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:250-272"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

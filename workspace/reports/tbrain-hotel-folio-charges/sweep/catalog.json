@@ -1,0 +1,213 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "h1-no-free-night": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "(stay[\"nights\"] - stay[\"nights\"] // FREE_NIGHT_EVERY) * stay[\"rate\"]",
+     "new": "stay[\"nights\"] * stay[\"rate\"]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_every_seventh_night_free"
+   ],
+   "rationale": "2.1"
+  },
+  "h1b-every-eighth": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "FREE_NIGHT_EVERY = 7",
+     "new": "FREE_NIGHT_EVERY = 8"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_1_every_seventh_night_free"
+   ],
+   "rationale": "seventh"
+  },
+  "h2-no-cap": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "return min(stay[\"nights\"], CITY_TAX_MAX_NIGHTS) * CITY_TAX_PER_NIGHT",
+     "new": "return stay[\"nights\"] * CITY_TAX_PER_NIGHT"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_city_tax_for_at_most_fourteen_nights"
+   ],
+   "rationale": "2.2 stop"
+  },
+  "h2b-cap-13": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "CITY_TAX_MAX_NIGHTS = 14",
+     "new": "CITY_TAX_MAX_NIGHTS = 13"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_city_tax_for_at_most_fourteen_nights"
+   ],
+   "rationale": "14 nights"
+  },
+  "h2c-old-amount": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "CITY_TAX_PER_NIGHT = 250",
+     "new": "CITY_TAX_PER_NIGHT = 200"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_city_tax_for_at_most_fourteen_nights"
+   ],
+   "rationale": "250"
+  },
+  "h3-half-even-tax": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "    return math.floor(tax + Fraction(1, 2))",
+     "new": "    return round(tax)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_occupancy_tax_half_cent_up"
+   ],
+   "rationale": "half up"
+  },
+  "h3b-old-rate": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "OCCUPANCY_TAX_PERCENT = \"13.5\"",
+     "new": "OCCUPANCY_TAX_PERCENT = 12"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_3_occupancy_tax_half_cent_up"
+   ],
+   "rationale": "13.5"
+  },
+  "tx-fee-half-up": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "    return to_cents(percent(room_charge, SERVICE_FEE_PERCENT))",
+     "new": "    return math.floor(percent(room_charge, SERVICE_FEE_PERCENT) + Fraction(1, 2))"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_service_fee_keeps_todays_step"
+   ],
+   "rationale": "kept round"
+  },
+  "ty-cheap-new-rule": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "    if stay[\"rate\"] >= CITY_TAX_RULE_FROM:",
+     "new": "    if True:"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_room_under_5000_keeps_todays_city_tax"
+   ],
+   "rationale": "kept city tax"
+  },
+  "ty-cheap-capped": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "    return stay[\"nights\"] * CITY_TAX_OLD_PER_NIGHT",
+     "new": "    return min(stay[\"nights\"], CITY_TAX_MAX_NIGHTS) * CITY_TAX_OLD_PER_NIGHT"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_room_under_5000_keeps_todays_city_tax"
+   ],
+   "rationale": "kept no cap"
+  },
+  "ty-cheap-no-exemption": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "    if stay[\"rate\"] < CITY_TAX_FREE_BELOW:\n        return 0\n",
+     "new": ""
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_room_under_5000_keeps_todays_city_tax"
+   ],
+   "rationale": "kept exemption"
+  },
+  "ty-threshold-5001": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/folio/charges.py",
+     "old": "CITY_TAX_RULE_FROM = 5000",
+     "new": "CITY_TAX_RULE_FROM = 5001"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_room_under_5000_keeps_todays_city_tax"
+   ],
+   "rationale": "5,000 or more"
+  },
+  "c5-capped-199": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/folio/statement.py",
+     "old": "folios = [folio(x) for x in stays[\"stays\"]]",
+     "new": "folios = [folio(x) for x in stays[\"stays\"][:199]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_limits_reached"
+   ],
+   "rationale": "200 stays"
+  },
+  "c15-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/folio/statement.py",
+     "old": "folios = [folio(x) for x in stays[\"stays\"]]",
+     "new": "folios = [folio(x) for x in sorted(stays[\"stays\"], key=lambda q: q[\"id\"])]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_5_totals_and_folio_order"
+   ],
+   "rationale": "file order"
+  }
+ },
+ "alternatives": {
+  "alt-extra-keys": {
+   "edits": [
+    {
+     "file": "app/src/folio/statement.py",
+     "old": "return {\"id\": stay[\"id\"],",
+     "new": "return {\"note\": \"x\", \"id\": stay[\"id\"],"
+    }
+   ],
+   "rationale": "extra keys ignored"
+  }
+ }
+}

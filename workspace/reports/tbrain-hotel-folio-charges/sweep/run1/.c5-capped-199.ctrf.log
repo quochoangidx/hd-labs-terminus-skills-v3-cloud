@@ -1,0 +1,58 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 10 items
+
+../../tests/test_outputs.py ......F...                                   [100%]
+
+=================================== FAILURES ===================================
+_________________________ test_rule_1_2_limits_reached _________________________
+
+    def test_rule_1_2_limits_reached():
+        """200 stays; 1 and 60 nights; rates of 5,000 and 150,000 cents."""
+        assert len(load("limits")[0]["stays"]["stays"]) == 200
+>       check_family("limits")
+
+/tests/test_outputs.py:246: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:210: in check_family
+    compare(run(row["stays"]), row["folios"], row["stays"]["stays"], f"{name} {row['stays']['audit']}", grades)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'audit': 'FC3-0012', 'folios': [{'id': 'ABCDEFGHIJ', 'room': 7800000, 'occupancy_tax': 1053000, 'city_tax': 3500, ......x': 250, ...}, {'id': 'L5', 'room': 2055317, 'occupancy_tax': 277468, 'city_tax': 3500, ...}, ...], 'total': 484338928}
+expected = {'audit': 'FC3-0012', 'folios': [{'id': 'ABCDEFGHIJ', 'room': 7800000, 'occupancy_tax': 1053000, 'city_tax': 3500, ......x': 250, ...}, {'id': 'L5', 'room': 2055317, 'occupancy_tax': 277468, 'city_tax': 3500, ...}, ...], 'total': 484426278}
+stays = [{'id': 'ABCDEFGHIJ', 'nights': 60, 'rate': 150000}, {'id': '9', 'nights': 1, 'rate': 5000}, {'id': 'L2', 'nights': 18... 'nights': 1, 'rate': 5000}, {'id': 'L4', 'nights': 1, 'rate': 80284}, {'id': 'L5', 'nights': 19, 'rate': 120901}, ...]
+label = 'limits FC3-0012', grades = frozenset()
+
+    def compare(actual, expected, stays, label, grades=frozenset()):
+        """Every key the README lists, as a JSON integer or string; further keys are ignored. For a stay whose service
+        fee lands on a half cent, the fee, the folio total and the file total are compared only where ``grades`` holds
+        "half_fee"."""
+        assert isinstance(actual, dict) and set(actual) >= {"audit", "folios", "total"}, f"{label}: top-level keys"
+        _same(actual["audit"], expected["audit"], f"{label} audit")
+        skipped = {i for i, x in enumerate(stays) if half_fee(x)} if "half_fee" not in grades else set()
+        if not skipped:
+            _same(actual["total"], expected["total"], f"{label} total")
+        got, want = actual["folios"], expected["folios"]
+>       assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} folios, expected {len(want)}"
+E       AssertionError: limits FC3-0012: 199 folios, expected 200
+E       assert (True and 199 == 200)
+E        +  where True = isinstance([{'id': 'ABCDEFGHIJ', 'room': 7800000, 'occupancy_tax': 1053000, 'city_tax': 3500, ...}, {'id': '9', 'room': 5000, 'oc...tax': 10838, 'city_tax': 250, ...}, {'id': 'L5', 'room': 2055317, 'occupancy_tax': 277468, 'city_tax': 3500, ...}, ...], list)
+E        +  and   199 = len([{'id': 'ABCDEFGHIJ', 'room': 7800000, 'occupancy_tax': 1053000, 'city_tax': 3500, ...}, {'id': '9', 'room': 5000, 'oc...tax': 10838, 'city_tax': 250, ...}, {'id': 'L5', 'room': 2055317, 'occupancy_tax': 277468, 'city_tax': 3500, ...}, ...])
+E        +  and   200 = len([{'id': 'ABCDEFGHIJ', 'room': 7800000, 'occupancy_tax': 1053000, 'city_tax': 3500, ...}, {'id': '9', 'room': 5000, 'oc...tax': 10838, 'city_tax': 250, ...}, {'id': 'L5', 'room': 2055317, 'occupancy_tax': 277468, 'city_tax': 3500, ...}, ...])
+
+/tests/test_outputs.py:198: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_2_1_every_seventh_night_free
+PASSED ../../tests/test_outputs.py::test_rule_2_2_city_tax_for_at_most_fourteen_nights
+PASSED ../../tests/test_outputs.py::test_rule_2_3_occupancy_tax_half_cent_up
+PASSED ../../tests/test_outputs.py::test_rule_2_5_totals_and_folio_order
+PASSED ../../tests/test_outputs.py::test_service_fee_keeps_todays_step
+PASSED ../../tests/test_outputs.py::test_room_under_5000_keeps_todays_city_tax
+PASSED ../../tests/test_outputs.py::test_generated_night_audits
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_1_2_limits_reached - AssertionE...
+========================= 1 failed, 9 passed in 0.68s ==========================

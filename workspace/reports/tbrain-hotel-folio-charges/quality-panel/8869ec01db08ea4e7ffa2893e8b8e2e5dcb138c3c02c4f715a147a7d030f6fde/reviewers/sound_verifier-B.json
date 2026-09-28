@@ -1,0 +1,207 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "8869ec01db08ea4e7ffa2893e8b8e2e5dcb138c3c02c4f715a147a7d030f6fde",
+  "severity": "Advisory",
+  "summary": "The verifier compares every README key with exact types against spot-checked, independently correct sealed expectations. It rejects every plausible wrong implementation traced for rules 2.1, 2.2, 2.3 and 2.5 and for the two figures left to today's code (service fee rounding, and city tax under 5,000). It accepts contract-valid alternatives. The only weakness is failure localisation: an always-round-up occupancy-tax mutant passes the rule-2.3 test itself and is caught only by the cheap-room, limits and generated tests. The reward is still 0, so this is Advisory.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/folio-charges-rules.md",
+      "environment/app/examples/harbourview-1102.json",
+      "environment/app/src/folio/__init__.py",
+      "environment/app/src/folio/charges.py",
+      "environment/app/src/folio/money.py",
+      "environment/app/src/folio/statement.py",
+      "environment/app/tools/folio_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-free_nights.jsonl",
+      "tests/expected/02-city_tax.jsonl",
+      "tests/expected/03-occupancy_tax.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-service_fee.jsonl",
+      "tests/expected/06-city_tax_cheap.jsonl",
+      "tests/expected/07-generated.jsonl",
+      "tests/expected/08-limits.jsonl",
+      "tests/shipped/app/tools/folio_run.py",
+      "tests/shipped/app/src/folio/__init__.py",
+      "tests/shipped/app/src/folio/charges.py",
+      "tests/shipped/app/src/folio/money.py",
+      "tests/shipped/app/src/folio/statement.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "SOUND_VERIFIER-1",
+      "severity": "Advisory",
+      "claim": "The test named for rule 2.3 (test_rule_2_3_occupancy_tax_half_cent_up) does not isolate 'nearest cent' from 'always round up'. Every occupancy-tax fraction in 03-occupancy_tax.jsonl is 0, exactly .5 or above .5, so a ceiling mutant passes that test. Other fixed families reject the mutant, so the reward is correct; only failure localisation is weak.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "Rule 2.3 says 13.5 per cent of the room charge is rounded to the nearest cent, with an exact half cent going up. A fraction below .5 must round down.",
+        "actual_behavior": "A candidate that computes ceil(room*135/1000) gets every occupancy_tax in family 03 right: O1 688.5->689, O2 715.5->716, O3 4900.5->4901, O4 13513.5->13514, O5 675 exact, O6 20249.865->20250, O7 20999.79->21000. It fails only where some fraction is below .5: K7 in 06-city_tax_cheap (64987*0.135=8773.245, expected 8773), T0 in 07-generated (1769574*0.135=238892.49, expected 238892) and L4 in 08-limits (80284*0.135=10838.34, expected 10838).",
+        "trace_or_receipt": "Static trace, not executed. compare() checks occupancy_tax for every folio in every family (tests/test_outputs.py:202-205). In families 01, 02 and 04 every occupancy tax is exact. In family 05 the fractions are .5, .79 or 0. In family 03 they are as listed above. So the ceiling mutant passes test_rule_2_1, test_rule_2_2, test_rule_2_3, test_rule_2_5 and test_service_fee. It fails test_room_under_5000_keeps_todays_city_tax, test_rule_1_2_limits_reached and test_generated_night_audits. pytest therefore returns non-zero and test.sh:20-27 writes reward 0."
+      },
+      "reachable_case_or_path": "Candidate implements occupancy tax as ceiling division ('going up' misread as always up). Result: test_rule_2_3 passes; the failure appears under the cheap-room city-tax, limits and generated tests.",
+      "graded_effect": "Reward is unchanged (0 for the mutant). Diagnosis is misleading: the failing tests are named for other rules, and the rule-2.3 test reports success for a rule-2.3 defect.",
+      "citations": [
+        "tests/expected/03-occupancy_tax.jsonl:1",
+        "tests/expected/06-city_tax_cheap.jsonl:1",
+        "tests/expected/07-generated.jsonl:1",
+        "tests/expected/08-limits.jsonl:1",
+        "tests/test_outputs.py:224-226",
+        "tests/test_outputs.py:202-205",
+        "environment/app/docs/folio-charges-rules.md:31-32"
+      ],
+      "root_invariant": "Each partition of a named rounding rule (below half, exactly half with even floor, exactly half with odd floor, above half, exact) should be discriminated inside the test named for that rule.",
+      "authority": [
+        "environment/app/docs/folio-charges-rules.md:31-32",
+        "instruction.md:5"
+      ],
+      "implementation_sites": [
+        "tests/expected/03-occupancy_tax.jsonl:1",
+        "tests/test_outputs.py:224-226"
+      ],
+      "sibling_variants": [
+        "Service-fee rounding (today's banker's rounding): family 05 includes a below-half fee (S9 5444.39->5444), even-floor halves (S1 178.5->178, S3 192.5->192) and odd-floor halves (S2 185.5->186, S4 199.5->200), so all partitions are discriminated there. No sibling gap."
+      ],
+      "interaction_variants": [
+        "Every occupancy half-cent room (room congruent to 100 mod 200) is also a service-fee half-cent room. In family 03, compare() skips service_fee and total for those stays but still compares occupancy_tax (tests/test_outputs.py:195-205), so the half partitions stay graded. Checked; no additional gap."
+      ],
+      "minimal_repair_boundary": "Add one stay with a below-half occupancy fraction to 03-occupancy_tax.jsonl, for example 1 night at 5,003 cents (675.405 -> 675), and update the ROSTER digest.",
+      "closure_evidence": [
+        "A ceiling-rounding mutant fails test_rule_2_3_occupancy_tax_half_cent_up.",
+        "The reference still passes all tests."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read every packet file in the manifest. The tests/shipped files are byte-identical to the environment files by manifest hash, and I also read them directly.",
+    "Derived today's behaviour from charges.py and money.py: room = nights*rate; city tax 0 below 3000 cents, otherwise nights*200 with no cap; occupancy 12%; service fee 3.5%; Python round() on Fraction, which is banker's rounding.",
+    "Recomputed by hand under FC-3 plus today's steps for unruled figures: all of family 01 including the file total, C5, O3, O4, O6, O7, K2, K4, K6, K7, K9, K10, T0, MI4JZ1, WBFW14, L5 and L21. All matched the sealed values.",
+    "Mutant sweep for free nights: no free nights, only one free night, (n-1)//7, every 8th night free. All are caught by F2, F5 and F6 in family 01.",
+    "Mutant sweep for city tax: nights uncapped, cap at 13 or 15, cap on paid nights, threshold > 5000, cheap rooms set to 0, cheap rooms at 250, 14-night cap applied to cheap rooms. All are caught by C2-C4 and F2/F3 (families 01/02), by F8/O5/K9 at 5000, or by K5, K7, K8 and K10 in family 06.",
+    "Mutant sweep for occupancy tax: 12% rate, banker's rounding (caught by O1 and O3), floor or half-down (caught by O1), ceiling (caught only outside family 03; see SOUND_VERIFIER-1).",
+    "Mutant sweep for service fee: global half-up change to to_cents (caught by S1 and S3), fee computed on the pre-free-night room charge (caught by F2), ceiling (caught by S9).",
+    "Totals and order: compare() checks the file total when there is no skipped stay, checks every folio key with type equality, and checks folio order positionally. Relabelled and shuffled generated files block hardcoding by id or audit name.",
+    "Checked that the half_fee skip removes no coverage: family 05 grades service_fee and total for half-fee stays under grades={'half_fee'}.",
+    "Checked acceptance of valid alternatives: JSON is parsed, key order and extra keys are ignored, and exact int type is required, consistent with the README.",
+    "Checked driver integrity and stale-state handling: the verifier replaces the driver with its own copy and compares the delivered bytes; runs use python3 -I -S with PYTHONDONTWRITEBYTECODE as an unprivileged uid; test.sh only rewards when pytest passes and the cmp succeeds.",
+    "Checked domain adherence: within_limits enforces rule 1.2 on every graded file, and load() confines rooms under 5,000 cents to family 06. No unreachable or out-of-domain case is graded."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Rules 2.1, 2.2, 2.3 and 2.5, the unruled service fee and the unruled city tax under 5,000 each have a named family with discriminating stays. Rule 2.3 localisation is weaker for the ceiling mutant.",
+      "evidence": ["tests/test_outputs.py:214-272", "tests/expected/01-free_nights.jsonl:1", "tests/expected/02-city_tax.jsonl:1", "tests/expected/03-occupancy_tax.jsonl:1"],
+      "finding_ids": ["SOUND_VERIFIER-1"]
+    },
+    {
+      "category": "Full core result (values, membership, required outputs)",
+      "status": "checked",
+      "reason": "Every README key is compared with exact type; folio count, order and ids are compared; the file total is compared except when a half-fee stay is skipped, and it is graded in families 04 and 05.",
+      "evidence": ["tests/test_outputs.py:185-205", "environment/app/README.md:24-30"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rule has an isolating case (rounding/threshold partitions)",
+      "status": "checked",
+      "reason": "Covered: the 5000 threshold at 4999 and 5000; the 3000 today-threshold at 2999 and 3000; the 14-night cap at 13, 14 and 15; free nights at 6, 7, 8, 13, 14, 15 and 60; occupancy halves with even and odd floors; service-fee halves with even and odd floors. Occupancy below-half is absent from its own family.",
+      "evidence": ["tests/expected/06-city_tax_cheap.jsonl:1", "tests/expected/03-occupancy_tax.jsonl:1", "tests/expected/05-service_fee.jsonl:1"],
+      "finding_ids": ["SOUND_VERIFIER-1"]
+    },
+    {
+      "category": "Plausible incorrect solution rejected",
+      "status": "checked",
+      "reason": "Every traced mutant is rejected by at least one fixed family (see checks_performed).",
+      "evidence": ["tests/test_outputs.py:208-247"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "Output is parsed as JSON; extra keys and key order are tolerated; any correct computation method yields identical integers. The driver is fixed by contract, so its byte check matches instruction.md:1.",
+      "evidence": ["tests/test_outputs.py:150", "tests/test_outputs.py:189-205", "tests/test_outputs.py:292-298", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced",
+      "status": "checked",
+      "reason": "Leaving the driver unchanged is enforced in test_outputs.py and test.sh. 'No extra guard' is observable only through the graded figures, which are covered in-domain. Out-of-limit inputs are left open and are not graded.",
+      "evidence": ["tests/test_outputs.py:61-93", "tests/test.sh:20-27", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behaviour, Oracle-specific representation, stale binaries, self-controlled comparisons",
+      "status": "checked",
+      "reason": "Expectations are sealed with a ROSTER sha256; the candidate cannot supply the comparison. The driver is replaced by the verifier's copy. -I -S and PYTHONDONTWRITEBYTECODE limit stale state. Integer representation is contract-mandated.",
+      "evidence": ["tests/test_outputs.py:49-58", "tests/test_outputs.py:170-182", "tests/test_outputs.py:146", "tests/expected/ROSTER:1-8"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable or out-of-domain test cases",
+      "status": "checked",
+      "reason": "within_limits asserts rule 1.2 on every sealed and relabelled file; relabelled ids stay within 1-10 characters from CODE and are unique.",
+      "evidence": ["tests/test_outputs.py:159-167", "tests/test_outputs.py:250-272"],
+      "finding_ids": []
+    },
+    {
+      "category": "Expectation correctness (independent spot checks)",
+      "status": "checked",
+      "reason": "About 20 folios across all families were recomputed by hand from the FC-3 rules plus today's steps; all matched.",
+      "evidence": ["tests/expected/01-free_nights.jsonl:1", "tests/expected/06-city_tax_cheap.jsonl:1", "tests/expected/07-generated.jsonl:1", "tests/expected/08-limits.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.1 free nights", "2.2 city tax counts all nights, first 14"],
+      "case_or_path": "C2 (13 nights, 12 paid) expects 3250, F2 (7 nights) expects 1750 and F3 (8 nights) expects 2000, so a paid-night city tax is rejected.",
+      "status": "checked",
+      "evidence": ["tests/expected/02-city_tax.jsonl:1", "tests/expected/01-free_nights.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 free nights", "unruled service fee computed from the rule-defined room charge"],
+      "case_or_path": "F2: room 120000 gives fee 4200; a fee on the old 140000 room would be 4900. The stay is not half-fee, so it is compared.",
+      "status": "checked",
+      "evidence": ["tests/expected/01-free_nights.jsonl:1", "tests/test_outputs.py:153-156"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 half-up occupancy rounding", "today's banker's rounding for the service fee"],
+      "case_or_path": "Rooms congruent to 100 mod 200 put both figures on a half cent. Family 03 grades occupancy (O1, O3 have even floors); family 05 grades the fee (S1, S3 have even floors). A global to_cents change fails family 05, and an unchanged to_cents fails family 03.",
+      "status": "checked",
+      "evidence": ["tests/expected/03-occupancy_tax.jsonl:1", "tests/expected/05-service_fee.jsonl:1", "tests/test_outputs.py:195-205"],
+      "finding_ids": ["SOUND_VERIFIER-1"]
+    },
+    {
+      "rules": ["2.2 threshold at 5,000", "today's city tax below 5,000 (threshold 3000, 200 per night, uncapped)"],
+      "case_or_path": "K7/K8 (4999) expect 3000/12000, K9 (5000) expects 3500, and K3/K5 (2999/3000) expect 0/200.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-city_tax_cheap.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.5 totals", "file order"],
+      "case_or_path": "Family 04 has ids ZZZZZZZZZZ, 0 and A1 out of lexical order plus a single-stay file; relabelled generated files are shuffled, and the expected folios follow the shuffle.",
+      "status": "checked",
+      "evidence": ["tests/expected/04-order_and_total.jsonl:1-2", "tests/test_outputs.py:250-262"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}
