@@ -1,0 +1,199 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "i1-no-grace": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "    if stay <= GRACE_MINUTES and session[\"vehicle\"] in GRACED:\n        return 0\n",
+     "new": ""
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_grace_period_and_hours"
+   ],
+   "rationale": "2.2"
+  },
+  "i1b-grace-strict": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "if stay <= GRACE_MINUTES and",
+     "new": "if stay < GRACE_MINUTES and"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_grace_period_and_hours"
+   ],
+   "rationale": "15 or less"
+  },
+  "i1c-grace-16": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "GRACE_MINUTES = 15",
+     "new": "GRACE_MINUTES = 16"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_grace_period_and_hours"
+   ],
+   "rationale": "15"
+  },
+  "i2-van-300": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "\"VAN\": 450",
+     "new": "\"VAN\": 300"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_hourly_rates"
+   ],
+   "rationale": "3.1"
+  },
+  "i3-no-max": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "        fee = min(fee, DAILY_MAXIMUM * -(-stay // 1440))",
+     "new": "        pass"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_3_car_and_van_maximum"
+   ],
+   "rationale": "3.3"
+  },
+  "i3b-whole-days": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "DAILY_MAXIMUM * -(-stay // 1440)",
+     "new": "DAILY_MAXIMUM * max(1, stay // 1440)"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_3_car_and_van_maximum"
+   ],
+   "rationale": "days begun"
+  },
+  "tx-credit-floor": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "    due = fee - VALIDATION_CREDIT if session[\"validated\"] else fee",
+     "new": "    due = max(0, fee - VALIDATION_CREDIT) if session[\"validated\"] else fee"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_validated_ticket_keeps_todays_amount_due"
+   ],
+   "rationale": "kept credit"
+  },
+  "tx-grace-due-zero": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "    fee = parking_fee(session)\n",
+     "new": "    fee = parking_fee(session)\n    if fee == 0:\n        return 0, 0\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_validated_ticket_keeps_todays_amount_due"
+   ],
+   "rationale": "kept credit in grace"
+  },
+  "ty-moto-capped": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "CAPPED = (\"CAR\", \"VAN\")",
+     "new": "CAPPED = (\"CAR\", \"VAN\", \"MOTO\")"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_motorcycle_keeps_todays_uncapped_fee"
+   ],
+   "rationale": "kept uncapped"
+  },
+  "c5-capped-199": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/parkfee/statement.py",
+     "old": "lines = [line(x) for x in sessions[\"sessions\"]]",
+     "new": "lines = [line(x) for x in sessions[\"sessions\"][:199]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_limits_reached"
+   ],
+   "rationale": "200 sessions"
+  },
+  "c15-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/parkfee/statement.py",
+     "old": "lines = [line(x) for x in sessions[\"sessions\"]]",
+     "new": "lines = [line(x) for x in sorted(sessions[\"sessions\"], key=lambda q: q[\"id\"])]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_total_and_session_order"
+   ],
+   "rationale": "file order"
+  },
+  "c7-stay-capped": {
+   "class": "C7",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "    return -(-(session[\"exit\"] - session[\"entry\"]) // 60)",
+     "new": "    return min(167, -(-(session[\"exit\"] - session[\"entry\"]) // 60))"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_limits_reached"
+   ],
+   "rationale": "a stay of 10,080 minutes is charged 168 hours"
+  },
+  "tz-moto-grace": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/parkfee/fees.py",
+     "old": "GRACED = (\"CAR\", \"VAN\")",
+     "new": "GRACED = (\"CAR\", \"VAN\", \"MOTO\")"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_motorcycle_keeps_todays_uncapped_fee"
+   ],
+   "rationale": "kept: no grace for a motorcycle"
+  }
+ },
+ "alternatives": {
+  "alt-extra-keys": {
+   "edits": [
+    {
+     "file": "app/src/parkfee/statement.py",
+     "old": "return {\"id\": session[\"id\"],",
+     "new": "return {\"note\": \"x\", \"id\": session[\"id\"],"
+    }
+   ],
+   "rationale": "extra keys ignored"
+  }
+ }
+}
