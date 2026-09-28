@@ -178,8 +178,10 @@ workspace/submissions/SUBMISSION-<task-slug>.md
 Write the source draft only after the task behavior, oracle, verifier, and
 available difficulty probes are stable. The source draft is the factual record;
 `workspace/submissions/SUBMISSION-<task-slug>.md` is the canonical copy-paste packet for
-the platform UI (same name/shape as `task-batch` and `task-clone` produce): the
-four explanation fields PLUS the Metadata answers ("approved canonical base image?"
+the platform UI (same name/shape as `task-batch` and `task-clone` produce). It
+does **not** contain the Difficulty, Solution or Verification Explanation —
+those three are written only in `task.toml` `[metadata]`. The packet holds
+Relevant Experience, the Metadata answers ("approved canonical base image?"
 Yes/No + exact digest-pinned image; "Task Inspiration from the Task Gallery?"
 Yes/No + Inspiration ID), the full paste-ready Rubrics block (format rules:
 AGENTS.md §9 — `Agent`-prefixed single physical lines, closed score set with

@@ -209,7 +209,9 @@ workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready plat
 
    These files are optional authoring notes and must remain outside the submitted
    task and ZIP; the authoritative submitted values are in `task.toml`, from
-   which Snorkel assembles `README.md`.
+   which Snorkel assembles `README.md`. The packet must not carry Difficulty,
+   Solution or Verification Explanation sections; flag them as should-fix if
+   present.
 
    Review each field separately:
 

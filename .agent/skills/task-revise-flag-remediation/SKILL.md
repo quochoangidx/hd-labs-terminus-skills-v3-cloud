@@ -598,6 +598,7 @@ Before repackaging, bring every out-of-ZIP artifact in line with the repaired
 snapshot: the three `task.toml` explanations (counts in
 `verification_explanation` must match the files; the quality gate checks them),
 `difficulty` (the measured tier once one exists), the platform rubric, and
-`SUBMISSION-<slug>.md`. In the accepted corpus, four of six submission notes and
+`SUBMISSION-<slug>.md` (Relevant Experience, Metadata, Rubrics only — remove any
+leftover Difficulty/Solution/Verification sections). In the accepted corpus, four of six submission notes and
 two rubrics were left describing a trap that had already been dropped; one needed
 a reviewer to fix it by hand.

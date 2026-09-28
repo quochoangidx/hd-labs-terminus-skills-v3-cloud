@@ -75,8 +75,9 @@ The ZIP must contain only the files/folders required by the Platform Submission 
 **Make shell scripts executable before zipping.** Reviewers reject a ZIP whose `tests/test.sh` or `solution/solve.sh` is non-executable. Run `chmod +x tests/test.sh solution/solve.sh` first, then verify the stored Unix mode with `unzip -Z <zip> tests/test.sh solution/solve.sh` (expect `-rwxr-xr-x`). `zip -X` preserves the Unix permission mode — it only strips uid/gid and timestamps — so the allowlist command below keeps the exec bit intact.
 
 The platform's `Difficulty Explanation`, `Solution Explanation`,
-`Verification Explanation`, and `Relevant Experience` fields are entered
-separately in the UI. They are not ZIP contents.
+`Verification Explanation`, and `Relevant Experience` fields come from
+`task.toml` `[metadata]`; they are not separate ZIP files. The first three are
+never written into `SUBMISSION-<slug>.md`.
 
 The Terminus 3 ZIP root should contain:
 
@@ -211,17 +212,13 @@ workspace/reports/<task-slug>/submission-explanations-source.md   (factual sourc
 workspace/submissions/SUBMISSION-<task-slug>.md                   (UI-ready platform packet)
 ```
 
-The UI-ready packet must contain (alongside Metadata and Rubrics — see
-`task-clone`/`task-batch` for the full packet format) exactly these three
-explanation sections:
+The UI-ready packet holds Relevant Experience, Metadata and Rubrics (see
+`task-clone`/`task-batch` for the format) and must **not** contain Difficulty,
+Solution or Verification Explanation sections. Those three live in `task.toml`
+`[metadata]`: `difficulty_explanation`, `solution_explanation`,
+`verification_explanation`.
 
-```text
-Difficulty Explanation
-Solution Explanation
-Verification Explanation
-```
-
-Check that:
+Check the `task.toml` explanations:
 
 - the final text preserves the facts, thresholds, paths, APIs, and validation
   results from the source draft
@@ -242,10 +239,11 @@ but they do not change the ZIP allowlist.
 On first upload:
 
 - upload the ZIP through the Terminus 3 submission flow
-- copy the three explanation sections (plus rubric and metadata answers)
-  from the UI-ready `workspace/submissions/SUBMISSION-<slug>.md` packet into their
-  matching platform fields; do not copy headings, rewrite diagnostics, or the
-  factual source draft
+- the three explanation fields come from `task.toml` `[metadata]`; copy the
+  rubric, Relevant Experience and metadata answers from the UI-ready
+  `workspace/submissions/SUBMISSION-<slug>.md` packet into their matching
+  platform fields; do not copy headings, rewrite diagnostics, or the factual
+  source draft
 - check "Generate Rubric(s)" while "Send to Reviewer" is unchecked
 - keep "Send to Reviewer" unchecked
 - inspect CI and generated rubric before final reviewer submission

@@ -949,21 +949,15 @@ Create one file per accepted task:
 workspace/submissions/SUBMISSION-<slug>.md
 ```
 
+Do not write Difficulty, Solution or Verification Explanation sections in this
+file; those three live only in `task.toml` `[metadata]`
+(`difficulty_explanation`, `solution_explanation`, `verification_explanation`),
+written from the frozen task and observed probe evidence under the rules in
+`terminus-regular-task-authoring`.
+
 Use this exact structure:
 
 ```markdown
-# Difficulty Explanation
-
-Describe in original language why the task is challenging for humans and coding agents. Base the explanation on the actual task design and observed probe failures. Name the professional role that would perform this work and why it is relevant. State where any corpus, fixtures, captures, traces, or dataset came from and why they are realistic; if the task uses no external data, say that explicitly. Do not claim unsupported platform difficulty.
-
-# Solution Explanation
-
-Describe the high-level solution approach and the key implementation insights. Do not copy the full Oracle or expose hidden fixture values.
-
-# Verification Explanation
-
-Explain how the tests verify correctness, including the major behavior clusters, preservation checks, edge cases, and anti-shortcut coverage.
-
 # Relevant Experience
 
 State the concrete domain, toolchain, or repository experience that supports the task design. Keep it factual and do not invent personal credentials.

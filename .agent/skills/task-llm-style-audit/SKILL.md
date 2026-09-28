@@ -36,7 +36,7 @@ inventory first, then score each surface:
 | Environment docs | `environment/**/*.md`, specs, READMEs | must read like a real engineering doc (API contract, schema, RFC), never a prompt extension |
 | Environment code comments | `environment/**` source | comments must not point at bugs or narrate the fix; when in doubt, delete the comment |
 | Rubric text | platform textbox draft / `*-rubics.txt` | flat `Agent ...` lines; vary phrasing across criteria |
-| Submission explanations | `workspace/reports/<slug>/submission-explanations*.md` | audit all four fields; keep the three technical explanations distinct and Relevant Experience factual |
+| Submission explanations | `task.toml` `[metadata]` explanation fields; Relevant Experience in `SUBMISSION-<slug>.md` | audit all four fields; keep the three technical explanations distinct and Relevant Experience factual; the packet must not repeat the three explanations |
 | Test/solution comments, Dockerfile comments | `tests/`, `solution/`, `Dockerfile` | reviewer-visible even though agent-invisible; same prose rules |
 | Filenames | whole tree | no AI-scaffolding names: `CLAUDE.md`, `AGENTS.md`, `skills.md`, `.cursor/` |
 
