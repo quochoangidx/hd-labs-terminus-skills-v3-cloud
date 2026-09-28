@@ -1,0 +1,120 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "9157208d95100765d2c5d6735d478c4fc366a4c2313e87acdfd3915049193a5d",
+  "severity": "None",
+  "summary": "The reference installs four static layouts. A manual static trace of every placement against makeup-rules.md found all four valid, with costs exactly equal to targets.json: mon 4635, wed 6701, fri 7500, sat 10601. No contract violation was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/tools/check_layout.py",
+      "environment/app/planner/plan_edition.py",
+      "environment/app/editions/targets.json",
+      "environment/app/editions/mon.json",
+      "environment/app/editions/wed.json",
+      "environment/app/editions/fri.json",
+      "environment/app/editions/sat.json",
+      "solution/solve.sh",
+      "solution/layouts/mon.json",
+      "solution/layouts/wed.json",
+      "solution/layouts/fri.json",
+      "solution/layouts/sat.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled the 19 manifest files with the files read. All were read in full and none was truncated.",
+    "mon (16 pages, 58 ads): grouped placements by page. For each page, checked bounds, overlaps, rest-on-foot-or-ads across the full width, and cell counts against limits (page 1: 36; others: 60*42*6//100=151); page 1 ad AD014 is at row 36. Also checked competitor spreads (cars, phones, estate, banks, grocers, travel) and that all 18 booked ads are placed. Unplaced 019, 021, 031, 040, 048 and 055 sum to 4305. Wrong-section penalties are AD014 114 and AD033 216. No right-hand ad sits on an even page. Total 4635 equals target 4635.",
+    "wed (20 pages, 88 ads): the same per-page checks, with every non-front page at or under 151 cells. Competitor groups banks, travel, furniture, cars, grocers, estate and phones are on distinct spreads, and all 34 booked ads are placed. Unplaced 003, 011, 032, 050, 079, 082 and 088 sum to 6175. Wrong-section penalties are 001 53, 024 123, 055 225 and 087 125, totalling 526. There is no left-hand penalty. Total 6701 equals target 6701.",
+    "fri (24 pages, 100 ads): the same per-page checks. Competitor spreads are distinct; for example, all 8 placed furniture ads are on spreads 3 to 10 with none repeated. All 34 booked ads are placed. Unplaced 018, 021, 022, 039, 044, 045, 052, 060, 088 and 100 sum to 6688. Wrong-section penalties are 007 175, 009 54, 020 216, 025 193, 040 82 and 073 92, totalling 812. There is no left-hand penalty. Total 7500 equals target 7500.",
+    "sat (32 pages, 138 ads): the same per-page checks. Competitor spreads are distinct across grocers, phones, furniture, cars, banks, travel and estate. All 46 booked ads are placed. Unplaced 018, 020, 043, 059, 064, 096, 117, 125 and 128 sum to 9935. Wrong-section penalties are 002 71, 024 75, 087 31, 092 121, 093 81, 131 135 and 135 152, totalling 666. There is no left-hand penalty. Total 10601 equals target 10601.",
+    "Checked the layout file format: a single top-level 'placements' object, integer page/column/row values, known ids only, and no duplicate keys, which is well under the size, digit and depth limits.",
+    "Checked that solve.sh creates /app/layouts, copies the four files there and runs check_layout.py under set -e. Since every layout is valid, each check exits 0."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference",
+      "status": "checked",
+      "reason": "Traced all four editions placement by placement. Boundaries exercised include pages filled to exactly the 151-cell limit, front-page ads at row 36 (the strip boundary), ads resting on stacked ads rather than the foot, and full-height 42-row ads.",
+      "evidence": ["environment/app/docs/makeup-rules.md:32-41", "solution/layouts/mon.json:1", "solution/layouts/wed.json:1", "solution/layouts/fri.json:1", "solution/layouts/sat.json:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "Layouts are standard JSON with integer fields and the required 'placements' object. solve.sh writes to /app/layouts/<edition>.json as instruction.md requires.",
+      "evidence": ["instruction.md:1", "environment/app/docs/makeup-rules.md:57-72", "solution/solve.sh:16-20"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches (deletion, replacement, identifier reuse)",
+      "status": "not_applicable",
+      "reason": "The reference is a static copy of precomputed layouts with no stateful logic. Uniqueness of ad ids per page is enforced by JSON object keys, and no duplicate keys appear.",
+      "evidence": ["solution/solve.sh:16-20"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or interruption promises.",
+      "evidence": ["instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Cost computation and target satisfaction",
+      "status": "checked",
+      "reason": "Recomputed every cost term by hand: left-out rates, wrong-section rate*30//100 per ad, and left-hand rate*15//100 per ad. Every edition's total equals its target, satisfying 'no more than'.",
+      "evidence": ["environment/app/docs/makeup-rules.md:43-55", "environment/app/editions/targets.json:1-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Booked ads and competitor separation",
+      "status": "checked",
+      "reason": "Every booked ad in all four editions is placed. No competitor group has two ads on the same page or spread, using spread(p)=0 for page 1 and p//2 otherwise, as makeup-rules.md:11-13 defines.",
+      "evidence": ["environment/app/docs/makeup-rules.md:11-13", "environment/app/docs/makeup-rules.md:39-41"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rest-on-foot-or-ads (rule 2)", "no overlap (rule 1)"],
+      "case_or_path": "Stacked columns such as wed p17 col2-3 (008 on 081 on 053 on 044/069) and sat p27 (041 on 073 on 049/070): each upper ad's row below is fully covered, with no shared cells.",
+      "status": "checked",
+      "evidence": ["solution/layouts/wed.json:1", "solution/layouts/sat.json:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["front-page strip (rule 3)", "wrong-section cost"],
+      "case_or_path": "Sport-section ads placed on news page 1 (mon AD014, wed AD087) sit at row 36 within 6 rows / 36 cells and are correctly charged the wrong-section penalty.",
+      "status": "checked",
+      "evidence": ["solution/layouts/mon.json:1", "solution/layouts/wed.json:1", "environment/app/docs/makeup-rules.md:36-38"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["competitor spreads (rule 4)", "page 1 stands alone"],
+      "case_or_path": "sat phones AD031 on p3 (spread 1) and cars AD110 on p2 (spread 1) are different groups. No group has members on both p2 and p3, or on p1 alongside anything that conflicts.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:11-13", "solution/layouts/sat.json:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["wrong-section penalty", "left-hand penalty"],
+      "case_or_path": "Checked for ads subject to both penalties: every placed right_hand ad is on an odd page in all four editions, so no double penalty arises and none is omitted.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:47-54"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

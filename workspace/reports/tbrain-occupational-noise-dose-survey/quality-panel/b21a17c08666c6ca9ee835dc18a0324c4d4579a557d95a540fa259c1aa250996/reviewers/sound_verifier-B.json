@@ -1,0 +1,259 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "b21a17c08666c6ca9ee835dc18a0324c4d4579a557d95a540fa259c1aa250996",
+  "severity": "Advisory",
+  "summary": "The verifier compares the complete report (every key, both lists, order, exact twa, and dose to the stated tolerance) for every fixture family. Each HC-4 rule and each figure kept from today's code has a fixture that isolates it, so a plausible implementation that gets one rule wrong fails. I found no false rejection of contract-valid output that a solver could plausibly reach. One Advisory: the read-probe control makes reward depend on /app/README.md still existing, although the contract does not require it.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/noise-survey-manual.md",
+      "environment/app/examples/press-shop-day.json",
+      "environment/app/tools/noisedose_run.py",
+      "environment/app/src/noisedose/__init__.py",
+      "environment/app/src/noisedose/levels.py",
+      "environment/app/src/noisedose/twa.py",
+      "environment/app/src/noisedose/flags.py",
+      "environment/app/src/noisedose/groups.py",
+      "environment/app/src/noisedose/survey.py",
+      "environment/app/src/noisedose/shift.py",
+      "environment/app/src/noisedose/report.py",
+      "environment/app/src/noisedose/runs.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/reference_duration.jsonl",
+      "tests/expected/threshold.jsonl",
+      "tests/expected/sampled_time.jsonl",
+      "tests/expected/paused_runs.jsonl",
+      "tests/expected/partial_surveys.jsonl",
+      "tests/expected/whole_shift.jsonl",
+      "tests/expected/three_quarters.jsonl",
+      "tests/expected/below_three_quarters.jsonl",
+      "tests/expected/differential-below_three_quarters.jsonl",
+      "tests/expected/measured_nothing.jsonl",
+      "tests/expected/differential-measured_nothing.jsonl",
+      "tests/expected/above_ceiling.jsonl",
+      "tests/expected/differential-above_ceiling.jsonl",
+      "tests/expected/ceiling_level.jsonl",
+      "tests/expected/impulse.jsonl",
+      "tests/expected/twa.jsonl",
+      "tests/expected/rounding.jsonl",
+      "tests/expected/status.jsonl",
+      "tests/expected/groups.jsonl",
+      "tests/expected/quiet_members.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/limits_workers.jsonl",
+      "tests/expected/limits_logs.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/shipped/app/tools/noisedose_run.py",
+      "tests/shipped/app/src/noisedose/__init__.py",
+      "tests/shipped/app/src/noisedose/flags.py",
+      "tests/shipped/app/src/noisedose/groups.py",
+      "tests/shipped/app/src/noisedose/levels.py",
+      "tests/shipped/app/src/noisedose/report.py",
+      "tests/shipped/app/src/noisedose/runs.py",
+      "tests/shipped/app/src/noisedose/shift.py",
+      "tests/shipped/app/src/noisedose/survey.py",
+      "tests/shipped/app/src/noisedose/twa.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "SOUND_VERIFIER-1",
+      "severity": "Advisory",
+      "claim": "The positive control in test_candidate_cannot_read_verifier_state needs /app/README.md to exist and be readable by the candidate's user. A package that is otherwise correct but has deleted or renamed the README therefore fails the whole all-or-nothing reward.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "Reward depends on the report printed by the unchanged driver and on the driver's bytes (instruction.md:1, instruction.md:5). The contract does not require /app/README.md to remain.",
+        "actual_behavior": "If /app/README.md is missing, the probe's open() raises OSError and the probe exits 0. _unreadable_by_candidate then returns True, the assertion `not _unreadable_by_candidate('/app/README.md')` fails, pytest exits non-zero, and reward.txt stays 0.",
+        "trace_or_receipt": "tests/test_outputs.py:383: the probe exits 0 on OSError. Line 385: code == 0 means unreadable. Line 392 asserts that README is readable. tests/test.sh:23 grants reward only when rc == 0. Static trace, not executed."
+      },
+      "reachable_case_or_path": "A solver fixes every rule in /app/src/noisedose, leaves the driver byte-identical, and deletes /app/README.md (for example while tidying). Every report comparison passes, but test_candidate_cannot_read_verifier_state fails.",
+      "graded_effect": "A narrow false rejection of a package whose graded behaviour is correct. It is reachable only through an action no plausible solver path needs, so it is excluded from the blocking decision.",
+      "citations": [
+        "tests/test_outputs.py:382-392",
+        "tests/test.sh:20-27",
+        "instruction.md:1-5"
+      ],
+      "root_invariant": "A control that checks the verifier's own harness should not depend on candidate-deletable state outside the graded interface.",
+      "authority": [
+        "instruction.md:1",
+        "instruction.md:5"
+      ],
+      "implementation_sites": [
+        "tests/test_outputs.py:392"
+      ],
+      "sibling_variants": [
+        "The other probe targets (/tests, ROSTER, the shipped copy, /logs/verifier) are verifier-owned, and the candidate cannot change their readability (tests/test.sh:15, tests/test_outputs.py:81-88). No other control depends on candidate files."
+      ],
+      "interaction_variants": [
+        "tests/test.sh:16 runs chmod -R a+rX /app, so a mode change alone cannot trigger this. Only removing or renaming the file can."
+      ],
+      "minimal_repair_boundary": "Use a verifier-created world-readable file (for example, under a fresh temp directory) as the positive control, not a file under /app.",
+      "closure_evidence": [
+        "A correct package with /app/README.md removed passes; the probe still reports /tests and ROSTER unreadable."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read the manual (sections 1-6), README report schema, instruction tolerance/exact-compare promises, and every shipped source module; confirmed tests/shipped/app files are byte-identical by manifest hash to environment/app and read them.",
+    "Traced compare/_row/_number: all README keys compared; survey name exact; list lengths/order exact; twa numeric equality or None identity; status/id/group/ceiling/impulse type+value exact; dose REL/ABS 5e-11 midpoint between 1e-11 pass and 1e-10 fail bounds; extra keys ignored except ceiling/impulse on group rows (manual 6.1).",
+    "Checked stored goldens carry ~12 significant digits (max ~5e-12 relative rounding), so a correct float implementation stays inside the 5e-11 band and a 1e-10 error falls outside it.",
+    "Hand-recomputed expected doses/TWAs for: HC4-0001 A4/A6, HC4-0002 B1/B2/B3/G1, HC4-0003 A1/A2, HC4-0004 B2, HC4-0005 A1/A2, HC4-0006 B1/B2, HC4-0007 A1/A2, HC4-0015 X1/X2/X3, HC4-0016 Y1/Y2/Y5, HC4-0037 V1, HC4-0019 Y1, HC4-0020 Z1, HC4-0038 K1/K4, HC4-0024 R0-R4 rounding margins, HC4-0025 S1-S4/T0-T3 status, HC4-0026 G1 group mean, HC4-0031 L-PEAKS; all agree with the manual.",
+    "Mutant sweep (static): 90/5 criterion; threshold > 80; sampled time = counted readings only; sampled time including 0.0 runs; sampled >40 instead of >=40; partial projected to 480; partial boundary > 3/4; whole-shift scaled down; below-3/4 projected to own shift / always to 480 / not projected; today's sampled time inside kept below-3/4 step; above-ceiling counted at own level or dropped; ceiling >=115; impulse >140; OSHA TWA formula; floor rounding; status on unrounded TWA; status >=85 over; flagged worker not over; group mean of TWAs; group mean excluding zero doses; group status inheriting member flags; group sort non-ASCII - each rejected by a named fixture.",
+    "Checked the differential design: pairs differ only in shift_minutes (below-3/4, measured-nothing) or in the above-ceiling level (118.5/131.2/140.0/115.1 vs 115.0); the shipped copy is asserted to agree across each pair; the candidate must too.",
+    "Checked the generated family and its relabelling: generated rows carry no trap input (load asserts this), logs have at most 12 runs, so splitting cannot exceed the 1,500-run limit; splitting and shuffling preserve every manual-defined figure; the expected rows are relabelled consistently.",
+    "Checked exact-half rounding reachability: an exact TWA equals 85 + 3 log2(D/100), where D/100 lies in the Q-span of 2^(j/30). So (twa-85)/3 = k/60 with k odd is unattainable (x^60-2 is irreducible). Exact halves are unreachable, and round-half-even and round-half-up cannot give different graded outcomes.",
+    "Checked harness: driver replaced by verifier copy before candidate code runs; delivered bytes compared; /app sealed; candidate runs as uid 65534 with -I -S, no_new_privs; reward requires pytest rc 0 and cmp of driver."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to a failing assertion",
+      "status": "checked",
+      "reason": "Every manual rule 1.2-6.1 and each kept-today figure has a dedicated test function, and each compares complete reports of its family.",
+      "evidence": ["tests/test_outputs.py:246-347", "environment/app/docs/noise-survey-manual.md:13-103"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result, not existence/keys/row count",
+      "status": "checked",
+      "reason": "_row compares every README key's value, and compare enforces list length and position order.",
+      "evidence": ["tests/test_outputs.py:196-225", "environment/app/README.md:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case per named domain rule",
+      "status": "checked",
+      "reason": "The isolating fixtures are: threshold 80.0/79.9 (HC4-0003/4); sampled time with 40.0-79.9 readings (HC4-0005/6); 0.0 runs (HC4-0007/8); own-shift projection (HC4-0009/10); exact 3/4 (HC4-0013/14); whole shift or longer (HC4-0011/12); ceiling 115.0 vs 115.1 (HC4-0021, HC4-0038); impulse 139.9/140.0 (HC4-0022/39); rounding (HC4-0024); status bands (HC4-0025); group mean (HC4-0026); quiet members (HC4-0027/28); order (HC4-0029).",
+      "evidence": ["tests/expected/threshold.jsonl:1-2", "tests/expected/sampled_time.jsonl:1-2", "tests/expected/three_quarters.jsonl:1-2", "tests/expected/status.jsonl:1", "tests/expected/rounding.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected",
+      "status": "checked",
+      "reason": "Static mutant sweep in checks_performed; every listed mutant changes at least one compared value in a named fixture.",
+      "evidence": ["tests/expected/partial_surveys.jsonl:1", "tests/expected/below_three_quarters.jsonl:1-3", "tests/expected/above_ceiling.jsonl:1-3", "tests/expected/impulse.jsonl:2", "tests/expected/quiet_members.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "JSON is parsed rather than byte-compared. Extra keys are ignored, int or float twa/dose are accepted, and the dose tolerance covers float reordering and golden rounding. The only candidate-state coupling found is the README control.",
+      "evidence": ["tests/test_outputs.py:196-225", "tests/test_outputs.py:392"],
+      "finding_ids": ["SOUND_VERIFIER-1"]
+    },
+    {
+      "category": "Documented restrictions and lifecycle (driver byte-identity)",
+      "status": "checked",
+      "reason": "The delivered driver's bytes are captured before replacement and compared to the shipped copy. test.sh also checks that the driver file is unchanged after the run.",
+      "evidence": ["tests/test_outputs.py:70-78", "tests/test_outputs.py:395-401", "tests/test.sh:23", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Figures left to today's code (kept steps) and differential soundness",
+      "status": "checked",
+      "reason": "Goldens for below-3/4, measured-nothing and above-ceiling match today's step applied to the manual's sampled time and measured dose. The differential pairs change only fields the kept step ignores.",
+      "evidence": ["environment/app/src/noisedose/shift.py:17-22", "environment/app/src/noisedose/runs.py:19", "tests/test_outputs.py:233-243", "tests/expected/differential-below_three_quarters.jsonl:1-5", "tests/expected/differential-above_ceiling.jsonl:1-4"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed / partitioned derived quantities and state transitions",
+      "status": "checked",
+      "reason": "The TWA log term is exercised both negative and positive (53.3, 65.9, 73.3 through 115.0). The zero-dose partition gives null TWA with status below or over depending on flags. The group all-zero case gives null and below. No state machine applies.",
+      "evidence": ["tests/expected/twa.jsonl:1", "tests/expected/measured_nothing.jsonl:1", "tests/expected/impulse.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Held-out/generated variation and anti-lookup",
+      "status": "checked",
+      "reason": "Five generated surveys are checked both as sealed and after relabelling (fresh names and ids, shuffled order, runs split). Split logs stay inside section 1 limits.",
+      "evidence": ["tests/test_outputs.py:350-379", "tests/expected/generated.jsonl:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Section 1 limit coverage",
+      "status": "checked",
+      "reason": "The limits fixtures cover 300 workers and 40 codes, a 1,500-run log, a 2,880-minute log, 500 peaks including 60.0 and 170.0, shifts of 60 and 1,440 minutes, and 8-character codes and 12-character ids. Their structure is asserted before comparison.",
+      "evidence": ["tests/test_outputs.py:339-347", "tests/expected/limits_workers.jsonl:1", "tests/expected/limits_logs.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.4 sampled time (readings >=40)", "kept below-3/4 projection"],
+      "case_or_path": "HC4-0037 V1: shift 480, 120@88 plus 120@70. The manual's sampled time of 240 gives 100.0, while today's sampled time of 120 would give 200.",
+      "status": "checked",
+      "evidence": ["tests/expected/below_three_quarters.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 whole shift keeps measured dose", "today's <480 projection"],
+      "case_or_path": "HC4-0011 A1 (shift 360, sampled 420) and HC4-0038 K1 (shift 60, sampled 60) keep their measured dose. Leftover projection to 480 would change both.",
+      "status": "checked",
+      "evidence": ["tests/expected/whole_shift.jsonl:1", "tests/expected/above_ceiling.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2 0.0 run is not a reading", "2.5 partial classification"],
+      "case_or_path": "HC4-0007 A1: counting the paused minutes would put sampled time at 475, but the correct 370 is still partial. The projection factor differs, so the dose differs.",
+      "status": "checked",
+      "evidence": ["tests/expected/paused_runs.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.3 flagged worker is over", "6.1 group status on TWA alone"],
+      "case_or_path": "In HC4-0039 both members are over by impulse, yet the group is below at 78.0. In HC4-0022 G2 a flagged zero-dose member leaves the group at null and below.",
+      "status": "checked",
+      "evidence": ["tests/expected/impulse.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 status judged on reported TWA", "5.3 bands"],
+      "case_or_path": "In HC4-0025, T0 (unrounded 81.99) reports 82.0 and is action. T1 (unrounded 85.03) reports 85.0 and is action. T2 reports 85.1 and is over.",
+      "status": "checked",
+      "evidence": ["tests/expected/status.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 counted at own level up to ceiling", "kept above-ceiling counted level", "5.1 ceiling flag"],
+      "case_or_path": "HC4-0038 K1: 115.1 is counted at 115.0 (213.33) and sets the ceiling flag. HC4-0021: 115.0 is counted at its own level without the flag.",
+      "status": "checked",
+      "evidence": ["tests/expected/above_ceiling.jsonl:3", "tests/expected/ceiling_level.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["6.1 group mean includes zero shift doses", "4.1 nought has no TWA"],
+      "case_or_path": "HC4-0027 and HC4-0028: quiet members at 0.0 halve or thin the group mean. An all-quiet group (G2) gives null and below.",
+      "status": "checked",
+      "evidence": ["tests/expected/quiet_members.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["relabelling", "section 1 run-count limit"],
+      "case_or_path": "Split runs at most double a generated log of at most 12 runs, so within_limits on the relabelled survey cannot fail for a correct candidate.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:364-378", "tests/expected/generated.jsonl:1-5"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["read-probe control", "candidate-controlled /app contents"],
+      "case_or_path": "Deleting /app/README.md turns the control assertion into a failure.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:392"],
+      "finding_ids": ["SOUND_VERIFIER-1"]
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

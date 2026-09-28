@@ -1,0 +1,20 @@
+# Rubric coverage matrix: tbrain-workers-comp-disability-benefit
+
+Review target: `workspace/submissions/tbrain-workers-comp-disability-benefit.zip` (sha256 8c9f7e80e05f8f116ad0494c2fbe246d3378375d2a823f3dc98b8867cb6e2f7a). Witnesses are CTRF ids in the ZIP's `tests/test_outputs.py`.
+
+| contract_id | source | observable_requirement | witness_ids | discrimination | coverage | criterion_id |
+|---|---|---|---|---|---|---|
+| weeks_pay_credit | manual 1.4, 2.2, 3.1, 3.2 | a line of 2,000 cents or more counts toward the week before its payday's; exactly 2,000 is a week's pay | test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays; test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay; test_rule_2_3_base_period_ends_before_the_week_of_injury | payday-week crediting (W01); strict 2,000 (c8) | covered | R1 |
+| aww_thirteen | manual 3.3 | base-period wages over thirteen for 0 to 13 paid weeks | test_rule_3_3_average_weekly_wage_divides_by_thirteen; test_rule_3_3_no_week_paid_gives_nought | divide by weeks paid (W02); one line per payday (c11) | covered | R2 |
+| rate_two_thirds | manual 3.4, 1.1 | two thirds of AWW to the nearest cent | test_rule_3_4_rate_is_two_thirds; test_rule_3_4_maximum_and_minimum_bound_the_rate | 60 per cent (W03); floored rate (c8) | covered | R3 |
+| row_in_force | manual 2.4, 3.4 | the row in force on the date of injury bounds the rate | test_rule_2_4_row_in_force_on_the_date_of_injury | newest row (W04); strictly before (c3); first row (c10) | covered | R4 |
+| low_wage | manual 3.5 | AWW below the minimum is the rate | test_rule_3_5_low_wage_rate_is_the_aww | lifted to minimum (W05) | covered | R5 |
+| disability_days | manual 2.5 | both ends of each period count | test_rule_2_5_both_ends_of_a_period_count | one day short (W06); span capped (c3) | covered | R6 |
+| waiting_retro | manual 2.6, 4.1, 4.2 | three waiting days, paid back from fourteen days | test_rule_2_6_three_waiting_days; test_rule_4_1_retroactive_from_fourteen_days | seven days (W07); retro strictly above 14 (c8) | covered | R7 |
+| ttd_rounding | manual 4.3, 1.1 | rate x paid / 7 to the nearest cent | test_rule_4_3_amount_rounded_to_the_cent | truncation (W08) | covered | R8 |
+| partial_week | manual 2.7, 2.8, 5.1, 5.2 | a week of partial disability pays two thirds of its loss capped at the rate; exactly 1,000 cents is one; a week earning the AWW has no loss | test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate; test_rule_2_8_week_of_exactly_1000_cents_is_partial_disability; test_rule_2_7_week_earning_the_aww_has_no_wage_loss | uncapped (c8); floored (c8); strict 1,000 (c8) | covered | R3, R10 |
+| kept_correction_week | instruction reach rule; manual 1.4, 2.2, 3.1, 3.2 | a line below 2,000 cents keeps its payday's week | test_correction_below_a_weeks_pay_keeps_its_paydays_week | every line shifted (W09); small lines dropped (W10); tiny lines guarded (c12) | covered | R9, N1, N2 |
+| kept_low_week_share | instruction reach rule; manual 1.6, 2.8, 5.1, 5.2 | a partial week below 1,000 cents keeps 3/5 of its loss, rounded, capped at the rate | test_week_below_1000_cents_keeps_todays_share | one fraction for every week (W11); nothing paid (W12); uncapped (W13); floored (W14) | covered | R10, N3, N4, N5 |
+| statement_layout | README Statements; manual 6.1 | job order, exactly ten keys, integer figures, claim numbers as given | test_statement_order_and_keys; test_section_one_limits_reached; test_generated_jobs | sorted statements (c15); float total (c16); claim number altered (c1, c6, c9) | covered | R1-R8 (whole-statement comparison) |
+| frozen_driver | instruction frozen-surface sentence | the driver stays byte-identical | test_submitted_driver_unchanged | tampered driver (H01) | covered | R11 |
+| authority_and_hardcoding | instruction: the manual is the authority | figures come from the package working the manual's rules | test_generated_jobs; test_section_one_limits_reached; test_candidate_cannot_read_verifier_state | reading sealed expectations (H02) | covered | N6 |

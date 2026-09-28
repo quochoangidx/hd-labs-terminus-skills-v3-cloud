@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-gnu-bc-reimplementation"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Software"
+subcategory = "Languages"
+languages = ["python"]
+tags = ["gnu-bc", "arbitrary-precision", "interpreter", "calculator-language", "reimplementation"]
+expert_time_estimate_hours = 14
+difficulty_explanation = "A drop-in GNU bc 1.07.1 has to be rebuilt from its manual page, with no bc in the image to compare against: an arbitrary-precision decimal calculator language with its own grammar and scale rules. The parser must follow bc's unusual precedence, where relational operators bind more loosely than assignment and unary minus more tightly than ^, and decide which expression statements print. The number layer must reproduce the scale and truncation rules of every operator, square roots, powers with negative exponents, and exact conversion to and from every input and output base, including the grouped digits of bases above 16 and the fraction digits of non-decimal output, all split at 70 columns with the column shared by numbers and strings. The interpreter must run each line as an execution block that a runtime error abandons, keep last, give functions dynamically scoped autos and parameters, pass arrays by value or by variable, convert constants with the input base in force when they run (the call-time base inside functions), and honour quit at parse time but halt only when executed. The expertise is reading the manual and the stated rules exactly; an engineer who writes bc from memory gets the scale of products, the printing of numbers below one, line splitting and constant conversion wrong while simple arithmetic passes."
+solution_explanation = "The reference is one standard-library file that ports GNU bc: an exact decimal number type implementing the bc number library (add, subtract, multiply with the product scale rule, truncating divide, remainder, power by repeated squaring with the in-place scale cut, Newton square root), a flex-style scanner, a precedence-climbing parser that reproduces the yacc grammar's precedence, its expression flags and its code generation with labels, and a byte-code interpreter mirroring execute.c and storage.c: per-name stacks for autos and parameters, array copy or alias for array parameters, special-variable clamping, runtime errors that abandon the block, and bc_out_num with one shared output column for line splitting."
+verification_explanation = "A separate verifier image holds 1905 bc programs, some split between a FILE argument and standard input. For every case the verifier first runs the image's own GNU bc 1.07.1 as root in a fresh directory to get the expected standard output, then runs /app/pybc/bc.py as an unprivileged user, through a launcher that stops any process start, native code or import from outside the standard library, in another fresh copy with LC_ALL=C and compares standard output byte for byte. The bc binary and the dc of the same package are made root-only first. Cases are grouped into one named test per area of the manual (numbers and bases, arithmetic and scale, built-in functions, printing and radixes, strings and print, relational and boolean operators, assignment and variables, control flow, user functions, runtime errors) plus eight buckets of generated programs, and two more tests check the launcher and read the delivered package. Points the manual leaves unstated are specified in the instruction (product and square-root scale, truncation, number printing, line splitting, constant conversion, length, evaluation order, runtime errors) or filtered: a case was kept only if the builder's variant readings (the manual's literal rule for assignment statements, clean 0/1 from && and ||, the manual's base limits, a negative zero from ^) give the same output."
+relevant_experience = "Years of Unix tooling and numerical work: writing bc and dc scripts for build and report pipelines, porting command-line tools to minimal containers, implementing arbitrary-precision decimal arithmetic and writing parsers and byte-code interpreters for small languages."
+
+[verifier]
+timeout_sec = 3600
+environment_mode = "separate"
+network_mode = "public"
+
+[agent]
+timeout_sec = 7200
+network_mode = "public"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

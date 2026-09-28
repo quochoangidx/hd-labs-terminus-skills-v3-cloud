@@ -1,0 +1,200 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-airport-gate-assignment",
+ "primary_outcome": "four daily stand plans that obey the stand rules and cost no more than each day's best-known target",
+ "obligations": [
+  {
+   "id": "VALIDITY",
+   "class": "core",
+   "contribution": "every plan keeps every hard rule of the rules document",
+   "authority": {
+    "file": "environment/app/docs/stand-rules.md",
+    "anchor": "What a plan must do"
+   },
+   "implementation_sites": [
+    "solution/solve.sh"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the buffer, wingtip, size and border-control rules decide which low-walking assignments exist, so cost can only be lowered inside the feasible set"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_day_1_plan_is_valid",
+     "test_outputs.py::test_day_2_plan_is_valid",
+     "test_outputs.py::test_day_3_plan_is_valid",
+     "test_outputs.py::test_day_4_plan_is_valid"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "each hard rule is checked exhaustively over the whole file; one wrong-path receipt per rule family shows the validity test for that instance rejects it"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a plan that breaks exactly one hard rule",
+   "wrong_but_plausible": "put a turn on the nearest pier stand without checking the buffer, the wingtip pairs or border control",
+   "selfdescription_phrase": "rules"
+  },
+  {
+   "id": "COST",
+   "class": "core",
+   "contribution": "every plan's cost under the rules is at or below its best-known target",
+   "authority": {
+    "file": "environment/app/docs/stand-rules.md",
+    "anchor": "A plan costs the sum of:"
+   },
+   "implementation_sites": [
+    "solution/solve.sh"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the buffer, wingtip, size and border-control rules decide which low-walking assignments exist, so cost can only be lowered inside the feasible set"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_day_1_plan_meets_target",
+     "test_outputs.py::test_day_2_plan_meets_target",
+     "test_outputs.py::test_day_3_plan_meets_target",
+     "test_outputs.py::test_day_4_plan_meets_target"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "the reference sits exactly on each target (cost equal to target passes); a valid near-miss above target is a wrong-path receipt"
+   },
+   "expected_source": "authority_text",
+   "discriminating_instance": "a valid plan whose cost is above the target",
+   "wrong_but_plausible": "a dispatch plan (first free stand in arrival order) or a single short local search that is valid but above target",
+   "selfdescription_phrase": "target"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "VALIDITY",
+    "to": "COST"
+   },
+   {
+    "from": "COST",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "feasibility-shapes-cost",
+   "obligation_ids": [
+    "VALIDITY",
+    "COST"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_day_1_plan_meets_target",
+    "test_outputs.py::test_day_2_plan_meets_target",
+    "test_outputs.py::test_day_3_plan_meets_target",
+    "test_outputs.py::test_day_4_plan_meets_target"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "environment/app/docs/stand-rules.md",
+   "anchor": "These rules decide whether a day's stand plan can be flown and what it costs."
+  },
+  "silence": {
+   "file": "environment/app/docs/stand-rules.md",
+   "anchor": "Nothing else is charged.",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "For each day in `/app/days/`"
+  }
+ },
+ "determinism": {
+  "seeds": [],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "FILE-FORMAT",
+   "domain_required": true,
+   "rationale": "the apron's plan files are read by the stand-allocation display in this shape; the instruction names the rules document as the format authority",
+   "authority_anchor": {
+    "file": "environment/app/docs/stand-rules.md",
+    "anchor": "Each key is a stand id"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight-final.json",
+ "wrong_paths": [
+  {
+   "id": "near-miss-day-4",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COST"
+   ],
+   "receipt": "wrong-paths/near-miss-day-4.json"
+  },
+  {
+   "id": "shipped-planner-day-1",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COST"
+   ],
+   "receipt": "wrong-paths/shipped-planner-day-1.json"
+  },
+  {
+   "id": "size-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/size-ignored.json"
+  },
+  {
+   "id": "border-control-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/border-control-ignored.json"
+  },
+  {
+   "id": "buffer-without-margin",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/buffer-without-margin.json"
+  },
+  {
+   "id": "wingtip-pairs-ignored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/wingtip-pairs-ignored.json"
+  },
+  {
+   "id": "turn-left-out",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "VALIDITY"
+   ],
+   "receipt": "wrong-paths/turn-left-out.json"
+  },
+  {
+   "id": "edit-checker-and-targets",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/edit-checker-and-targets.json"
+  }
+ ],
+ "task_snapshot_sha256": "350a6199264575a1711be6b6e6c50018d687f01302abf6b9600ae2e3a4e43be6"
+}

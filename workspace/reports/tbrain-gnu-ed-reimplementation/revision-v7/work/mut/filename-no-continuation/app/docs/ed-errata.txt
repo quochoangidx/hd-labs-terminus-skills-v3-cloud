@@ -1,0 +1,106 @@
+GNU ed 1.19 against its own manual
+==================================
+
+The manual in ed.txt describes ed, but the program is what the maintenance scripts
+talk to, and in the places below 1.19 does not do what a reading of the manual
+would suggest. Each entry states what the program does, and each was checked
+against the program itself. Everything the manual describes that is not listed
+here holds as written.
+
+Addresses and marks
+
+1. An apostrophe address whose mark was never set resolves to address 0 while the
+   buffer is empty, so 'a= prints 0 and 'aa appends at the start. Once the buffer
+   holds a line, the same address fails.
+
+2. Changing a marked line clears its mark: after 1ka and 1s/a/A/, the address 'a
+   fails. Undoing that change brings the mark back.
+
+3. A command that takes one address uses the last address given, as the manual
+   says, and does not care about the order of the pair: 2,1= prints 1, 2,1a appends
+   after line 1, 2,1i inserts before it and 2,1kx marks it. A command that takes a
+   range, such as p, d, c, j, s, w or g, refuses one whose first address is above
+   its second.
+
+Regular expressions
+
+4. A bounded repeat at the start of an expression or subexpression is an error, not
+   the literal text the manual promises: \{2\} on its own fails to compile, and so
+   does \(\{2\}\). An unescaped brace is an ordinary character, so {2} matches the
+   text {2}.
+
+5. In extended expressions ^ and $ anchor wherever they appear, so a^b matches
+   nothing. The manual and POSIX make them ordinary characters away from the ends.
+
+6. A substitution with the g suffix is refused once a zero-length match repeats at
+   the same place: s/a*/X/g fails on a line holding b, while it succeeds on a line
+   holding a, where the first match covers the whole line. The same expression
+   without the g suffix always succeeds, and a count then counts a zero-length
+   match again at the same place instead of moving past it: on a line holding ab,
+   s/x*/-/2 gives -ab, the same result as s/x*/-/.
+
+7. A backslash ending a regular-expression parameter does not continue it onto the
+   next line; the command fails instead.
+
+8. When two branches of an alternation reach the same whole match, the branch
+   written first supplies the captured text.
+
+9. A collating element or equivalence class holding more than one character, such
+   as [[.ab.]], is an error in the C locale.
+
+10. A repeat count above 32767 is an error, in basic and extended expressions alike:
+    y\{32768\} and y\{0,32768\} fail to compile, while y\{32767\} is accepted.
+
+Commands
+
+11. f FILE sets the default filename and prints it. The manual has it print the
+    filename only when FILE is left out. Bare f with no filename set fails.
+
+12. A one-address j does nothing, as the manual says, but it still clears the undo
+    stack, so a following u has nothing to undo.
+
+13. An a or i whose input ends at once, with a period on its first line, adds no
+    line but still clears the undo stack, so a following u has nothing to undo. A c
+    whose input ends at once has deleted the addressed lines, and u puts them back.
+
+14. A global command clears the undo stack even when its pattern selected no line.
+
+15. m accepts the last line of the range being moved as its destination, although
+    the manual forbids a destination inside that range. A destination strictly
+    inside the range is still refused.
+
+16. In a global command list, a line ending with a backslash continues onto the
+    next line, and every segment is a command, an empty one being a print. So g/./
+    with a backslash and then an empty line holds two empty commands and prints every
+    selected line twice; the empty line does not end with a backslash, so the line
+    after it is the next command, and a q there quits once the global command has
+    run through every selected line. Without the backslash, an empty command list
+    means one print per selected line.
+
+17. A substitution with no final delimiter inside a global command list takes the
+    rest of the list as its replacement text instead of failing. The newline that
+    ends the list is left over and counts as one more, empty, command, so every
+    selected line is printed twice: once for the omitted delimiter, even when
+    nothing was replaced on that line, and once for the empty command.
+
+18. Inside a global command list, an s that finds nothing to replace on the current
+    line is not an error, although the manual makes a substitution without a match
+    one: the rest of the list still runs for that line and the global command goes
+    on to the next, even when no selected line matches at all. On its own, outside
+    a global command, such an s fails as the manual says.
+
+19. W clears the warning that q gives for a modified buffer when it writes the
+    whole buffer, the same way w does.
+
+20. In a replacement, \N stands for the digit N itself when the regular expression
+    has fewer than N subexpressions: s/a/[\1]/ turns ab into [1]b. A subexpression
+    that exists but took no part in the match gives the empty string, as the
+    manual says.
+
+21. An e or E whose file cannot be read still empties the buffer, leaves the empty
+    buffer unmodified and makes that file the default filename, and then fails. So
+    = then prints 0, f prints the new name, and q quits without a warning.
+
+Diagnostics
+
+22. The ? notification goes to standard output.

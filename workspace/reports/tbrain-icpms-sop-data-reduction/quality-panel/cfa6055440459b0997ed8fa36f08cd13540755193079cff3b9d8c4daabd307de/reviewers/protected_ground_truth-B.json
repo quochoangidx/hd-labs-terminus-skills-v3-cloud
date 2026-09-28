@@ -1,0 +1,164 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-B",
+  "snapshot_sha256": "cfa6055440459b0997ed8fa36f08cd13540755193079cff3b9d8c4daabd307de",
+  "severity": "None",
+  "summary": "No reachable path lets candidate code read, replace, predict or impersonate the expected reports or the reward channel. Goldens and ROSTER sit in the separate verifier image under root-only /tests (mode 700). Candidate code runs only through the verifier-owned driver as uid 65534 with no_new_privs, a cleared environment, python -I -S, a fresh cwd and an outcome-neutral input path. Reward is written by root test.sh into root-only /logs/verifier from the pytest exit code.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/tools/metalquant_run.py",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/metalquant_run.py",
+      "tests/expected/ROSTER",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/spike_recovery.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/generated-1.jsonl",
+      "tests/expected/generated-2.jsonl",
+      "tests/expected/capacity.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 39 packet-manifest entries against the files read; every listed file was read in full.",
+    "Traced the build boundary. The candidate image copies only app/ (environment/Dockerfile:5-6) and .dockerignore excludes tests/ and solution/ (environment/.dockerignore:11-12). No golden, ROSTER, generator or reference implementation is visible to the candidate.",
+    "Traced verifier image ownership. /tests is root-owned mode 700 (tests/Dockerfile:5,12). /opt/driver is root:root with the driver at mode 644 (tests/Dockerfile:6-11). test.sh re-applies chmod 700 to /tests and /logs/verifier before any candidate code runs (tests/test.sh:4,15).",
+    "Traced candidate execution. The only candidate-reachable code is /app/src, imported by the verifier's root-owned driver copy (tests/shipped/tools/metalquant_run.py:7-9; tests/Dockerfile:7-8). It runs under setpriv --reuid=65534 --regid=65534 --clear-groups --no-new-privs with env -i, python3 -I -S, a fresh mkdtemp cwd and start_new_session with killpg (tests/test_outputs.py:27,61-82,97).",
+    "Checked input naming. Every batch is written by root to <random mkdtemp>/batch.json, mode 644, in a root-owned 0755 stage directory (tests/test_outputs.py:85-94). There is no family name, test name or expected-outcome token in argv, cwd or environment.",
+    "Checked the reward channel. Credit depends only on the root pytest exit code. test.sh writes reward.txt into /logs/verifier, mode 700 (tests/test.sh:20-26). Candidate stdout is parsed only as the report under comparison (tests/test_outputs.py:98-99,108-125) and cannot impersonate a completed verification.",
+    "Checked the comparator for non-JSON exploits. json.loads yields only standard types. NaN and Infinity fail the abs-difference bound (tests/test_outputs.py:102-105). Exact fields require type(a) is type(e) (tests/test_outputs.py:125).",
+    "Checked golden integrity. load() pins each family's SHA-256 digest and row count to ROSTER, and both live in root-only /tests (tests/test_outputs.py:38-58).",
+    "Checked the self-tests. The access-boundary probes run in the same unprivileged context as the candidate (tests/test_outputs.py:209-220).",
+    "Checked privileged reads of candidate-influenced paths. The only one is DELIVERED_DRIVER.read_bytes() on /app/tools/metalquant_run.py (tests/test_outputs.py:26,205-206). It compares against a shipped driver that the candidate already has verbatim (environment/app/tools/metalquant_run.py is byte-identical per packet-manifest.json:18,40). It never feeds an expected report, so following a symlink there exposes no answer and grants no credit the candidate could not earn by leaving the file unchanged.",
+    "Checked chmod -R a+rX /app (tests/test.sh:16). It runs after /tests is sealed, and GNU chmod -R ignores symlinks met during traversal, so a candidate symlink under /app cannot relax verifier-file modes."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Keep expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "Goldens exist only in the verifier image under root-only /tests. Candidate code runs as uid 65534 and cannot list or read /tests or /logs/verifier. The shipped environment carries no reference implementation or golden; small-batch.json is an input only.",
+      "evidence": ["environment/Dockerfile:5-6", "environment/.dockerignore:11-12", "tests/Dockerfile:5-12", "tests/test.sh:15", "tests/test_outputs.py:61-66", "tests/test_outputs.py:209-220", "environment/app/examples/small-batch.json:1-20"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths: symlink and path-traversal escapes",
+      "status": "checked",
+      "reason": "The batch file is written by root into a root-owned fresh directory. The only root read of a candidate path is the driver byte-compare, which carries no answer. chmod -R skips traversal symlinks and runs after /tests is sealed.",
+      "evidence": ["tests/test_outputs.py:85-94", "tests/test_outputs.py:205-206", "tests/test.sh:15-16"],
+      "finding_ids": []
+    },
+    {
+      "category": "Compute expected values independently of the submitted artifact",
+      "status": "checked",
+      "reason": "Expected reports are precomputed, sealed JSONL pinned by ROSTER digests. Nothing is derived from candidate output or a candidate-provided checksum.",
+      "evidence": ["tests/test_outputs.py:1-10", "tests/test_outputs.py:38-58", "tests/expected/ROSTER:1-18"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes exposed through filenames, arguments, working directories or environment variables",
+      "status": "checked",
+      "reason": "Every batch uses the neutral name batch.json under a random mkdtemp directory. The cwd is a fresh random directory, the environment is cleared to a fixed minimal set, and argv holds only the driver path and the batch path. Batch contents are inputs the candidate must reduce; run ids such as W-/MB-/CCV- encode run kind, which the input already declares, not the expected result.",
+      "evidence": ["tests/test_outputs.py:27", "tests/test_outputs.py:85-99"],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading results in a trusted channel; candidate stdout or early exit cannot impersonate verification",
+      "status": "checked",
+      "reason": "Reward comes from the root pytest return code, written by root into a 700 directory. A non-zero driver exit fails the assertion, and stdout is compared field by field against the sealed golden.",
+      "evidence": ["tests/test.sh:4-5", "tests/test.sh:20-26", "tests/test_outputs.py:97-99", "tests/test_outputs.py:108-125"],
+      "finding_ids": []
+    },
+    {
+      "category": "Test the access boundary from the candidate's execution context; confirm that suspected shortcuts are defeated",
+      "status": "checked",
+      "reason": "The unreadability probes use the same run_unprivileged wrapper as the driver. Suspected shortcuts traced: persisting state in /tmp across batches, daemons escaping killpg via setsid, /proc inspection of the root pytest, and replacing /app/tools with a symlink. None reaches a golden or the reward file, because every such file is root-owned and unreadable and unwritable by uid 65534.",
+      "evidence": ["tests/test_outputs.py:61-82", "tests/test_outputs.py:209-220"],
+      "finding_ids": []
+    },
+    {
+      "category": "Setuid/privilege-drop bypass (C-3 pattern)",
+      "status": "checked",
+      "reason": "--no-new-privs is set, and the verifier installs no candidate binary as setuid.",
+      "evidence": ["tests/test_outputs.py:64", "tests/Dockerfile:6-12"],
+      "finding_ids": []
+    },
+    {
+      "category": "Persisted or partially reset answer-bearing state (C-7 pattern)",
+      "status": "checked",
+      "reason": "No candidate-writable artifact is later trusted as an expected baseline. Each batch is compared only against its sealed golden.",
+      "evidence": ["tests/test_outputs.py:128-130"],
+      "finding_ids": []
+    },
+    {
+      "category": "Oracle or reference executable reachable by candidate code (C-8 pattern)",
+      "status": "checked",
+      "reason": "No solution or reference model is present in either image's candidate-reachable paths. The verifier driver is only a thin loader of the candidate's own package.",
+      "evidence": ["tests/shipped/tools/metalquant_run.py:1-24", "tests/Dockerfile:3-12"],
+      "finding_ids": []
+    },
+    {
+      "category": "Candidate-writable artifact checked and later replaced (C-9 pattern)",
+      "status": "checked",
+      "reason": "The executed driver is root-owned under /opt/driver, and uid 65534 cannot modify it. The candidate package is candidate-authored by design, so replacing it at runtime gains nothing.",
+      "evidence": ["tests/Dockerfile:6-11", "tests/test_outputs.py:24"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["Leave /app/tools/metalquant_run.py byte-identical (instruction.md:3)", "Verifier runs its own driver copy against /app/src"],
+      "case_or_path": "The candidate replaces /app/tools/metalquant_run.py with a symlink to /tests/shipped/... The root read in test_driver_is_unchanged follows it, but this grants only the same pass as leaving the file untouched. Reductions always use /opt/driver, so no expected report is exposed or affected.",
+      "status": "checked",
+      "evidence": ["instruction.md:3", "tests/test_outputs.py:24-26", "tests/test_outputs.py:205-206", "tests/Dockerfile:7-8"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Unprivileged candidate execution per batch", "Sequential deterministic family order"],
+      "case_or_path": "The candidate keeps an invocation counter in world-writable /tmp to learn which batch index it is running. Expected values remain unreadable, so knowing the index cannot yield the answer without performing the reduction.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:85-99", "tests/test_outputs.py:133-202"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["chmod -R a+rX /app runs as root", "/tests sealed 700 before candidate code runs"],
+      "case_or_path": "A candidate-shipped symlink under /app pointing into /tests. The sealing happens first, and recursive chmod does not follow traversal symlinks, so /tests stays 700.",
+      "status": "checked",
+      "evidence": ["tests/test.sh:15-16"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

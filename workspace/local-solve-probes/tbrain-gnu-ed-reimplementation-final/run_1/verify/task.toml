@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-gnu-ed-reimplementation"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Software"
+subcategory = "Languages"
+languages = ["python"]
+tags = ["gnu-ed", "line-editor", "posix-regex", "undo", "reimplementation"]
+expert_time_estimate_hours = 12
+difficulty_explanation = "A drop-in GNU ed 1.19 has to reproduce a stateful line editor from its manual with no ed to compare against: every address form, including relative offsets, marks, wrapping regex searches and the rule that a semicolon moves the current address before the next address is read; the exact current address after every command; undo that can itself be undone and that treats a whole global command as one step; global commands whose active list drops lines the command list touches; interactive G and V reading command lists from standard input; substitution with counts, the repeat form and line splitting; the cut buffer; and a POSIX regular-expression engine that takes the leftmost and then the longest match, which Python's re does not do. Errors matter as much as success: ed prints a question mark, stops at the first error when its commands come from a regular file but carries on when they come from a pipe, and warns once before quitting a modified buffer. The expertise is reading these rules exactly; an engineer who implements ed from memory gets the current-address, undo, destination and exit-status details wrong while everything else passes."
+solution_explanation = "The reference is a standard-library port of the editor model in two files. posixre.py parses basic and extended regular expressions with the GNU escapes and matches them with an exhaustive backtracking search that keeps the leftmost start and the longest end. ed.py keeps the buffer as a circular list of line nodes and an undo stack of add, delete and move records that relink those nodes, so undo, undo of undo, marks and the global active list behave as the manual describes; it parses addresses and commands with their suffixes, runs g, v, G and V over an active list, applies substitutions with counts, the repeat form and line splitting, and prints question marks and sets the exit status according to whether standard input is a regular file and whether -l is given."
+verification_explanation = "A separate verifier image holds the command scripts, each with its options, input files and the kind of standard input (a pipe or a regular file). For every case the verifier runs the image's own GNU ed 1.19 as root in a fresh directory to get the expected output, then runs /app/pyed/ed.py as an unprivileged user in another fresh copy of the same files with LC_ALL=C. It compares standard output byte for byte, whether the exit status is zero, and the names and contents of every file left in the directory. The ed binary is made root-only first, so the candidate cannot delegate to it. Cases are grouped into one named test per area of the manual plus eight buckets of generated scripts; a case is kept only if its result does not change under any other plausible reading of a point the manual leaves open."
+relevant_experience = "Years of Unix systems work: maintaining shell and ed/sed scripts that edit configuration files in place, porting command-line tools to minimal containers, and implementing regular-expression engines with POSIX leftmost-longest semantics."
+
+[verifier]
+timeout_sec = 3600
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 7200
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

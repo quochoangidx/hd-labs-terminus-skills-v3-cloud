@@ -1,0 +1,68 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 22 items
+
+../../tests/test_outputs.py ..................F...                       [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """300 workers under 40 codes, a 1,500-run log, a 2,880-minute log, 500 peaks and the range ends."""
+        rows = load("limits_workers") + load("limits_logs")
+        workers = rows[0]["survey"]["workers"]
+        assert len(workers) == 300 and len({w["group"] for w in workers}) == 40
+        logs = rows[1]["survey"]["workers"]
+        assert len(logs[0]["log"]) == 1500 and sum(m for m, _ in logs[1]["log"]) == 2880 and len(logs[2]["peaks"]) == 500
+>       check_family("limits_workers")
+
+/tests/test_outputs.py:346: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'survey': 'HC4-0030', 'workers': [{'id': 'L000-XXXXXXX', 'group': 'ABCDEFGH', 'dose': 0.0, 'twa': None, ...}, {'id': ...2767, 'twa': 79.7, 'status': 'below'}, {'group': 'E', 'dose': 120.31312635565423, 'twa': 85.8, 'status': 'over'}, ...]}
+expected = {'survey': 'HC4-0030', 'workers': [{'id': 'L000-XXXXXXX', 'group': 'ABCDEFGH', 'dose': 0.0, 'twa': None, ...}, {'id': ...0.1529720182, 'twa': 79.8, 'status': 'below'}, {'group': 'E', 'dose': 106.603153, 'twa': 85.3, 'status': 'over'}, ...]}
+label = 'limits_workers HC4-0030'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) >= {"survey", "workers", "groups"}, f"{label}: top-level keys"
+        assert type(actual["survey"]) is str and actual["survey"] == expected["survey"], f"{label}: survey name"
+        for section, keys in (("workers", ROW_KEYS), ("groups", GROUP_KEYS)):
+            got, want = actual[section], expected[section]
+>           assert isinstance(got, list) and len(got) == len(want), f"{label}: {section} has {len(got) if isinstance(got, list) else got!r} rows, expected {len(want)}"
+E           AssertionError: limits_workers HC4-0030: workers has 256 rows, expected 300
+E           assert (True and 256 == 300)
+E            +  where True = isinstance([{'id': 'L000-XXXXXXX', 'group': 'ABCDEFGH', 'dose': 0.0, 'twa': None, ...}, {'id': 'L001-', 'group': 'A', 'dose': 127... 202.5524919252284, 'twa': 88.1, ...}, {'id': 'L005-', 'group': 'E', 'dose': 141.4213562373095, 'twa': 86.5, ...}, ...], list)
+E            +  and   256 = len([{'id': 'L000-XXXXXXX', 'group': 'ABCDEFGH', 'dose': 0.0, 'twa': None, ...}, {'id': 'L001-', 'group': 'A', 'dose': 127... 202.5524919252284, 'twa': 88.1, ...}, {'id': 'L005-', 'group': 'E', 'dose': 141.4213562373095, 'twa': 86.5, ...}, ...])
+E            +  and   300 = len([{'id': 'L000-XXXXXXX', 'group': 'ABCDEFGH', 'dose': 0.0, 'twa': None, ...}, {'id': 'L001-', 'group': 'A', 'dose': 127... 'dose': 202.552491925, 'twa': 88.1, ...}, {'id': 'L005-', 'group': 'E', 'dose': 141.421356237, 'twa': 86.5, ...}, ...])
+
+/tests/test_outputs.py:223: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db
+PASSED ../../tests/test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts
+PASSED ../../tests/test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold
+PASSED ../../tests/test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading
+PASSED ../../tests/test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift
+PASSED ../../tests/test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose
+PASSED ../../tests/test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters
+PASSED ../../tests/test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection
+PASSED ../../tests/test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose
+PASSED ../../tests/test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged
+PASSED ../../tests/test_outputs.py::test_rule_5_2_impulse_at_140_dbc
+PASSED ../../tests/test_outputs.py::test_rule_4_1_twa_formula
+PASSED ../../tests/test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth
+PASSED ../../tests/test_outputs.py::test_rule_5_3_status_bands_at_82_and_85
+PASSED ../../tests/test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses
+PASSED ../../tests/test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean
+PASSED ../../tests/test_outputs.py::test_report_order_and_group_codes
+PASSED ../../tests/test_outputs.py::test_generated_surveys
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+========================= 1 failed, 21 passed in 3.61s =========================

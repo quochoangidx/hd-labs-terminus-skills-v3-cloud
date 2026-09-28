@@ -1,0 +1,76 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 24 items
+
+../../tests/test_outputs.py ....................F...                     [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """60 reps, 300 orders, 100 credit notes, quotas of 100,000 and 10^10, every field at its ends."""
+        check_family("limits_reps")
+        row = load("limits_job")[0]
+        rng = random.Random(RELABEL_SEED)
+        names = fresh_names(rng, 60)
+        base = dict(row["job"]["reps"][0])
+        for key, n in row["repeat"].items():  # each entry repeated to the list's longest
+            base[key] = base[key] * n
+        big = dict(row["job"], reps=[dict(base, rep=n) for n in names])
+        within_limits(big)
+        assert len(big["reps"]) == 60 and len(base["orders"]) == 300 and len(base["credits"]) == 100
+>       compare(run(big), [dict(row["statements"][0], rep=n) for n in names], f"limits job of 60 reps (seed {RELABEL_SEED})")
+
+/tests/test_outputs.py:376: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'T', 'bookings': 300000000000, 'commission': 47999988000, 'bonus': 9000000000, ...}, {'rep': '...': 9000000000, ...}, {'rep': 'Q', 'bookings': 300000000000, 'commission': 47999988000, 'bonus': 9000000000, ...}, ...]}
+expected = [{'rep': 'T', 'bookings': 300000000000, 'commission': 47999988000, 'bonus': 9000000000, ...}, {'rep': 'DNTBR6UXMPMQGRL...s': 9000000000, ...}, {'rep': 'Q', 'bookings': 300000000000, 'commission': 47999988000, 'bonus': 9000000000, ...}, ...]
+label = 'limits job of 60 reps (seed 20260928)'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: limits job of 60 reps (seed 20260928) statement 0 ('T') clawback: 5120000000, expected 8000000000
+E               assert (<class 'int'> is <class 'int'> and 5120000000 == 8000000000)
+E                +  where <class 'int'> = type(5120000000)
+E                +  and   <class 'int'> = type(8000000000)
+
+/tests/test_outputs.py:202: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_2_bookings_take_the_reps_split
+PASSED ../../tests/test_outputs.py::test_rule_3_1_orders_on_the_quarter_edges
+PASSED ../../tests/test_outputs.py::test_rule_4_1_accelerators_apply_to_the_part_above_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_1_bookings_on_the_quota_and_twice_the_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_2_each_band_rounds_half_up
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reversals_up_to_120_days
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reversal_ages_120_and_121
+PASSED ../../tests/test_outputs.py::test_rule_2_3_credit_note_of_exactly_50000
+PASSED ../../tests/test_outputs.py::test_rule_5_2_credit_notes_outside_the_quarter
+PASSED ../../tests/test_outputs.py::test_courtesy_credits_keep_todays_clawback_line
+PASSED ../../tests/test_outputs.py::test_rule_6_1_new_logo_bonus_on_small_splits
+PASSED ../../tests/test_outputs.py::test_rule_2_4_first_order_of_exactly_250000
+PASSED ../../tests/test_outputs.py::test_trial_orders_keep_todays_bonus_line
+PASSED ../../tests/test_outputs.py::test_rule_7_2_shortfall_added_to_owed
+PASSED ../../tests/test_outputs.py::test_rule_7_2_total_exactly_on_the_draw
+PASSED ../../tests/test_outputs.py::test_rule_7_2_total_below_nought
+PASSED ../../tests/test_outputs.py::test_rule_7_3_recovery_only_above_the_draw
+PASSED ../../tests/test_outputs.py::test_rule_7_4_minimum_payment
+PASSED ../../tests/test_outputs.py::test_rule_7_4_due_of_24999_and_25000
+PASSED ../../tests/test_outputs.py::test_statement_order_and_keys
+PASSED ../../tests/test_outputs.py::test_generated_jobs
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+========================= 1 failed, 23 passed in 1.39s =========================

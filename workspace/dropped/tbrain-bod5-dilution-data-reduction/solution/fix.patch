@@ -1,0 +1,94 @@
+--- a/app/src/bodcalc/bottles.py
++++ b/app/src/bodcalc/bottles.py
+@@ -1,8 +1,8 @@
+ """Per-bottle arithmetic: depletion, sample fraction, the spent and usable tests, bottle BOD."""
+ 
+ BOTTLE_ML = 300.0
+-MIN_DEPLETION = 2.0
+-MIN_FINAL_DO = 1.0
++MIN_DEPLETION = 2.5
++MIN_FINAL_DO = 1.2
+ 
+ 
+ def depletion(bottle):
+@@ -32,4 +32,4 @@
+ 
+ def bottle_bod(bottle, seed_factor):
+     """BOD of one check or sample bottle, in mg/L."""
+-    return depletion(bottle) / sample_fraction(bottle) - seed_correction(bottle, seed_factor)
++    return (depletion(bottle) - seed_correction(bottle, seed_factor)) / sample_fraction(bottle)
+--- a/app/src/bodcalc/qc.py
++++ b/app/src/bodcalc/qc.py
+@@ -10,7 +10,7 @@
+ 
+ def blank_depletion(blanks):
+     """Depletion that stands for the batch's dilution water."""
+-    return sum(depletion(b) for b in blanks) / len(blanks)
++    return max(depletion(b) for b in blanks)
+ 
+ 
+ def check_value(check, seed_factor):
+@@ -36,8 +36,10 @@
+         parent = sample.get("duplicate_of")
+         if parent is None:
+             continue
+-        mine = found[sample["id"]][1]
+-        theirs = found[parent][1]
+-        rpd = abs(mine - theirs) / theirs * 100.0
++        (rel_mine, mine), (rel_theirs, theirs) = found[sample["id"]], found[parent]
++        if rel_mine == "=" and rel_theirs == "=":
++            rpd = abs(mine - theirs) / ((mine + theirs) / 2.0) * 100.0
++        else:
++            rpd = abs(mine - theirs) / theirs * 100.0
+         out.append({"id": sample["id"], "of": parent, "rpd": rpd, "pass": rpd <= RPD_LIMIT})
+     return out
+--- a/app/src/bodcalc/report.py
++++ b/app/src/bodcalc/report.py
+@@ -1,5 +1,7 @@
+ """Assemble the batch report."""
+ 
++import math
++
+ from . import qc
+ from .bench import decode
+ from .samples import results
+@@ -8,7 +10,7 @@
+ 
+ def reported(value):
+     """A value as it goes on the report."""
+-    return round(value, 1)
++    return round(value, 2 - math.floor(math.log10(abs(value)))) if value else 0.0
+ 
+ 
+ def reduce_batch(batch):
+--- a/app/src/bodcalc/samples.py
++++ b/app/src/bodcalc/samples.py
+@@ -17,7 +17,7 @@
+     if all(is_spent(b) for b in bottles):
+         least = min(bottles, key=lambda b: b["sample_ml"])
+         return ">", bottle_bod(least, seed_factor)
+-    limiting = min(bottles, key=lambda b: b["sample_ml"])
++    limiting = max(bottles, key=lambda b: b["sample_ml"])
+     return "<", MIN_DEPLETION / sample_fraction(limiting)
+ 
+ 
+--- a/app/src/bodcalc/seed.py
++++ b/app/src/bodcalc/seed.py
+@@ -1,13 +1,10 @@
+ """Seed factor from the seed-control bottles."""
+ 
+-from .bottles import depletion
++from .bottles import depletion, is_usable
+ 
+ 
+ def seed_factor(controls):
+     """Oxygen taken up per mL of seed, in mg/L per mL."""
+-    taken = 0.0
+-    seed = 0.0
+-    for control in controls:
+-        taken += depletion(control)
+-        seed += control["seed_ml"]
+-    return taken / seed
++    reference = [c for c in controls if is_usable(c)] or list(controls)
++    rates = [depletion(c) / c["seed_ml"] for c in reference]
++    return sum(rates) / len(rates)

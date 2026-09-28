@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-gnu-grep-reimplementation"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Software"
+subcategory = "Languages"
+languages = ["python"]
+tags = ["gnu-grep", "posix-regex", "leftmost-longest", "text-search", "reimplementation"]
+expert_time_estimate_hours = 10
+difficulty_explanation = "A drop-in GNU grep 3.8 has to reproduce, from the manual alone and with no grep in the image, both a regular-expression engine and the whole output machinery. The engine must handle BRE and ERE with GNU escapes, classes and back-references, and take the POSIX leftmost-longest match over every pattern, which Python's own re (leftmost-first) does not do; -w must retry shorter and later matches rather than give up on the first one. The output side must get context groups and their separators, -m with trailing context, -o with byte offsets, -T alignment, the -c/-l/-L/-q precedence, per-file counts and names, NUL-separated names and records, binary-file suppression, and the exit status after a missing file exactly right. The expertise is reading each rule of the manual and of the instruction exactly and composing them; an engineer who implements grep from memory gets context separators, -w retries, offsets and binary files wrong while simple searches pass."
+solution_explanation = "The reference is a standard-library implementation in two files. posixre.py parses GNU BRE and ERE into a tree and matches it with a thread search that keeps the leftmost start and the longest end, back-references included. grep.py parses options (clustered short options, long options, -NUM), splits the pattern list, builds a matcher that applies -i, -w (with GNU's retry at a shorter length and later starts) and -x, and runs each file through an emulation of GNU's print loop: pending after-context, bounded before-context, group separators, -m, -o with offsets, the -T width taken from the file size, binary detection with NUL-to-newline conversion, and the -c/-l/-L/-q precedence."
+verification_explanation = "A separate verifier image holds 1999 cases (options, patterns, standard input and named files, sometimes a missing one or one with NUL bytes). For every case the verifier first runs the image's own GNU grep 3.8 as root in a fresh directory to get the expected standard output and exit status, then runs /app/pygrep/grep.py as an unprivileged user in another fresh copy with LC_ALL=C and compares stdout byte for byte and the exit status. The grep binary is made root-only first, so the candidate cannot delegate to it. Cases are grouped into one named test per area of the manual plus eight buckets of mixed generated command lines; points the manual leaves open are either stated in the instruction (option precedence, binary files, file errors) or filtered: a case was kept only if the variant readings the builder implemented give the same result."
+relevant_experience = "Years of Unix tooling and text-processing work: writing and debugging grep, sed and awk pipelines, porting shell tooling to minimal containers, and implementing regular-expression engines with POSIX leftmost-longest semantics."
+
+[verifier]
+timeout_sec = 3600
+environment_mode = "separate"
+network_mode = "public"
+
+[agent]
+timeout_sec = 7200
+network_mode = "public"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

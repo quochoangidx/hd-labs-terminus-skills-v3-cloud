@@ -1,0 +1,253 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "fa3d5d1ee0370a144e73521d4f98adcc12f305c4fc6402caf6137800aa961dbf",
+  "severity": "Minor",
+  "summary": "The reference follows every case-guide rule for the evidence shapes solution/model.py generates. Traced paths: step correction, year inference across Dec->Jan, hostile window with 600 s inclusive, wtmp sessions, TTY-tied sudo, key fingerprint fixed point, ctime and package 2 s exclusion, and open-session activity. One contract-permitted branch fails: the clock-step detector only recognises a host clock that was BEHIND true time (d > 0). A host clock that was wrong in the other direction (ahead) is never corrected, so every pre-step time is reported N seconds off. Rule 1 and the instruction do not restrict the sign of the error. The sealed generator only produces lagging clocks, so no current graded case is known to be affected.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/triage.py",
+      "environment/app/docs/case-guide.md",
+      "environment/app/docs/record-formats.md",
+      "environment/app/docs/report.md",
+      "environment/app/evidence/case-1/collection.txt",
+      "environment/app/evidence/case-1/fs-listing.tsv",
+      "environment/app/evidence/case-1/var/log/auth.log",
+      "environment/app/evidence/case-1/var/log/auth.log.1",
+      "environment/app/evidence/case-1/var/log/remote/files.log",
+      "environment/app/evidence/case-1/var/log/dpkg.log",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/apt-listchanges.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/cron.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/logwatch.list",
+      "environment/app/evidence/case-1/home/git/.bash_history",
+      "environment/app/evidence/case-1/home/tpham/.bash_history",
+      "environment/app/evidence/case-1/root/.bash_history",
+      "environment/app/evidence/case-1/home/git/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/home/tpham/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/root/.ssh/authorized_keys",
+      "solution/solve.sh",
+      "solution/triage.py",
+      "solution/model.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/evidence/case-1/var/log/wtmp, btmp, auth.log.2.gz, auth.log.3.gz: binary/gzip. Not opened because the reviewer has no shell. Their layout is fixed by record-formats.md:28-34 and their production by solution/model.py:491-501, and the reference's parser was traced against those.",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/{base-files,openssh-server,anacron,rkhunter,sysstat}.list: not opened individually. Their content is produced by solution/model.py:510-514, and three sibling .list files were read."
+    ]
+  },
+  "findings": [
+    {
+      "id": "CRS-1",
+      "severity": "Minor",
+      "claim": "The clock-step correction in solution/triage.py only handles a host clock that ran behind true time. If the host clock was ahead by a fixed amount before being set right, which the visible contract permits, nothing is corrected and every pre-step host-clock time in the report is off by the step size.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "case-guide.md:11-14: the host clock 'may have been wrong by a fixed amount for part of the evidence period and then set right, at most once. Report true times, not what the host clock said.' instruction.md:5 allows 'with or without one clock step of 30 to 7,200 seconds'. Neither text restricts the sign of the error. So when the host clock was N seconds ahead before the step, pre-step wtmp/btmp/auth/history/ctime/dpkg readings must be reported N seconds earlier than the host recorded them.",
+        "actual_behavior": "In solution/triage.py:120-130, d = true_at[msg] - t is negative (-N) for every pre-step sshd line when the host was ahead. The branch `if d > 0` never fires, so `lag` stays False and `step_t` stays None. fix() at line 129-130 then returns t unchanged for every reading. initial_access.time, privilege_escalation, first_activity and last_activity (all pre-step in typical cases, because the step follows initial access) come out N seconds late. Session/sudo/persistence window membership is also computed on a mixed timeline.",
+        "trace_or_receipt": "Static trace, not executed. Take a host 3600 s ahead until true time tc. The sshd Accepted line for initial access at true time T < tc is written to auth.log with host time T+3600, and the collector copy is stamped T. Line 123 gives d = T - (T+3600) = -3600. `d > 0` is false and the `elif lag and d == 0` branch needs lag=True, so step_t is None. fix(T+3600) = T+3600, and line 251 emits iso(T+3600) for initial_access.time instead of iso(T). By contrast the generator only ever renders lagging clocks (solution/model.py:412-413, rec(t) = t - N with N in [30, 7200] from model.py:352), which is why the sealed goldens never exercise this branch."
+      },
+      "reachable_case_or_path": "Any evidence directory whose host clock was ahead (not behind) by 30-7200 s before a single step, with the remote collector's correct stamps showing collector_time < host_time for pre-step sshd lines. Path: analyze() -> step detection at solution/triage.py:120-127 -> fix() at 129-130 -> every time field in the report.",
+      "graded_effect": "On such an input the reference reports wrong initial_access.time, privilege_escalation, first_activity and last_activity. Persistence and sudo attribution can also be wrong near session boundaries. solution/seal.py:88-89 builds every graded case from model.build/write_evidence, which only produces lagging clocks, so no currently sealed case is known to be affected (that cannot be confirmed from this packet because tests are withheld). The defect is a reference/contract mismatch on a contract-permitted input, not a demonstrated reward change today. Hence Minor, not Major.",
+      "citations": [
+        "environment/app/docs/case-guide.md:9-14",
+        "instruction.md:5",
+        "solution/triage.py:120-130",
+        "solution/triage.py:251-257",
+        "solution/model.py:352",
+        "solution/model.py:412-413",
+        "solution/solve.sh:5-9"
+      ],
+      "root_invariant": "The host-clock correction must invert whatever fixed error the contract allows (either sign, 30-7200 s, at most one step), using the collector's copy to decide the error and which side of the step each reading lies on.",
+      "authority": [
+        "environment/app/docs/case-guide.md:9-14",
+        "instruction.md:5",
+        "environment/app/docs/record-formats.md:22-27"
+      ],
+      "implementation_sites": [
+        "solution/triage.py:120-130 (step detection and fix)",
+        "solution/triage.py:132-135 (auth, wtmp, btmp corrected through fix)",
+        "solution/triage.py:219 (dpkg times through fix)",
+        "solution/triage.py:231 (fs-listing ctime through fix)",
+        "solution/triage.py:249 (history stamps through fix)"
+      ],
+      "sibling_variants": [
+        "An ahead clock also makes host readings overlap after the step, because the same host second can occur before and after the correction. The reference's single threshold `t < step_t` could not tell the two sides apart even with the sign fixed. That is the ambiguity case-guide.md:13-14 says the collector settles.",
+        "All consumers of fix() (auth lines, wtmp logins/logouts, btmp failures, dpkg installed lines, fs-listing ctimes, timestamped history) inherit the same uncorrected offset."
+      ],
+      "interaction_variants": [
+        "Rule 6 package exclusion (within 2 s of status installed): both sides stay uncorrected, so the relative comparison survives, but in_window() membership against session windows fails when the step lies between them.",
+        "Rule 2 hostile window: unaffected unless the five failures straddle the step, because differences within one side are preserved.",
+        "Year inference (solution/triage.py:57-78) runs on raw host readings and is unaffected unless an ahead offset crosses New Year."
+      ],
+      "minimal_repair_boundary": "Either make the contract state the direction (for example 'the host clock ran behind by a fixed amount ... and was then stepped forward'), which matches the generator and makes the reference correct as written, or generalise the step detection in solution/triage.py to accept d < 0 as well as d > 0 and decide each reading's side from the collector brackets.",
+      "closure_evidence": [
+        "If the contract is narrowed: instruction.md/case-guide.md name the direction, and the existing reference passes unchanged.",
+        "If the reference is generalised: a model variant with rec(t) = t + N before tc gives reference output equal to truth(s) on initial_access.time, privilege_escalation and first/last_activity, and the existing lagging-clock families still pass."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read the case guide, record formats and report format, and mapped each rule 1-7 to its solution/triage.py implementation site.",
+    "Traced step detection and fix() for a lagging clock using model.write_evidence rec() and the tc-1/tc noise-line bracket (model.py:455-457, within_limits 373-380). fix() is an exact inverse of rec() when step_t == tc.",
+    "Traced the same code for an ahead clock, a contract-permitted sign (CRS-1).",
+    "Traced year inference for Dec->Jan collections, including a step and rotated files (reading order highest-number first).",
+    "Traced the hostile-address rule at the exactly-600 s boundary (model brute 'ts' spans exactly 600 s) and the 601 s decoy (carol/ivan), both from btmp.",
+    "Traced initial access from wtmp sessions plus hostile set, and the fixed point over addresses, accounts, keys and escalation, including the key login from a second address and a root key login.",
+    "Traced sudo attribution by TTY plus session window with a concurrent legitimate victim session (O2) and admin session (sudo family).",
+    "Traced persistence classification regex coverage, including .wants/*.service symlinks, the ctime-vs-mtime decoy between sessions, package files at t-2 and t+2 (edge_lo/edge_hi), and the forged touch -r (+2 ctime).",
+    "Traced first/last activity: recon failures days earlier, open session excluded at collected_utc, stamped root history within the intruder windows (REQUIRED 'open' case), admin root commands kept >3600 s from the windows.",
+    "Cross-checked case-1 artefacts (remote log step bracket at 17:40:30/17:40:31, root history, fs-listing ctimes, dpkg apt-listchanges inside the intrusion window) against the traced logic.",
+    "Checked output format: iso() emits YYYY-MM-DDTHH:MM:SSZ, JSON keys match report.md, sets are emitted as sorted lists."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced ordinary cases and the boundaries the contract names: 600 s hostile window (<=), 2 s package window (abs <= 2), open session, Dec->Jan year, UTC offsets -12:00/+14:00 (epoch() subtracts the offset in seconds), step 30/7200 s. All match the contract for lagging clocks. The ahead-clock sign fails (CRS-1).",
+      "evidence": [
+        "solution/triage.py:31-32",
+        "solution/triage.py:57-78",
+        "solution/triage.py:120-130",
+        "solution/triage.py:159-162",
+        "solution/triage.py:237",
+        "environment/app/docs/case-guide.md:16-18",
+        "environment/app/docs/case-guide.md:42-44"
+      ],
+      "finding_ids": ["CRS-1"]
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "iso() uses %Y-%m-%dT%H:%M:%SZ with whole seconds. Report keys are exactly the seven report.md keys. Sets are emitted as sorted unique lists, and privilege_escalation is null when absent. The output is written to argv[2].",
+      "evidence": [
+        "solution/triage.py:27-28",
+        "solution/triage.py:250-258",
+        "solution/triage.py:265",
+        "environment/app/docs/report.md:3-25"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state (session open/close, TTY reuse, fixed-point accumulation)",
+      "status": "checked",
+      "reason": "wtmp sessions are keyed by line and closed by a type 8 record on the same line, processed in corrected-time order. model TTY allocation never reuses a busy or open TTY. The fixed point grows addrs/accounts/keys monotonically and recomputes pe each pass, then terminates on no change.",
+      "evidence": [
+        "solution/triage.py:136-144",
+        "solution/triage.py:169-173",
+        "solution/triage.py:181-205",
+        "solution/model.py:419-425"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery / durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no crash-recovery or durability promise. The program is a one-shot read-then-write analyzer.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 1 time and clock step",
+      "status": "checked",
+      "reason": "The lagging-clock correction is exact. The ahead-clock sign is uncorrected (CRS-1).",
+      "evidence": ["solution/triage.py:113-132", "environment/app/docs/case-guide.md:9-14"],
+      "finding_ids": ["CRS-1"]
+    },
+    {
+      "category": "Rules 2-3 hostile address and initial access",
+      "status": "checked",
+      "reason": "btmp type-6 records per host are sorted, and any 5-window with last-first <= 600 counts. Initial access is the earliest wtmp login from a hostile host.",
+      "evidence": ["solution/triage.py:135", "solution/triage.py:155-167", "environment/app/docs/case-guide.md:16-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 4 sources and accounts (address, key, terminal ties; shared password does not tie)",
+      "status": "checked",
+      "reason": "Addresses tie sessions. Keys found in intruder-account histories are fingerprinted per record-formats.md and matched to Accepted publickey fingerprints. The legitimate same-account login from another address (O2) is never added, and root is added once escalated.",
+      "evidence": ["solution/triage.py:91-93", "solution/triage.py:185-205", "environment/app/docs/case-guide.md:24-32", "environment/app/docs/record-formats.md:42-45"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 5 privilege escalation",
+      "status": "checked",
+      "reason": "Takes the minimum of sudo-to-root lines whose TTY/time falls in an intruder session and root logins from intruder addresses, or null.",
+      "evidence": ["solution/triage.py:192-196", "environment/app/docs/case-guide.md:34-35"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 6 persistence",
+      "status": "checked",
+      "reason": "The path-kind predicate matches the enumerated kinds exactly. Uses ctime, not mtime. Excludes package-written files within <=2 s of status installed for a listing package.",
+      "evidence": ["solution/triage.py:213-239", "environment/app/docs/case-guide.md:37-44"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 7 first/last activity",
+      "status": "checked",
+      "reason": "Includes failures from intruder sources, logins/logouts, sudo lines in intruder sessions, persistence ctimes, and stamped history of intruder accounts inside intruder windows. Does not add collected_utc for an open session.",
+      "evidence": ["solution/triage.py:241-249", "environment/app/docs/case-guide.md:46-51"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["Rule 1 clock step", "Rule 6 package 2 s exclusion"],
+      "case_or_path": "ctime family, edge_hi: package file ctime at t+2 and dpkg status installed at t, both inside the intrusion window, with a step possibly between them. fix() inverts rec() exactly for a lagging clock, so |ctime - t| = 2 and the file is excluded.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:219", "solution/triage.py:231", "solution/triage.py:237", "solution/model.py:336-343"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 1 clock step", "Year inference Dec->Jan"],
+      "case_or_path": "year family with a clock step: host-time lines stay monotone (sorted by rec()), so the month-decrease-walking-backwards rule decrements the year exactly once.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:57-78", "solution/model.py:461"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 4 terminal tie", "Rule 5/7 sudo by concurrent administrators"],
+      "case_or_path": "sudo family: a legitimate victim session from O2 and an admin session with sudo between initial access and escalation. The TTYs differ, so session_at() attributes them to non-intruder sessions and they are excluded from escalation and activity.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:169-173", "solution/triage.py:192", "solution/triage.py:246", "solution/model.py:279-286"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 4 key tie", "Rule 5 root login"],
+      "case_or_path": "key family with key_target /root/.ssh/authorized_keys: the key is echoed in the victim or root history, and the fingerprint matches the Accepted publickey for root from B. The second pass adds B, the root session and the root login time to the escalation candidates.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:185-205", "solution/model.py:137-138", "solution/model.py:209-216"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 6 'during the intrusion'", "ctime vs mtime decoy"],
+      "case_or_path": "/etc/cron.d/<decoy> with mtime inside S1 and ctime between the two intruder sessions: the reference uses ctime against session windows and excludes it, consistent with truth(). Whether 'during the intrusion' means session windows or the whole first-to-last span is a contract-wording question, not a reference defect, and belongs to coherent_contract.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:207-210", "solution/triage.py:235", "solution/model.py:344-347", "environment/app/docs/case-guide.md:37-38"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 7 timestamped history", "Admins using sudo during the attack"],
+      "case_or_path": "The root history is shared. The reference attributes stamped root commands to the intruder when they fall inside an intruder session window. The generator keeps admin root shells more than 3600 s from those windows. An admin root shell overlapping the attacker would be unattributable from the evidence under any reading, so this is a contract-scope question, not a reference defect.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:248-249", "solution/model.py:259-265"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 1 clock step direction", "Rules 3/5/7 reported times"],
+      "case_or_path": "A host clock ahead of true time before the step leaves every pre-step time uncorrected.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:120-130", "environment/app/docs/case-guide.md:11-14"],
+      "finding_ids": ["CRS-1"]
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,69 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 23 items
+
+../../tests/test_outputs.py ..................F....                      [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """300 workers under 40 codes, a 1,500-run log, a 2,880-minute log, 500 peaks and the range ends."""
+        rows = load("limits_workers") + load("limits_logs")
+        workers = rows[0]["survey"]["workers"]
+        assert len(workers) == 300 and len({w["group"] for w in workers}) == 40
+        logs = rows[1]["survey"]["workers"]
+        assert len(logs[0]["log"]) == 1500 and sum(m for m, _ in logs[1]["log"]) == 2880 and len(logs[2]["peaks"]) == 500
+        check_family("limits_workers")
+>       check_family("limits_logs")
+
+/tests/test_outputs.py:347: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:225: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+/tests/test_outputs.py:211: in _row
+    _number(a, e, f"{where} dose")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = 18551.722365138092, expected = 27569.910626
+where = 'limits_logs HC4-0031 workers[0] (L-1500) dose'
+
+    def _number(actual, expected, where):
+        assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+        bound = REL * abs(expected) if abs(expected) >= 1 else ABS
+>       assert abs(actual - expected) <= bound, f"{where}: {actual!r}, expected {expected!r}"
+E       AssertionError: limits_logs HC4-0031 workers[0] (L-1500) dose: 18551.722365138092, expected 27569.910626
+E       assert 9018.188260861909 <= 1.3784955313e-06
+E        +  where 9018.188260861909 = abs((18551.722365138092 - 27569.910626))
+
+/tests/test_outputs.py:199: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db
+PASSED ../../tests/test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts
+PASSED ../../tests/test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold
+PASSED ../../tests/test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading
+PASSED ../../tests/test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift
+PASSED ../../tests/test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose
+PASSED ../../tests/test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters
+PASSED ../../tests/test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection
+PASSED ../../tests/test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose
+PASSED ../../tests/test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged
+PASSED ../../tests/test_outputs.py::test_rule_5_2_impulse_at_140_dbc
+PASSED ../../tests/test_outputs.py::test_rule_4_1_twa_formula
+PASSED ../../tests/test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth
+PASSED ../../tests/test_outputs.py::test_rule_5_3_status_bands_at_82_and_85
+PASSED ../../tests/test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses
+PASSED ../../tests/test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean
+PASSED ../../tests/test_outputs.py::test_report_order_and_group_codes
+PASSED ../../tests/test_outputs.py::test_section_one_largest_doses
+PASSED ../../tests/test_outputs.py::test_generated_surveys
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+========================= 1 failed, 22 passed in 4.27s =========================

@@ -1,0 +1,132 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "2591b8ab9770d08a431ff4a35b457f6cee29c52526185def06a2bd64f885a27c",
+  "severity": "None",
+  "summary": "The reference patch (solution/fix.patch applied by solution/solve.sh) implements every tariff DM-3 rule the instruction names: dwell counts both end days (2.1), dry 5 / reefer 3 free days (2.2), demurrage days = dwell - free (2.3), charge = rate x first 4 days + 2 x rate after the fourth (3.1), total = sum (3.2, unchanged). Where the tariff is silent it keeps today's step exactly as instruction.md line 3 requires: a tank keeps 5 free days via .get(type, FREE_DAYS), and a container not on demurrage keeps days = dwell - free and charge = days x rate (zero or a credit), with no added clamp. The driver is untouched, output keys/types/order are preserved, and Python integers cannot overflow at the rule 1.2 maxima. Static traces of ordinary, boundary and interaction cases found no incorrect behavior.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/demurrage-tariff.md",
+      "environment/app/examples/north-quay-0611.json",
+      "environment/app/src/demurrage/__init__.py",
+      "environment/app/src/demurrage/charges.py",
+      "environment/app/src/demurrage/dwell.py",
+      "environment/app/src/demurrage/statement.py",
+      "environment/app/tools/demurrage_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled packet-manifest.json (19 files including 2 panel docs) against the files read: all were read in full, none were missing or extra.",
+    "Rule 2.1 dwell: fix.patch:31-32 changes the return to picked_up - discharged + 1. Same-day pickup gives 1 and a pickup 120 days later gives 121 (tariff 2.1 counts both end days).",
+    "Rule 2.2 free days: fix.patch:26,36-37 gives DRY 5 and REEFER 3. TANK falls through to FREE_DAYS=5, which is today's step (dwell.py:3,11-12), as required by instruction.md:3.",
+    "Rule 2.3 demurrage days: charges.days is unchanged (charges.py:4-5, stood - free), and it now receives the corrected dwell and free days.",
+    "Rule 3.1 tiered charge: fix.patch:14-17 traced for days 1,4,5,7,116. days=4 gives 4r; days=5 gives 4r+2r=6r; days=7 at r=7500 gives 75000; the maximum dry case (dwell 121, days 116, r=100000) gives 400000+22400000=22800000.",
+    "Not-on-demurrage branch: fix.patch:14-15 returns chargeable*rate for chargeable<=0. That is identical to today's charges.py:9, so no clamp or guard is added (instruction.md:3).",
+    "Rule 3.2 total and file order: statement.py:14-16 is unchanged, and it sums the corrected charges in file order.",
+    "Example trace (examples/north-quay-0611.json): MSKU dwell 12/free 5/days 7/charge 75000; TGHU dwell 6/free 3/days 3/charge 36000; CAIU dwell 3/free 5/days -2/charge -15000; total 96000.",
+    "Output bytes and types: the keys id,dwell,free,days,charge,terminal,total are all native ints or strings (README:27-31). The driver json.dump is unchanged.",
+    "Driver preservation: fix.patch touches only app/src/demurrage/charges.py and dwell.py, so tools/demurrage_run.py stays byte-identical (instruction.md:1).",
+    "Patch applicability: solve.sh:17-18 runs patch -p1 from /, and the a/app/... paths resolve to /app (Dockerfile:7-8). Hunk line counts were checked against the shipped files (charges.py -5,+11 over lines 5-9; dwell.py -1,12 +1,13).",
+    "Magnitude: 200 x 22800000 = 4560000000, above 2^32. Python int arithmetic is exact, so nothing overflows.",
+    "Cross-check of the support model: model.py:10-21 matches the patched package in every branch (free .get default 5, tier split, credit branch), and seal.py within_limits matches rule 1.2."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace ordinary case and each relevant boundary through the reference",
+      "status": "checked",
+      "reason": "I traced dwell 1 (same-day), dwell equal to free days, one day past free, demurrage days 1-3/4/5 and 116, rates 1 and 100000, and all three types.",
+      "evidence": ["solution/fix.patch:14-17", "solution/fix.patch:31-37", "environment/app/docs/demurrage-tariff.md:13-39", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "Output is JSON produced by the unchanged driver. All numeric fields stay Python ints (no floats), and the key set and order match README.",
+      "evidence": ["environment/app/tools/demurrage_run.py:16-19", "environment/app/src/demurrage/statement.py:7-16", "environment/app/README.md:23-31"],
+      "finding_ids": []
+    },
+    {
+      "category": "Branches that update state (deletion, expiry, replacement, identifier reuse)",
+      "status": "checked",
+      "reason": "The computation is stateless and per container. The one branch split, on demurrage vs not, was checked on both sides. Duplicate ids are excluded by instruction.md:3.",
+      "evidence": ["solution/fix.patch:14-17", "environment/app/src/demurrage/statement.py:14-16", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims",
+      "status": "not_applicable",
+      "reason": "The contract makes no interruption, recovery or durability promise.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Tariff-silent figures keep today's step (instruction rule)",
+      "status": "checked",
+      "reason": "Tank free days and the days/charge of a container not on demurrage both reproduce the shipped computation, fed with the corrected dwell and free figures.",
+      "evidence": ["instruction.md:3", "environment/app/src/demurrage/dwell.py:3,11-12", "environment/app/src/demurrage/charges.py:4-9", "solution/fix.patch:14-15,37"],
+      "finding_ids": []
+    },
+    {
+      "category": "Driver must remain byte-identical",
+      "status": "checked",
+      "reason": "The patch modifies only the two src files. solve.sh does not touch tools/.",
+      "evidence": ["solution/fix.patch:1-4,18-21", "solution/solve.sh:16-18"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2 tank silent (today's 5)", "2.3 on demurrage", "3.1 tiered charge"],
+      "case_or_path": "TANK with dwell 11 at rate 1000: free 5, days 6, charge 4*1000+2*2*1000=8000. The tier applies because the tank is on demurrage.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:14-17,37"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 +1 dwell", "2.2 reefer 3", "not-on-demurrage today's step"],
+      "case_or_path": "REEFER dwell 3 (edge): days 0, charge 0. REEFER dwell 1: days -2, charge -2*rate. Both are today's step with the corrected inputs.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:14-15,32,37"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1", "2.2 dry 5", "3.1 fourth-day boundary"],
+      "case_or_path": "DRY dwell 9: days 4, charge 4r. DRY dwell 10: days 5, charge 6r.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:16-17"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 total", "credit charges", "file order"],
+      "case_or_path": "A mixed file with a negative credit line and tiered lines. The total is the signed sum in file order, as in the example total of 96000.",
+      "status": "checked",
+      "evidence": ["environment/app/src/demurrage/statement.py:14-16", "environment/app/examples/north-quay-0611.json:3-7"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 maxima", "3.1", "3.2"],
+      "case_or_path": "200 containers at dwell 121 and rate 100000: total 4560000000, exact in Python int.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/demurrage-tariff.md:13-21", "solution/fix.patch:16-17"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": "This is a static review; I did not execute anything. Whether days and charge for a container not on demurrage should be negative (today's step) or zero is a contract-interpretation question for coherent_contract. The reference follows the explicit instruction.md:3 rule ('keeps working the figure out the way it does today', 'no ... clamp'), so it is not a reference defect on this axis."
+}

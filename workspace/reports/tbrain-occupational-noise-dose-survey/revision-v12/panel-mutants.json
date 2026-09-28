@@ -1,0 +1,47 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "f1-survey-wide-run-budget": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "    for worker in survey[\"workers\"]:\n        yield {",
+     "new": "    budget = 1500\n    for worker in survey[\"workers\"]:\n        kept = worker[\"log\"][:max(budget, 0)]\n        budget -= len(kept)\n        worker = dict(worker, log=kept)\n        yield {"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "panel v12 finding 1: 1,500 runs is a per-log limit, not a survey budget"
+  },
+  "f1b-workers-dropped-after-budget": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "    for worker in survey[\"workers\"]:\n        yield {",
+     "new": "    budget = 1500\n    for worker in survey[\"workers\"]:\n        budget -= len(worker[\"log\"])\n        if budget < 0:\n            return\n        yield {"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "panel v12 finding 1, the 'omits B' variant"
+  },
+  "f1c-budget-over-readings": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/noisedose/survey.py",
+     "old": "    for worker in survey[\"workers\"]:\n        yield {",
+     "new": "    budget = 1500\n    for worker in survey[\"workers\"]:\n        kept = []\n        for run in worker[\"log\"]:\n            if run[1] >= 40.0:\n                if budget <= 0:\n                    continue\n                budget -= 1\n            kept.append(run)\n        worker = dict(worker, log=kept)\n        yield {"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "panel v12 finding 1, budget counted over readings"
+  }
+ }
+}

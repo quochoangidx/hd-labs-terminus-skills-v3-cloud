@@ -1,0 +1,146 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "ad6e645e958855ab9f8a7647802a408015390e1adf717230c63db2250e540cda",
+  "severity": "None",
+  "summary": "The reference patch implements every manual TD-7 rule (week's-pay crediting, 13-week base period divided by thirteen, two-thirds rate with the row in force on the injury date, the low-wage rule, inclusive disability days, a three-day waiting period, retroactive days from fourteen, TTD rounded to the nearest cent, two-thirds partial benefit capped at the rate). Where no manual rule reaches (a line under 2,000 cents keeps its payday's week; a partial week under 1,000 cents keeps the shipped 3/5 share, capped at the rate), it keeps today's calculation, as instruction.md paragraph 2 requires. The patch hunks match the shipped files, and the driver is not touched. No concrete incorrect behavior found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/td-benefits-manual.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/src/tdbenefit/__init__.py",
+      "environment/app/src/tdbenefit/dates.py",
+      "environment/app/src/tdbenefit/disability.py",
+      "environment/app/src/tdbenefit/money.py",
+      "environment/app/src/tdbenefit/partial.py",
+      "environment/app/src/tdbenefit/payroll.py",
+      "environment/app/src/tdbenefit/rates.py",
+      "environment/app/src/tdbenefit/statement.py",
+      "environment/app/tools/tdbenefit_run.py",
+      "solution/fix.patch",
+      "solution/solve.sh",
+      "solution/model.py",
+      "solution/seal.py",
+      "solution/jobgen.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked every fix.patch hunk header and its context lines against the shipped disability.py, partial.py, payroll.py and rates.py line numbers; all hunks line up (solve.sh applies them with patch -p1 from /, and the Dockerfile installs patch).",
+    "Traced wage-line crediting: a Friday line of 2,000 cents or more goes to week_ending(Friday) - 7 = the Sunday five days earlier (manual 2.2/3.1). A smaller line stays on the payday's week, which is today's step, because 3.2 only says 'one payroll week' (instruction.md:3).",
+    "Traced the AWW. It is half_up(base wages, 13) (3.3); with no base-period lines it gives 0. This also removes the shipped divide-by-zero when weeks_paid is 0.",
+    "Traced the weekly rate. The row in force is the last row taking effect on or before the injury date, starting from table[0], which 1.3 guarantees applies (2.4). An AWW below the minimum returns the AWW (3.5). Otherwise the rate is 2/3 of the AWW rounded half-up, then clamped to max and min (3.4). Division by 3 never leaves an exact half, and clamping to integer bounds makes the round-then-clamp order irrelevant.",
+    "Traced disability days: (last - first).days + 1 (2.5); waiting = min(3, days) (2.6); retro = waiting when days >= 14 (4.1); paid = days - waiting + retro (4.2); ttd = half_up(rate * paid, 7) (4.3 with 1.1, and 7 is odd, so there is no half).",
+    "Traced partial disability: wage loss = aww - earned, or 0 (2.7). A week earning 1,000 cents or more pays 2/3 of its loss, capped at the rate (2.8/5.1). A week earning less pays the shipped 3/5 of its loss, capped at the rate. The manual gives no share for such weeks, while 5.2 still gives them a benefit, and instruction.md:3 keeps the package constants at today's values. tpd_weeks = len(earnings) (6.1).",
+    "Checked the statement keys and order and the total = ttd + tpd against README.md and manual 6.1. Every figure is a Python int, and statements come out in job order.",
+    "Checked that model.py agrees with the patch on each step, including counted_week (Friday - 5 days) and the 3/5 low-week share. This was a consistency check only, not an independent correctness argument.",
+    "Hand-traced the sample job: 2025-03-12 is a Wednesday, so the base period runs from Sunday 2024-12-01 to Sunday 2025-03-02. The 2024-12-06 week's pay credits to 2024-12-01 (in the base period). The 2025-03-07 week's pay credits to 2025-03-02 (in). The 2025-03-14 line is in the injury week (out). The 37-cent correction stays on Sunday 2025-01-26 (in). The row in force is the 2024-07-01 row."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced the ordinary sample claim and these boundaries: a line of exactly 2,000 and of 1,999 cents; injury on a Monday, Friday or Sunday; zero base-period lines; AWW at or below the minimum; 2/3 AWW at the max or min; 1-, 2-, 3-, 13- and 14-day disability; TTD remainders 1-6 sevenths; partial weeks of 999, 1,000, the AWW and more than the AWW.",
+      "evidence": ["solution/fix.patch:52-59", "solution/fix.patch:62-67", "solution/fix.patch:80-99", "solution/fix.patch:8-23", "solution/fix.patch:30-43", "environment/app/docs/td-benefits-manual.md:52-109"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, types, keys, paths",
+      "status": "checked",
+      "reason": "All figures are integer cents from integer arithmetic (half_up), with exactly the README keys in FIELDS order. The claim string passes through unchanged, and the driver is unchanged, as instruction.md requires.",
+      "evidence": ["environment/app/src/tdbenefit/statement.py:9-29", "environment/app/src/tdbenefit/money.py:4-12", "environment/app/README.md:35-50", "environment/app/tools/tdbenefit_run.py:12-20", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches (loop state, replacement, identifier reuse)",
+      "status": "checked",
+      "reason": "The only loop state is row_in_force's 'chosen', which is reset per call and seeded with table[0], and the per-claim tpd/wage accumulators, which are local per call. No carry-over between claims.",
+      "evidence": ["solution/fix.patch:83-89", "environment/app/src/tdbenefit/partial.py:12-18", "environment/app/src/tdbenefit/payroll.py:9-19"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract is a pure computation from a job file to stdout, with no recovery or durability promises.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rounding and precision (manual 1.1)",
+      "status": "checked",
+      "reason": "Rounding is half-up to the nearest cent only where a rule multiplies or divides: AWW /13, rate x2/3, TTD /7, partial x2/3 or x3/5. The base-period sum and the total are not rounded. None of the odd divisors can produce an exact half.",
+      "evidence": ["environment/app/docs/td-benefits-manual.md:12-14", "environment/app/src/tdbenefit/money.py:4-12", "solution/fix.patch:23", "solution/fix.patch:67"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreached-rule fallback required by instruction.md paragraph 2",
+      "status": "checked",
+      "reason": "Two gaps keep today's step. A sub-2,000-cent line keeps the payday's week. A partial week under 1,000 cents keeps the shipped 3/5 share with the shipped cap, fed by the manual AWW and rate. No added guard or clamp.",
+      "evidence": ["instruction.md:3", "solution/fix.patch:30-43", "solution/fix.patch:52-59", "environment/app/src/tdbenefit/rates.py:7", "environment/app/docs/td-benefits-manual.md:108-109"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2/3.1 week's-pay crediting", "2.1/2.3 base period"],
+      "case_or_path": "A week's pay on the Friday of the injury week credits to the last base week (included). A week's pay on the Friday after the first base week credits to the first base week (included). A week's pay for the week before the base period is excluded.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:55-59", "environment/app/src/tdbenefit/payroll.py:22-30"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2/unreached small-line placement", "2.3 base period edges"],
+      "case_or_path": "A sub-2,000-cent correction on the injury-week Friday stays on the injury week and is excluded. One on the first base week's Friday stays on that week and is included. This is today's placement, as instruction.md:3 requires.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:57-59", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.5 low-wage rate", "5.1 partial cap at the weekly rate"],
+      "case_or_path": "AWW 30,000 with min 45,000 gives rate 30,000. A partial week earning 15,000 has a loss of 15,000, 2/3 of which is 10,000, under the 30,000 cap, so it pays 10,000.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:96-97", "solution/fix.patch:40-42"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 row in force", "3.4 max/min clamp"],
+      "case_or_path": "An injury the day before a row change uses the earlier row's max and min. An injury on the change day uses the new row. The clamp uses the chosen row.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:83-99"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.6 waiting period", "4.1 retroactive at fourteen days over multiple periods"],
+      "case_or_path": "Periods [5,4,5], counted inclusively, give 14 days: waiting 3, retro 3, paid 14. A single 13-day period gives waiting 3, retro 0, paid 10.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:9", "solution/fix.patch:16", "environment/app/src/tdbenefit/disability.py:19-26"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.8 partial-week threshold", "2.7 wage loss nought at or above AWW"],
+      "case_or_path": "A week earning 999 cents with AWW 999 or less has loss 0 regardless of share. A week earning the AWW or more has loss 0. A week of 1,000 cents uses 2/3 and a week of 999 uses 3/5.",
+      "status": "checked",
+      "evidence": ["environment/app/src/tdbenefit/partial.py:7-9", "solution/fix.patch:40-42"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 AWW with no base lines", "3.5 low-wage rate"],
+      "case_or_path": "No wage lines gives AWW 0, which is below the minimum (at least 1,000), so the rate is 0 and TTD is 0. No division by zero after the patch.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:62-67", "solution/fix.patch:96-97"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

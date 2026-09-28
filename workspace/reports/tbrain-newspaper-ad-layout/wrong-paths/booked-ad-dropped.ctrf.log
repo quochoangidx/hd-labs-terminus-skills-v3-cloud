@@ -1,0 +1,232 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 8 items
+
+../../tests/test_outputs.py ..FF....                                     [100%]
+
+=================================== FAILURES ===================================
+___________________________ test_wed_layout_is_valid ___________________________
+
+name = 'wed'
+
+    def _cost(name):
+        path = os.path.join(LAYOUTS, name + ".json")
+        assert os.path.isfile(path), f"no layout at {path}"
+        try:
+            layout = load_layout(path)
+>           return evaluate(_edition(name), layout)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ed = {'name': 'wed', 'pages': 20, 'columns': 6, 'rows': 42, ...}
+layout = {'placements': {'AD001': {'page': 9, 'column': 1, 'row': 22}, 'AD002': {'page': 16, 'column': 5, 'row': 26}, 'AD004': {'page': 9, 'column': 4, 'row': 32}, 'AD006': {'page': 13, 'column': 0, 'row': 21}, ...}}
+
+    def evaluate(ed, layout):
+        """Return the integer cost of the layout, or raise LayoutError."""
+        if not isinstance(layout, dict) or not isinstance(layout.get("placements"), dict):
+            raise LayoutError('the layout must be an object with a "placements" object')
+        cols, rows, pages = ed["columns"], ed["rows"], ed["pages"]
+        ads = {a["id"]: a for a in ed["ads"]}
+        grid = {p: [[None] * cols for _ in range(rows)] for p in range(1, pages + 1)}
+        placed = {}
+        for aid, pos in layout["placements"].items():
+            if aid not in ads:
+                raise LayoutError(f"unknown ad {aid!r}")
+            if not isinstance(pos, dict) or any(type(pos.get(k)) is not int for k in ("page", "column", "row")):
+                raise LayoutError(f"ad {aid}: a placement needs whole-number page, column and row")
+            a = ads[aid]
+            p, c, r = pos["page"], pos["column"], pos["row"]
+            if not 1 <= p <= pages:
+                raise LayoutError(f"ad {aid}: no page {p}")
+            if c < 0 or r < 0 or c + a["width"] > cols or r + a["depth"] > rows:
+                raise LayoutError(f"ad {aid} runs off page {p}")
+            for y in range(r, r + a["depth"]):
+                for x in range(c, c + a["width"]):
+                    if grid[p][y][x] is not None:
+                        raise LayoutError(f"ads {grid[p][y][x]} and {aid} overlap on page {p}")
+                    grid[p][y][x] = aid
+            placed[aid] = (p, c, r)
+    
+        for aid, (p, c, r) in placed.items():
+            a = ads[aid]
+            below = r + a["depth"]
+            if below < rows:
+                for x in range(c, c + a["width"]):
+                    if grid[p][below][x] is None:
+                        raise LayoutError(f"ad {aid} on page {p} is not resting on the foot of the page or on ads across its full width")
+    
+        for p in range(1, pages + 1):
+            used = sum(1 for y in range(rows) for x in range(cols) if grid[p][y][x] is not None)
+            limit = ed["front_page_ad_rows"] * cols if p == 1 else ed["max_ad_share_percent"] * rows * cols // 100
+            if used > limit:
+                raise LayoutError(f"page {p} carries {used} ad cells, more than its limit of {limit}")
+        for aid, (p, c, r) in placed.items():
+            if p == 1 and r < rows - ed["front_page_ad_rows"]:
+                raise LayoutError(f"ad {aid} reaches above the front-page strip")
+    
+        def spread(p):
+            return 0 if p == 1 else p // 2
+    
+        by_group = {}
+        for aid, (p, _, _) in placed.items():
+            g = ads[aid]["competitor_group"]
+            if g is not None:
+                by_group.setdefault(g, []).append((spread(p), aid))
+        for g, lst in by_group.items():
+            seen = {}
+            for s, aid in lst:
+                if s in seen:
+                    raise LayoutError(f"competing ads {seen[s]} and {aid} face each other")
+                seen[s] = aid
+    
+        for a in ed["ads"]:
+            if a["booked"] and a["id"] not in placed:
+>               raise LayoutError(f"booked ad {a['id']} is not placed")
+E               check_layout.LayoutError: booked ad AD005 is not placed
+
+/tests/check_layout.py:136: LayoutError
+
+During handling of the above exception, another exception occurred:
+
+    def test_wed_layout_is_valid():
+>       _cost("wed")
+
+/tests/test_outputs.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+name = 'wed'
+
+    def _cost(name):
+        path = os.path.join(LAYOUTS, name + ".json")
+        assert os.path.isfile(path), f"no layout at {path}"
+        try:
+            layout = load_layout(path)
+            return evaluate(_edition(name), layout)
+        except LayoutError as exc:
+>           pytest.fail(f"{name}: layout breaks the make-up rules: {exc}")
+E           Failed: wed: layout breaks the make-up rules: booked ad AD005 is not placed
+
+/tests/test_outputs.py:36: Failed
+_________________________ test_wed_layout_meets_target _________________________
+
+name = 'wed'
+
+    def _cost(name):
+        path = os.path.join(LAYOUTS, name + ".json")
+        assert os.path.isfile(path), f"no layout at {path}"
+        try:
+            layout = load_layout(path)
+>           return evaluate(_edition(name), layout)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ed = {'name': 'wed', 'pages': 20, 'columns': 6, 'rows': 42, ...}
+layout = {'placements': {'AD001': {'page': 9, 'column': 1, 'row': 22}, 'AD002': {'page': 16, 'column': 5, 'row': 26}, 'AD004': {'page': 9, 'column': 4, 'row': 32}, 'AD006': {'page': 13, 'column': 0, 'row': 21}, ...}}
+
+    def evaluate(ed, layout):
+        """Return the integer cost of the layout, or raise LayoutError."""
+        if not isinstance(layout, dict) or not isinstance(layout.get("placements"), dict):
+            raise LayoutError('the layout must be an object with a "placements" object')
+        cols, rows, pages = ed["columns"], ed["rows"], ed["pages"]
+        ads = {a["id"]: a for a in ed["ads"]}
+        grid = {p: [[None] * cols for _ in range(rows)] for p in range(1, pages + 1)}
+        placed = {}
+        for aid, pos in layout["placements"].items():
+            if aid not in ads:
+                raise LayoutError(f"unknown ad {aid!r}")
+            if not isinstance(pos, dict) or any(type(pos.get(k)) is not int for k in ("page", "column", "row")):
+                raise LayoutError(f"ad {aid}: a placement needs whole-number page, column and row")
+            a = ads[aid]
+            p, c, r = pos["page"], pos["column"], pos["row"]
+            if not 1 <= p <= pages:
+                raise LayoutError(f"ad {aid}: no page {p}")
+            if c < 0 or r < 0 or c + a["width"] > cols or r + a["depth"] > rows:
+                raise LayoutError(f"ad {aid} runs off page {p}")
+            for y in range(r, r + a["depth"]):
+                for x in range(c, c + a["width"]):
+                    if grid[p][y][x] is not None:
+                        raise LayoutError(f"ads {grid[p][y][x]} and {aid} overlap on page {p}")
+                    grid[p][y][x] = aid
+            placed[aid] = (p, c, r)
+    
+        for aid, (p, c, r) in placed.items():
+            a = ads[aid]
+            below = r + a["depth"]
+            if below < rows:
+                for x in range(c, c + a["width"]):
+                    if grid[p][below][x] is None:
+                        raise LayoutError(f"ad {aid} on page {p} is not resting on the foot of the page or on ads across its full width")
+    
+        for p in range(1, pages + 1):
+            used = sum(1 for y in range(rows) for x in range(cols) if grid[p][y][x] is not None)
+            limit = ed["front_page_ad_rows"] * cols if p == 1 else ed["max_ad_share_percent"] * rows * cols // 100
+            if used > limit:
+                raise LayoutError(f"page {p} carries {used} ad cells, more than its limit of {limit}")
+        for aid, (p, c, r) in placed.items():
+            if p == 1 and r < rows - ed["front_page_ad_rows"]:
+                raise LayoutError(f"ad {aid} reaches above the front-page strip")
+    
+        def spread(p):
+            return 0 if p == 1 else p // 2
+    
+        by_group = {}
+        for aid, (p, _, _) in placed.items():
+            g = ads[aid]["competitor_group"]
+            if g is not None:
+                by_group.setdefault(g, []).append((spread(p), aid))
+        for g, lst in by_group.items():
+            seen = {}
+            for s, aid in lst:
+                if s in seen:
+                    raise LayoutError(f"competing ads {seen[s]} and {aid} face each other")
+                seen[s] = aid
+    
+        for a in ed["ads"]:
+            if a["booked"] and a["id"] not in placed:
+>               raise LayoutError(f"booked ad {a['id']} is not placed")
+E               check_layout.LayoutError: booked ad AD005 is not placed
+
+/tests/check_layout.py:136: LayoutError
+
+During handling of the above exception, another exception occurred:
+
+    def test_wed_layout_meets_target():
+>       check_target("wed")
+
+/tests/test_outputs.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:40: in check_target
+    cost = _cost(name)
+           ^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+name = 'wed'
+
+    def _cost(name):
+        path = os.path.join(LAYOUTS, name + ".json")
+        assert os.path.isfile(path), f"no layout at {path}"
+        try:
+            layout = load_layout(path)
+            return evaluate(_edition(name), layout)
+        except LayoutError as exc:
+>           pytest.fail(f"{name}: layout breaks the make-up rules: {exc}")
+E           Failed: wed: layout breaks the make-up rules: booked ad AD005 is not placed
+
+/tests/test_outputs.py:36: Failed
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_mon_layout_is_valid
+PASSED ../../tests/test_outputs.py::test_mon_layout_meets_target
+PASSED ../../tests/test_outputs.py::test_fri_layout_is_valid
+PASSED ../../tests/test_outputs.py::test_fri_layout_meets_target
+PASSED ../../tests/test_outputs.py::test_sat_layout_is_valid
+PASSED ../../tests/test_outputs.py::test_sat_layout_meets_target
+FAILED ../../tests/test_outputs.py::test_wed_layout_is_valid - Failed: wed: l...
+FAILED ../../tests/test_outputs.py::test_wed_layout_meets_target - Failed: we...
+========================= 2 failed, 6 passed in 0.45s ==========================

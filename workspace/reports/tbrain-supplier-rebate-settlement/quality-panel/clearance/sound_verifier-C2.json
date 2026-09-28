@@ -1,0 +1,202 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-C2",
+  "snapshot_sha256": "a0d735d6eeca8a3aafc0a047d83dfac4e5b188012b539632ffecf270836f6e59",
+  "severity": "None",
+  "summary": "The verifier compares every field of every settlement, type-strictly, against sealed expectations whose sampled values I re-derived from Schedule R. Each schedule rule and each of the three leave-as-today behaviours has a fixture that changes outcome under a plausible wrong implementation, including decoupling the shared constants in rates.py. No false rejection of contract-valid output was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/rebate-schedule.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/tools/rebate_run.py",
+      "environment/app/src/rebate/__init__.py",
+      "environment/app/src/rebate/chargeback.py",
+      "environment/app/src/rebate/dates.py",
+      "environment/app/src/rebate/growth.py",
+      "environment/app/src/rebate/ledger.py",
+      "environment/app/src/rebate/money.py",
+      "environment/app/src/rebate/protection.py",
+      "environment/app/src/rebate/rates.py",
+      "environment/app/src/rebate/returns.py",
+      "environment/app/src/rebate/settle.py",
+      "environment/app/src/rebate/statement.py",
+      "environment/app/src/rebate/tiers.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/carton_receipt.jsonl",
+      "tests/expected/carton_threshold.jsonl",
+      "tests/expected/contract_sale.jsonl",
+      "tests/expected/contract_threshold.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/growth_110.jsonl",
+      "tests/expected/growth_increase.jsonl",
+      "tests/expected/growth_no_prior.jsonl",
+      "tests/expected/limits_accounts.jsonl",
+      "tests/expected/limits_job.jsonl",
+      "tests/expected/loose_units.jsonl",
+      "tests/expected/minimum_settlement.jsonl",
+      "tests/expected/net_below_nought.jsonl",
+      "tests/expected/price_drop.jsonl",
+      "tests/expected/price_drop_threshold.jsonl",
+      "tests/expected/price_match.jsonl",
+      "tests/expected/rebate_rounding.jsonl",
+      "tests/expected/returns_charge.jsonl",
+      "tests/expected/returns_edges.jsonl",
+      "tests/expected/settlement_edge.jsonl",
+      "tests/expected/statement_order.jsonl",
+      "tests/expected/tidy_ups.jsonl",
+      "tests/expected/tier_net.jsonl",
+      "tests/expected/tier_threshold.jsonl",
+      "tests/shipped/app/** (the packet manifest shows SHA-256 values identical to environment/app/src/rebate/* and environment/app/tools/rebate_run.py, and I read those environment files)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped each Schedule R rule (2.2, 2.4, 2.5, 2.6, 3.1, 3.3, 3.5, 3.6, 4.1, 5.1, 5.2, 5.3, 6.2) and the three leave-as-today behaviours (loose-unit dating, tidy-up credit, price-match chargeback) to the test family that grades it (tests/test_outputs.py:221-331).",
+    "Re-derived sealed values by hand from the schedule. 61J7S8P purchases 181508578 (a carton invoiced 12-28 is excluded and 09-27 is included, so the verifier requires +4 days, not +3). DUD3PZHCV81-K returns 100000 at a 40-cent charge, reaching tier 300 exactly. XCQHB4L rebate 370 and account 37 rebate 51 (a 50.5 half goes up). JNMYUEWMD- growth 225 (224.5 half-up). W with prior=1 has growth 224297. Z8B7R growth 490151 (on the increase, not on net). KFF tidy-up protection 84900. J56X chargebacks 1239053097 (a price match exactly 25 under cost is kept). limits_job totals.",
+    "Checked that the shared constants in rates.py are discriminated. Tidy-ups include credits of 4998 and 100 (dropped), 5000 (kept at the cutoff) and 24900 (kept), so coupling notice_cutoff to 25000 fails, and so does removing the cutoff. Price matches include below-cost gaps of 25, 26, 38 and 39 (kept) and 1 and 24 (dropped), so coupling claim_cutoff to 40 fails, as does zeroing price matches or raising the cutoff to 100.",
+    "Checked the sign partitions of net: negative (net_below_nought, row-0 bp 1500, expected tier_bp 0), zero (price_match 03JD and statement_order x with row-0 bp 769/550, expected tier_bp equal to row 0), and positive. Both a max(net,0) clamp and a strict '>' threshold are rejected.",
+    "Checked comparator semantics: parsed JSON; exactly one top-level key; list order equals job order; key set compared as a set; values type-strict int (bool and float rejected), matching README Statements (tests/test_outputs.py:201-211).",
+    "Checked the relabel and shuffle metamorphic run. The README states that the lists are in no particular order and that codes are any 1-16 character string. Sums are order-independent, so a valid implementation is not falsely rejected.",
+    "Checked that load() enforces within_limits and trap_inputs on every sealed job, and confirmed by reading every family file that the trap-input sets match TRAP_INPUTS. No fixture is unreachable or out of domain.",
+    "Checked that the differential runs against the shipped copy compare only the leave-as-today figures (loose-unit purchases, protection, chargebacks), and that the shipped figures agree with the schedule for the non-trap items in those same jobs (price drops and contract sales give identical credit under both).",
+    "Checked the driver pinning: the delivered bytes are recorded before the verifier's copy is installed; test_submitted_driver_unchanged and test.sh then enforce the instruction's byte-for-byte promise."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Every schedule rule and every leave-as-today behaviour has a family whose full-settlement comparison changes under the wrong behaviour. Rules 2.4 and 2.5 (the thresholds for price drop and contract sale) cannot change any figure relative to today's code: a price drop's credit is at least 250*100=25000, which is at least the 5000 notice cutoff, and a contract sale's gap is at least 100, which is at least the 25 claim cutoff. No wrong-but-observable variant exists for those two rules, so this is not a coverage gap.",
+      "evidence": ["tests/test_outputs.py:221-331", "environment/app/docs/rebate-schedule.md:71-75", "environment/app/src/rebate/protection.py:13-15", "environment/app/src/rebate/chargeback.py:13-16", "environment/app/src/rebate/rates.py:4-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result checked (values, membership, required outputs)",
+      "status": "checked",
+      "reason": "compare() checks the exact settlement count and order, the exact key set, and every value of all 12 fields in every job.",
+      "evidence": ["tests/test_outputs.py:201-218", "environment/app/README.md:38-55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rule has a case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "Carton +4 days and the exactly-12 threshold: carton_receipt and carton_threshold. Return charge of 40: returns_charge and tier_threshold DUD3. Return quarter edges: returns_edges. Tier on net, and at-or-above: tier_net and tier_threshold. Below nought: net_below_nought. Half-up: rebate_rounding and growth_110. Growth on the increase, the 110% boundary and prior 0 vs 1: growth_increase, growth_110 and growth_no_prior. Protection in quarter: price_drop (edges 03-31, 07-01, 06-30). Minimum 25000/24999/25001 and empty account: settlement_edge.",
+      "evidence": ["tests/expected/carton_receipt.jsonl:1", "tests/expected/tier_threshold.jsonl:1", "tests/expected/rebate_rounding.jsonl:1", "tests/expected/growth_110.jsonl:1", "tests/expected/growth_no_prior.jsonl:1", "tests/expected/settlement_edge.jsonl:1", "tests/expected/net_below_nought.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solution rejected",
+      "status": "checked",
+      "reason": "Each of these is rejected by a sealed family: the unchanged shipped package; a global change to the constants in rates.py (unit_handling=40, small_credit=25000); shifting every line by 4 days; +3 days; floor or banker's rounding; growth on net; a strict '>' tier test; a tier chosen on gross purchases; clamping negative net; and zeroing non-contract items.",
+      "evidence": ["tests/expected/tidy_ups.jsonl:1", "tests/expected/price_match.jsonl:1", "tests/expected/loose_units.jsonl:1", "tests/expected/tier_net.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, ordering, implementation choices)",
+      "status": "checked",
+      "reason": "Output is parsed as JSON. Key order inside a settlement is free because the keys are compared as a set. The top-level single key and the job order are both required by the README. The input lists are shuffled only where the README says order is unspecified. Integer type strictness is required by instruction and README. The driver is fixed by the instruction.",
+      "evidence": ["tests/test_outputs.py:204-211", "tests/test_outputs.py:356-370", "environment/app/README.md:34-42", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced (driver left unchanged)",
+      "status": "checked",
+      "reason": "The delivered driver's bytes are captured before os.replace and compared with the shipped copy. test.sh then re-checks the file with cmp after pytest.",
+      "evidence": ["tests/test_outputs.py:58-66", "tests/test_outputs.py:421-427", "tests/test.sh:24-28"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, stale binaries, Oracle-specific representation, self-controlled comparisons",
+      "status": "checked",
+      "reason": "The candidate's package is run fresh through the verifier-owned driver for every job. Expectations are sealed and pinned by SHA-256. The shipped differential copy is owned by its own uid and is byte-identical to the environment package (manifest hashes). No comparison uses candidate-produced reference values.",
+      "evidence": ["tests/test_outputs.py:69-90", "tests/test_outputs.py:113-130", "tests/test_outputs.py:187-198", "packet-manifest.json:54-66"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable or out-of-domain test cases",
+      "status": "checked",
+      "reason": "within_limits() mirrors schedule section 1 and runs on every graded job, including the relabelled and 100-account constructed jobs. The trap-input set is asserted per family. I read every fixture file, and the jobs fall inside those limits.",
+      "evidence": ["tests/test_outputs.py:144-198", "tests/test_outputs.py:378-400", "environment/app/docs/rebate-schedule.md:21-58"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization-to-first-event transition",
+      "status": "not_applicable",
+      "reason": "The settlement is a stateless per-account computation. No state machine is graded.",
+      "evidence": ["environment/app/src/rebate/statement.py:12-37"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: legal sign partitions discriminated",
+      "status": "checked",
+      "reason": "Net negative, zero and positive are all graded with nonzero row-0 rates, so the at-or-above rule at 0 and the below-nought rule are separately visible. A growth account with prior>0 and negative net expects 0. Totals are non-negative by construction.",
+      "evidence": ["tests/expected/net_below_nought.jsonl:1", "tests/expected/price_match.jsonl:1", "tests/expected/statement_order.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Representation promises vs semantic content",
+      "status": "checked",
+      "reason": "No byte-level output comparison is made. The only byte comparison is of the driver file, which the instruction explicitly promises.",
+      "evidence": ["instruction.md:1", "tests/test_outputs.py:421-427"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2/3.1 carton receipt", "3.2 loose line keeps invoice quarter (today's code)"],
+      "case_or_path": "loose_units -M- 2025-Q3: loose lines invoiced 06-27/06-28 excluded, 09-29 included, while cartons move by +4 days; differential against the shipped package on loose-only purchases.",
+      "status": "checked",
+      "evidence": ["tests/expected/loose_units.jsonl:2", "tests/test_outputs.py:306-315"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 return charge 40", "5.3 price-match chargeback at today's claim cutoff 25 (shared constant)"],
+      "case_or_path": "price_match J56X: a gap of 25 is kept with the return charge at 40. A single constant cannot satisfy both.",
+      "status": "checked",
+      "evidence": ["tests/expected/price_match.jsonl:1", "environment/app/src/rebate/rates.py:10-15"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["6.2 settlement minimum 25000", "5.3 tidy-up credit at today's notice cutoff 5000 (shared constant)"],
+      "case_or_path": "tidy_ups KFF: tidy-up credits of 24900 and 5000 are kept, and 4998 is dropped, while settlement_edge requires the 25000 minimum.",
+      "status": "checked",
+      "evidence": ["tests/expected/tidy_ups.jsonl:1", "tests/expected/settlement_edge.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 returns", "3.5/2.6 tier on net at or above threshold"],
+      "case_or_path": "tier_threshold DUD3PZHCV81-K: gross 1300000 less returns of 100000 at a 40-cent charge gives net exactly 1200000, which reaches bp 300. A 25-cent charge would give a lower tier.",
+      "status": "checked",
+      "evidence": ["tests/expected/tier_threshold.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["4.1 growth on increase", "1.1 half-up rounding"],
+      "case_or_path": "growth_110 JNMYUEWMD-: increase 11225 -> 224.5 -> 225; the 110% boundary is exact (a float 1.1 multiply would misjudge 110000 vs 100000).",
+      "status": "checked",
+      "evidence": ["tests/expected/growth_110.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.6 below nought reaches no tier", "3.6 rebate on net"],
+      "case_or_path": "net_below_nought: row-0 bp 1500 and negative net; tier_bp 0 and rebate 0 are required, while protection is still paid.",
+      "status": "checked",
+      "evidence": ["tests/expected/net_below_nought.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

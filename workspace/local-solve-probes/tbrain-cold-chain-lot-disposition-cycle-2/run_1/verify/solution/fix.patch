@@ -1,0 +1,98 @@
+--- a/app/src/coldchain/attribution.py
++++ b/app/src/coldchain/attribution.py
+@@ -1,7 +1,7 @@
+ """How long each logger reading stands for, and where the logger missed readings."""
+ 
+-LAST_READING_MINUTES = 60  # a logger's last reading is taken to cover one more reporting window
+-GAP_MINUTES = 60  # a spacing longer than this means the logger missed readings
++LAST_READING_MINUTES = 0  # the last reading of an export stands for nothing after it
++GAP_MINUTES = 30  # a spacing longer than this means the logger missed readings
+ 
+ 
+ def holds(readings):
+@@ -13,6 +13,11 @@
+         else:
+             held.append(LAST_READING_MINUTES)
+     return held
++
++
++def logged_holds(held):
++    """The part of each reading's minutes a band is charged with: nothing for a reading that opens a logger gap."""
++    return [minutes if minutes <= GAP_MINUTES else 0 for minutes in held]
+ 
+ 
+ def unlogged_minutes(readings):
+--- a/app/src/coldchain/bands.py
++++ b/app/src/coldchain/bands.py
+@@ -3,10 +3,13 @@
+ 
+ def band_of(temp, stability):
+     """Name of the band a reading is charged to, or None for a reading in range."""
+-    if stability.low <= temp < stability.high:
++    if stability.low <= temp <= stability.high:
+         return None
+     for band in sorted(stability.bands, key=lambda entry: entry.lower, reverse=True):
+-        if temp >= band.lower:
++        if band.lower >= stability.high:
++            if temp > band.lower:
++                break
++        elif temp >= band.lower:
+             break
+     return band.name
+ 
+--- a/app/src/coldchain/disposition.py
++++ b/app/src/coldchain/disposition.py
+@@ -1,10 +1,11 @@
+ """Per-lot figures and the release decision."""
+ 
+-from .attribution import holds, unlogged_minutes
++from .attribution import holds, logged_holds, unlogged_minutes
+ from .bands import band_minutes
+ from .kinetics import mean_kinetic_temperature
+ 
+ UNLOGGED_LIMIT_MINUTES = 120
++EXCURSION_ENTRY_MINUTES = 15
+ 
+ 
+ def dispose(lot, stability):
+@@ -14,17 +15,21 @@
+     temps, weights = [], []
+     for leg in lot.legs:
+         held = holds(leg.readings)
+-        per_leg.append(band_minutes(leg.readings, held, stability))
++        per_leg.append(band_minutes(leg.readings, logged_holds(held), stability))
+         unlogged += unlogged_minutes(leg.readings)
+         temps += [reading.temp for reading in leg.readings]
+         weights += held
+-    band_time = {band.name: max(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
+-    remaining = {band.name: band.allowance_h * 60 - band_time[band.name] for band in stability.bands}
++    band_time = {band.name: sum(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
++    prior = {
++        band.name: sum(entry for entry in lot.certificate.get(band.name, []) if entry >= EXCURSION_ENTRY_MINUTES)
++        for band in stability.bands
++    }
++    remaining = {band.name: band.allowance_h * 60 - prior[band.name] - band_time[band.name] for band in stability.bands}
+     mkt = mean_kinetic_temperature(temps, weights, stability.ratio)
+     frozen = any(reading.temp < stability.freeze_point for reading in lot.readings())
+     if frozen or any(left < 0 for left in remaining.values()):
+         decision = "reject"
+-    elif round(mkt, 1) > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
++    elif mkt > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
+         decision = "quarantine"
+     else:
+         decision = "release"
+--- a/app/src/coldchain/report.py
++++ b/app/src/coldchain/report.py
+@@ -1,11 +1,8 @@
+ """The disposition report the driver prints."""
+ 
+-import math
+-
+-
+ def hours(minutes):
+     """Minutes as hours to the hundredth."""
+-    return math.trunc(minutes / 60 * 100) / 100
++    return round(minutes / 60, 2)
+ 
+ 
+ def build_report(stability, results):

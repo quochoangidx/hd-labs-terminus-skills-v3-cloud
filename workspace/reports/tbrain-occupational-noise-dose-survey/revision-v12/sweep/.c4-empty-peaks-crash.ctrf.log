@@ -1,0 +1,1099 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 22 items
+
+../../tests/test_outputs.py FFFFFFFFFFFFFFFFFFFF..                       [100%]
+
+=================================== FAILURES ===================================
+____________ test_rule_3_1_reference_duration_uses_85_dba_and_3_db _____________
+
+    def test_rule_3_1_reference_duration_uses_85_dba_and_3_db():
+        """Doses follow the 85 dBA criterion and 3 dB exchange rate, at levels from 80.0 to 115.0 dBA."""
+>       check_family("reference_duration")
+
+/tests/test_outputs.py:248: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0001', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[480, 85.0]], ...}, {'id'... 480, 'log': [[480, 100.0]], ...}, {'id': 'A6', 'group': 'G6', 'shift_minutes': 480, 'log': [[480, 110.5]], ...}, ...]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+________________ test_rule_2_3_reading_at_the_threshold_counts _________________
+
+    def test_rule_2_3_reading_at_the_threshold_counts():
+        """A reading exactly at 80.0 dBA adds dose; 79.9 dBA does not."""
+>       check_family("threshold")
+
+/tests/test_outputs.py:253: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0003', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[240, 80.0], [240, 90.0]]... 79.9], [240, 90.0]], ...}, {'id': 'A3', 'group': 'G2', 'shift_minutes': 480, 'log': [[240, 80.1], [240, 90.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_________ test_rule_2_4_sampled_time_includes_readings_below_threshold _________
+
+    def test_rule_2_4_sampled_time_includes_readings_below_threshold():
+        """Sampled time counts every reading, quiet ones at 40.0 to 79.9 dBA included."""
+>       check_family("sampled_time")
+
+/tests/test_outputs.py:258: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0005', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[200, 92.0], [200, 70.0]], ...}, {'id': 'A2', 'group': 'G1', 'shift_minutes': 600, 'log': [[300, 90.0], [200, 60.0], [100, 40.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_____________ test_rule_2_2_run_logged_at_nought_is_not_a_reading ______________
+
+    def test_rule_2_2_run_logged_at_nought_is_not_a_reading():
+        """A run logged at 0.0 is not a reading, so its minutes stay out of sampled time."""
+>       check_family("paused_runs")
+
+/tests/test_outputs.py:263: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0007', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[200, 91.0], [60, 0.0], [170, 86.5], [45, 0.0]], ...}, {'id': 'A2', 'group': 'G1', 'shift_minutes': 480, 'log': [[30, 0.0], [400, 93.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_____________ test_rule_3_3_partial_survey_projected_to_own_shift ______________
+
+    def test_rule_3_3_partial_survey_projected_to_own_shift():
+        """A partial survey is projected to the worker's own shift, not to eight hours."""
+>       check_family("partial_surveys")
+
+/tests/test_outputs.py:268: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0009', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 720, 'log': [[600, 90.0]], ...}, {'id'...nutes': 600, 'log': [[599, 88.0]], ...}, {'id': 'A3', 'group': 'G3', 'shift_minutes': 480, 'log': [[400, 89.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+__________ test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose ___________
+
+    def test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose():
+        """A survey of the whole shift or longer keeps its measured dose."""
+>       check_family("whole_shift")
+
+/tests/test_outputs.py:273: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0011', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 360, 'log': [[420, 88.0]], ...}, {'id'...inutes': 480, 'log': [[480, 88.0]], ...}, {'id': 'A3', 'group': 'G2', 'shift_minutes': 60, 'log': [[480, 85.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+____________ test_rule_2_5_partial_survey_at_exactly_three_quarters ____________
+
+    def test_rule_2_5_partial_survey_at_exactly_three_quarters():
+        """Sampled time of exactly three quarters of the shift is a partial survey, on shifts of 60 to 1,440 minutes."""
+>       check_family("three_quarters")
+
+/tests/test_outputs.py:278: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0013', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 600, 'log': [[450, 90.0]], ...}, {'id'...minutes': 480, 'log': [[360, 88.0]], ...}, {'id': 'A3', 'group': 'G3', 'shift_minutes': 60, 'log': [[45, 95.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+___________ test_survey_below_three_quarters_keeps_todays_projection ___________
+
+    def test_survey_below_three_quarters_keeps_todays_projection():
+        """The manual gives no rule for the shift dose of a survey below three quarters: today's step stands."""
+>       check_family("below_three_quarters")
+
+/tests/test_outputs.py:283: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0015', 'workers': [{'id': 'X1', 'group': 'G1', 'shift_minutes': 720, 'log': [[300, 90.0]], ...}, {'id'... 'log': [[600, 88.0]], ...}, {'id': 'X3', 'group': 'G3', 'shift_minutes': 360, 'log': [[120, 92.0], [60, 85.5]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_____________ test_survey_that_measured_nothing_keeps_todays_dose ______________
+
+    def test_survey_that_measured_nothing_keeps_todays_dose():
+        """A survey that measured nothing keeps today's shift dose of nought."""
+>       check_family("measured_nothing")
+
+/tests/test_outputs.py:289: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0017', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [], ...}, {'id': 'A2', 'gr..., 'shift_minutes': 480, 'log': [[480, 90.0]], ...}, {'id': 'A3', 'group': 'G2', 'shift_minutes': 600, 'log': [], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+____________ test_reading_above_ceiling_keeps_todays_counted_level _____________
+
+    def test_reading_above_ceiling_keeps_todays_counted_level():
+        """A reading above the ceiling level is counted where today's step counts it, and flags the ceiling."""
+>       check_family("above_ceiling")
+
+/tests/test_outputs.py:295: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0019', 'workers': [{'id': 'Y1', 'group': 'G1', 'shift_minutes': 480, 'log': [[400, 90.0], [20, 118.5]], ...}, {'id': 'Y2', 'group': 'G2', 'shift_minutes': 480, 'log': [[470, 84.0], [10, 131.2]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+__________ test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged ___________
+
+    def test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged():
+        """A reading of exactly 115.0 dBA does not flag the ceiling."""
+>       check_family("ceiling_level")
+
+/tests/test_outputs.py:301: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0021', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[1, 115.0], [479, 70.0]], ...}, {'id': 'A2', 'group': 'G2', 'shift_minutes': 480, 'log': [[480, 115.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_______________________ test_rule_5_2_impulse_at_140_dbc _______________________
+
+    def test_rule_5_2_impulse_at_140_dbc():
+        """A peak of 140.0 dBC is an impulse and makes the worker "over"; 139.9 dBC is not."""
+>       check_family("impulse")
+
+/tests/test_outputs.py:306: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0022', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[480, 81.0]], ...}, {'id'...nutes': 480, 'log': [[480, 70.0]], ...}, {'id': 'A4', 'group': 'G2', 'shift_minutes': 480, 'log': [[480, 75.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+__________________________ test_rule_4_1_twa_formula ___________________________
+
+    def test_rule_4_1_twa_formula():
+        """The TWA is 85 + 3 log2(D / 100); a dose of nought has no TWA."""
+>       check_family("twa")
+
+/tests/test_outputs.py:311: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0023', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[480, 88.0]], ...}, {'id'...'log': [[1, 80.0], [479, 60.0]], ...}, {'id': 'A4', 'group': 'G3', 'shift_minutes': 1440, 'log': [[1440, 97.0]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+__________________ test_rule_1_2_twa_rounded_to_nearest_tenth __________________
+
+    def test_rule_1_2_twa_rounded_to_nearest_tenth():
+        """The reported TWA is the nearest tenth, on both sides of each tenth."""
+>       check_family("rounding")
+
+/tests/test_outputs.py:316: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0024', 'workers': [{'id': 'R0', 'group': 'G0', 'shift_minutes': 480, 'log': [[217, 87.5], [263, 76.8]]... 88.1], [145, 70.9]], ...}, {'id': 'R4', 'group': 'G4', 'shift_minutes': 480, 'log': [[228, 83.2], [252, 68.7]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+___________________ test_rule_5_3_status_bands_at_82_and_85 ____________________
+
+    def test_rule_5_3_status_bands_at_82_and_85():
+        """Status bands at 82.0 and 85.0 dB on the reported TWA, and "over" for a flagged worker."""
+>       check_family("status")
+
+/tests/test_outputs.py:321: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0025', 'workers': [{'id': 'S1', 'group': 'G1', 'shift_minutes': 480, 'log': [[480, 81.9]], ...}, {'id'...], [105, 84.0]], ...}, {'id': 'T1', 'group': 'H1', 'shift_minutes': 480, 'log': [[326, 86.7], [154, 71.6]], ...}, ...]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_______________ test_rule_6_1_group_dose_is_mean_of_shift_doses ________________
+
+    def test_rule_6_1_group_dose_is_mean_of_shift_doses():
+        """A group's dose is the mean of its members' shift doses; its TWA and status follow from it."""
+>       check_family("groups")
+
+/tests/test_outputs.py:326: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0026', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[480, 95.0]], ...}, {'id'...nutes': 600, 'log': [[500, 88.0]], ...}, {'id': 'C1', 'group': 'G3', 'shift_minutes': 480, 'log': [[480, 89.2]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_______________ test_rule_6_1_quiet_member_counts_in_group_mean ________________
+
+    def test_rule_6_1_quiet_member_counts_in_group_mean():
+        """A quiet member's shift dose of nought counts in the group mean."""
+>       check_family("quiet_members")
+
+/tests/test_outputs.py:331: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0027', 'workers': [{'id': 'A1', 'group': 'G1', 'shift_minutes': 480, 'log': [[480, 90.0]], ...}, {'id': 'Q1', 'group': 'G1', 'shift_minutes': 480, 'log': [[300, 64.0], [180, 71.5]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+______________________ test_report_order_and_group_codes _______________________
+
+    def test_report_order_and_group_codes():
+        """Workers stay in survey order; groups come in ascending character order of their codes."""
+>       check_family("report_order")
+
+/tests/test_outputs.py:336: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0029', 'workers': [{'id': 'Z-9', 'group': 'ZZ', 'shift_minutes': 480, 'log': [[480, 86.0]], ...}, {'id...es': 480, 'log': [[480, 81.0]], ...}, {'id': 'C', 'group': '0', 'shift_minutes': 480, 'log': [[480, 89.0]], ...}, ...]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """300 workers under 40 codes, a 1,500-run log, a 2,880-minute log, 500 peaks and the range ends."""
+        rows = load("limits_workers") + load("limits_logs")
+        workers = rows[0]["survey"]["workers"]
+        assert len(workers) == 300 and len({w["group"] for w in workers}) == 40
+        logs = rows[1]["survey"]["workers"]
+        assert len(logs[0]["log"]) == 1500 and sum(m for m, _ in logs[1]["log"]) == 2880 and len(logs[2]["peaks"]) == 500
+>       check_family("limits_workers")
+
+/tests/test_outputs.py:346: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0030', 'workers': [{'id': 'L000-XXXXXXX', 'group': 'ABCDEFGH', 'shift_minutes': 60, 'log': [[60, 70.5]...440, 'log': [[1440, 83.3]], ...}, {'id': 'L005-', 'group': 'E', 'shift_minutes': 480, 'log': [[480, 86.5]], ...}, ...]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+____________________________ test_generated_surveys ____________________________
+
+    def test_generated_surveys():
+        """Seeded surveys over the rest of the section 1 domain, as sealed and under fresh labels."""
+>       check_family("generated")
+
+/tests/test_outputs.py:374: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+survey = {'survey': 'HC4-0032', 'workers': [{'id': 'ONBHDRZ', 'group': '5AKGKFHZ', 'shift_minutes': 60, 'log': [[1, 88.1], [37,...[121, 65.0], [61, 102.9]], ...}, {'id': 'JKQ8', 'group': '5AKGKFHZ', 'shift_minutes': 600, 'log': [[709, 56.9]], ...}]}
+shipped = False
+
+    def reduce(survey, shipped=False):
+        """Run the driver on one survey (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "survey.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(survey, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "noisedose_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/noisedose_run.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/noisedose_run.py", line 18, in main
+E             json.dump(build_report(survey), sys.stdout)
+E                       ~~~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 31, in build_report
+E             workers = [worker_row(worker) for worker in load_workers(survey)]
+E                        ~~~~~~~~~~^^^^^^^^
+E           File "/app/tools/../src/noisedose/report.py", line 17, in worker_row
+E             impulse = has_impulse(worker["peaks"])
+E           File "/app/tools/../src/noisedose/flags.py", line 13, in has_impulse
+E             return max(peaks) >= IMPULSE_DBC
+E                    ~~~^^^^^^^
+E         ValueError: max() iterable argument is empty
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:146: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db
+FAILED ../../tests/test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts
+FAILED ../../tests/test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold
+FAILED ../../tests/test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading
+FAILED ../../tests/test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift
+FAILED ../../tests/test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose
+FAILED ../../tests/test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters
+FAILED ../../tests/test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection
+FAILED ../../tests/test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose
+FAILED ../../tests/test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level
+FAILED ../../tests/test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged
+FAILED ../../tests/test_outputs.py::test_rule_5_2_impulse_at_140_dbc - Assert...
+FAILED ../../tests/test_outputs.py::test_rule_4_1_twa_formula - AssertionErro...
+FAILED ../../tests/test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth
+FAILED ../../tests/test_outputs.py::test_rule_5_3_status_bands_at_82_and_85
+FAILED ../../tests/test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses
+FAILED ../../tests/test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean
+FAILED ../../tests/test_outputs.py::test_report_order_and_group_codes - Asser...
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+FAILED ../../tests/test_outputs.py::test_generated_surveys - AssertionError: ...
+========================= 20 failed, 2 passed in 2.09s =========================

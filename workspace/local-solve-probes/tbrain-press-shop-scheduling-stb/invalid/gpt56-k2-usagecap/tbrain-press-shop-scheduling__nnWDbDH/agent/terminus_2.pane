@@ -1,0 +1,7194 @@
+[?2004hroot@669d565ab501:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@669d565ab501:/app# clear
+[?2004l[H[J[3J[?2004hroot@669d565ab501:/app# find docs weeks planner tools -maxdepth 2 -type f -print | sort && echo '--- RULES ---' && cat docs/press-rules.md && echo '--- TARGETS ---' && cat weeks/targets.json
+[?2004ldocs/press-rules.md
+planner/plan_week.py
+tools/check_schedule.py
+weeks/targets.json
+weeks/week-36.json
+weeks/week-37.json
+weeks/week-38.json
+--- RULES ---
+# Press schedule rules
+
+These rules decide what a weekly press schedule does and what it costs. They are
+the rules `tools/check_schedule.py` applies.
+
+## The week
+
+Each file in `weeks/` is one week of the stamping line. Times are whole minutes
+from Monday 06:00, and nothing ends the week: work may run past Friday.
+
+A press has an `id`, a `tonnage`, a stroke rate `strokes_per_minute`, the die
+family it has mounted when the week starts (`initial_family`), and a list of
+`maintenance` windows `[start, end)` during which it neither runs nor is set up.
+
+A job has an `id`, a die `family`, the `tonnage` it needs, a number of
+`strokes`, a `release` time before which it cannot start, a `due` time and a
+`weight`. It can run only on a press whose tonnage is at least the job's.
+
+`setup_minutes[a][b]` is the changeover time from die family `a` to family `b`
+(the table gives ten minutes when the family stays the same: the coil and the
+blank stack still change). `setup_cost_per_minute` prices a minute of changeover.
+
+## Running a press
+
+A schedule gives each press the jobs it runs, in order. Every job of the week is
+on exactly one press it can run on. For each job in turn, on its press:
+
+1. A changeover from the family currently mounted to the job's family takes
+   `setup_minutes[current][job]`. It starts at the earliest minute, not before
+   the previous job on the press has finished (or minute 0 for the first job),
+   at which it meets no maintenance window.
+2. The job runs for its strokes divided by the press's stroke rate, rounded up
+   to a whole minute. It starts at the earliest minute, not before the
+   changeover has finished and not before the job's release, at which the whole
+   run meets no maintenance window.
+3. The press then has the job's family mounted, and the job finishes at its
+   start plus its run time.
+
+An interval meets a maintenance window when the two overlap for any time; an
+interval may end exactly when a window starts or start exactly when it ends.
+
+## Cost
+
+A schedule costs `setup_cost_per_minute` times the total changeover minutes on
+all presses, plus, for every job, its `weight` times the minutes by which it
+finishes after its `due` time (nothing when it finishes on time).
+
+## File format
+
+    {"presses": {"P1": ["J004", "J017", ...], "P2": [...], ...}}
+
+Each key is a press id, given at most once; each list gives job ids, as JSON
+strings exactly as in the week file, in running order. A press may be left out
+or given an empty list, in which case it runs nothing. Any other top-level key
+is ignored.
+--- TARGETS ---
+{
+ "week-36": 34200,
+ "week-37": 50197,
+ "week-38": 79519
+}[?2004hroot@669d565ab501:/app# echo '--- PLANNER ---' && sed -n '1,260p' planner/plan_week.py && echo '--- CHECKER ---' && sed -n '1,320p' tools/check_schedule.py && echo '--- WEEK FILES ---' && for f in weeks/week-*; do echo "### $f"; cat "$f"; done
+[?2004l--- PLANNER ---
+"""Current press planner: earliest due date first, each job to the press that finishes it soonest.
+
+Usage: python3 planner/plan_week.py weeks/<week>.json schedules/<week>.json
+"""
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from check_schedule import clear_of, evaluate, minutes  # noqa: E402
+
+
+def plan(week):
+    presses = week["presses"]
+    state = {p["id"]: (0, p["initial_family"]) for p in presses}
+    lists = {p["id"]: [] for p in presses}
+    for job in sorted(week["jobs"], key=lambda j: (j["due"], j["id"])):
+        best = None
+        for p in presses:
+            if job["tonnage"] > p["tonnage"]:
+                continue
+            clock, family = state[p["id"]]
+            change = week["setup_minutes"][family][job["family"]]
+            change_start = clear_of(clock, change, p["maintenance"])
+            run = minutes(job, p)
+            start = clear_of(max(change_start + change, job["release"]), run, p["maintenance"])
+            if best is None or start + run < best[0]:
+                best = (start + run, p["id"])
+        end, pid = best
+        lists[pid].append(job["id"])
+        state[pid] = (end, job["family"])
+    return {"presses": lists}
+
+
+def main(argv):
+    with open(argv[1]) as fh:
+        week = json.load(fh)
+    schedule = plan(week)
+    with open(argv[2], "w") as fh:
+        json.dump(schedule, fh, indent=1)
+    print("cost", evaluate(week, schedule))
+
+
+if __name__ == "__main__":
+    main(sys.argv)
+--- CHECKER ---
+"""Check a press schedule against docs/press-rules.md and print its cost.
+
+Usage: python3 tools/check_schedule.py weeks/<week>.json schedules/<week>.json
+"""
+
+import json
+import sys
+
+
+class ScheduleError(ValueError):
+    pass
+
+
+def minutes(job, press):
+    return -(-job["strokes"] // press["strokes_per_minute"])
+
+
+def clear_of(start, length, windows):
+    """Earliest time at or after start at which [t, t + length) meets no maintenance window."""
+    moved = True
+    while moved:
+        moved = False
+        for a, b in windows:
+            if start < b and a < start + length:
+                start = b
+                moved = True
+    return start
+
+
+def evaluate(week, schedule):
+    presses = {p["id"]: p for p in week["presses"]}
+    jobs = {j["id"]: j for j in week["jobs"]}
+    setup = week["setup_minutes"]
+    if not isinstance(schedule, dict) or not isinstance(schedule.get("presses"), dict):
+        raise ScheduleError("a schedule is a JSON object with a presses object")
+    seen = set()
+    setup_total = 0
+    penalty = 0
+    for pid, sequence in schedule["presses"].items():
+        press = presses.get(pid)
+        if press is None:
+            raise ScheduleError(f"unknown press {pid!r}")
+        if not isinstance(sequence, list):
+            raise ScheduleError(f"{pid}: the job list is not a list")
+        clock = 0
+        family = press["initial_family"]
+        for jid in sequence:
+            if not isinstance(jid, str) or jid not in jobs:
+                raise ScheduleError(f"{pid}: unknown job {jid!r}")
+            if jid in seen:
+                raise ScheduleError(f"{pid}: job {jid} scheduled twice")
+            seen.add(jid)
+            job = jobs[jid]
+            if job["tonnage"] > press["tonnage"]:
+                raise ScheduleError(f"{pid}: job {jid} needs {job['tonnage']} t, the press has {press['tonnage']} t")
+            change = setup[family][job["family"]]
+            change_start = clear_of(clock, change, press["maintenance"])
+            run = minutes(job, press)
+            start = clear_of(max(change_start + change, job["release"]), run, press["maintenance"])
+            end = start + run
+            setup_total += change
+            penalty += job["weight"] * max(0, end - job["due"])
+            clock = end
+            family = job["family"]
+    missing = sorted(set(jobs) - seen)
+    if missing:
+        raise ScheduleError(f"{len(missing)} jobs are not scheduled, first {missing[:5]}")
+    return week["setup_cost_per_minute"] * setup_total + penalty
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.exit(__doc__)
+    with open(argv[1]) as fh:
+        week = json.load(fh)
+    with open(argv[2]) as fh:
+        schedule = json.load(fh)
+    try:
+        cost = evaluate(week, schedule)
+    except ScheduleError as exc:
+        print(f"INFEASIBLE: {exc}")
+        return 1
+    print(f"feasible, cost {cost}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+--- WEEK FILES ---
+### weeks/week-36.json
+{
+ "name": "week-36",
+ "presses": [
+  {
+   "id": "P1",
+   "tonnage": 400,
+   "strokes_per_minute": 30,
+   "initial_family": "D",
+   "maintenance": [
+    [
+     4777,
+     5017
+    ]
+   ]
+  },
+  {
+   "id": "P2",
+   "tonnage": 800,
+   "strokes_per_minute": 18,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     5795,
+     6275
+    ]
+   ]
+  },
+  {
+   "id": "P3",
+   "tonnage": 600,
+   "strokes_per_minute": 22,
+   "initial_family": "F",
+   "maintenance": [
+    [
+     2723,
+     2963
+    ]
+   ]
+  },
+  {
+   "id": "P4",
+   "tonnage": 250,
+   "strokes_per_minute": 40,
+   "initial_family": "A",
+   "maintenance": [
+    [
+     3055,
+     3295
+    ]
+   ]
+  }
+ ],
+ "setup_minutes": {
+  "A": {
+   "A": 10,
+   "B": 60,
+   "C": 45,
+   "D": 45,
+   "E": 35,
+   "F": 75
+  },
+  "B": {
+   "A": 90,
+   "B": 10,
+   "C": 60,
+   "D": 45,
+   "E": 75,
+   "F": 60
+  },
+  "C": {
+   "A": 45,
+   "B": 120,
+   "C": 10,
+   "D": 75,
+   "E": 75,
+   "F": 45
+  },
+  "D": {
+   "A": 35,
+   "B": 75,
+   "C": 75,
+   "D": 10,
+   "E": 60,
+   "F": 45
+  },
+  "E": {
+   "A": 35,
+   "B": 120,
+   "C": 90,
+   "D": 120,
+   "E": 10,
+   "F": 60
+  },
+  "F": {
+   "A": 120,
+   "B": 60,
+   "C": 75,
+   "D": 75,
+   "E": 45,
+   "F": 10
+  }
+ },
+ "setup_cost_per_minute": 40,
+ "jobs": [
+  {
+   "id": "J001",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 3049,
+   "due": 3555,
+   "weight": 3
+  },
+  {
+   "id": "J002",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 1999,
+   "weight": 2
+  },
+  {
+   "id": "J003",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 621,
+   "weight": 3
+  },
+  {
+   "id": "J004",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 2137,
+   "weight": 2
+  },
+  {
+   "id": "J005",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 681,
+   "due": 4617,
+   "weight": 5
+  },
+  {
+   "id": "J006",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 0,
+   "due": 824,
+   "weight": 1
+  },
+  {
+   "id": "J007",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 2188,
+   "due": 6102,
+   "weight": 1
+  },
+  {
+   "id": "J008",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 3172,
+   "due": 6896,
+   "weight": 1
+  },
+  {
+   "id": "J009",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 822,
+   "due": 4945,
+   "weight": 1
+  },
+  {
+   "id": "J010",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 1382,
+   "due": 2138,
+   "weight": 1
+  },
+  {
+   "id": "J011",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 1435,
+   "due": 2150,
+   "weight": 1
+  },
+  {
+   "id": "J012",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1627,
+   "weight": 1
+  },
+  {
+   "id": "J013",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2627,
+   "weight": 2
+  },
+  {
+   "id": "J014",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 529,
+   "weight": 1
+  },
+  {
+   "id": "J015",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 2510,
+   "due": 5676,
+   "weight": 5
+  },
+  {
+   "id": "J016",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2410,
+   "weight": 1
+  },
+  {
+   "id": "J017",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 0,
+   "due": 555,
+   "weight": 1
+  },
+  {
+   "id": "J018",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 1492,
+   "due": 3613,
+   "weight": 1
+  },
+  {
+   "id": "J019",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1086,
+   "weight": 1
+  },
+  {
+   "id": "J020",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 2312,
+   "weight": 1
+  },
+  {
+   "id": "J021",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2581,
+   "weight": 5
+  },
+  {
+   "id": "J022",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 1709,
+   "weight": 2
+  },
+  {
+   "id": "J023",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2343,
+   "weight": 2
+  },
+  {
+   "id": "J024",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 3510,
+   "weight": 3
+  },
+  {
+   "id": "J025",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 617,
+   "weight": 3
+  },
+  {
+   "id": "J026",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 1686,
+   "due": 4899,
+   "weight": 2
+  },
+  {
+   "id": "J027",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 625,
+   "weight": 2
+  },
+  {
+   "id": "J028",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 3038,
+   "weight": 3
+  },
+  {
+   "id": "J029",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2403,
+   "weight": 3
+  },
+  {
+   "id": "J030",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 1367,
+   "weight": 5
+  },
+  {
+   "id": "J031",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1184,
+   "weight": 5
+  },
+  {
+   "id": "J032",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 634,
+   "weight": 1
+  },
+  {
+   "id": "J033",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 910,
+   "weight": 5
+  },
+  {
+   "id": "J034",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2842,
+   "weight": 3
+  },
+  {
+   "id": "J035",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 167,
+   "due": 3151,
+   "weight": 5
+  },
+  {
+   "id": "J036",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2130,
+   "weight": 1
+  },
+  {
+   "id": "J037",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 0,
+   "due": 874,
+   "weight": 2
+  },
+  {
+   "id": "J038",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 2962,
+   "due": 6128,
+   "weight": 5
+  },
+  {
+   "id": "J039",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3335,
+   "weight": 1
+  },
+  {
+   "id": "J040",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 989,
+   "due": 2465,
+   "weight": 1
+  },
+  {
+   "id": "J041",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 672,
+   "due": 2950,
+   "weight": 3
+  },
+  {
+   "id": "J042",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1828,
+   "weight": 1
+  },
+  {
+   "id": "J043",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3576,
+   "weight": 3
+  },
+  {
+   "id": "J044",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3654,
+   "weight": 3
+  },
+  {
+   "id": "J045",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 227,
+   "due": 3458,
+   "weight": 2
+  }
+ ]
+}### weeks/week-37.json
+{
+ "name": "week-37",
+ "presses": [
+  {
+   "id": "P1",
+   "tonnage": 400,
+   "strokes_per_minute": 30,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     3714,
+     3834
+    ],
+    [
+     5642,
+     5882
+    ]
+   ]
+  },
+  {
+   "id": "P2",
+   "tonnage": 800,
+   "strokes_per_minute": 18,
+   "initial_family": "A",
+   "maintenance": [
+    [
+     820,
+     1060
+    ],
+    [
+     3986,
+     4226
+    ]
+   ]
+  },
+  {
+   "id": "P3",
+   "tonnage": 600,
+   "strokes_per_minute": 22,
+   "initial_family": "E",
+   "maintenance": [
+    [
+     2011,
+     2131
+    ],
+    [
+     4409,
+     4889
+    ]
+   ]
+  },
+  {
+   "id": "P4",
+   "tonnage": 250,
+   "strokes_per_minute": 40,
+   "initial_family": "D",
+   "maintenance": [
+    [
+     3655,
+     3895
+    ]
+   ]
+  },
+  {
+   "id": "P5",
+   "tonnage": 400,
+   "strokes_per_minute": 26,
+   "initial_family": "F",
+   "maintenance": [
+    [
+     3847,
+     4087
+    ]
+   ]
+  },
+  {
+   "id": "P6",
+   "tonnage": 800,
+   "strokes_per_minute": 16,
+   "initial_family": "C",
+   "maintenance": [
+    [
+     4639,
+     4759
+    ]
+   ]
+  }
+ ],
+ "setup_minutes": {
+  "A": {
+   "A": 10,
+   "B": 75,
+   "C": 75,
+   "D": 75,
+   "E": 60,
+   "F": 35
+  },
+  "B": {
+   "A": 45,
+   "B": 10,
+   "C": 120,
+   "D": 35,
+   "E": 35,
+   "F": 75
+  },
+  "C": {
+   "A": 60,
+   "B": 35,
+   "C": 10,
+   "D": 45,
+   "E": 45,
+   "F": 45
+  },
+  "D": {
+   "A": 35,
+   "B": 60,
+   "C": 45,
+   "D": 10,
+   "E": 45,
+   "F": 120
+  },
+  "E": {
+   "A": 120,
+   "B": 45,
+   "C": 75,
+   "D": 45,
+   "E": 10,
+   "F": 60
+  },
+  "F": {
+   "A": 120,
+   "B": 60,
+   "C": 45,
+   "D": 60,
+   "E": 60,
+   "F": 10
+  }
+ },
+ "setup_cost_per_minute": 40,
+ "jobs": [
+  {
+   "id": "J001",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3629,
+   "weight": 1
+  },
+  {
+   "id": "J002",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 1572,
+   "due": 4186,
+   "weight": 5
+  },
+  {
+   "id": "J003",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2756,
+   "weight": 2
+  },
+  {
+   "id": "J004",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 541,
+   "weight": 1
+  },
+  {
+   "id": "J005",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 910,
+   "weight": 2
+  },
+  {
+   "id": "J006",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 3539,
+   "due": 6931,
+   "weight": 2
+  },
+  {
+   "id": "J007",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3200,
+   "weight": 5
+  },
+  {
+   "id": "J008",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 1184,
+   "weight": 2
+  },
+  {
+   "id": "J009",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 588,
+   "weight": 3
+  },
+  {
+   "id": "J010",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3089,
+   "weight": 1
+  },
+  {
+   "id": "J011",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 358,
+   "due": 2409,
+   "weight": 1
+  },
+  {
+   "id": "J012",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1323,
+   "weight": 3
+  },
+  {
+   "id": "J013",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 1040,
+   "due": 3566,
+   "weight": 1
+  },
+  {
+   "id": "J014",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 2728,
+   "due": 5680,
+   "weight": 1
+  },
+  {
+   "id": "J015",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 819,
+   "weight": 5
+  },
+  {
+   "id": "J016",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 0,
+   "due": 3130,
+   "weight": 2
+  },
+  {
+   "id": "J017",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 2840,
+   "due": 6997,
+   "weight": 3
+  },
+  {
+   "id": "J018",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1503,
+   "weight": 1
+  },
+  {
+   "id": "J019",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 2200,
+   "due": 4711,
+   "weight": 3
+  },
+  {
+   "id": "J020",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 3082,
+   "weight": 2
+  },
+  {
+   "id": "J021",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2994,
+   "weight": 2
+  },
+  {
+   "id": "J022",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 1711,
+   "due": 2799,
+   "weight": 1
+  },
+  {
+   "id": "J023",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 3223,
+   "due": 5095,
+   "weight": 2
+  },
+  {
+   "id": "J024",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1412,
+   "weight": 1
+  },
+  {
+   "id": "J025",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 3809,
+   "weight": 1
+  },
+  {
+   "id": "J026",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3352,
+   "weight": 1
+  },
+  {
+   "id": "J027",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1306,
+   "weight": 1
+  },
+  {
+   "id": "J028",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 567,
+   "weight": 1
+  },
+  {
+   "id": "J029",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2873,
+   "weight": 1
+  },
+  {
+   "id": "J030",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 4800,
+   "release": 2342,
+   "due": 4323,
+   "weight": 1
+  },
+  {
+   "id": "J031",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1188,
+   "weight": 1
+  },
+  {
+   "id": "J032",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 873,
+   "due": 4067,
+   "weight": 2
+  },
+  {
+   "id": "J033",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1305,
+   "weight": 1
+  },
+  {
+   "id": "J034",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4223,
+   "weight": 1
+  },
+  {
+   "id": "J035",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4274,
+   "weight": 1
+  },
+  {
+   "id": "J036",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1842,
+   "weight": 2
+  },
+  {
+   "id": "J037",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3733,
+   "weight": 3
+  },
+  {
+   "id": "J038",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 1773,
+   "due": 4671,
+   "weight": 2
+  },
+  {
+   "id": "J039",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1988,
+   "weight": 1
+  },
+  {
+   "id": "J040",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4283,
+   "weight": 1
+  },
+  {
+   "id": "J041",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 4800,
+   "release": 1015,
+   "due": 3889,
+   "weight": 2
+  },
+  {
+   "id": "J042",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 2513,
+   "weight": 1
+  },
+  {
+   "id": "J043",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2604,
+   "weight": 2
+  },
+  {
+   "id": "J044",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4143,
+   "weight": 1
+  },
+  {
+   "id": "J045",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 2235,
+   "due": 6057,
+   "weight": 5
+  },
+  {
+   "id": "J046",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1283,
+   "weight": 2
+  },
+  {
+   "id": "J047",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 538,
+   "weight": 1
+  },
+  {
+   "id": "J048",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 964,
+   "due": 4877,
+   "weight": 3
+  },
+  {
+   "id": "J049",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1702,
+   "weight": 3
+  },
+  {
+   "id": "J050",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 4136,
+   "weight": 5
+  },
+  {
+   "id": "J051",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2293,
+   "weight": 1
+  },
+  {
+   "id": "J052",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 1757,
+   "due": 4186,
+   "weight": 1
+  },
+  {
+   "id": "J053",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1022,
+   "weight": 5
+  },
+  {
+   "id": "J054",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2192,
+   "weight": 1
+  },
+  {
+   "id": "J055",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 737,
+   "weight": 2
+  },
+  {
+   "id": "J056",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2718,
+   "weight": 2
+  },
+  {
+   "id": "J057",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 1196,
+   "due": 3785,
+   "weight": 1
+  },
+  {
+   "id": "J058",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 504,
+   "weight": 1
+  },
+  {
+   "id": "J059",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 814,
+   "weight": 5
+  },
+  {
+   "id": "J060",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 1362,
+   "due": 5061,
+   "weight": 1
+  },
+  {
+   "id": "J061",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4248,
+   "weight": 5
+  },
+  {
+   "id": "J062",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1029,
+   "weight": 2
+  },
+  {
+   "id": "J063",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3165,
+   "weight": 5
+  },
+  {
+   "id": "J064",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3273,
+   "weight": 1
+  },
+  {
+   "id": "J065",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 2260,
+   "due": 4537,
+   "weight": 1
+  },
+  {
+   "id": "J066",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 3652,
+   "weight": 1
+  },
+  {
+   "id": "J067",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 2971,
+   "weight": 3
+  },
+  {
+   "id": "J068",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1749,
+   "weight": 5
+  },
+  {
+   "id": "J069",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2584,
+   "weight": 3
+  },
+  {
+   "id": "J070",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 1183,
+   "weight": 2
+  },
+  {
+   "id": "J071",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4007,
+   "weight": 1
+  },
+  {
+   "id": "J072",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 3006,
+   "due": 7242,
+   "weight": 1
+  },
+  {
+   "id": "J073",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 758,
+   "due": 4183,
+   "weight": 5
+  },
+  {
+   "id": "J074",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1675,
+   "weight": 5
+  },
+  {
+   "id": "J075",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 1906,
+   "weight": 3
+  },
+  {
+   "id": "J076",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 3129,
+   "due": 4047,
+   "weight": 1
+  },
+  {
+   "id": "J077",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 3388,
+   "weight": 5
+  },
+  {
+   "id": "J078",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2644,
+   "weight": 3
+  },
+  {
+   "id": "J079",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1536,
+   "weight": 3
+  },
+  {
+   "id": "J080",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2580,
+   "weight": 5
+  },
+  {
+   "id": "J081",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4286,
+   "weight": 3
+  },
+  {
+   "id": "J082",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 2929,
+   "weight": 5
+  },
+  {
+   "id": "J083",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 574,
+   "weight": 3
+  },
+  {
+   "id": "J084",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 2338,
+   "due": 3582,
+   "weight": 3
+  },
+  {
+   "id": "J085",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 2686,
+   "due": 3581,
+   "weight": 3
+  }
+ ]
+}### weeks/week-38.json
+{
+ "name": "week-38",
+ "presses": [
+  {
+   "id": "P1",
+   "tonnage": 400,
+   "strokes_per_minute": 30,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     2327,
+     2807
+    ]
+   ]
+  },
+  {
+   "id": "P2",
+   "tonnage": 800,
+   "strokes_per_minute": 18,
+   "initial_family": "C",
+   "maintenance": [
+    [
+     4998,
+     5478
+    ]
+   ]
+  },
+  {
+   "id": "P3",
+   "tonnage": 600,
+   "strokes_per_minute": 22,
+   "initial_family": "A",
+   "maintenance": [
+    [
+     1651,
+     1891
+    ],
+    [
+     4233,
+     4713
+    ]
+   ]
+  },
+  {
+   "id": "P4",
+   "tonnage": 250,
+   "strokes_per_minute": 40,
+   "initial_family": "E",
+   "maintenance": [
+    [
+     4689,
+     5169
+    ],
+    [
+     5979,
+     6099
+    ]
+   ]
+  },
+  {
+   "id": "P5",
+   "tonnage": 400,
+   "strokes_per_minute": 26,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     6053,
+     6293
+    ]
+   ]
+  },
+  {
+   "id": "P6",
+   "tonnage": 800,
+   "strokes_per_minute": 16,
+   "initial_family": "D",
+   "maintenance": [
+    [
+     2734,
+     2854
+    ],
+    [
+     5440,
+     5920
+    ]
+   ]
+  },
+  {
+   "id": "P7",
+   "tonnage": 600,
+   "strokes_per_minute": 24,
+   "initial_family": "C",
+   "maintenance": [
+    [
+     2237,
+     2357
+    ],
+    [
+     6140,
+     6260
+    ]
+   ]
+  },
+  {
+   "id": "P8",
+   "tonnage": 200,
+   "strokes_per_minute": 44,
+   "initial_family": "E",
+   "maintenance": [
+    [
+     1645,
+     1765
+    ]
+   ]
+  }
+ ],
+ "setup_minutes": {
+  "A": {
+   "A": 10,
+   "B": 60,
+   "C": 35,
+   "D": 120,
+   "E": 45,
+   "F": 120
+  },
+  "B": {
+   "A": 120,
+   "B": 10,
+   "C": 90,
+   "D": 120,
+   "E": 60,
+   "F": 90
+  },
+  "C": {
+   "A": 45,
+   "B": 120,
+   "C": 10,
+   "D": 35,
+   "E": 60,
+   "F": 60
+  },
+  "D": {
+   "A": 120,
+   "B": 120,
+   "C": 45,
+   "D": 10,
+   "E": 120,
+   "F": 60
+  },
+  "E": {
+   "A": 35,
+   "B": 120,
+   "C": 75,
+   "D": 45,
+   "E": 10,
+   "F": 60
+  },
+  "F": {
+   "A": 90,
+   "B": 45,
+   "C": 35,
+   "D": 120,
+   "E": 120,
+   "F": 10
+  }
+ },
+ "setup_cost_per_minute": 40,
+ "jobs": [
+  {
+   "id": "J001",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4300,
+   "weight": 3
+  },
+  {
+   "id": "J002",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 4298,
+   "weight": 1
+  },
+  {
+   "id": "J003",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 2889,
+   "due": 3377,
+   "weight": 1
+  },
+  {
+   "id": "J004",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3153,
+   "weight": 1
+  },
+  {
+   "id": "J005",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2672,
+   "weight": 1
+  },
+  {
+   "id": "J006",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3245,
+   "weight": 3
+  },
+  {
+   "id": "J007",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3150,
+   "weight": 5
+  },
+  {
+   "id": "J008",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 1346,
+   "weight": 5
+  },
+  {
+   "id": "J009",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 2054,
+   "due": 6094,
+   "weight": 2
+  },
+  {
+   "id": "J010",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 1914,
+   "due": 2498,
+   "weight": 5
+  },
+  {
+   "id": "J011",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2355,
+   "weight": 5
+  },
+  {
+   "id": "J012",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 2209,
+   "due": 4891,
+   "weight": 1
+  },
+  {
+   "id": "J013",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3722,
+   "weight": 2
+  },
+  {
+   "id": "J014",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1953,
+   "weight": 3
+  },
+  {
+   "id": "J015",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1385,
+   "weight": 2
+  },
+  {
+   "id": "J016",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1529,
+   "weight": 3
+  },
+  {
+   "id": "J017",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3866,
+   "weight": 2
+  },
+  {
+   "id": "J018",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 107,
+   "due": 2184,
+   "weight": 1
+  },
+  {
+   "id": "J019",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2129,
+   "weight": 2
+  },
+  {
+   "id": "J020",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 3021,
+   "due": 6441,
+   "weight": 2
+  },
+  {
+   "id": "J021",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 718,
+   "due": 4616,
+   "weight": 2
+  },
+  {
+   "id": "J022",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 2343,
+   "due": 3113,
+   "weight": 1
+  },
+  {
+   "id": "J023",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3369,
+   "weight": 3
+  },
+  {
+   "id": "J024",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 899,
+   "due": 4543,
+   "weight": 1
+  },
+  {
+   "id": "J025",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2109,
+   "weight": 3
+  },
+  {
+   "id": "J026",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3298,
+   "weight": 5
+  },
+  {
+   "id": "J027",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2501,
+   "weight": 1
+  },
+  {
+   "id": "J028",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 1522,
+   "due": 3386,
+   "weight": 1
+  },
+  {
+   "id": "J029",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 800,
+   "weight": 3
+  },
+  {
+   "id": "J030",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2587,
+   "weight": 2
+  },
+  {
+   "id": "J031",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3119,
+   "weight": 1
+  },
+  {
+   "id": "J032",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 1808,
+   "weight": 1
+  },
+  {
+   "id": "J033",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1324,
+   "weight": 1
+  },
+  {
+   "id": "J034",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2209,
+   "weight": 5
+  },
+  {
+   "id": "J035",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2458,
+   "weight": 3
+  },
+  {
+   "id": "J036",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2992,
+   "weight": 2
+  },
+  {
+   "id": "J037",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2362,
+   "weight": 1
+  },
+  {
+   "id": "J038",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 4316,
+   "weight": 3
+  },
+  {
+   "id": "J039",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 4070,
+   "weight": 5
+  },
+  {
+   "id": "J040",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 525,
+   "due": 1100,
+   "weight": 3
+  },
+  {
+   "id": "J041",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 627,
+   "weight": 2
+  },
+  {
+   "id": "J042",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 2894,
+   "due": 3938,
+   "weight": 2
+  },
+  {
+   "id": "J043",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 1403,
+   "weight": 2
+  },
+  {
+   "id": "J044",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2962,
+   "weight": 3
+  },
+  {
+   "id": "J045",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 2836,
+   "weight": 3
+  },
+  {
+   "id": "J046",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3993,
+   "weight": 3
+  },
+  {
+   "id": "J047",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 4183,
+   "weight": 1
+  },
+  {
+   "id": "J048",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3970,
+   "weight": 5
+  },
+  {
+   "id": "J049",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 1348,
+   "due": 3637,
+   "weight": 1
+  },
+  {
+   "id": "J050",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 527,
+   "weight": 3
+  },
+  {
+   "id": "J051",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 1319,
+   "weight": 3
+  },
+  {
+   "id": "J052",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 763,
+   "due": 3296,
+   "weight": 5
+  },
+  {
+   "id": "J053",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1480,
+   "weight": 2
+  },
+  {
+   "id": "J054",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 2546,
+   "due": 5218,
+   "weight": 5
+  },
+  {
+   "id": "J055",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4044,
+   "weight": 3
+  },
+  {
+   "id": "J056",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1716,
+   "weight": 2
+  },
+  {
+   "id": "J057",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1928,
+   "weight": 3
+  },
+  {
+   "id": "J058",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2753,
+   "weight": 2
+  },
+  {
+   "id": "J059",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2156,
+   "weight": 5
+  },
+  {
+   "id": "J060",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 2569,
+   "due": 3912,
+   "weight": 1
+  },
+  {
+   "id": "J061",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 2117,
+   "due": 2603,
+   "weight": 2
+  },
+  {
+   "id": "J062",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3691,
+   "weight": 2
+  },
+  {
+   "id": "J063",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 881,
+   "weight": 5
+  },
+  {
+   "id": "J064",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3395,
+   "weight": 5
+  },
+  {
+   "id": "J065",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 557,
+   "weight": 1
+  },
+  {
+   "id": "J066",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 3436,
+   "weight": 1
+  },
+  {
+   "id": "J067",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2337,
+   "weight": 3
+  },
+  {
+   "id": "J068",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2014,
+   "weight": 1
+  },
+  {
+   "id": "J069",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 847,
+   "weight": 1
+  },
+  {
+   "id": "J070",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 2212,
+   "weight": 5
+  },
+  {
+   "id": "J071",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3631,
+   "weight": 5
+  },
+  {
+   "id": "J072",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2630,
+   "weight": 2
+  },
+  {
+   "id": "J073",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 525,
+   "weight": 1
+  },
+  {
+   "id": "J074",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2389,
+   "weight": 1
+  },
+  {
+   "id": "J075",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2288,
+   "weight": 5
+  },
+  {
+   "id": "J076",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3294,
+   "weight": 5
+  },
+  {
+   "id": "J077",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1195,
+   "weight": 2
+  },
+  {
+   "id": "J078",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2796,
+   "weight": 3
+  },
+  {
+   "id": "J079",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3397,
+   "weight": 1
+  },
+  {
+   "id": "J080",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3462,
+   "weight": 3
+  },
+  {
+   "id": "J081",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1702,
+   "weight": 1
+  },
+  {
+   "id": "J082",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 980,
+   "due": 2276,
+   "weight": 1
+  },
+  {
+   "id": "J083",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 3522,
+   "due": 6780,
+   "weight": 1
+  },
+  {
+   "id": "J084",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2967,
+   "weight": 1
+  },
+  {
+   "id": "J085",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 868,
+   "due": 2027,
+   "weight": 5
+  },
+  {
+   "id": "J086",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1761,
+   "weight": 1
+  },
+  {
+   "id": "J087",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 2714,
+   "due": 3937,
+   "weight": 2
+  },
+  {
+   "id": "J088",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3873,
+   "weight": 1
+  },
+  {
+   "id": "J089",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3832,
+   "weight": 1
+  },
+  {
+   "id": "J090",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3057,
+   "weight": 3
+  },
+  {
+   "id": "J091",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1905,
+   "weight": 2
+  },
+  {
+   "id": "J092",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 1581,
+   "weight": 5
+  },
+  {
+   "id": "J093",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 2506,
+   "due": 4884,
+   "weight": 5
+  },
+  {
+   "id": "J094",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4217,
+   "weight": 1
+  },
+  {
+   "id": "J095",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 2002,
+   "weight": 3
+  },
+  {
+   "id": "J096",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3503,
+   "weight": 2
+  },
+  {
+   "id": "J097",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3999,
+   "weight": 1
+  },
+  {
+   "id": "J098",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1460,
+   "weight": 2
+  },
+  {
+   "id": "J099",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 944,
+   "weight": 5
+  },
+  {
+   "id": "J100",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 3038,
+   "due": 6627,
+   "weight": 5
+  },
+  {
+   "id": "J101",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 897,
+   "due": 3018,
+   "weight": 1
+  },
+  {
+   "id": "J102",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 515,
+   "weight": 2
+  },
+  {
+   "id": "J103",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4125,
+   "weight": 5
+  },
+  {
+   "id": "J104",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 151,
+   "due": 1151,
+   "weight": 1
+  },
+  {
+   "id": "J105",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2677,
+   "weight": 1
+  },
+  {
+   "id": "J106",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2852,
+   "weight": 5
+  },
+  {
+   "id": "J107",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 2310,
+   "due": 4839,
+   "weight": 1
+  },
+  {
+   "id": "J108",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 3175,
+   "due": 5509,
+   "weight": 3
+  },
+  {
+   "id": "J109",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3573,
+   "weight": 3
+  },
+  {
+   "id": "J110",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1548,
+   "weight": 5
+  },
+  {
+   "id": "J111",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 2499,
+   "due": 5623,
+   "weight": 5
+  },
+  {
+   "id": "J112",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 3972,
+   "weight": 3
+  },
+  {
+   "id": "J113",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 735,
+   "weight": 5
+  },
+  {
+   "id": "J114",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 175,
+   "due": 2696,
+   "weight": 1
+  },
+  {
+   "id": "J115",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1140,
+   "weight": 3
+  },
+  {
+   "id": "J116",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 3359,
+   "due": 5025,
+   "weight": 1
+  },
+  {
+   "id": "J117",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 1794,
+   "due": 4681,
+   "weight": 2
+  },
+  {
+   "id": "J118",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 2818,
+   "due": 5464,
+   "weight": 5
+  },
+  {
+   "id": "J119",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3968,
+   "weight": 1
+  },
+  {
+   "id": "J120",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 3081,
+   "due": 5851,
+   "weight": 1
+  },
+  {
+   "id": "J121",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3989,
+   "weight": 1
+  },
+  {
+   "id": "J122",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1863,
+   "weight": 1
+  },
+  {
+   "id": "J123",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 434,
+   "due": 1427,
+   "weight": 3
+  },
+  {
+   "id": "J124",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2326,
+   "weight": 1
+  },
+  {
+   "id": "J125",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1766,
+   "weight": 1
+  },
+  {
+   "id": "J126",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1698,
+   "weight": 5
+  },
+  {
+   "id": "J127",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 1423,
+   "due": 2083,
+   "weight": 2
+  },
+  {
+   "id": "J128",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1190,
+   "weight": 1
+  },
+  {
+   "id": "J129",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4096,
+   "weight": 2
+  },
+  {
+   "id": "J130",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 4189,
+   "weight": 1
+  },
+  {
+   "id": "J131",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 4034,
+   "weight": 3
+  },
+  {
+   "id": "J132",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2322,
+   "weight": 3
+  },
+  {
+   "id": "J133",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2157,
+   "weight": 2
+  },
+  {
+   "id": "J134",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1585,
+   "weight": 2
+  },
+  {
+   "id": "J135",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2654,
+   "weight": 5
+  },
+  {
+   "id": "J136",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1080,
+   "weight": 1
+  },
+  {
+   "id": "J137",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1801,
+   "weight": 2
+  },
+  {
+   "id": "J138",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 2867,
+   "due": 3897,
+   "weight": 1
+  },
+  {
+   "id": "J139",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3071,
+   "weight": 3
+  },
+  {
+   "id": "J140",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 655,
+   "weight": 1
+  }
+ ]
+}[?2004hroot@669d565ab501:/app# pwd; ls -la
+[?2004l/app
+total 32
+drwxr-xr-x 1 root root 4096 Sep 24 12:55 .
+drwxr-xr-x 1 root root 4096 Sep 24 12:55 ..
+-rw-r--r-- 1 root root  521 Sep 24 12:54 README.md
+drwxr-xr-x 2 root root 4096 Sep 24 12:55 docs
+drwxr-xr-x 2 root root 4096 Sep 24 12:55 planner
+drwxr-xr-x 2 root root 4096 Sep 24 12:55 schedules
+drwxr-xr-x 2 root root 4096 Sep 24 12:55 tools
+drwxr-xr-x 2 root root 4096 Sep 24 12:55 weeks
+[?2004hroot@669d565ab501:/app# find /app -maxdepth 3 -type f -print | sort
+[?2004l/app/README.md
+/app/docs/press-rules.md
+/app/planner/plan_week.py
+/app/tools/check_schedule.py
+/app/weeks/targets.json
+/app/weeks/week-36.json
+/app/weeks/week-37.json
+/app/weeks/week-38.json
+[?2004hroot@669d565ab501:/app# cat /app/docs/press-rules.md; echo; cat /app/weeks/targets.json
+[?2004l# Press schedule rules
+
+These rules decide what a weekly press schedule does and what it costs. They are
+the rules `tools/check_schedule.py` applies.
+
+## The week
+
+Each file in `weeks/` is one week of the stamping line. Times are whole minutes
+from Monday 06:00, and nothing ends the week: work may run past Friday.
+
+A press has an `id`, a `tonnage`, a stroke rate `strokes_per_minute`, the die
+family it has mounted when the week starts (`initial_family`), and a list of
+`maintenance` windows `[start, end)` during which it neither runs nor is set up.
+
+A job has an `id`, a die `family`, the `tonnage` it needs, a number of
+`strokes`, a `release` time before which it cannot start, a `due` time and a
+`weight`. It can run only on a press whose tonnage is at least the job's.
+
+`setup_minutes[a][b]` is the changeover time from die family `a` to family `b`
+(the table gives ten minutes when the family stays the same: the coil and the
+blank stack still change). `setup_cost_per_minute` prices a minute of changeover.
+
+## Running a press
+
+A schedule gives each press the jobs it runs, in order. Every job of the week is
+on exactly one press it can run on. For each job in turn, on its press:
+
+1. A changeover from the family currently mounted to the job's family takes
+   `setup_minutes[current][job]`. It starts at the earliest minute, not before
+   the previous job on the press has finished (or minute 0 for the first job),
+   at which it meets no maintenance window.
+2. The job runs for its strokes divided by the press's stroke rate, rounded up
+   to a whole minute. It starts at the earliest minute, not before the
+   changeover has finished and not before the job's release, at which the whole
+   run meets no maintenance window.
+3. The press then has the job's family mounted, and the job finishes at its
+   start plus its run time.
+
+An interval meets a maintenance window when the two overlap for any time; an
+interval may end exactly when a window starts or start exactly when it ends.
+
+## Cost
+
+A schedule costs `setup_cost_per_minute` times the total changeover minutes on
+all presses, plus, for every job, its `weight` times the minutes by which it
+finishes after its `due` time (nothing when it finishes on time).
+
+## File format
+
+    {"presses": {"P1": ["J004", "J017", ...], "P2": [...], ...}}
+
+Each key is a press id, given at most once; each list gives job ids, as JSON
+strings exactly as in the week file, in running order. A press may be left out
+or given an empty list, in which case it runs nothing. Any other top-level key
+is ignored.
+
+{
+ "week-36": 34200,
+ "week-37": 50197,
+ "week-38": 79519
+}[?2004hroot@669d565ab501:/app# sed -n '1,320p' /app/tools/check_schedule.py; echo '--- PLANNER ---'; sed -n '1,320p' /app/planner/plan_week.py
+[?2004l"""Check a press schedule against docs/press-rules.md and print its cost.
+
+Usage: python3 tools/check_schedule.py weeks/<week>.json schedules/<week>.json
+"""
+
+import json
+import sys
+
+
+class ScheduleError(ValueError):
+    pass
+
+
+def minutes(job, press):
+    return -(-job["strokes"] // press["strokes_per_minute"])
+
+
+def clear_of(start, length, windows):
+    """Earliest time at or after start at which [t, t + length) meets no maintenance window."""
+    moved = True
+    while moved:
+        moved = False
+        for a, b in windows:
+            if start < b and a < start + length:
+                start = b
+                moved = True
+    return start
+
+
+def evaluate(week, schedule):
+    presses = {p["id"]: p for p in week["presses"]}
+    jobs = {j["id"]: j for j in week["jobs"]}
+    setup = week["setup_minutes"]
+    if not isinstance(schedule, dict) or not isinstance(schedule.get("presses"), dict):
+        raise ScheduleError("a schedule is a JSON object with a presses object")
+    seen = set()
+    setup_total = 0
+    penalty = 0
+    for pid, sequence in schedule["presses"].items():
+        press = presses.get(pid)
+        if press is None:
+            raise ScheduleError(f"unknown press {pid!r}")
+        if not isinstance(sequence, list):
+            raise ScheduleError(f"{pid}: the job list is not a list")
+        clock = 0
+        family = press["initial_family"]
+        for jid in sequence:
+            if not isinstance(jid, str) or jid not in jobs:
+                raise ScheduleError(f"{pid}: unknown job {jid!r}")
+            if jid in seen:
+                raise ScheduleError(f"{pid}: job {jid} scheduled twice")
+            seen.add(jid)
+            job = jobs[jid]
+            if job["tonnage"] > press["tonnage"]:
+                raise ScheduleError(f"{pid}: job {jid} needs {job['tonnage']} t, the press has {press['tonnage']} t")
+            change = setup[family][job["family"]]
+            change_start = clear_of(clock, change, press["maintenance"])
+            run = minutes(job, press)
+            start = clear_of(max(change_start + change, job["release"]), run, press["maintenance"])
+            end = start + run
+            setup_total += change
+            penalty += job["weight"] * max(0, end - job["due"])
+            clock = end
+            family = job["family"]
+    missing = sorted(set(jobs) - seen)
+    if missing:
+        raise ScheduleError(f"{len(missing)} jobs are not scheduled, first {missing[:5]}")
+    return week["setup_cost_per_minute"] * setup_total + penalty
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.exit(__doc__)
+    with open(argv[1]) as fh:
+        week = json.load(fh)
+    with open(argv[2]) as fh:
+        schedule = json.load(fh)
+    try:
+        cost = evaluate(week, schedule)
+    except ScheduleError as exc:
+        print(f"INFEASIBLE: {exc}")
+        return 1
+    print(f"feasible, cost {cost}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+--- PLANNER ---
+"""Current press planner: earliest due date first, each job to the press that finishes it soonest.
+
+Usage: python3 planner/plan_week.py weeks/<week>.json schedules/<week>.json
+"""
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from check_schedule import clear_of, evaluate, minutes  # noqa: E402
+
+
+def plan(week):
+    presses = week["presses"]
+    state = {p["id"]: (0, p["initial_family"]) for p in presses}
+    lists = {p["id"]: [] for p in presses}
+    for job in sorted(week["jobs"], key=lambda j: (j["due"], j["id"])):
+        best = None
+        for p in presses:
+            if job["tonnage"] > p["tonnage"]:
+                continue
+            clock, family = state[p["id"]]
+            change = week["setup_minutes"][family][job["family"]]
+            change_start = clear_of(clock, change, p["maintenance"])
+            run = minutes(job, p)
+            start = clear_of(max(change_start + change, job["release"]), run, p["maintenance"])
+            if best is None or start + run < best[0]:
+                best = (start + run, p["id"])
+        end, pid = best
+        lists[pid].append(job["id"])
+        state[pid] = (end, job["family"])
+    return {"presses": lists}
+
+
+def main(argv):
+    with open(argv[1]) as fh:
+        week = json.load(fh)
+    schedule = plan(week)
+    with open(argv[2], "w") as fh:
+        json.dump(schedule, fh, indent=1)
+    print("cost", evaluate(week, schedule))
+
+
+if __name__ == "__main__":
+    main(sys.argv)
+[?2004hroot@669d565ab501:/app# for f in /app/weeks/week-36.json /app/weeks/week-37.json /app/weeks/week-38.json; do echo "===== $f ====="; cat "$f"; echo; done
+[?2004l===== /app/weeks/week-36.json =====
+{
+ "name": "week-36",
+ "presses": [
+  {
+   "id": "P1",
+   "tonnage": 400,
+   "strokes_per_minute": 30,
+   "initial_family": "D",
+   "maintenance": [
+    [
+     4777,
+     5017
+    ]
+   ]
+  },
+  {
+   "id": "P2",
+   "tonnage": 800,
+   "strokes_per_minute": 18,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     5795,
+     6275
+    ]
+   ]
+  },
+  {
+   "id": "P3",
+   "tonnage": 600,
+   "strokes_per_minute": 22,
+   "initial_family": "F",
+   "maintenance": [
+    [
+     2723,
+     2963
+    ]
+   ]
+  },
+  {
+   "id": "P4",
+   "tonnage": 250,
+   "strokes_per_minute": 40,
+   "initial_family": "A",
+   "maintenance": [
+    [
+     3055,
+     3295
+    ]
+   ]
+  }
+ ],
+ "setup_minutes": {
+  "A": {
+   "A": 10,
+   "B": 60,
+   "C": 45,
+   "D": 45,
+   "E": 35,
+   "F": 75
+  },
+  "B": {
+   "A": 90,
+   "B": 10,
+   "C": 60,
+   "D": 45,
+   "E": 75,
+   "F": 60
+  },
+  "C": {
+   "A": 45,
+   "B": 120,
+   "C": 10,
+   "D": 75,
+   "E": 75,
+   "F": 45
+  },
+  "D": {
+   "A": 35,
+   "B": 75,
+   "C": 75,
+   "D": 10,
+   "E": 60,
+   "F": 45
+  },
+  "E": {
+   "A": 35,
+   "B": 120,
+   "C": 90,
+   "D": 120,
+   "E": 10,
+   "F": 60
+  },
+  "F": {
+   "A": 120,
+   "B": 60,
+   "C": 75,
+   "D": 75,
+   "E": 45,
+   "F": 10
+  }
+ },
+ "setup_cost_per_minute": 40,
+ "jobs": [
+  {
+   "id": "J001",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 3049,
+   "due": 3555,
+   "weight": 3
+  },
+  {
+   "id": "J002",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 1999,
+   "weight": 2
+  },
+  {
+   "id": "J003",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 621,
+   "weight": 3
+  },
+  {
+   "id": "J004",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 2137,
+   "weight": 2
+  },
+  {
+   "id": "J005",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 681,
+   "due": 4617,
+   "weight": 5
+  },
+  {
+   "id": "J006",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 0,
+   "due": 824,
+   "weight": 1
+  },
+  {
+   "id": "J007",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 2188,
+   "due": 6102,
+   "weight": 1
+  },
+  {
+   "id": "J008",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 3172,
+   "due": 6896,
+   "weight": 1
+  },
+  {
+   "id": "J009",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 822,
+   "due": 4945,
+   "weight": 1
+  },
+  {
+   "id": "J010",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 1382,
+   "due": 2138,
+   "weight": 1
+  },
+  {
+   "id": "J011",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 1435,
+   "due": 2150,
+   "weight": 1
+  },
+  {
+   "id": "J012",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1627,
+   "weight": 1
+  },
+  {
+   "id": "J013",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2627,
+   "weight": 2
+  },
+  {
+   "id": "J014",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 529,
+   "weight": 1
+  },
+  {
+   "id": "J015",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 2510,
+   "due": 5676,
+   "weight": 5
+  },
+  {
+   "id": "J016",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2410,
+   "weight": 1
+  },
+  {
+   "id": "J017",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 0,
+   "due": 555,
+   "weight": 1
+  },
+  {
+   "id": "J018",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 1492,
+   "due": 3613,
+   "weight": 1
+  },
+  {
+   "id": "J019",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1086,
+   "weight": 1
+  },
+  {
+   "id": "J020",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 2312,
+   "weight": 1
+  },
+  {
+   "id": "J021",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2581,
+   "weight": 5
+  },
+  {
+   "id": "J022",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 1709,
+   "weight": 2
+  },
+  {
+   "id": "J023",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2343,
+   "weight": 2
+  },
+  {
+   "id": "J024",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 3510,
+   "weight": 3
+  },
+  {
+   "id": "J025",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 617,
+   "weight": 3
+  },
+  {
+   "id": "J026",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 1686,
+   "due": 4899,
+   "weight": 2
+  },
+  {
+   "id": "J027",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 625,
+   "weight": 2
+  },
+  {
+   "id": "J028",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 3038,
+   "weight": 3
+  },
+  {
+   "id": "J029",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2403,
+   "weight": 3
+  },
+  {
+   "id": "J030",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 1367,
+   "weight": 5
+  },
+  {
+   "id": "J031",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1184,
+   "weight": 5
+  },
+  {
+   "id": "J032",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 634,
+   "weight": 1
+  },
+  {
+   "id": "J033",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 910,
+   "weight": 5
+  },
+  {
+   "id": "J034",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2842,
+   "weight": 3
+  },
+  {
+   "id": "J035",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 167,
+   "due": 3151,
+   "weight": 5
+  },
+  {
+   "id": "J036",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2130,
+   "weight": 1
+  },
+  {
+   "id": "J037",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 0,
+   "due": 874,
+   "weight": 2
+  },
+  {
+   "id": "J038",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 2962,
+   "due": 6128,
+   "weight": 5
+  },
+  {
+   "id": "J039",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3335,
+   "weight": 1
+  },
+  {
+   "id": "J040",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 989,
+   "due": 2465,
+   "weight": 1
+  },
+  {
+   "id": "J041",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 672,
+   "due": 2950,
+   "weight": 3
+  },
+  {
+   "id": "J042",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1828,
+   "weight": 1
+  },
+  {
+   "id": "J043",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3576,
+   "weight": 3
+  },
+  {
+   "id": "J044",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3654,
+   "weight": 3
+  },
+  {
+   "id": "J045",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 227,
+   "due": 3458,
+   "weight": 2
+  }
+ ]
+}
+===== /app/weeks/week-37.json =====
+{
+ "name": "week-37",
+ "presses": [
+  {
+   "id": "P1",
+   "tonnage": 400,
+   "strokes_per_minute": 30,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     3714,
+     3834
+    ],
+    [
+     5642,
+     5882
+    ]
+   ]
+  },
+  {
+   "id": "P2",
+   "tonnage": 800,
+   "strokes_per_minute": 18,
+   "initial_family": "A",
+   "maintenance": [
+    [
+     820,
+     1060
+    ],
+    [
+     3986,
+     4226
+    ]
+   ]
+  },
+  {
+   "id": "P3",
+   "tonnage": 600,
+   "strokes_per_minute": 22,
+   "initial_family": "E",
+   "maintenance": [
+    [
+     2011,
+     2131
+    ],
+    [
+     4409,
+     4889
+    ]
+   ]
+  },
+  {
+   "id": "P4",
+   "tonnage": 250,
+   "strokes_per_minute": 40,
+   "initial_family": "D",
+   "maintenance": [
+    [
+     3655,
+     3895
+    ]
+   ]
+  },
+  {
+   "id": "P5",
+   "tonnage": 400,
+   "strokes_per_minute": 26,
+   "initial_family": "F",
+   "maintenance": [
+    [
+     3847,
+     4087
+    ]
+   ]
+  },
+  {
+   "id": "P6",
+   "tonnage": 800,
+   "strokes_per_minute": 16,
+   "initial_family": "C",
+   "maintenance": [
+    [
+     4639,
+     4759
+    ]
+   ]
+  }
+ ],
+ "setup_minutes": {
+  "A": {
+   "A": 10,
+   "B": 75,
+   "C": 75,
+   "D": 75,
+   "E": 60,
+   "F": 35
+  },
+  "B": {
+   "A": 45,
+   "B": 10,
+   "C": 120,
+   "D": 35,
+   "E": 35,
+   "F": 75
+  },
+  "C": {
+   "A": 60,
+   "B": 35,
+   "C": 10,
+   "D": 45,
+   "E": 45,
+   "F": 45
+  },
+  "D": {
+   "A": 35,
+   "B": 60,
+   "C": 45,
+   "D": 10,
+   "E": 45,
+   "F": 120
+  },
+  "E": {
+   "A": 120,
+   "B": 45,
+   "C": 75,
+   "D": 45,
+   "E": 10,
+   "F": 60
+  },
+  "F": {
+   "A": 120,
+   "B": 60,
+   "C": 45,
+   "D": 60,
+   "E": 60,
+   "F": 10
+  }
+ },
+ "setup_cost_per_minute": 40,
+ "jobs": [
+  {
+   "id": "J001",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3629,
+   "weight": 1
+  },
+  {
+   "id": "J002",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 1572,
+   "due": 4186,
+   "weight": 5
+  },
+  {
+   "id": "J003",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2756,
+   "weight": 2
+  },
+  {
+   "id": "J004",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 541,
+   "weight": 1
+  },
+  {
+   "id": "J005",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 910,
+   "weight": 2
+  },
+  {
+   "id": "J006",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 3539,
+   "due": 6931,
+   "weight": 2
+  },
+  {
+   "id": "J007",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3200,
+   "weight": 5
+  },
+  {
+   "id": "J008",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 1184,
+   "weight": 2
+  },
+  {
+   "id": "J009",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 588,
+   "weight": 3
+  },
+  {
+   "id": "J010",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3089,
+   "weight": 1
+  },
+  {
+   "id": "J011",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 358,
+   "due": 2409,
+   "weight": 1
+  },
+  {
+   "id": "J012",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1323,
+   "weight": 3
+  },
+  {
+   "id": "J013",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 1040,
+   "due": 3566,
+   "weight": 1
+  },
+  {
+   "id": "J014",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 2728,
+   "due": 5680,
+   "weight": 1
+  },
+  {
+   "id": "J015",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 819,
+   "weight": 5
+  },
+  {
+   "id": "J016",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 0,
+   "due": 3130,
+   "weight": 2
+  },
+  {
+   "id": "J017",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 2840,
+   "due": 6997,
+   "weight": 3
+  },
+  {
+   "id": "J018",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1503,
+   "weight": 1
+  },
+  {
+   "id": "J019",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 2200,
+   "due": 4711,
+   "weight": 3
+  },
+  {
+   "id": "J020",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 3082,
+   "weight": 2
+  },
+  {
+   "id": "J021",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2994,
+   "weight": 2
+  },
+  {
+   "id": "J022",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 1711,
+   "due": 2799,
+   "weight": 1
+  },
+  {
+   "id": "J023",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 3223,
+   "due": 5095,
+   "weight": 2
+  },
+  {
+   "id": "J024",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1412,
+   "weight": 1
+  },
+  {
+   "id": "J025",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 3809,
+   "weight": 1
+  },
+  {
+   "id": "J026",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3352,
+   "weight": 1
+  },
+  {
+   "id": "J027",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1306,
+   "weight": 1
+  },
+  {
+   "id": "J028",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 567,
+   "weight": 1
+  },
+  {
+   "id": "J029",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2873,
+   "weight": 1
+  },
+  {
+   "id": "J030",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 4800,
+   "release": 2342,
+   "due": 4323,
+   "weight": 1
+  },
+  {
+   "id": "J031",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1188,
+   "weight": 1
+  },
+  {
+   "id": "J032",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 873,
+   "due": 4067,
+   "weight": 2
+  },
+  {
+   "id": "J033",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1305,
+   "weight": 1
+  },
+  {
+   "id": "J034",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4223,
+   "weight": 1
+  },
+  {
+   "id": "J035",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4274,
+   "weight": 1
+  },
+  {
+   "id": "J036",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1842,
+   "weight": 2
+  },
+  {
+   "id": "J037",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3733,
+   "weight": 3
+  },
+  {
+   "id": "J038",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 1773,
+   "due": 4671,
+   "weight": 2
+  },
+  {
+   "id": "J039",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1988,
+   "weight": 1
+  },
+  {
+   "id": "J040",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4283,
+   "weight": 1
+  },
+  {
+   "id": "J041",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 4800,
+   "release": 1015,
+   "due": 3889,
+   "weight": 2
+  },
+  {
+   "id": "J042",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 2513,
+   "weight": 1
+  },
+  {
+   "id": "J043",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2604,
+   "weight": 2
+  },
+  {
+   "id": "J044",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4143,
+   "weight": 1
+  },
+  {
+   "id": "J045",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 2235,
+   "due": 6057,
+   "weight": 5
+  },
+  {
+   "id": "J046",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1283,
+   "weight": 2
+  },
+  {
+   "id": "J047",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 538,
+   "weight": 1
+  },
+  {
+   "id": "J048",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 964,
+   "due": 4877,
+   "weight": 3
+  },
+  {
+   "id": "J049",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1702,
+   "weight": 3
+  },
+  {
+   "id": "J050",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 4136,
+   "weight": 5
+  },
+  {
+   "id": "J051",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2293,
+   "weight": 1
+  },
+  {
+   "id": "J052",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 1757,
+   "due": 4186,
+   "weight": 1
+  },
+  {
+   "id": "J053",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1022,
+   "weight": 5
+  },
+  {
+   "id": "J054",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2192,
+   "weight": 1
+  },
+  {
+   "id": "J055",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 737,
+   "weight": 2
+  },
+  {
+   "id": "J056",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2718,
+   "weight": 2
+  },
+  {
+   "id": "J057",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 1196,
+   "due": 3785,
+   "weight": 1
+  },
+  {
+   "id": "J058",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 504,
+   "weight": 1
+  },
+  {
+   "id": "J059",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 814,
+   "weight": 5
+  },
+  {
+   "id": "J060",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 1362,
+   "due": 5061,
+   "weight": 1
+  },
+  {
+   "id": "J061",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4248,
+   "weight": 5
+  },
+  {
+   "id": "J062",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1029,
+   "weight": 2
+  },
+  {
+   "id": "J063",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3165,
+   "weight": 5
+  },
+  {
+   "id": "J064",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3273,
+   "weight": 1
+  },
+  {
+   "id": "J065",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 2260,
+   "due": 4537,
+   "weight": 1
+  },
+  {
+   "id": "J066",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 3652,
+   "weight": 1
+  },
+  {
+   "id": "J067",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 2971,
+   "weight": 3
+  },
+  {
+   "id": "J068",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1749,
+   "weight": 5
+  },
+  {
+   "id": "J069",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2584,
+   "weight": 3
+  },
+  {
+   "id": "J070",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 1183,
+   "weight": 2
+  },
+  {
+   "id": "J071",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4007,
+   "weight": 1
+  },
+  {
+   "id": "J072",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 3006,
+   "due": 7242,
+   "weight": 1
+  },
+  {
+   "id": "J073",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 758,
+   "due": 4183,
+   "weight": 5
+  },
+  {
+   "id": "J074",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1675,
+   "weight": 5
+  },
+  {
+   "id": "J075",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 1906,
+   "weight": 3
+  },
+  {
+   "id": "J076",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 3129,
+   "due": 4047,
+   "weight": 1
+  },
+  {
+   "id": "J077",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 3388,
+   "weight": 5
+  },
+  {
+   "id": "J078",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2644,
+   "weight": 3
+  },
+  {
+   "id": "J079",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1536,
+   "weight": 3
+  },
+  {
+   "id": "J080",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2580,
+   "weight": 5
+  },
+  {
+   "id": "J081",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4286,
+   "weight": 3
+  },
+  {
+   "id": "J082",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 2929,
+   "weight": 5
+  },
+  {
+   "id": "J083",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 574,
+   "weight": 3
+  },
+  {
+   "id": "J084",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 2338,
+   "due": 3582,
+   "weight": 3
+  },
+  {
+   "id": "J085",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 2686,
+   "due": 3581,
+   "weight": 3
+  }
+ ]
+}
+===== /app/weeks/week-38.json =====
+{
+ "name": "week-38",
+ "presses": [
+  {
+   "id": "P1",
+   "tonnage": 400,
+   "strokes_per_minute": 30,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     2327,
+     2807
+    ]
+   ]
+  },
+  {
+   "id": "P2",
+   "tonnage": 800,
+   "strokes_per_minute": 18,
+   "initial_family": "C",
+   "maintenance": [
+    [
+     4998,
+     5478
+    ]
+   ]
+  },
+  {
+   "id": "P3",
+   "tonnage": 600,
+   "strokes_per_minute": 22,
+   "initial_family": "A",
+   "maintenance": [
+    [
+     1651,
+     1891
+    ],
+    [
+     4233,
+     4713
+    ]
+   ]
+  },
+  {
+   "id": "P4",
+   "tonnage": 250,
+   "strokes_per_minute": 40,
+   "initial_family": "E",
+   "maintenance": [
+    [
+     4689,
+     5169
+    ],
+    [
+     5979,
+     6099
+    ]
+   ]
+  },
+  {
+   "id": "P5",
+   "tonnage": 400,
+   "strokes_per_minute": 26,
+   "initial_family": "B",
+   "maintenance": [
+    [
+     6053,
+     6293
+    ]
+   ]
+  },
+  {
+   "id": "P6",
+   "tonnage": 800,
+   "strokes_per_minute": 16,
+   "initial_family": "D",
+   "maintenance": [
+    [
+     2734,
+     2854
+    ],
+    [
+     5440,
+     5920
+    ]
+   ]
+  },
+  {
+   "id": "P7",
+   "tonnage": 600,
+   "strokes_per_minute": 24,
+   "initial_family": "C",
+   "maintenance": [
+    [
+     2237,
+     2357
+    ],
+    [
+     6140,
+     6260
+    ]
+   ]
+  },
+  {
+   "id": "P8",
+   "tonnage": 200,
+   "strokes_per_minute": 44,
+   "initial_family": "E",
+   "maintenance": [
+    [
+     1645,
+     1765
+    ]
+   ]
+  }
+ ],
+ "setup_minutes": {
+  "A": {
+   "A": 10,
+   "B": 60,
+   "C": 35,
+   "D": 120,
+   "E": 45,
+   "F": 120
+  },
+  "B": {
+   "A": 120,
+   "B": 10,
+   "C": 90,
+   "D": 120,
+   "E": 60,
+   "F": 90
+  },
+  "C": {
+   "A": 45,
+   "B": 120,
+   "C": 10,
+   "D": 35,
+   "E": 60,
+   "F": 60
+  },
+  "D": {
+   "A": 120,
+   "B": 120,
+   "C": 45,
+   "D": 10,
+   "E": 120,
+   "F": 60
+  },
+  "E": {
+   "A": 35,
+   "B": 120,
+   "C": 75,
+   "D": 45,
+   "E": 10,
+   "F": 60
+  },
+  "F": {
+   "A": 90,
+   "B": 45,
+   "C": 35,
+   "D": 120,
+   "E": 120,
+   "F": 10
+  }
+ },
+ "setup_cost_per_minute": 40,
+ "jobs": [
+  {
+   "id": "J001",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 4300,
+   "weight": 3
+  },
+  {
+   "id": "J002",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 4298,
+   "weight": 1
+  },
+  {
+   "id": "J003",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 2889,
+   "due": 3377,
+   "weight": 1
+  },
+  {
+   "id": "J004",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3153,
+   "weight": 1
+  },
+  {
+   "id": "J005",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2672,
+   "weight": 1
+  },
+  {
+   "id": "J006",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3245,
+   "weight": 3
+  },
+  {
+   "id": "J007",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3150,
+   "weight": 5
+  },
+  {
+   "id": "J008",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 1346,
+   "weight": 5
+  },
+  {
+   "id": "J009",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 2054,
+   "due": 6094,
+   "weight": 2
+  },
+  {
+   "id": "J010",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 1914,
+   "due": 2498,
+   "weight": 5
+  },
+  {
+   "id": "J011",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2355,
+   "weight": 5
+  },
+  {
+   "id": "J012",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 2209,
+   "due": 4891,
+   "weight": 1
+  },
+  {
+   "id": "J013",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3722,
+   "weight": 2
+  },
+  {
+   "id": "J014",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1953,
+   "weight": 3
+  },
+  {
+   "id": "J015",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1385,
+   "weight": 2
+  },
+  {
+   "id": "J016",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1529,
+   "weight": 3
+  },
+  {
+   "id": "J017",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3866,
+   "weight": 2
+  },
+  {
+   "id": "J018",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 107,
+   "due": 2184,
+   "weight": 1
+  },
+  {
+   "id": "J019",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2129,
+   "weight": 2
+  },
+  {
+   "id": "J020",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 3021,
+   "due": 6441,
+   "weight": 2
+  },
+  {
+   "id": "J021",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 718,
+   "due": 4616,
+   "weight": 2
+  },
+  {
+   "id": "J022",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 2343,
+   "due": 3113,
+   "weight": 1
+  },
+  {
+   "id": "J023",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3369,
+   "weight": 3
+  },
+  {
+   "id": "J024",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 899,
+   "due": 4543,
+   "weight": 1
+  },
+  {
+   "id": "J025",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2109,
+   "weight": 3
+  },
+  {
+   "id": "J026",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3298,
+   "weight": 5
+  },
+  {
+   "id": "J027",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2501,
+   "weight": 1
+  },
+  {
+   "id": "J028",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 1522,
+   "due": 3386,
+   "weight": 1
+  },
+  {
+   "id": "J029",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 800,
+   "weight": 3
+  },
+  {
+   "id": "J030",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2587,
+   "weight": 2
+  },
+  {
+   "id": "J031",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3119,
+   "weight": 1
+  },
+  {
+   "id": "J032",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 1808,
+   "weight": 1
+  },
+  {
+   "id": "J033",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1324,
+   "weight": 1
+  },
+  {
+   "id": "J034",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2209,
+   "weight": 5
+  },
+  {
+   "id": "J035",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2458,
+   "weight": 3
+  },
+  {
+   "id": "J036",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2992,
+   "weight": 2
+  },
+  {
+   "id": "J037",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2362,
+   "weight": 1
+  },
+  {
+   "id": "J038",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 4316,
+   "weight": 3
+  },
+  {
+   "id": "J039",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 4070,
+   "weight": 5
+  },
+  {
+   "id": "J040",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 525,
+   "due": 1100,
+   "weight": 3
+  },
+  {
+   "id": "J041",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 627,
+   "weight": 2
+  },
+  {
+   "id": "J042",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 2894,
+   "due": 3938,
+   "weight": 2
+  },
+  {
+   "id": "J043",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 1403,
+   "weight": 2
+  },
+  {
+   "id": "J044",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2962,
+   "weight": 3
+  },
+  {
+   "id": "J045",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 2836,
+   "weight": 3
+  },
+  {
+   "id": "J046",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3993,
+   "weight": 3
+  },
+  {
+   "id": "J047",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 4183,
+   "weight": 1
+  },
+  {
+   "id": "J048",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3970,
+   "weight": 5
+  },
+  {
+   "id": "J049",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 1348,
+   "due": 3637,
+   "weight": 1
+  },
+  {
+   "id": "J050",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 527,
+   "weight": 3
+  },
+  {
+   "id": "J051",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 1319,
+   "weight": 3
+  },
+  {
+   "id": "J052",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 763,
+   "due": 3296,
+   "weight": 5
+  },
+  {
+   "id": "J053",
+   "family": "E",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1480,
+   "weight": 2
+  },
+  {
+   "id": "J054",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 2546,
+   "due": 5218,
+   "weight": 5
+  },
+  {
+   "id": "J055",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4044,
+   "weight": 3
+  },
+  {
+   "id": "J056",
+   "family": "D",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1716,
+   "weight": 2
+  },
+  {
+   "id": "J057",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1928,
+   "weight": 3
+  },
+  {
+   "id": "J058",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 2753,
+   "weight": 2
+  },
+  {
+   "id": "J059",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2156,
+   "weight": 5
+  },
+  {
+   "id": "J060",
+   "family": "F",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 2569,
+   "due": 3912,
+   "weight": 1
+  },
+  {
+   "id": "J061",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 2117,
+   "due": 2603,
+   "weight": 2
+  },
+  {
+   "id": "J062",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3691,
+   "weight": 2
+  },
+  {
+   "id": "J063",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 881,
+   "weight": 5
+  },
+  {
+   "id": "J064",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3395,
+   "weight": 5
+  },
+  {
+   "id": "J065",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 557,
+   "weight": 1
+  },
+  {
+   "id": "J066",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 3436,
+   "weight": 1
+  },
+  {
+   "id": "J067",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2337,
+   "weight": 3
+  },
+  {
+   "id": "J068",
+   "family": "E",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2014,
+   "weight": 1
+  },
+  {
+   "id": "J069",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 847,
+   "weight": 1
+  },
+  {
+   "id": "J070",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 2212,
+   "weight": 5
+  },
+  {
+   "id": "J071",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3631,
+   "weight": 5
+  },
+  {
+   "id": "J072",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2630,
+   "weight": 2
+  },
+  {
+   "id": "J073",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 7200,
+   "release": 0,
+   "due": 525,
+   "weight": 1
+  },
+  {
+   "id": "J074",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2389,
+   "weight": 1
+  },
+  {
+   "id": "J075",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2288,
+   "weight": 5
+  },
+  {
+   "id": "J076",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 3600,
+   "release": 0,
+   "due": 3294,
+   "weight": 5
+  },
+  {
+   "id": "J077",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1195,
+   "weight": 2
+  },
+  {
+   "id": "J078",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2796,
+   "weight": 3
+  },
+  {
+   "id": "J079",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 3397,
+   "weight": 1
+  },
+  {
+   "id": "J080",
+   "family": "A",
+   "tonnage": 600,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3462,
+   "weight": 3
+  },
+  {
+   "id": "J081",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1702,
+   "weight": 1
+  },
+  {
+   "id": "J082",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 980,
+   "due": 2276,
+   "weight": 1
+  },
+  {
+   "id": "J083",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 3522,
+   "due": 6780,
+   "weight": 1
+  },
+  {
+   "id": "J084",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 2967,
+   "weight": 1
+  },
+  {
+   "id": "J085",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 868,
+   "due": 2027,
+   "weight": 5
+  },
+  {
+   "id": "J086",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1761,
+   "weight": 1
+  },
+  {
+   "id": "J087",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 2400,
+   "release": 2714,
+   "due": 3937,
+   "weight": 2
+  },
+  {
+   "id": "J088",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3873,
+   "weight": 1
+  },
+  {
+   "id": "J089",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3832,
+   "weight": 1
+  },
+  {
+   "id": "J090",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3057,
+   "weight": 3
+  },
+  {
+   "id": "J091",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1905,
+   "weight": 2
+  },
+  {
+   "id": "J092",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 600,
+   "release": 0,
+   "due": 1581,
+   "weight": 5
+  },
+  {
+   "id": "J093",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 7200,
+   "release": 2506,
+   "due": 4884,
+   "weight": 5
+  },
+  {
+   "id": "J094",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4217,
+   "weight": 1
+  },
+  {
+   "id": "J095",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 2002,
+   "weight": 3
+  },
+  {
+   "id": "J096",
+   "family": "B",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3503,
+   "weight": 2
+  },
+  {
+   "id": "J097",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3999,
+   "weight": 1
+  },
+  {
+   "id": "J098",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1460,
+   "weight": 2
+  },
+  {
+   "id": "J099",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 0,
+   "due": 944,
+   "weight": 5
+  },
+  {
+   "id": "J100",
+   "family": "F",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 3038,
+   "due": 6627,
+   "weight": 5
+  },
+  {
+   "id": "J101",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 897,
+   "due": 3018,
+   "weight": 1
+  },
+  {
+   "id": "J102",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 515,
+   "weight": 2
+  },
+  {
+   "id": "J103",
+   "family": "F",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 4125,
+   "weight": 5
+  },
+  {
+   "id": "J104",
+   "family": "D",
+   "tonnage": 600,
+   "strokes": 3600,
+   "release": 151,
+   "due": 1151,
+   "weight": 1
+  },
+  {
+   "id": "J105",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2677,
+   "weight": 1
+  },
+  {
+   "id": "J106",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 2852,
+   "weight": 5
+  },
+  {
+   "id": "J107",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 2310,
+   "due": 4839,
+   "weight": 1
+  },
+  {
+   "id": "J108",
+   "family": "D",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 3175,
+   "due": 5509,
+   "weight": 3
+  },
+  {
+   "id": "J109",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 3573,
+   "weight": 3
+  },
+  {
+   "id": "J110",
+   "family": "E",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1548,
+   "weight": 5
+  },
+  {
+   "id": "J111",
+   "family": "C",
+   "tonnage": 600,
+   "strokes": 1200,
+   "release": 2499,
+   "due": 5623,
+   "weight": 5
+  },
+  {
+   "id": "J112",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 600,
+   "release": 0,
+   "due": 3972,
+   "weight": 3
+  },
+  {
+   "id": "J113",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 735,
+   "weight": 5
+  },
+  {
+   "id": "J114",
+   "family": "C",
+   "tonnage": 200,
+   "strokes": 600,
+   "release": 175,
+   "due": 2696,
+   "weight": 1
+  },
+  {
+   "id": "J115",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 4800,
+   "release": 0,
+   "due": 1140,
+   "weight": 3
+  },
+  {
+   "id": "J116",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 3359,
+   "due": 5025,
+   "weight": 1
+  },
+  {
+   "id": "J117",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 1794,
+   "due": 4681,
+   "weight": 2
+  },
+  {
+   "id": "J118",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 600,
+   "release": 2818,
+   "due": 5464,
+   "weight": 5
+  },
+  {
+   "id": "J119",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3968,
+   "weight": 1
+  },
+  {
+   "id": "J120",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 3600,
+   "release": 3081,
+   "due": 5851,
+   "weight": 1
+  },
+  {
+   "id": "J121",
+   "family": "B",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 3989,
+   "weight": 1
+  },
+  {
+   "id": "J122",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1863,
+   "weight": 1
+  },
+  {
+   "id": "J123",
+   "family": "C",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 434,
+   "due": 1427,
+   "weight": 3
+  },
+  {
+   "id": "J124",
+   "family": "B",
+   "tonnage": 400,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2326,
+   "weight": 1
+  },
+  {
+   "id": "J125",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1766,
+   "weight": 1
+  },
+  {
+   "id": "J126",
+   "family": "D",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1698,
+   "weight": 5
+  },
+  {
+   "id": "J127",
+   "family": "A",
+   "tonnage": 400,
+   "strokes": 3600,
+   "release": 1423,
+   "due": 2083,
+   "weight": 2
+  },
+  {
+   "id": "J128",
+   "family": "E",
+   "tonnage": 250,
+   "strokes": 1200,
+   "release": 0,
+   "due": 1190,
+   "weight": 1
+  },
+  {
+   "id": "J129",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 1800,
+   "release": 0,
+   "due": 4096,
+   "weight": 2
+  },
+  {
+   "id": "J130",
+   "family": "B",
+   "tonnage": 600,
+   "strokes": 600,
+   "release": 0,
+   "due": 4189,
+   "weight": 1
+  },
+  {
+   "id": "J131",
+   "family": "F",
+   "tonnage": 200,
+   "strokes": 1200,
+   "release": 0,
+   "due": 4034,
+   "weight": 3
+  },
+  {
+   "id": "J132",
+   "family": "A",
+   "tonnage": 200,
+   "strokes": 2400,
+   "release": 0,
+   "due": 2322,
+   "weight": 3
+  },
+  {
+   "id": "J133",
+   "family": "B",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 2157,
+   "weight": 2
+  },
+  {
+   "id": "J134",
+   "family": "E",
+   "tonnage": 200,
+   "strokes": 3600,
+   "release": 0,
+   "due": 1585,
+   "weight": 2
+  },
+  {
+   "id": "J135",
+   "family": "C",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 2654,
+   "weight": 5
+  },
+  {
+   "id": "J136",
+   "family": "A",
+   "tonnage": 250,
+   "strokes": 7200,
+   "release": 0,
+   "due": 1080,
+   "weight": 1
+  },
+  {
+   "id": "J137",
+   "family": "D",
+   "tonnage": 250,
+   "strokes": 1800,
+   "release": 0,
+   "due": 1801,
+   "weight": 2
+  },
+  {
+   "id": "J138",
+   "family": "C",
+   "tonnage": 400,
+   "strokes": 4800,
+   "release": 2867,
+   "due": 3897,
+   "weight": 1
+  },
+  {
+   "id": "J139",
+   "family": "F",
+   "tonnage": 800,
+   "strokes": 4800,
+   "release": 0,
+   "due": 3071,
+   "weight": 3
+  },
+  {
+   "id": "J140",
+   "family": "A",
+   "tonnage": 800,
+   "strokes": 2400,
+   "release": 0,
+   "due": 655,
+   "weight": 1
+  }
+ ]
+}
+[?2004hroot@669d565ab501:/app# cat /app/tools/check_schedule.py
+[?2004l"""Check a press schedule against docs/press-rules.md and print its cost.
+
+Usage: python3 tools/check_schedule.py weeks/<week>.json schedules/<week>.json
+"""
+
+import json
+import sys
+
+
+class ScheduleError(ValueError):
+    pass
+
+
+def minutes(job, press):
+    return -(-job["strokes"] // press["strokes_per_minute"])
+
+
+def clear_of(start, length, windows):
+    """Earliest time at or after start at which [t, t + length) meets no maintenance window."""
+    moved = True
+    while moved:
+        moved = False
+        for a, b in windows:
+            if start < b and a < start + length:
+                start = b
+                moved = True
+    return start
+
+
+def evaluate(week, schedule):
+    presses = {p["id"]: p for p in week["presses"]}
+    jobs = {j["id"]: j for j in week["jobs"]}
+    setup = week["setup_minutes"]
+    if not isinstance(schedule, dict) or not isinstance(schedule.get("presses"), dict):
+        raise ScheduleError("a schedule is a JSON object with a presses object")
+    seen = set()
+    setup_total = 0
+    penalty = 0
+    for pid, sequence in schedule["presses"].items():
+        press = presses.get(pid)
+        if press is None:
+            raise ScheduleError(f"unknown press {pid!r}")
+        if not isinstance(sequence, list):
+            raise ScheduleError(f"{pid}: the job list is not a list")
+        clock = 0
+        family = press["initial_family"]
+        for jid in sequence:
+            if not isinstance(jid, str) or jid not in jobs:
+                raise ScheduleError(f"{pid}: unknown job {jid!r}")
+            if jid in seen:
+                raise ScheduleError(f"{pid}: job {jid} scheduled twice")
+            seen.add(jid)
+            job = jobs[jid]
+            if job["tonnage"] > press["tonnage"]:
+                raise ScheduleError(f"{pid}: job {jid} needs {job['tonnage']} t, the press has {press['tonnage']} t")
+            change = setup[family][job["family"]]
+            change_start = clear_of(clock, change, press["maintenance"])
+            run = minutes(job, press)
+            start = clear_of(max(change_start + change, job["release"]), run, press["maintenance"])
+            end = start + run
+            setup_total += change
+            penalty += job["weight"] * max(0, end - job["due"])
+            clock = end
+            family = job["family"]
+    missing = sorted(set(jobs) - seen)
+    if missing:
+        raise ScheduleError(f"{len(missing)} jobs are not scheduled, first {missing[:5]}")
+    return week["setup_cost_per_minute"] * setup_total + penalty
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.exit(__doc__)
+    with open(argv[1]) as fh:
+        week = json.load(fh)
+    with open(argv[2]) as fh:
+        schedule = json.load(fh)
+    try:
+        cost = evaluate(week, schedule)
+    except ScheduleError as exc:
+        print(f"INFEASIBLE: {exc}")
+        return 1
+    print(f"feasible, cost {cost}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+[?2004hroot@669d565ab501:/app# cat /app/planner/plan_week.py
+[?2004l"""Current press planner: earliest due date first, each job to the press that finishes it soonest.
+
+Usage: python3 planner/plan_week.py weeks/<week>.json schedules/<week>.json
+"""
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from check_schedule import clear_of, evaluate, minutes  # noqa: E402
+
+
+def plan(week):
+    presses = week["presses"]
+    state = {p["id"]: (0, p["initial_family"]) for p in presses}
+    lists = {p["id"]: [] for p in presses}
+    for job in sorted(week["jobs"], key=lambda j: (j["due"], j["id"])):
+        best = None
+        for p in presses:
+            if job["tonnage"] > p["tonnage"]:
+                continue
+            clock, family = state[p["id"]]
+            change = week["setup_minutes"][family][job["family"]]
+            change_start = clear_of(clock, change, p["maintenance"])
+            run = minutes(job, p)
+            start = clear_of(max(change_start + change, job["release"]), run, p["maintenance"])
+            if best is None or start + run < best[0]:
+                best = (start + run, p["id"])
+        end, pid = best
+        lists[pid].append(job["id"])
+        state[pid] = (end, job["family"])
+    return {"presses": lists}
+
+
+def main(argv):
+    with open(argv[1]) as fh:
+        week = json.load(fh)
+    schedule = plan(week)
+    with open(argv[2], "w") as fh:
+        json.dump(schedule, fh, indent=1)
+    print("cost", evaluate(week, schedule))
+
+
+if __name__ == "__main__":
+    main(sys.argv)
+[?2004hroot@669d565ab501:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,glob,collections,os
+[?2004l[?2004h> for fn in glob.glob('/app/weeks/week-*.json'):
+[?2004l[?2004h>  d=json.load(open(fn)); print('\n',os.path.basename(fn),d.keys()); print('setup cost',d['setup_cost_per_minute']); print('setup',d['setup_minutes']); print('presses:')
+[?2004l[?2004h>  for p in d['presses']: print(p)
+[?2004l[?2004h>  js=d['jobs']; print('jobs',len(js),'families',collections.Counter(j['family'] for j in js),'tonnage',collections.Counter(j['tonnage'] for j in js),'release>0',sum(j['release']>0 for j in js),'due range',(min(j['due'] for j in js),max(j['due'] for j in js)),'weights',collections.Counter(j['weight'] for j in js))
+[?2004l[?2004h> PY
+[?2004l
+ week-36.json dict_keys(['name', 'presses', 'setup_minutes', 'setup_cost_per_minute', 'jobs'])
+setup cost 40
+setup {'A': {'A': 10, 'B': 60, 'C': 45, 'D': 45, 'E': 35, 'F': 75}, 'B': {'A': 90, 'B': 10, 'C': 60, 'D': 45, 'E': 75, 'F': 60}, 'C': {'A': 45, 'B': 120, 'C': 10, 'D': 75, 'E': 75, 'F': 45}, 'D': {'A': 35, 'B': 75, 'C': 75, 'D': 10, 'E': 60, 'F': 45}, 'E': {'A': 35, 'B': 120, 'C': 90, 'D': 120, 'E': 10, 'F': 60}, 'F': {'A': 120, 'B': 60, 'C': 75, 'D': 75, 'E': 45, 'F': 10}}
+presses:
+{'id': 'P1', 'tonnage': 400, 'strokes_per_minute': 30, 'initial_family': 'D', 'maintenance': [[4777, 5017]]}
+{'id': 'P2', 'tonnage': 800, 'strokes_per_minute': 18, 'initial_family': 'B', 'maintenance': [[5795, 6275]]}
+{'id': 'P3', 'tonnage': 600, 'strokes_per_minute': 22, 'initial_family': 'F', 'maintenance': [[2723, 2963]]}
+{'id': 'P4', 'tonnage': 250, 'strokes_per_minute': 40, 'initial_family': 'A', 'maintenance': [[3055, 3295]]}
+jobs 45 families Counter({'B': 10, 'F': 10, 'E': 8, 'A': 7, 'C': 6, 'D': 4}) tonnage Counter({400: 14, 250: 11, 600: 7, 800: 7, 200: 6}) release>0 15 due range (529, 6896) weights Counter({1: 18, 3: 10, 2: 9, 5: 8})
+
+ week-37.json dict_keys(['name', 'presses', 'setup_minutes', 'setup_cost_per_minute', 'jobs'])
+setup cost 40
+setup {'A': {'A': 10, 'B': 75, 'C': 75, 'D': 75, 'E': 60, 'F': 35}, 'B': {'A': 45, 'B': 10, 'C': 120, 'D': 35, 'E': 35, 'F': 75}, 'C': {'A': 60, 'B': 35, 'C': 10, 'D': 45, 'E': 45, 'F': 45}, 'D': {'A': 35, 'B': 60, 'C': 45, 'D': 10, 'E': 45, 'F': 120}, 'E': {'A': 120, 'B': 45, 'C': 75, 'D': 45, 'E': 10, 'F': 60}, 'F': {'A': 120, 'B': 60, 'C': 45, 'D': 60, 'E': 60, 'F': 10}}
+presses:
+{'id': 'P1', 'tonnage': 400, 'strokes_per_minute': 30, 'initial_family': 'B', 'maintenance': [[3714, 3834], [5642, 5882]]}
+{'id': 'P2', 'tonnage': 800, 'strokes_per_minute': 18, 'initial_family': 'A', 'maintenance': [[820, 1060], [3986, 4226]]}
+{'id': 'P3', 'tonnage': 600, 'strokes_per_minute': 22, 'initial_family': 'E', 'maintenance': [[2011, 2131], [4409, 4889]]}
+{'id': 'P4', 'tonnage': 250, 'strokes_per_minute': 40, 'initial_family': 'D', 'maintenance': [[3655, 3895]]}
+{'id': 'P5', 'tonnage': 400, 'strokes_per_minute': 26, 'initial_family': 'F', 'maintenance': [[3847, 4087]]}
+{'id': 'P6', 'tonnage': 800, 'strokes_per_minute': 16, 'initial_family': 'C', 'maintenance': [[4639, 4759]]}
+jobs 85 families Counter({'F': 20, 'E': 19, 'C': 15, 'B': 11, 'D': 10, 'A': 10}) tonnage Counter({400: 23, 800: 21, 250: 15, 600: 15, 200: 11}) release>0 24 due range (504, 7242) weights Counter({1: 36, 2: 18, 3: 16, 5: 15})
+
+ week-38.json dict_keys(['name', 'presses', 'setup_minutes', 'setup_cost_per_minute', 'jobs'])
+setup cost 40
+setup {'A': {'A': 10, 'B': 60, 'C': 35, 'D': 120, 'E': 45, 'F': 120}, 'B': {'A': 120, 'B': 10, 'C': 90, 'D': 120, 'E': 60, 'F': 90}, 'C': {'A': 45, 'B': 120, 'C': 10, 'D': 35, 'E': 60, 'F': 60}, 'D': {'A': 120, 'B': 120, 'C': 45, 'D': 10, 'E': 120, 'F': 60}, 'E': {'A': 35, 'B': 120, 'C': 75, 'D': 45, 'E': 10, 'F': 60}, 'F': {'A': 90, 'B': 45, 'C': 35, 'D': 120, 'E': 120, 'F': 10}}
+presses:
+{'id': 'P1', 'tonnage': 400, 'strokes_per_minute': 30, 'initial_family': 'B', 'maintenance': [[2327, 2807]]}
+{'id': 'P2', 'tonnage': 800, 'strokes_per_minute': 18, 'initial_family': 'C', 'maintenance': [[4998, 5478]]}
+{'id': 'P3', 'tonnage': 600, 'strokes_per_minute': 22, 'initial_family': 'A', 'maintenance': [[1651, 1891], [4233, 4713]]}
+{'id': 'P4', 'tonnage': 250, 'strokes_per_minute': 40, 'initial_family': 'E', 'maintenance': [[4689, 5169], [5979, 6099]]}
+{'id': 'P5', 'tonnage': 400, 'strokes_per_minute': 26, 'initial_family': 'B', 'maintenance': [[6053, 6293]]}
+{'id': 'P6', 'tonnage': 800, 'strokes_per_minute': 16, 'initial_family': 'D', 'maintenance': [[2734, 2854], [5440, 5920]]}
+{'id': 'P7', 'tonnage': 600, 'strokes_per_minute': 24, 'initial_family': 'C', 'maintenance': [[2237, 2357], [6140, 6260]]}
+{'id': 'P8', 'tonnage': 200, 'strokes_per_minute': 44, 'initial_family': 'E', 'maintenance': [[1645, 1765]]}
+jobs 140 families Counter({'A': 28, 'B': 28, 'C': 27, 'E': 24, 'D': 17, 'F': 16}) tonnage Counter({400: 43, 250: 29, 800: 28, 200: 21, 600: 19}) release>0 36 due range (515, 6780) weights Counter({1: 50, 3: 30, 5: 30, 2: 30})
+[?2004hroot@669d565ab501:/app# cat > /app/optimize.py <<'PY'
+[?2004l[?2004h> import json, math, random, time, sys, os
+[?2004l[?2004h> 
+[?2004l[?2004h> fn=sys.argv[1]; seconds=float(sys.argv[2]); seed=int(sys.argv[3]) if len(sys.argv)>3 else 1
+[?2004l[?2004h> random.seed(seed)
+[?2004l[?2004h> d=json.load(open(fn)); P=d['presses']; J=d['jobs']; n=len(J); m=len(P)
+[?2004l[?2004h> idx={j['id']:i for i,j in enumerate(J)}
+[?2004l[?2004h> elig=[[q for q,p in enumerate(P) if p['tonnage']>=j['tonnage']] for j in J]
+[?2004l[?2004h> setup=d['setup_minutes']; sc=d['setup_cost_per_minute']
+[?2004l[?2004h> 
+[?2004l[?2004h> def avoid(t,L,maint):
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         nt=t
+[?2004l[?2004h>         for a,b in maint:
+[?2004l[?2004h>             if t < b and t+L > a: nt=max(nt,b)
+[?2004l[?2004h>         if nt==t:return t
+[?2004l[?2004h>         t=nt
+[?2004l[?2004h> 
+[?2004l[?2004h> def pcost(q,seq):
+[?2004l[?2004h>     p=P[q]; t=0; fam=p['initial_family']; c=0
+[?2004l[?2004h>     for x in seq:
+[?2004l[?2004h>         j=J[x]; s=setup[fam][j['family']]; c+=sc*s
+[?2004l[?2004h>         t=avoid(t,s,p['maintenance'])+s
+[?2004l[?2004h>         r=(j['strokes']+p['strokes_per_minute']-1)//p['strokes_per_minute']
+[?2004l[?2004h>         t=avoid(max(t,j['release']),r,p['maintenance'])+r
+[?2004l[?2004h>         if t>j['due']: c+=(t-j['due'])*j['weight']
+[?2004l[?2004h>         fam=j['family']
+[?2004l[?2004h>     return c
+[?2004l[?2004h> 
+[?2004l[?2004h> def total(S): return sum(pcost(q,s) for q,s in enumerate(S))
+[?2004l[?2004h> 
+[?2004l[?2004h> def construct(rule,noise=0):
+[?2004l[?2004h>     S=[[] for _ in P]; times=[0]*m; fam=[p['initial_family'] for p in P]
+[?2004l[?2004h>     order=sorted(range(n),key=lambda x:(J[x]['due']+noise*random.random()*1500, -J[x]['weight'],J[x]['release']))
+[?2004l[?2004h>     for x in order:
+[?2004l[?2004h>         best=None
+[?2004l[?2004h>         for q in elig[x]:
+[?2004l[?2004h>             old=pcost(q,S[q]); new=pcost(q,S[q]+[x]); delta=new-old
+[?2004l[?2004h>             # varying emphasis gives diverse starts
+[?2004l[?2004h>             score = delta if rule==0 else (new + (rule-1)*700*len(S[q]))
+[?2004l[?2004h>             if best is None or score<best[0]:best=(score,q)
+[?2004l[?2004h>         S[best[1]].append(x)
+[?2004l[?2004h>     return S
+[?2004l[?2004h> 
+[?2004l[?2004h> # include planner-like earliest-completion append construction
+[?2004l[?2004h> def completion_construct(noise=0):
+[?2004l[?2004h>     S=[[] for _ in P]
+[?2004l[?2004h>     order=sorted(range(n),key=lambda x:(J[x]['due']+random.uniform(-noise,noise),-J[x]['weight']))
+[?2004l[?2004h>     for x in order:
+[?2004l[?2004h>         best=min(elig[x],key=lambda q:pcost(q,S[q]+[x])-pcost(q,S[q]))
+[?2004l[?2004h>         S[best].append(x)
+[?2004l[?2004h>     return S
+[?2004l[?2004h> 
+[?2004l[?2004h> starts=[construct(0,0),construct(0,1),construct(1,0),completion_construct(300)]
+[?2004l[?2004h> S=min(starts,key=total); cur=total(S); best=cur; BS=[s[:] for s in S]
+[?2004l[?2004h> print('initial',cur,flush=True)
+[?2004l[?2004h> end=time.time()+seconds; it=0; accepted=0; restart_at=time.time()+seconds/3
+[?2004l[?2004h> # Annealing with periodic reheating; target temperatures calibrated in cost units.
+[?2004l[?2004h> while time.time()<end:
+[?2004l[?2004h>     frac=max(0,(end-time.time())/seconds)
+[?2004l[?2004h>     T=30 + 3500*(frac**2)
+[?2004l[?2004h>     typ=random.random()
+[?2004l[?2004h>     affected=set()
+[?2004l[?2004h>     undo=None
+[?2004l[?2004h>     if typ<.68:
+[?2004l[?2004h>         a=random.randrange(m)
+[?2004l[?2004h>         if not S[a]: continue
+[?2004l[?2004h>         i=random.randrange(len(S[a])); x=S[a][i]
+[?2004l[?2004h>         b=random.choice(elig[x]); k=random.randrange(len(S[b])+1)
+[?2004l[?2004h>         old=sum(pcost(q,S[q]) for q in {a,b})
+[?2004l[?2004h>         S[a].pop(i)
+[?2004l[?2004h>         if a==b and k>i:k-=1
+[?2004l[?2004h>         S[b].insert(k,x)
+[?2004l[?2004h>         new=sum(pcost(q,S[q]) for q in {a,b}); delta=new-old
+[?2004l[?2004h>         undo=('rel',a,i,b,k)
+[?2004l[?2004h>     elif typ<.93:
+[?2004l[?2004h>         a=random.randrange(m)
+[?2004l[?2004h>         if not S[a]:continue
+[?2004l[?2004h>         b=random.randrange(m)
+[?2004l[?2004h>         if not S[b]:continue
+[?2004l[?2004h>         i=random.randrange(len(S[a])); k=random.randrange(len(S[b])); x,y=S[a][i],S[b][k]
+[?2004l[?2004h>         if b not in elig[x] or a not in elig[y]:continue
+[?2004l[?2004h>         old=sum(pcost(q,S[q]) for q in {a,b})
+[?2004l[?2004h>         S[a][i],S[b][k]=y,x
+[?2004l[?2004h>         new=sum(pcost(q,S[q]) for q in {a,b}); delta=new-old
+[?2004l[?2004h>         undo=('swap',a,i,b,k)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         a=random.randrange(m)
+[?2004l[?2004h>         if len(S[a])<2:continue
+[?2004l[?2004h>         i,k=sorted(random.sample(range(len(S[a])),2)); old=pcost(a,S[a]); S[a][i:k+1]=reversed(S[a][i:k+1]); new=pcost(a,S[a]); delta=new-old
+[?2004l[?2004h>         undo=('rev',a,i,k)
+[?2004l[?2004h>     if delta<=0 or random.random()<math.exp(-delta/T):
+[?2004l[?2004h>         cur+=delta; accepted+=1
+[?2004l[?2004h>         if cur<best:
+[?2004l[?2004h>             best=cur; BS=[s[:] for s in S]
+[?2004l[?2004h>             print('best',best,'it',it,flush=True)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         if undo[0]=='rel':
+[?2004l[?2004h>             _,a,i,b,k=undo; x=S[b].pop(k); S[a].insert(i,x)
+[?2004l[?2004h>         elif undo[0]=='swap':
+[?2004l[?2004h>             _,a,i,b,k=undo; S[a][i],S[b][k]=S[b][k],S[a][i]
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             _,a,i,k=undo; S[a][i:k+1]=reversed(S[a][i:k+1])
+[?2004l[?2004h>     it+=1
+[?2004l[?2004h>     # Restart from incumbent and reheat naturally through occasional perturbations
+[?2004l[?2004h>     if it%50000==0:
+[?2004l[?2004h>         S=[s[:] for s in BS];cur=best
+[?2004l[?2004h> print('FINAL',best,'iterations',it,flush=True)
+[?2004l[?2004h> out={'presses':{P[q]['id']:[J[x]['id'] for x in BS[q]] for q in range(m)}}
+[?2004l[?2004h> os.makedirs('/app/schedules',exist_ok=True)
+[?2004l[?2004h> base=os.path.basename(fn).removesuffix('.json')
+[?2004l[?2004h> json.dump(out,open('/app/schedules/'+base+'.json','w'),indent=2)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@669d565ab501:/app# python3 /app/optimize.py /app/weeks/week-36.json 15 11
+[?2004linitial 62010
+best 61502 it 100010
+best 60957 it 100067
+best 60954 it 146406
+best 58311 it 150052
+best 58063 it 150127
+best 56900 it 181281
+best 55421 it 181282
+best 54124 it 181291
+best 52124 it 181302
+best 52121 it 225302
+best 51666 it 225308
+best 51022 it 225312
+best 48865 it 237508
+best 48643 it 237510
+best 48172 it 237701
+best 47327 it 237755
+best 46774 it 237762
+best 46249 it 237780
+best 46112 it 250013
+best 45584 it 258443
+best 45184 it 258465
+best 45154 it 258490
+best 43524 it 273661
+best 43301 it 273680
+best 43244 it 274268
+best 43211 it 274284
+best 42997 it 279402
+best 42679 it 288993
+best 41834 it 289022
+best 41781 it 289052
+best 41648 it 294615
+best 41112 it 294628
+best 40458 it 294642
+best 40186 it 295371
+best 40026 it 295411
+best 39936 it 300019
+best 39658 it 300091
+best 39409 it 300108
+best 39138 it 311540
+best 39115 it 316908
+best 38905 it 316917
+best 38468 it 317273
+best 37662 it 335076
+best 37308 it 350010
+best 37304 it 350049
+best 37245 it 382310
+best 37155 it 382664
+best 36963 it 387003
+best 36868 it 396233
+best 36811 it 400266
+best 36713 it 400385
+best 36599 it 400402
+best 36479 it 428527
+best 36473 it 428604
+best 36435 it 428613
+best 36423 it 428880
+best 36379 it 428919
+best 36341 it 451283
+best 36297 it 451351
+best 36260 it 452736
+best 36231 it 454906
+best 36193 it 455974
+best 36101 it 456520
+FINAL 36101 iterations 568589
+[?2004hroot@669d565ab501:/app# python3 /app/optimize.py /app/weeks/week-37.json 25 12
+[?2004linitial 86310
+best 85310 it 50007
+best 84710 it 50011
+best 83510 it 300018
+best 83054 it 316673
+best 82832 it 316935
+best 82544 it 320255
+best 81916 it 322525
+best 80796 it 322666
+best 80518 it 322703
+best 79787 it 322787
+best 78982 it 322794
+best 78539 it 322797
+best 76890 it 322801
+best 75449 it 340453
+best 74049 it 340465
+best 72989 it 340480
+best 72498 it 345256
+best 72164 it 345665
+best 71866 it 346658
+best 71546 it 346665
+best 71334 it 346671
+best 70734 it 346674
+best 69652 it 346679
+best 69474 it 346842
+best 69064 it 346882
+best 69032 it 346888
+best 68730 it 346945
+best 68420 it 346966
+best 66573 it 346969
+best 65893 it 350007
+best 65851 it 358517
+best 65819 it 358534
+best 65633 it 358730
+best 65351 it 358763
+best 65091 it 358804
+best 64709 it 358999
+best 64424 it 359007
+best 64178 it 359022
+best 63908 it 359083
+best 63764 it 362333
+best 63689 it 362389
+best 63657 it 362431
+best 63543 it 362543
+best 63271 it 368519
+best 63055 it 368659
+best 62910 it 368731
+best 62733 it 381353
+best 62296 it 381752
+best 62126 it 381852
+best 61991 it 381890
+best 61989 it 381933
+best 61810 it 390881
+best 61722 it 390885
+best 61458 it 391487
+best 61155 it 391904
+best 60814 it 392151
+best 60722 it 392232
+best 60713 it 392235
+best 60671 it 392267
+best 60583 it 392507
+best 60460 it 392536
+best 60368 it 392566
+best 60079 it 392582
+best 60071 it 396018
+best 59932 it 399435
+best 59740 it 399441
+best 59721 it 399457
+best 58838 it 399481
+best 58657 it 399521
+best 58513 it 399537
+best 58313 it 399566
+best 58149 it 401309
+best 57968 it 401355
+best 57705 it 431867
+best 57638 it 431920
+best 57385 it 431936
+best 57339 it 432000
+best 57312 it 436054
+best 56973 it 436096
+best 56961 it 436140
+best 56710 it 436283
+best 56467 it 436594
+best 56449 it 436813
+best 56343 it 446871
+best 56311 it 446878
+best 56200 it 450001
+best 55947 it 450314
+best 55815 it 450381
+best 55217 it 450438
+best 53817 it 450474
+best 53787 it 465699
+best 53631 it 465782
+best 53622 it 465819
+best 53495 it 473433
+best 53465 it 473439
+best 53402 it 473788
+best 53390 it 473841
+best 53297 it 515126
+best 53237 it 515157
+best 53229 it 516141
+best 53188 it 516539
+best 53129 it 517463
+best 53122 it 517518
+best 53120 it 518148
+best 53113 it 542563
+best 53104 it 543794
+best 53099 it 544480
+best 53057 it 546053
+best 53035 it 546093
+best 52987 it 550522
+best 52951 it 552676
+best 52941 it 556847
+FINAL 52941 iterations 581477
+[?2004hroot@669d565ab501:/app# python3 /app/optimize.py /app/weeks/week-38.json 35 13
+[?2004linitial 177043
+best 174889 it 3
+best 174510 it 10
+best 164172 it 33
+best 163905 it 50002
+best 163019 it 50018
+best 162863 it 50022
+best 161494 it 50059
+best 160770 it 50078
+best 158795 it 50079
+best 158006 it 100036
+best 157839 it 250037
+best 157114 it 255254
+best 156581 it 255255
+best 155309 it 255268
+best 152594 it 255270
+best 146004 it 255279
+best 145941 it 255293
+best 145658 it 255572
+best 144172 it 255705
+best 143934 it 255808
+best 141970 it 296704
+best 140985 it 296709
+best 140857 it 296730
+best 140162 it 300001
+best 139407 it 300002
+best 139392 it 300029
+best 139307 it 300032
+best 139076 it 300037
+best 138256 it 300053
+best 136941 it 300079
+best 136308 it 300106
+best 134852 it 302993
+best 132571 it 302998
+best 131270 it 303148
+best 130787 it 320135
+best 130703 it 320138
+best 130395 it 320209
+best 129395 it 320218
+best 129033 it 320257
+best 128502 it 320276
+best 127458 it 320335
+best 126891 it 320384
+best 126763 it 320435
+best 126431 it 344409
+best 126309 it 344437
+best 126259 it 344466
+best 124280 it 344557
+best 123861 it 344632
+best 123853 it 344680
+best 123743 it 344698
+best 123508 it 344770
+best 123132 it 350151
+best 123087 it 350162
+best 122833 it 350179
+best 122765 it 350226
+best 122720 it 368047
+best 120662 it 369656
+best 120503 it 369679
+best 120189 it 369680
+best 120110 it 369796
+best 119460 it 369804
+best 118707 it 370528
+best 118698 it 370541
+best 118658 it 371175
+best 118198 it 374021
+best 118050 it 374075
+best 118045 it 374093
+best 117783 it 381810
+best 117307 it 381881
+best 117119 it 383186
+best 117038 it 383190
+best 116748 it 383191
+best 116656 it 383250
+best 116300 it 383300
+best 115885 it 383313
+best 115133 it 386253
+best 114015 it 386278
+best 113135 it 386282
+best 112483 it 386419
+best 112397 it 386579
+best 112255 it 388666
+best 112077 it 388894
+best 111956 it 389036
+best 111871 it 389069
+best 111102 it 390233
+best 110782 it 390281
+best 109442 it 390321
+best 109296 it 390360
+best 109177 it 390373
+best 108978 it 390542
+best 108791 it 390544
+best 106815 it 390570
+best 106584 it 390590
+best 106268 it 390594
+best 106037 it 390648
+best 105911 it 390657
+best 105771 it 390956
+best 105396 it 390982
+best 105340 it 391024
+best 105262 it 391026
+best 105185 it 391069
+best 105123 it 391071
+best 105029 it 391087
+best 104980 it 400363
+best 104531 it 400976
+best 104119 it 401081
+best 104043 it 401089
+best 103775 it 401113
+best 103453 it 401131
+best 103304 it 401137
+best 102967 it 401161
+best 102728 it 401206
+best 101953 it 401271
+best 101922 it 401302
+best 101826 it 401303
+best 101734 it 401332
+best 101524 it 401404
+best 101408 it 402565
+best 101207 it 409301
+best 101095 it 409312
+best 101093 it 409487
+best 101089 it 409495
+best 100937 it 409658
+best 100841 it 409676
+best 99881 it 409691
+best 99465 it 409834
+best 99157 it 409874
+best 99108 it 410075
+best 99048 it 410079
+best 99040 it 410214
+best 98460 it 410785
+best 98403 it 410807
+best 98098 it 410843
+best 97147 it 410922
+best 97030 it 411149
+best 96898 it 411153
+best 96558 it 411185
+best 96495 it 411397
+best 96054 it 413423
+best 95977 it 413494
+best 95805 it 413521
+best 95803 it 413526
+best 95073 it 413582
+best 95032 it 415025
+best 94431 it 424429
+best 93765 it 424637
+best 93335 it 438023
+best 92789 it 438047
+best 92734 it 443394
+best 92584 it 443467
+best 92229 it 450187
+best 92189 it 450196
+best 92120 it 450210
+best 91765 it 450231
+best 91718 it 450485
+best 91622 it 450554
+best 91587 it 450575
+best 91340 it 450668
+best 91250 it 450688
+best 91080 it 450693
+best 90997 it 451550
+best 90826 it 490752
+best 90732 it 490835
+best 90609 it 490841
+best 90584 it 491267
+best 90564 it 491273
+best 90503 it 491323
+best 90484 it 491399
+best 90363 it 495276
+best 90000 it 495434
+best 89769 it 495466
+best 89739 it 496907
+best 89579 it 496946
+best 89476 it 497104
+best 89338 it 497271
+best 89215 it 497389
+best 88953 it 497401
+best 87991 it 497930
+best 87837 it 497936
+best 87659 it 497953
+best 87547 it 498173
+best 87382 it 498176
+best 86890 it 498181
+best 86742 it 498715
+best 86713 it 499304
+best 86667 it 500024
+best 86629 it 500025
+best 86563 it 500226
+best 86510 it 500371
+best 86430 it 500374
+best 86285 it 500412
+best 86228 it 500442
+best 86004 it 509902
+best 85936 it 510030
+best 85774 it 510055
+best 85712 it 510132
+best 85680 it 535908
+best 85452 it 535935
+best 85366 it 535963
+best 85360 it 535986
+best 85273 it 549422
+best 85228 it 562139
+best 85151 it 562821
+best 85141 it 563277
+best 85086 it 567186
+best 85056 it 567194
+best 85015 it 567523
+best 85014 it 584087
+best 84939 it 585251
+best 84844 it 585479
+best 84832 it 601359
+best 84814 it 601387
+best 84811 it 613238
+best 84808 it 637095
+best 84806 it 637100
+FINAL 84806 iterations 679152
+[?2004hroot@669d565ab501:/app# for w in week-36 week-37 week-38; do echo "=== $w ==="; python3 /app/tools/check_schedule.py /app/weeks/$w.json /app/schedules/$w.json; done
+[?2004l=== week-36 ===
+feasible, cost 36101
+=== week-37 ===
+feasible, cost 52941
+=== week-38 ===
+feasible, cost 84806
+[?2004hroot@669d565ab501:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/optimize.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("starts=[construct(0,0),construct(0,1),construct(1,0),completion_construct(300)]\nS=min(starts,key=total)","""starts=[construct(0,0),construct(0,1),construct(1,0),completion_construct(300)]
+[?2004l[?2004h> base=os.path.basename(fn).removesuffix('.json')
+[?2004l[?2004h> oldfile='/app/schedules/'+base+'.json'
+[?2004l[?2004h> if os.path.exists(oldfile):
+[?2004l[?2004h>     od=json.load(open(oldfile))['presses']
+[?2004l[?2004h>     starts.append([[idx[x] for x in od.get(p['id'],[])] for p in P])
+[?2004l[?2004h> S=min(starts,key=total)""")
+[?2004l[?2004h> s=s.replace("if typ<.68:","if typ<.58:")
+[?2004l[?2004h> s=s.replace("elif typ<.93:","elif typ<.82:")
+[?2004l[?2004h> s=s.replace("    else:\n        a=random.randrange(m)\n        if len(S[a])<2:continue\n        i,k=sorted(random.sample(range(len(S[a])),2)); old=pcost(a,S[a]); S[a][i:k+1]=reversed(S[a][i:k+1]); new=pcost(a,S[a]); delta=new-old\n        undo=('rev',a,i,k)","""    elif typ<.94:
+[?2004l[?2004h>         a=random.randrange(m)
+[?2004l[?2004h>         if len(S[a])<2: continue
+[?2004l[?2004h>         L=random.randint(2,min(5,len(S[a]))); i=random.randrange(len(S[a])-L+1); block=S[a][i:i+L]
+[?2004l[?2004h>         choices=[q for q in range(m) if all(q in elig[x] for x in block)]
+[?2004l[?2004h>         b=random.choice(choices); oldseqA=S[a][:]; oldseqB=S[b][:]
+[?2004l[?2004h>         old=sum(pcost(q,S[q]) for q in {a,b})
+[?2004l[?2004h>         del S[a][i:i+L]; k=random.randrange(len(S[b])+1); S[b][k:k]=block
+[?2004l[?2004h>         new=sum(pcost(q,S[q]) for q in {a,b}); delta=new-old
+[?2004l[?2004h>         undo=('block',a,oldseqA,b,oldseqB)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         a=random.randrange(m)
+[?2004l[?2004h>         if len(S[a])<2:continue
+[?2004l[?2004h>         i,k=sorted(random.sample(range(len(S[a])),2)); old=pcost(a,S[a]); S[a][i:k+1]=reversed(S[a][i:k+1]); new=pcost(a,S[a]); delta=new-old
+[?2004l[?2004h>         undo=('rev',a,i,k)""")
+[?2004l[?2004h> s=s.replace("        elif undo[0]=='swap':\n            _,a,i,b,k=undo; S[a][i],S[b][k]=S[b][k],S[a][i]\n        else:","""        elif undo[0]=='swap':
+[?2004l[?2004h>             _,a,i,b,k=undo; S[a][i],S[b][k]=S[b][k],S[a][i]
+[?2004l[?2004h>         elif undo[0]=='block':
+[?2004l[?2004h>             _,a,sa,b,sb=undo; S[a]=sa
+[?2004l[?2004h>             if b!=a:S[b]=sb
+[?2004l[?2004h>         else:""")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@669d565ab501:/app# python3 -m py_compile /app/optimize.py && python3 /app/optimize.py /app/weeks/week-36.json 50 101
+[?2004linitial 36101
+best 36007 it 1183612
+best 35997 it 1183732
+best 35923 it 1200116
+best 35341 it 1200120
+best 34970 it 1211303
+best 34917 it 1211450
+best 34707 it 1211501
+best 34677 it 1211693
+best 34465 it 1211818
+best 34337 it 1221257
+best 34326 it 1290846
+best 34312 it 1350018
+best 34308 it 1351949
+best 34265 it 1414161
+best 34200 it 1424656
+best 34145 it 1467196
+best 34115 it 1467204
+best 34049 it 1467378
+best 33983 it 1484606
+FINAL 33983 iterations 1867813
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-36.json /app/schedules/week-36.json
+[?2004lfeasible, cost 33983
+[?2004hroot@669d565ab501:/app# python3 /app/optimize.py /app/weeks/week-37.json 55 202
+[?2004linitial 52941
+best 52924 it 1322819
+FINAL 52924 iterations 1369464
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-37.json /app/schedules/week-37.json
+[?2004lfeasible, cost 52924
+[?2004hroot@669d565ab501:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/optimize.py'; s=open(p).read()
+[?2004l[?2004h> s=s.replace("elif typ<.94:\n        a=random.randrange(m)","elif typ<.91:\n        a=random.randrange(m)")
+[?2004l[?2004h> s=s.replace("    else:\n        a=random.randrange(m)\n        if len(S[a])<2:continue\n        i,k=sorted(random.sample(range(len(S[a])),2)); old=pcost(a,S[a]); S[a][i:k+1]=reversed(S[a][i:k+1]); new=pcost(a,S[a]); delta=new-old\n        undo=('rev',a,i,k)","""    elif typ<.98:
+[?2004l[?2004h>         a,b=random.sample(range(m),2)
+[?2004l[?2004h>         if not S[a] or not S[b]: continue
+[?2004l[?2004h>         la=random.randint(1,min(4,len(S[a]))); lb=random.randint(1,min(4,len(S[b])))
+[?2004l[?2004h>         ia=random.randrange(len(S[a])-la+1); ib=random.randrange(len(S[b])-lb+1)
+[?2004l[?2004h>         ba=S[a][ia:ia+la]; bb=S[b][ib:ib+lb]
+[?2004l[?2004h>         if not all(b in elig[x] for x in ba) or not all(a in elig[x] for x in bb): continue
+[?2004l[?2004h>         sa=S[a][:]; sb=S[b][:]; old=pcost(a,S[a])+pcost(b,S[b])
+[?2004l[?2004h>         S[a][ia:ia+la]=bb; S[b][ib:ib+lb]=ba
+[?2004l[?2004h>         new=pcost(a,S[a])+pcost(b,S[b]); delta=new-old
+[?2004l[?2004h>         undo=('blockswap',a,sa,b,sb)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         a=random.randrange(m)
+[?2004l[?2004h>         if len(S[a])<2:continue
+[?2004l[?2004h>         i,k=sorted(random.sample(range(len(S[a])),2)); old=pcost(a,S[a]); S[a][i:k+1]=reversed(S[a][i:k+1]); new=pcost(a,S[a]); delta=new-old
+[?2004l[?2004h>         undo=('rev',a,i,k)""")
+[?2004l[?2004h> s=s.replace("        elif undo[0]=='block':\n            _,a,sa,b,sb=undo; S[a]=sa\n            if b!=a:S[b]=sb\n        else:","""        elif undo[0] in ('block','blockswap'):
+[?2004l[?2004h>             _,a,sa,b,sb=undo; S[a]=sa
+[?2004l[?2004h>             if b!=a:S[b]=sb
+[?2004l[?2004h>         else:""")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@669d565ab501:/app# python3 -m py_compile /app/optimize.py && python3 /app/optimize.py /app/weeks/week-37.json 58 303
+[?2004linitial 52924
+best 52611 it 1161668
+best 52585 it 1161941
+best 52333 it 1162035
+best 52267 it 1169416
+best 52225 it 1200014
+best 52195 it 1219267
+best 52164 it 1222658
+best 52157 it 1227069
+best 52104 it 1227110
+best 52064 it 1227111
+best 52054 it 1227146
+best 52022 it 1254612
+FINAL 52022 iterations 1495845
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-37.json /app/schedules/week-37.json
+[?2004lfeasible, cost 52022
+[?2004hroot@669d565ab501:/app# python3 /app/optimize.py /app/weeks/week-37.json 58 404
+[?2004linitial 52022
+FINAL 52022 iterations 1547891
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-37.json /app/schedules/week-37.json
+[?2004lfeasible, cost 52022
+[?2004hroot@669d565ab501:/app# cat > /app/descent.py <<'PY'
+[?2004l[?2004h> import json,sys,os,math,time
+[?2004l[?2004h> wf,sf=sys.argv[1:3]; limit=float(sys.argv[3])
+[?2004l[?2004h> d=json.load(open(wf)); sol=json.load(open(sf))['presses']; P=d['presses']; J=d['jobs']; setup=d['setup_minutes']; sc=d['setup_cost_per_minute']
+[?2004l[?2004h> ix={j['id']:i for i,j in enumerate(J)}; S=[[ix[x] for x in sol.get(p['id'],[])] for p in P]
+[?2004l[?2004h> elig=[[q for q,p in enumerate(P) if p['tonnage']>=j['tonnage']] for j in J]
+[?2004l[?2004h> def avoid(t,L,M):
+[?2004l[?2004h>  while 1:
+[?2004l[?2004h>   z=t
+[?2004l[?2004h>   for a,b in M:
+[?2004l[?2004h>    if t<b and t+L>a:z=max(z,b)
+[?2004l[?2004h>   if z==t:return t
+[?2004l[?2004h>   t=z
+[?2004l[?2004h> def cost(q,s):
+[?2004l[?2004h>  p=P[q];t=0;f=p['initial_family'];c=0
+[?2004l[?2004h>  for x in s:
+[?2004l[?2004h>   j=J[x]; u=setup[f][j['family']]; c+=sc*u;t=avoid(t,u,p['maintenance'])+u
+[?2004l[?2004h>   r=(j['strokes']+p['strokes_per_minute']-1)//p['strokes_per_minute'];t=avoid(max(t,j['release']),r,p['maintenance'])+r
+[?2004l[?2004h>   c+=max(0,t-j['due'])*j['weight'];f=j['family']
+[?2004l[?2004h>  return c
+[?2004l[?2004h> def total():return sum(cost(q,s) for q,s in enumerate(S))
+[?2004l[?2004h> end=time.time()+limit; cur=total(); print('start',cur,flush=True)
+[?2004l[?2004h> while time.time()<end:
+[?2004l[?2004h>  best=0; move=None; pc=[cost(q,S[q]) for q in range(len(P))]
+[?2004l[?2004h>  # Exhaustive relocations
+[?2004l[?2004h>  for a in range(len(P)):
+[?2004l[?2004h>   for i,x in enumerate(S[a]):
+[?2004l[?2004h>    for b in elig[x]:
+[?2004l[?2004h>     for k in range(len(S[b])+1):
+[?2004l[?2004h>      if a==b and (k==i or k==i+1):continue
+[?2004l[?2004h>      A=S[a][:];A.pop(i)
+[?2004l[?2004h>      kk=k-(a==b and k>i)
+[?2004l[?2004h>      if a==b:
+[?2004l[?2004h>       A.insert(kk,x); delta=cost(a,A)-pc[a]
+[?2004l[?2004h>      else:
+[?2004l[?2004h>       B=S[b][:];B.insert(k,x);delta=cost(a,A)+cost(b,B)-pc[a]-pc[b]
+[?2004l[?2004h>      if delta<best:best=delta;move=('r',a,i,b,k)
+[?2004l[?2004h>  # Exhaustive swaps if time allows
+[?2004l[?2004h>  for a in range(len(P)):
+[?2004l[?2004h>   for b in range(a,len(P)):
+[?2004l[?2004h>    for i,x in enumerate(S[a]):
+[?2004l[?2004h>     ks=range(i+1,len(S[b])) if a==b else range(len(S[b]))
+[?2004l[?2004h>     for k in ks:
+[?2004l[?2004h>      y=S[b][k]
+[?2004l[?2004h>      if b not in elig[x] or a not in elig[y]:continue
+[?2004l[?2004h>      A=S[a][:]; B=A if a==b else S[b][:];A[i],B[k]=y,x
+[?2004l[?2004h>      delta=(cost(a,A)-pc[a]) if a==b else cost(a,A)+cost(b,B)-pc[a]-pc[b]
+[?2004l[?2004h>      if delta<best:best=delta;move=('s',a,i,b,k)
+[?2004l[?2004h>  if not move:break
+[?2004l[?2004h>  if move[0]=='r':
+[?2004l[?2004h>   _,a,i,b,k=move;x=S[a].pop(i);k-=a==b and k>i;S[b].insert(k,x)
+[?2004l[?2004h>  else:
+[?2004l[?2004h>   _,a,i,b,k=move;S[a][i],S[b][k]=S[b][k],S[a][i]
+[?2004l[?2004h>  cur+=best;print(cur,best,move,flush=True)
+[?2004l[?2004h> out={'presses':{p['id']:[J[x]['id'] for x in S[q]] for q,p in enumerate(P)}};json.dump(out,open(sf,'w'),indent=2);print('FINAL',total())
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@669d565ab501:/app# python3 /app/descent.py /app/weeks/week-37.json /app/schedules/week-37.json 58
+[?2004lstart 52022
+FINAL 52022
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-37.json /app/schedules/week-37.json
+[?2004lfeasible, cost 52022
+[?2004hroot@669d565ab501:/app# cat > /app/report.py <<'PY'
+[?2004l[?2004h> import json,sys,math
+[?2004l[?2004h> w=json.load(open(sys.argv[1])); z=json.load(open(sys.argv[2]))['presses']; J={j['id']:j for j in w['jobs']}; sm=w['setup_minutes']; sc=w['setup_cost_per_minute']
+[?2004l[?2004h> def av(t,L,M):
+[?2004l[?2004h>  while 1:
+[?2004l[?2004h>   q=t
+[?2004l[?2004h>   for a,b in M:
+[?2004l[?2004h>    if t<b and t+L>a:q=max(q,b)
+[?2004l[?2004h>   if q==t:return t
+[?2004l[?2004h>   t=q
+[?2004l[?2004h> TS=TT=0
+[?2004l[?2004h> for p in w['presses']:
+[?2004l[?2004h>  t=0;f=p['initial_family'];su=ta=0; late=[]; ids=z.get(p['id'],[])
+[?2004l[?2004h>  for x in ids:
+[?2004l[?2004h>   j=J[x];u=sm[f][j['family']];su+=u;t=av(t,u,p['maintenance'])+u;r=math.ceil(j['strokes']/p['strokes_per_minute']);t=av(max(t,j['release']),r,p['maintenance'])+r
+[?2004l[?2004h>   v=max(0,t-j['due'])*j['weight'];ta+=v
+[?2004l[?2004h>   if v:late.append((x,j['family'],t-j['due'],j['weight'],v))
+[?2004l[?2004h>   f=j['family']
+[?2004l[?2004h>  TS+=su*sc;TT+=ta
+[?2004l[?2004h>  print(p['id'],'n',len(ids),'setup',su*sc,'tardy',ta,'end',t,'families',''.join(J[x]['family'] for x in ids))
+[?2004l[?2004h>  print(' late',late)
+[?2004l[?2004h> print('TOTAL setup',TS,'tardy',TT,'=',TS+TT)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@669d565ab501:/app# python3 /app/report.py /app/weeks/week-37.json /app/schedules/week-37.json
+[?2004lP1 n 25 setup 14400 tardy 0 end 2840 families DDDDCCCCCCCCCBBBBBBEEEEEE
+ late []
+P2 n 19 setup 12600 tardy 22 end 4626 families AAFFFFDDAAAAAAAAFFF
+ late [('J033', 'D', 22, 1, 22)]
+P3 n 10 setup 6000 tardy 0 end 3571 families EEEFFFFFFF
+ late []
+P4 n 4 setup 1600 tardy 0 end 2562 families DDDD
+ late []
+P5 n 6 setup 2400 tardy 0 end 3804 families FFFFFF
+ late []
+P6 n 21 setup 15000 tardy 0 end 4391 families BBBEEEEEECCCCCCBBEEEE
+ late []
+TOTAL setup 52000 tardy 22 = 52022
+[?2004hroot@669d565ab501:/app# cat > /app/blockdescent.py <<'PY'
+[?2004lest=delta;move=(a,i,v,b,k)
+ if move is None:break
+ a,i,v,b,k=move;block=S[a][i:v];del S[a][i:v]
+ if a==b:k-=v-i if k>v else 0
+ S[b][k:k]=block;cur+=best;print('best',cur,best,move,flush=True)
+out={'presses':{p['id']:[J[x]['id'] for x in S[q]] for q,p in enumerate(P)}};json.dump(out,open(sf,'w'),indent=2);print('FINAL',total())
+PY
+python3 /app/blockdescent.py /app/weeks/week-37.json /app/schedules/week-37.json 58
+[?2004h> exec(open('/app/descent.py').read().split("end=time.time()+limit")[0])
+[?2004l[?2004h> end=time.time()+limit;cur=total();print('start',cur,flush=True)
+[?2004l[?2004h> while time.time()<end:
+[?2004l[?2004h>  pc=[cost(q,S[q]) for q in range(len(P))];best=0;move=None
+[?2004l[?2004h>  for a in range(len(P)):
+[?2004l[?2004h>   # all same-family runs, plus bounded arbitrary segments
+[?2004l[?2004h>   seg=set()
+[?2004l[?2004h>   i=0
+[?2004l[?2004h>   while i<len(S[a]):
+[?2004l[?2004h>    k=i+1
+[?2004l[?2004h>    while k<len(S[a]) and J[S[a][k]]['family']==J[S[a][i]]['family']:k+=1
+[?2004l[?2004h>    for u in range(i,k):
+[?2004l[?2004h>     for v in range(u+1,k+1):seg.add((u,v))
+[?2004l[?2004h>    i=k
+[?2004l[?2004h>   for i in range(len(S[a])):
+[?2004l[?2004h>    for v in range(i+2,min(len(S[a]),i+12)+1):seg.add((i,v))
+[?2004l[?2004h>   for i,v in seg:
+[?2004l[?2004h>    block=S[a][i:v]
+[?2004l[?2004h>    for b in range(len(P)):
+[?2004l[?2004h>     if not all(b in elig[x] for x in block):continue
+[?2004l[?2004h>     for k in range(len(S[b])+1):
+[?2004l[?2004h>      if a==b and i<=k<=v:continue
+[?2004l[?2004h>      if a==b:
+[?2004l[?2004h>       A=S[a][:];del A[i:v];kk=k-(v-i if k>v else 0);A[kk:kk]=block;delta=cost(a,A)-pc[a]
+[?2004l[?2004h>      else:
+[?2004l[?2004h>       A=S[a][:];del A[i:v];B=S[b][:];B[k:k]=block;delta=cost(a,A)+cost(b,B)-pc[a]-pc[b]
+[?2004l[?2004h>      if delta<best:best=delta;move=(a,i,v,b,k)
+[?2004l[?2004h>  if move is None:break
+[?2004l[?2004h>  a,i,v,b,k=move;block=S[a][i:v];del S[a][i:v]
+[?2004l[?2004h>  if a==b:k-=v-i if k>v else 0
+[?2004l[?2004h>  S[b][k:k]=block;cur+=best;print('best',cur,best,move,flush=True)
+[?2004l[?2004h> out={'presses':{p['id']:[J[x]['id'] for x in S[q]] for q,p in enumerate(P)}};json.dump(out,open(sf,'w'),indent=2);print('FINAL',total())
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@669d565ab501:/app# python3 /app/blockdescent.py /app/weeks/week-37.json /app/schedules/week-37.json 58
+[?2004lstart 52022
+FINAL 52022
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-37.json /app/schedules/week-37.json; python3 /app/report.py /app/weeks/week-37.json /app/schedules/week-37.json | tail -3
+[?2004lfeasible, cost 52022
+P6 n 21 setup 15000 tardy 0 end 4391 families BBBEEEEEECCCCCCBBEEEE
+ late []
+TOTAL setup 52000 tardy 22 = 52022
+[?2004hroot@669d565ab501:/app# cp /app/optimize.py /app/optimize-hot.py && sed -i "s/T=30 + 3500\*(frac\*\*2)/T=20 + 12000*(frac**3)/; s/    if it%50000==0:/    if False:/" /app/optimize-hot.py && python3 -m py_compile /app/optimize-hot.py && python3 /app/optimize-hot.py /app/weeks/week-37.json 58 717
+[?2004linitial 52022
+best 52019 it 1161130
+best 51890 it 1162016
+best 51575 it 1162036
+best 51568 it 1162475
+best 51444 it 1162551
+best 51432 it 1162621
+best 51429 it 1163252
+best 51312 it 1164168
+best 51237 it 1164457
+best 51032 it 1166806
+best 51013 it 1166839
+best 50701 it 1166845
+best 50543 it 1167031
+best 50451 it 1167059
+best 50046 it 1169068
+best 50021 it 1169112
+best 49793 it 1169413
+best 49755 it 1178187
+best 49750 it 1178731
+best 49709 it 1179666
+best 49621 it 1179804
+best 49605 it 1179837
+best 49536 it 1183578
+best 49430 it 1185492
+best 49389 it 1185633
+best 49350 it 1185657
+best 49315 it 1351760
+best 49280 it 1365023
+best 49256 it 1374796
+best 49239 it 1478763
+FINAL 49239 iterations 1513396
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-37.json /app/schedules/week-37.json
+[?2004lfeasible, cost 49239
+[?2004hroot@669d565ab501:/app# python3 /app/optimize-hot.py /app/weeks/week-38.json 58 818
+[?2004linitial 84806
+FINAL 84806 iterations 1011764
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-38.json /app/schedules/week-38.json
+[?2004lfeasible, cost 84806
+[?2004hroot@669d565ab501:/app# python3 /app/report.py /app/weeks/week-38.json /app/schedules/week-38.json
+[?2004lP1 n 18 setup 7200 tardy 0 end 3752 families BBBBBBBBBBBBBBBBBB
+ late []
+P2 n 30 setup 18200 tardy 0 end 4699 families CAAAAAAACCCCDDDDDCCCCCCCCCCAAA
+ late []
+P3 n 16 setup 7800 tardy 0 end 3115 families AAAAAEEEEEEEEEEE
+ late []
+P4 n 11 setup 7400 tardy 0 end 1130 families FFFCCCCCCCC
+ late []
+P5 n 22 setup 13800 tardy 0 end 3509 families EEEEEEAAAAAAAAAAAAACDD
+ late []
+P6 n 21 setup 17200 tardy 6 end 4533 families FBBBEEEEFFFFFFBBBBBBB
+ late [('J041', 'B', 3, 2, 6)]
+P7 n 17 setup 9800 tardy 0 end 3198 families CCCDDDDDDDDFFFFFF
+ late []
+P8 n 5 setup 3400 tardy 0 end 3058 families EEEDD
+ late []
+TOTAL setup 84800 tardy 6 = 84806
+[?2004hroot@669d565ab501:/app# python3 /app/optimize-hot.py /app/weeks/week-38.json 150 919
+[?2004linitial 84806
+best 84805 it 1992037
+best 84798 it 1992173
+best 84730 it 1992524
+best 84665 it 1995689
+best 84650 it 1995827
+best 84601 it 2004803
+best 84578 it 2032527
+best 84541 it 2033141
+best 84518 it 2033474
+best 84510 it 2033977
+best 84420 it 2034077
+best 84409 it 2053020
+best 84332 it 2053988
+best 84331 it 2054625
+best 84323 it 2055821
+best 84273 it 2055836
+best 84108 it 2056079
+best 84004 it 2107768
+best 83779 it 2107930
+best 83388 it 2108028
+best 83328 it 2108043
+best 83310 it 2108331
+best 83296 it 2108940
+best 83271 it 2109450
+best 83269 it 2109502
+best 83229 it 2113380
+best 83199 it 2120272
+best 83163 it 2121016
+best 83150 it 2121091
+best 83102 it 2121125
+best 83061 it 2121278
+best 83058 it 2149593
+best 83051 it 2150386
+best 83049 it 2289986
+FINAL 83049 iterations 2543376
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-38.json /app/schedules/week-38.json
+[?2004lfeasible, cost 83049
+[?2004hroot@669d565ab501:/app# python3 /app/optimize-hot.py /app/weeks/week-38.json 150 1021
+[?2004linitial 83049
+best 83023 it 2158866
+best 83002 it 2300884
+best 82972 it 2300897
+best 82948 it 2340950
+best 82926 it 2340963
+FINAL 82926 iterations 2767726
+[?2004hroot@669d565ab501:/app# python3 /app/tools/check_schedule.py /app/weeks/week-38.json /app/schedules/week-38.json
+[?2004lfeasible, cost 82926
+[?2004hroot@669d565ab501:/app# 

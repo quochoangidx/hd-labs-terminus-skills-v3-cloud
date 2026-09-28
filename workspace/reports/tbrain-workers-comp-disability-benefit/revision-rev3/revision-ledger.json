@@ -1,0 +1,52 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-workers-comp-disability-benefit",
+ "report_path": "platform-report-v3.md",
+ "returned_snapshot_sha256": "25ad45d1287d30e6f4eed8d37767c839d57ae280d416a32335ac9c96ca5be19b",
+ "repaired_snapshot_sha256": "e6a7977bf16a68bb8caba1057232092100fc4da61c59eb7b5e03a87d349e1008",
+ "findings": [
+  {
+   "id": "F1",
+   "axis": "deterministic_execution",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Grading run-time drawn jobs against the verifier's model is kept (it answers the v2 sealed-corpus finding), but the seed no longer comes from the OS: DRAW_SEEDS = (5, 6, 31, 139), one job each, so every clean run grades the same four jobs. The fixed set is chosen to guarantee the panel's first flip case (a 40-row job: seed 5) and asserts it, plus a 1-row job.",
+   "reproduction": "repro-v3/de-flip-40-rows.json",
+   "closure": "closure-rev3/de-flip-40-rows.json",
+   "gate": {
+    "rule": "no verifier input may derive from OS entropy, time or unseeded RNG; any run-time draw uses fixed seeds and asserts the boundary cases it must include (blueprint determinism class; candidate for panel_precheck rule: grep tests/ for os.urandom/secrets/uuid4/random.seed() without literal)"
+   },
+   "changed_files": [
+    "tests/test_outputs.py",
+    "task.toml (verification_explanation)"
+   ],
+   "supporting_receipts": [
+    "repro-v3/de-os-entropy-draws.txt",
+    "closure-rev3/de-os-entropy-draws.txt"
+   ]
+  },
+  {
+   "id": "F2",
+   "axis": "deterministic_execution",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Same root cause as F1 (DRAW_SEED from os.urandom). Fixed seeds close it; seed 6 draws a rate row taking effect on 2016-01-02, the panel's second flip case, and the test asserts that row is present. The class sweep also fixed RELABEL_SEED (claim-number relabelling of the generated and limits jobs), which drew from os.urandom too, to 20260928.",
+   "reproduction": "repro-v3/de-flip-2016-01-02.json",
+   "closure": "closure-rev3/de-flip-2016-01-02.json",
+   "gate": {
+    "rule": "same class as F1: OS-entropy seeds in the verifier, including relabel/shuffle seeds"
+   },
+   "changed_files": [
+    "tests/test_outputs.py",
+    "task.toml (verification_explanation)"
+   ],
+   "supporting_receipts": [
+    "repro-v3/de-os-entropy-draws.txt",
+    "closure-rev3/de-os-entropy-draws.txt"
+   ]
+  }
+ ],
+ "previous_findings": []
+}

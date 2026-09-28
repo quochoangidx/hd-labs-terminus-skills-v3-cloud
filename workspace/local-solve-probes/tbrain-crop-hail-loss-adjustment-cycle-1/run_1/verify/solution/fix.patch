@@ -1,0 +1,101 @@
+diff -ruN a/app/src/hailadj/claim.py b/app/src/hailadj/claim.py
+--- a/app/src/hailadj/claim.py
++++ b/app/src/hailadj/claim.py
+@@ -5,6 +5,7 @@
+ from .figures import figure
+ from .plots import field_averages
+ from .replant import replant_line
++from .rounding import half_up
+ from .sheet import read_claim
+ 
+ 
+@@ -13,7 +14,7 @@
+ 
+     The liability is per_acre dollars times acres, given in tenths of an acre.
+     """
+-    return payable * per_acre * acres // 100
++    return half_up(payable * per_acre * acres, 100)
+ 
+ 
+ def field_statement(field):
+diff -ruN a/app/src/hailadj/figures.py b/app/src/hailadj/figures.py
+--- a/app/src/hailadj/figures.py
++++ b/app/src/hailadj/figures.py
+@@ -3,21 +3,23 @@
+ # Percentages in tenths of a per cent, money in cents.
+ FIGURES = {
+     "trace_tenths": 50,
+-    "deductible_tenths": 50,
++    "loss_floor_tenths": 80,
++    "deductible_tenths": 100,
+     "vanish_tenths": 200,
+     "replant_cents": 3000,
+     "small_cents": 2500,
++    "claim_floor_cents": 10000,
+ }
+ 
+ # Which figure each step of the package reads.
+ STEPS = {
+     "plot_trace": "trace_tenths",
+-    "minimum_loss": "trace_tenths",
++    "minimum_loss": "loss_floor_tenths",
+     "straight_deductible": "deductible_tenths",
+     "vanishing_start": "vanish_tenths",
+     "replant_rate": "replant_cents",
+     "replant_trace": "small_cents",
+-    "minimum_claim": "small_cents",
++    "minimum_claim": "claim_floor_cents",
+ }
+ 
+ 
+diff -ruN a/app/src/hailadj/leaf.py b/app/src/hailadj/leaf.py
+--- a/app/src/hailadj/leaf.py
++++ b/app/src/hailadj/leaf.py
+@@ -9,7 +9,7 @@
+     "V14": 35,
+     "VT": 100,
+     "R2": 75,
+-    "R4": 55,
++    "R4": 40,
+     "R5": 15,
+ }
+ 
+diff -ruN a/app/src/hailadj/loss.py b/app/src/hailadj/loss.py
+--- a/app/src/hailadj/loss.py
++++ b/app/src/hailadj/loss.py
+@@ -1,11 +1,12 @@
+ """Field loss, minimum loss and the deductible options."""
+ 
+ from .figures import figure
++from .rounding import half_up
+ 
+ 
+ def field_loss(stand, leaf):
+     """A field's loss from its stand loss and leaf loss, in tenths of a per cent."""
+-    return stand + leaf
++    return stand + half_up(leaf * (1000 - stand), 1000)
+ 
+ 
+ def payable_loss(loss, option):
+@@ -17,5 +18,5 @@
+     if option == "straight":
+         return max(0, loss - figure("straight_deductible"))
+     if option == "vanishing":
+-        return max(0, 2 * (loss - figure("vanishing_start")))
++        return min(loss, max(0, 2 * (loss - figure("vanishing_start"))))
+     raise ValueError(f"unknown deductible option {option!r}")
+diff -ruN a/app/src/hailadj/plots.py b/app/src/hailadj/plots.py
+--- a/app/src/hailadj/plots.py
++++ b/app/src/hailadj/plots.py
+@@ -20,10 +20,7 @@
+ 
+ def plot_average(figures):
+     """The average of a field's plot figures, in tenths of a per cent."""
+-    counted = [value for value in figures if value]
+-    if not counted:
+-        return 0
+-    return half_up(sum(counted), len(counted))
++    return half_up(sum(figures), len(figures))
+ 
+ 
+ def field_averages(plots):

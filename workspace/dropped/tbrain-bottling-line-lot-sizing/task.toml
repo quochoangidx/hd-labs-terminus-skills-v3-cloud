@@ -1,0 +1,32 @@
+artifacts = ["/app/plans/"]
+name = "tbrain-bottling-line-lot-sizing"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Operations"
+subcategory = "Supply chain"
+languages = ["python"]
+tags = ["lot-sizing", "production-planning", "manufacturing", "setup-times", "metaheuristics"]
+expert_time_estimate_hours = 6
+difficulty_explanation = "Each site is the twenty-day production plan a bottling plant's production planner draws up: 12-26 soft-drink and water products on three or four filling lines, each product allowed only on some lines at its own fill rate, with a changeover of 30-120 minutes and a cost every time a line runs a product on a day, line capacity that varies with maintenance and Sunday shutdowns, and day-by-day demand with promotions. Stock left over costs holding every day and demand not met costs backlog every day until it is filled. It is a capacitated lot-sizing problem with setup times on parallel machines: making a product in fewer, larger runs saves changeovers but fills capacity early and builds stock, spreading it thinly saves stock but burns capacity on changeovers, and where capacity is short the planner must decide which products to pre-build days ahead and which to leave late. A production planner in manufacturing has to search lot sizes, line choice and timing together, because each target is the cheapest plan found by hours of that search. The sites are synthetic but modelled on a regional bottler's product families, fill rates and changeover times."
+solution_explanation = "solution/search.py is the search that produced the reference plans: simulated annealing over the batches of each product on each line and day, keeping every line-day within capacity, with moves that shift batches to another day or line, merge two runs of a product to save a changeover, add or remove batches, and move a whole run to another day; the cost is updated one product at a time. Runs started from the shipped planner's plan and later from the cheapest plan so far, several seeds per site at starting temperatures near the size of a changeover cost, until restarts stopped improving. Each target is the cost of the cheapest plan seen. solve.sh copies the four saved plans and stops unless the checker reports each one valid within its target."
+verification_explanation = "The verifier reads the four plan files as JSON data and scores them with its own copy of the checker, sites and targets, so nothing the agent edits under /app affects grading and no candidate code runs. For each site one test checks that the plan is valid (standard JSON within the stated limits, runs naming a known day, line and product the line can fill, at least one batch per run, no duplicate day-line-product run, and every line-day within capacity counting each run's setup minutes) and one checks that its integer cost, setups plus daily holding and backlog, is at or below the target. The reference plans sit exactly on the targets; the shipped planner's plans are valid and above every target."
+relevant_experience = "Production planning in beverage manufacturing: capacitated lot sizing with setup times and costs on parallel filling lines, inventory and backlog trade-offs, and local-search and annealing methods for daily line plans."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 5400
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

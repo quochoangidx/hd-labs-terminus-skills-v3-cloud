@@ -1,0 +1,506 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-mobile-data-overage-billing",
+ "primary_outcome": "statements that follow tariff MD-2 for every account file within rule 1.2",
+ "obligations": [
+  {
+   "id": "USAGE",
+   "class": "core",
+   "contribution": "each session in whole megabytes, a part megabyte counting as a whole one",
+   "authority": {
+    "file": "environment/app/docs/data-usage-tariff.md",
+    "anchor": "Each session is measured on its own in whole megabytes"
+   },
+   "implementation_sites": [
+    "environment/app/src/usagebill/usage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "usage feeds the overage, the allowance feeds the overage, the overage feeds the charge, every charge feeds the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_1_sessions_in_whole_megabytes",
+     "test_outputs.py::test_generated_account_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a 1 kB session; 1,025 kB twice",
+   "wrong_but_plausible": "cycle kilobytes summed then floored (shipped); floored per session",
+   "selfdescription_phrase": "session"
+  },
+  {
+   "id": "ALLOWANCE",
+   "class": "core",
+   "contribution": "BASIC 2,048 MB, PLUS 10,240 MB",
+   "authority": {
+    "file": "environment/app/docs/data-usage-tariff.md",
+    "anchor": "The allowance of a BASIC line is 2,048"
+   },
+   "implementation_sites": [
+    "environment/app/src/usagebill/usage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "usage feeds the overage, the allowance feeds the overage, the overage feeds the charge, every charge feeds the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_2_plan_allowances",
+     "test_outputs.py::test_generated_account_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "2,049 and 10,241 MB",
+   "wrong_but_plausible": "5,120 MB for every plan (shipped)",
+   "selfdescription_phrase": "allowance"
+  },
+  {
+   "id": "LATER_RATE",
+   "class": "core",
+   "contribution": "rate for the first 1,024 MB of overage, 1 cent after",
+   "authority": {
+    "file": "environment/app/docs/data-usage-tariff.md",
+    "anchor": "1 cent for each megabyte of overage after those"
+   },
+   "implementation_sites": [
+    "environment/app/src/usagebill/charges.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "usage feeds the overage, the allowance feeds the overage, the overage feeds the charge, every charge feeds the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_one_cent_after_the_first_1024_mb",
+     "test_outputs.py::test_generated_account_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "overage 1,023, 1,024, 1,025 MB",
+   "wrong_but_plausible": "full rate on every megabyte (shipped); threshold at 1,000 or 1,025",
+   "selfdescription_phrase": "1 cent"
+  },
+  {
+   "id": "TOTAL",
+   "class": "core",
+   "contribution": "total is the sum of the charges; lines in file order",
+   "authority": {
+    "file": "environment/app/docs/data-usage-tariff.md",
+    "anchor": "A statement's total is the sum of its lines' charges"
+   },
+   "implementation_sites": [
+    "environment/app/src/usagebill/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "usage feeds the overage, the allowance feeds the overage, the overage feeds the charge, every charge feeds the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_total_and_line_order",
+     "test_outputs.py::test_generated_account_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "ids 0 and ZZZZZZZZZZ out of sort order",
+   "wrong_but_plausible": "lines sorted; total of positive charges only",
+   "selfdescription_phrase": "allowance"
+  },
+  {
+   "id": "FLEX_SILENT",
+   "class": "core",
+   "contribution": "FLEX line keeps today's 5,120 MB (silent)",
+   "authority": {
+    "file": "environment/app/docs/data-usage-tariff.md",
+    "anchor": "a plan is \"BASIC\", \"PLUS\" or \"FLEX\""
+   },
+   "implementation_sites": [
+    "environment/app/src/usagebill/usage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "usage feeds the overage, the allowance feeds the overage, the overage feeds the charge, every charge feeds the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_flex_line_keeps_todays_allowance",
+     "test_outputs.py::test_figures_left_to_todays_code_together"
+    ],
+    "boundary": [
+     "test_outputs.py::test_figures_left_to_todays_code_together"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "FLEX at 5,121 MB",
+   "wrong_but_plausible": "0 or 2,048 MB for FLEX",
+   "selfdescription_phrase": "FLEX"
+  },
+  {
+   "id": "IDLE_SILENT",
+   "class": "core",
+   "contribution": "a line inside its allowance keeps today's overage and charge, nought or a credit (silent)",
+   "authority": {
+    "file": "environment/app/docs/data-usage-tariff.md",
+    "anchor": "A line whose usage is more than its allowance is over its allowance"
+   },
+   "implementation_sites": [
+    "environment/app/src/usagebill/charges.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "usage feeds the overage, the allowance feeds the overage, the overage feeds the charge, every charge feeds the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_line_not_over_keeps_todays_overage_and_charge",
+     "test_outputs.py::test_figures_left_to_todays_code_together"
+    ],
+    "boundary": [
+     "test_outputs.py::test_figures_left_to_todays_code_together"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "no sessions; exactly on the allowance",
+   "wrong_but_plausible": "overage or charge clamped at nought",
+   "selfdescription_phrase": "allowance"
+  },
+  {
+   "id": "ACCOUNT",
+   "class": "core",
+   "contribution": "statement account returned as given, any string",
+   "authority": {
+    "file": "environment/app/README.md",
+    "anchor": "`account`, as given."
+   },
+   "implementation_sites": [
+    "environment/app/src/usagebill/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "usage feeds the overage, the allowance feeds the overage, the overage feeds the charge, every charge feeds the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_generated_account_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_generated_account_files"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "'a', '', 1,200 chars, edge spaces, quotes, non-ASCII",
+   "wrong_but_plausible": "upper/strip/truncate/ASCII-fold the name",
+   "selfdescription_phrase": "account"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "USAGE",
+    "to": "LATER_RATE"
+   },
+   {
+    "from": "ALLOWANCE",
+    "to": "LATER_RATE"
+   },
+   {
+    "from": "FLEX_SILENT",
+    "to": "LATER_RATE"
+   },
+   {
+    "from": "IDLE_SILENT",
+    "to": "TOTAL"
+   },
+   {
+    "from": "LATER_RATE",
+    "to": "TOTAL"
+   },
+   {
+    "from": "TOTAL",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ACCOUNT",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "silent-together",
+   "obligation_ids": [
+    "FLEX_SILENT",
+    "IDLE_SILENT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_figures_left_to_todays_code_together"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "rating-chain",
+   "obligation_ids": [
+    "USAGE",
+    "ALLOWANCE",
+    "LATER_RATE",
+    "TOTAL",
+    "ACCOUNT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_generated_account_files"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each rule holds for every account file within the limits of rule 1.2"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the tariff gives no rule for a figure that one of the package's steps works out",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/data-usage-tariff.md",
+     "anchor": "The allowance of a PLUS line is 10,240",
+     "witness_ids": [
+      "test_outputs.py::test_flex_line_keeps_todays_allowance",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    },
+    {
+     "file": "environment/app/docs/data-usage-tariff.md",
+     "anchor": "The charge of a line over its",
+     "witness_ids": [
+      "test_outputs.py::test_line_not_over_keeps_todays_overage_and_charge",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Account files of one to two hundred lines will be billed"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "RELABEL_SEED from os.urandom, printed on failure; any draw gives the same verdict for a correct package"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave that driver exactly as it is; the file you leave there has to match ours byte for byte",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness with a readable control",
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED)"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATEMENT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the billing team reads the statement in the README's shape, integers in megabytes and cents",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "## Statement"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "revision-v1/preflight.json",
+ "wrong_paths": [
+  {
+   "id": "clamp-charge",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "IDLE_SILENT"
+   ],
+   "receipt": "revision-v1/regression/clamp-charge.json"
+  },
+  {
+   "id": "clamp-overage",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "IDLE_SILENT"
+   ],
+   "receipt": "revision-v1/regression/clamp-overage.json"
+  },
+  {
+   "id": "flex-zero",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FLEX_SILENT"
+   ],
+   "receipt": "revision-v1/regression/flex-zero.json"
+  },
+  {
+   "id": "flex-2048",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FLEX_SILENT"
+   ],
+   "receipt": "revision-v1/regression/flex-2048.json"
+  },
+  {
+   "id": "later-after-1000",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "LATER_RATE"
+   ],
+   "receipt": "revision-v1/regression/later-after-1000.json"
+  },
+  {
+   "id": "later-after-1025",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "LATER_RATE"
+   ],
+   "receipt": "revision-v1/regression/later-after-1025.json"
+  },
+  {
+   "id": "session-floor",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "USAGE"
+   ],
+   "receipt": "revision-v1/regression/session-floor.json"
+  },
+  {
+   "id": "cycle-ceil",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "USAGE"
+   ],
+   "receipt": "revision-v1/regression/cycle-ceil.json"
+  },
+  {
+   "id": "revert-hunk-1",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "LATER_RATE"
+   ],
+   "receipt": "revision-v1/regression/revert-hunk-1.json"
+  },
+  {
+   "id": "revert-hunk-2",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ALLOWANCE"
+   ],
+   "receipt": "revision-v1/regression/revert-hunk-2.json"
+  },
+  {
+   "id": "s1-account-lower",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s1-account-lower.json"
+  },
+  {
+   "id": "s2-account-strip",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s2-account-strip.json"
+  },
+  {
+   "id": "s3-account-trunc-32",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s3-account-trunc-32.json"
+  },
+  {
+   "id": "s4-account-ascii-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s4-account-ascii-only.json"
+  },
+  {
+   "id": "s5-account-empty-default",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s5-account-empty-default.json"
+  },
+  {
+   "id": "s6-account-quotes-dropped",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s6-account-quotes-dropped.json"
+  },
+  {
+   "id": "s7-account-space-collapsed",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s7-account-space-collapsed.json"
+  },
+  {
+   "id": "s8-account-title",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACCOUNT"
+   ],
+   "receipt": "revision-v1/closure/s8-account-title.json"
+  },
+  {
+   "id": "f1-account-upper",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "revision-v1/closure/f1-account-upper.json"
+  },
+  {
+   "id": "lines-sorted",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TOTAL"
+   ],
+   "receipt": "revision-v1/regression/lines-sorted.json"
+  }
+ ],
+ "task_snapshot_sha256": "4e91dd88e749c5645d70f7da42c9243d37ad4569b38e43305aca33668c8f0181"
+}

@@ -1,0 +1,374 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "c1-code-stripped": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "\"rep\": rep[\"rep\"],",
+     "new": "\"rep\": rep[\"rep\"].strip(),"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "README: the rep code, as given"
+  },
+  "c2-value-capped-1e8": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/commission/bookings.py",
+     "old": "total += rep_share(value, split)",
+     "new": "total += rep_share(min(value, 10**8), split)"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: order values up to 1,000,000,000"
+  },
+  "c2-owed-capped-1e7": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/commission/payout.py",
+     "old": "    if total < draw:\n",
+     "new": "    owed = min(owed, 10**7)\n    if total < draw:\n"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: owed balance up to 100,000,000"
+  },
+  "c3-orders-capped-256": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/commission/bookings.py",
+     "old": "for booked, value, split, first in orders:",
+     "new": "for booked, value, split, first in orders[:256]:"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: 300 orders"
+  },
+  "c3-credits-capped-64": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/commission/clawback.py",
+     "old": "for raised, booked, amount, split in credits:",
+     "new": "for raised, booked, amount, split in credits[:64]:"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.5: 100 credit notes"
+  },
+  "c3-quota-floored-1e6": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/commission/commission.py",
+     "old": "    low, mid, top = bands(bookings, quota)\n",
+     "new": "    low, mid, top = bands(bookings, max(quota, 10**6))\n"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: quota from 100,000"
+  },
+  "c3-draw-capped-1e6": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/commission/payout.py",
+     "old": "    if total < draw:\n",
+     "new": "    draw = min(draw, 10**6)\n    if total < draw:\n"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: draw up to 10,000,000"
+  },
+  "c4-carried-ignored-below-100": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "total = earned + bonus_cents + rep[\"carried\"] - taken",
+     "new": "total = earned + bonus_cents + (rep[\"carried\"] if rep[\"carried\"] >= 100 else 0) - taken"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_7_4_minimum_payment"
+   ],
+   "rationale": "1.3: carried from 0, every small value counts"
+  },
+  "c5-reps-capped-50": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "for rep in job[\"reps\"]]",
+     "new": "for rep in job[\"reps\"][:50]]"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: 60 reps"
+  },
+  "c6-code-cut-8": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "\"rep\": rep[\"rep\"],",
+     "new": "\"rep\": rep[\"rep\"][:8],"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "1.3: codes up to 16 characters"
+  },
+  "c7-bookings-int32": {
+   "class": "C7",
+   "edits": [
+    {
+     "file": "app/src/commission/bookings.py",
+     "old": "    return total\n",
+     "new": "    return total & 0xFFFFFFFF\n"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "bookings to 3 x 10^11"
+  },
+  "c8-half-down": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/money.py",
+     "old": "(2 * amount * bp + 10000) // 20000",
+     "new": "(2 * amount * bp + 9999) // 20000"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_2_bookings_take_the_reps_split"
+   ],
+   "rationale": "1.1: an exact half cent goes up"
+  },
+  "c8-reversal-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/clawback.py",
+     "old": "if amount >= REVERSAL_CENTS",
+     "new": "if amount > REVERSAL_CENTS"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_3_credit_note_of_exactly_50000"
+   ],
+   "rationale": "2.3: 50,000 cents or more"
+  },
+  "c8-new-logo-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/bonus.py",
+     "old": "if value < NEW_LOGO_CENTS and",
+     "new": "if value <= NEW_LOGO_CENTS and"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_4_first_order_of_exactly_250000"
+   ],
+   "rationale": "2.4: 250,000 cents or more"
+  },
+  "c8-age-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/clawback.py",
+     "old": "if days_between(booked, raised) > limit:",
+     "new": "if days_between(booked, raised) >= limit:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_1_reversal_ages_120_and_121"
+   ],
+   "rationale": "5.1: 120 days or less"
+  },
+  "c8-minimum-inclusive": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/payout.py",
+     "old": "due < figure(\"minimum_payment\")",
+     "new": "due <= figure(\"minimum_payment\")"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_7_4_due_of_24999_and_25000"
+   ],
+   "rationale": "7.4: 25,000 cents or more is paid"
+  },
+  "c8-negative-total-floored": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "    recovered, owed, paid, carried = payout(total, rep[\"draw\"], rep[\"owed\"])\n",
+     "new": "    total = max(total, 0)\n    recovered, owed, paid, carried = payout(total, rep[\"draw\"], rep[\"owed\"])\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_7_2_total_below_nought"
+   ],
+   "rationale": "7.1/7.2: a total below nought stands and is owed"
+  },
+  "c8-first-day-excluded": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/bookings.py",
+     "old": "if in_quarter(parse_day(booked), quarter):",
+     "new": "if in_quarter(parse_day(booked), quarter) and parse_day(booked).day != 1:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_1_orders_on_the_quarter_edges"
+   ],
+   "rationale": "1.2: a quarter includes its first day"
+  },
+  "c10-quota-constant": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/src/commission/commission.py",
+     "old": "    low, mid, top = bands(bookings, quota)\n",
+     "new": "    low, mid, top = bands(bookings, 10**7)\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_accelerators_apply_to_the_part_above_quota"
+   ],
+   "rationale": "the quota varies per rep"
+  },
+  "c15-sorted-by-code": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "for rep in job[\"reps\"]]",
+     "new": "for rep in sorted(job[\"reps\"], key=lambda r: r[\"rep\"])]"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "README: job order"
+  },
+  "c16-total-float": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "\"total\": total,",
+     "new": "\"total\": float(total),"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_7_4_minimum_payment"
+   ],
+   "rationale": "README: every value but rep an integer"
+  },
+  "c16-paid-bool-zero": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "\"paid\": paid,",
+     "new": "\"paid\": paid if paid else False,"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_7_4_minimum_payment"
+   ],
+   "rationale": "a boolean is not an integer"
+  },
+  "c8-bands-retroactive-inclusive": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/commission/commission.py",
+     "old": "    low, mid, top = bands(bookings, quota)\n    return (share_of(low, figure(\"band_rate\")) + share_of(mid, figure(\"above_quota_rate\"))\n            + share_of(top, figure(\"top_rate\")))\n",
+     "new": "    rate = figure(\"top_rate\") if bookings >= 2 * quota else figure(\"above_quota_rate\") if bookings >= quota else figure(\"band_rate\")\n    return share_of(bookings, rate)\n"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_bookings_on_the_quota_and_twice_the_quota"
+   ],
+   "rationale": "4.1: bookings exactly on the quota earn 800 bp throughout; the edge case of a band-reached reading"
+  }
+ },
+ "alternatives": {
+  "alt-module-constants": {
+   "edits": [
+    {
+     "file": "app/src/commission/figures.py",
+     "old": "    \"minimum_payment\": \"payment_cents\",",
+     "new": "    \"minimum_payment\": \"small_cents\","
+    },
+    {
+     "file": "app/src/commission/payout.py",
+     "old": "if draw == 0 and due < figure(\"minimum_payment\"):",
+     "new": "if draw == 0 and due < 25000:"
+    },
+    {
+     "file": "app/src/commission/clawback.py",
+     "old": "limit = figure(\"reversal_age\") if amount >= REVERSAL_CENTS else figure(\"clawback_age\")",
+     "new": "limit = 120 if amount >= 50000 else figure(\"clawback_age\")"
+    },
+    {
+     "file": "app/src/commission/bonus.py",
+     "old": "        if value < NEW_LOGO_CENTS and credit < figure(\"bonus_floor\"):\n            lines.append(0)\n        else:\n            lines.append(share_of(credit, figure(\"bonus_rate\")))\n",
+     "new": "        if value >= 250000:\n            lines.append(share_of(credit, 300))\n        elif credit < figure(\"bonus_floor\"):\n            lines.append(0)\n        else:\n            lines.append(share_of(credit, figure(\"bonus_rate\")))\n"
+    }
+   ],
+   "rationale": "the plan's figures as literals in the modules, the shared table left as shipped"
+  },
+  "alt-forked-branches": {
+   "edits": [
+    {
+     "file": "app/src/commission/clawback.py",
+     "old": "        limit = figure(\"reversal_age\") if amount >= REVERSAL_CENTS else figure(\"clawback_age\")\n        if days_between(booked, raised) > limit:\n            lines.append(0)\n            continue\n        lines.append(share_of(rep_share(amount, split), figure(\"clawback_rate\")))\n",
+     "new": "        age = days_between(booked, raised)\n        if amount >= REVERSAL_CENTS:\n            lines.append(share_of(rep_share(amount, split), 800) if age <= 120 else 0)\n        elif age > figure(\"clawback_age\"):\n            lines.append(0)\n        else:\n            lines.append(share_of(rep_share(amount, split), figure(\"clawback_rate\")))\n"
+    },
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "    return {\n        \"rep\"",
+     "new": "    return dict(reversed(list({\n        \"rep\""
+    },
+    {
+     "file": "app/src/commission/statement.py",
+     "old": "        \"carried\": carried,\n    }\n",
+     "new": "        \"carried\": carried,\n    }.items())))\n"
+    }
+   ],
+   "rationale": "a forked clawback with the reversal rule written beside today's step, and statement keys in reverse order (key order is not graded)"
+  }
+ }
+}

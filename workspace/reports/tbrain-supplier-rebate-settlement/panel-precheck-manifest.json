@@ -1,0 +1,558 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-supplier-rebate-settlement",
+ "primary_outcome": "the statements printed by /app/tools/rebate_run.py give every account's purchases, returns, net purchases, rebate rate and volume rebate, growth bonus, price protection, chargebacks, settlement, paid and carried amounts as Schedule R edition R-4 gives them",
+ "obligations": [
+  {
+   "id": "QUARTER_CREDIT",
+   "class": "core",
+   "contribution": "a carton shipment (12 units or more) counts toward the quarter it is received in, the fourth day after its invoice; a smaller line keeps the export's date (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "A carton shipment counts toward the quarter in which the distributor"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/ledger.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides the purchases, hence the net, tier, rebate and growth bonus"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_carton_shipment_counts_by_receipt",
+     "test_outputs.py::test_loose_units_keep_their_invoice_quarter"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_line_of_exactly_12_units_is_a_carton",
+     "test_outputs.py::test_loose_units_keep_their_invoice_quarter"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "carton lines invoiced in the last four days before each quarter edge; separately loose-unit lines on the same days",
+   "wrong_but_plausible": "invoice date for every line (shipped); shift every line four days (minimal natural fix of 3.1)",
+   "selfdescription_phrase": "quarter a line counts"
+  },
+  {
+   "id": "RETURNS",
+   "class": "core",
+   "contribution": "returns of the quarter credited at value less 40 cents a unit",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "credited at its value less a handling charge of 40 cents a unit"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/returns.py",
+    "environment/app/src/rebate/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "returns make the net purchases"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_returns_less_40_cents_a_unit"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_3_returns_on_the_quarter_edges"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "returns in and just outside the quarter",
+   "wrong_but_plausible": "25 cents a unit (shipped)",
+   "selfdescription_phrase": "returns credited"
+  },
+  {
+   "id": "TIER",
+   "class": "core",
+   "contribution": "the tier reached by net purchases, at or above its threshold; below nought none",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "The tier an amount reaches is the last row of the tier table whose"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/tiers.py",
+    "environment/app/src/rebate/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the rate makes the volume rebate"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_5_tier_is_picked_on_net_purchases"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_6_net_exactly_on_a_threshold",
+     "test_outputs.py::test_rule_2_6_net_below_nought_reaches_no_tier"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "heavy returns taking net below a threshold gross passes; net exactly on a threshold",
+   "wrong_but_plausible": "gross purchases; strict comparison (shipped)",
+   "selfdescription_phrase": "rebate rate"
+  },
+  {
+   "id": "REBATE",
+   "class": "core",
+   "contribution": "the rebate rate in basis points of net purchases, rounded to the cent half up",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "The volume rebate is the rebate rate, in basis points, of the net"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/tiers.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "adds to the settlement"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_6_volume_rebate_rounded_half_up"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_6_volume_rebate_rounded_half_up"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "net x bp leaving every remainder, exact halves included",
+   "wrong_but_plausible": "truncation (shipped)",
+   "selfdescription_phrase": "volume rebate"
+  },
+  {
+   "id": "GROWTH",
+   "class": "core",
+   "contribution": "200 bp of the increase over last year's positive net purchases, at 110 per cent or more",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "earns a growth bonus of 200"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/growth.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "adds to the settlement"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_growth_bonus_on_the_increase"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_growth_exactly_110_per_cent",
+     "test_outputs.py::test_rule_4_1_no_prior_purchases_no_bonus"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "growth of exactly 110 per cent and far above; prior nought and one cent",
+   "wrong_but_plausible": "200 bp of all net purchases (shipped)",
+   "selfdescription_phrase": "growth bonus"
+  },
+  {
+   "id": "PROTECTION",
+   "class": "core",
+   "contribution": "a price drop (a cut of 250 cents or more) in the quarter earns cut x on hand; a tidy-up notice keeps today's step, the credit dropped below today's 5,000 cents (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "A price drop that takes effect in the account's quarter earns a credit of"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/protection.py",
+    "environment/app/src/rebate/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "adds to the settlement"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_1_price_drop_earns_cut_times_on_hand",
+     "test_outputs.py::test_tidy_up_notices_keep_todays_credit"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_cut_of_exactly_250_cents_is_a_price_drop",
+     "test_outputs.py::test_tidy_up_notices_keep_todays_credit"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "tidy-up notices whose credit is below 5,000, from 5,000 to 24,999 and above 25,000 cents",
+   "wrong_but_plausible": "editing the shared MINIMUM_CREDIT to 25,000 (minimal natural fix of 6.2); no credit for a tidy-up; guard removed",
+   "selfdescription_phrase": "price protection"
+  },
+  {
+   "id": "CHARGEBACK",
+   "class": "core",
+   "contribution": "a contract sale (100 cents or more below cost) in the quarter earns the amount below cost x units; a price-match sale keeps today's step, skipped below today's 25 cents a unit (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "A contract sale made in the account's quarter earns a chargeback of the"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/chargeback.py",
+    "environment/app/src/rebate/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "adds to the settlement"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_2_contract_sale_chargeback",
+     "test_outputs.py::test_price_match_sales_keep_todays_chargeback"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_5_sale_exactly_100_cents_under_cost_is_a_contract_sale",
+     "test_outputs.py::test_price_match_sales_keep_todays_chargeback"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "price-match sales 25 to 39 cents and 1 to 99 cents under cost",
+   "wrong_but_plausible": "editing the shared HANDLING_PER_UNIT to 40 (minimal natural fix of 3.3); no chargeback for a price-match sale",
+   "selfdescription_phrase": "chargebacks"
+  },
+  {
+   "id": "SETTLEMENT",
+   "class": "core",
+   "contribution": "the sum; paid in full at 25,000 cents or more, otherwise carried whole",
+   "authority": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "A settlement of 25,000 cents or more is paid in full"
+   },
+   "implementation_sites": [
+    "environment/app/src/rebate/settle.py",
+    "environment/app/src/rebate/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the primary outcome's paid and carried figures"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_2_minimum_settlement"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_2_settlement_of_exactly_25000_cents"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "settlements of 5,000 to 24,999 cents and exactly 25,000",
+   "wrong_but_plausible": "5,000 cents (shipped)",
+   "selfdescription_phrase": "settlement"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "QUARTER_CREDIT",
+    "to": "TIER"
+   },
+   {
+    "from": "RETURNS",
+    "to": "TIER"
+   },
+   {
+    "from": "TIER",
+    "to": "REBATE"
+   },
+   {
+    "from": "QUARTER_CREDIT",
+    "to": "GROWTH"
+   },
+   {
+    "from": "RETURNS",
+    "to": "GROWTH"
+   },
+   {
+    "from": "REBATE",
+    "to": "SETTLEMENT"
+   },
+   {
+    "from": "GROWTH",
+    "to": "SETTLEMENT"
+   },
+   {
+    "from": "PROTECTION",
+    "to": "SETTLEMENT"
+   },
+   {
+    "from": "CHARGEBACK",
+    "to": "SETTLEMENT"
+   },
+   {
+    "from": "SETTLEMENT",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "received-purchases-make-the-tier",
+   "obligation_ids": [
+    "QUARTER_CREDIT",
+    "RETURNS",
+    "TIER"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_1_carton_shipment_counts_by_receipt",
+    "test_outputs.py::test_rule_3_5_tier_is_picked_on_net_purchases"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "net-sets-rebate-and-growth",
+   "obligation_ids": [
+    "TIER",
+    "REBATE",
+    "GROWTH"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_6_volume_rebate_rounded_half_up",
+    "test_outputs.py::test_rule_4_1_growth_bonus_on_the_increase"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "shared-figures-cross-files",
+   "obligation_ids": [
+    "SETTLEMENT",
+    "PROTECTION",
+    "RETURNS",
+    "CHARGEBACK"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_tidy_up_notices_keep_todays_credit",
+    "test_outputs.py::test_price_match_sales_keep_todays_chargeback",
+    "test_outputs.py::test_rule_6_2_minimum_settlement"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "each rule of the schedule holds for every job inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Take each rule of the schedule as far as its words reach and stop there",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/rebate-schedule.md",
+     "anchor": "carton, the supplier sends them by courier",
+     "witness_ids": [
+      "test_outputs.py::test_loose_units_keep_their_invoice_quarter"
+     ]
+    },
+    {
+     "file": "environment/app/docs/rebate-schedule.md",
+     "anchor": "supplier's price file carries tidy-ups of a few cents to a couple of dollars a",
+     "witness_ids": [
+      "test_outputs.py::test_tidy_up_notices_keep_todays_credit"
+     ]
+    },
+    {
+     "file": "environment/app/docs/rebate-schedule.md",
+     "anchor": "counter sales where a clerk matched a competitor's price",
+     "witness_ids": [
+      "test_outputs.py::test_price_match_sales_keep_todays_chargeback"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The jobs we run hold one to a hundred accounts"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED=20260928 (authoring only; graded jobs are sealed files)",
+   "tests/test_outputs.py RELABEL_SEED = 20260928 (sealed constant): fresh account codes and orders for the generated and limits jobs, a relabelling that leaves every figure unchanged; printed with any failure"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave /app/tools/rebate_run.py exactly as it is",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED), before and after candidate code",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness with a verifier-made readable control",
+  "test_outputs.py::test_generated_jobs": "seeded trap-free jobs over the governed section 1 domain, also relabelled at run time",
+  "test_outputs.py::test_section_one_limits_reached": "section 1 ends and derived extremes (trap-free)",
+  "test_outputs.py::test_statement_order_and_keys": "README layout: job order, codes as given, exactly twelve keys, integer figures",
+  "test_outputs.py::test_rule_4_1_no_prior_purchases_no_bonus": "GROWTH boundary: prior of nought and one cent",
+  "test_outputs.py::test_rule_3_3_returns_on_the_quarter_edges": "RETURNS boundary"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATEMENT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the settlement system reads these keys in job order; README fixes them",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "in the order of the job's"
+   }
+  },
+  {
+   "id": "CENT-ROUNDING",
+   "domain_required": true,
+   "rationale": "settlements are paid in whole cents; 1.1 fixes nearest cent, half up",
+   "authority_anchor": {
+    "file": "environment/app/docs/rebate-schedule.md",
+    "anchor": "rounded to the nearest"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "W01-invoice-date-for-every-line",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "QUARTER_CREDIT"
+   ],
+   "receipt": "wrong-paths/W01-invoice-date-for-every-line.json"
+  },
+  {
+   "id": "W02-tier-on-gross",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIER"
+   ],
+   "receipt": "wrong-paths/W02-tier-on-gross.json"
+  },
+  {
+   "id": "W03-strict-threshold",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIER"
+   ],
+   "receipt": "wrong-paths/W03-strict-threshold.json"
+  },
+  {
+   "id": "W04-handling-25",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "RETURNS"
+   ],
+   "receipt": "wrong-paths/W04-handling-25.json"
+  },
+  {
+   "id": "W05-bonus-on-all-net",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "GROWTH"
+   ],
+   "receipt": "wrong-paths/W05-bonus-on-all-net.json"
+  },
+  {
+   "id": "W06-minimum-5000",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SETTLEMENT"
+   ],
+   "receipt": "wrong-paths/W06-minimum-5000.json"
+  },
+  {
+   "id": "W07-rebate-truncated",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "REBATE"
+   ],
+   "receipt": "wrong-paths/W07-rebate-truncated.json"
+  },
+  {
+   "id": "W08-shared-small-credit-edited",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "PROTECTION",
+    "SETTLEMENT"
+   ],
+   "receipt": "wrong-paths/W08-shared-small-credit-edited.json"
+  },
+  {
+   "id": "W09-no-credit-for-tidy-ups",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "PROTECTION"
+   ],
+   "receipt": "wrong-paths/W09-no-credit-for-tidy-ups.json"
+  },
+  {
+   "id": "W10-notice-cutoff-removed",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "PROTECTION"
+   ],
+   "receipt": "wrong-paths/W10-notice-cutoff-removed.json"
+  },
+  {
+   "id": "W11-shared-unit-handling-edited",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CHARGEBACK",
+    "RETURNS"
+   ],
+   "receipt": "wrong-paths/W11-shared-unit-handling-edited.json"
+  },
+  {
+   "id": "W12-no-chargeback-for-price-match",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CHARGEBACK"
+   ],
+   "receipt": "wrong-paths/W12-no-chargeback-for-price-match.json"
+  },
+  {
+   "id": "W13-shift-every-line",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "QUARTER_CREDIT"
+   ],
+   "receipt": "wrong-paths/W13-shift-every-line.json"
+  },
+  {
+   "id": "W14-drop-loose-lines",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "QUARTER_CREDIT"
+   ],
+   "receipt": "wrong-paths/W14-drop-loose-lines.json"
+  },
+  {
+   "id": "H01-driver-tampered",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H01-driver-tampered.json"
+  },
+  {
+   "id": "H02-read-sealed-expectations",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H02-read-sealed-expectations.json"
+  }
+ ],
+ "task_snapshot_sha256": "33427b0611748d4739c00adfda98a885acba9c321e2dc2c21f2783b6eea4e514"
+}

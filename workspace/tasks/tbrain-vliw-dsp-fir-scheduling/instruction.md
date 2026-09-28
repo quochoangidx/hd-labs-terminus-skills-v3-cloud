@@ -1,0 +1,7 @@
+The 16-tap FIR kernel for our KESTREL-16 filter DSP, `/app/kernel/fir16.s`, is correct but far too slow for the new sample rate. Rewrite it so that it is still correct and finishes within `8N + 64` cycles for every block size `N` that is a multiple of 16 from 16 to 4096. The machine is described in `/app/docs/kestrel-isa.md`, and the assembler and cycle-accurate simulator in `/app/kestrel/` are its definition; `/app/tools/run_fir.py` shows how the kernel is run.
+
+The kernel computes `y[n] = (h[0]*x[n] + h[1]*x[n+1] + ... + h[15]*x[n+15]) >> 15` for `n` from 0 to N-1, with an arithmetic shift, keeping the low 32 bits. The samples `x[0]` to `x[N+15]` and the coefficients `h[0]` to `h[15]` are any signed 16-bit values, packed two to a word with the even-indexed value in the low half: word `i` at address `0x1000 + i` holds `x[2i]` and `x[2i+1]`, and word `k` at `0x0100 + k` holds `h[2k]` and `h[2k+1]`. `y[n]` is written as one word at `0x4000 + n`.
+
+On entry `r0` holds N, `a0` = `0x1000`, `a1` = `0x0100`, `a2` = `0x4000`, and every other register and accumulator is zero. The kernel ends with `halt`. Besides `y`, it may write only to addresses `0x3F00`-`0x3FFF` and `0x8000`-`0xFFFF`, and it must leave `x` and `h` unchanged.
+
+It will be run on the task's simulator for many block sizes across the whole range, with random, extreme and small inputs, and checked for every output value, the cycle count and the memory it leaves behind.

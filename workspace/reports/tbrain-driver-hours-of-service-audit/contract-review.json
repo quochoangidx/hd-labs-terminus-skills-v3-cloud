@@ -1,0 +1,81 @@
+{
+  "reviewer_turn": "contract_review",
+  "visibility": "task/instruction.md, task/environment/** and _docs/solver_path_screen.md only; shipped package executed on copies in the scratchpad; an independent minute-by-minute reference was written from FM-4 alone to derive the witnesses",
+  "findings": [
+    {
+      "id": "CR-1",
+      "severity": "blocking",
+      "location": "whole design (instruction + environment/app/docs/hours-manual.md + src/hoslog)",
+      "issue": "The solver-path screen scores self_verification_resistance 2. The task is a list of departures, each written out in the manual: 11h to 10h, 70h/8-day to 60h/7-day, yard moves counted as driving, shift start at first on-duty minute instead of first driving, break defined as rest only, window measured on the clock, violation minutes put on their own day, floor instead of round for time left, and window time left measured on the clock. The one silent-keep region (time left below nought keeps round()) is named outright in the instruction, so one sentence disarms it. Under the screen's threshold, a score of 2 at contract review means stop and redesign the core before writing the verifier. I cannot name a restraint trap or blind spot that I scored too low.",
+      "evidence": "A complete reference written from FM-4 alone took about 60 lines (scratchpad work/ref.py) and matched a hand derivation on every witness. Every graded figure is a closed-form or per-minute count that the manual defines in full. Platform calibration: departure-list designs with no unlabelled trap went 30 of 30 on Opus 5.5.",
+      "suggested_fix": "Redesign once, before any verifier exists. Add at least two independent traps of different kinds that pass the 0/8 screen: silent sub-domains inside an aggregate the solver must rebuild, reachable only through a chain of definitions rather than a labelled sentence. Example: a shipped behaviour for a value the manual leaves undefined, sitting inside the same per-minute loop as a defect. Or, better, drop the explicit 'below nought' carve-out from the instruction and let it follow from 1.5 plus the generic silence clause, so the solver must derive that the sign branch keeps round(). Recheck that fairness still holds after the change."
+    },
+    {
+      "id": "CR-2",
+      "severity": "should_fix",
+      "location": "instruction.md paragraph 2, sentences 3-4 ('For such a value, keeping today's calculation takes precedence over the rest of this paragraph; every other step it passes through still follows the manual.')",
+      "issue": "It is unclear how far 'today's calculation' reaches. A careful reader can take it as the whole shipped time_left for that value: the 11h/70h constants, on-duty 'used' for the window, the shift start at first driving. Another reader takes it as only the minutes-to-hours conversion (round(m/60,1)) applied to manual-correct minutes. The second half of the sentence points to the second reading, but 'takes precedence over the rest of this paragraph' (which includes 'worked from the figures the manual does define') points the other way.",
+      "evidence": "w6: 601 driving minutes gives -1 minute left. Conversion-only reading: -0.0. Floor reading: -0.1. Whole-shipped-calculation reading: 1.0 (11h limit). All three can be defended from the text.",
+      "suggested_fix": "Name the step. For example: 'For such a value, the minutes left are worked as the manual says, and only their conversion to hours keeps the calculation the code makes today, even though that needs a check the manual does not call for.' Keep it at that level so the rounding function is not spelled out."
+    },
+    {
+      "id": "CR-3",
+      "severity": "polish",
+      "location": "instruction.md paragraph 1, symptom list ('Drivers who took proper breaks come out in violation')",
+      "issue": "This symptom does not match the shipped behaviour. The shipped break rule accepts on-duty-not-driving as a break, which makes it more lenient. Across 6000 fuzzed logs the shipped package never reported more 3.3 minutes than FM-4 does. The only over-report was 3.4, caused by the 8-day/70h cycle.",
+      "evidence": "work/ fuzz: shipped total > reference total happened only for 3.4 (91 of about 3000 logs), never for 3.1, 3.2 or 3.3.",
+      "suggested_fix": "Reword to something the code actually does, e.g. 'drivers well inside the weekly cycle come out in violation' or 'drivers who worked through a break on duty come out clean'."
+    },
+    {
+      "id": "CR-4",
+      "severity": "polish",
+      "location": "instruction.md last paragraph ('time left is compared as a number')",
+      "issue": "It does not say whether 'as a number' means exact float equality or a tolerance. It also does not say whether -0.0 is acceptable, which round() produces for -1 and -2 minutes.",
+      "evidence": "round(-1/60,1) == -0.0. json.dump prints -0.0. floor(m/6)/10 and floor(m/60*10)/10 agree for m in 0..3600, so there is no float hazard on the non-negative side.",
+      "suggested_fix": "State 'compared numerically (so -0.0 equals 0)', or give an explicit tolerance smaller than 0.05."
+    },
+    {
+      "id": "CR-5",
+      "severity": "polish",
+      "location": "hours-manual.md 2.2 together with README miles sentence",
+      "issue": "On a team truck, a co-driver in `on` status (on-duty passenger) whose stretch shows the truck's miles counts as driving under 2.2 read literally. The rule is decidable, since there is no team flag and the rule is keyed on the `on` status plus miles of 1 or more per stretch. Domain instinct pulls the other way, though, and the instruction lists team trucks in its coverage envelope.",
+      "evidence": "README: miles is 'the distance the truck covered while the entry was in force, whoever was at the wheel'. 2.2: 'Time in the on status during a stretch in which the truck covers one mile or more is driving time'.",
+      "suggested_fix": "If this is intended, keep it and make sure the verifier's team cases use only off/sleeper with miles, or `on` with miles counted as driving, consistently. If it is not intended, restrict the rule. No contract change is needed if intended."
+    }
+  ],
+  "witnesses": [
+    {"id": "W1", "input": "examples/two-day-log.json", "expected": {"days": [{"day":1,"driving":630,"on_duty":705,"violations":{"3.1":30,"3.2":0,"3.3":0,"3.4":0}},{"day":2,"driving":510,"on_duty":540,"violations":{"3.1":0,"3.2":0,"3.3":30,"3.4":0}}], "left": {"driving":1.5,"window":5.0,"cycle":4.5}}, "shipped": {"left":{"driving":2.5,"window":5.5,"cycle":14.6},"day1_3.1":0}, "derivation": "Shift 1 starts at 330 (on, 2.4). Driving 255+240+135 = 630, so the last 30 minutes are past 10h (3.1). The 45-min off at 615 is a break; 375 driving minutes since then, under 8h. The on stretch at 900 has 0.4 mi, so it is not a yard move. The off+sleeper run 1080-1800 is 720 min, a reset. Shift 2 starts at 1800 (on, not the 1830 driving). 510 driving minutes; 3.3 is past 8h from 2310 = 30 min. Left: 600-510 = 90 min = 1.5 h; 840-(2340-1800) = 300 min = 5.0 h; 3600-(recap[1..6] 2080 + 705 + 540) = 275 min = 4.58, floor 4.5."},
+    {"id": "W2", "input": "end 300; on@0 miles 1, on@60 miles 0.99, on@120 miles 0.6, on@150 miles 0.6, driving@180", "expected": {"driving":180,"on_duty":300,"left":{"driving":7.0,"window":9.0,"cycle":55.0}}, "derivation": "2.2 is judged per stretch. 1 mile is a yard move (60 min). 0.99 is not. Two adjacent 0.6-mile stretches are not merged (1.1 'That span is a stretch'). Driving is 60+120 = 180. Window runs on the clock from 0. Boundary: the 1-mile threshold and per-stretch judgement."},
+    {"id": "W3", "input": "end 1200; driving 0-480, off 480-495, sleeper 495-510, driving 510-570, on 570-600, driving 600-1200", "expected": {"violations":{"3.1":540,"3.2":360,"3.3":180,"3.4":0},"left":{"driving":-9.0,"window":-6.0,"cycle":40.5}}, "derivation": "A 15 off + 15 sleeper run is a 30-min rest period, so it is a break (2.3/2.5, exact boundary). The 30 min on-duty at 570 is not a break. 3.3 counts driving since 510: 60 + 420 reaches 480 at 1020, so 1020-1199 = 180. 3.1 passes 600 at 660, so 540. 3.2 is on the clock from 0: t >= 840 gives 360. Negative left keeps round(): -540/60 = -9.0 and -360/60 = -6.0."},
+    {"id": "W3b", "input": "as W3 but sleeper ends at 509 (rest run 29 min)", "expected": {"violations":{"3.1":541,"3.2":360,"3.3":661}}, "derivation": "A 29-min rest is not a break, so every driving minute after 480 of the shift's driving is past 3.3: 61+600 = 661. This is the one-minute-short boundary."},
+    {"id": "W4", "input": "end 2400; off 0-1380, on 1380 (23:00), driving 1440-1740, off 1740-1800, driving 1800-2100, sleeper 2100-2160, driving 2160-2280, off", "expected": {"days":[{"day":1,"driving":0,"on_duty":60},{"day":2,"driving":720,"on_duty":720,"violations":{"3.1":120,"3.2":60,"3.3":0,"3.4":0}}],"left":{"driving":-2.0,"window":-3.0,"cycle":47.0}}, "shipped": {"day2_3.1":60,"day2_3.2":0,"left":{"window":2.0}}, "derivation": "The shift begins on day 1 at 1380 (on-duty, 2.4) and crosses midnight. The window closes at 2220, so driving 2220-2279 gives 60 violation minutes, counted on day 2 where they fall (4.1). 3.1 passes 600 driving at 2160, giving 120. Breaks at 1740 and 2100 keep 3.3 at 0. Window left 840-1020 = -180 = -3.0 via round()."},
+    {"id": "W5", "input": "end 420; recap [1440,550,550,550,550,550,550]; driving 0-360, off", "expected": {"violations":{"3.4":60},"left":{"driving":4.0,"window":7.0,"cycle":-1.0}}, "derivation": "The cycle total at minute t on day 1 is recap[1..6] = 3300 (recap[0] is the 7th day back and drops out under 60h/7-day) plus t. It reaches 3600 at t=300, so 300-359 = 60 violation minutes (>= in 3.4). Cycle left 3600-3660 = -60 = -1.0. Shipped gives 360 and -15.0."},
+    {"id": "W6", "input": "end 700; driving 0-601, off", "expected": {"violations":{"3.1":1,"3.3":121},"left":{"driving":-0.0,"window":2.3,"cycle":49.9}}, "derivation": "Silent region. Driving left is -1 minute, below nought (1.5), so the shipped conversion round(-1/60,1) = -0.0 (numerically 0) is kept. Floor would give -0.1, which is wrong. Window 840-700 = 140 min = 2.33, floor 2.3. Cycle 3600-601 = 2999 = 49.98, floor 49.9 (round would give 50.0). This witness is undetermined under the CR-2 reading dispute: -0.0, -0.1 or 1.0."},
+    {"id": "W7", "input": "end 1500; on 0-60, driving 60-360, off 360-1500", "expected": {"days":[{"day":1,"driving":300,"on_duty":360},{"day":2,"driving":0,"on_duty":0}],"left":{"driving":5.0,"window":-11.0,"cycle":54.0}}, "derivation": "The log ends in a completed reset (1140 min of rest). The latest shift that began before end is still the one from 0 (5.1), so the window is 840-1500 = -660 = -11.0 via round(). Silent region: no clamp to 0 and no reset of the window."},
+    {"id": "W8", "input": "end 3000; off 0-100, driving 100-200, off 200-799 (599), driving 799-900, sleeper 900-1500 (600), on 1500, driving 1530-3000", "expected": {"days":[{"day":1,"driving":201},{"day":2,"driving":1350,"on_duty":1380,"violations":{"3.1":750,"3.2":540,"3.3":870}},{"day":3,"driving":120,"violations":{"3.1":120,"3.2":120,"3.3":120}}],"left":{"driving":-14.5,"window":-11.0,"cycle":31.6}}, "derivation": "Rest at minute 0 continues the pre-log reset (1.3). 599 min is not a reset. Exactly 600 is a reset, so shift 2 starts at 1500 (on). Driving past 600 from 2130 and window closing at 2340 are counted per day, and day 3 gets its own minutes (the shipped code puts them all on day 2)."},
+    {"id": "W9", "input": "end 900; on 0-30, off 30-90 miles 25 (personal conveyance), sleeper 90-600 miles 480 (team berth), driving 600-900", "expected": {"days":[{"day":1,"driving":300,"on_duty":330,"violations":{"3.1":0,"3.2":60,"3.3":0,"3.4":0}}],"left":{"driving":5.0,"window":-1.0,"cycle":54.5}}, "derivation": "Only `on` with miles >= 1 becomes driving (2.2). off/sleeper with miles are rest (2.1). The 570-min rest run is not a reset, so the shift from 0 continues. The window is on the clock, so driving at 840-899 is past it. Restraint: a solver that keys yard moves on miles alone breaks this."}
+  ],
+  "solver_path_screen": {
+    "pre_mortem": "A strong solver lists how FM-4 differs from the code, one rule at a time: constants (10h, 60h/7d), is_driving plus yard moves, breaks as rest-only runs of 30 min or more, shift start at first on-duty, window on the clock (t - start >= 840), violations on the minute's own day, window time left on the clock, floor to a tenth. It writes a per-minute forward reference straight from sections 2-5, which is about 60 lines (this reviewer's took minutes), and differential-fuzzes the patched package against it, with extra focus on the boundaries the instruction lists (599/600, 29/30, exactly 10h/14h/60h, midnight crossings). The instruction states the negative-time-left carve-out outright, so the solver adds `if minutes < 0: round(...) else floor` and self-checks it with one negative case. Remaining places to slip: reading CR-2 the other way (keeping 11h/70h for negative values), merging adjacent `on` stretches before the 1-mile test, or keying yard moves on miles alone (W9). All three are ruled out by explicit sentences. Expected: both solvers pass.",
+    "scores": {
+      "reference_unreachable": 2,
+      "authority_incomplete_for_grading": 1,
+      "hidden_state_not_closed_form": 2,
+      "restraint_traps": 2,
+      "fuzz_blind_spot": 2
+    },
+    "score_notes": {
+      "reference_unreachable": "No stdlib or standard computes it and federal HOS differs, but the manual is a complete, directly executable spec.",
+      "authority_incomplete_for_grading": "Every graded figure is set by FM-4 except negative time left, which the instruction names explicitly.",
+      "hidden_state_not_closed_form": "Per-minute counters (shift driving, since-break, today on-duty) are stateful but simple, with no coupling beyond the rule text.",
+      "restraint_traps": "One labelled carve-out (negative left keeps round) that an instruction sentence disarms; per the screen it counts as roughly zero. Minor keep-shipped sites (status-keyed rest with miles, per-stretch yard-move test) are written into rule sentences and also count as zero.",
+      "fuzz_blind_spot": "The graded boundaries are listed in the instruction's coverage paragraph and are natural targets for fuzzing. The -1/-2 and -7..-9 minute rounding split is found by any solver that tests near zero."
+    },
+    "self_verification_resistance": 2,
+    "prediction": "collapses",
+    "confidence": "high",
+    "decisive_reason": "FM-4 fully determines every graded figure and the only silent-keep region is announced in the instruction, so a from-manual reference plus differential fuzzing converges without any inference self-testing cannot confirm."
+  },
+  "overall": "reject",
+  "overall_note": "The contract is fair and nearly complete (fix CR-2; CR-3 and CR-4 are polish), but the solver-path screen scores 2 with no underscored trap to name, so per the contract-review threshold: stop and redesign the causal core before any verifier is written (one redesign allowed). This is a difficulty stop, not a fairness rejection."
+}

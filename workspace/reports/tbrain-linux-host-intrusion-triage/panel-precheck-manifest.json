@@ -1,0 +1,496 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-linux-host-intrusion-triage",
+ "primary_outcome": "the JSON incident report /app/triage.py writes for an evidence directory equals the report case-guide.md gives (initial access, sources, accounts, privilege escalation, persistence, first and last activity)",
+ "obligations": [
+  {
+   "id": "TIMELINE",
+   "class": "core",
+   "contribution": "place every host-clock time in UTC: local syslog/dpkg time at the collection offset, year inferred back from the collection across a December->January rotation, +N for everything before the clock step",
+   "authority": {
+    "file": "environment/app/docs/case-guide.md",
+    "anchor": "may have run behind by a fixed amount"
+   },
+   "implementation_sites": [
+    "environment/app/triage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every reported time and every window test (sessions, sudo attribution, ctime) runs on this timeline"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_1_local_offsets_convert_to_utc"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_host_clock_error_is_corrected_in_every_source",
+     "test_outputs.py::test_rule_1_year_is_placed_across_new_year",
+     "test_outputs.py::test_range_ends_low",
+     "test_outputs.py::test_range_ends_high",
+     "test_outputs.py::test_range_ends_late_year"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "attack in late December collected in January; a step of 30-7200 s after initial access; offsets -12:00..+14:00 incl. :30/:45",
+   "wrong_but_plausible": "collection year for every line; ignore the step or apply it to auth.log only; local time as UTC; always add the correction",
+   "selfdescription_phrase": "year of an auth-log line"
+  },
+  {
+   "id": "INITIAL_ACCESS",
+   "class": "core",
+   "contribution": "hostile = five btmp failures within 600 s; initial access = earliest wtmp login from a hostile address",
+   "authority": {
+    "file": "environment/app/docs/case-guide.md",
+    "anchor": "The team calls an address hostile"
+   },
+   "implementation_sites": [
+    "environment/app/triage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the initial login seeds the attacker address/account fixed point and first activity"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_case_1_visible_collection"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_hostile_address_five_failures_within_600_seconds",
+     "test_outputs.py::test_rule_2_btmp_keeps_failures_rotated_out_of_auth_log"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "admin key login before the attack; a mistyping user with five failures over 601 s then success; brute force of exactly five in 600 s; scanners that never succeed; oldest failures rotated out of auth.log",
+   "wrong_but_plausible": "first successful login; any address with five failures; strict <600; counting auth.log failures",
+   "selfdescription_phrase": "initial access"
+  },
+  {
+   "id": "ATTRIBUTION",
+   "class": "core",
+   "contribution": "attacker keys (fingerprints of keys in attacker accounts' histories), attacker logins/addresses/accounts to a fixed point",
+   "authority": {
+    "file": "environment/app/docs/case-guide.md",
+    "anchor": "The credentials that tie are the keys the"
+   },
+   "implementation_sites": [
+    "environment/app/triage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides sources, accounts, the session windows that persistence, escalation and activity are measured in"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_planted_key_ties_a_second_address"
+    ],
+    "boundary": [
+     "test_outputs.py::test_broad_hosts"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "later publickey login from a second address with the planted key; admin's own key added in the admin's history",
+   "wrong_but_plausible": "ignore key logins from other addresses; take keys from every history",
+   "selfdescription_phrase": "attacker key"
+  },
+  {
+   "id": "ESCALATION",
+   "class": "core",
+   "contribution": "first sudo to root on a TTY whose open session is an attacker session (or an attacker root login)",
+   "authority": {
+    "file": "environment/app/docs/case-guide.md",
+    "anchor": "is the first time the intruder acted as root"
+   },
+   "implementation_sites": [
+    "environment/app/triage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "adds root to the attacker accounts, which adds root's history (keys, stamped commands)"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_escalation_is_on_the_intruder_terminal"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_escalation_by_a_root_login_without_sudo"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "the account owner and an admin run sudo on other ptys while the attacker is logged in, before the attacker's first sudo",
+   "wrong_but_plausible": "first sudo by the compromised account after initial access",
+   "selfdescription_phrase": "privilege escalation"
+  },
+  {
+   "id": "PERSISTENCE",
+   "class": "core",
+   "contribution": "class paths whose ctime (not mtime) lies in an attacker session, minus paths a package wrote at its install time",
+   "authority": {
+    "file": "environment/app/docs/case-guide.md",
+    "anchor": "whose ctime falls while"
+   },
+   "implementation_sites": [
+    "environment/app/triage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "persistence ctimes feed last activity; attacker keys file is both persistence and the key-login link"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_persistence_by_ctime_and_not_package_writes"
+    ],
+    "boundary": [
+     "test_outputs.py::test_range_ends_low",
+     "test_outputs.py::test_range_ends_high"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "attacker file with mtime forged years back; admin file with mtime in the window and ctime outside; a package installing a cron.d file during the attacker session",
+   "wrong_but_plausible": "select by mtime; all class paths with ctime in window",
+   "selfdescription_phrase": "persistence"
+  },
+  {
+   "id": "ACTIVITY",
+   "class": "core",
+   "contribution": "earliest and latest attacker event over failures, logins, logouts, sudo, persistence ctimes and in-session stamped history",
+   "authority": {
+    "file": "environment/app/docs/case-guide.md",
+    "anchor": "are the earliest and latest of the intruder's"
+   },
+   "implementation_sites": [
+    "environment/app/triage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "aggregates every other obligation's events on one timeline"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_7_activity_with_a_session_still_open"
+    ],
+    "boundary": [
+     "test_outputs.py::test_broad_hosts"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "probing failures days before the burst; the last session still open with stamped root commands",
+   "wrong_but_plausible": "first activity = initial access; last = last logout",
+   "selfdescription_phrase": "first and last attacker activity"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "INITIAL_ACCESS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ATTRIBUTION",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ESCALATION",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "PERSISTENCE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ACTIVITY",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "TIMELINE",
+    "to": "INITIAL_ACCESS"
+   },
+   {
+    "from": "TIMELINE",
+    "to": "ESCALATION"
+   },
+   {
+    "from": "TIMELINE",
+    "to": "PERSISTENCE"
+   },
+   {
+    "from": "TIMELINE",
+    "to": "ACTIVITY"
+   },
+   {
+    "from": "INITIAL_ACCESS",
+    "to": "ATTRIBUTION"
+   },
+   {
+    "from": "ATTRIBUTION",
+    "to": "ESCALATION"
+   },
+   {
+    "from": "ESCALATION",
+    "to": "ATTRIBUTION"
+   },
+   {
+    "from": "ATTRIBUTION",
+    "to": "PERSISTENCE"
+   },
+   {
+    "from": "PERSISTENCE",
+    "to": "ACTIVITY"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "timeline-windows",
+   "obligation_ids": [
+    "TIMELINE",
+    "ESCALATION",
+    "PERSISTENCE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_1_host_clock_error_is_corrected_in_every_source"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "key-escalation-fixed-point",
+   "obligation_ids": [
+    "ATTRIBUTION",
+    "ESCALATION",
+    "INITIAL_ACCESS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_planted_key_ties_a_second_address"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "activity-aggregate",
+   "obligation_ids": [
+    "ACTIVITY",
+    "PERSISTENCE",
+    "TIMELINE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_7_activity_with_a_session_still_open"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Every rule in the guide holds for every such directory"
+  },
+  "silence": {
+   "file": "environment/app/docs/case-guide.md",
+   "anchor": "Every evidence directory records exactly one intrusion by one",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The other hosts differ in everything the guide lets vary"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/seal.py SEED_BASE 5000000, sealed; verifier draws nothing"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "list fields compared as sets; tests pinned by name"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_candidate_cannot_read_verifier_files": "harness isolation check (protected ground truth), not a report rule"
+ },
+ "removed_obligations": [
+  {
+   "id": "BACKWARD_STEP",
+   "reason": "rescope E2 (clearance CRS-C Minor): a host clock that ran ahead and was set back makes host times overlap; month-end steps, collector-settled logins in the overlap and rotation interactions multiplied reference obligations without adding to the causal core, so rule 1 is narrowed to a clock that ran behind and was set forward",
+   "former_anchor": {
+    "file": "environment/app/docs/case-guide.md",
+    "anchor": "may have been wrong by a fixed amount"
+   }
+  }
+ ],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SHAPE",
+   "domain_required": true,
+   "rationale": "the report is consumed by the team's case tooling; keys and the UTC time format are fixed",
+   "authority_anchor": {
+    "file": "environment/app/docs/report.md",
+    "anchor": "writes one JSON object with exactly these keys"
+   }
+  },
+  {
+   "id": "UTC-FORMAT",
+   "domain_required": true,
+   "rationale": "times compared as strings",
+   "authority_anchor": {
+    "file": "environment/app/docs/report.md",
+    "anchor": "Every time is UTC, written `YYYY-MM-DDTHH:MM:SSZ`"
+   }
+  }
+ ],
+ "documented_exceptions": [
+  {
+   "row": "closure.silence",
+   "reason": "from-scratch analyzer, not a repair: no shipped behaviour to keep. contract-closure \u00a71: a from-scratch task declares the domain it grades and grades nothing outside it; the anchor is that domain declaration and named_cases is empty."
+  },
+  {
+   "row": "support obligations",
+   "reason": "record parsing and JSON serialization are written by the solver (no supplied package), so no support row can be implementation_complete; folded into the core obligations whose evidence they read; formats fully specified in record-formats.md."
+  },
+  {
+   "row": "evidence packing",
+   "reason": "graded evidence sets (auth logs, binary wtmp/btmp, listings) are ~315 KB; they are sealed as tests/evidence/<family>.tar.gz (binary, outside the panel text budget) while every expected report and each case's range facts stay plain JSONL under tests/expected; ROSTER pins both."
+  },
+  {
+   "row": "wrong-path source",
+   "reason": "from-scratch analyzer: no solution/fix.patch; wrong paths are whole-deliverable patches of environment/app/triage.py (stub -> wrong analyzer) scored by reports/.../tools/score.sh, the same separate verifier image the harness uses."
+  },
+  {
+   "row": "restrictions",
+   "reason": "'Use only the Python standard library' and 'must not depend on anything in /app/evidence' are enforced by the harness itself rather than by a test that could fail: every run is python3 -I -S (no site-packages) in a verifier image whose /app holds only triage.py and docs (no /app/evidence). A submission breaking either cannot produce a report there, so it fails every family test."
+  }
+ ],
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "no_year_rollover",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIMELINE"
+   ],
+   "receipt": "wrong-paths/no_year_rollover.json"
+  },
+  {
+   "id": "ignore_clock_step",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIMELINE"
+   ],
+   "receipt": "wrong-paths/ignore_clock_step.json"
+  },
+  {
+   "id": "step_on_authlog_only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIMELINE"
+   ],
+   "receipt": "wrong-paths/step_on_authlog_only.json"
+  },
+  {
+   "id": "local_time_as_utc",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIMELINE"
+   ],
+   "receipt": "wrong-paths/local_time_as_utc.json"
+  },
+  {
+   "id": "hostile_strict_600",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "INITIAL_ACCESS"
+   ],
+   "receipt": "wrong-paths/hostile_strict_600.json"
+  },
+  {
+   "id": "hostile_any_five",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "INITIAL_ACCESS"
+   ],
+   "receipt": "wrong-paths/hostile_any_five.json"
+  },
+  {
+   "id": "failures_from_authlog",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "INITIAL_ACCESS"
+   ],
+   "receipt": "wrong-paths/failures_from_authlog.json"
+  },
+  {
+   "id": "first_success_is_initial",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "INITIAL_ACCESS"
+   ],
+   "receipt": "wrong-paths/first_success_is_initial.json"
+  },
+  {
+   "id": "keys_from_every_history",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ATTRIBUTION"
+   ],
+   "receipt": "wrong-paths/keys_from_every_history.json"
+  },
+  {
+   "id": "sudo_by_account",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ESCALATION"
+   ],
+   "receipt": "wrong-paths/sudo_by_account.json"
+  },
+  {
+   "id": "trust_mtime",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "PERSISTENCE"
+   ],
+   "receipt": "wrong-paths/trust_mtime.json"
+  },
+  {
+   "id": "no_package_exception",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "PERSISTENCE"
+   ],
+   "receipt": "wrong-paths/no_package_exception.json"
+  },
+  {
+   "id": "harness-bypass",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/harness-bypass.json"
+  },
+  {
+   "id": "c4-open-session-end-is-event",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ACTIVITY"
+   ],
+   "receipt": "sweep/c4-open-session-end-is-event.json"
+  },
+  {
+   "id": "always_add_correction",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TIMELINE"
+   ],
+   "receipt": "wrong-paths/always_add_correction.json"
+  },
+  {
+   "id": "drop_root_login_branch",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ESCALATION"
+   ],
+   "receipt": "wrong-paths/drop_root_login_branch.json"
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "task_snapshot_sha256": "766a90e9346efdbfb8b88b8d9b703e946d5a7eabebd56986063868dd22482d07"
+}

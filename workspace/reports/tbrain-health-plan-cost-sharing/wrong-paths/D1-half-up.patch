@@ -1,0 +1,79 @@
+diff --git a/app/src/costshare/adjudicator.py b/app/src/costshare/adjudicator.py
+--- a/app/src/costshare/adjudicator.py
++++ b/app/src/costshare/adjudicator.py
+@@ -38,30 +38,39 @@
+         self.ledger = Ledger(plan)
+ 
+     def deductible_left(self, member: str) -> int:
+-        return self.plan.deductible - self.ledger.deductible_paid(member)
++        left = self.plan.deductible - self.ledger.deductible_paid(member)
++        if self.plan.family_deductible > 0:
++            left = min(left, self.plan.family_deductible - self.ledger.family_deductible_paid())
++        return left
+ 
+     def adjudicate(self, line: Line) -> Result:
+         plan = self.plan
+         deductible = copay = coinsurance = 0
++        if line.kind == "preventive":
++            return Result(line.allowed, 0, 0, 0)
+         if line.kind == "office":
+             copay = plan.office_copay
+-            coinsurance = share(line.allowed - copay, plan.coinsurance)
++            if 0 < line.allowed < copay:
++                copay = line.allowed
+         else:
+             deductible = min(line.allowed, self.deductible_left(line.member))
+-            coinsurance = share(line.allowed, plan.coinsurance)
+-        charged_deductible = deductible
++            coinsurance = share(line.allowed - deductible, plan.coinsurance)
+ 
++        rooms = []
+         if plan.oop_max > 0:
+-            room = plan.oop_max - self.ledger.oop_paid(line.member)
+-            excess = deductible + copay + coinsurance - room
++            rooms.append(plan.oop_max - self.ledger.oop_paid(line.member))
++        if plan.family_oop_max > 0:
++            rooms.append(plan.family_oop_max - self.ledger.family_oop_paid())
++        if rooms:
++            excess = deductible + copay + coinsurance - min(rooms)
+             if excess > 0:
+-                take = min(deductible, excess)
+-                deductible -= take
++                take = max(0, min(coinsurance, excess))
++                coinsurance -= take
+                 excess -= take
+-                take = min(copay, excess)
++                take = max(0, min(copay, excess))
+                 copay -= take
+                 excess -= take
+-                coinsurance -= min(coinsurance, excess)
++                deductible -= max(0, min(deductible, excess))
+ 
+-        self.ledger.record(line.member, charged_deductible, copay, coinsurance)
++        self.ledger.record(line.member, deductible, copay, coinsurance)
+         return Result(line.allowed, deductible, copay, coinsurance)
+diff --git a/app/src/costshare/ledger.py b/app/src/costshare/ledger.py
+--- a/app/src/costshare/ledger.py
++++ b/app/src/costshare/ledger.py
+@@ -32,4 +32,7 @@
+         self._deductible[member] += deductible
+         self._family_deductible += deductible
+         self._oop[member] += deductible + copay + coinsurance
+-        self._family_oop += deductible + coinsurance
++        if self.plan.family_oop_max > 0:
++            self._family_oop += deductible + copay + coinsurance
++        else:
++            self._family_oop += deductible + coinsurance
+diff --git a/app/src/costshare/money.py b/app/src/costshare/money.py
+--- a/app/src/costshare/money.py
++++ b/app/src/costshare/money.py
+@@ -5,4 +5,9 @@
+ 
+ def share(amount: int, rate: int) -> int:
+     """The share of ``amount`` cents at ``rate`` basis points, in whole cents."""
++    if False:
++        whole, rest = divmod(amount * rate, BASIS)
++        if 2 * rest > BASIS or (2 * rest == BASIS and whole % 2):
++            whole += 1
++        return whole
+     return (amount * rate + BASIS // 2) // BASIS

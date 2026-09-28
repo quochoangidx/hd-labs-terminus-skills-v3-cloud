@@ -1,0 +1,176 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "1f8455343561593f1b80303d84437fe6aff0d467dbe94ff7649ead648e2783ed",
+  "severity": "None",
+  "summary": "The verifier compares every README key for every line (with exact type), line order and total against sealed statements. The sealed values match my own trace of tariff MD-2 plus the instruction's 'today's step stands' rule for FLEX allowance and not-over lines. Isolating fixtures reject each plausible wrong implementation I traced: floor of summed KB, ceil of summed KB, per-session floor, a single shared allowance, a flat rate, an off-by-one at the 1024 MB tier boundary, account-level tiering, clamping negative overage or charge, and a changed FLEX allowance. Exact types, permitted extra keys and relabelled or shuffled files do not cause false rejections.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/data-usage-tariff.md",
+      "environment/app/examples/fjord-0907.json",
+      "environment/app/src/usagebill/__init__.py",
+      "environment/app/src/usagebill/charges.py",
+      "environment/app/src/usagebill/statement.py",
+      "environment/app/src/usagebill/usage.py",
+      "environment/app/tools/usagebill_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-sessions.jsonl",
+      "tests/expected/02-plans.jsonl",
+      "tests/expected/03-later_rate.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-flex.jsonl",
+      "tests/expected/06-not_over.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl",
+      "tests/shipped/app/src/usagebill/__init__.py (manifest hash identical to environment copy)",
+      "tests/shipped/app/src/usagebill/charges.py (manifest hash identical to environment copy)",
+      "tests/shipped/app/src/usagebill/statement.py (manifest hash identical to environment copy)",
+      "tests/shipped/app/src/usagebill/usage.py (manifest hash identical to environment copy)",
+      "tests/shipped/app/tools/usagebill_run.py (manifest hash identical to environment copy)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Derived expected semantics from tariff MD-2 and instruction.md: per-session ceil to MB; BASIC 2048 and PLUS 10240; FLEX allowance stays at today's 5120 (tariff silent); over = used - allowance, left unclamped for not-over lines; over lines charged rate*min(over,1024) + 1*max(over-1024,0); not-over lines keep today's charge, over*rate, which can be negative; total = sum of charges",
+    "Recomputed by hand: S1, S2, S3, S4 and S5 (01), all five lines of 02, R1 to R6 (03), ZZZZZZZZZZ, 0 and ONLY (04), F1 to F6 (05), N1 to N7 and the negative total (06), X1 to X5 (07), WF5UR40 and 7F6H1 (08), and ABCDEFGHIJ and L2 (09). All matched the sealed statements",
+    "Traced wrong implementations against the fixtures: the original floor of summed KB fails S1; ceil of summed KB fails S2 and S3; per-session floor fails S1; +1 per session fails S1 (whole-MB sessions); a single shared allowance or swapped plans fail P1 and P2; a flat rate fails R3 and others; tier off-by-one fails R2 (40960 vs 40921); account-level tiering fails any multi-line over file; clamping over or charge to 0 fails N1, N2, N5, N6, X1 and X4; a changed FLEX allowance fails F1 to F4",
+    "Checked that alternative correct formulas for the tier charge (min/max form, or a conditional on over <= 1024) all give the same results for negative, zero and positive overage, so the not_over expectations do not require one Oracle-specific form",
+    "Checked comparator: parsed JSON; exact type and value for account, total and each LINE_KEYS field; line count and order; extra keys ignored (tests/test_outputs.py:197-211)",
+    "Checked relabel pass: id/line/session shuffles and account-name changes are applied consistently to input and expectation; per-session rounding is order-independent, so a correct implementation cannot be falsely rejected",
+    "Checked load(): roster SHA-256 and row counts, rule 1.2 limits enforced on every graded file, and silent-figure lines confined to families that grade them (tests/test_outputs.py:159-194)",
+    "Checked driver byte-equality test against instruction.md:1 requirement and test.sh reward gating",
+    "Checked execution path: python3 -I -S as uid 65534 on /app after chmod a+rX and the write seal; no third-party imports are needed; PYTHONDONTWRITEBYTECODE is set; stale sourceless pyc in __pycache__ is never imported"
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Rule 2.1 -> 01-sessions; 2.2 -> 02-plans; 3.1 tier -> 03-later_rate; 3.2 total/order -> 04; FLEX today's allowance -> 05; not-over today's overage/charge -> 06; interaction -> 07; each compared on all keys",
+      "evidence": ["tests/test_outputs.py:219-257", "environment/app/docs/data-usage-tariff.md:26-42", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result checked (values, membership, required outputs), not just existence",
+      "status": "checked",
+      "reason": "compare() checks account, total, line count, order and every one of id/used/allowance/over/charge with exact type",
+      "evidence": ["tests/test_outputs.py:197-211", "environment/app/README.md:23-31"],
+      "finding_ids": []
+    },
+    {
+      "category": "Each named domain rule has a case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "Part-MB sessions (S1-S3, N6), 1 kB sessions (S1, N2, S4), allowances just over (P1, P2), tier boundary 1023/1024/1025 on BASIC and PLUS (R1-R5), rate 1 beyond tier (P4, R4), FLEX 5120 (F1-F4, X1-X3), negative over/charge (N1, N2, N5, N6, X1, X4), exact-on (N3, N4, X2)",
+      "evidence": ["tests/expected/01-sessions.jsonl:1", "tests/expected/02-plans.jsonl:1", "tests/expected/03-later_rate.jsonl:1", "tests/expected/05-flex.jsonl:1", "tests/expected/06-not_over.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected",
+      "status": "checked",
+      "reason": "Traced the unchanged package, ceil of summed KB, per-session floor, a single allowance, a flat rate, a tier off-by-one, clamp/guard on not-over lines, and a wrong FLEX allowance. Each fails at least one sealed fixture",
+      "evidence": ["tests/expected/01-sessions.jsonl:1", "tests/expected/03-later_rate.jsonl:1", "tests/expected/06-not_over.jsonl:1", "environment/app/src/usagebill/usage.py:7-13"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (format, ordering, implementation choices)",
+      "status": "checked",
+      "reason": "Output is parsed as JSON and extra keys are ignored. The driver is fixed, so serialization is not candidate-controlled. Equivalent tier formulas give identical results. Relabelled cases keep expectations semantically consistent",
+      "evidence": ["tests/test_outputs.py:201-211", "tests/test_outputs.py:260-285", "environment/app/tools/usagebill_run.py:16-19"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle (driver left byte-identical; open inputs not graded)",
+      "status": "checked",
+      "reason": "Delivered driver bytes are compared with the shipped copy (the instruction requires byte identity). Every graded file is asserted within rule 1.2, so no open input is graded",
+      "evidence": ["tests/test_outputs.py:63-71", "tests/test_outputs.py:169-179", "tests/test_outputs.py:305-311", "tests/test.sh:23-27", "instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: legal sign partitions discriminated",
+      "status": "checked",
+      "reason": "over and charge are exercised negative (N1, N2, N5, N6, X1, X4), zero (N3, N4, X2) and positive. The total is exercised negative (-1090645, -78388) and positive, so clamp and abs mutants fail",
+      "evidence": ["tests/expected/06-not_over.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "State machine initialization-to-first-event",
+      "status": "not_applicable",
+      "reason": "Stateless per-line computation. The empty-sessions (zero-sum) initial case is still covered by N1 and X1",
+      "evidence": ["environment/app/src/usagebill/statement.py:7-16", "tests/expected/06-not_over.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "Expectations are sealed with roster hashes and are not candidate-writable. The candidate runs as an unprivileged uid under a verifier-owned driver. No pyc reliance (PYTHONDONTWRITEBYTECODE; sourceless __pycache__ files are never imported). All cases are within the rule 1.2 domain and reachable",
+      "evidence": ["tests/test_outputs.py:94-96", "tests/test_outputs.py:110-152", "tests/test_outputs.py:182-194", "tests/expected/ROSTER:1-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs encoding/representation promises",
+      "status": "checked",
+      "reason": "The contract promises JSON integer/string values and line order. The verifier checks exactly that via type() equality on parsed JSON, and bytes or whitespace are not constrained",
+      "evidence": ["instruction.md:5", "tests/test_outputs.py:197-198"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["FLEX allowance left to today's code", "3.1 tiered charge"],
+      "case_or_path": "F2 (over exactly 1024 -> 10240), F3 (over 3881 rate 3 -> 5929), F4 (rate 500, over 112120 -> 623096): the tier must apply to FLEX lines using the 5120 allowance",
+      "status": "checked",
+      "evidence": ["tests/expected/05-flex.jsonl:1", "environment/app/docs/data-usage-tariff.md:33-40"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["FLEX allowance left to today's code", "not-over overage/charge left to today's code"],
+      "case_or_path": "X1 FLEX with no sessions -> over -5120, charge -30720; X2 FLEX exactly on 5120 -> 0/0; beside PLUS not-over X4 and BASIC over X5",
+      "status": "checked",
+      "evidence": ["tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.1 per-session rounding", "2.3 over/at allowance boundary"],
+      "case_or_path": "N3/N4 exactly on the allowance only with per-session rounding; S1/P1/P2 just over only with per-session ceil (floor of the sum gives exactly-on or under)",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_over.jsonl:1", "tests/expected/01-sessions.jsonl:1", "tests/expected/02-plans.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.1 tier", "not-over charge (signed)"],
+      "case_or_path": "The tier formula min(over,1024)*rate + max(over-1024,0) applied to negative over equals over*rate, so a correct tiered implementation without a guard matches N1/N2/N5/N6. A guard returning 0 fails",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_over.jsonl:1", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 total", "line order / relabelling"],
+      "case_or_path": "The relabel pass shuffles lines and sessions and renames ids and account. Expected lines are permuted identically and the total is unchanged",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:260-285"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 limits", "3.1 tier at extremes"],
+      "case_or_path": "The 200-line file with sessions of 1 and 2,000,000 kB and rates 1 and 500. Checked ABCDEFGHIJ (626168) and L2 (514312) by hand",
+      "status": "checked",
+      "evidence": ["tests/expected/09-limits.jsonl:1", "tests/test_outputs.py:254-257"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

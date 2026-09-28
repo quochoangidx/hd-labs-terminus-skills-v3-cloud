@@ -1,0 +1,28 @@
+# Bounded scope ledger (bounded-task-design.md), written before the verifier.
+primary_outcome: >
+  The batch report printed by /app/tools/platecount_run.py gives, for every sample, the result kind and
+  the reported APC string that SOP MIC-14 gives (unit, kind, apc).
+causal_core: >
+  readings -> plate classes (countable 2.4, crowded 2.5 incl. too-numerous marks, sparse 2.6) and plated
+  amount (2.1, 2.2) -> counted dilutions (2.7) and counted plates (2.8, not crowded) -> count (4.1)
+  | sparse sample (2.6: neither countable nor crowded plate) -> estimate from the first dilution holding a colony (4.2) or less-than at the first
+  dilution (4.3) | every plate crowded -> greater-than at the last dilution (4.4) | anything else: today's
+  greater-than when a crowded plate is present (4.4, last dilution holding one) -> two-significant-figure half-up rounding and d.dEk writing (1.2) -> kind (5.1).
+core_obligations:
+  - {id: COUNTABLE_RANGE, contribution: "countable 20-300, crowded above 300", authority: "SOP 2.4, 2.5", witness: test_rule_2_4_countable_range_20_to_300, plausible_wrong: "keep 25-250 (shipped)"}
+  - {id: TOO_NUMEROUS, contribution: "a plate marked too numerous to count is crowded", authority: "SOP 2.3, 2.5", witness: test_rule_2_5_too_numerous_plate_is_crowded, plausible_wrong: "read null as 0 colonies (shipped)"}
+  - {id: PLATED_AMOUNT, contribution: "volume x dilution everywhere a plated amount is used", authority: "SOP 2.2", witness: test_rule_2_2_plated_amount_uses_the_volume, plausible_wrong: "dilution alone (shipped)"}
+  - {id: COUNT, contribution: "pool the countable plates of the counted dilutions over their plated amounts; the second counted dilution is only the step a tenth of the first", authority: "SOP 2.7, 4.1", witness: "test_rule_4_1_count_pools_two_consecutive_dilutions; test_dilution_that_is_not_a_tenth_stays_out_of_the_count (trap T1)", plausible_wrong: "first dilution only (shipped) / pool the next listed dilution or the next with a countable plate (natural over-repairs)"}
+  - {id: SPARSE, contribution: "a sparse sample is estimated from its first dilution holding a colony, or is a less-than at its first dilution", authority: "SOP 2.6, 4.2, 4.3", witness: "test_rule_4_2_estimate_from_first_dilution_with_a_colony; test_rule_4_3_less_than_at_the_first_dilution", plausible_wrong: "pool every uncrowded plate; last dilution (shipped)"}
+  - {id: COUNTED_PLATES, contribution: "a count takes every plate of the counted dilutions that is not crowded, sparse and empty ones included", authority: "SOP 2.8, 4.1", witness: "test_sparse_and_empty_plates_on_a_counted_dilution_stay_in_the_count (trap T2)", plausible_wrong: "countable plates only (natural over-repair of in_count)"}
+  - {id: ABOVE, contribution: "a crowded plate and no countable plate: 300 over the plated amount of a plate of the last dilution holding a crowded plate", authority: "SOP 4.4", witness: test_rule_4_4_greater_than_at_the_last_dilution, plausible_wrong: "wholly crowded samples only, first dilution, 250 (shipped)"}
+  - {id: ROUNDING, contribution: "two significant figures, exact half up, d.dEk", authority: "SOP 1.2", witness: test_rule_1_2_exact_half_goes_up, plausible_wrong: "round half to even (shipped)"}
+support_obligations:
+  - {id: BATCH_LOADER, supplied_boundary: "src/platecount/batch.py decodes samples, steps, exact volumes and readings", why_not_core: "decoding is complete and not a repair surface"}
+  - {id: DRIVER, supplied_boundary: "tools/platecount_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: REPORT_LAYOUT, supplied_boundary: "README report keys, unit labels, kind names and sample order, already produced by report.py", why_not_core: "serialization already right"}
+non_goals:
+  - malformed or out-of-range batch files (left entirely open in the instruction)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - spreader, broken-plate or double-pour corrections (SOP 3.2: the reading stands)

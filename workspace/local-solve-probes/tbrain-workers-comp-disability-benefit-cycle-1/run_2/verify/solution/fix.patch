@@ -1,0 +1,125 @@
+--- a/app/src/tdbenefit/disability.py
++++ b/app/src/tdbenefit/disability.py
+@@ -2,6 +2,7 @@
+ 
+ from .dates import parse_day
++from .money import half_up
+ 
+-WAITING_DAYS = 7
++WAITING_DAYS = 3
+ RETROACTIVE_AFTER = 14
+ 
+@@ -9,5 +10,5 @@
+ def period_days(first, last):
+     """The number of days a certified period covers."""
+-    return (parse_day(last) - parse_day(first)).days
++    return (parse_day(last) - parse_day(first)).days + 1
+ 
+ 
+@@ -23,4 +24,4 @@
+     retroactive = waiting if days >= RETROACTIVE_AFTER else 0
+     paid = days - waiting + retroactive
+-    amount = rate * paid // 7
++    amount = half_up(rate * paid, 7)
+     return {"waiting_days": waiting, "retro_days": retroactive, "ttd_days": paid, "ttd": amount}
+--- a/app/src/tdbenefit/partial.py
++++ b/app/src/tdbenefit/partial.py
+@@ -10,8 +10,9 @@
+ 
+ 
+-def partial_disability(earnings, aww):
++def partial_disability(earnings, aww, rate):
+     """The number of partial weeks and the partial amount in cents."""
+     total = 0
+     for _week, earned in earnings:
+-        total += ratio_of(wage_loss(aww, earned), RATE_FRACTION)
++        benefit = ratio_of(wage_loss(aww, earned), RATE_FRACTION)
++        total += min(benefit, rate)
+     return {"tpd_weeks": len(earnings), "tpd": total}
+--- a/app/src/tdbenefit/payroll.py
++++ b/app/src/tdbenefit/payroll.py
+@@ -5,4 +5,6 @@
+ 
+ BASE_WEEKS = 13
++FULL_TIME_WEEKS = 10
++PAYROLL_DAY = 4  # Friday, as date.weekday() counts
+ 
+ 
+@@ -11,10 +13,14 @@
+ 
+     Lines come from the payroll register as [paid, cents]; the register is dated by the
+-    day the money went out.
++    day the money went out. Each item is (week, cents, is a week's pay).
+     """
+     credited = []
+     for paid, cents in lines:
+         day = parse_day(paid)
+-        credited.append((week_ending(day), cents))
++        week = week_ending(day)
++        weeks_pay = day.weekday() == PAYROLL_DAY
++        if weeks_pay:
++            week -= WEEK
++        credited.append((week, cents, weeks_pay))
+     return credited
+ 
+@@ -26,7 +32,7 @@
+ 
+ def base_period_lines(lines, injury):
+-    """The credited lines that fall in the base period, as (week, cents)."""
++    """The credited lines that fall in the base period, as (week, cents, is a week's pay)."""
+     weeks = set(base_period(injury))
+-    return [(week, cents) for week, cents in credit_lines(lines) if week in weeks]
++    return [line for line in credit_lines(lines) if line[0] in weeks]
+ 
+ 
+@@ -34,5 +40,7 @@
+     """The worker's average weekly wage in cents."""
+     in_base = base_period_lines(lines, injury)
+-    wages = sum(cents for _week, cents in in_base)
+-    weeks_paid = len({week for week, _cents in in_base})
++    wages = sum(cents for _week, cents, _pay in in_base)
++    if len({week for week, _cents, weeks_pay in in_base if weeks_pay}) >= FULL_TIME_WEEKS:
++        return half_up(wages, BASE_WEEKS)
++    weeks_paid = len({week for week, _cents, _pay in in_base})
+     return half_up(wages, weeks_paid)
+--- a/app/src/tdbenefit/rates.py
++++ b/app/src/tdbenefit/rates.py
+@@ -5,5 +5,5 @@
+ 
+ # Share of the average weekly wage paid as the weekly rate.
+-RATE_FRACTION = (3, 5)
++RATE_FRACTION = (2, 3)
+ 
+ 
+@@ -13,12 +13,18 @@
+ 
+ 
+-def row_in_force(table):
+-    """The row in force: the table's newest row."""
+-    return table[-1]
++def row_in_force(table, day):
++    """The row in force on `day`: the last row taking effect on or before it."""
++    chosen = table[0]
++    for row in table:
++        if row[0] <= day:
++            chosen = row
++    return chosen
+ 
+ 
+ def weekly_rate(aww, table, injury):
+     """The weekly compensation rate in cents for an average weekly wage `aww`."""
+-    _effective, maximum, minimum = row_in_force(table)
++    _effective, maximum, minimum = row_in_force(table, injury)
++    if aww < minimum:
++        return aww
+     rate = ratio_of(aww, RATE_FRACTION)
+     if rate > maximum:
+--- a/app/src/tdbenefit/statement.py
++++ b/app/src/tdbenefit/statement.py
+@@ -16,5 +16,5 @@
+     rate = weekly_rate(aww, table, injury)
+     ttd = total_disability(claim["disability"], rate)
+-    tpd = partial_disability(claim["earnings"], aww)
++    tpd = partial_disability(claim["earnings"], aww, rate)
+     figures = {"claim": claim["claim"], "aww": aww, "rate": rate}
+     figures.update(ttd)

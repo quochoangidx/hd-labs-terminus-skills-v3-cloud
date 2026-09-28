@@ -1,0 +1,26 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The batch report printed by /app/tools/bodcalc_run.py gives the seed factor, blank depletion, check value,
+  batch qualifiers, every sample's relation and value, and every duplicate's RPD and pass that SOP WQ-14 gives.
+causal_core: >
+  bottle depletion and final DO -> spent / usable (2.3, 2.4) -> seed rates of usable controls -> seed factor (3.2;
+  today's pooled figure when no control is usable) -> seed correction and bottle BOD (3.3, 4.1) -> measured BOD or
+  bound (5.1-5.4) -> reported value (1.2) and duplicate RPD on measured BODs (6.1; today's calculation when a side is
+  a bound) -> pass (6.2); blanks -> blank depletion -> B; check bottles -> check value -> G (7.1, 7.2).
+core_obligations:
+  - {id: USABLE, contribution: "usable = not spent and depletion >= 2.50", authority: "SOP 2.4", witness: "family D1 (depletion 2.0-2.5 beside usable bottles)", plausible_wrong: "keep 2.0 (shipped)"}
+  - {id: SPENT, contribution: "spent = final DO below 1.20", authority: "SOP 2.3", witness: "family D2 (final DO 1.00-1.19)", plausible_wrong: "keep 1.0 (shipped)"}
+  - {id: SEED_FACTOR, contribution: "mean seed rate of usable controls; with none usable, today's pooled figure (trap T1)", authority: "SOP 3.1, 3.2", witness: "family D3; trap family T1", plausible_wrong: "pooled over every control (shipped) / 0.0, an error, or a mean over every control when none is usable (natural over-repair)"}
+  - {id: BOTTLE_BOD, contribution: "(depletion - seed correction) / sample fraction", authority: "SOP 3.3, 4.1", witness: "family D4 (seeded bottles, fraction < 1)", plausible_wrong: "depletion / fraction - correction (shipped)"}
+  - {id: BOUNDS, contribution: "'>' from least-sample bottle when all spent; '<' 2.50 over fraction of most-sample bottle otherwise; first listed on ties", authority: "SOP 5.2-5.4", witness: "family D5", plausible_wrong: "'<' from the least-sample bottle (shipped)"}
+  - {id: RPD, contribution: "|a-b| over the mean of two measured BODs; with a bound on either side, today's calculation (trap T2)", authority: "SOP 5.1, 6.1, 6.2", witness: "family D7; trap family T2", plausible_wrong: "over the parent's value (shipped) / the mean-denominator formula applied to bounds too (natural over-repair)"}
+  - {id: BLANK, contribution: "largest blank depletion; B above 0.20", authority: "SOP 7.1", witness: "family D6", plausible_wrong: "mean of the blanks (shipped)"}
+  - {id: ROUNDING, contribution: "reported values to three significant figures, half away from nought; nothing else rounded", authority: "SOP 1.2", witness: "family D8", plausible_wrong: "one decimal place (shipped); rounding the seed factor or RPD too"}
+support_obligations:
+  - {id: DECODE, supplied_boundary: "bench.decode turns every reading and volume into a float", why_not_core: "plumbing, already correct"}
+  - {id: DRIVER, supplied_boundary: "tools/bodcalc_run.py prints the report", why_not_core: "frozen surface, verifier runs its own copy"}
+  - {id: CHECK_VALUE, supplied_boundary: "qc.check_value / qualifiers G, already correct under the SOP", why_not_core: "no departure; moves only through USABLE/SPENT/SEED_FACTOR/BOTTLE_BOD"}
+non_goals:
+  - batches outside SOP section 1 limits or breaking its structural rules (tier 3, left open)
+  - malformed JSON, missing fields, error messages and exit codes
+  - key order inside JSON objects

@@ -1,0 +1,1641 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-ed-reimplementation-rev6/run_2/baseline/environment/app/pyed/ed.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-ed-reimplementation-rev6/run_2/solve/environment/app/pyed/ed.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-ed-reimplementation-rev6/run_2/baseline/environment/app/pyed/ed.py	2026-09-25 15:19:17
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-gnu-ed-reimplementation-rev6/run_2/solve/environment/app/pyed/ed.py	2026-09-26 10:06:32
+@@ -3,12 +3,1635 @@
+ Usage: python3 /app/pyed/ed.py [OPTIONS] [FILE]
+ """
+ 
++import os
++import stat
+ import sys
+ 
++# ---------------------------------------------------------------------------
++# Regular expressions (POSIX BRE / ERE with GNU extensions, leftmost-longest)
++# ---------------------------------------------------------------------------
+ 
++T_CHAR, T_ANY, T_SET, T_BOL, T_EOL, T_GROUP, T_BREF, T_CAT, T_ALT, T_REP, \
++    T_EMPTY = range(11)
++
++INF = 1 << 30
++RE_DUP_MAX = 0x7fff
++
++
++class RegexError(Exception):
++    pass
++
++
++class RNode(object):
++    __slots__ = ('t', 'a', 'b', 'mn', 'mx')
++
++    def __init__(self, t, a=None, b=None, mn=0, mx=0):
++        self.t = t
++        self.a = a
++        self.b = b
++        self.mn = mn
++        self.mx = mx
++
++
++def _cls_chars(name):
++    r = set()
++    for o in range(256):
++        c = chr(o)
++        ok = False
++        if o < 128:
++            if name == 'alpha':
++                ok = c.isalpha()
++            elif name == 'digit':
++                ok = '0' <= c <= '9'
++            elif name == 'alnum':
++                ok = c.isalnum()
++            elif name == 'upper':
++                ok = 'A' <= c <= 'Z'
++            elif name == 'lower':
++                ok = 'a' <= c <= 'z'
++            elif name == 'space':
++                ok = c in ' \t\n\r\f\v'
++            elif name == 'blank':
++                ok = c in ' \t'
++            elif name == 'punct':
++                ok = (33 <= o <= 47) or (58 <= o <= 64) or (91 <= o <= 96) \
++                    or (123 <= o <= 126)
++            elif name == 'print':
++                ok = 32 <= o <= 126
++            elif name == 'graph':
++                ok = 33 <= o <= 126
++            elif name == 'cntrl':
++                ok = o < 32 or o == 127
++            elif name == 'xdigit':
++                ok = c in '0123456789abcdefABCDEF'
++        if ok:
++            r.add(c)
++    return r
++
++
++CLASS_NAMES = ('alpha', 'digit', 'alnum', 'upper', 'lower', 'space', 'blank',
++               'punct', 'print', 'graph', 'cntrl', 'xdigit')
++
++
++class Parser(object):
++    def __init__(self, pat, ere, icase):
++        self.p = pat
++        self.n = len(pat)
++        self.i = 0
++        self.ere = ere
++        self.icase = icase
++        self.ngroups = 0
++        self.completed = set()
++        self.hasbr = False
++        self.depth = 0
++
++    def parse(self):
++        node = self.parse_alt()
++        if self.i < self.n:
++            raise RegexError('unmatched')
++        return node
++
++    def at_alt(self):
++        p, i = self.p, self.i
++        if i >= self.n:
++            return False
++        if self.ere:
++            return p[i] == '|'
++        return p[i] == '\\' and i + 1 < self.n and p[i + 1] == '|'
++
++    def at_close(self):
++        p, i = self.p, self.i
++        if i >= self.n:
++            return False
++        if self.ere:
++            return p[i] == ')' and self.depth > 0
++        return p[i] == '\\' and i + 1 < self.n and p[i + 1] == ')'
++
++    def parse_alt(self):
++        branches = [self.parse_branch()]
++        while self.at_alt():
++            self.i += 1 if self.ere else 2
++            branches.append(self.parse_branch())
++        if len(branches) == 1:
++            return branches[0]
++        return RNode(T_ALT, branches)
++
++    def parse_branch(self):
++        items = []
++        start = True
++        after_anchor = False
++        while self.i < self.n and not self.at_alt() and not self.at_close():
++            node, anchor = self.parse_expr(start, after_anchor)
++            items.append(node)
++            start = False
++            after_anchor = anchor
++        if not items:
++            return RNode(T_EMPTY)
++        if len(items) == 1:
++            return items[0]
++        return RNode(T_CAT, items)
++
++    def parse_interval(self):
++        # self.i is after the opening brace
++        p = self.p
++        j = self.i
++        while j < self.n and p[j].isdigit():
++            j += 1
++        s1 = p[self.i:j]
++        comma = False
++        s2 = ''
++        if j < self.n and p[j] == ',':
++            comma = True
++            k = j + 1
++            while k < self.n and p[k].isdigit():
++                k += 1
++            s2 = p[j + 1:k]
++            j = k
++        if self.ere:
++            if j >= self.n or p[j] != '}':
++                raise RegexError('brace')
++            j += 1
++        else:
++            if j + 1 >= self.n or p[j] != '\\' or p[j + 1] != '}':
++                raise RegexError('brace')
++            j += 2
++        if not s1 and not comma:
++            raise RegexError('badbr')
++        mn = int(s1) if s1 else 0
++        if comma:
++            mx = int(s2) if s2 else INF
++        else:
++            mx = mn
++        if mn > RE_DUP_MAX or (mx != INF and mx > RE_DUP_MAX):
++            raise RegexError('size')
++        if mx < mn:
++            raise RegexError('badbr')
++        self.i = j
++        return mn, mx
++
++    def parse_bracket(self):
++        # self.i after '['
++        p = self.p
++        n = self.n
++        neg = False
++        if self.i < n and p[self.i] == '^':
++            neg = True
++            self.i += 1
++        chars = set()
++        first = True
++        while True:
++            if self.i >= n:
++                raise RegexError('ebrack')
++            c = p[self.i]
++            if c == ']' and not first:
++                self.i += 1
++                break
++            kind, val = self.parse_belem(first)
++            if kind in ('char', 'coll') and self.i + 1 < n and \
++                    p[self.i] == '-' and p[self.i + 1] != ']':
++                self.i += 1
++                kind2, val2 = self.parse_belem(True)
++                if kind2 not in ('char', 'coll'):
++                    raise RegexError('erange')
++                if ord(val) > ord(val2):
++                    raise RegexError('erange')
++                for o in range(ord(val), ord(val2) + 1):
++                    chars.add(chr(o))
++            elif kind == 'class':
++                chars |= val
++            else:
++                chars.add(val)
++            first = False
++        if self.icase:
++            extra = set()
++            for ch in chars:
++                extra.add(ch.lower())
++            chars |= extra
++        return RNode(T_SET, frozenset(chars), neg)
++
++    def parse_belem(self, accept_hyphen):
++        p = self.p
++        n = self.n
++        i = self.i
++        if p[i] == '[' and i + 1 < n and p[i + 1] in ':=.':
++            d = p[i + 1]
++            j = p.find(d + ']', i + 2)
++            if j < 0:
++                raise RegexError('ebrack')
++            name = p[i + 2:j]
++            self.i = j + 2
++            if d == ':':
++                if name not in CLASS_NAMES:
++                    raise RegexError('ectype')
++                if self.icase and name in ('upper', 'lower'):
++                    name = 'alpha'
++                return 'class', _cls_chars(name)
++            if len(name) != 1:
++                raise RegexError('ecollate')
++            if d == '=':
++                return 'equiv', name
++            return 'coll', name
++        c = p[i]
++        if c == '-' and not accept_hyphen:
++            if not (i + 1 < n and p[i + 1] == ']'):
++                raise RegexError('erange')
++        self.i = i + 1
++        return 'char', c
++
++    def parse_expr(self, caret_ok, after_anchor):
++        """Returns (node, is_anchor)."""
++        p = self.p
++        c = p[self.i]
++        node = None
++        start = caret_ok or after_anchor
++        if self.ere:
++            if c in '*+?{':
++                raise RegexError('badrpt')
++            if c == '^':
++                self.i += 1
++                return RNode(T_BOL), True
++            if c == '$':
++                self.i += 1
++                return RNode(T_EOL), True
++            if c == '(':
++                self.i += 1
++                self.ngroups += 1
++                idx = self.ngroups
++                self.depth += 1
++                inner = self.parse_alt()
++                if self.i >= self.n or p[self.i] != ')':
++                    raise RegexError('eparen')
++                self.i += 1
++                self.depth -= 1
++                self.completed.add(idx)
++                node = RNode(T_GROUP, inner, idx - 1)
++            elif c == '.':
++                self.i += 1
++                node = RNode(T_ANY)
++            elif c == '[':
++                self.i += 1
++                node = self.parse_bracket()
++            elif c == '\\':
++                if self.i + 1 >= self.n:
++                    raise RegexError('eescape')
++                d = p[self.i + 1]
++                self.i += 2
++                if '1' <= d <= '9':
++                    k = int(d)
++                    if k not in self.completed:
++                        raise RegexError('esubreg')
++                    self.hasbr = True
++                    node = RNode(T_BREF, k - 1)
++                else:
++                    node = RNode(T_CHAR, d)
++            else:
++                self.i += 1
++                node = RNode(T_CHAR, c)
++        else:
++            if c == '\\':
++                if self.i + 1 >= self.n:
++                    raise RegexError('eescape')
++                d = p[self.i + 1]
++                if d == '(':
++                    self.i += 2
++                    self.ngroups += 1
++                    idx = self.ngroups
++                    self.depth += 1
++                    inner = self.parse_alt()
++                    if not (self.i + 1 < self.n and p[self.i] == '\\' and
++                            p[self.i + 1] == ')'):
++                        raise RegexError('eparen')
++                    self.i += 2
++                    self.depth -= 1
++                    self.completed.add(idx)
++                    node = RNode(T_GROUP, inner, idx - 1)
++                elif d == ')':
++                    raise RegexError('eparen')
++                elif d == '{':
++                    if start:
++                        raise RegexError('badrpt')
++                    raise RegexError('badrpt')
++                elif d in '+?' and start:
++                    self.i += 2
++                    node = RNode(T_CHAR, d)
++                elif '1' <= d <= '9':
++                    self.i += 2
++                    k = int(d)
++                    if k not in self.completed:
++                        raise RegexError('esubreg')
++                    self.hasbr = True
++                    node = RNode(T_BREF, k - 1)
++                else:
++                    self.i += 2
++                    node = RNode(T_CHAR, d)
++            elif c == '*' and start:
++                self.i += 1
++                node = RNode(T_CHAR, '*')
++            elif c == '^' and caret_ok:
++                self.i += 1
++                return RNode(T_BOL), True
++            elif c == '$' and (self.i + 1 == self.n or
++                               p[self.i + 1:self.i + 3] in ('\\)', '\\|')):
++                self.i += 1
++                return RNode(T_EOL), True
++            elif c == '.':
++                self.i += 1
++                node = RNode(T_ANY)
++            elif c == '[':
++                self.i += 1
++                node = self.parse_bracket()
++            else:
++                self.i += 1
++                node = RNode(T_CHAR, c)
++        # duplication operators
++        while self.i < self.n:
++            c = p[self.i]
++            if self.ere:
++                if c == '*':
++                    self.i += 1
++                    node = RNode(T_REP, node, None, 0, INF)
++                elif c == '+':
++                    self.i += 1
++                    node = RNode(T_REP, node, None, 1, INF)
++                elif c == '?':
++                    self.i += 1
++                    node = RNode(T_REP, node, None, 0, 1)
++                elif c == '{':
++                    self.i += 1
++                    mn, mx = self.parse_interval()
++                    node = RNode(T_REP, node, None, mn, mx)
++                else:
++                    break
++            else:
++                if c == '*':
++                    self.i += 1
++                    node = RNode(T_REP, node, None, 0, INF)
++                elif c == '\\' and self.i + 1 < self.n and \
++                        p[self.i + 1] in '+?{':
++                    d = p[self.i + 1]
++                    self.i += 2
++                    if d == '+':
++                        node = RNode(T_REP, node, None, 1, INF)
++                    elif d == '?':
++                        node = RNode(T_REP, node, None, 0, 1)
++                    else:
++                        mn, mx = self.parse_interval()
++                        node = RNode(T_REP, node, None, mn, mx)
++                else:
++                    break
++        return node, False
++
++
++def _required(node, acc):
++    t = node.t
++    if t == T_CHAR:
++        acc.add(node.a)
++    elif t == T_GROUP:
++        _required(node.a, acc)
++    elif t == T_CAT:
++        for it in node.a:
++            _required(it, acc)
++    elif t == T_REP:
++        if node.mn >= 1:
++            _required(node.a, acc)
++
++
++def _combine(a, b):
++    if b is None:
++        return a
++    if a is None:
++        return b
++    return tuple(y if y is not None else x for x, y in zip(a, b))
++
++
++class Regex(object):
++    def __init__(self, pat, ere, icase):
++        if icase:
++            pat = pat.lower()
++        p = Parser(pat, ere, icase)
++        self.root = p.parse()
++        self.ngroups = p.ngroups
++        self.hasbr = p.hasbr
++        self.icase = icase
++        self.required = set()
++        _required(self.root, self.required)
++
++    def search(self, text, start=0, notbol=False):
++        s = text.lower() if self.icase else text
++        if self.required:
++            rest = s[start:] if start else s
++            for ch in self.required:
++                if ch not in rest:
++                    return None
++        m = _Matcher(s, notbol, self.hasbr, self.ngroups)
++        n = len(s)
++        init = (None,) * self.ngroups if self.hasbr else None
++        for st in range(start, n + 1):
++            res = m.m(self.root, st, init)
++            if res:
++                best_e = -1
++                best_c = None
++                for e, c in res:
++                    if e > best_e:
++                        best_e = e
++                        best_c = c
++                caps = best_c if best_c is not None else (None,) * self.ngroups
++                return st, best_e, caps
++        return None
++
++
++class _Matcher(object):
++    def __init__(self, s, notbol, hasbr, ng):
++        self.s = s
++        self.n = len(s)
++        self.notbol = notbol
++        self.hasbr = hasbr
++        self.ng = ng
++        self.memo = {}
++
++    def m(self, node, pos, caps):
++        t = node.t
++        s = self.s
++        if t == T_CHAR:
++            if pos < self.n and s[pos] == node.a:
++                return [(pos + 1, caps)]
++            return []
++        if t == T_ANY:
++            if pos < self.n:
++                return [(pos + 1, caps)]
++            return []
++        if t == T_SET:
++            if pos < self.n and ((s[pos] in node.a) != node.b):
++                return [(pos + 1, caps)]
++            return []
++        if t == T_BOL:
++            if pos == 0 and not self.notbol:
++                return [(pos, caps)]
++            return []
++        if t == T_EOL:
++            if pos == self.n:
++                return [(pos, caps)]
++            return []
++        if t == T_EMPTY:
++            return [(pos, caps)]
++        if t == T_BREF:
++            g = caps[node.a] if caps is not None else None
++            if g is None:
++                return []
++            sub = s[g[0]:g[1]]
++            if s.startswith(sub, pos):
++                return [(pos + len(sub), caps)]
++            return []
++        hasbr = self.hasbr
++        if not hasbr:
++            key = (id(node), pos)
++            r = self.memo.get(key)
++            if r is not None:
++                return r
++        if t == T_GROUP:
++            res = []
++            idx = node.b
++            for e, d in self.m(node.a, pos, caps):
++                lst = list(d) if d is not None else [None] * self.ng
++                lst[idx] = (pos, e)
++                res.append((e, tuple(lst)))
++            if hasbr:
++                res = _dedup(res, True)
++        elif t == T_CAT:
++            frontier = [(pos, caps)]
++            for item in node.a:
++                new = []
++                seen = set()
++                for p, c in frontier:
++                    sub = self.m(item, p, c if hasbr else None)
++                    for e, d in sub:
++                        nc = _combine(c, d)
++                        k = (e, nc) if hasbr else e
++                        if k not in seen:
++                            seen.add(k)
++                            new.append((e, nc))
++                frontier = new
++                if not frontier:
++                    break
++            res = frontier
++        elif t == T_ALT:
++            res = []
++            seen = set()
++            for br in node.a:
++                for e, d in self.m(br, pos, caps):
++                    k = (e, d) if hasbr else e
++                    if k not in seen:
++                        seen.add(k)
++                        res.append((e, d))
++        elif t == T_REP:
++            res = self.rep(node, pos, caps, 0)
++        else:
++            res = []
++        if not hasbr:
++            self.memo[key] = res
++        return res
++
++    def rep(self, node, pos, caps, k):
++        inner = node.a
++        mn = node.mn
++        mx = node.mx
++        hasbr = self.hasbr
++        it = inner.t
++        if it in (T_CHAR, T_ANY, T_SET):
++            s = self.s
++            n = self.n
++            lim = mx - k
++            j = pos
++            cnt = 0
++            if it == T_CHAR:
++                ch = inner.a
++                while j < n and cnt < lim and s[j] == ch:
++                    j += 1
++                    cnt += 1
++            elif it == T_ANY:
++                cnt = min(lim, n - pos)
++                j = pos + cnt
++            else:
++                st = inner.a
++                ng = inner.b
++                while j < n and cnt < lim and ((s[j] in st) != ng):
++                    j += 1
++                    cnt += 1
++            need = max(0, mn - k)
++            if cnt < need:
++                return []
++            return [(pos + c, caps) for c in range(cnt, need - 1, -1)]
++        if not hasbr:
++            kk = k if (k < mn or mx != INF) else mn
++            key = (id(node), pos, kk)
++            r = self.memo.get(key)
++            if r is not None:
++                return r
++        res = []
++        seen = set()
++        if k < mx:
++            for e, d in self.m(inner, pos, caps if hasbr else None):
++                if e == pos and k >= mn:
++                    continue
++                nc = _combine(caps, d) if hasbr else d
++                for e2, d2 in self.rep(node, e, nc if hasbr else None, k + 1):
++                    fc = _combine(nc, d2)
++                    kk2 = (e2, fc) if hasbr else e2
++                    if kk2 not in seen:
++                        seen.add(kk2)
++                        res.append((e2, fc))
++        if k >= mn:
++            kk2 = (pos, caps) if hasbr else pos
++            if kk2 not in seen:
++                seen.add(kk2)
++                res.append((pos, caps))
++        if not hasbr:
++            self.memo[key] = res
++        return res
++
++
++def _dedup(res, hasbr):
++    out = []
++    seen = set()
++    for e, d in res:
++        k = (e, d) if hasbr else e
++        if k not in seen:
++            seen.add(k)
++            out.append((e, d))
++    return out
++
++
++# ---------------------------------------------------------------------------
++# The editor
++# ---------------------------------------------------------------------------
++
++ERR = -1
++EMOD = -3
++QUIT = -4
++
++PF_L = 1
++PF_N = 2
++PF_P = 4
++
++
++class EdError(Exception):
++    pass
++
++
++class Line(object):
++    __slots__ = ('text',)
++
++    def __init__(self, text):
++        self.text = text
++
++
++class Cmd(object):
++    __slots__ = ('buf', 'i')
++
++    def __init__(self, buf):
++        self.buf = buf
++        self.i = 0
++
++    def peek(self, off=0):
++        j = self.i + off
++        if j < len(self.buf):
++            return self.buf[j]
++        return ''
++
++    def get(self):
++        c = self.peek()
++        self.i += 1
++        return c
++
++    def skip_blanks(self):
++        while self.peek() in (' ', '\t') and self.peek() != '':
++            self.i += 1
++
++
++def _isdigit(c):
++    return c != '' and '0' <= c <= '9'
++
++
++class Ed(object):
++    def __init__(self, data, stdin_is_reg, extended, loose, scripted):
++        self.inlines = data.split('\n')
++        if self.inlines and self.inlines[-1] == '':
++            self.inlines.pop()
++            self.inlines = [x + '\n' for x in self.inlines]
++        else:
++            last = self.inlines.pop() if self.inlines else None
++            self.inlines = [x + '\n' for x in self.inlines]
++            if last:
++                self.inlines.append(last)
++        self.inpos = 0
++        self.stdin_is_reg = stdin_is_reg
++        self.extended = extended
++        self.loose = loose
++        self.scripted = scripted
++        self.out = []
++        self.lines = []
++        self.cur = 0
++        self.modified = False
++        self.marks = {}
++        self.def_filename = ''
++        self.u_state = None
++        self.u_valid = False
++        self.last_regex = None
++        self.subst_regex = None
++        self.last_repl = None
++        self.s_snum = 1
++        self.s_pflags = 0
++        self.active_cleared = False
++        self.g_inactive = set()
++
++    # -- I/O ---------------------------------------------------------------
++    def write(self, s):
++        self.out.append(s)
++
++    def get_stdin_line(self):
++        if self.inpos >= len(self.inlines):
++            return None
++        line = self.inlines[self.inpos]
++        self.inpos += 1
++        return line
++
++    # -- buffer helpers ------------------------------------------------------
++    def last(self):
++        return len(self.lines)
++
++    def clear_undo(self):
++        self.u_state = (list(self.lines), self.cur, self.modified)
++        self.u_valid = False
++
++    def changed(self):
++        self.u_valid = True
++        self.modified = True
++
++    def undo(self, isglobal):
++        if not self.u_valid or self.u_state is None:
++            raise EdError('Nothing to undo')
++        lines, cur, mod = self.u_state
++        self.u_state = (self.lines, self.cur, self.modified)
++        self.lines = list(lines)
++        self.cur = cur
++        self.modified = mod
++        if isglobal:
++            self.active_cleared = True
++
++    def node_addr(self, node):
++        for i, x in enumerate(self.lines):
++            if x is node:
++                return i + 1
++        return -1
++
++    def delete_lines(self, frm, to):
++        del self.lines[frm - 1:to]
++        self.cur = min(frm, len(self.lines))
++        self.changed()
++
++    def insert_texts(self, addr, texts):
++        nodes = [Line(t) for t in texts]
++        self.lines[addr:addr] = nodes
++        if nodes:
++            self.changed()
++        return len(nodes)
++
++    def print_lines(self, frm, to, pflags):
++        if frm == 0 or frm > to or to > self.last():
++            raise EdError('Invalid address')
++        for a in range(frm, to + 1):
++            text = self.lines[a - 1].text
++            if pflags & PF_N:
++                self.write('%d\t' % a)
++            if pflags & PF_L:
++                self.write(self.list_text(text))
++            else:
++                self.write(text + '\n')
++        self.cur = to
++
++    def list_text(self, text):
++        esc = {'\a': '\\a', '\b': '\\b', '\f': '\\f', '\n': '\\n',
++               '\r': '\\r', '\t': '\\t', '\v': '\\v', '\\': '\\\\',
++               '$': '\\$'}
++        out = []
++        col = 0
++        for ch in text:
++            if ch in esc:
++                piece = esc[ch]
++            elif 32 <= ord(ch) < 127:
++                piece = ch
++            else:
++                piece = '\\%03o' % ord(ch)
++            if col + len(piece) > 71:
++                out.append('\\\n')
++                col = 0
++            out.append(piece)
++            col += len(piece)
++        out.append('$\n')
++        return ''.join(out)
++
++    # -- file I/O ------------------------------------------------------------
++    def read_file(self, name, addr):
++        try:
++            with open(name, 'rb') as f:
++                data = f.read()
++        except (IOError, OSError):
++            raise EdError('Cannot open input file')
++        text = data.decode('latin-1')
++        size = len(data)
++        if text == '':
++            parts = []
++        else:
++            parts = text.split('\n')
++            if parts[-1] == '':
++                parts.pop()
++        n = self.insert_texts(addr, parts)
++        self.cur = addr + n
++        if not self.scripted:
++            self.write('%d\n' % size)
++        return n
++
++    def write_file(self, name, mode, frm, to):
++        if frm == 0:
++            data = ''
++        else:
++            data = ''.join(l.text + '\n' for l in self.lines[frm - 1:to])
++        try:
++            with open(name, mode) as f:
++                f.write(data.encode('latin-1'))
++        except (IOError, OSError):
++            raise EdError('Cannot open output file')
++        if not self.scripted:
++            self.write('%d\n' % len(data))
++
++    # -- parsing helpers -----------------------------------------------------
++    def parse_int(self, cb):
++        j = cb.i
++        while _isdigit(cb.peek()):
++            cb.i += 1
++        return int(cb.buf[j:cb.i])
++
++    def get_marked_addr(self, ch):
++        if ch == '' or not ('a' <= ch <= 'z'):
++            raise EdError('Invalid mark character')
++        node = self.marks.get(ch)
++        a = self.node_addr(node) if node is not None else -1
++        if a > 0:
++            return a
++        if not self.lines:
++            return 0
++        raise EdError('Invalid address')
++
++    def extract_pattern(self, cb, delim):
++        """cb.i is just past the delimiter. Leaves cb at the closing
++        delimiter or newline. Returns the pattern text."""
++        start = cb.i
++        buf = cb.buf
++        n = len(buf)
++        while cb.i < n and buf[cb.i] != delim and buf[cb.i] != '\n':
++            c = buf[cb.i]
++            if c == '[':
++                j = self.parse_char_class(buf, cb.i + 1)
++                if j < 0:
++                    raise EdError('Unbalanced brackets ([])')
++                cb.i = j
++            elif c == '\\':
++                cb.i += 1
++                if cb.i >= n or buf[cb.i] == '\n':
++                    raise EdError('Trailing backslash (\\)')
++            cb.i += 1
++        return buf[start:cb.i]
++
++    @staticmethod
++    def parse_char_class(buf, p):
++        n = len(buf)
++        if p < n and buf[p] == '^':
++            p += 1
++        if p < n and buf[p] == ']':
++            p += 1
++        while p < n and buf[p] != ']' and buf[p] != '\n':
++            if buf[p] == '[' and p + 1 < n and buf[p + 1] in '.:=':
++                d = buf[p + 1]
++                p += 2
++                # find d followed by ']'
++                while True:
++                    if p >= n or buf[p] == '\n':
++                        return -1
++                    if buf[p] == d and p + 1 < n and buf[p + 1] == ']':
++                        p += 1
++                        break
++                    p += 1
++            p += 1
++        if p < n and buf[p] == ']':
++            return p
++        return -1
++
++    def compile(self, pat, icase):
++        try:
++            return Regex(pat, self.extended, icase)
++        except RegexError:
++            raise EdError('Invalid regular expression')
++        except RecursionError:
++            raise EdError('Invalid regular expression')
++
++    def get_compiled_regex(self, cb):
++        delim = cb.peek()
++        if delim in (' ', '\n', ''):
++            raise EdError('Invalid pattern delimiter')
++        cb.i += 1
++        pat = self.extract_pattern(cb, delim)
++        if cb.peek() == delim:
++            cb.i += 1
++        icase = False
++        if cb.peek() == 'I':
++            cb.i += 1
++            icase = True
++        if pat == '':
++            if icase:
++                raise EdError('Invalid regular expression')
++            if self.last_regex is None:
++                raise EdError('No previous pattern')
++            return self.last_regex
++        rx = self.compile(pat, icase)
++        self.last_regex = rx
++        return rx
++
++    def matches(self, rx, text):
++        return rx.search(text, 0, False) is not None
++
++    def next_matching_addr(self, cb):
++        forward = cb.peek() == '/'
++        rx = self.get_compiled_regex(cb)
++        last = self.last()
++        addr = self.cur
++        for _ in range(last):
++            if forward:
++                addr = addr + 1 if addr < last else 1
++            else:
++                addr = addr - 1 if addr > 1 else last
++            if self.matches(rx, self.lines[addr - 1].text):
++                return addr
++        raise EdError('No match')
++
++    def extract_addresses(self, cb):
++        first = True
++        first_addr = -1
++        second_addr = -1
++        cb.skip_blanks()
++        while True:
++            ch = cb.peek()
++            if _isdigit(ch):
++                n = self.parse_int(cb)
++                if first:
++                    first = False
++                    second_addr = n
++                else:
++                    second_addr += n
++            elif ch in (' ', '\t'):
++                cb.i += 1
++                cb.skip_blanks()
++            elif ch in ('+', '-'):
++                if first:
++                    first = False
++                    second_addr = self.cur
++                cb.i += 1
++                if _isdigit(cb.peek()):
++                    n = self.parse_int(cb)
++                    second_addr += (-n if ch == '-' else n)
++                else:
++                    second_addr += (-1 if ch == '-' else 1)
++            elif ch in ('.', '$'):
++                if not first:
++                    raise EdError('Invalid address')
++                first = False
++                cb.i += 1
++                second_addr = self.cur if ch == '.' else self.last()
++            elif ch in ('/', '?'):
++                if not first:
++                    raise EdError('Invalid address')
++                second_addr = self.next_matching_addr(cb)
++                first = False
++            elif ch == "'":
++                if not first:
++                    raise EdError('Invalid address')
++                first = False
++                cb.i += 1
++                second_addr = self.get_marked_addr(cb.get())
++            elif ch in ('%', ',', ';'):
++                if first:
++                    if first_addr < 0:
++                        first_addr = self.cur if ch == ';' else 1
++                        second_addr = self.last()
++                else:
++                    if second_addr < 0 or second_addr > self.last():
++                        raise EdError('Invalid address')
++                    if ch == ';':
++                        self.cur = second_addr
++                    first_addr = second_addr
++                    first = True
++                cb.i += 1
++            else:
++                if not first and (second_addr < 0 or
++                                  second_addr > self.last()):
++                    raise EdError('Invalid address')
++                addr_cnt = 0
++                if second_addr >= 0:
++                    addr_cnt = 2 if first_addr >= 0 else 1
++                if addr_cnt <= 0:
++                    second_addr = self.cur
++                if addr_cnt <= 1:
++                    first_addr = second_addr
++                return addr_cnt, first_addr, second_addr
++
++    def check_range(self, n, m, addr_cnt, first, second):
++        if addr_cnt == 0:
++            first, second = n, m
++        if first < 1 or first > second or second > self.last():
++            raise EdError('Invalid address')
++        return first, second
++
++    def get_third_addr(self, cb):
++        saved = self.cur
++        cnt, f, s = self.extract_addresses(cb)
++        if s < 0 or s > self.last():
++            raise EdError('Invalid address')
++        return s
++
++    def get_command_suffix(self, cb):
++        pf = 0
++        while True:
++            ch = cb.peek()
++            bit = {'l': PF_L, 'n': PF_N, 'p': PF_P}.get(ch) if ch else None
++            if bit is None or (pf & bit):
++                break
++            pf |= bit
++            cb.i += 1
++        if cb.get() != '\n':
++            raise EdError('Invalid command suffix')
++        return pf
++
++    @staticmethod
++    def unexpected_suffix(ch):
++        if ch == '' or ch not in ' \t\n\r\f\v':
++            raise EdError('Unexpected command suffix')
++
++    @staticmethod
++    def unexpected_address(addr_cnt):
++        if addr_cnt > 0:
++            raise EdError('Unexpected address')
++
++    def get_filename(self, cb, allow_empty=False):
++        cb.skip_blanks()
++        if cb.peek() != '\n' and cb.peek() != '':
++            j = cb.buf.find('\n', cb.i)
++            if j < 0:
++                j = len(cb.buf)
++            name = cb.buf[cb.i:j]
++            cb.i = j + 1
++            return name
++        cb.i += 1
++        if not allow_empty and not self.def_filename:
++            raise EdError('No current filename')
++        return ''
++
++    # -- input mode ------------------------------------------------------------
++    def append_lines(self, cb, addr, isglobal):
++        self.cur = addr
++        count = 0
++        while True:
++            if not isglobal:
++                line = self.get_stdin_line()
++                if line is None:
++                    return count
++                if not line.endswith('\n'):
++                    line += '\n'
++            else:
++                if cb.i >= len(cb.buf):
++                    return count
++                j = cb.buf.find('\n', cb.i)
++                if j < 0:
++                    j = len(cb.buf) - 1
++                line = cb.buf[cb.i:j + 1]
++                cb.i = j + 1
++            if line == '.\n':
++                return count
++            self.lines.insert(self.cur, Line(line[:-1]))
++            self.cur += 1
++            count += 1
++            self.changed()
++
++    # -- global ------------------------------------------------------------------
++    def get_global_list(self, cb):
++        j = cb.buf.find('\n', cb.i)
++        if j < 0:
++            j = len(cb.buf)
++        line = cb.buf[cb.i:j]
++        cb.i = j + 1
++        parts = []
++        while True:
++            k = len(line)
++            nb = 0
++            while nb < k and line[k - 1 - nb] == '\\':
++                nb += 1
++            if nb % 2 == 1:
++                parts.append(line[:-1] + '\n')
++                nxt = self.get_stdin_line()
++                if nxt is None or not nxt.endswith('\n'):
++                    raise EdError('Unexpected end-of-file')
++                line = nxt[:-1]
++            else:
++                parts.append(line + '\n')
++                break
++        return ''.join(parts)
++
++    def exec_global(self, cb, first, second, want):
++        rx = self.get_compiled_regex(cb)
++        active = []
++        for node in self.lines[first - 1:second]:
++            if self.matches(rx, node.text) == want:
++                active.append(node)
++        cmdlist = self.get_global_list(cb)
++        self.clear_undo()
++        self.active_cleared = False
++        self.g_inactive = set()
++        for node in active:
++            if self.active_cleared:
++                break
++            if id(node) in self.g_inactive:
++                continue
++            a = self.node_addr(node)
++            if a < 0:
++                continue
++            self.cur = a
++            gcb = Cmd(cmdlist)
++            while gcb.i < len(gcb.buf):
++                st = self.exec_command(gcb, 0, True)
++                if st != 0:
++                    return st
++        return 0
++
++    # -- substitute --------------------------------------------------------------
++    def command_s(self, cb, addr_cnt, first, second, isglobal):
++        first, second = self.check_range(self.cur, self.cur, addr_cnt,
++                                         first, second)
++        SF_G, SF_P, SF_R, SF_NONE = 1, 2, 4, 8
++        sflags = 0
++        while True:
++            ch = cb.peek()
++            if _isdigit(ch):
++                n = self.parse_int(cb)
++                if n <= 0:
++                    raise EdError('Invalid count')
++                self.s_snum = n
++                sflags |= SF_NONE
++            elif ch == '\n':
++                sflags |= SF_NONE
++            elif ch == 'g':
++                sflags |= SF_G
++                cb.i += 1
++            elif ch == 'p':
++                sflags |= SF_P
++                cb.i += 1
++            elif ch == 'r':
++                sflags |= SF_R
++                cb.i += 1
++            else:
++                if sflags:
++                    raise EdError('Invalid command suffix')
++            if not (sflags and cb.peek() != '\n'):
++                break
++        if sflags:
++            cb.i += 1  # the newline
++            if self.subst_regex is None or self.last_repl is None:
++                raise EdError('No previous substitution')
++            if sflags & SF_G:
++                self.s_snum = 1 if self.s_snum == 0 else 0
++            if sflags & SF_P:
++                self.s_pflags ^= PF_P
++            if sflags & SF_R:
++                if self.last_regex is None:
++                    raise EdError('No previous pattern')
++                self.subst_regex = self.last_regex
++            rx = self.subst_regex
++            repl = self.last_repl
++            snum = self.s_snum
++            pflags = self.s_pflags
++        else:
++            delim = cb.peek()
++            if delim in (' ', '\n', ''):
++                raise EdError('Invalid pattern delimiter')
++            cb.i += 1
++            pat = self.extract_pattern(cb, delim)
++            # replacement
++            if cb.peek() != delim:
++                raise EdError('Missing pattern delimiter')
++            cb.i += 1
++            buf = cb.buf
++            if cb.peek() == '%' and (
++                    cb.peek(1) == delim or
++                    (cb.peek(1) == '\n' and
++                     (not isglobal or cb.i + 2 >= len(cb.buf)))):
++                cb.i += 1
++                if self.last_repl is None:
++                    raise EdError('No previous substitution')
++                repl = self.last_repl
++            else:
++                out = []
++                while True:
++                    if cb.i >= len(cb.buf):
++                        break
++                    ch = cb.buf[cb.i]
++                    if ch == delim:
++                        break
++                    if ch == '\n' and (not isglobal or
++                                       cb.i + 1 >= len(cb.buf)):
++                        break
++                    out.append(ch)
++                    cb.i += 1
++                    if ch == '\\':
++                        if cb.i >= len(cb.buf):
++                            break
++                        ch2 = cb.buf[cb.i]
++                        out.append(ch2)
++                        cb.i += 1
++                        if ch2 == '\n' and not isglobal:
++                            nxt = self.get_stdin_line()
++                            if nxt is None or not nxt.endswith('\n'):
++                                raise EdError('Unexpected end-of-file')
++                            cb.buf = cb.buf[:cb.i] + nxt
++                repl = ''.join(out)
++                self.last_repl = repl
++            # suffixes
++            pflags = 0
++            snum = 1
++            icase = False
++            if cb.peek() == '\n' or cb.peek() == '':
++                pflags = PF_P
++            else:
++                cb.i += 1  # delimiter
++                gseen = False
++                cseen = False
++                while True:
++                    ch = cb.peek()
++                    if ch == 'g':
++                        if gseen or cseen:
++                            raise EdError('Invalid command suffix')
++                        gseen = True
++                        snum = 0
++                        cb.i += 1
++                    elif _isdigit(ch):
++                        if gseen or cseen:
++                            raise EdError('Invalid command suffix')
++                        cseen = True
++                        n = self.parse_int(cb)
++                        if n <= 0:
++                            raise EdError('Invalid count')
++                        snum = n
++                    elif ch in ('I', 'i') and ch != '':
++                        if icase:
++                            raise EdError('Invalid command suffix')
++                        icase = True
++                        cb.i += 1
++                    elif ch in ('l', 'n', 'p') and ch != '':
++                        bit = {'l': PF_L, 'n': PF_N, 'p': PF_P}[ch]
++                        if pflags & bit:
++                            raise EdError('Invalid command suffix')
++                        pflags |= bit
++                        cb.i += 1
++                    else:
++                        break
++            if cb.get() not in ('\n',):
++                raise EdError('Invalid command suffix')
++            if pat == '':
++                if icase:
++                    raise EdError('Invalid regular expression')
++                if self.last_regex is None:
++                    raise EdError('No previous pattern')
++                rx = self.last_regex
++            else:
++                rx = self.compile(pat, icase)
++                self.last_regex = rx
++            self.subst_regex = rx
++            self.s_snum = snum
++            self.s_pflags = pflags
++        if not isglobal:
++            self.clear_undo()
++        self.search_and_replace(first, second, rx, repl, snum, isglobal)
++        return pflags
++
++    def search_and_replace(self, first, second, rx, repl, snum, isglobal):
++        addr = first
++        last_changed = None
++        for _ in range(second - first + 1):
++            node = self.lines[addr - 1]
++            new = self.replace_text(node.text, rx, repl, snum)
++            if new is None:
++                addr += 1
++                continue
++            parts = new.split('\n')
++            self.lines[addr - 1:addr] = [Line(t) for t in parts]
++            self.changed()
++            addr += len(parts)
++            last_changed = addr - 1
++            self.cur = last_changed
++        if last_changed is None:
++            if not isglobal:
++                raise EdError('No match')
++        else:
++            self.cur = last_changed
++
++    def replace_text(self, text, rx, repl, snum):
++        out = []
++        pos = 0
++        matchno = 0
++        changed = False
++        notbol = False
++        prev_empty = None
++        n = len(text)
++        while True:
++            m = rx.search(text, pos, notbol)
++            if m is None:
++                break
++            so, eo, caps = m
++            if so == eo:
++                if prev_empty == so:
++                    raise EdError('Infinite substitution loop')
++                prev_empty = so
++            else:
++                prev_empty = None
++            matchno += 1
++            if snum == 0 or snum == matchno:
++                changed = True
++                out.append(text[pos:so])
++                out.append(self.expand(repl, text, so, eo, caps))
++            else:
++                out.append(text[pos:eo])
++            pos = eo
++            if snum != 0 and matchno >= snum:
++                break
++            if pos >= n:
++                break
++            notbol = True
++        if not changed:
++            return None
++        out.append(text[pos:])
++        return ''.join(out)
++
++    @staticmethod
++    def expand(repl, text, so, eo, caps):
++        out = []
++        i = 0
++        n = len(repl)
++        while i < n:
++            c = repl[i]
++            if c == '&':
++                out.append(text[so:eo])
++            elif c == '\\' and i + 1 < n:
++                d = repl[i + 1]
++                i += 1
++                if '1' <= d <= '9':
++                    k = int(d) - 1
++                    if k < len(caps) and caps[k] is not None:
++                        out.append(text[caps[k][0]:caps[k][1]])
++                else:
++                    out.append(d)
++            else:
++                out.append(c)
++            i += 1
++        return ''.join(out)
++
++    # -- command dispatch ----------------------------------------------------------
++    def exec_command(self, cb, prev_status, isglobal):
++        addr_cnt, first, second = self.extract_addresses(cb)
++        cb.skip_blanks()
++        c = cb.get()
++        pflags = 0
++        if c == 'a':
++            pflags = self.get_command_suffix(cb)
++            if not isglobal:
++                self.clear_undo()
++            self.append_lines(cb, second, isglobal)
++        elif c == 'c':
++            if first == 0:
++                first = 1
++            if second == 0:
++                second = 1
++            first, second = self.check_range(self.cur, self.cur, addr_cnt,
++                                             first, second)
++            pflags = self.get_command_suffix(cb)
++            if not isglobal:
++                self.clear_undo()
++            self.delete_lines(first, second)
++            after = self.cur
++            n = self.append_lines(cb, first - 1, isglobal)
++            if n == 0:
++                self.cur = after
++        elif c == 'd':
++            first, second = self.check_range(self.cur, self.cur, addr_cnt,
++                                             first, second)
++            pflags = self.get_command_suffix(cb)
++            if not isglobal:
++                self.clear_undo()
++            self.delete_lines(first, second)
++        elif c in ('e', 'E'):
++            if c == 'e' and self.modified and prev_status != EMOD:
++                return EMOD
++            self.unexpected_address(addr_cnt)
++            self.unexpected_suffix(cb.peek())
++            name = self.get_filename(cb)
++            # delete everything
++            self.lines = []
++            self.cur = 0
++            self.modified = True
++            self.clear_undo()
++            if name:
++                self.def_filename = name
++            self.read_file(name if name else self.def_filename, 0)
++            self.u_valid = False
++            self.u_state = None
++            self.modified = False
++        elif c == 'f':
++            self.unexpected_address(addr_cnt)
++            self.unexpected_suffix(cb.peek())
++            name = self.get_filename(cb, True)
++            if name:
++                self.def_filename = name
++            if not self.def_filename:
++                raise EdError('No current filename')
++            self.write(self.def_filename + '\n')
++        elif c in ('g', 'v'):
++            if isglobal:
++                raise EdError('Cannot nest global commands')
++            first, second = self.check_range(1, self.last(), addr_cnt,
++                                             first, second)
++            st = self.exec_global(cb, first, second, c == 'g')
++            if st != 0:
++                return st
++        elif c == 'i':
++            pflags = self.get_command_suffix(cb)
++            if not isglobal:
++                self.clear_undo()
++            n = self.append_lines(cb, max(second - 1, 0), isglobal)
++            if n == 0:
++                self.cur = second
++        elif c == 'j':
++            first, second = self.check_range(self.cur, self.cur + 1, addr_cnt,
++                                             first, second)
++            pflags = self.get_command_suffix(cb)
++            if not isglobal:
++                self.clear_undo()
++            if first != second:
++                text = ''.join(l.text for l in self.lines[first - 1:second])
++                self.lines[first - 1:second] = [Line(text)]
++                self.cur = first
++                self.changed()
++        elif c == 'k':
++            ch = cb.get()
++            if second == 0:
++                raise EdError('Invalid address')
++            if ch == '' or not ('a' <= ch <= 'z'):
++                raise EdError('Invalid mark character')
++            pflags = self.get_command_suffix(cb)
++            self.marks[ch] = self.lines[second - 1]
++        elif c in ('l', 'n', 'p'):
++            first, second = self.check_range(self.cur, self.cur, addr_cnt,
++                                             first, second)
++            pflags = self.get_command_suffix(cb)
++            bit = {'l': PF_L, 'n': PF_N, 'p': PF_P}[c]
++            self.print_lines(first, second, pflags | bit)
++            pflags = 0
++        elif c == 'm':
++            first, second = self.check_range(self.cur, self.cur, addr_cnt,
++                                             first, second)
++            dest = self.get_third_addr(cb)
++            if first <= dest < second:
++                raise EdError('Invalid destination')
++            pflags = self.get_command_suffix(cb)
++            if not isglobal:
++                self.clear_undo()
++            else:
++                for nd in self.lines[first - 1:second]:
++                    self.g_inactive.add(id(nd))
++            if dest == first - 1 or dest == second:
++                self.cur = second
++                self.modified = True
++            else:
++                block = self.lines[first - 1:second]
++                cnt = len(block)
++                del self.lines[first - 1:second]
++                if dest > second:
++                    ins = dest - cnt
++                else:
++                    ins = dest
++                self.lines[ins:ins] = block
++                self.cur = ins + cnt
++                self.changed()
++        elif c in ('q', 'Q'):
++            self.unexpected_address(addr_cnt)
++            pflags = self.get_command_suffix(cb)
++            if c == 'q' and self.modified and prev_status != EMOD:
++                return EMOD
++            return QUIT
++        elif c == 'r':
++            self.unexpected_suffix(cb.peek())
++            if addr_cnt == 0:
++                second = self.last()
++            name = self.get_filename(cb)
++            if not self.def_filename and name:
++                self.def_filename = name
++            if not isglobal:
++                self.clear_undo()
++            n = self.read_file(name if name else self.def_filename, second)
++            if n:
++                self.modified = True
++        elif c == 's':
++            pflags = self.command_s(cb, addr_cnt, first, second, isglobal)
++        elif c == 't':
++            first, second = self.check_range(self.cur, self.cur, addr_cnt,
++                                             first, second)
++            dest = self.get_third_addr(cb)
++            pflags = self.get_command_suffix(cb)
++            if not isglobal:
++                self.clear_undo()
++            texts = [l.text for l in self.lines[first - 1:second]]
++            self.insert_texts(dest, texts)
++            self.cur = dest + len(texts)
++        elif c == 'u':
++            self.unexpected_address(addr_cnt)
++            pflags = self.get_command_suffix(cb)
++            self.undo(isglobal)
++        elif c in ('w', 'W'):
++            n = cb.peek()
++            if n in ('q', 'Q'):
++                cb.i += 1
++            else:
++                n = ''
++            self.unexpected_suffix(cb.peek())
++            name = self.get_filename(cb)
++            if addr_cnt == 0 and self.last() == 0:
++                first = second = 0
++            else:
++                first, second = self.check_range(1, self.last(), addr_cnt,
++                                                 first, second)
++            if not self.def_filename and name:
++                self.def_filename = name
++            self.write_file(name if name else self.def_filename,
++                            'ab' if c == 'W' else 'wb', first, second)
++            if (first == 0 and self.last() == 0) or \
++                    (first == 1 and second == self.last()):
++                self.modified = False
++            elif n == 'q' and self.modified and prev_status != EMOD:
++                return EMOD
++            if n:
++                return QUIT
++        elif c == '=':
++            pflags = self.get_command_suffix(cb)
++            self.write('%d\n' % (second if addr_cnt else self.last()))
++        elif c == '\n':
++            first = 1
++            if addr_cnt == 0:
++                first, second = 1, self.cur + (0 if isglobal else 1)
++            if first > second or second > self.last():
++                raise EdError('Invalid address')
++            self.print_lines(second, second, 0)
++        elif c == '#':
++            while True:
++                ch = cb.get()
++                if ch == '\n' or ch == '':
++                    break
++        else:
++            raise EdError('Unknown command')
++        if pflags:
++            self.print_lines(self.cur, self.cur, pflags)
++        return 0
++
++    def main_loop(self):
++        status = 0
++        err_status = 0
++        while True:
++            line = self.get_stdin_line()
++            if line is None:
++                if not self.modified or status == EMOD:
++                    return err_status
++                status = EMOD
++            else:
++                if not line.endswith('\n'):
++                    line += '\n'
++                cb = Cmd(line)
++                try:
++                    status = self.exec_command(cb, status, False)
++                except EdError:
++                    status = ERR
++                if status == 0:
++                    continue
++                if status == QUIT:
++                    return err_status
++            self.write('?\n')
++            if not self.loose and err_status == 0:
++                err_status = 1
++            if self.stdin_is_reg:
++                return err_status
++
++
++def run(argv):
++    extended = loose = scripted = False
++    files = []
++    for a in argv:
++        if len(a) > 1 and a[0] == '-':
++            for ch in a[1:]:
++                if ch == 'E':
++                    extended = True
++                elif ch == 'l':
++                    loose = True
++                elif ch == 's':
++                    scripted = True
++                else:
++                    return 1
++        else:
++            files.append(a)
++    try:
++        st = os.fstat(0)
++        is_reg = stat.S_ISREG(st.st_mode)
++    except OSError:
++        is_reg = False
++    data = sys.stdin.buffer.read().decode('latin-1')
++    ed = Ed(data, is_reg, extended, loose, scripted)
++    code = None
++    if files:
++        name = files[0]
++        try:
++            ed.read_file(name, 0)
++            ed.u_valid = False
++            ed.modified = False
++        except EdError:
++            if is_reg:
++                code = 2
++        ed.modified = False
++        ed.def_filename = name
++    if code is None:
++        try:
++            code = ed.main_loop()
++        except RecursionError:
++            code = 1
++    out = ''.join(ed.out).encode('latin-1')
++    sys.stdout.buffer.write(out)
++    sys.stdout.buffer.flush()
++    return code
++
++
+ def main(argv):
+-    sys.stderr.write("pyed: not implemented yet\n")
+-    return 1
++    import threading
++    sys.setrecursionlimit(200000)
++    threading.stack_size(256 * 1024 * 1024)
++    result = [1]
++
++    def target():
++        result[0] = run(argv)
++
++    t = threading.Thread(target=target)
++    t.start()
++    t.join()
++    return result[0]
+ 
+ 
+ if __name__ == "__main__":

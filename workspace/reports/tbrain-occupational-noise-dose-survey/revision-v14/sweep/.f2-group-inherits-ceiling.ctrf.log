@@ -1,0 +1,77 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 23 items
+
+../../tests/test_outputs.py .........F.............                      [100%]
+
+=================================== FAILURES ===================================
+____________ test_reading_above_ceiling_keeps_todays_counted_level _____________
+
+    def test_reading_above_ceiling_keeps_todays_counted_level():
+        """A reading above the ceiling level is counted where today's step counts it, and flags the ceiling."""
+>       check_family("above_ceiling")
+
+/tests/test_outputs.py:295: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:230: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:225: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'group': 'G1', 'dose': 71.11111111111111, 'twa': 83.5, 'status': 'over'}
+expected = {'group': 'G1', 'dose': 71.1111111111, 'twa': 83.5, 'status': 'action'}
+keys = {'dose', 'group', 'status', 'twa'}
+where = 'above_ceiling HC4-0038 groups[0] (G1)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: above_ceiling HC4-0038 groups[0] (G1) status: 'over', expected 'action'
+E               assert (<class 'str'> is <class 'str'> and 'over' == 'action'
+E                +  where <class 'str'> = type('over')
+E                +  and   <class 'str'> = type('action')
+E                 
+E                 - action
+E                 + over)
+
+/tests/test_outputs.py:215: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db
+PASSED ../../tests/test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts
+PASSED ../../tests/test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold
+PASSED ../../tests/test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading
+PASSED ../../tests/test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift
+PASSED ../../tests/test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose
+PASSED ../../tests/test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters
+PASSED ../../tests/test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection
+PASSED ../../tests/test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged
+PASSED ../../tests/test_outputs.py::test_rule_5_2_impulse_at_140_dbc
+PASSED ../../tests/test_outputs.py::test_rule_4_1_twa_formula
+PASSED ../../tests/test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth
+PASSED ../../tests/test_outputs.py::test_rule_5_3_status_bands_at_82_and_85
+PASSED ../../tests/test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses
+PASSED ../../tests/test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean
+PASSED ../../tests/test_outputs.py::test_report_order_and_group_codes
+PASSED ../../tests/test_outputs.py::test_section_one_limits_reached
+PASSED ../../tests/test_outputs.py::test_section_one_largest_doses
+PASSED ../../tests/test_outputs.py::test_generated_surveys
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level
+========================= 1 failed, 22 passed in 2.81s =========================

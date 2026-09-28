@@ -1,0 +1,20 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The port trace of /app/rtl/vc_arb.v (in_ready, out_valid, out_vc, out_data, credits after every
+  rising edge) equals spec.md's cycle-accurate behaviour under any legal stimulus.
+causal_core: >
+  pre-edge state + same-edge inputs -> opportunity (4.1) -> eligibility (4.2, flush 4.7) -> selection
+  with run/stick (4.3, 4.4) -> output register load/drain (4.5, 3.4) and buffer pop/push/flush (4.6,
+  4.7) and credit arithmetic with load/spend/return (4.8) -> Moore outputs (3.1-3.3).
+core_obligations:
+  - {id: OPPORTUNITY, contribution: "grant only when out_valid==0 or out_ready", authority: "spec 4.1", witness: "family backpressure", plausible_wrong: "grant only when out_valid==0 (bubble after each drain)"}
+  - {id: ELIGIBILITY, contribution: "pre-edge cnt/cred, same-edge flush", authority: "spec 4.2", witness: "family credit", plausible_wrong: "a same-edge credit return enables the grant"}
+  - {id: SELECTION, contribution: "run of two, round robin from last+1, hold on no grant, flush ends run", authority: "spec 4.3, 4.4", witness: "family runs, flush", plausible_wrong: "idle opportunity ends the run / flush keeps the run"}
+  - {id: BUFFER, contribution: "two entries, pop+push same edge, no push when full, flush keeps same-edge write", authority: "spec 3.2, 4.6, 4.7", witness: "family buffer, flush", plausible_wrong: "ready pass-through when full and granted / flush drops same-edge write"}
+  - {id: CREDITS, contribution: "clamp(base - spend + return), base = load or count", authority: "spec 4.8", witness: "family config, credit", plausible_wrong: "a load overrides the same-edge spend/return"}
+  - {id: OUTREG, contribution: "load on grant, clear vc/data on drain, hold on stall", authority: "spec 3.4, 4.5", witness: "all families", plausible_wrong: "keep stale out_data after drain"}
+support_obligations:
+  - {id: RESET, supplied_boundary: "spec 5, stated values", why_not_core: "plain reset values; exercised by family reset"}
+  - {id: BUILD, supplied_boundary: "spec 7 build rules; yosys synth + source lint", why_not_core: "hygiene, not behaviour"}
+non_goals:
+  - X/Z inputs, timing/area, parameterisation beyond 3 VCs, any port other than section 1

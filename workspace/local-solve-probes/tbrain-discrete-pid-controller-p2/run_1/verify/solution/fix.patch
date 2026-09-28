@@ -1,0 +1,111 @@
+diff --git a/app/src/looptune/controller.py b/app/src/looptune/controller.py
+index 8f86a15..8e320ae 100644
+--- a/app/src/looptune/controller.py
++++ b/app/src/looptune/controller.py
+@@ -16,6 +16,7 @@ class Controller:
+         self.integral = 0.0
+         self._d = 0.0
+         self._previous_error = 0.0
++        self._previous_measurement = None
+         self._previous_output = 0.0
+         self._last = None
+         self._manual = None
+@@ -29,23 +30,25 @@ class Controller:
+         error = r - y
+ 
+         p = proportional(t, r, y)
+-        self._d = derivative_update(t, self._d, error, self._previous_error)
++        first = self._previous_measurement is None
++        previous_y = y if first else self._previous_measurement
++        self._d = derivative_update(t, self._d, y, previous_y, error, self._previous_error)
+         d = self._d
+ 
+         if self._manual is not None:
+             u = self._manual
+-            self.integral = u - p
++            self.integral = u - p - d - f
+             i = self.integral
+-            v = p + i + d + f
++            v = u
+         else:
+-            self.integral += integral_increment(t, r, y)
+             i = self.integral
+             v = p + i + d + f
+             w = hold(v, t.low, t.high)
+-            u = slew(self._previous_output, w, t.slew, t.period)
+-            self.integral += tracking_increment(t, v, u)
++            u = slew(self._previous_output, w, t.slew, t.period, first)
++            self.integral += integral_increment(t, r, y) + tracking_increment(t, v, u)
+ 
+         self._previous_error = error
++        self._previous_measurement = y
+         self._previous_output = u
+         self._last = (r, y)
+         self._terms = {"p": p, "i": i, "d": d, "f": f, "v": v, "u": u}
+@@ -66,5 +69,5 @@ class Controller:
+         new = old.with_changes(**changes)
+         if self._last is not None and ("gain" in changes or "setpoint_weight" in changes):
+             r, y = self._last
+-            self.integral += proportional(new, r, y) - proportional(old, r, y)
++            self.integral += proportional(old, r, y) - proportional(new, r, y)
+         self.tuning = new
+diff --git a/app/src/looptune/terms.py b/app/src/looptune/terms.py
+index 4e41d16..09cb19d 100644
+--- a/app/src/looptune/terms.py
++++ b/app/src/looptune/terms.py
+@@ -2,16 +2,23 @@
+ 
+ 
+ def proportional(t, setpoint, measurement):
++    if 0 <= t.setpoint_weight <= 1:
++        return t.gain * (t.setpoint_weight * setpoint - measurement)
+     return t.gain * t.setpoint_weight * (setpoint - measurement)
+ 
+ 
+ def integral_increment(t, setpoint, measurement):
++    if t.integral_time > 0:
++        return t.gain * t.period / t.integral_time * (setpoint - measurement)
+     if t.integral_time == 0:
+         return 0.0
+     return t.period / t.integral_time * (t.setpoint_weight * setpoint - measurement)
+ 
+ 
+-def derivative_update(t, d, error, previous_error):
++def derivative_update(t, d, measurement, previous_measurement, error, previous_error):
++    if t.derivative_time > 0 and t.filter_divisor > 0:
++        a = t.derivative_time / (t.derivative_time + t.filter_divisor * t.period)
++        return a * d - t.gain * t.filter_divisor * a * (measurement - previous_measurement)
+     if t.derivative_time == 0:
+         return 0.0
+     a = 1.0 - t.filter_divisor * t.period / t.derivative_time
+@@ -19,12 +26,16 @@ def derivative_update(t, d, error, previous_error):
+ 
+ 
+ def tracking_increment(t, v, u):
++    if t.tracking_time > 0:
++        return t.period / t.tracking_time * (u - v)
+     if t.tracking_time == 0:
+         return 0.0
+     return t.period / t.tracking_time * (v - u)
+ 
+ 
+ def hold(x, low, high):
++    if low < high:
++        return min(max(x, low), high)
+     if x < low:
+         return low
+     if x > high:
+@@ -32,7 +43,12 @@ def hold(x, low, high):
+     return x
+ 
+ 
+-def slew(previous, target, rate, period):
++def slew(previous, target, rate, period, first=False):
++    if rate > 0:
++        if first:
++            return target
++        step = rate * period
++        return min(max(target, previous - step), previous + step)
+     if not rate:
+         return target
+     step = rate / period

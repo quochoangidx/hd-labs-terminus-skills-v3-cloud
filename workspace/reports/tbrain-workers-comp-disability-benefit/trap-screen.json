@@ -1,0 +1,58 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-workers-comp-disability-benefit",
+ "stage": "strengthening 1/1 after skeleton cycle-1 2/2 and contract_review r1 (svr 2)",
+ "design_rule": "in both traps the minimal natural fix of the driving departure changes the silent case; keeping it needs added code",
+ "traps": [
+  {
+   "id": "T1_correction_below_a_weeks_pay_keeps_its_paydays_week",
+   "kind": "two-hop bare-value exclusion inside the crediting loop a departure forces the solver to rewrite (contract-closure \u00a715 rule 10)",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "D1 (3.1: a week's pay counts toward the week it pays, the week before its payday's) forces payroll.credit_lines(); the shipped loop treats every line alike, so the minimal fix `week_ending(day) - WEEK` moves every line",
+    "bare_two_hop_representation": "every wage line is [Friday, cents] (1.4: all paid on a Friday payday); nothing but the amount tells a correction apart; 2.2 'a week's pay is a wage line of 2,000 cents or more' is the only boundary; 1.4 describes corrections in domain words (a few cents of back pay, a rounding adjustment) without a figure",
+    "one_routing_decision": "which payroll week the line counts toward (in or out of the base period at its two edges)",
+    "keeping_requires_adding_code": "`if cents >= 2000:` around the shift",
+    "definition_chain": "1.4 -> 2.2 (threshold) -> 3.1 (subject 'a week's pay') -> 3.2 'every wage line counts toward one payroll week' (closes the exclusion reading) -> reach rule keeps today's payday week"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 3.2 says each line counts toward one week without placing it; only 3.1 places lines, and only a week's pay",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "soft: a correction to earlier pay could be allocated to the week it corrects, but the line does not say which; counting it when paid is common practice",
+    "unnamed_shared_step": "no: the unruled figure is the week a line below a week's pay counts toward",
+    "trap_in_several_tests": "no: only family T1 has a sub-2,000 line whose payday week and the week before straddle the base period (checked in the scorer)"
+   },
+   "flags": "0 hard, 1 soft",
+   "evidence": {
+    "minimal_fix_T1-shift-every-line": "fails only T1 (receipts/score-skeleton-validation.json)",
+    "exclusion_reading_T1-drop-small-lines": "fails T1 and broad",
+    "shipped_step_equals_model": "606/606 lines (receipts/departure-trap-checks.json)"
+   }
+  },
+  {
+   "id": "T2_week_below_1000_cents_keeps_todays_share",
+   "kind": "departure in a shared expression (RATE_FRACTION, used by the weekly rate and the partial benefit) whose second consumer has a subtype outside the rule's defined domain",
+   "blueprint_4_1_properties": {
+    "shared_expression": "D3 (3.4: two thirds, shipped 3/5) is one constant in rates.py that partial.py also reads; the minimal fix edits the constant and never opens partial.py, which moves every partial week to two thirds",
+    "defined_domain": "5.1's subject is 'a week of partial disability', defined in 2.8 as a week of the partial earnings with 1,000 cents or more earned; 1.6 describes the other weeks in domain words (no lighter work: nothing or a few dollars of holiday pay); 5.2 gives every week a benefit (closes the exclusion reading)",
+    "one_routing_decision": "which share a week of the partial earnings is paid at; the kept share is the shipped constant's value on the shipped line, capped at the manual's rate",
+    "keeping_requires_adding_code": "a separate 3/5 share for weeks below 1,000 cents once the shared constant becomes 2/3",
+    "definition_chain": "1.6 -> 2.8 (threshold) -> 5.1 (subject 'a week of partial disability') -> 5.2 (every week has a benefit) -> reach rule keeps today's share; wage loss (2.7) and rate (3.4/3.5) follow the manual"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 3.4's 'two thirds' governs the weekly rate only; 5.1 governs weeks of partial disability only; nothing else names a share",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "soft-to-moderate: an adjuster would pay a week without light work at least the partial share, and the kept 60 per cent (capped) is lower than the governed two thirds; the reach rule is the only support",
+    "unnamed_shared_step": "no: the unruled figure is the benefit share of a week that is not a week of partial disability",
+    "trap_in_several_tests": "no: only family T2 carries a week below 1,000 cents where 3/5 and 2/3 give different capped benefits; every other family's partial weeks earn 1,000 cents or more"
+   },
+   "flags": "0 hard, 1 soft",
+   "evidence": {
+    "minimal_fix_T2-one-fraction-for-every-week": "fails only T2",
+    "exclusion_reading_T2-pay-nothing-below-1000": "fails only T2",
+    "shipped_step_equals_model": "833/833 weeks (receipts/departure-trap-checks.json)"
+   },
+   "risk_note": "the contrary instinct is the risk: if both solvers read 2.8 but pay two thirds anyway, that is a 0/8 pattern to judge at step 7"
+  }
+ ],
+ "independence": "different nodes (week crediting in payroll.py vs partial share in partial.py/rates.py), different departures (D1 vs D3), different kinds (rewritten loop vs shared constant), different definitions (2.2 vs 2.8); the one reach rule names neither"
+}

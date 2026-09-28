@@ -1,0 +1,507 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-car-rental-agreement-billing",
+ "primary_outcome": "bill runs that follow manual RC-3 for every agreement file within rule 1.3",
+ "obligations": [
+  {
+   "id": "DAYS",
+   "class": "core",
+   "contribution": "a day rental is charged whole days plus one past 59 minutes over; a rental under a day keeps every day begun (silent)",
+   "authority": {
+    "file": "environment/app/docs/rental-charges-manual.md",
+    "anchor": "A day rental is charged for its whole days"
+   },
+   "implementation_sites": [
+    "environment/app/src/rentcharge/time_charge.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "days feed the time charge and the allowance; time and mileage feed the tax; all feed the total and the file sums"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_3_whole_days_and_59_minutes_free",
+     "test_outputs.py::test_rental_under_a_day_keeps_todays_days",
+     "test_outputs.py::test_generated_agreement_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_3_limits_reached",
+     "test_outputs.py::test_figures_left_to_todays_code_together"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "1,440+59 and 1,440+60 minutes; 1 and 59 minutes",
+   "wrong_but_plausible": "every day begun kept (shipped); grace applied under a day",
+   "selfdescription_phrase": "whole days"
+  },
+  {
+   "id": "ALLOWANCE",
+   "class": "core",
+   "contribution": "150 free miles per day charged",
+   "authority": {
+    "file": "environment/app/docs/rental-charges-manual.md",
+    "anchor": "150 miles for each day it is charged for"
+   },
+   "implementation_sites": [
+    "environment/app/src/rentcharge/mileage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "days feed the time charge and the allowance; time and mileage feed the tax; all feed the total and the file sums"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_allowance_150_miles_a_day",
+     "test_outputs.py::test_rule_3_2_allowance_on_a_rental_under_a_day",
+     "test_outputs.py::test_generated_agreement_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_3_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "allowance met exactly and passed by a mile",
+   "wrong_but_plausible": "100 miles a day kept",
+   "selfdescription_phrase": "allowance"
+  },
+  {
+   "id": "TURNOVER",
+   "class": "core",
+   "contribution": "1,000,000 added when the odometer reading back is smaller",
+   "authority": {
+    "file": "environment/app/docs/rental-charges-manual.md",
+    "anchor": "1,000,000 is added"
+   },
+   "implementation_sites": [
+    "environment/app/src/rentcharge/mileage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "days feed the time charge and the allowance; time and mileage feed the tax; all feed the total and the file sums"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_odometer_turns_over",
+     "test_outputs.py::test_generated_agreement_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_3_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "999,999 out turning over",
+   "wrong_but_plausible": "negative miles kept",
+   "selfdescription_phrase": "turnover"
+  },
+  {
+   "id": "FUEL",
+   "class": "core",
+   "contribution": "refuelling rental: fuel rate per eighth short plus 1,500; a car back as full or fuller keeps today's line (silent)",
+   "authority": {
+    "file": "environment/app/docs/rental-charges-manual.md",
+    "anchor": "plus a refuelling fee of 1,500 cents"
+   },
+   "implementation_sites": [
+    "environment/app/src/rentcharge/fuel.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "days feed the time charge and the allowance; time and mileage feed the tax; all feed the total and the file sums"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_refuelling_fee",
+     "test_outputs.py::test_car_back_as_full_or_fuller_keeps_todays_fuel_charge",
+     "test_outputs.py::test_generated_agreement_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_3_limits_reached",
+     "test_outputs.py::test_figures_left_to_todays_code_together"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "one eighth short; fuller by eight",
+   "wrong_but_plausible": "fee missing; line floored at nought",
+   "selfdescription_phrase": "refuelling fee"
+  },
+  {
+   "id": "TAX",
+   "class": "core",
+   "contribution": "8.25 per cent of time and mileage charges, half cent up",
+   "authority": {
+    "file": "environment/app/docs/rental-charges-manual.md",
+    "anchor": "Fuel is not taxed"
+   },
+   "implementation_sites": [
+    "environment/app/src/rentcharge/run.py",
+    "environment/app/src/rentcharge/tax.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "days feed the time charge and the allowance; time and mileage feed the tax; all feed the total and the file sums"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_fuel_is_not_taxed",
+     "test_outputs.py::test_rule_1_2_tax_half_cent_goes_up",
+     "test_outputs.py::test_generated_agreement_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_3_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "taxes of 16.5, 49.5, 115.5 and 1,105.5 cents",
+   "wrong_but_plausible": "fuel taxed; tax floored or half-even",
+   "selfdescription_phrase": "taxes only"
+  },
+  {
+   "id": "TOTALS",
+   "class": "core",
+   "contribution": "bills in file order, totals and file sums",
+   "authority": {
+    "file": "environment/app/docs/rental-charges-manual.md",
+    "anchor": "its tax is the sum"
+   },
+   "implementation_sites": [
+    "environment/app/src/rentcharge/run.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "days feed the time charge and the allowance; time and mileage feed the tax; all feed the total and the file sums"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_bill_order_and_file_totals",
+     "test_outputs.py::test_generated_agreement_files"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_3_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "several agreements in one file",
+   "wrong_but_plausible": "reordered bills",
+   "selfdescription_phrase": "file order"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "DAYS",
+    "to": "ALLOWANCE"
+   },
+   {
+    "from": "DAYS",
+    "to": "TAX"
+   },
+   {
+    "from": "ALLOWANCE",
+    "to": "TAX"
+   },
+   {
+    "from": "TURNOVER",
+    "to": "ALLOWANCE"
+   },
+   {
+    "from": "TAX",
+    "to": "TOTALS"
+   },
+   {
+    "from": "FUEL",
+    "to": "TOTALS"
+   },
+   {
+    "from": "TOTALS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "silent-together",
+   "obligation_ids": [
+    "DAYS",
+    "FUEL"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_figures_left_to_todays_code_together"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each of its rules holds for every agreement file within the limits of its rule 1.3"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the manual gives no rule for a figure that one of the package's steps works out",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/rental-charges-manual.md",
+     "anchor": "A day rental is a rental whose length is 1,440 minutes or more",
+     "witness_ids": [
+      "test_outputs.py::test_rental_under_a_day_keeps_todays_days",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    },
+    {
+     "file": "environment/app/docs/rental-charges-manual.md",
+     "anchor": "A refuelling rental is a rental whose car came back with fewer eighths",
+     "witness_ids": [
+      "test_outputs.py::test_car_back_as_full_or_fuller_keeps_todays_fuel_charge",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Agreement files of one to two hundred agreements will be billed"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "RELABEL_SEED from os.urandom, printed on failure; any draw gives the same verdict for a correct package"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave that driver exactly as it is; the file you leave there has to match ours byte for byte",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  },
+  {
+   "id": "ONLY-GOVERNED",
+   "statement": "Only change what the manual governs.",
+   "enforced_by": [
+    "test_outputs.py::test_only_the_package_changed"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness with a readable control",
+  "test_outputs.py::test_only_the_package_changed": "restriction witness (ONLY-GOVERNED): README, manual and example keep their shipped SHA-256",
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED)"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "BILL-RUN-SCHEMA",
+   "domain_required": true,
+   "rationale": "the billing office reads the bill run in the README's shape, integers in cents",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "## Bill run"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "revision-v2/preflight/preflight.json",
+ "wrong_paths": [
+  {
+   "id": "c1-cap-199",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TOTALS"
+   ],
+   "receipt": "wrong-paths/c1-cap-199.json"
+  },
+  {
+   "id": "c9-fuel-floored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FUEL"
+   ],
+   "receipt": "wrong-paths/c9-fuel-floored.json"
+  },
+  {
+   "id": "c9-grace-under-a-day",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DAYS"
+   ],
+   "receipt": "wrong-paths/c9-grace-under-a-day.json"
+  },
+  {
+   "id": "f1-empty-branch-rejected",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/f1-empty-branch-rejected.json"
+  },
+  {
+   "id": "f2-branch-X-no-bills",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/f2-branch-X-no-bills.json"
+  },
+  {
+   "id": "f3-readme-edited",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/f3-readme-edited.json"
+  },
+  {
+   "id": "f4-argv-basename-guard",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/f4-argv-basename-guard.json"
+  },
+  {
+   "id": "revert-days",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DAYS"
+   ],
+   "receipt": "wrong-paths/revert-days.json"
+  },
+  {
+   "id": "revert-fuel",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FUEL"
+   ],
+   "receipt": "wrong-paths/revert-fuel.json"
+  },
+  {
+   "id": "revert-mileage",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ALLOWANCE",
+    "TURNOVER"
+   ],
+   "receipt": "wrong-paths/revert-mileage.json"
+  },
+  {
+   "id": "revert-tax-base",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TAX"
+   ],
+   "receipt": "wrong-paths/revert-tax-base.json"
+  },
+  {
+   "id": "revert-tax-round",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TAX"
+   ],
+   "receipt": "wrong-paths/revert-tax-round.json"
+  },
+  {
+   "id": "s1-branch-ascii-only",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/s1-branch-ascii-only.json"
+  },
+  {
+   "id": "s1-branch-stripped",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/s1-branch-stripped.json"
+  },
+  {
+   "id": "s1-branch-truncated-32",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/s1-branch-truncated-32.json"
+  },
+  {
+   "id": "s2-non-rc3-branch-no-bills",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/s2-non-rc3-branch-no-bills.json"
+  },
+  {
+   "id": "s3-example-edited",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/s3-example-edited.json"
+  },
+  {
+   "id": "s3-manual-edited",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/s3-manual-edited.json"
+  },
+  {
+   "id": "s4-json-suffix-guard",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/s4-json-suffix-guard.json"
+  },
+  {
+   "id": "f2-fee-day-rentals-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FUEL"
+   ],
+   "receipt": "wrong-paths/f2-fee-day-rentals-only.json"
+  },
+  {
+   "id": "s5-fee-only-from-an-hour",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FUEL"
+   ],
+   "receipt": "wrong-paths/s5-fee-only-from-an-hour.json"
+  },
+  {
+   "id": "s6-no-refuel-rule-under-a-day",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FUEL"
+   ],
+   "receipt": "wrong-paths/s6-no-refuel-rule-under-a-day.json"
+  },
+  {
+   "id": "f3-sub-hour-no-mileage",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ALLOWANCE"
+   ],
+   "receipt": "wrong-paths/f3-sub-hour-no-mileage.json"
+  },
+  {
+   "id": "s7-sub-day-no-mileage",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "ALLOWANCE"
+   ],
+   "receipt": "wrong-paths/s7-sub-day-no-mileage.json"
+  },
+  {
+   "id": "s8-turnover-day-rentals-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TURNOVER"
+   ],
+   "receipt": "wrong-paths/s8-turnover-day-rentals-only.json"
+  },
+  {
+   "id": "f1-numeric-id-as-integer",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/f1-numeric-id-as-integer.json"
+  }
+ ],
+ "task_snapshot_sha256": "6ca1a173755f27b3067d9dd315db09db73ed65b9271a51944ba464c9461212f7"
+}

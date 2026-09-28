@@ -1,0 +1,22 @@
+{
+ "task_slug": "tbrain-container-demurrage-detention",
+ "scorer": "builder self-score at phase 1 (before contract_review)",
+ "pre_mortem": "The solver reads DT-3, fixes the seven departures (both-ends day count, gate-out day in both stages, working-day terminal free time, closures, non-retroactive tiers, revision by first chargeable day, half-up discount), writes its own reference from the rules and fuzzes the package against it. Every departure is self-verifiable. It goes wrong only where its reference holds its own opinion: (T1) it rounds every discount half up, or takes the discount of a box still running on the ended stages only, instead of keeping today's truncation on the repaired amount, because 6.2's 'charges' reads like 'stage amounts' and the accrual/charge line sits in 5.4; (T2) its date lookup meets a first chargeable day before the sheet's first revision and it falls back to the earliest revision or fails, instead of the latest revision today's code uses. A solver that greps the two 'gives no rule' sentences and asks what today's code computes keeps both.",
+ "scores": {
+  "reference_unreachable": 2,
+  "authority_incomplete_for_grading": 3,
+  "hidden_state_not_closed_form": 1,
+  "restraint_traps": 3,
+  "fuzz_blind_spot": 3
+ },
+ "score_notes": {
+  "restraint_traps": "two traps of the held shape on different nodes (M1 on the discount inside the rebuilt rounding; M2/routing on the rebuilt revision lookup), each kept value carrying the departure just fixed; but both are signposted by the same value-level phrase and one reading policy disarms both",
+  "authority_incomplete_for_grading": "both kept figures come from the shipped code, not the rules",
+  "fuzz_blind_spot": "T1 shows only on a running box with a discount leaving half a cent or more (the reference and the package agree wherever the solver's own reading holds); T2 is hit by random effective dates, which exposes it rather than hides it"
+ },
+ "self_verification_resistance": 3,
+ "prediction": "resists weakly (1/2 more likely than 0/2)",
+ "confidence": "low",
+ "decisive_reason": "T1 is the icpms-style definitional-domain departure (the natural rounding fix overwrites a kept truncation that no solver imagines keeping), but T2 is findable by a self-fuzz and one careful policy covers both",
+ "threshold_action": "svr 3 > 2: continue to contract_review and the skeleton pair"
+}

@@ -1,0 +1,89 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-supplier-rebate-settlement",
+ "stage": "after skeleton cycle-2 (1/2 on claude-opus-5) and phase-2 verifier; snapshot d034ad333e4e00a2eee4bab983e3da9a821d03844dd781b1675f3ea5d2dc4476",
+ "design_rule": "TA and TB replicate workers-comp T2 in the abstract (a departure is a wrong value of a shared constant in file X; a second consumer in file Y with no departure of its own applies the constant only where a bare subtype outside the Y rule's defined subject can feel it); TC replicates T1 (uniform one-line shift inside the loop the departure forces the solver to rewrite, a threshold subtype excluded)",
+ "traps": [
+  {
+   "id": "TA_tidy_up_notice_keeps_todays_credit",
+   "kind": "shared-table reach (rates.py small_credit, read by settle.py and protection.py through USES)",
+   "blueprint_4_1_properties": {
+    "shared_expression": "D6 (6.2: 25,000; shipped small_credit 5,000) is one table entry that the notice cut-off in protection.py also reads through USES; the natural fix edits the entry in place",
+    "defined_domain": "5.1's subject is 'a price drop', defined in 2.4 as a notice lowering the unit price by 250 cents or more; 1.6 describes the other notices only in domain words (tidy-ups of a few cents to a couple of dollars a unit); a price drop's credit is at least 250 x 100 = 25,000 cents (1.6 floor of 100 units on hand), so the cut-off never touches a governed drop at either value",
+    "one_routing_decision": "whether a tidy-up's credit is paid or dropped",
+    "keeping_requires_adding_code": "a separate minimum-settlement constant in settle.py (or today's 5,000 kept for protection.py) once 6.2 is fixed",
+    "definition_chain": "1.6 -> 2.4 (threshold) -> 5.1 (subject 'a price drop') -> reach rule keeps today's step with MINIMUM_CREDIT at 5,000; 6.2 speaks only of a settlement"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 5.1 credits price drops only; 6.2's minimum governs a settlement, not a notice",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "soft: an analyst might pay every tidy-up or none; the reach rule is the only support for today's 5,000 cut-off",
+    "unnamed_shared_step": "soft risk: the shared figure is a code constant; a reader could argue 6.2 'sets' MINIMUM_CREDIT. The silence names constants explicitly ('every constant of the package at its value today; the only inputs that change are those the schedule itself sets'); contract_review decides",
+    "trap_in_several_tests": "no: only family TA carries a tidy-up in the quarter (checked by gen.trap_inputs)"
+   },
+   "flags": "0 hard, 2 soft",
+   "evidence": {
+    "natural_fix_W08": "fails only test_tidy_up_notices_keep_todays_credit (wrong-paths/W08-shared-small-credit-edited.json)",
+    "exclusion_reading_W09": "fails only the TA test",
+    "cutoff_removed_W10": "fails only the TA test",
+    "additive_fix": "sweep alt-additive-constants scores 1",
+    "cycle_1": "2/2 kept (named-constant layout; both split the constants)",
+    "cycle_2": "run_1 kept, run_2 missed by the exclusion reading (notice_cutoff pointed at a 250-cent price_drop figure)"
+   }
+  },
+  {
+   "id": "TB_price_match_sale_keeps_todays_chargeback",
+   "kind": "shared-table reach (rates.py unit_handling, read by returns.py and chargeback.py through USES)",
+   "blueprint_4_1_properties": {
+    "shared_expression": "D4 (3.3: 40 cents; shipped unit_handling 25) is one table entry that the claim cut-off in chargeback.py also reads through USES; the natural fix edits the entry in place",
+    "defined_domain": "5.2's subject is 'a contract sale', defined in 2.5 as 100 cents or more below cost; 1.7 describes the rest only in domain words (counter price-match sales a little under cost); a contract sale's gap (>= 100) clears the cut-off at either value",
+    "one_routing_decision": "whether a price-match sale is claimed or skipped",
+    "keeping_requires_adding_code": "a separate return-handling constant in returns.py once 3.3 is fixed",
+    "definition_chain": "1.7 -> 2.5 (threshold) -> 5.2 (subject 'a contract sale') -> reach rule keeps today's step with HANDLING_PER_UNIT at 25; 3.3's charge applies to a return"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 5.2 speaks only of contract sales; 3.3's handling charge is on a return",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "soft",
+    "unnamed_shared_step": "soft after skeleton2: the table key is 'unit_handling' and 3.3 names a handling charge, so the shared-figure reading remains; the blind contract_review (r1, adjudicated) did not uphold it as ambiguity",
+    "trap_in_several_tests": "no: only family TB carries a price-match sale in the quarter"
+   },
+   "flags": "0 hard, 2 soft/moderate",
+   "evidence": {
+    "natural_fix_W11": "fails only test_price_match_sales_keep_todays_chargeback",
+    "exclusion_reading_W12": "fails only the TB test",
+    "additive_fix": "sweep alt-additive-constants scores 1",
+    "cycle_1": "2/2 kept",
+    "cycle_2": "run_1 kept, run_2 missed by the exclusion reading (claim_cutoff pointed at a 100-cent contract_gap figure)"
+   }
+  },
+  {
+   "id": "TC_loose_units_keep_their_invoice_quarter",
+   "kind": "two-hop bare-value exclusion inside the dating loop D1 forces the solver to rewrite",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "D1 (3.1: a carton shipment counts by receipt, invoice + 4 days) forces ledger.dated_lines(); the shipped loop dates every line alike, so the minimal fix `parse_day(invoiced) + 4 days` moves every line",
+    "bare_two_hop_representation": "every purchase line is [invoiced, units, unit_cents]; only units tells a courier line apart; 2.2 'a carton shipment is a purchase line of 12 units or more' is the only boundary; 1.4 describes loose units in domain words without an arrival day",
+    "one_routing_decision": "which quarter a loose-unit line counts toward at the two quarter edges",
+    "keeping_requires_adding_code": "`if units >= 12:` around the shift",
+    "definition_chain": "1.4 -> 2.2 (threshold) -> 3.1 (subject 'a carton shipment') -> 3.2 'every purchase line counts toward exactly one quarter' (closes the exclusion reading) -> reach rule keeps the export's date"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: only 3.1 places a line",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "soft: courier goods also arrive later than the invoice, but the schedule gives no day",
+    "unnamed_shared_step": "no",
+    "trap_in_several_tests": "no: only family TC has a loose-unit line invoiced in the four days before a quarter edge"
+   },
+   "flags": "0 hard, 1 soft",
+   "evidence": {
+    "natural_fix_W13": "fails only test_loose_units_keep_their_invoice_quarter",
+    "exclusion_reading_W14": "fails the TC test and broad tests",
+    "cycle_1": "2/2 kept",
+    "cycle_2": "2/2 kept"
+   }
+  }
+ ],
+ "independence": "three nodes in different files (settle/protection, returns/chargeback, ledger), three departures (D6, D4, D1), two kinds (shared constant reach x2 with different definitions 2.4 and 2.5; rewritten loop with 2.2); the one reach rule names none of them",
+ "layout": "skeleton2: the handling charge and the settlement minimum share entries of one table in rates.py (FIGURES unit_handling 25 and small_credit 5000, looked up through USES by return_charge/claim_cutoff and notice_cutoff/settlement_minimum); no consumer names a shared constant; the Oracle adds return_handling 40 and minimum_settlement 25000 and repoints two uses. Schedule 5.3 closes the exclusion reading (every in-quarter notice and below-cost sale carries one line)",
+ "local_result": "cycle-2 rescored on the finished verifier: 1/2 (probe-verdict.json); run_2's two misses come from one exclusion reading, so TA and TB are correlated in practice; TC has not bitten locally (4/4 kept). No trap missed by both runs: no 0/8 flag"
+}

@@ -1,0 +1,75 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-occupational-noise-dose-survey",
+ "stage": "design, after the skeleton cycle-1 2/2 strengthening (snapshot 0be030db...)",
+ "traps": [
+  {
+   "id": "T3_survey_below_three_quarters_keeps_todays_projection",
+   "kind": "bounded-rule silent edge; the bound sits in a definition (2.5 'partial survey'), not in the rule sentence (3.3 'A partial survey is projected ...')",
+   "properties": {
+    "inside_rebuilt_aggregate": "departure 3.3 (projection to 480 minutes instead of the worker's shift) forces shift.shift_dose() to be rewritten",
+    "natural_rewrite_looks_like_the_rule": "'project a survey shorter than the shift' is how 'partial survey' reads without its definition",
+    "keeping_requires_adding_code": "a three-quarter branch, with the old 480 step kept below it",
+    "chain": "2.4 sampled time -> 2.5 partial survey (at least 3/4, shorter than the shift) -> 3.3 speaks only of partial surveys and of surveys of the whole shift or longer -> value-level silence: the shift dose of any other survey has no rule, so today's figure stands, worked from the manual's sampled time and measured dose"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: no sentence gives every survey a shift dose; the long-shift symptom is narrowed to dosimeters that ran most of the day",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "moderate (projecting short samples is disputed in practice)",
+    "unnamed_shared_step": "no: the unruled figure is the shift dose",
+    "trap_in_several_tests": "no: only its own family/test; the broad and limits families sample at least three quarters by predicate"
+   },
+   "flags": "0 hard, 1 soft",
+   "receipts": "receipts/departure-trap-checks.json traps[1]; receipts/score-skeleton-validation.json natural_T3_0/1 fail only T3"
+  },
+  {
+   "id": "T4_reading_above_ceiling_counted_at_the_ceiling",
+   "kind": "apply-the-formula-everywhere edge (Opus kind) in the dose loop the departures force the solver to rebuild",
+   "properties": {
+    "inside_rebuilt_aggregate": "departures 2.3 (threshold edge), 2.4 (sampled time) and 3.1 (85/3) force runs.measure() and its loop to be rebuilt; today's loop takes `counted = min(level, CEILING_DBA)` before the threshold test",
+    "natural_rewrite_looks_like_the_rule": "3.1 'the reference duration at a level L is 480 / 2^((L - 85) / 3)' written with L the logged level",
+    "keeping_requires_adding_code": "the rebuilt loop must keep the ceiling step inside it",
+    "chain": "3.2 sums 'the reference duration at the level it is counted at' -> 2.3 'one logged no higher than the ceiling level is counted at its own level' -> 5.1 'The ceiling level is 115.0 dBA' (three non-adjacent rules) -> value-level silence: the level a reading above the ceiling is counted at has no rule, so today's figure (the ceiling level) stands; its reference duration then follows 3.1"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 3.1 gives the duration at a level, and 3.2 names which level; 5.1's ceiling flag does not govern dose",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "moderate: an expert would integrate at the logged level, but the worker's status is 'over' either way through the ceiling flag, so only the dose and TWA figures move",
+    "unnamed_shared_step": "no: the unruled figure is 'the level it is counted at'",
+    "trap_in_several_tests": "no: readings above 115.0 dBA appear only in its own family/test; the ceiling-flag-true witness is inside it"
+   },
+   "flags": "0 hard, 1 soft",
+   "receipts": "receipts/departure-trap-checks.json traps[2]; receipts/score-skeleton-validation.json natural_T4_0 fails only T4"
+  },
+  {
+   "id": "T1_run_logged_at_0_stays_out_of_sampled_time",
+   "kind": "definition hop on a bare value inside a rebuilt aggregate (exclusion)",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "departure 2.4 forces the sampled-time sum in runs.measure() to be rebuilt; the natural rebuild moves `sampled += minutes` ahead of every test",
+    "bare_two_hop_representation": "a run's `level` is 0.0 in the same homogeneous `log` list; README gives only the range '0.0 or 40.0-140.0', never what 0.0 means; excluded only by 2.2 'a reading is a run logged at 40.0 dBA or more' and 2.4 'sampled time is the total length of the worker's readings'",
+    "one_routing_decision": "the run's minutes are in or out of sampled time; no kept arithmetic",
+    "keeping_requires_adding_code": "the shipped code has no reading floor; the repair must add one (is_reading) inside the rebuilt loop",
+    "definition_chain": "1.4 level range -> 2.2 reading -> 2.4 sampled time -> 3.3 projection denominator"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: no sentence in manual, README or instruction speaks of the log's or the dosimeter's total time; 3.3 speaks only of sampled time",
+    "no_definitional_chain": "no: chain 2.2 -> 2.4 -> 3.3",
+    "contrary_expert_instinct": "no: a dosimeter logging 0.0 dBA measured nothing; hygienists exclude unmeasured time from sampled time",
+    "unnamed_shared_step": "no: the step is the defined term 'sampled time'",
+    "trap_in_several_tests": "no (planned): runs at 0.0 only in test_run_logged_at_nought_stays_out_of_sampled_time; its surveys are full-shift and hold no reading below or at the threshold, so a miss of 2.3, 2.4 or the T3 edge does not turn it red"
+   },
+   "flags": 0,
+   "natural_wrong_path_receipt": "receipts/departure-trap-checks.json traps[0] (natural repair differs from model; Oracle matches; shipped matches model on the sampled time of such logs)",
+   "residual_risk": "collapse risk rather than 0/8: the visible example holds a run at 0.0 and the chain is short, so a solver who writes its own reference from the definitions keeps it",
+   "status": "demoted: governed rule kept as a scorer family, not counted (cycle-1: both solvers read the 40.0 floor in one hop)"
+  }
+ ],
+ "independence": "T3: the shift dose of a survey, shift.py, 2.5 'partial survey'. T4: the level a reading is counted at, runs.py, 2.3/5.1 'counted at its own level ... no higher than the ceiling level'. Different figures, files, lists and definitions; the instruction names neither. Both are silent keeps, so a solver who audits every defined term for a bounded domain gets both: one reading policy still covers them",
+ "verdict": "T3 and T4: 0 hard flags, 1 soft each. Both are the unanimous-miss (0/8) risk kind if the skeleton pair misses them together; step 4a re-screens",
+ "dropped": [
+  {
+   "id": "T2_member_without_reading_stays_out_of_group_mean",
+   "reason": "contract_review F1: 1.3 settled it and the README 0.0 competed; the no-shift-dose state was removed, and the governed quiet-member case stays as D9b"
+  }
+ ]
+}

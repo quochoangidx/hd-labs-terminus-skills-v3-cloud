@@ -1,0 +1,203 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-A",
+  "snapshot_sha256": "673a31e29e8ec8e46c69e24d873670315f77f1c35a6f15fa483a43e42c37b01f",
+  "severity": "None",
+  "summary": "No uncontrolled input changes the grade. Every graded survey and expectation is sealed and pinned by SHA-256 and row count. The one run-time randomness, the os.urandom relabelling of the five generated surveys, changes only labels, worker order and run splitting. Those change doses by rounding-error amounts, far inside the 5e-11 dose tolerance, and seal.py keeps every unrounded worker and group TWA at least 1e-7 dB from a rounding half, so the reported tenth and the status cannot flip. There is no clock, network or fixed sleep, and the base images are digest-pinned.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/noise-survey-manual.md",
+      "environment/app/examples/press-shop-day.json",
+      "environment/app/tools/noisedose_run.py",
+      "environment/app/src/noisedose/__init__.py",
+      "environment/app/src/noisedose/flags.py",
+      "environment/app/src/noisedose/groups.py",
+      "environment/app/src/noisedose/levels.py",
+      "environment/app/src/noisedose/report.py",
+      "environment/app/src/noisedose/runs.py",
+      "environment/app/src/noisedose/shift.py",
+      "environment/app/src/noisedose/survey.py",
+      "environment/app/src/noisedose/twa.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/seal.py",
+      "solution/jobgen.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/above_ceiling.jsonl",
+      "tests/expected/below_three_quarters.jsonl",
+      "tests/expected/ceiling_level.jsonl",
+      "tests/expected/differential-above_ceiling.jsonl",
+      "tests/expected/differential-below_three_quarters.jsonl",
+      "tests/expected/differential-measured_nothing.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/groups.jsonl",
+      "tests/expected/impulse.jsonl",
+      "tests/expected/limits_logs.jsonl",
+      "tests/expected/limits_workers.jsonl",
+      "tests/expected/measured_nothing.jsonl",
+      "tests/expected/partial_surveys.jsonl",
+      "tests/expected/paused_runs.jsonl",
+      "tests/expected/quiet_members.jsonl",
+      "tests/expected/reference_duration.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/rounding.jsonl",
+      "tests/expected/sampled_time.jsonl",
+      "tests/expected/status.jsonl",
+      "tests/expected/three_quarters.jsonl",
+      "tests/expected/threshold.jsonl",
+      "tests/expected/twa.jsonl",
+      "tests/expected/whole_shift.jsonl",
+      "tests/shipped/app/tools/noisedose_run.py",
+      "tests/shipped/app/src/noisedose/__init__.py",
+      "tests/shipped/app/src/noisedose/flags.py",
+      "tests/shipped/app/src/noisedose/groups.py",
+      "tests/shipped/app/src/noisedose/levels.py",
+      "tests/shipped/app/src/noisedose/report.py",
+      "tests/shipped/app/src/noisedose/runs.py",
+      "tests/shipped/app/src/noisedose/shift.py",
+      "tests/shipped/app/src/noisedose/survey.py",
+      "tests/shipped/app/src/noisedose/twa.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 62 manifest entries against the files read. The Read view of tests/expected/limits_workers.jsonl was truncated after worker L165. I read the rest of that line with anchored Grep extractions: worker rows L160-L299 and all 40 group rows. The shipped package and driver files have the same manifest SHA-256 as the environment copies, and I read both.",
+    "Traced every source of randomness in tests/test_outputs.py. RELABEL_SEED comes from os.urandom (line 43) and is used only by relabel() in test_generated_surveys (lines 339-368). The tempfile.mkdtemp names (lines 83, 121-122) and mktemp in test.sh are scratch paths only and are never compared (the D-3 pattern).",
+    "Followed the relabel from start to finish. It sets a new survey name that the expected report copies, new sorted unique 12-character ids that the expected worker rows copy, and a shuffled worker order that the expected worker rows follow. Group codes and group rows stay unchanged. Each run of two or more minutes is split into two runs at the same level, which keeps the sampled time, the counted readings, the ceiling flag and the peaks the same. Only the floating-point summation order changes, by about 1e-16 relative, compared with REL/ABS = 5e-11 (line 41).",
+    "Checked that summation-order noise cannot move a reported TWA tenth or a status. seal.py line 95 asserts not model.near_rounding_edge(survey) for every sealed survey. model.py lines 148-164 check each worker's and each group's unrounded TWA against a margin of 1e-6 tenths, and the relabelled survey has the same unrounded figures up to rounding error.",
+    "Checked that the relabelled survey stays inside section 1. Splitting only doubles run counts, which are deterministic and small (generated logs hold at most about 14 runs), within_limits is re-asserted at line 367, and ids come from CODE plus hyphen with length 12, matching manual 1.4.",
+    "Checked that the generated corpus is pinned. jobgen.py uses SEED = 20260926 (line 14) and is authoring-only. The verifier reads only the sealed JSONL, verified by SHA-256 and row count against ROSTER (test_outputs.py lines 170-182).",
+    "Checked that boundary cases are guaranteed fixtures, not random draws: 79.9/80.0/80.1 dBA, 115.0 and 115.1 dBA, 139.9/140.0 dBC, exactly three quarters, one minute short of three quarters, whole shift, TWAs on 82.0/85.0, 0.0 runs, empty logs and section 1 limits. Each has its own named family, and none relies on the relabel draw.",
+    "Checked clock use. The only time call is time.monotonic() for a 1,500 s overall DEADLINE (line 39) under a 1,800 s verifier timeout. There is no wall-clock or date dependence in the task, model or verifier, and the manual has no time-window rule.",
+    "Checked readiness and timing. Each reduction is a synchronous Popen.communicate with the remaining budget as timeout, and the whole process group is killed afterwards (lines 95-116). There are no sleeps and no services to wait for. About 95 short Python runs fit well inside the budget.",
+    "Checked dependencies. Both images use a digest-pinned python:3.13-slim-bookworm, so candidate and model use the same libm and interpreter. The verifier pins pytest==9.1.1 and pytest-json-ctrf==0.5.2. The verifier runs with no network. Unpinned apt packages (tmux, asciinema, patch, git) exist only in the agent image and are not used in grading.",
+    "Checked ordering. Worker order is the survey order and group order is the sorted codes (README lines 34-40). compare() checks both list orders exactly, as the instruction requires, and expected rows follow the same rule. The shipped package and model both sort group codes. Test order is fixed by file order, and pytest-randomly is disabled.",
+    "Checked the shipped differential. The shipped package is deterministic, with no set or hash iteration and sorted group codes, so the assertion sa['dose'] == sb['dose'] (line 229) gives the same result on every run."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fixed fixtures or explicit stable seed; boundary cases guaranteed",
+      "status": "checked",
+      "reason": "All graded inputs are sealed JSONL pinned by SHA-256 and row count. The generator seed is constant and authoring-only. Each boundary case sits in its own named family. The run-time relabel only adds checks on top of the sealed generated family, which is always checked first.",
+      "evidence": ["tests/test_outputs.py:170-182", "tests/test_outputs.py:361-368", "solution/jobgen.py:14", "solution/jobgen.py:53-151", "tests/expected/ROSTER:1-24"],
+      "finding_ids": []
+    },
+    {
+      "category": "Fresh random seeds affecting graded result",
+      "status": "checked",
+      "reason": "The os.urandom seed drives only a figure-preserving relabel. The expected values follow the same labels and order, the dose tolerance absorbs summation-order noise, and seal.py keeps every TWA away from a rounding half, so a correct submission gets the same result on every draw. The seed is printed in failure messages so a failure can be replayed.",
+      "evidence": ["tests/test_outputs.py:41-43", "tests/test_outputs.py:339-358", "solution/seal.py:95", "solution/model.py:148-164"],
+      "finding_ids": []
+    },
+    {
+      "category": "Evaluation clock fixed when expiry/time windows graded",
+      "status": "not_applicable",
+      "reason": "The contract has no date or time-window rule. The only clock is a monotonic overall budget, which cannot change a verdict for a normally fast submission.",
+      "evidence": ["environment/app/docs/noise-survey-manual.md:1-103", "tests/test_outputs.py:39", "tests/test_outputs.py:129-130"],
+      "finding_ids": []
+    },
+    {
+      "category": "Pinned dependencies and local inputs",
+      "status": "checked",
+      "reason": "Both base images are digest-pinned and the verifier's pytest packages are pinned. All inputs are local under /tests, and the verifier runs with no network. The unpinned apt tools are in the agent image only and play no part in grading.",
+      "evidence": ["tests/Dockerfile:2-4", "environment/Dockerfile:2-4", "task.toml:18-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Sorted where contract requires order; equivalent orderings accepted where not",
+      "status": "checked",
+      "reason": "The README fixes worker order as survey order and group order as ascending code order, and the instruction says list order is compared exactly. The verifier compares by position, which matches. No unordered collection is compared in a fixed order.",
+      "evidence": ["environment/app/README.md:33-41", "instruction.md:5", "tests/test_outputs.py:207-214", "solution/model.py:141"],
+      "finding_ids": []
+    },
+    {
+      "category": "Readiness conditions instead of fixed sleeps",
+      "status": "checked",
+      "reason": "Reductions are synchronous one-shot processes with no service startup and no sleep. Process groups are killed after each run, so nothing left running from one invocation can affect the next.",
+      "evidence": ["tests/test_outputs.py:95-116", "tests/test.sh:18-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Filesystem/iteration ordering",
+      "status": "checked",
+      "reason": "Families are loaded by explicit name, and seal.py sorts its rglob. Group rows are built from sorted codes in the model, the shipped package and the reference patch. Neither the verifier nor any of these packages iterates over a set or hash in a way that affects grading.",
+      "evidence": ["tests/test_outputs.py:217-219", "solution/seal.py:104-110", "environment/app/src/noisedose/groups.py:16", "solution/fix.patch:24-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Floating-point tolerance vs. nondeterministic evaluation order",
+      "status": "checked",
+      "reason": "Doses are graded at 5e-11 relative (absolute below one), and sealed doses keep 12 significant figures (error at most 5e-12). A TWA tenth is compared exactly, but only after the unrounded values were proven to be at least 1e-7 dB from a half.",
+      "evidence": ["tests/test_outputs.py:185-188", "solution/seal.py:59-63", "solution/model.py:87-91"],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated clean-run stability of correct and incorrect submissions",
+      "status": "checked",
+      "reason": "Static trace only, not executed. A correct submission passes on every draw by the reasoning above. A wrong submission that behaves correctly only on sealed names or content fails the relabel with near certainty (36^10 names, new 12-character ids). Every rule-level wrong behaviour I traced fails a sealed, non-random family, so its grade does not depend on the draw.",
+      "evidence": ["tests/test_outputs.py:235-368"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["1.2 TWA rounded to nearest tenth, half up", "run-time relabel reorders workers and splits runs"],
+      "case_or_path": "Group mean and worker dose computed in a different summation order after the shuffle and split, then rounded to a tenth. seal.py rejects any survey whose unrounded worker or group TWA is within 1e-7 dB of a half, so a rounding-error shift cannot change the tenth or the 82.0/85.0 status band.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:339-358", "solution/model.py:148-164", "solution/seal.py:95"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["README worker order is survey order", "relabel shuffles workers"],
+      "case_or_path": "Expected worker rows are rebuilt in the shuffled order with the new ids (relabel lines 350-358), so comparing by position stays consistent. Group rows keep sorted-code order, which the shuffle does not change.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:347-358", "environment/app/README.md:33-41"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.4 limit of 1,500 runs per log", "relabel splits every run of two or more minutes"],
+      "case_or_path": "Run-count doubling does not depend on the draw. Generated logs are short, and within_limits is re-asserted on the relabelled survey, so the result is the same on every run.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:353-356", "tests/test_outputs.py:367", "solution/jobgen.py:180-196"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.5/3.3 partial vs. below-three-quarters projection", "run splitting"],
+      "case_or_path": "Splitting keeps the total length of readings, so the integer test 4*sampled >= 3*shift and the trap classification come out the same. The generated family carries no trap inputs (load asserts this).",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:158-167", "tests/test_outputs.py:181", "solution/model.py:55-58"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["shipped-package differential", "hash/iteration determinism of the shipped package"],
+      "case_or_path": "sa['dose'] == sb['dose'] is asserted on the shipped copy on every run. The shipped code is plain arithmetic with sorted group codes, so the assertion is stable.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:222-232", "tests/shipped/app/src/noisedose/runs.py:10-24", "tests/shipped/app/src/noisedose/shift.py:11-22"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["overall DEADLINE budget", "per-test reductions including 1,500-run and 300-worker surveys"],
+      "case_or_path": "About 95 short synchronous Python invocations against a 1,500 s budget under a 1,800 s verifier timeout. There is no sleep, and a normally fast correct implementation has ample margin.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:39", "tests/test_outputs.py:129-132", "task.toml:18-19"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

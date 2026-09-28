@@ -1,0 +1,381 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-container-demurrage-detention",
+ "primary_outcome": "the statement printed by /app/tools/ddbill_run.py gives every container's stage figures, amount, discount and net and the invoice total as tariff rules DT-3 give them",
+ "obligations": [
+  {
+   "id": "STAGE_DAYS",
+   "class": "core",
+   "contribution": "merchant stage starts on the gate-out date; a stage's days run from its first day through its last (or the cut-off) with both ends counted",
+   "authority": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "A stage's days are the dates from its first day through its last day"
+   },
+   "implementation_sites": [
+    "environment/app/src/ddbill/stays.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "days set the free-time window and every chargeable day, hence amounts, discount and total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_days_count_both_ends",
+     "test_outputs.py::test_rule_2_2_merchant_stage_starts_on_gate_out_day"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_days_count_both_ends"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "boxes gated out and returned on the discharge day, and stays of one to four hundred days, running and ended",
+   "wrong_but_plausible": "date difference without the first day; merchant stage from the day after gate-out (shipped)",
+   "selfdescription_phrase": "a stage's days"
+  },
+  {
+   "id": "TERMINAL_FREE_TIME",
+   "class": "core",
+   "contribution": "terminal free days are used one per working day (not a weekend or port holiday) and not on a closure day; none means the day before the first day",
+   "authority": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "free days are used one per working day"
+   },
+   "implementation_sites": [
+    "environment/app/src/ddbill/freetime.py",
+    "environment/app/src/ddbill/dates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the last free day decides which days are chargeable"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_terminal_free_time_uses_working_days",
+     "test_outputs.py::test_rule_3_1_closure_day_uses_no_free_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_3_no_free_days"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "discharges on a Thursday or Friday before a weekend and a holiday, with a closure inside free time",
+   "wrong_but_plausible": "calendar days (shipped); weekends skipped but holidays or closures counted",
+   "selfdescription_phrase": "last free day"
+  },
+  {
+   "id": "CHARGEABLE_DAYS",
+   "class": "core",
+   "contribution": "chargeable days are the stage's days after its last free day, closure days left out at the terminal only; weekends and holidays after free time are charged",
+   "authority": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "A stage's chargeable days are its days after its last free day"
+   },
+   "implementation_sites": [
+    "environment/app/src/ddbill/freetime.py",
+    "environment/app/src/ddbill/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the count and the first chargeable day feed the tier charge and the scale choice"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_closure_day_is_not_chargeable_at_the_terminal"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_weekends_after_free_time_are_chargeable"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "closures after free time at the terminal and during the merchant stage; a holiday after free time",
+   "wrong_but_plausible": "stage days less free days (shipped); drop weekends after free time; drop closures in the merchant stage",
+   "selfdescription_phrase": "chargeable days"
+  },
+  {
+   "id": "SCALE",
+   "class": "core",
+   "contribution": "a stage is priced on the scale of the revision in force on its first chargeable day; before the contract's earliest effective date the rules give no rule and the latest revision stays",
+   "authority": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "the revision in force on the stage's first chargeable day"
+   },
+   "implementation_sites": [
+    "environment/app/src/ddbill/rates.py",
+    "environment/app/src/ddbill/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the scale sets every stage amount"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_2_scale_in_force_on_first_chargeable_day",
+     "test_outputs.py::test_charges_that_began_before_the_rate_sheet_keep_todays_scale"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_2_revision_effective_on_the_first_chargeable_day"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a stage whose first chargeable day falls between two revisions, on an effective date, and before the earliest",
+   "wrong_but_plausible": "latest revision always (shipped); the earliest revision or an error when none is in force (natural over-repair)",
+   "selfdescription_phrase": "revision in force"
+  },
+  {
+   "id": "TIER_CHARGE",
+   "class": "core",
+   "contribution": "each chargeable day is charged at the rate of the tier that takes it; tiers are not retroactive",
+   "authority": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "Tiers are not retroactive"
+   },
+   "implementation_sites": [
+    "environment/app/src/ddbill/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the tier charge is the stage amount"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_3_tiers_are_not_retroactive"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_3_stay_ending_on_a_tier_boundary"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "stays ending one day short of, on, and one day past each tier boundary of a five-tier scale",
+   "wrong_but_plausible": "every day at the rate of the tier the last day reaches (shipped); off-by-one boundary",
+   "selfdescription_phrase": "tier that takes it"
+  },
+  {
+   "id": "DISCOUNT",
+   "class": "core",
+   "contribution": "the discount is the contract percentage of the stages' charges rounded half up; for a container with a running stage the rules give no rule (an accrual is not a charge) and today's truncated percentage of the repaired amount stays",
+   "authority": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "A container's discount is its contract's discount percentage"
+   },
+   "implementation_sites": [
+    "environment/app/src/ddbill/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the discount sets the net and the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_2_discount_rounds_half_up",
+     "test_outputs.py::test_running_container_keeps_todays_discount"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_2_discount_exact_half_cent"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "returned containers whose amount times percentage leaves 0, 49, 50 and 99 hundredths; running containers leaving 50 to 99 hundredths",
+   "wrong_but_plausible": "truncation everywhere (shipped); half up everywhere, or a discount on the ended stages only (natural over-repairs)",
+   "selfdescription_phrase": "discount"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver printing the statement",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/ddbill_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  },
+  {
+   "id": "STATEMENT_LAYOUT",
+   "class": "support",
+   "contribution": "section 7 keys, container order, null merchant stage",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/ddbill/statement.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_statement_layout_and_order"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "STAGE_DAYS",
+    "to": "TERMINAL_FREE_TIME"
+   },
+   {
+    "from": "STAGE_DAYS",
+    "to": "CHARGEABLE_DAYS"
+   },
+   {
+    "from": "TERMINAL_FREE_TIME",
+    "to": "CHARGEABLE_DAYS"
+   },
+   {
+    "from": "CHARGEABLE_DAYS",
+    "to": "SCALE"
+   },
+   {
+    "from": "CHARGEABLE_DAYS",
+    "to": "TIER_CHARGE"
+   },
+   {
+    "from": "SCALE",
+    "to": "TIER_CHARGE"
+   },
+   {
+    "from": "TIER_CHARGE",
+    "to": "DISCOUNT"
+   },
+   {
+    "from": "TIER_CHARGE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "DISCOUNT",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STAGE_DAYS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "TERMINAL_FREE_TIME",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "CHARGEABLE_DAYS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "free-time-sets-first-chargeable-day-and-scale",
+   "obligation_ids": [
+    "TERMINAL_FREE_TIME",
+    "CHARGEABLE_DAYS",
+    "SCALE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_2_scale_in_force_on_first_chargeable_day",
+    "test_outputs.py::test_rule_3_1_terminal_free_time_uses_working_days"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "chargeable-count-drives-tiers",
+   "obligation_ids": [
+    "STAGE_DAYS",
+    "CHARGEABLE_DAYS",
+    "TIER_CHARGE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_3_tiers_are_not_retroactive",
+    "test_outputs.py::test_rule_4_1_closure_day_is_not_chargeable_at_the_terminal"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "stage-status-decides-discount",
+   "obligation_ids": [
+    "TIER_CHARGE",
+    "DISCOUNT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_6_2_discount_rounds_half_up",
+    "test_outputs.py::test_running_container_keeps_todays_discount"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each rule applies to every job inside the limits of rule 1.4"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the rules give no rule for a value the package works out",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/tariff-rules.md",
+     "anchor": "where a rule needs the revision in force on such a day",
+     "witness_ids": [
+      "test_outputs.py::test_charges_that_began_before_the_rate_sheet_keep_todays_scale"
+     ]
+    },
+    {
+     "file": "environment/app/docs/tariff-rules.md",
+     "anchor": "Where a rule needs the charge of a running stage",
+     "witness_ids": [
+      "test_outputs.py::test_running_container_keeps_todays_discount"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Jobs of one to three hundred containers under one to twenty contracts will be run"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED (authoring only; graded jobs are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave the driver alone: the file you leave at that path must be byte-for-byte the one you were given",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_candidate_cannot_read_ground_truth": "protected ground truth witness (planned)"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATEMENT-ORDER",
+   "domain_required": true,
+   "rationale": "the statement lists containers in job order",
+   "authority_anchor": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "in the job's order"
+   }
+  },
+  {
+   "id": "HALF-CENT-UP",
+   "domain_required": true,
+   "rationale": "discount rounding",
+   "authority_anchor": {
+    "file": "environment/app/docs/tariff-rules.md",
+    "anchor": "an exact half cent is rounded up"
+   }
+  }
+ ],
+ "wrong_paths": []
+}

@@ -1,0 +1,133 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "ad6e645e958855ab9f8a7647802a408015390e1adf717230c63db2250e540cda",
+  "severity": "None",
+  "summary": "The patched package (solution/fix.patch applied by solve.sh) implements every manual TD-7 rule within section-1 limits and keeps today's calculation, with today's constants, for the two items no rule reaches (the week a sub-2,000-cent correction counts toward, and the share paid on a partial-earnings week below 1,000 cents), as instruction.md paragraph 2 requires. I found no concrete incorrect behavior on any normal, boundary or interaction path.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/td-benefits-manual.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/src/tdbenefit/__init__.py",
+      "environment/app/src/tdbenefit/dates.py",
+      "environment/app/src/tdbenefit/disability.py",
+      "environment/app/src/tdbenefit/money.py",
+      "environment/app/src/tdbenefit/partial.py",
+      "environment/app/src/tdbenefit/payroll.py",
+      "environment/app/src/tdbenefit/rates.py",
+      "environment/app/src/tdbenefit/statement.py",
+      "environment/app/tools/tdbenefit_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/seal.py",
+      "solution/jobgen.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked that fix.patch applies: hunk headers and context lines match the shipped disability.py, partial.py, payroll.py and rates.py line for line. Old and new line counts agree for every hunk. solve.sh runs `cd /; patch -p1`, which maps a/app/src/... to /app/src/..., and the Dockerfile installs patch. The driver is not touched.",
+    "Traced sample-job.json by hand through the patched logic (a static trace; nothing was executed). Injury on Wed 2025-03-12 puts the week of injury at Sun 03-16, so the base period is Sundays 2024-12-15..2025-03-09. Each week's-pay line counts toward F-5, so 13 of them land in the base period. The 37-cent correction counts toward its payday's week, 01-26, which is in the base period. Base wages are 1,389,428, so AWW = 106879. The first row is in force, so the rate is round(2/3*106879) = 71253. Disability days are 25+4 = 29, giving waiting 3, retro 3, paid 29, and ttd = 71253*29/7 = 295191. TPD is 43253+30253.",
+    "Checked week crediting: for a Friday payday F, week_ending(F)-7 = F-5, which is the Sunday whose following Friday is F (manual 2.2/3.1). Lines under 2,000 cents keep the payday's week, which is today's step because no manual rule places them (3.2).",
+    "Checked the AWW: base-period sum /13, rounded half up (3.3, 1.1). With no base wages the AWW is 0, which removes the shipped divide-by-zero on weeks_paid = 0.",
+    "Checked the rate: the row in force is the last row with from <= injury (2.4); a default of table[0] is never used, because 1.3 guarantees injury >= first row date. An AWW below the minimum returns the AWW itself (3.5). Otherwise the rate is round(2/3 AWW) clamped to [min, max] (3.4). Rounding before clamping is equivalent to clamping first, because the bounds are integers and rounding is monotone.",
+    "Checked disability: days are inclusive on both ends (2.5), the waiting period is min(3, days) (2.6), retro equals waiting when days >= 14 (4.1), paid = days - waiting + retro (4.2), and ttd = half_up(rate*paid, 7) (4.3, 1.1).",
+    "Checked partial: loss = AWW - earned or 0 (2.7). Weeks earning >= 1,000 cents get 2/3 of the loss, rounded and capped at the rate (2.8, 5.1). Lower weeks keep today's 3/5 share and rate cap, applied to the manual's AWW, loss and rate, per the paragraph-2 rule that unreached calculations keep today's steps and constants. tpd_weeks counts every week (6.1), and tpd is the sum (5.2).",
+    "Checked the statement: keys match the README order, every value except claim is an integer, the claim is passed through as given, and job order is kept.",
+    "Checked half-up rounding: the divisors 13, 3, 5 and 7 are odd, so no exact half ever arises and the tie-break cannot matter.",
+    "Checked model.py as a cross-reference only, not as an independent argument. Its rules agree with the patch on every branch listed above."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced the sample job. Also traced these boundaries: injury on Sunday, Monday or Friday for the base period; a line of exactly 2,000 cents versus 1,999; injury on the day a row takes effect and the day before; AWW equal to the minimum versus below it; 2/3 AWW at the max or min; one-day periods; 1, 2 and 3 disability days; 13 versus 14 disability days; earnings of exactly 1,000 versus 999; earnings >= AWW; no wage lines; no partial weeks.",
+      "evidence": ["solution/fix.patch:52-67", "solution/fix.patch:80-100", "solution/fix.patch:8-23", "solution/fix.patch:30-43", "environment/app/docs/td-benefits-manual.md:52-117"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, types, keys, order, paths",
+      "status": "checked",
+      "reason": "statement.py FIELDS match the README keys. Every figure is a Python int, from integer half_up arithmetic. The driver keeps json.dump on stdout and is unchanged. Claims keep job order.",
+      "evidence": ["environment/app/src/tdbenefit/statement.py:9-29", "environment/app/README.md:35-50", "environment/app/tools/tdbenefit_run.py:12-20"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches (loop state, replacement, identifier reuse)",
+      "status": "checked",
+      "reason": "row_in_force carries loop state that is overwritten on each qualifying row, so the last row effective on or before the injury wins. Rows are strictly increasing (1.3). The partial loop accumulates per-week benefits with no carried state beyond the total. Claim numbers are only echoed.",
+      "evidence": ["solution/fix.patch:83-89", "solution/fix.patch:37-43"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery, persistence or interruption promise. The task is a pure stdin-free, file-in, JSON-out computation.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rules the manual does not reach: today's calculation and constants preserved, no added guards",
+      "status": "checked",
+      "reason": "Sub-2,000 lines keep the payday's week, and sub-1,000 partial weeks keep today's 3/5 share and rate cap. Only manual-settled inputs (AWW, loss, rate) take manual values. No clamp or guard beyond the manual's own rules was added; the table[0] default is unreachable within 1.3.",
+      "evidence": ["instruction.md:3", "solution/fix.patch:30-43", "solution/fix.patch:53-59", "environment/app/src/tdbenefit/partial.py:12-18", "environment/app/src/tdbenefit/payroll.py:9-19"],
+      "finding_ids": []
+    },
+    {
+      "category": "Patch applicability and driver byte-identity",
+      "status": "checked",
+      "reason": "Every hunk's context matches the shipped file lines and its counts are consistent. The patch touches only src files, and tools/tdbenefit_run.py is untouched.",
+      "evidence": ["solution/solve.sh:32-34", "solution/fix.patch:1-100", "environment/Dockerfile:4"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["3.5 low AWW is the rate", "5.1 partial benefit capped at the rate"],
+      "case_or_path": "AWW below the minimum, with partial weeks: the rate is the AWW, and 2/3 of a loss is at most 2/3 AWW, which is below the cap. For low weeks, 3/5 of the loss is also below the AWW, so the cap is consistent.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:95-97", "solution/fix.patch:40-42"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2/3.1 week's pay credited to the prior week", "2.1/2.3 base period"],
+      "case_or_path": "A payday in the week of injury pays the last base week, so it is included. A payday in the first base week pays the week before the base period, so it is excluded. A correction on either payday keeps the payday's week, per today's step.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:56-59", "environment/app/src/tdbenefit/payroll.py:22-30"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.6 waiting period", "4.1 retroactive from 14 days"],
+      "case_or_path": "Disability days of 1, 2, 3, 13 and 14 (including 14 spread over several periods): waiting = min(3, days), and retro is 3 only when days >= 14.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:9-23", "environment/app/src/tdbenefit/disability.py:19-26"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 row in force", "3.4 max/min bounds", "3.5 below minimum"],
+      "case_or_path": "The minimum used by the 3.5 check and the 3.4 clamp both come from the row in force on the injury date, not the newest row.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:92-100"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.1 rounding", "3.3/3.4/4.3/5.1 derived amounts"],
+      "case_or_path": "The AWW is rounded before it is used in the rate and the wage loss. Each per-week benefit is rounded before the cap and the sum. TTD is rounded once, on rate*paid/7.",
+      "status": "checked",
+      "evidence": ["environment/app/src/tdbenefit/money.py:4-12", "solution/fix.patch:23", "solution/fix.patch:67"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

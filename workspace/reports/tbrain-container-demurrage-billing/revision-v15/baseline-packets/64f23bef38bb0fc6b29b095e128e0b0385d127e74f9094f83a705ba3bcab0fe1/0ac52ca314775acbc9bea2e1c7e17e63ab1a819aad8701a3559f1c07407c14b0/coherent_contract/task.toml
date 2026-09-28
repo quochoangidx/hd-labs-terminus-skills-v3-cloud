@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-container-demurrage-billing"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Operations"
+subcategory = "Logistics"
+languages = ["python"]
+tags = ["container-demurrage", "port-terminal-billing", "free-time", "tariff-compliance", "intermodal-logistics"]
+expert_time_estimate_hours = 2
+difficulty_explanation = "This is the work of a terminal billing analyst who keeps a container terminal's demurrage tooling in line with its published tariff. The package carries slips real terminal billing systems make. It counts dwell one day short by leaving out the pickup day, gives every container 5 free days where the tariff gives a reefer 3, and charges every demurrage day at the daily rate where the tariff doubles it after the fourth day. The harder half is knowing where the tariff stops. It gives free days only for dry and reefer boxes, and demurrage days and a charge only for a container on demurrage. A tank keeps today's 5 free days, and a container picked up inside its free time keeps today's step: its dwell less its free days, nought or negative, charged at the daily rate as a credit. The charge step has to be rewritten for the doubled rate, and the natural rewrite clamps the days or the charge of a container inside its free time at nought, which the tariff does not give. A hand-built reference fuzzed against the package will not flag the difference. No real terminal data is used. The release files are synthetic, shaped like terminal gate-out exports, with hand-built files that sit on every limit."
+solution_explanation = "The reference patch counts dwell from the discharge day to the pickup day inclusive, gives a dry container 5 free days and a reefer 3, and charges a container on demurrage its daily rate for each of the first 4 demurrage days and twice the rate for each day after. Where the tariff gives no rule it keeps today's step: a tank keeps 5 free days, and a container not on demurrage keeps its dwell less its free days as its days and that many days at the rate as its charge, nought or a credit. All arithmetic is integer. The driver is untouched."
+verification_explanation = "A separate verifier image records the delivered driver's bytes, puts its own copy on /app/tools/demurrage_run.py, seals /app as root-owned, and runs the documented command against the delivered /app/src. Each run is made as an unprivileged user in its own session with an isolated interpreter, on each file staged under one neutral name. It compares every README key as a JSON integer or string, and the container order. Expected statements were sealed ahead of time into tests/expected by solution/seal.py from solution/model.py, a model written from the tariff that never imports the package, and are pinned by SHA-256 and row count in tests/expected/ROSTER. There are 11 tests over 9 sealed files: one named test per rule, one for each of the two figures left to today's code, one combining them, a limits test, a seeded family and two harness tests. Tank containers and containers not on demurrage appear only in the tests that grade them. Named files put dwell exactly on each free-day limit and one day past it, demurrage of 1, 4, 5 and more days, and pickups on the discharge day. Every rule 1.2 limit is reached: 200 containers, discharge days 0 and 3,650, pickups on the discharge day and 120 days later, rates of 1 and 100,000 cents, and ids of 1 and 11 characters. The seeded family is also billed under run-time labels drawn from os.urandom: new ids, a new name and new discharge days, with containers shuffled. Locally the Oracle scores 1 and the unfixed package 0. Thirteen one-edit mutants of the reference each fail their own test, among them every departure reverted, the doubled rate starting after the third or fifth day, 0 or 3 free days for a tank, days or charge floored at nought inside free time, a 120-day dwell cap and a 199-container cap. A contract-valid alternative scores 1, and a test proves the candidate cannot read /tests, the expectations, the shipped copy or /logs/verifier."
+relevant_experience = "Container terminal and shipping-line commercial operations: demurrage and detention tariffs, free-time rules by equipment type, and the terminal billing systems that raise the invoices."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 3600
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

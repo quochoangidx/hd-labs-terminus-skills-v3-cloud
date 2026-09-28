@@ -1,0 +1,126 @@
+diff --git a/app/src/tdbenefit/disability.py b/app/src/tdbenefit/disability.py
+index 7d7bbe2..36478a5 100644
+--- a/app/src/tdbenefit/disability.py
++++ b/app/src/tdbenefit/disability.py
+@@ -1,14 +1,15 @@
+ """Disability days, the waiting period and the temporary total disability amount."""
+ 
+ from .dates import parse_day
++from .money import half_up
+ 
+-WAITING_DAYS = 7
++WAITING_DAYS = 3
+ RETROACTIVE_AFTER = 14
+ 
+ 
+ def period_days(first, last):
+     """The number of days a certified period covers."""
+-    return (parse_day(last) - parse_day(first)).days
++    return (parse_day(last) - parse_day(first)).days + 1
+ 
+ 
+ def disability_days(periods):
+@@ -22,5 +23,5 @@ def total_disability(periods, rate):
+     waiting = min(WAITING_DAYS, days)
+     retroactive = waiting if days >= RETROACTIVE_AFTER else 0
+     paid = days - waiting + retroactive
+-    amount = rate * paid // 7
++    amount = half_up(rate * paid, 7)
+     return {"waiting_days": waiting, "retro_days": retroactive, "ttd_days": paid, "ttd": amount}
+diff --git a/app/src/tdbenefit/partial.py b/app/src/tdbenefit/partial.py
+index bf3137b..da7d97f 100644
+--- a/app/src/tdbenefit/partial.py
++++ b/app/src/tdbenefit/partial.py
+@@ -3,6 +3,9 @@
+ from .money import ratio_of
+ from .rates import RATE_FRACTION
+ 
++PARTIAL_WEEK_FROM = 1_000  # cents earned: a week below it is not a week of partial disability
++EARLIER_FRACTION = (3, 5)  # the share such a week has always been paid at
++
+ 
+ def wage_loss(aww, earned):
+     """What the week fell short of the average weekly wage, in cents."""
+@@ -13,6 +16,7 @@ def partial_disability(earnings, aww, rate):
+     """The number of partial weeks and the partial amount in cents."""
+     total = 0
+     for _week, earned in earnings:
+-        benefit = ratio_of(wage_loss(aww, earned), RATE_FRACTION)
++        fraction = RATE_FRACTION if earned >= PARTIAL_WEEK_FROM else EARLIER_FRACTION
++        benefit = ratio_of(wage_loss(aww, earned), fraction)
+         total += min(benefit, rate)
+     return {"tpd_weeks": len(earnings), "tpd": total}
+diff --git a/app/src/tdbenefit/payroll.py b/app/src/tdbenefit/payroll.py
+index 78435b6..d5c7188 100644
+--- a/app/src/tdbenefit/payroll.py
++++ b/app/src/tdbenefit/payroll.py
+@@ -4,6 +4,7 @@ from .dates import parse_day, week_ending, weeks_back, WEEK
+ from .money import half_up
+ 
+ BASE_WEEKS = 13
++WEEKS_PAY_FROM = 2_000  # cents: a smaller line is not a week's pay
+ 
+ 
+ def credit_lines(lines):
+@@ -12,10 +13,15 @@ def credit_lines(lines):
+     Lines come from the payroll register as [paid, cents]; the register is dated by the
+     day the money went out.
+     """
++    if len({paid for paid, _cents in lines}) > 52:
++        raise ValueError("register holds more than 52 paydays")
+     credited = []
+     for paid, cents in lines:
+         day = parse_day(paid)
+-        credited.append((week_ending(day), cents))
++        week = week_ending(day)
++        if cents >= WEEKS_PAY_FROM:
++            week -= WEEK
++        credited.append((week, cents))
+     return credited
+ 
+ 
+@@ -34,5 +40,4 @@ def average_weekly_wage(lines, injury):
+     """The worker's average weekly wage in cents."""
+     in_base = base_period_lines(lines, injury)
+     wages = sum(cents for _week, cents in in_base)
+-    weeks_paid = len({week for week, _cents in in_base})
+-    return half_up(wages, weeks_paid)
++    return half_up(wages, BASE_WEEKS)
+diff --git a/app/src/tdbenefit/rates.py b/app/src/tdbenefit/rates.py
+index 2300d14..a19b172 100644
+--- a/app/src/tdbenefit/rates.py
++++ b/app/src/tdbenefit/rates.py
+@@ -4,7 +4,7 @@ from .dates import parse_day
+ from .money import ratio_of
+ 
+ # Share of the average weekly wage paid as the weekly rate.
+-RATE_FRACTION = (3, 5)
++RATE_FRACTION = (2, 3)
+ 
+ 
+ def load_table(rows):
+@@ -12,14 +12,20 @@ def load_table(rows):
+     return [(parse_day(row["from"]), row["max"], row["min"]) for row in rows]
+ 
+ 
+-def row_in_force(table):
+-    """The row in force: the table's newest row."""
+-    return table[-1]
++def row_in_force(table, day):
++    """The row in force on `day`: the last row taking effect on or before it."""
++    chosen = table[0]
++    for row in table:
++        if row[0] <= day:
++            chosen = row
++    return chosen
+ 
+ 
+ def weekly_rate(aww, table, injury):
+     """The weekly compensation rate in cents for an average weekly wage `aww`."""
+-    _effective, maximum, minimum = row_in_force(table)
++    _effective, maximum, minimum = row_in_force(table, injury)
++    if aww < minimum:
++        return aww
+     rate = ratio_of(aww, RATE_FRACTION)
+     if rate > maximum:
+         rate = maximum

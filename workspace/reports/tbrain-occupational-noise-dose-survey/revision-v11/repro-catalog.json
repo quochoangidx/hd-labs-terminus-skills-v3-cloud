@@ -1,0 +1,56 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {},
+ "alternatives": {
+  "f1-impulse-first-100-peaks": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/flags.py",
+     "old": "for peak in peaks)",
+     "new": "for peak in peaks[:100])"
+    }
+   ],
+   "rationale": "reproduction on the returned snapshot: panel finding 1: impulse from peaks[:100]"
+  },
+  "f2-group-inherits-ceiling": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "\"status\": status_for(twa)})",
+     "new": "\"status\": \"over\" if any(r[\"ceiling\"] for r in members[code]) else status_for(twa)})"
+    }
+   ],
+   "rationale": "reproduction on the returned snapshot: panel finding 2: 6.1 judges the group on its TWA alone"
+  },
+  "f3-group-rows-carry-flags": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/groups.py",
+     "old": "\"status\": status_for(twa)})",
+     "new": "\"status\": status_for(twa), \"ceiling\": False, \"impulse\": False})"
+    }
+   ],
+   "rationale": "reproduction on the returned snapshot: panel finding 3: 6.1 a group carries no ceiling or impulse flag"
+  },
+  "f4-dose-rounded-6dp": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        row[\"dose\"] = round(row[\"dose\"], 6)\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "rationale": "reproduction on the returned snapshot: panel finding 4: 1.2 a dose is reported without rounding"
+  },
+  "f5-twa-off-by-5e-7": {
+   "edits": [
+    {
+     "file": "app/src/noisedose/report.py",
+     "old": "    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": group_rows(workers)}",
+     "new": "    groups = group_rows(workers)\n    for row in workers + groups:\n        if row[\"twa\"] is not None:\n            row[\"twa\"] = row[\"twa\"] + 5e-7\n    return {\"survey\": survey[\"survey\"], \"workers\": workers, \"groups\": groups}"
+    }
+   ],
+   "rationale": "reproduction on the returned snapshot: panel finding 5: the TWA is the reported tenth exactly"
+  }
+ }
+}

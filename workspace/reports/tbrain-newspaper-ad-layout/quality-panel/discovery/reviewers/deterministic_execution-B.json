@@ -1,0 +1,160 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-B",
+  "snapshot_sha256": "9157208d95100765d2c5d6735d478c4fc366a4c2313e87acdfd3915049193a5d",
+  "severity": "None",
+  "summary": "Grading is a pure, integer-only function of the four submitted layout files and verifier-owned fixed copies of the checker, editions and targets. There is no randomness, clock, network data, order-sensitive result or readiness wait in the graded path, and the base image and direct test dependencies are pinned. A fixed submission gets the same reward on every clean run.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/planner/plan_edition.py",
+      "environment/app/tools/check_layout.py",
+      "environment/app/editions/targets.json",
+      "environment/app/editions/mon.json",
+      "environment/app/editions/wed.json",
+      "environment/app/editions/fri.json",
+      "environment/app/editions/sat.json",
+      "solution/solve.sh",
+      "solution/layouts/mon.json",
+      "solution/layouts/wed.json",
+      "solution/layouts/fri.json",
+      "solution/layouts/sat.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_layout.py",
+      "tests/targets.json",
+      "tests/editions/mon.json",
+      "tests/editions/wed.json",
+      "tests/editions/fri.json",
+      "tests/editions/sat.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read every file in the packet manifest (29 task/doc files plus the manifest). I read tests/editions/*.json in full. For environment/app/editions/{mon,wed,fri,sat}.json I read the header and field counts, and the manifest shows their SHA-256 is identical to the fully read tests/editions copies (for example fri 14f96d01..., sat 8ab1657f...). environment/app/tools/check_layout.py and environment/app/editions/targets.json were read in full; both are hash-identical to their tests/ copies.",
+    "Traced tests/test.sh -> pytest -> tests/test_outputs.py -> tests/check_layout.py load_layout/evaluate to find every input to the reward: the /app/layouts/<edition>.json artifacts, plus the verifier-owned tests/editions/*.json and tests/targets.json.",
+    "Searched the graded path for random, time/date, environment-dependent and network inputs and found none. The only nondeterministic value is the mktemp -d scratch directory in test.sh:13, which serves only as the working directory and never reaches a grading decision (the D-3 pattern).",
+    "Checked that evaluate() does not depend on order. Overlap, resting, page-share, front-strip, competitor-spread and booked-ad checks each reject if any violation exists, whatever order placements are in. Cost is an integer sum over ed['ads'] in fixed file order, and there are no floats. A valid/invalid verdict and its cost therefore do not depend on the key order of placements.",
+    "Checked set/dict hash-seed exposure. _no_repeats uses a set only for membership, and no set iteration feeds the result.",
+    "Checked dependency pinning. Both Dockerfiles pin python:3.13-slim-bookworm by digest, and tests/Dockerfile pins pytest==9.1.1 and pytest-json-ctrf==0.5.2. The checker uses only the standard library.",
+    "Checked timing: no sleeps, servers or readiness waits. evaluate() is bounded at 32 pages x 42 rows x 6 columns, far below the verifier timeout_sec=1800.",
+    "Checked the target comparison: cost <= TARGETS[name] on Python ints, with no tolerance or rounding. The reference layouts described as sitting exactly on target pass stably.",
+    "Checked the reference: solve.sh copies static committed layouts and runs the checker. It does not run a search at solve time, so Oracle output is fixed."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fixed fixtures / explicit seeds; boundary cases guaranteed",
+      "status": "checked",
+      "reason": "All graded inputs are committed JSON fixtures. There is no generator or seed, and the same four editions and targets are graded on every run.",
+      "evidence": ["tests/test_outputs.py:19-26", "tests/test_outputs.py:44-73", "tests/targets.json:1-6", "tests/editions/mon.json:1-10"],
+      "finding_ids": []
+    },
+    {
+      "category": "Evaluation clock fixed when expiry/time windows are graded",
+      "status": "not_applicable",
+      "reason": "Neither the contract nor the checker has any date, time or expiry concept, and evaluate() makes no clock call.",
+      "evidence": ["environment/app/docs/makeup-rules.md:26-55", "tests/check_layout.py:76-152"],
+      "finding_ids": []
+    },
+    {
+      "category": "Dependencies pinned and required inputs local",
+      "status": "checked",
+      "reason": "The base image is pinned by digest, and pytest and the ctrf plugin are pinned by exact version. The checker imports only json/os/sys. The verifier reads local copies of editions and targets and runs with network_mode no-network. Transitive pytest dependencies are not hash-pinned, but they only run the test harness; no fetched data or package affects the checker's result.",
+      "evidence": ["tests/Dockerfile:1-3", "environment/Dockerfile:1", "tests/check_layout.py:6-8", "task.toml:18-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Ordering: sorted where required, equivalent orderings accepted",
+      "status": "checked",
+      "reason": "The contract defines placements as a JSON object with no required key order. evaluate() reaches the same accept/reject verdict and integer cost for any key order, and pytest-randomly is explicitly disabled, although the tests do not depend on one another anyway.",
+      "evidence": ["environment/app/docs/makeup-rules.md:57-65", "tests/check_layout.py:84-152", "tests/test.sh:15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Readiness conditions instead of fixed sleeps",
+      "status": "not_applicable",
+      "reason": "No service, background process or wait exists in the verifier. It reads files and runs pure evaluation.",
+      "evidence": ["tests/test.sh:1-21", "tests/test_outputs.py:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated clean-run stability of correct and incorrect submissions",
+      "status": "checked",
+      "reason": "This is a static trace, not an execution. The reward depends only on pytest's exit code over deterministic functions of fixed bytes, so a given layout set, correct or wrong, always produces the same exit code and reward. The mktemp scratch directory cannot change it.",
+      "evidence": ["tests/test.sh:13-21", "tests/test_outputs.py:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Filesystem/iteration ordering and hash randomization",
+      "status": "checked",
+      "reason": "No directory listing is used; paths are built from fixed edition names. The only set is used for membership only. Dict iteration follows file insertion order and does not affect the verdict.",
+      "evidence": ["tests/test_outputs.py:24-31", "tests/check_layout.py:40-46", "tests/check_layout.py:122-132"],
+      "finding_ids": []
+    },
+    {
+      "category": "Numeric stability of graded values",
+      "status": "checked",
+      "reason": "Cost uses integer arithmetic with per-ad floor division, matching the documented // rule. Floats parsed from the layout are rejected as placement fields by type(...) is int, so no floating-point value reaches cost.",
+      "evidence": ["tests/check_layout.py:87", "tests/check_layout.py:138-152", "environment/app/docs/makeup-rules.md:43-55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reference solution determinism",
+      "status": "checked",
+      "reason": "solve.sh copies committed layouts rather than running the stochastic search at solve time, so the Oracle output is byte-fixed.",
+      "evidence": ["solution/solve.sh:15-20", "solution/layouts/mon.json:1"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["cost <= target comparison", "reference cost equals target exactly"],
+      "case_or_path": "The reference layouts cost exactly the targets (task.toml verification_explanation). Because cost is an exact Python int and the comparison is <=, there is no rounding or tolerance drift that could flip the boundary pass between runs.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:39-41", "tests/check_layout.py:138-152", "tests/targets.json:1-6"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["placements object key order", "first-violation LayoutError reporting"],
+      "case_or_path": "In an invalid layout with several violations, iteration order decides which error message is raised, but every order raises LayoutError, so pytest.fail and reward 0 are the same. A valid layout is valid in every order.",
+      "status": "checked",
+      "evidence": ["tests/check_layout.py:84-136", "tests/test_outputs.py:32-36"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["separate verifier environment", "candidate-editable /app copies of editions/targets/checker"],
+      "case_or_path": "Candidate edits to /app/editions, /app/editions/targets.json or /app/tools/check_layout.py cannot change the verifier's inputs, which are loaded from its own directory. The same layout bytes are graded the same regardless of agent-side state.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:15-26", "tests/Dockerfile:5", "task.toml:1", "task.toml:18-21"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["mktemp working directory", "pytest rootdir/collection"],
+      "case_or_path": "Running from a random scratch directory with python3 -I and an absolute test path gives the same collection and imports on every run (sys.path is set from __file__). No conftest or ini lookup depends on the random cwd in a way that changes results.",
+      "status": "checked",
+      "evidence": ["tests/test.sh:13-15", "tests/test_outputs.py:15-17"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["solver's stochastic search", "graded submission stability"],
+      "case_or_path": "The instruction lets the candidate run its own randomized search, so different agent trials may produce different layouts. That is variance in the submission, not in grading, and each resulting layout set is graded deterministically.",
+      "status": "checked",
+      "evidence": ["instruction.md:1-3", "tests/test_outputs.py:29-41"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

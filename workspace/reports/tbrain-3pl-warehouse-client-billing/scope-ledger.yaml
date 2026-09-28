@@ -1,0 +1,28 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The statement printed by /app/tools/stockbill_run.py gives, for every lot, its billed storage
+  weeks, peak, billed storage, handling, energy surcharge and amount, and the statement total, as schedule WB-5 gives them.
+causal_core: >
+  receipts and dispatches -> pallets on hand by day (2.2) -> anniversary storage weeks in the period (4.1-4.2)
+  -> rate card in force on each week's first day and each movement's date (3.1-3.2; before the earliest
+  effective date, today's card) -> non-retroactive tier by week number (4.3) and per-pallet handling with
+  out-of-hours rates on non-working days (5.1-5.2) -> storage and handling, charge or accrual (6.1-6.2) ->
+  billed storage with the minimum (4.4) -> energy surcharge on billed storage (6.2 with 1.3) -> amount and total (6.3); billed weeks -> peak (4.5; with none, today's step).
+core_obligations:
+  - {id: ON_HAND, contribution: "a dispatch (entry of one pallet or more) leaves the day after its date; an entry below nought keeps today's same-day timing", authority: "2.1, 2.2; instruction silence clause", witness: "test_rule_2_2_pallet_on_hand_on_its_dispatch_day; test_entry_below_nought_keeps_todays_timing (trap T1)", plausible_wrong: "gone on the dispatch day (shipped); every entry from the next day or returns ignored (natural over-repairs)"}
+  - {id: STORAGE_WEEKS, contribution: "seven-day weeks from the receipt date, billed when they start in the period", authority: "4.1, 4.2", witness: test_rule_4_1_storage_weeks_run_from_receipt, plausible_wrong: "calendar weeks from Monday (shipped); weeks ending in the period"}
+  - {id: STORAGE_TIERS, contribution: "each week at the tier that takes its own number", authority: "4.3", witness: test_rule_4_3_tiers_are_not_retroactive, plausible_wrong: "tier from the lot's age at period end (shipped); off-by-one boundary"}
+  - {id: HANDLING, contribution: "receipt (one pallet or more) billed the fee once plus the receiving rate per pallet; dispatch per pallet at the dispatch rate; out-of-hours on weekends and public holidays; a lot that arrived empty has no receipt; entries below one pallet are not billed", authority: "2.1, 2.3, 5.1-5.3", witness: "test_rule_5_1_receipt_billed_at_receiving_rate; test_rule_5_1_receipt_fee_once; test_rule_5_2_public_holiday_is_out_of_hours; test_lot_that_arrived_empty_has_no_receipt (trap T2)", plausible_wrong: "dispatch rate and no fee (shipped); weekends only (shipped); a fee on every arrival (natural over-repair)"}
+  - {id: RATE_CARD, contribution: "revision in force on the line's date (always one, 1.4)", authority: "3.1, 3.2", witness: test_rule_3_2_rates_in_force_on_the_day, plausible_wrong: "latest card always (shipped)"}
+  - {id: MINIMUM, contribution: "a lot with billed weeks pays at least the client's minimum (governed, unchanged)", authority: "4.4", witness: test_rule_4_4_minimum_fee, plausible_wrong: "minimum on lots with no billed weeks"}
+  - {id: PEAK, contribution: "most pallets on hand on a billed week's first day; nought with no billed week", authority: "4.5, 2.4", witness: "test_rule_4_5_peak_on_billed_weeks; test_rule_4_5_peak_without_billed_week_is_nought", plausible_wrong: "most on any day (shipped)"}
+  - {id: SURCHARGE, contribution: "surcharge percent of billed storage rounded half up", authority: "1.3, 6.2", witness: test_rule_6_2_surcharge_rounds_half_up, plausible_wrong: "truncation (shipped)"}
+support_obligations:
+  - {id: JOB_DECODE, supplied_boundary: "dates.py and lots.py decode dates and dispatches", why_not_core: "decoding is complete"}
+  - {id: DRIVER, supplied_boundary: "tools/stockbill_run.py, frozen and byte-checked", why_not_core: "the harness runs its own copy"}
+  - {id: STATEMENT_LAYOUT, supplied_boundary: "section 7 keys and lot order, already right in statement.py", why_not_core: "serialization already right"}
+non_goals:
+  - jobs outside clause 1.4 (left entirely open)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - value-added services, minimum charges, inbound appointments, currency, payment terms

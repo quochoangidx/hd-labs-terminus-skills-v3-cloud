@@ -1,0 +1,75 @@
+{
+  "reviewer_turn": "contract_review",
+  "recheck_of": "contract-review.json (first turn)",
+  "visibility": "scratchpad task/instruction.md, task/environment/** and _docs/solver_path_screen.md only; redesigned package diffed against the first-turn copy and run on copies (work2/)",
+  "changes_seen": [
+    "Instruction: the explicit 'time left below nought' carve-out is gone. The silence clause now reads: work every figure out as the manual says, and keep only the step the code takes today to turn those figures into the reported value. That keep-step takes precedence over the no-guard sentence.",
+    "Instruction: the symptom list is rewritten, coverage now says 'entries of every status with and without miles', and time left is compared to within 0.001.",
+    "Manual 1.5 gains 'provides for logs as 1.1 to 1.3 describe them'. 2.2 is reworded to cover driving status plus yard moves. A new 2.3 defines a yard move as on-duty time in a stretch covering one mile or more. Later sections are renumbered 2.4-2.7 and the 1.3 cross-reference is updated.",
+    "README: the team-truck/co-driver explanation is removed. Miles is now 'recorded on every entry, whatever its status'.",
+    "limits.py: the loop now admits stretches that are driving or on-duty, and counts shift_on/today_on only for on-duty. Behaviour is unchanged for the shipped is_driving, but the structure now allows driving time that is not on-duty (a lure for miles-keyed yard moves)."
+  ],
+  "reopened": [],
+  "prior_findings_status": [
+    {"id": "CR-1", "status": "resolved_partially", "note": "The negative-time-left carve-out is no longer labelled. It now has to be derived from 1.5 plus the silence clause, and a second definitional trap (rest with miles is not a yard move, via 2.3 then 2.1) has been added. The screen now scores self_verification_resistance 3, which is at the build threshold. It is not a strong resist; see CR-7."},
+    {"id": "CR-2", "status": "closed", "note": "'still work out every figure that value is made from as the manual says, and keep only the step the code takes today to turn those figures into the reported value' names the conversion step. Limits, driving minutes, clock window and shift start all follow the manual. W6 is now determined: -0.0."},
+    {"id": "CR-3", "status": "closed", "note": "The new symptoms match the shipped code: 3.1 at 11h, window counted in on-duty minutes, shift-start-day attribution, and generous left (11h/70h, round, on-duty window)."},
+    {"id": "CR-4", "status": "closed", "note": "'to within 0.001' is stated. -0.0 equals 0. Floor versus round differ by 0.1 or more wherever they differ, so the tolerance does not mask the trap."},
+    {"id": "CR-5", "status": "closed", "note": "The team explanation is gone. 2.3 keys yard moves on on-duty time and 1-mile stretches, so an `on` passenger stretch with miles is a yard move and off/sleeper with miles is not. Decidable from defined terms."}
+  ],
+  "findings": [
+    {
+      "id": "CR-6",
+      "severity": "polish",
+      "location": "hours-manual.md 1.5 vs 5.2; instruction.md paragraph 2",
+      "issue": "5.2 ('Time left is reported in hours, rounded down to a tenth of an hour') reads as a positive, universal rule. Only 1.5's scoping sentence ('provides for ... time left from nought up to the limit') takes negative values out of its reach. This is decidable, because 1.5 limits what the manual provides for and the instruction's silence clause then applies. But it is a competing positive statement of the kind the 0/8 screen warns about: a reader who treats 1.5 as descriptive will floor negatives. It also has to be clear that 'below nought' is judged on the exact 5.1 value (-1 minute = -1/60 h) and not on the rounded one: floor would report -0.1, round reports -0.0.",
+      "evidence": "W6 (-1 min): -0.0 under keep-step, -0.1 under uniform floor. W11 (-8 min): -0.1 vs -0.2. W10 (-200 min): -3.3 vs -3.4. The two differ whenever |minutes| mod 6 is 1, 2 or 3.",
+      "suggested_fix": "Optional, and only if the builder wants lower fairness risk: make 5.2 say 'Time left, when the manual provides for it (1.5), is reported ...'. That strengthens the chain without naming the carve-out. If left as is, keep the verifier's negative-left cases (the 1, 2 and 3 minute residues) in the rubric's documented witnesses so the fairness reviewer can trace the 1.5 → silence-clause chain."
+    },
+    {
+      "id": "CR-7",
+      "severity": "should_fix",
+      "location": "design strength (instruction paragraph 2 wording; limits.py loop)",
+      "issue": "The redesign has one real trap and one weak one. (a) Negative time left keeps round(). The trap is real, but the silence clause is phrased so close to the answer ('keep only the step the code takes today to turn those figures into the reported value' plus a guard override) that a careful solver asking 'which reported value has no rule?' lands on 1.5 at once. (b) Rest with miles is not a yard move. The chain is 2.3 → 'on-duty time' → 2.1, but domain instinct (personal conveyance and berth time are off duty) points to the right answer, and the limits.py lure is weak against that. Under the platform calibration, (b) will rarely be missed, so the task effectively rests on one trap. A one-trap design gave CORE 4/8 once and 0/8 when every run missed it.",
+      "evidence": "Pre-mortem below. W9/W10 are right under both the 'status == on and miles >= 1' reading and the 'on-duty and miles >= 1' reading. Only a solver keying on miles alone fails, and the manual plus federal instinct both push against that.",
+      "suggested_fix": "No further redesign is allowed, so no core change. Make sure the verifier weights (a) across all three time-left keys with several residues, and covers (b) with off, sleeper and `on` stretches carrying 1+ miles. Do not add hints."
+    }
+  ],
+  "witnesses": [
+    {"id": "W1", "input": "examples/two-day-log.json", "expected": {"days":[{"day":1,"driving":630,"on_duty":705,"violations":{"3.1":30,"3.2":0,"3.3":0,"3.4":0}},{"day":2,"driving":510,"on_duty":540,"violations":{"3.1":0,"3.2":0,"3.3":30,"3.4":0}}],"left":{"driving":1.5,"window":5.0,"cycle":4.5}}, "derivation": "Unchanged from turn 1. The redesign did not alter the example or the rules that govern it."},
+    {"id": "W2", "input": "on 0-60 miles 1, on 60-120 miles 0.99, on 120-150 0.6, on 150-180 0.6, driving 180-300; end 300", "expected": {"driving":180,"on_duty":300,"left":{"driving":7.0,"window":9.0,"cycle":55.0}}, "derivation": "Under 2.3 a stretch is a yard move if it is on-duty and covers 1 mile or more. Only the first stretch qualifies. Adjacent 0.6-mile stretches are judged one stretch at a time."},
+    {"id": "W3", "input": "as turn 1 (off15+sleeper15 break exactly 30)", "expected": {"violations":{"3.1":540,"3.2":360,"3.3":180},"left":{"driving":-9.0,"window":-6.0,"cycle":40.5}}, "derivation": "Unchanged. The negative left values are multiples of 6 minutes, so round and floor agree here."},
+    {"id": "W3b", "input": "as W3 with a 29-min rest", "expected": {"violations":{"3.3":661}}, "derivation": "Unchanged."},
+    {"id": "W4", "input": "shift starts on-duty at 1380 and crosses midnight (turn 1)", "expected": {"days":[{"day":2,"violations":{"3.1":120,"3.2":60}}],"left":{"driving":-2.0,"window":-3.0,"cycle":47.0}}, "derivation": "Unchanged."},
+    {"id": "W5", "input": "recap [1440,550x6], driving 0-360", "expected": {"violations":{"3.4":60},"left":{"cycle":-1.0}}, "derivation": "Unchanged."},
+    {"id": "W6", "input": "driving 0-601, end 700", "expected": {"left":{"driving":-0.0,"window":2.3,"cycle":49.9}}, "derivation": "Silent region, now determined without a labelled sentence. The 5.1 figure is 600-601 = -1 min = -1/60 h, below nought, and 1.5 says the manual does not provide for it. The silence clause keeps today's conversion step round(-1/60, 1) = -0.0. Floor (-0.1) is wrong. Window 140 min floors to 2.3; cycle 2999 min floors to 49.9 (round would give 50.0)."},
+    {"id": "W7", "input": "log ends in a completed reset (turn 1)", "expected": {"left":{"driving":5.0,"window":-11.0,"cycle":54.0}}, "derivation": "Unchanged. -660 min is a multiple of 6."},
+    {"id": "W8", "input": "rest at 0 continuing the reset, 599 vs 600 (turn 1)", "expected": {"left":{"driving":-14.5,"window":-11.0,"cycle":31.6}}, "derivation": "Unchanged. -870 and -660 are multiples of 6."},
+    {"id": "W9", "input": "on 0-30, off 30-90 miles 25, sleeper 90-600 miles 480, driving 600-900", "expected": {"days":[{"day":1,"driving":300,"on_duty":330,"violations":{"3.2":60}}],"left":{"driving":5.0,"window":-1.0,"cycle":54.5}}, "derivation": "Now derived through 2.3 → 2.1: off/sleeper time is rest, not on-duty, so it is not a yard move, whatever its miles. The rest run of 570 minutes is not a reset."},
+    {"id": "W10", "input": "end 2000; driving 0-480, off 480-495 miles 12, sleeper 495-510 miles 9, driving 510-600, sleeper 600-1200 miles 500, on 1200-1260 miles 3, driving 1260-2000", "expected": {"days":[{"day":1,"driving":810,"on_duty":810,"violations":{"3.1":0,"3.2":0,"3.3":0,"3.4":0}},{"day":2,"driving":560,"on_duty":560,"violations":{"3.1":200,"3.2":0,"3.3":320,"3.4":0}}],"left":{"driving":-3.3,"window":0.6,"cycle":37.1}}, "shipped": {"days":[{"violations":{"3.1":80,"3.3":260}},{"violations":{"3.1":0,"3.3":0}}],"left":{"driving":-1.3,"window":1.7,"cycle":47.2}}, "derivation": "Rest stretches carrying miles still form a 30-min break and a 600-min reset (2.4/2.6). Shift 2 begins at 1200 with an `on` yard move (3 mi), which counts as driving. Shift driving is 800, so 3.1 is past from 1800 and 3.3 is past from 1680, all on day 2. Driving left is -200 min, and round(-3.333, 1) = -3.3, not floor -3.4. Window 40 min floors to 0.6. A solver keying yard moves on miles alone would make the berth time driving and break the reset."},
+    {"id": "W11", "input": "end 848; on 0-10, driving 10-500, off 500-560, driving 560-848", "expected": {"days":[{"day":1,"driving":778,"on_duty":788,"violations":{"3.1":178,"3.2":8,"3.3":10,"3.4":0}}],"left":{"driving":-3.0,"window":-0.1,"cycle":46.8}}, "derivation": "Window left 840-848 = -8 min, below nought, so round(-0.1333, 1) = -0.1 (floor gives -0.2). Driving left -178 min gives -3.0 under both. The shift starts at 0 (on), so 3.2 is past from 840: 8 minutes."}
+  ],
+  "solver_path_screen": {
+    "pre_mortem": "A strong solver lists the departures, most of them unchanged from turn 1: constants, yard moves, rest-only breaks, on-duty shift start, clock window, own-day attribution, clock window-left, floor. It writes a per-minute reference from FM-4 and differential-fuzzes. Two reading decisions remain, and fuzzing cannot confirm either, because the solver's reference and patch share the same interpretation. (1) Yard move = 'on-duty time' with 1+ miles. The limits.py loop structure and 'miles recorded on every entry' invite keying on miles alone, but 2.3 → 2.1 plus federal instinct (personal conveyance and berth are off duty) lead most strong solvers to the correct `on`/`driving` reading. (2) Time left: the natural move is to replace round() with floor everywhere. Keeping round() for negatives needs the solver to connect 1.5's scope sentence to the silence clause. The clause is pointed ('keep only the step the code takes today to turn those figures into the reported value', plus a precedence override for guards), so a careful Opus 5.5 that asks 'which reported value has no rule?' will likely find it. A solver that reads 5.2 as universal, or treats 1.5 as boilerplate, floors negatives and fails every past-limit log whose residue is 1-3 minutes. That miss is the most likely one, and it lands across all three left keys.",
+    "scores": {
+      "reference_unreachable": 2,
+      "authority_incomplete_for_grading": 3,
+      "hidden_state_not_closed_form": 2,
+      "restraint_traps": 3,
+      "fuzz_blind_spot": 2
+    },
+    "score_notes": {
+      "reference_unreachable": "The manual is still a complete, executable spec for everything except the keep-step. The keep-step reference is the shipped hours() itself.",
+      "authority_incomplete_for_grading": "Negative time left is graded shipped behaviour inside a silent region, reached only by inference that self-testing cannot confirm. It is fair: the 1.5 chain plus the silence clause settle it.",
+      "hidden_state_not_closed_form": "Simple per-minute counters.",
+      "restraint_traps": "One trap in the held shape: a silent sub-domain inside the same conversion step as a defect (round→floor), not labelled, reachable through the 1.5 definitional chain. One weak trap: rest with miles excluded via 2.3 → 2.1, which domain instinct already favours. Counted as roughly one and a half.",
+      "fuzz_blind_spot": "Past-limit logs and near-zero residues are generated naturally. The blind spot is interpretive, not a matter of input shape."
+    },
+    "self_verification_resistance": 3,
+    "prediction": "resists",
+    "confidence": "low",
+    "decisive_reason": "Everything except negative-time-left rounding collapses to a from-manual reference. Whether a solver keeps round() there depends on one reading of 1.5 that fuzzing cannot confirm and that local Opus 5.5 will often, but not reliably, make."
+  },
+  "overall": "accept_with_fixes",
+  "overall_note": "The contract is fair and determined. CR-2 to CR-5 are closed and nothing is reopened. The screen scores 3, which is the build threshold, so build. CR-6 (optional strengthening of the 5.2 scope) and CR-7 (verifier weighting across left keys and residues) are the fixes. Do not add hints that would disarm the 1.5 chain."
+}

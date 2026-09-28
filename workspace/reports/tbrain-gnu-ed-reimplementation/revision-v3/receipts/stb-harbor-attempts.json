@@ -1,0 +1,29 @@
+{
+ "what": "Validation through the stb CLI was attempted first, as asked, and could not run in this environment. None of the three failures is about the task.",
+ "attempts": [
+  {
+   "command": "stb harbor run -a oracle -p <task> -o <out>",
+   "exit_code": 1,
+   "error": "network_mode='no-network' is not supported by EnvironmentType.DOCKER environment. Environment providers must enforce the requested network policy or reject the task.",
+   "reading": "the local Docker provider refuses the task's declared agent and verifier network policy. Weakening that policy to make the runner happy would change what the platform measures, so the documented fallback applies: rebuild the digest-pinned separate verifier and run each phase under docker --network none with a noexec /tmp, which scripts/preflight.sh does."
+  },
+  {
+   "command": "stb harbor check <task>",
+   "exit_code": 1,
+   "error": "API Error: 400 bedrock error: Access to Anthropic models is not allowed from unsupported countries, regions, or territories.",
+   "reading": "the checking agent cannot reach its default model from this region."
+  },
+  {
+   "command": "stb harbor check <task> -m @openai/gpt-5.6",
+   "exit_code": 1,
+   "error": "API Error: 400 Function tools with reasoning_effort are not supported for gpt-5.6 in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+   "reading": "the check agent sends reasoning_effort with tools; the agent schema offers only low/medium/high/xhigh/max, so 'none' cannot be selected through this CLI. `harbor check` also refuses any agent other than claude-code."
+  }
+ ],
+ "fallback": "scripts/preflight.sh --strict --determinism: both images built, oracle reward 1, NOP reward 0, oracle reward 1 under a noexec /tmp, plus the twelve wrong paths.",
+ "logs": [
+  "harbor-v3/oracle.log",
+  "harbor-v3/check.log",
+  "harbor-v3/check-gpt2.log"
+ ]
+}

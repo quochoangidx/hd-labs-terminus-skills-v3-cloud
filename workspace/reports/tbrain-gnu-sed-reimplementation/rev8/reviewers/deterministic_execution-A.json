@@ -1,0 +1,212 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-A",
+  "snapshot_sha256": "d1e1daa9b7f760fc2ef54e5302bcfffd2ae5c1a4e0da387ba432453d620dfa2a",
+  "severity": "None",
+  "summary": "Grading is stable across clean runs. All 1,606 cases are fixed, committed fixtures, and the roster is enforced by exact family counts. Expected results come from the GNU sed binary in a digest-pinned image. No clock, RNG, network or ordering input reaches a graded comparison. Random temp-dir names never reach compared output. By static estimate the reference's worst long-line cases finish far below the 5 s per-run limit.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "task.toml",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/cases/inputs.json",
+      "tests/cases/areas.json",
+      "tests/cases/areas_2.json",
+      "tests/cases/mixed_1_2.json",
+      "tests/cases/mixed_3_4.json",
+      "tests/cases/matrix.json",
+      "tests/cases/sweeps.json",
+      "solution/solve.sh",
+      "solution/pysed/sed.py",
+      "solution/pysed/posixre.py",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/scope.md",
+      "environment/app/docs/sed.txt",
+      "environment/app/pysed/sed.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled packet-manifest.json (23 task files plus 2 panel docs) with the files read. Every listed file was opened in full: matrix.json in pages 1-1100, 1100-2200, 2199-3499 and 3498-3833, and sed.txt in pages 1-1000, 1000-2500, 2499-3999 and 3998-5116. The only 'omitted long line' (inputs.json:14, the @long input) was read in full on a direct Read of inputs.json.",
+    "Traced case loading (tests/test_outputs.py:50-76): six committed JSON files are loaded in the fixed CASE_FILES order, @name references resolve from inputs.json, and an exact FAMILY_COUNTS roster assert (lines 23-47, 72) fails the run if any family or count drifts. No generator, seed, random or time import exists anywhere in tests/.",
+    "Traced expected-value production (tests/test_outputs.py:142-154). Each case runs /bin/sed first, then the candidate, in the same freshly created directory with the same argv, stdin bytes and ENV. The comparison is (stdout bytes, returncode) only; stderr goes to DEVNULL.",
+    "Checked dependency pinning. Both tests/Dockerfile:1 and environment/Dockerfile:1 use python:3.13-slim-bookworm@sha256:01f4..., so the GNU sed that produces the expected results is fixed by image digest. pytest==9.1.1 and pytest-json-ctrf==0.5.2 are pinned (tests/Dockerfile:3). The verifier runs with network_mode no-network (task.toml:21), and every input is a local fixture.",
+    "Traced the tempfile.mkdtemp random directory (test_outputs.py:118-127). File names inside it come from the fixtures and are passed as relative names (arguments(), lines 112-115). No in-scope command (no F, w or r: scope.md:8) can emit the directory path to stdout, and error text goes to stderr, which is not compared. Same as example D-3: scratch-only randomness.",
+    "Checked subprocess I/O races (test_outputs.py:130-139). communicate() writes the whole stdin and closes it. Early-exit scripts (q/Q, file-only cases) give EPIPE on stdin, which communicate ignores, so the output and status do not depend on timing. start_new_session plus killpg on timeout fully reaps the process group.",
+    "Static timing estimate for the reference (solution/pysed/posixre.py:258-326; sed.py:613-642) on the heaviest fixtures (sweeps.json:3-16 over inputs.json:14: about 1025 a's, about 4000 b's, 700x'ab'+'c'). Matching is bounded Pike-VM work: a single thread for anchored and interval patterns (a{2050} on the doubled 2050-a line, (ab){700}), O(1) per start on non-matching lines, and linear scanning for s/\\n/+/g over about 12k chars. The estimate is tens of milliseconds, far from the 5 s limit (test_outputs.py:108). No near-boundary case was found. This is static reasoning, not an execution.",
+    "Checked the aggregate verifier budget: about 3,215 subprocesses (1,606 cases x 2, plus 3 guard runs, plus 1 probe) against verifier timeout_sec 3600 (task.toml:20). At typical Python start-up cost the reference needs a few minutes.",
+    "Checked hash-seed and iteration-order sensitivity. PYTHONHASHSEED is not fixed in ENV (test_outputs.py:109), but the reference uses sets and frozensets only for membership tests (posixre.py:5-13, 198-237, 277-283) and dicts only for keyed lookup (sed.py labels). No output depends on set iteration order. The os.walk order in test_editing_is_done_in_python (test_outputs.py:337-342) only collects an ELF list asserted empty, so order is irrelevant.",
+    "Checked privilege and filesystem stability. test.sh:15-21 chmods /tests, the real sed binary and site-packages before candidate code runs, then chowns and chmods /app deterministically. The candidate runs as uid 65534 with no_new_privs (test_outputs.py:107). Fixture files are 0644 in 0755 directories (lines 120-126), so root sed and the demoted candidate see the same readable and missing files.",
+    "Checked that test ordering and plugins are fixed: -p no:randomly and -p no:cacheprovider (test.sh:25), and no cross-test shared state (each case gets a fresh mkdtemp that is then removed).",
+    "Checked the environment side. The agent image's apt packages (environment/Dockerfile:3) are unpinned, but only /app is carried to grading (instruction.md:7; task.toml:1 artifacts), so they cannot change a verifier outcome."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fixed fixtures or stable seed; boundary cases guaranteed (checklist 1)",
+      "status": "checked",
+      "reason": "All cases are literal committed JSON, and the loader asserts exact family counts. Boundary cases are explicit fixtures, not draws: long lines, per-digit numbers, every class over ASCII, every delimiter, bracket edges, missing file, '-', empty files. There is no RNG anywhere in tests/.",
+      "evidence": [
+        "tests/test_outputs.py:20-47",
+        "tests/test_outputs.py:50-76",
+        "tests/cases/sweeps.json:2-353",
+        "tests/cases/inputs.json:1-21",
+        "tests/cases/areas.json:1528-1566",
+        "tests/cases/matrix.json:1779-2324"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Fixed evaluation clock (checklist 2)",
+      "status": "not_applicable",
+      "reason": "No graded behaviour involves dates, expiry or time windows. No time or date API appears in the tests or the reference, and sed output in scope does not depend on the clock.",
+      "evidence": [
+        "tests/test_outputs.py:12-17",
+        "environment/app/docs/scope.md:5-10"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Pinned dependencies and local inputs (checklist 3)",
+      "status": "checked",
+      "reason": "Both images are pinned by digest, so GNU sed 4.9 (the oracle run at test time) is fixed. The pytest packages are pinned by version. The verifier runs without network, and all inputs are local fixtures. Transitive pytest dependencies are unpinned at image build time, but the same unpinned build applies to every submission and cannot change the verdict of one fixed submission; this is general hardening, not a finding.",
+      "evidence": [
+        "tests/Dockerfile:1-3",
+        "environment/Dockerfile:1",
+        "task.toml:18-21",
+        "tests/test_outputs.py:78"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Ordering: sorted where required, equivalent orderings accepted where not (checklist 4)",
+      "status": "checked",
+      "reason": "sed stdout is an ordered byte stream by contract (instruction.md:1). The expected result comes from the same binary on the same input, so there is no unordered collection to canonicalise. Case iteration order is fixed by the JSON files, os.walk order is irrelevant, and the reference does not iterate hash-ordered sets into output.",
+      "evidence": [
+        "instruction.md:1",
+        "tests/test_outputs.py:61-68",
+        "tests/test_outputs.py:337-342",
+        "solution/pysed/posixre.py:198-237"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Readiness conditions instead of sleeps; timing assumptions (checklist 5)",
+      "status": "checked",
+      "reason": "There are no sleeps or services. Each run is a blocking communicate() with a disclosed 5 s cap. The reference's heaviest fixtures are statically bounded at far below the cap, and the aggregate run fits inside verifier timeout_sec 3600.",
+      "evidence": [
+        "tests/test_outputs.py:106-139",
+        "instruction.md:5",
+        "task.toml:19-20",
+        "solution/pysed/posixre.py:258-326",
+        "tests/cases/sweeps.json:3-16"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Random scratch values vs graded values (example D-3)",
+      "status": "checked",
+      "reason": "The only random value is the mkdtemp and RUN_DIR path. Fixtures are referenced by relative name with cwd set to that path, and no in-scope command prints file or directory names to stdout.",
+      "evidence": [
+        "tests/test_outputs.py:112-127",
+        "tests/test.sh:23-24",
+        "environment/app/docs/scope.md:8"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated grading of correct and incorrect submissions from clean environments stays stable (checklist 6)",
+      "status": "checked",
+      "reason": "This is a static argument; nothing was executed. The expected values are a deterministic function of (pinned sed binary, fixed argv, fixed stdin, fixed files). The candidate sees the identical inputs. The verdict is all-or-nothing on exact equality, and reward is written only from pytest's exit code. No uncontrolled input was found that could flip either a correct or an incorrect fixed submission between runs.",
+      "evidence": [
+        "tests/test.sh:4-31",
+        "tests/test_outputs.py:142-161"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "Early-exit scripts (q/Q exit codes)",
+        "stdin supplied through a pipe to both processes"
+      ],
+      "case_or_path": "matrix.json:2207-2221 'N;q9' with files, and sweeps.json:37-43 'q255' on @n30. sed may exit before reading stdin, and communicate() suppresses the resulting EPIPE, so stdout and returncode are the same whatever the scheduling.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:130-139",
+        "tests/cases/matrix.json:2207-2221",
+        "tests/cases/sweeps.json:37-43"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "Missing input file makes the exit status 2 (scope.md)",
+        "GNU sed runs as root, the candidate as uid 65534"
+      ],
+      "case_or_path": "areas.json:1519-1537 and matrix.json:1794-2324 name a file that is never created. It is absent for both uids, and the created files are 0644, so root-only readability never makes the expected status differ from what a demoted correct program sees.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:118-127",
+        "tests/test_outputs.py:107",
+        "environment/app/docs/scope.md:14"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "Each run has to finish within five seconds (instruction.md:5)",
+        "Long-line and interval sweeps"
+      ],
+      "case_or_path": "sweeps.json:16 's/.*/&&/;s/a\\{2050\\}/two/' over @long (pattern space up to about 8000 chars) and sweeps.json:12 '/^(ab){700}c$/'. The reference Pike VM runs a single-thread path or fails immediately per start, so the estimate is tens of ms (static estimate, not executed). GNU sed on the same inputs is also far from 5 s, so neither side of the comparison sits near the timeout boundary.",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/sweeps.json:3-16",
+        "tests/cases/inputs.json:14",
+        "solution/pysed/posixre.py:258-326",
+        "solution/pysed/posixre.py:358-375"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "Per-run 5 s limit",
+        "Verifier timeout_sec 3600 over about 1,609 candidate runs"
+      ],
+      "case_or_path": "In principle, a candidate averaging more than about 2.2 s per run would stay within the disclosed per-run limit but exceed the whole-verifier budget. No plausible implementation shown here comes near that regime: inputs are a few dozen short lines except 14 long-line cases. The reference costs about Python start-up time per run. This is recorded as checked, with no reward-changing path demonstrated.",
+      "status": "checked",
+      "evidence": [
+        "task.toml:19-20",
+        "tests/test_outputs.py:108",
+        "instruction.md:5"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "Python hash randomisation (PYTHONHASHSEED not fixed)",
+        "Byte-exact stdout comparison"
+      ],
+      "case_or_path": "The candidate runs without a fixed PYTHONHASHSEED. The reference's bracket and class sets are used only for membership tests, and labels are dict lookups, so the reference's output is seed-independent. Any seed dependence would come from a candidate's own code, not from the task package.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:109",
+        "solution/pysed/posixre.py:193-237",
+        "solution/pysed/sed.py:250-252"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

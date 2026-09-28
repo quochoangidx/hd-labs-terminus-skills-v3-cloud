@@ -1,0 +1,195 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-B",
+  "snapshot_sha256": "f1c6d6826cbf6a6ef8730a4a08d17327cf4fb33acdf8992e6671f11648116acb",
+  "severity": "None",
+  "summary": "The instruction, the HC-4 manual and the README together fix every graded figure. The two gaps the manual leaves (shift dose of a survey below three quarters, and the counted level of a reading above the ceiling) are covered by the explicit 'keep today's step, fed with the manual's figures' rule, and the visible shipped code fully determines that step. Every sealed expectation I hand-traced agrees with this reading, and the tolerance, exact-match and ordering promises match the verifier. No contract defect found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/noise-survey-manual.md",
+      "environment/app/examples/press-shop-day.json",
+      "environment/app/tools/noisedose_run.py",
+      "environment/app/src/noisedose/__init__.py",
+      "environment/app/src/noisedose/levels.py",
+      "environment/app/src/noisedose/twa.py",
+      "environment/app/src/noisedose/flags.py",
+      "environment/app/src/noisedose/groups.py",
+      "environment/app/src/noisedose/survey.py",
+      "environment/app/src/noisedose/shift.py",
+      "environment/app/src/noisedose/report.py",
+      "environment/app/src/noisedose/runs.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/reference_duration.jsonl",
+      "tests/expected/threshold.jsonl",
+      "tests/expected/sampled_time.jsonl",
+      "tests/expected/paused_runs.jsonl",
+      "tests/expected/partial_surveys.jsonl",
+      "tests/expected/whole_shift.jsonl",
+      "tests/expected/three_quarters.jsonl",
+      "tests/expected/below_three_quarters.jsonl",
+      "tests/expected/measured_nothing.jsonl",
+      "tests/expected/above_ceiling.jsonl",
+      "tests/expected/ceiling_level.jsonl",
+      "tests/expected/impulse.jsonl",
+      "tests/expected/twa.jsonl",
+      "tests/expected/rounding.jsonl",
+      "tests/expected/status.jsonl",
+      "tests/expected/groups.jsonl",
+      "tests/expected/quiet_members.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/limits_workers.jsonl",
+      "tests/expected/limits_logs.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/differential-below_three_quarters.jsonl",
+      "tests/expected/differential-above_ceiling.jsonl",
+      "tests/expected/differential-measured_nothing.jsonl",
+      "tests/shipped/app/tools/noisedose_run.py",
+      "tests/shipped/app/src/noisedose/__init__.py",
+      "tests/shipped/app/src/noisedose/flags.py",
+      "tests/shipped/app/src/noisedose/groups.py",
+      "tests/shipped/app/src/noisedose/levels.py",
+      "tests/shipped/app/src/noisedose/report.py",
+      "tests/shipped/app/src/noisedose/runs.py",
+      "tests/shipped/app/src/noisedose/shift.py",
+      "tests/shipped/app/src/noisedose/survey.py",
+      "tests/shipped/app/src/noisedose/twa.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped each manual rule (1.2 rounding, 2.2 reading >=40.0, 2.3 threshold >=80.0 and ceiling counting, 2.4 sampled time, 2.5 partial survey, 3.1 reference duration, 3.2 measured dose, 3.3 projection, 4.1 TWA, 5.1-5.3 flags and status bands, 6.1 group mean) to a named test and its sealed family in tests/test_outputs.py:246-336.",
+    "Enumerated every step of the shipped package (runs.py, shift.py, twa.py, flags.py, groups.py) and classified each figure as manual-governed or manual-silent. Only two are silent: the shift dose of a survey below three quarters (shift.py:18-22) and the counted level of a reading above 115.0 (runs.py:19). instruction.md:3 explicitly says to keep today's step there, worked from the manual's figures.",
+    "Hand-traced the kept short-survey step with manual sampled time for below_three_quarters HC4-0015/0016/0037. For example, V1 (240 sampled including a 70.0 reading): 50*480/240 = 100.0, matching the sealed 100.0. A counted-only-minutes reading would give 200, so the 'from the figures the manual does define' clause is load-bearing and it is disclosed.",
+    "Checked the Y1 case (500 min at 85.0, shift 720). Sampled 500 is >=480, so today's step keeps measured dose 104.1667 and TWA 85.2, reported as over. This matches the sealed value.",
+    "Hand-traced above_ceiling HC4-0019 Y1 (partial projection, counted at 115), HC4-0020 Z1/Z2 and HC4-0038 K1/K4. The sealed doses match counting at 115.0 and flagging only >115.0.",
+    "Hand-traced partial, whole-shift, three-quarters and paused-run families: HC4-0007 A1 = 281.19, HC4-0009 A1 = 476.22, HC4-0014 B2 at 458/610 >= 457.5, HC4-0012 B1 two 1440-minute runs, HC4-0011 A1 = 175.0.",
+    "Checked the differential pairs. Each pair differs only in shift length (below-3/4 and measured-nothing) or in above-ceiling vs 115.0 level. Under the disclosed kept step the candidate dose must be the same across each pair, which is consistent with the contract.",
+    "Checked the tolerance text in instruction.md:5 against REL/ABS=5e-11 in test_outputs.py:40-41,196-199. The accept bound is 1e-11, the reject bound is 1e-10, and the sealed values carry 12 significant figures (error at most about 5e-12 relative), so a within-1e-11 answer passes.",
+    "Checked the TWA exact-tenth comparison (test_outputs.py:212-213) against the instruction's 'same tenth ... or null'. An integer 85 compares equal to 85.0. A null expectation requires None (line 215).",
+    "Checked the group rows: the mean of the members' shift doses including zeros (quiet_members HC4-0027/0028, measured_nothing HC4-0018), TWA/status on the group TWA alone with no flags (impulse HC4-0039 group below), and the key-absence check at test_outputs.py:206-207, which manual 6.1 'a group carries no ceiling or impulse flag' supports.",
+    "Checked that group code order at report_order HC4-0029 (0, 9A, A, A1B2C3D4, AB, ZZ) matches the README 'ascending character order, digits before letters' for the [A-Z0-9] code alphabet.",
+    "Checked test_section_one_largest_doses (X4, X3, X6) against manual 1.4 limits and 3.3: X3 at exactly 1080/1440 is partial, giving 3x; X6 at 2880 minutes on a 60-minute shift keeps its measured 6x.",
+    "Checked that the relabelled generated surveys (empty, long, non-ASCII and space-padded names, new ids, shuffled order, runs split at the same level) change no manual-defined or kept-step figure, and that the README permits any string as a survey name.",
+    "Checked that within_limits/trap_inputs (test_outputs.py:154-178) keep every graded survey inside manual 1.4 and the instruction's open-input exclusions.",
+    "Checked driver immutability: instruction.md:1 requires byte equality, which test_outputs.py:439-445 and test.sh:23 enforce. The shipped driver's hash is identical to the environment driver's.",
+    "Confirmed via the manifest hashes that the tests/shipped copies are byte-identical to the environment package, then read both."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Every grading rule has a candidate-visible authority",
+      "status": "checked",
+      "reason": "Each compared key (survey, id, group, dose, twa, status, ceiling, impulse, list orders) traces to README report section or manual sections 1-6; dose tolerance and twa exactness are stated in instruction.md:5.",
+      "evidence": ["instruction.md:5", "environment/app/README.md:29-41", "environment/app/docs/noise-survey-manual.md:19-102", "tests/test_outputs.py:196-225"],
+      "finding_ids": []
+    },
+    {
+      "category": "Permitted input domain and needed boundaries",
+      "status": "checked",
+      "reason": "Manual 1.4 limits are inclusive and the instruction lists open inputs. The boundaries are defined: 40.0 reading, 80.0 threshold, 115.0 ceiling (not flagged, counted at own level), 140.0 impulse, exactly 3/4 shift, exactly whole shift, 82.0/85.0 bands, and TWA null at zero dose.",
+      "evidence": ["environment/app/docs/noise-survey-manual.md:26-37", "environment/app/docs/noise-survey-manual.md:44-58", "environment/app/docs/noise-survey-manual.md:86-96", "instruction.md:3", "tests/test_outputs.py:154-178"],
+      "finding_ids": []
+    },
+    {
+      "category": "Manual-silent figures resolved by visible authority (hidden-convention check)",
+      "status": "checked",
+      "reason": "The short-survey shift dose and the above-ceiling counted level are not defined by the manual. instruction.md:3 directs the candidate to keep today's step fed with the manual's figures, and the visible shift.py/runs.py fully determine that step. The sealed values match this reading.",
+      "evidence": ["instruction.md:3", "environment/app/src/noisedose/shift.py:17-22", "environment/app/src/noisedose/runs.py:18-24", "tests/expected/below_three_quarters.jsonl:1-3", "tests/expected/above_ceiling.jsonl:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rendered instruction, declared artifacts and verifier paths agree",
+      "status": "checked",
+      "reason": "The command path /app/tools/noisedose_run.py, the package location /app/src and the untouched-driver requirement match the verifier's invocation and byte check. There is no broken template text or sentinel.",
+      "evidence": ["instruction.md:1", "tests/test_outputs.py:130-147", "tests/test_outputs.py:439-445", "tests/test.sh:23"],
+      "finding_ids": []
+    },
+    {
+      "category": "Examples support the stated rules",
+      "status": "checked",
+      "reason": "The example survey follows the README schema. It includes a 0.0 run, quiet readings, a 142.6 dBC peak and ten-hour shifts, which illustrate the rules without contradicting them.",
+      "evidence": ["environment/app/examples/press-shop-day.json:1-20", "environment/app/README.md:14-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Representation-specific grading / instruction-test asymmetry",
+      "status": "checked",
+      "reason": "Dose uses a disclosed tolerance. twa is an exact tenth or null as disclosed. Extra worker keys are ignored. Group ceiling/impulse keys are rejected, which manual 6.1 discloses. Booleans and strings must be native types, which the README discloses.",
+      "evidence": ["tests/test_outputs.py:202-215", "environment/app/docs/noise-survey-manual.md:100-102", "environment/app/README.md:33-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contradictions or impossible requirements",
+      "status": "checked",
+      "reason": "I found no conflict between the manual, the README and the instruction. 'Add no clamp' does not conflict with keeping today's ceiling min(), because that is an existing step the manual leaves open. The largest dose case (6x at 2880 minutes) is reachable within the limits.",
+      "evidence": ["instruction.md:3", "tests/test_outputs.py:383-413"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.4 sampled time includes quiet readings", "kept short-survey step (scale to 480 when sampled < 480)"],
+      "case_or_path": "HC4-0037 V1: 120 at 88.0 + 120 at 70.0, shift 480. Manual sampled time is 240, below 360, so the kept step gives 50*480/240 = 100.0, as sealed.",
+      "status": "checked",
+      "evidence": ["tests/expected/below_three_quarters.jsonl:3", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2 0.0 not a reading", "2.5/3.3 partial projection"],
+      "case_or_path": "HC4-0007 A1: the 0.0 runs are excluded, sampled time is 370 (at least 360), and the dose is projected to 480, giving 281.19 as sealed.",
+      "status": "checked",
+      "evidence": ["tests/expected/paused_runs.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["kept above-ceiling counting at 115", "3.3 partial projection and 5.1 ceiling flag"],
+      "case_or_path": "HC4-0019 Y1: 400 at 90.0 + 20 at 118.5, shift 480, sampled 420. The dose is (264.567+4266.67)*480/420 = 5178.55, the worker is ceiling-flagged and over, and the group has no flag.",
+      "status": "checked",
+      "evidence": ["tests/expected/above_ceiling.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.3 flagged worker over", "6.1 group status on group TWA alone"],
+      "case_or_path": "HC4-0039: both members are impulse-flagged and over, but the group mean dose of 19.84 gives TWA 78.0, so the group is below.",
+      "status": "checked",
+      "evidence": ["tests/expected/impulse.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["4.1 zero dose has no TWA", "6.1 quiet member counted in mean"],
+      "case_or_path": "HC4-0018: B1 has only 0.0 runs (dose 0, null TWA); the group mean is 94.49, giving 84.8 and action.",
+      "status": "checked",
+      "evidence": ["tests/expected/measured_nothing.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 status judged on rounded TWA", "5.3 band edges"],
+      "case_or_path": "HC4-0025 T1: dose 100.59 gives TWA 85.03, which rounds to 85.0, so action. T0 at 82.0 is action and T3 at 81.9 is below.",
+      "status": "checked",
+      "evidence": ["tests/expected/status.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.5 exactly three quarters", "section 1 largest dose"],
+      "case_or_path": "X3: 1080 at 115.0 on a 1440 shift is partial, so 3x102400. X6: 2880 minutes on a 60-minute shift is at least the whole shift, so the measured dose of 6x stands.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:390-413"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

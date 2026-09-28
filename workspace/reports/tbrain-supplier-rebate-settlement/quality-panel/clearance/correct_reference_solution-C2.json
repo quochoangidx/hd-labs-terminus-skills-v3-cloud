@@ -1,0 +1,156 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-C2",
+  "snapshot_sha256": "a0d735d6eeca8a3aafc0a047d83dfac4e5b188012b539632ffecf270836f6e59",
+  "severity": "None",
+  "summary": "The reference patch implements every Schedule R (R-4) rule the instruction makes authoritative (carton receipt date, 40-cent return handling, at-or-above tiers on net purchases, half-up volume rebate, growth on the increase, 25,000-cent minimum), leaves unreached items (loose lines, tidy-up notices, price-match sales) on today's code with today's constants, and adds no guards; no concrete incorrect behavior found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/rebate-schedule.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/tools/rebate_run.py",
+      "environment/app/src/rebate/__init__.py",
+      "environment/app/src/rebate/chargeback.py",
+      "environment/app/src/rebate/dates.py",
+      "environment/app/src/rebate/growth.py",
+      "environment/app/src/rebate/ledger.py",
+      "environment/app/src/rebate/money.py",
+      "environment/app/src/rebate/protection.py",
+      "environment/app/src/rebate/rates.py",
+      "environment/app/src/rebate/returns.py",
+      "environment/app/src/rebate/settle.py",
+      "environment/app/src/rebate/statement.py",
+      "environment/app/src/rebate/tiers.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 27 manifest files against files read; every file read in full, none truncated.",
+    "Applied fix.patch hunks mentally against growth.py, ledger.py, rates.py, statement.py and tiers.py and checked hunk line ranges and counts against the shipped files (e.g. ledger -1,8 +1,15 adds 7 lines; tiers -1,6 +1,8 adds 2).",
+    "2.2/3.1/3.2: a line of units >= 12 is dated invoice + 4 days before the inclusive in_quarter test (fix.patch:31-32, dates.py:25-28); traced invoice first-4 -> first (counts), first-5 -> first-1 (excluded), last-3 -> last+1 (excluded); 11-unit lines keep the invoice date (no schedule rule reaches them).",
+    "3.3: return_charge now reads return_handling=40 (fix.patch:42,49), so credit = units*(unit_cents-40) = value - 40*units; claim_cutoff still reads unit_handling=25.",
+    "2.6/3.5: tier_rate uses >= and last matching row (fix.patch:84); thresholds strictly increasing so last match is highest reached; net < 0 matches no row (first threshold 0) and rate stays 0.",
+    "3.4/3.5: statement picks tier on net (fix.patch:64).",
+    "1.1/3.6: volume_rebate = half_up(net*bp, 10000); money.half_up (2n+d)//(2d) is nearest-with-half-up for n >= 0; for net < 0 bp is 0 so result 0.",
+    "4.1: prior <= 0 -> 0; net*100 < prior*110 -> 0; else half_up((net-prior)*200, 10000) with net-prior > 0; prior=1 needs net >= 2.",
+    "5.1: price drop (cut >= 250) with on_hand >= 100 gives credit >= 25,000 >= notice_cutoff 5,000, so the shipped cutoff never zeroes a price drop; tidy-ups keep today's 5,000 cutoff.",
+    "5.2: contract sale (below >= 100) always passes the shipped 25-cent claim cutoff and is below*units; non-contract sales keep today's code.",
+    "5.3: only in-quarter notices/sales contribute (protection.py:11, chargeback.py:11).",
+    "6.1/6.2: total is sum of four non-negative components; settle pays when total >= 25,000 (settlement_minimum now reads minimum_settlement=25000), else carries whole total; notice_cutoff still reads small_credit=5000.",
+    "Output: all values int (half_up and integer arithmetic), keys match README list, account order preserved by build_statements; rebate_run.py is not touched by the patch.",
+    "Cross-checked solution/model.py against the patched package rule by rule (counting_day, tier_rate, share, growth, price_credit, sale_chargeback, settle); they agree, and model.py mirrors shipped behaviour on unreached inputs.",
+    "Checked solve.sh runs patch -p1 from / with a/app/... paths and that patch is installed in environment/Dockerfile."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced sample-job-like ordinary account plus boundaries: carton at quarter edges, 12 vs 11 units, net exactly on threshold, net below nought, growth exactly 110%, prior 0/1, price drop exactly 250 cut, contract gap exactly 100, settlement exactly 25,000 and 24,999.",
+      "evidence": ["solution/fix.patch:7-92", "environment/app/docs/rebate-schedule.md:64-126", "environment/app/src/rebate/dates.py:13-28"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, types, delimiters, paths",
+      "status": "checked",
+      "reason": "All statement values are Python ints from integer arithmetic or half_up; keys and order follow README; driver untouched as the instruction requires.",
+      "evidence": ["environment/app/src/rebate/statement.py:24-43", "environment/app/README.md:38-55", "environment/app/tools/rebate_run.py:16-20", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state (inclusion/exclusion, replacement of figures, shared constants)",
+      "status": "checked",
+      "reason": "The shared-figure table was split so only the uses the schedule sets change (return_charge, settlement_minimum) while claim_cutoff and notice_cutoff keep today's constants, as instruction paragraph 2 requires.",
+      "evidence": ["solution/fix.patch:36-54", "environment/app/src/rebate/rates.py:4-20", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Rounding and precision (rule 1.1)",
+      "status": "checked",
+      "reason": "Only shares (volume rebate, growth bonus) are rounded, half up; credits, chargebacks and returns are unrounded integer products.",
+      "evidence": ["environment/app/docs/rebate-schedule.md:11-14", "environment/app/src/rebate/money.py:4-6", "solution/fix.patch:7-8,91-92"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reach rule: unreached inputs keep today's calculation and constants; no added guards",
+      "status": "checked",
+      "reason": "Loose lines keep invoice date; tidy-up notices keep the 5,000 cutoff; price-match sales keep the 25 cutoff; no clamp or exception added.",
+      "evidence": ["instruction.md:3", "environment/app/src/rebate/protection.py:13-15", "environment/app/src/rebate/chargeback.py:13-16", "solution/fix.patch:31-33"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or durability promise; the tool is a pure stdin-file to stdout computation.",
+      "evidence": ["instruction.md:1-5", "environment/app/README.md:7-12"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reference delivery mechanics (solve.sh applies the patch in the built image)",
+      "status": "checked",
+      "reason": "patch is installed; paths a/app/... applied with -p1 from /; hunk ranges match shipped files.",
+      "evidence": ["solution/solve.sh:20-22", "environment/Dockerfile:3-7"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2/3.1 carton receipt", "1.2 inclusive quarter bounds"],
+      "case_or_path": "Carton invoiced on last-3 counts toward next quarter; invoiced first-4 counts toward this quarter; loose 11-unit line on last day stays in the quarter.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:31-32", "environment/app/src/rebate/dates.py:25-28"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 returns below purchases", "2.6 no tier below nought / 3.6 volume rebate"],
+      "case_or_path": "Returns exceed purchases: net < 0, tier_rate returns 0, half_up(0,10000)=0; growth returns 0 because net*100 < prior*110 for prior > 0.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:64,84,92", "environment/app/src/rebate/growth.py:11-14"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 return handling 40", "shipped claim cutoff reading the same unit_handling figure"],
+      "case_or_path": "Sale 30 cents below cost is not a contract sale; patch leaves claim_cutoff at 25 so it is charged as today, while returns use 40.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:39-53", "environment/app/src/rebate/chargeback.py:13-16"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["6.2 minimum 25,000", "shipped notice cutoff reading the same small_credit figure"],
+      "case_or_path": "Tidy-up notice cutting 49 cents on 200 units (9,800) remains credited under the 5,000 cutoff while a 24,999 settlement is carried.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:39-53", "environment/app/src/rebate/protection.py:13-15", "environment/app/src/rebate/settle.py:6-10"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.1 price drop", "shipped notice cutoff 5,000"],
+      "case_or_path": "Minimum price drop 250 x 100 units = 25,000 >= 5,000, so the cutoff cannot zero any price drop within section 1 limits.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/rebate-schedule.md:41-45,71-72", "environment/app/src/rebate/protection.py:13-15"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["4.1 growth threshold", "1.1 half-up rounding"],
+      "case_or_path": "prior 100,000, net 111,225: 11,225 x 200 / 10,000 = 224.5 -> 225 via half_up on (net-prior).",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:7-8", "environment/app/src/rebate/money.py:4-6"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

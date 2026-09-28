@@ -1,0 +1,143 @@
+diff -ruN a/app/src/sealsrc/checks.py b/app/src/sealsrc/checks.py
+--- a/app/src/sealsrc/checks.py
++++ b/app/src/sealsrc/checks.py
+@@ -1,24 +1,25 @@
+ """Per-entry determinations: exemption, leak tests, decay-to-disposal (sections 4, 5 and 7)."""
+ 
+-from .dates import elapsed_days
++from .dates import elapsed_days, parse
+ from .nuclides import exempt_quantity, half_life_days, leak_class
+ 
+ LEAK_THRESHOLD_BQ = {"beta-gamma": 3.7e6, "alpha": 3.7e5}
+ LEAK_INTERVAL_DAYS = 182
++WIPE_LEAK_BQ = 185
+ SHORT_LIVED_DAYS = 120
+ 
+ 
+ def is_exempt(nuclide, activity_bq, daughter_bq):
+     """True when the entry is at or below the exempt quantity of its nuclide."""
+-    return activity_bq <= exempt_quantity(nuclide)
++    return activity_bq + daughter_bq <= exempt_quantity(nuclide)
+ 
+ 
+ def last_leak_test(entry):
+     """Date of the entry's last leak test, or None when none is on record."""
+-    wipes = entry["leak_tests"]
+-    if not wipes:
++    dates = [parse(w["date"]) for w in entry["leak_tests"] if w["removable_bq"] < WIPE_LEAK_BQ]
++    if not dates:
+         return None
+-    return wipes[-1]["date"]
++    return "%04d-%02d-%02d" % max(dates)
+ 
+ 
+ def leak_test_due(entry, activity_bq, survey_date):
+@@ -26,7 +27,7 @@
+     cls = leak_class(entry["nuclide"])
+     if cls is None:
+         return False
+-    if entry["ref_bq"] < LEAK_THRESHOLD_BQ[cls]:
++    if activity_bq < LEAK_THRESHOLD_BQ[cls]:
+         return False
+     last = last_leak_test(entry)
+     if last is None:
+@@ -38,4 +39,4 @@
+     """True when a short-lived entry has decayed far enough to be disposed of."""
+     if half_life_days(nuclide) > SHORT_LIVED_DAYS:
+         return False
+-    return activity_bq <= ref_bq / 1000.0
++    return days >= 10 * half_life_days(nuclide)
+diff -ruN a/app/src/sealsrc/dates.py b/app/src/sealsrc/dates.py
+--- a/app/src/sealsrc/dates.py	2026-09-26 21:15:32
++++ b/app/src/sealsrc/dates.py	2026-09-26 21:15:32
+@@ -1,6 +1,8 @@
+ """Calendar dates as they appear in the inventory (YYYY-MM-DD)."""
+ 
++import datetime
+ 
++
+ def parse(text):
+     """(year, month, day) of a YYYY-MM-DD date."""
+     year, month, day = (int(part) for part in text.split("-"))
+@@ -9,8 +11,5 @@
+ 
+ def elapsed_days(start, end):
+     """Whole days from the date `start` to the date `end`."""
+-    sy, sm, sd = parse(start)
+-    ey, em, ed = parse(end)
+-    months = (ey - sy) * 12 + (em - sm)
+-    days = months * 30 + (ed - sd)
++    days = datetime.date(*parse(end)).toordinal() - datetime.date(*parse(start)).toordinal()
+     return max(days, 0)
+diff -ruN a/app/src/sealsrc/decay.py b/app/src/sealsrc/decay.py
+--- a/app/src/sealsrc/decay.py
++++ b/app/src/sealsrc/decay.py
+@@ -1,18 +1,16 @@
+ """Decay correction of certificate activities (manual section 3)."""
+ 
+-import math
+-
+ from .nuclides import daughter_of, half_life_days
+ 
+ 
+ def activity_on(ref_bq, nuclide, days):
+     """Activity of the parent nuclide `days` after the certificate's reference date."""
+-    return ref_bq * math.exp(-days / half_life_days(nuclide))
++    return ref_bq * 2.0 ** (-days / half_life_days(nuclide))
+ 
+ 
+ def daughter_activity(nuclide, parent_bq):
+     """Activity of the equilibrium daughter, 0.0 for a nuclide that has none."""
+-    daughter, _branching = daughter_of(nuclide)
++    daughter, branching = daughter_of(nuclide)
+     if daughter is None:
+         return 0.0
+-    return parent_bq
++    return parent_bq * branching
+diff -ruN a/app/src/sealsrc/locations.py b/app/src/sealsrc/locations.py
+--- a/app/src/sealsrc/locations.py	2026-09-26 21:15:32
++++ b/app/src/sealsrc/locations.py	2026-09-26 21:15:32
+@@ -3,14 +3,17 @@
+ from .nuclides import exempt_quantity
+ 
+ 
+-def location_rows(entries, locations):
+-    """One posting per storage location, in the order the inventory lists the locations."""
++def location_rows(entries, activities, locations):
++    """One posting per storage location, in the order the inventory lists the locations.
++
++    `activities` holds the current activity of each entry, in inventory order.
++    """
+     held = {loc["id"]: 0.0 for loc in locations}
+     count = {loc["id"]: 0 for loc in locations}
+-    for entry in entries:
++    for entry, activity in zip(entries, activities):
+         if entry["ref_bq"] <= exempt_quantity(entry["nuclide"]):
+             continue
+-        held[entry["location"]] += entry["ref_bq"]
++        held[entry["location"]] += activity
+         count[entry["location"]] += 1
+     rows = []
+     for loc in locations:
+diff -ruN a/app/src/sealsrc/nuclides.py b/app/src/sealsrc/nuclides.py
+--- a/app/src/sealsrc/nuclides.py
++++ b/app/src/sealsrc/nuclides.py
+@@ -21,7 +21,7 @@
+     "Cf-252": (2.645, "y", 1.0e4, "alpha", None, 0.0),
+ }
+ 
+-DAYS_PER_YEAR = 365
++DAYS_PER_YEAR = 365.25
+ 
+ 
+ def half_life_days(nuclide):
+diff -ruN a/app/src/sealsrc/report.py b/app/src/sealsrc/report.py
+--- a/app/src/sealsrc/report.py	2026-09-26 21:15:32
++++ b/app/src/sealsrc/report.py	2026-09-26 21:15:32
+@@ -31,5 +31,5 @@
+     return {
+         "survey_date": survey_date,
+         "sources": rows,
+-        "locations": location_rows(inventory["sources"], inventory["locations"]),
++        "locations": location_rows(inventory["sources"], [row["activity_bq"] for row in rows], inventory["locations"]),
+     }

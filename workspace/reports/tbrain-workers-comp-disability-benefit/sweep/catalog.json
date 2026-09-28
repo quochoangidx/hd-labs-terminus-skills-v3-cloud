@@ -1,0 +1,408 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "c1-claim-number-stripped": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/statement.py",
+     "old": "figures = {\"claim\": claim[\"claim\"],",
+     "new": "figures = {\"claim\": claim[\"claim\"].strip(),"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "README: the claim number, as given"
+  },
+  "c2-line-capped-100000": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/payroll.py",
+     "old": "        credited.append((week, cents))",
+     "new": "        credited.append((week, min(cents, 100_000)))"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: lines up to 500,000 cents"
+  },
+  "c3-row-strictly-before-injury": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/rates.py",
+     "old": "if row[0] <= day:",
+     "new": "if row[0] < day:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_4_row_in_force_on_the_date_of_injury"
+   ],
+   "rationale": "2.4: a row taking effect on the day of injury is in force"
+  },
+  "c3-partial-weeks-capped-100": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/partial.py",
+     "old": "    for _week, earned in earnings:",
+     "new": "    for _week, earned in earnings[:100]:"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.6: up to 104 partial weeks"
+  },
+  "c3-periods-capped-10": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/disability.py",
+     "old": "for first, last in periods)",
+     "new": "for first, last in periods[:10])"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.5: up to twelve periods"
+  },
+  "c3-period-span-capped-365": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/disability.py",
+     "old": "return (parse_day(last) - parse_day(first)).days + 1",
+     "new": "return min(366, (parse_day(last) - parse_day(first)).days + 1)"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_5_both_ends_of_a_period_count"
+   ],
+   "rationale": "1.5: a period of 400 days"
+  },
+  "c4-no-wages-divides-by-one": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/payroll.py",
+     "old": "    return half_up(wages, BASE_WEEKS)",
+     "new": "    return half_up(wages, BASE_WEEKS) if wages else 1"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_3_no_week_paid_gives_nought"
+   ],
+   "rationale": "3.3: nought wages give nought"
+  },
+  "c4-zero-earning-week-pays-nothing": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/partial.py",
+     "old": "        total += min(benefit, rate)",
+     "new": "        total += min(benefit, rate) if earned else 0"
+    }
+   ],
+   "expect_failing": [
+    "test_week_below_1000_cents_keeps_todays_share"
+   ],
+   "rationale": "a week earning nothing keeps today's share (silent case)"
+  },
+  "c5-claims-capped-128": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/statement.py",
+     "old": "for claim in job[\"claims\"]]}",
+     "new": "for claim in job[\"claims\"][:128]]}"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: 200 claims"
+  },
+  "c5-lines-capped-100": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/payroll.py",
+     "old": "    for paid, cents in lines:",
+     "new": "    for paid, cents in lines[:100]:"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: 120 wage lines"
+  },
+  "c5-rows-capped-32": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/rates.py",
+     "old": "    for row in table:",
+     "new": "    for row in table[:32]:"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: 40 rows"
+  },
+  "c6-claim-number-cut-16": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/statement.py",
+     "old": "figures = {\"claim\": claim[\"claim\"],",
+     "new": "figures = {\"claim\": claim[\"claim\"][:16],"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "1.3: claim numbers up to 24 characters"
+  },
+  "c8-rate-floored": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/rates.py",
+     "old": "    rate = ratio_of(aww, RATE_FRACTION)",
+     "new": "    rate = aww * RATE_FRACTION[0] // RATE_FRACTION[1]"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_4_rate_is_two_thirds"
+   ],
+   "rationale": "1.1: nearest cent"
+  },
+  "c8-weeks-pay-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/payroll.py",
+     "old": "if cents >= WEEKS_PAY_FROM:",
+     "new": "if cents > WEEKS_PAY_FROM:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay"
+   ],
+   "rationale": "2.2: 2,000 cents or more"
+  },
+  "c8-partial-week-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/partial.py",
+     "old": "if earned >= PARTIAL_WEEK_FROM else",
+     "new": "if earned > PARTIAL_WEEK_FROM else"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_8_week_of_exactly_1000_cents_is_partial_disability"
+   ],
+   "rationale": "2.8: 1,000 cents or more"
+  },
+  "c8-retro-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/disability.py",
+     "old": "if days >= RETROACTIVE_AFTER else 0",
+     "new": "if days > RETROACTIVE_AFTER else 0"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_retroactive_from_fourteen_days"
+   ],
+   "rationale": "4.1: fourteen or more"
+  },
+  "c8-partial-benefit-floored": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/partial.py",
+     "old": "        benefit = ratio_of(wage_loss(aww, earned), fraction)",
+     "new": "        benefit = wage_loss(aww, earned) * fraction[0] // fraction[1]"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate"
+   ],
+   "rationale": "1.1: nearest cent"
+  },
+  "c8-cap-at-maximum-not-rate": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/partial.py",
+     "old": "        total += min(benefit, rate)",
+     "new": "        total += benefit"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate"
+   ],
+   "rationale": "5.1: no more than the weekly rate"
+  },
+  "c9-claim-number-ascii": {
+   "class": "C9",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/statement.py",
+     "old": "figures = {\"claim\": claim[\"claim\"],",
+     "new": "figures = {\"claim\": claim[\"claim\"].encode(\"ascii\", \"replace\").decode(),"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "1.3: any characters"
+  },
+  "c10-first-row-only": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/rates.py",
+     "old": "    _effective, maximum, minimum = row_in_force(table, injury)",
+     "new": "    _effective, maximum, minimum = table[0]"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_4_row_in_force_on_the_date_of_injury"
+   ],
+   "rationale": "the table varies"
+  },
+  "c11-one-line-per-payday": {
+   "class": "C11",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/payroll.py",
+     "old": "    return [(week, cents) for week, cents in credit_lines(lines) if week in weeks]",
+     "new": "    return [(week, cents) for week, cents in dict(credit_lines(lines)).items() if week in weeks]"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_3_average_weekly_wage_divides_by_thirteen"
+   ],
+   "rationale": "two lines toward one week both count"
+  },
+  "c12-tiny-lines-dropped": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/payroll.py",
+     "old": "        credited.append((week, cents))",
+     "new": "        if cents >= 100:\n            credited.append((week, cents))"
+    }
+   ],
+   "expect_failing": [
+    "test_correction_below_a_weeks_pay_keeps_its_paydays_week"
+   ],
+   "rationale": "no guard on small lines"
+  },
+  "c15-statements-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/statement.py",
+     "old": "return {\"statements\": [claim_statement(claim, table) for claim in job[\"claims\"]]}",
+     "new": "return {\"statements\": sorted((claim_statement(claim, table) for claim in job[\"claims\"]), key=lambda s: s[\"claim\"])}"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "README: job order"
+  },
+  "c16-figure-as-float": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/statement.py",
+     "old": "    figures[\"total\"] = ttd[\"ttd\"] + tpd[\"tpd\"]",
+     "new": "    figures[\"total\"] = float(ttd[\"ttd\"] + tpd[\"tpd\"])"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "README: every value but claim an integer"
+  },
+  "c4-low-week-uncapped": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/partial.py",
+     "old": "        total += min(benefit, rate)",
+     "new": "        total += min(benefit, rate) if earned >= PARTIAL_WEEK_FROM else benefit"
+    }
+   ],
+   "expect_failing": [
+    "test_week_below_1000_cents_keeps_todays_share"
+   ],
+   "rationale": "today's cap at the rate on a low week (instruction reach rule)"
+  },
+  "c8-low-week-floored": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/partial.py",
+     "old": "        benefit = ratio_of(wage_loss(aww, earned), fraction)",
+     "new": "        benefit = ratio_of(wage_loss(aww, earned), fraction) if fraction == RATE_FRACTION else wage_loss(aww, earned) * 3 // 5"
+    }
+   ],
+   "expect_failing": [
+    "test_week_below_1000_cents_keeps_todays_share"
+   ],
+   "rationale": "today's 3/5 is rounded to the nearest cent (1.1, ratio_of)"
+  }
+ },
+ "alternatives": {
+  "alt-float-ttd-round": {
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/disability.py",
+     "old": "    amount = half_up(rate * paid, 7)",
+     "new": "    amount = round(rate * paid / 7)"
+    }
+   ],
+   "rationale": "rate x paid < 2^53 and no sevenths half: float round is exact"
+  },
+  "alt-fraction-rate": {
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/rates.py",
+     "old": "    rate = ratio_of(aww, RATE_FRACTION)",
+     "new": "    from fractions import Fraction\n    rate = int(Fraction(aww * RATE_FRACTION[0], RATE_FRACTION[1]) + Fraction(1, 2))"
+    }
+   ],
+   "rationale": "exact Fraction rounding, same nearest cent"
+  },
+  "alt-keys-reversed": {
+   "edits": [
+    {
+     "file": "app/src/tdbenefit/statement.py",
+     "old": "    return {key: figures[key] for key in FIELDS}",
+     "new": "    return {key: figures[key] for key in reversed(FIELDS)}"
+    }
+   ],
+   "rationale": "key order is not promised"
+  }
+ },
+ "untouched_classes": {
+  "C7": "Python integers are unbounded and the largest figure (a total of 315,885,714 cents) is far below 2^31; no fixed-width type exists to overflow",
+  "C13": "the envelope's named axes (weekday of injury, rate-row change, weeks paid, partial-week earnings) meet in the generated and limits jobs; no pair of them forms a cross-product a plausible slip could break separately",
+  "C14": "the one expression with two consumers (RATE_FRACTION in rates.py and partial.py) is witnessed by W03 and W11 (wrong-paths/)",
+  "C17": "harness: H01 (tampered driver) and H02 (unfixed package reading the sealed expectations) in wrong-paths/; staging uses prefix-less mkdtemp and one neutral file name",
+  "C18": "independence.json: solution/model.py never imports the package; tests/ hold no model or generator"
+ }
+}

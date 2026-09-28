@@ -1,0 +1,202 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-A",
+  "snapshot_sha256": "396f374ad48c49716916b491fa816cc51c9c3668ed9fcc7a1c1f591380524fff",
+  "severity": "None",
+  "summary": "Every graded figure traces to the manual RC-3, the README output schema, or the instruction's explicit fallback rule ('no rule, so today's step stands; add no clamp'). That rule settles the two gaps the manual leaves open: the days charged for a rental under a day, and the fuel charge for a car returned with as much fuel or more. I found no hidden convention, contradiction or asymmetry between the instruction and the tests. By hand I recomputed the sealed expectations for every named family and spot-checked the generated and limits files; they match the contract.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/rental-charges-manual.md",
+      "environment/app/examples/counter-2031-05.json",
+      "environment/app/tools/rentcharge_run.py",
+      "environment/app/src/rentcharge/__init__.py",
+      "environment/app/src/rentcharge/clock.py",
+      "environment/app/src/rentcharge/fuel.py",
+      "environment/app/src/rentcharge/mileage.py",
+      "environment/app/src/rentcharge/run.py",
+      "environment/app/src/rentcharge/tax.py",
+      "environment/app/src/rentcharge/time_charge.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-grace.jsonl",
+      "tests/expected/02-allowance.jsonl",
+      "tests/expected/03-turnover.jsonl",
+      "tests/expected/04-refuelling.jsonl",
+      "tests/expected/05-tax_base.jsonl",
+      "tests/expected/06-tax_rounding.jsonl",
+      "tests/expected/07-order_and_totals.jsonl",
+      "tests/expected/08-short_days.jsonl",
+      "tests/expected/09-short_allowance.jsonl",
+      "tests/expected/10-fuel_not_short.jsonl",
+      "tests/expected/11-traps_combined.jsonl",
+      "tests/expected/12-generated.jsonl",
+      "tests/expected/13-limits.jsonl",
+      "tests/shipped/app/tools/rentcharge_run.py",
+      "tests/shipped/app/src/rentcharge/__init__.py",
+      "tests/shipped/app/src/rentcharge/clock.py",
+      "tests/shipped/app/src/rentcharge/fuel.py",
+      "tests/shipped/app/src/rentcharge/mileage.py",
+      "tests/shipped/app/src/rentcharge/run.py",
+      "tests/shipped/app/src/rentcharge/tax.py",
+      "tests/shipped/app/src/rentcharge/time_charge.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked the packet manifest against the directory listing: all 44 listed files are present and were read. tests/expected/13-limits.jsonl is one long line. The Read tool truncated it after the whole agreements array and the first bills. I read the remaining bills with paginated Grep -o over bill objects (offsets 16 and 106) and the trailing revenue/tax with a separate Grep, so the file was fully covered.",
+    "Mapped each output key in the README bill-run schema (README.md:24-34) to a manual rule: days (2.3, plus the fallback for rentals under a day), miles (2.4), time_charge (3.1), mileage_charge (3.2), fuel_charge (3.3, plus the fallback for cars returned as full or fuller), tax (4.1, 1.2), total (4.2), revenue and file tax (4.3).",
+    "Recomputed by hand every bill in 01-grace, 02-allowance, 03-turnover, 04-refuelling, 05-tax_base, 06-tax_rounding, 07-order_and_totals, 08-short_days, 09-short_allowance, 10-fuel_not_short and 11-traps_combined from the manual text, plus spot checks in 12-generated (2W0) and 13-limits (Z-9, B, L7B). All matched.",
+    "Confirmed that the 'today's step' expectations for rentals under a day (days = ceiling of length/1440 = 1) and for cars returned full or fuller (fuel_out minus fuel_in, times fuel_rate, which can be 0 or negative, with no fee) follow the shipped code (time_charge.py:6-8, fuel.py:4-5), as instruction.md:3 requires.",
+    "Checked that every graded file stays within rule 1.3 (test_outputs.py:174-186). Short and fuller inputs appear only in the families that grade them (test_outputs.py:55, 189-209).",
+    "Checked that each comparison requirement in the tests is disclosed: exact string for the branch and ids, JSON integer type for the other figures, bill order (instruction.md:5; test_outputs.py:213-227); extra keys are ignored.",
+    "Checked the harness requirements against the instruction: the driver must stay byte-identical (instruction.md:1; test_outputs.py:356-362; test.sh:23), and the README, manual and example must be left unchanged (instruction.md:3 'Only change what the manual governs'; manual.md:5-7; test_outputs.py:348-353).",
+    "Checked the relabelled generated runs. They use new ids within 1.3, shuffle the bills with the expected order following, shift times by whole weeks, and use arbitrary branch strings. Each follows from the README's 'as given', 'in the order of the file' and the rules being invariant to length (test_outputs.py:297-332)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Every grading rule has a defining sentence or authoritative candidate-visible artifact",
+      "status": "checked",
+      "reason": "The instruction names the manual as the authority. The manual defines the grace period, allowance, turnover, refuelling fee, tax base and half-up rounding. The README defines the output keys. The instruction's fallback clause covers the two figures the manual leaves open. Every sealed expectation I recomputed follows from these sources alone.",
+      "evidence": [
+        "instruction.md:1",
+        "instruction.md:3",
+        "environment/app/docs/rental-charges-manual.md:16-18",
+        "environment/app/docs/rental-charges-manual.md:35-71",
+        "environment/app/README.md:24-34"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Permitted input domain and needed boundaries specified",
+      "status": "checked",
+      "reason": "Rule 1.3 gives inclusive limits, and the instruction leaves inputs outside them open. The tests enforce the limits on every graded file. The graded boundaries are: exactly 1440 minutes, +59/+60/+61 minutes, 1 and 1439 minutes, 60 days, odometer 999,999 turning over, 20,000 miles, and fuel from 0 to 8. Each has a defined result.",
+      "evidence": [
+        "environment/app/docs/rental-charges-manual.md:20-31",
+        "instruction.md:3",
+        "instruction.md:5",
+        "tests/test_outputs.py:174-186",
+        "tests/expected/01-grace.jsonl:1-2",
+        "tests/expected/08-short_days.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Rendered instruction, declared artifacts and verifier paths agree; no broken template or sentinels",
+      "status": "checked",
+      "reason": "The instruction's command /app/tools/rentcharge_run.py AGREEMENTS.json and the package path /app/src match the verifier's invocation. The artifact /app/ is consistent with this. The instruction discloses varying pathnames with 'every agreement file' and the README says the command takes any file. The rendered text has no template residue.",
+      "evidence": [
+        "instruction.md:1",
+        "task.toml:1",
+        "tests/test_outputs.py:145-166",
+        "environment/app/README.md:8"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Examples support the stated rules",
+      "status": "checked",
+      "reason": "The only example is an unannotated input file (one day rental with grace minutes and refuelling, and one rental under a day). It carries no expected output that could conflict with the manual.",
+      "evidence": [
+        "environment/app/examples/counter-2031-05.json:1-9"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden arbitrary conventions / representation-specific grading",
+      "status": "checked",
+      "reason": "The comparator checks the types and values of the README keys only, ignores extra keys, and checks no whitespace or key order. The instruction discloses the integer type and exact-string rules. Local time is naive; the manual gives no zone, and the code's wall-clock subtraction is today's step.",
+      "evidence": [
+        "tests/test_outputs.py:213-227",
+        "instruction.md:5",
+        "environment/app/src/rentcharge/clock.py:8-16"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction/test asymmetry (promises not graded or graded rules not promised)",
+      "status": "checked",
+      "reason": "Each of the five defects the instruction names has a dedicated family. The two fallback figures are graded and disclosed through instruction.md:3. The harness checks (driver bytes; README, manual and example hashes; candidate read isolation) are grounded in instruction text or impose nothing on a correct solution.",
+      "evidence": [
+        "instruction.md:1-5",
+        "tests/test_outputs.py:235-362"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Contradictions or impossible requirements",
+      "status": "checked",
+      "reason": "'Add no clamp' is consistent with the manual's own 'beyond the allowance', which keeps mileage at zero or more. The negative fuel credit and negative totals (E3 total -5175) follow from the fallback plus rule 4.2 and do not conflict with any rule. The tax base is never negative, so half-up rounding is unambiguous.",
+      "evidence": [
+        "environment/app/docs/rental-charges-manual.md:55-71",
+        "tests/expected/10-fuel_not_short.jsonl:1"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2/2.3 day rental grace", "instruction fallback: days of a rental under a day"],
+      "case_or_path": "Lengths of 1439 minutes (S5, C8) and 1440 minutes (G9, R1) give 1 day each, and 1 day+59 minutes (MMMMMMMMMM) also gives 1. 45 minutes (C1) gives 1 day under today's ceiling, not the 0 that grace applied everywhere would give.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:38-42", "instruction.md:3", "tests/expected/08-short_days.jsonl:1", "tests/expected/11-traps_combined.jsonl:1", "tests/expected/07-order_and_totals.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 allowance per day charged", "fallback days for a rental under a day"],
+      "case_or_path": "L3 (90 minutes, 151 miles, rate 500) gives mileage 500. C4 (59 minutes, 151 miles) gives 30. The allowance of 150 comes from the day charged under the fallback.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:55-57", "tests/expected/09-short_allowance.jsonl:1", "tests/expected/11-traps_combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 turnover", "rental under a day"],
+      "case_or_path": "C6 (30 minutes, 999900 to 300) gives 400 miles and 250 over the allowance at 500 = 125000. The turnover rule applies to every rental, not only day rentals.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:44-46", "tests/expected/11-traps_combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 refuelling fee", "fuel rate of 0 / rental under a day"],
+      "case_or_path": "F3 and C7 (rate 0, short) give 1500. C5 (1 minute, 1 eighth short) gives 2100.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:59-60", "tests/expected/04-refuelling.jsonl:1", "tests/expected/11-traps_combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["fallback fuel charge for a car returned as full or fuller", "4.1 fuel not taxed / 4.2 total"],
+      "case_or_path": "E2 gives -650 and E3 gives -16000 (total -5175). Tax stays 825 because fuel is excluded from the base. E4 (rate 0) gives 0.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:64-68", "instruction.md:3", "tests/expected/10-fuel_not_short.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 half-up tax", "4.3 file tax as sum of per-rental taxes"],
+      "case_or_path": "R1-R4 cover 16.5, 49.5, 115.5 and 1105.5 cents, which round up to 17, 50, 116 and 1106. The file tax 1406 is the sum of the rounded per-rental taxes.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/rental-charges-manual.md:16-18", "environment/app/docs/rental-charges-manual.md:70-71", "tests/expected/06-tax_rounding.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["README bill order and id as given", "relabelled generated runs"],
+      "case_or_path": "Shuffled order with new ids. The expected bills follow the file order and ids, and branch strings (empty, spaces, non-ASCII, 500 characters) are echoed as given.",
+      "status": "checked",
+      "evidence": ["environment/app/README.md:28-31", "tests/test_outputs.py:297-332"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

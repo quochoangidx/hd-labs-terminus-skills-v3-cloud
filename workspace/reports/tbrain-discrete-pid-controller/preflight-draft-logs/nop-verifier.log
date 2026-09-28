@@ -1,0 +1,632 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 24 items
+
+../../tests/test_outputs.py FFFFFFFFF.FFFFF.F.F..FFF                     [100%]
+
+=================================== FAILURES ===================================
+_________________ test_proportional_weights_only_the_setpoint __________________
+
+    def test_proportional_weights_only_the_setpoint():
+        tuning = {"gain": 2.0, "setpoint_weight": 0.4, **WIDE}
+>       check(tuning, steps([(1.0, 0.0), (1.0, 0.3), (0.5, 0.8), (-1.0, 0.2), (-1.0, -1.4)]))
+
+/tests/test_outputs.py:96: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 0.8, 'integral': 0.0, 't_p': 0.8, 't_i': 0.0, ...}, {'u': 0.5599999999999999, 'integral': 0.0, 't_p': 0.5599999..._p': -0.96, 't_i': 0.0, ...}, {'u': 0.31999999999999995, 'integral': 0.0, 't_p': 0.31999999999999995, 't_i': 0.0, ...}]
+expected = [{'u': 0.8, 'integral': 0.0, 't_p': 0.8, 't_i': 0.0, ...}, {'u': 0.20000000000000007, 'integral': 0.0, 't_p': 0.200000...000000000002, 't_i': 0.0, ...}, {'u': 1.9999999999999998, 'integral': 0.0, 't_p': 1.9999999999999998, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 2: u is 0.5599999999999999, expected 0.20000000000000007
+E               assert False
+E                +  where False = _close(0.5599999999999999, 0.20000000000000007)
+E                +    where 0.5599999999999999 = <built-in method get of dict object at 0xffff98fb8700>('u')
+E                +      where <built-in method get of dict object at 0xffff98fb8700> = {'u': 0.5599999999999999, 'integral': 0.0, 't_p': 0.5599999999999999, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+___________ test_proportional_weight_of_nought_keeps_the_measurement ___________
+
+    def test_proportional_weight_of_nought_keeps_the_measurement():
+        tuning = {"gain": 1.5, "setpoint_weight": 0.0, **WIDE}
+>       check(tuning, steps([(2.0, 0.5), (2.0, -0.25), (-3.0, 1.0)]))
+
+/tests/test_outputs.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 0.0, 'integral': 0.0, 't_p': 0.0, 't_i': 0.0, ...}, {'u': 0.0, 'integral': 0.0, 't_p': 0.0, 't_i': 0.0, ...}, {'u': 0.0, 'integral': 0.0, 't_p': -0.0, 't_i': 0.0, ...}]
+expected = [{'u': -0.75, 'integral': 0.0, 't_p': -0.75, 't_i': 0.0, ...}, {'u': 0.375, 'integral': 0.0, 't_p': 0.375, 't_i': 0.0, ...}, {'u': -1.5, 'integral': 0.0, 't_p': -1.5, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 0.0, expected -0.75
+E               assert False
+E                +  where False = _close(0.0, -0.75)
+E                +    where 0.0 = <built-in method get of dict object at 0xffff98cfae80>('u')
+E                +      where <built-in method get of dict object at 0xffff98cfae80> = {'u': 0.0, 'integral': 0.0, 't_p': 0.0, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+______________ test_proportional_only_output_is_gain_times_error _______________
+
+    def test_proportional_only_output_is_gain_times_error():
+        tuning = {"gain": 2.5, "setpoint_weight": 1.0, **WIDE}
+        ops = [["step", 1.0, 0.2, 0.0], ["step", 0.4, -0.6, 0.3], ["step", -2.0, 1.0, -0.8]]
+>       rows = check(tuning, ops)
+               ^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:107: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 2.0, 'integral': 0.0, 't_p': 2.0, 't_i': 0.0, ...}, {'u': 2.8, 'integral': 0.0, 't_p': 2.5, 't_i': 0.0, ...}, {'u': -8.3, 'integral': 0.0, 't_p': -7.5, 't_i': 0.0, ...}]
+expected = [{'u': 2.0, 'integral': 0.0, 't_p': 2.0, 't_i': 0.0, ...}, {'u': 2.8, 'integral': 0.0, 't_p': 2.5, 't_i': 0.0, ...}, {'u': -8.3, 'integral': 0.0, 't_p': -7.5, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 2: t_v is 2.5, expected 2.8
+E               assert False
+E                +  where False = _close(2.5, 2.8)
+E                +    where 2.5 = <built-in method get of dict object at 0xffff98cb5d40>('t_v')
+E                +      where <built-in method get of dict object at 0xffff98cb5d40> = {'u': 2.8, 'integral': 0.0, 't_p': 2.5, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+________________ test_integral_uses_the_gain_and_the_full_error ________________
+
+    def test_integral_uses_the_gain_and_the_full_error():
+        tuning = {"gain": 3.0, "integral_time": 2.0, "setpoint_weight": 0.5, **WIDE}
+>       check(tuning, steps([(1.0, 0.0), (1.0, 0.25), (1.0, 0.5), (0.2, 0.9), (-0.5, 0.1)]))
+
+/tests/test_outputs.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.525, 'integral': 0.025, 't_p': 1.5, 't_i': 0.025, ...}, {'u': 1.1625, 'integral': 0.037500000000000006, 't_p'...025000000000000022, ...}, {'u': -0.9199999999999999, 'integral': -0.02, 't_p': -0.8999999999999999, 't_i': -0.02, ...}]
+expected = [{'u': 1.5, 'integral': 0.15000000000000002, 't_p': 1.5, 't_i': 0.0, ...}, {'u': 0.9, 'integral': 0.26250000000000007,...u': -0.8174999999999998, 'integral': 0.14250000000000007, 't_p': -1.0499999999999998, 't_i': 0.23250000000000007, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 1.525, expected 1.5
+E               assert False
+E                +  where False = _close(1.525, 1.5)
+E                +    where 1.525 = <built-in method get of dict object at 0xffff98cfba80>('u')
+E                +      where <built-in method get of dict object at 0xffff98cfba80> = {'u': 1.525, 'integral': 0.025, 't_p': 1.5, 't_i': 0.025, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+______________ test_integral_addition_is_seen_from_the_next_step _______________
+
+    def test_integral_addition_is_seen_from_the_next_step():
+        tuning = {"gain": 1.0, "integral_time": 0.5, **WIDE}
+>       rows = check(tuning, steps([(1.0, 0.0), (1.0, 0.0), (1.0, 0.0)]))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:121: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.2, 'integral': 0.2, 't_p': 1.0, 't_i': 0.2, ...}, {'u': 1.4, 'integral': 0.4, 't_p': 1.0, 't_i': 0.4, ...}, {'u': 1.6, 'integral': 0.6000000000000001, 't_p': 1.0, 't_i': 0.6000000000000001, ...}]
+expected = [{'u': 1.0, 'integral': 0.2, 't_p': 1.0, 't_i': 0.0, ...}, {'u': 1.2, 'integral': 0.4, 't_p': 1.0, 't_i': 0.2, ...}, {'u': 1.4, 'integral': 0.6000000000000001, 't_p': 1.0, 't_i': 0.4, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 1.2, expected 1.0
+E               assert False
+E                +  where False = _close(1.2, 1.0)
+E                +    where 1.2 = <built-in method get of dict object at 0xffff98c50480>('u')
+E                +      where <built-in method get of dict object at 0xffff98c50480> = {'u': 1.2, 'integral': 0.2, 't_p': 1.0, 't_i': 0.2, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+____________________ test_derivative_ignores_setpoint_steps ____________________
+
+    def test_derivative_ignores_setpoint_steps():
+        tuning = {"gain": 2.0, "derivative_time": 0.5, "filter_divisor": 10.0, **WIDE}
+>       rows = check(tuning, steps([(0.0, 0.2), (1.0, 0.2), (-1.0, 0.2), (0.5, 0.2)]))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:129: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': -4.4, 'integral': 0.0, 't_p': -0.4, 't_i': 0.0, ...}, {'u': 25.6, 'integral': 0.0, 't_p': 1.6, 't_i': 0.0, ...}, {'u': -50.0, 'integral': 0.0, 't_p': -2.4, 't_i': 0.0, ...}, {'u': 50.0, 'integral': 0.0, 't_p': 0.6, 't_i': 0.0, ...}]
+expected = [{'u': -0.4, 'integral': 0.0, 't_p': -0.4, 't_i': 0.0, ...}, {'u': 1.6, 'integral': 0.0, 't_p': 1.6, 't_i': 0.0, ...}, {'u': -2.4, 'integral': 0.0, 't_p': -2.4, 't_i': 0.0, ...}, {'u': 0.6, 'integral': 0.0, 't_p': 0.6, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is -4.4, expected -0.4
+E               assert False
+E                +  where False = _close(-4.4, -0.4)
+E                +    where -4.4 = <built-in method get of dict object at 0xffff98d01840>('u')
+E                +      where <built-in method get of dict object at 0xffff98d01840> = {'u': -4.4, 'integral': 0.0, 't_p': -0.4, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+_________________ test_derivative_uses_the_backward_difference _________________
+
+    def test_derivative_uses_the_backward_difference():
+        tuning = {"gain": 1.2, "derivative_time": 0.3, "filter_divisor": 8.0, **WIDE}
+>       check(tuning, steps([(0.0, 0.0), (0.0, 0.1), (0.0, 0.3), (0.0, 0.6), (0.0, 0.6), (0.0, 0.6), (0.0, 0.2)]))
+
+/tests/test_outputs.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 0.0, 'integral': 0.0, 't_p': 0.0, 't_i': 0.0, ...}, {'u': -1.08, 'integral': 0.0, 't_p': -0.12, 't_i': 0.0, ......': 0.0, 't_p': -0.72, 't_i': 0.0, ...}, {'u': -7.238518518518523, 'integral': 0.0, 't_p': -0.72, 't_i': 0.0, ...}, ...]
+expected = [{'u': 0.0, 'integral': 0.0, 't_p': 0.0, 't_i': 0.0, ...}, {'u': -0.3818181818181818, 'integral': 0.0, 't_p': -0.12, '...: 0.0, 't_p': -0.72, 't_i': 0.0, ...}, {'u': -0.7904929494383766, 'integral': 0.0, 't_p': -0.72, 't_i': 0.0, ...}, ...]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 2: u is -1.08, expected -0.3818181818181818
+E               assert False
+E                +  where False = _close(-1.08, -0.3818181818181818)
+E                +    where -1.08 = <built-in method get of dict object at 0xffff98cab940>('u')
+E                +      where <built-in method get of dict object at 0xffff98cab940> = {'u': -1.08, 'integral': 0.0, 't_p': -0.12, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+____________________ test_derivative_first_step_has_no_kick ____________________
+
+    def test_derivative_first_step_has_no_kick():
+        tuning = {"gain": 2.0, "derivative_time": 0.5, "filter_divisor": 10.0, **WIDE}
+>       rows = check(tuning, steps([(0.0, 3.0), (0.0, 3.0), (0.0, 2.5)]))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:140: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': -50.0, 'integral': 0.0, 't_p': -6.0, 't_i': 0.0, ...}, {'u': 50.0, 'integral': 0.0, 't_p': -6.0, 't_i': 0.0, ...}, {'u': -50.0, 'integral': 0.0, 't_p': -5.0, 't_i': 0.0, ...}]
+expected = [{'u': -6.0, 'integral': 0.0, 't_p': -6.0, 't_i': 0.0, ...}, {'u': -6.0, 'integral': 0.0, 't_p': -6.0, 't_i': 0.0, ...}, {'u': -1.666666666666667, 'integral': 0.0, 't_p': -5.0, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is -50.0, expected -6.0
+E               assert False
+E                +  where False = _close(-50.0, -6.0)
+E                +    where -50.0 = <built-in method get of dict object at 0xffff98fbbe80>('u')
+E                +      where <built-in method get of dict object at 0xffff98fbbe80> = {'u': -50.0, 'integral': 0.0, 't_p': -6.0, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+____________________ test_feedforward_is_inside_the_limits _____________________
+
+    def test_feedforward_is_inside_the_limits():
+        tuning = {"gain": 1.0}
+>       check(tuning, [["step", 0.0, -0.5, 0.8], ["step", 0.0, 0.3, -0.9], ["step", 0.0, 0.0, 0.4],
+                       ["step", 0.0, 1.5, -0.2]])
+
+/tests/test_outputs.py:148: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.3, 'integral': 0.0, 't_p': 0.5, 't_i': 0.0, ...}, {'u': -1.2, 'integral': 0.0, 't_p': -0.3, 't_i': 0.0, ...}, {'u': 0.4, 'integral': 0.0, 't_p': 0.0, 't_i': 0.0, ...}, {'u': -1.2, 'integral': 0.0, 't_p': -1.5, 't_i': 0.0, ...}]
+expected = [{'u': 1.0, 'integral': 0.0, 't_p': 0.5, 't_i': 0.0, ...}, {'u': -1.0, 'integral': 0.0, 't_p': -0.3, 't_i': 0.0, ...}, {'u': 0.4, 'integral': 0.0, 't_p': 0.0, 't_i': 0.0, ...}, {'u': -1.0, 'integral': 0.0, 't_p': -1.5, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 1.3, expected 1.0
+E               assert False
+E                +  where False = _close(1.3, 1.0)
+E                +    where 1.3 = <built-in method get of dict object at 0xffff98cab180>('u')
+E                +      where <built-in method get of dict object at 0xffff98cab180> = {'u': 1.3, 'integral': 0.0, 't_p': 0.5, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+___________________ test_slew_allowance_is_rate_times_period ___________________
+
+    def test_slew_allowance_is_rate_times_period():
+        tuning = {"gain": 1.0, "slew": 2.0, "period": 0.1, "low": -2.0, "high": 2.0}
+>       check(tuning, steps([(-0.5, 0.0), (0.9, 0.0), (0.9, 0.0), (0.9, 0.0), (0.9, 0.0),
+                             (0.9, 0.0), (0.9, 0.0), (0.9, 0.0), (-1.5, 0.0), (-1.5, 0.0)]))
+
+/tests/test_outputs.py:161: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': -0.5, 'integral': 0.0, 't_p': -0.5, 't_i': 0.0, ...}, {'u': 0.9, 'integral': 0.0, 't_p': 0.9, 't_i': 0.0, ...},...'u': 0.9, 'integral': 0.0, 't_p': 0.9, 't_i': 0.0, ...}, {'u': 0.9, 'integral': 0.0, 't_p': 0.9, 't_i': 0.0, ...}, ...]
+expected = [{'u': -0.5, 'integral': 0.0, 't_p': -0.5, 't_i': 0.0, ...}, {'u': -0.3, 'integral': 0.0, 't_p': 0.9, 't_i': 0.0, ...}...00000004, 'integral': 0.0, 't_p': 0.9, 't_i': 0.0, ...}, {'u': 0.5, 'integral': 0.0, 't_p': 0.9, 't_i': 0.0, ...}, ...]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 2: u is 0.9, expected -0.3
+E               assert False
+E                +  where False = _close(0.9, -0.3)
+E                +    where 0.9 = <built-in method get of dict object at 0xffff98cb4900>('u')
+E                +      where <built-in method get of dict object at 0xffff98cb4900> = {'u': 0.9, 'integral': 0.0, 't_p': 0.9, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+________________________ test_first_step_is_not_slewed _________________________
+
+    def test_first_step_is_not_slewed():
+        tuning = {"gain": 1.0, "slew": 0.01, "period": 0.1}
+>       rows = check(tuning, steps([(0.7, 0.0), (0.7, 0.0), (-0.7, 0.0)]))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:167: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 0.09999999999999999, 'integral': 0.0, 't_p': 0.7, 't_i': 0.0, ...}, {'u': 0.19999999999999998, 'integral': 0.0, 't_p': 0.7, 't_i': 0.0, ...}, {'u': 0.09999999999999999, 'integral': 0.0, 't_p': -0.7, 't_i': 0.0, ...}]
+expected = [{'u': 0.7, 'integral': 0.0, 't_p': 0.7, 't_i': 0.0, ...}, {'u': 0.7, 'integral': 0.0, 't_p': 0.7, 't_i': 0.0, ...}, {'u': 0.699, 'integral': 0.0, 't_p': -0.7, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 0.09999999999999999, expected 0.7
+E               assert False
+E                +  where False = _close(0.09999999999999999, 0.7)
+E                +    where 0.09999999999999999 = <built-in method get of dict object at 0xffff98cabbc0>('u')
+E                +      where <built-in method get of dict object at 0xffff98cabbc0> = {'u': 0.09999999999999999, 'integral': 0.0, 't_p': 0.7, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+_______________________ test_slew_acts_after_the_limits ________________________
+
+    def test_slew_acts_after_the_limits():
+        tuning = {"gain": 1.0, "slew": 2.0, "period": 0.1}
+        ops = [["manual", 3.0], ["step", 0.5, 0.0, 0.0], ["auto"]] + steps([(0.5, 0.0)] * 5)
+>       check(tuning, ops)
+
+/tests/test_outputs.py:174: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 3.0, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}, {'u': 1.0, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}, {....}, {'u': 1.0, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}, {'u': 1.0, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}]
+expected = [{'u': 3.0, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}, {'u': 2.8, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}, {...'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}, {'u': 1.9999999999999993, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 2: u is 1.0, expected 2.8
+E               assert False
+E                +  where False = _close(1.0, 2.8)
+E                +    where 1.0 = <built-in method get of dict object at 0xffff98d01080>('u')
+E                +      where <built-in method get of dict object at 0xffff98d01080> = {'u': 1.0, 'integral': 2.5, 't_p': 0.5, 't_i': 2.5, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+______________ test_tracking_pulls_the_integral_back_from_a_limit ______________
+
+    def test_tracking_pulls_the_integral_back_from_a_limit():
+        tuning = {"gain": 2.0, "integral_time": 1.0, "tracking_time": 0.5}
+>       check(tuning, steps([(2.0, 0.0)] * 6 + [(0.0, 0.0)] * 4 + [(-2.0, 0.0)] * 3))
+
+/tests/test_outputs.py:183: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.0, 'integral': 0.8400000000000001, 't_p': 4.0, 't_i': 0.2, ...}, {'u': 1.0, 'integral': 1.848, 't_p': 4.0, 't...5, 't_p': 4.0, 't_i': 4.70912, ...}, {'u': 1.0, 'integral': 8.3411328, 't_p': 4.0, 't_i': 6.450944000000001, ...}, ...]
+expected = [{'u': 1.0, 'integral': -0.20000000000000007, 't_p': 4.0, 't_i': 0.0, ...}, {'u': 1.0, 'integral': -0.36, 't_p': 4.0, ..., 't_p': 4.0, 't_i': -0.5904, ...}, {'u': 1.0, 'integral': -0.7378560000000001, 't_p': 4.0, 't_i': -0.67232, ...}, ...]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: integral is 0.8400000000000001, expected -0.20000000000000007
+E               assert False
+E                +  where False = _close(0.8400000000000001, -0.20000000000000007)
+E                +    where 0.8400000000000001 = <built-in method get of dict object at 0xffff98c70680>('integral')
+E                +      where <built-in method get of dict object at 0xffff98c70680> = {'u': 1.0, 'integral': 0.8400000000000001, 't_p': 4.0, 't_i': 0.2, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+___________ test_manual_sets_the_integral_to_match_the_manual_output ___________
+
+    def test_manual_sets_the_integral_to_match_the_manual_output():
+        tuning = {"gain": 1.5, "integral_time": 2.0, "derivative_time": 0.4, "filter_divisor": 5.0,
+                  "setpoint_weight": 0.6}
+        ops = (steps([(0.5, 0.0), (0.5, 0.1)])
+               + [["manual", 0.3], ["step", 0.5, 0.25, 0.2], ["step", 0.5, 0.45, 0.2],
+                  ["manual", -0.4], ["step", 0.5, 0.3, -0.1], ["auto"]]
+               + steps([(0.5, 0.3), (0.5, 0.35), (0.6, 0.35)], f=-0.1))
+>       rows = check(tuning, ops)
+               ^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:195: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.0, 'integral': 0.015, 't_p': 0.44999999999999996, 't_i': 0.015, ...}, {'u': -1.0, 'integral': 0.025, 't_p': 0..., ...}, {'u': -0.8640136718750001, 'integral': -0.5800000000000001, 't_p': 0.18, 't_i': -0.5800000000000001, ...}, ...]
+expected = [{'u': 0.44999999999999996, 'integral': 0.037500000000000006, 't_p': 0.44999999999999996, 't_i': 0.0, ...}, {'u': 0.00..., ...}, {'u': -0.44204135548442824, 'integral': -0.3606744398719708, 't_p': 0.0, 't_i': -0.3756744398719708, ...}, ...]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 1.0, expected 0.44999999999999996
+E               assert False
+E                +  where False = _close(1.0, 0.44999999999999996)
+E                +    where 1.0 = <built-in method get of dict object at 0xffff98c57640>('u')
+E                +      where <built-in method get of dict object at 0xffff98c57640> = {'u': 1.0, 'integral': 0.015, 't_p': 0.44999999999999996, 't_i': 0.015, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+____________ test_retune_of_gain_and_weight_keeps_the_output_level _____________
+
+    def test_retune_of_gain_and_weight_keeps_the_output_level():
+        tuning = {"gain": 2.0, "integral_time": 1.5, "setpoint_weight": 0.5, **WIDE}
+        ops = (steps([(1.0, 0.0), (1.0, 0.2), (1.0, 0.4)])
+               + [["retune", {"gain": 4.0}]] + steps([(1.0, 0.4), (1.0, 0.5)])
+               + [["retune", {"setpoint_weight": 0.8}]] + steps([(1.0, 0.5), (0.0, 0.5)])
+               + [["retune", {"gain": 1.0, "setpoint_weight": 0.2}]] + steps([(0.0, 0.5)]))
+>       check(tuning, ops)
+
+/tests/test_outputs.py:215: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.0333333333333334, 'integral': 0.03333333333333333, 't_p': 1.0, 't_i': 0.03333333333333333, ...}, {'u': 0.8533...6666, ...}, {'u': 2.8866666666666667, 'integral': 1.2866666666666666, 't_p': 1.6, 't_i': 1.2866666666666666, ...}, ...]
+expected = [{'u': 1.0, 'integral': 0.13333333333333333, 't_p': 1.0, 't_i': 0.0, ...}, {'u': 0.7333333333333333, 'integral': 0.24,...0.41333333333333344, 'integral': -0.6533333333333334, 't_p': 1.2000000000000002, 't_i': -0.7866666666666667, ...}, ...]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 1.0333333333333334, expected 1.0
+E               assert False
+E                +  where False = _close(1.0333333333333334, 1.0)
+E                +    where 1.0333333333333334 = <built-in method get of dict object at 0xffff98c717c0>('u')
+E                +      where <built-in method get of dict object at 0xffff98c717c0> = {'u': 1.0333333333333334, 'integral': 0.03333333333333333, 't_p': 1.0, 't_i': 0.03333333333333333, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+__________ test_integral_time_below_nought_keeps_the_present_addition __________
+
+    def test_integral_time_below_nought_keeps_the_present_addition():
+        tuning = {"gain": 3.0, "integral_time": -2.0, "setpoint_weight": 0.5, **WIDE}
+>       check(tuning, steps([(1.0, 0.0), (1.0, 0.25), (0.4, 0.5), (-1.0, 0.5)]))
+
+/tests/test_outputs.py:231: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.475, 'integral': -0.025, 't_p': 1.5, 't_i': -0.025, ...}, {'u': 1.0875, 'integral': -0.037500000000000006, 't...00000000000006, ...}, {'u': -2.2225, 'integral': 0.027499999999999997, 't_p': -2.25, 't_i': 0.027499999999999997, ...}]
+expected = [{'u': 1.5, 'integral': -0.025, 't_p': 1.5, 't_i': 0.0, ...}, {'u': 0.725, 'integral': -0.037500000000000006, 't_p': 0...00000000000006, ...}, {'u': -3.0225, 'integral': 0.027499999999999997, 't_p': -3.0, 't_i': -0.022500000000000006, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 1.475, expected 1.5
+E               assert False
+E                +  where False = _close(1.475, 1.5)
+E                +    where 1.475 = <built-in method get of dict object at 0xffff98c54680>('u')
+E                +      where <built-in method get of dict object at 0xffff98c54680> = {'u': 1.475, 'integral': -0.025, 't_p': 1.5, 't_i': -0.025, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+________________ test_slew_below_nought_keeps_the_present_limit ________________
+
+    def test_slew_below_nought_keeps_the_present_limit():
+        tuning = {"gain": 1.0, "slew": -0.5, "period": 0.1, **WIDE}
+>       check(tuning, steps([(0.3, 0.0), (0.3, 0.0), (0.3, 0.0), (-0.2, 0.0)]))
+
+/tests/test_outputs.py:246: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': -5.0, 'integral': 0.0, 't_p': 0.3, 't_i': 0.0, ...}, {'u': -10.0, 'integral': 0.0, 't_p': 0.3, 't_i': 0.0, ...}, {'u': -15.0, 'integral': 0.0, 't_p': 0.3, 't_i': 0.0, ...}, {'u': -20.0, 'integral': 0.0, 't_p': -0.2, 't_i': 0.0, ...}]
+expected = [{'u': 0.3, 'integral': 0.0, 't_p': 0.3, 't_i': 0.0, ...}, {'u': -4.7, 'integral': 0.0, 't_p': 0.3, 't_i': 0.0, ...}, {'u': -9.7, 'integral': 0.0, 't_p': 0.3, 't_i': 0.0, ...}, {'u': -14.7, 'integral': 0.0, 't_p': -0.2, 't_i': 0.0, ...}]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is -5.0, expected 0.3
+E               assert False
+E                +  where False = _close(-5.0, 0.3)
+E                +    where -5.0 = <built-in method get of dict object at 0xffff98ca9040>('u')
+E                +      where <built-in method get of dict object at 0xffff98ca9040> = {'u': -5.0, 'integral': 0.0, 't_p': 0.3, 't_i': 0.0, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+__________ test_tracking_time_below_nought_keeps_the_present_feedback __________
+
+    def test_tracking_time_below_nought_keeps_the_present_feedback():
+        tuning = {"gain": 2.0, "integral_time": 1.0, "tracking_time": -1.0}
+>       check(tuning, steps([(2.0, 0.0)] * 5 + [(0.0, 0.0)] * 3))
+
+/tests/test_outputs.py:251: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.0, 'integral': -0.12000000000000005, 't_p': 4.0, 't_i': 0.2, ...}, {'u': 1.0, 'integral': -0.2280000000000001......}, {'u': -0.49141200000000007, 'integral': -0.49141200000000007, 't_p': 0.0, 't_i': -0.49141200000000007, ...}, ...]
+expected = [{'u': 1.0, 'integral': 0.09999999999999998, 't_p': 4.0, 't_i': 0.0, ...}, {'u': 1.0, 'integral': 0.19, 't_p': 4.0, 't...4, ...}, {'u': 0.40951000000000004, 'integral': 0.40951000000000004, 't_p': 0.0, 't_i': 0.40951000000000004, ...}, ...]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: integral is -0.12000000000000005, expected 0.09999999999999998
+E               assert False
+E                +  where False = _close(-0.12000000000000005, 0.09999999999999998)
+E                +    where -0.12000000000000005 = <built-in method get of dict object at 0xffff98cc57c0>('integral')
+E                +      where <built-in method get of dict object at 0xffff98cc57c0> = {'u': 1.0, 'integral': -0.12000000000000005, 't_p': 4.0, 't_i': 0.2, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+____________________ test_closed_loop_run_follows_the_note _____________________
+
+    def test_closed_loop_run_follows_the_note():
+        tuning = {"gain": 1.8, "integral_time": 4.0, "derivative_time": 0.6, "filter_divisor": 8.0,
+                  "tracking_time": 2.0, "setpoint_weight": 0.7, "period": 0.1, "low": -1.0,
+                  "high": 1.0, "slew": 2.0}
+        plant = {"y0": 0.1, "pole": 0.12, "gain": 1.3}
+        plan = [["hold", 0.5, 0.0, 60], ["retune", {"gain": 2.4, "setpoint_weight": 0.9}],
+                ["hold", 0.9, 0.1, 50], ["manual", 0.2], ["hold", 0.9, 0.1, 20], ["auto"],
+                ["hold", -0.4, -0.05, 70], ["retune", {"slew": 0.7, "tracking_time": 0.8}],
+                ["hold", 0.3, 0.0, 60]]
+>       check(tuning, model.closed_loop_ops(tuning, plan, plant))
+
+/tests/test_outputs.py:265: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:84: in check
+    _compare(rows, model.run(tuning, ops), fields)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'u': 1.0, 'integral': 0.2697625, 't_p': 0.504, 't_i': 0.0062499999999999995, ...}, {'u': -1.0, 'integral': 0.2219147...: 0.640959728552665, 'integral': 0.25161912680577275, 't_p': 0.3800716299006821, 't_i': 0.25161912680577275, ...}, ...]
+expected = [{'u': 0.44999999999999996, 'integral': 0.018000000000000002, 't_p': 0.44999999999999996, 't_i': 0.0, ...}, {'u': 0.24...0.24764363019346586, 'integral': 0.10013390125635593, 't_p': 0.2729594712866888, 't_i': 0.08655991447418872, ...}, ...]
+fields = ('u', 'integral', 't_p', 't_i', 't_d', 't_f', ...)
+
+    def _compare(rows, expected, fields=FIELDS):
+        assert len(rows) == len(expected), f"{len(rows)} steps reported, {len(expected)} expected"
+        for index, (row, want) in enumerate(zip(rows, expected)):
+            for key in fields:
+>               assert _close(row.get(key), want[key]), (
+                    f"step {index + 1}: {key} is {row.get(key)!r}, expected {want[key]!r}"
+                )
+E               AssertionError: step 1: u is 1.0, expected 0.44999999999999996
+E               assert False
+E                +  where False = _close(1.0, 0.44999999999999996)
+E                +    where 1.0 = <built-in method get of dict object at 0xffff98c55fc0>('u')
+E                +      where <built-in method get of dict object at 0xffff98c55fc0> = {'u': 1.0, 'integral': 0.2697625, 't_p': 0.504, 't_i': 0.0062499999999999995, ...}.get
+
+/tests/test_outputs.py:77: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_limits_at_or_past_each_other_give_the_high_limit
+PASSED ../../tests/test_outputs.py::test_manual_output_is_returned_unlimited
+PASSED ../../tests/test_outputs.py::test_weight_outside_nought_to_one_keeps_the_present_proportional
+PASSED ../../tests/test_outputs.py::test_filter_divisor_below_nought_keeps_the_present_derivative
+PASSED ../../tests/test_outputs.py::test_derivative_time_below_nought_keeps_the_present_derivative
+FAILED ../../tests/test_outputs.py::test_proportional_weights_only_the_setpoint
+FAILED ../../tests/test_outputs.py::test_proportional_weight_of_nought_keeps_the_measurement
+FAILED ../../tests/test_outputs.py::test_proportional_only_output_is_gain_times_error
+FAILED ../../tests/test_outputs.py::test_integral_uses_the_gain_and_the_full_error
+FAILED ../../tests/test_outputs.py::test_integral_addition_is_seen_from_the_next_step
+FAILED ../../tests/test_outputs.py::test_derivative_ignores_setpoint_steps - ...
+FAILED ../../tests/test_outputs.py::test_derivative_uses_the_backward_difference
+FAILED ../../tests/test_outputs.py::test_derivative_first_step_has_no_kick - ...
+FAILED ../../tests/test_outputs.py::test_feedforward_is_inside_the_limits - A...
+FAILED ../../tests/test_outputs.py::test_slew_allowance_is_rate_times_period
+FAILED ../../tests/test_outputs.py::test_first_step_is_not_slewed - Assertion...
+FAILED ../../tests/test_outputs.py::test_slew_acts_after_the_limits - Asserti...
+FAILED ../../tests/test_outputs.py::test_tracking_pulls_the_integral_back_from_a_limit
+FAILED ../../tests/test_outputs.py::test_manual_sets_the_integral_to_match_the_manual_output
+FAILED ../../tests/test_outputs.py::test_retune_of_gain_and_weight_keeps_the_output_level
+FAILED ../../tests/test_outputs.py::test_integral_time_below_nought_keeps_the_present_addition
+FAILED ../../tests/test_outputs.py::test_slew_below_nought_keeps_the_present_limit
+FAILED ../../tests/test_outputs.py::test_tracking_time_below_nought_keeps_the_present_feedback
+FAILED ../../tests/test_outputs.py::test_closed_loop_run_follows_the_note - A...
+========================= 19 failed, 5 passed in 0.77s =========================

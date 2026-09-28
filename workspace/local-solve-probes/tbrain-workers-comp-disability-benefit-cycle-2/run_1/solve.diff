@@ -1,0 +1,115 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/baseline/environment/app/src/tdbenefit/disability.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/solve/environment/app/src/tdbenefit/disability.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/baseline/environment/app/src/tdbenefit/disability.py	2026-09-27 19:17:32
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/solve/environment/app/src/tdbenefit/disability.py	2026-09-27 19:45:19
+@@ -1,14 +1,15 @@
+ """Disability days, the waiting period and the temporary total disability amount."""
+ 
+ from .dates import parse_day
++from .money import half_up
+ 
+-WAITING_DAYS = 7
++WAITING_DAYS = 3
+ RETROACTIVE_AFTER = 14
+ 
+ 
+ def period_days(first, last):
+-    """The number of days a certified period covers."""
+-    return (parse_day(last) - parse_day(first)).days
++    """The number of days a certified period covers, its first and last day included."""
++    return (parse_day(last) - parse_day(first)).days + 1
+ 
+ 
+ def disability_days(periods):
+@@ -22,5 +23,5 @@
+     waiting = min(WAITING_DAYS, days)
+     retroactive = waiting if days >= RETROACTIVE_AFTER else 0
+     paid = days - waiting + retroactive
+-    amount = rate * paid // 7
++    amount = half_up(rate * paid, 7)
+     return {"waiting_days": waiting, "retro_days": retroactive, "ttd_days": paid, "ttd": amount}
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/baseline/environment/app/src/tdbenefit/payroll.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/solve/environment/app/src/tdbenefit/payroll.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/baseline/environment/app/src/tdbenefit/payroll.py	2026-09-27 19:23:39
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/solve/environment/app/src/tdbenefit/payroll.py	2026-09-27 19:45:08
+@@ -5,7 +5,24 @@
+ 
+ BASE_WEEKS = 13
+ 
++# A wage line of this much or more is a week's pay (manual 2.2).
++WEEKS_PAY = 2000
+ 
++
++def week_credited(paid, cents):
++    """The payroll week (its Sunday) a wage line paid on `paid` counts toward.
++
++    A week's pay counts toward the week whose work it pays, and the payroll pays for a
++    week on the Friday that follows the week's Sunday (manual 2.2, 3.1), so that week is
++    the one before the week holding the payday. Smaller lines are corrections to earlier
++    pay; the manual sets no week for them, so they keep counting toward the payroll week
++    the payment was made in.
++    """
++    if cents >= WEEKS_PAY:
++        return week_ending(paid) - WEEK
++    return week_ending(paid)
++
++
+ def credit_lines(lines):
+     """Pair each wage line with the payroll week (its Sunday) the line counts toward.
+ 
+@@ -15,7 +32,7 @@
+     credited = []
+     for paid, cents in lines:
+         day = parse_day(paid)
+-        credited.append((week_ending(day), cents))
++        credited.append((week_credited(day, cents), cents))
+     return credited
+ 
+ 
+@@ -34,5 +51,4 @@
+     """The worker's average weekly wage in cents."""
+     in_base = base_period_lines(lines, injury)
+     wages = sum(cents for _week, cents in in_base)
+-    weeks_paid = len({week for week, _cents in in_base})
+-    return half_up(wages, weeks_paid)
++    return half_up(wages, BASE_WEEKS)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/baseline/environment/app/src/tdbenefit/rates.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/solve/environment/app/src/tdbenefit/rates.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/baseline/environment/app/src/tdbenefit/rates.py	2026-09-27 19:17:23
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-workers-comp-disability-benefit-cycle-2/run_1/solve/environment/app/src/tdbenefit/rates.py	2026-09-27 19:45:19
+@@ -3,8 +3,8 @@
+ from .dates import parse_day
+ from .money import ratio_of
+ 
+-# Share of the average weekly wage paid as the weekly rate.
+-RATE_FRACTION = (3, 5)
++# Share of the average weekly wage paid as the weekly rate: two thirds (manual 3.4).
++RATE_FRACTION = (2, 3)
+ 
+ 
+ def load_table(rows):
+@@ -12,14 +12,23 @@
+     return [(parse_day(row["from"]), row["max"], row["min"]) for row in rows]
+ 
+ 
+-def row_in_force(table):
+-    """The row in force: the table's newest row."""
+-    return table[-1]
++def row_in_force(table, day):
++    """The row in force on `day`: the last row that takes effect on or before it (manual 2.4)."""
++    in_force = table[0]
++    for row in table:
++        if row[0] <= day:
++            in_force = row
++        else:
++            break
++    return in_force
+ 
+ 
+ def weekly_rate(aww, table, injury):
+     """The weekly compensation rate in cents for an average weekly wage `aww`."""
+-    _effective, maximum, minimum = row_in_force(table)
++    _effective, maximum, minimum = row_in_force(table, injury)
++    if aww < minimum:
++        # Manual 3.5: the rate is the average weekly wage itself.
++        return aww
+     rate = ratio_of(aww, RATE_FRACTION)
+     if rate > maximum:
+         rate = maximum

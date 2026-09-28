@@ -1,0 +1,142 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-A",
+  "snapshot_sha256": "f9e2a843946feb803bea831bc197043b8ff4892295c4cbe2c5db018ff2b20e91",
+  "severity": "None",
+  "summary": "No reachable path lets candidate-controlled bytes read, replace, predict or influence the trusted grading decision. There is no answer to steal: the per-day cost targets are disclosed on purpose, and they are upper bounds, not answers. The verifier runs no /app code. It loads each plan as bounded JSON only, scores it with its own copy of check_plan.py against its own gzip day copies (the test checks each copy's SHA-256), and writes the reward from pytest's exit code in test.sh.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/planner/plan_day.py",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json",
+      "environment/app/days/day-2.json",
+      "environment/app/days/day-3.json",
+      "environment/app/days/day-4.json",
+      "environment/app/tools/check_plan.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/targets.json",
+      "tests/days/roster.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/days/day-{1..4}.json: I checked the structure of the bulk data bodies by grepping every top-level key in all four files (name, buffer_minutes, bus_cost_per_passenger, stands, walk_metres, wingtip_pairs, turns, transfers). I did not read them line by line; they are candidate input data only, and no answer-bearing key is present.",
+      "tests/days/day-{1..4}.json.gz: binary gzip, which the read tool cannot decode. tests/test_outputs.py:34-36 requires the decompressed bytes to match the SHA-256 in tests/days/roster.json, and those hashes equal the manifest hashes of environment/app/days/day-{1..4}.json. The verifier copies are therefore bound byte for byte to the candidate-visible days and hold no additional content.",
+      "environment/app/tools/check_plan.py: I did not reread it separately. Its manifest hash (603464e7...) is identical to tests/check_plan.py, which I read in full."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read tests/test_outputs.py in full. The verifier imports check_plan from HERE=/tests (sys.path.insert at line 18). It reads targets from /tests/targets.json (lines 22-23) and days from /tests/days/*.json.gz with a roster SHA-256 check (lines 30-40). The only thing it reads from /app is plan JSON at /app/plans/<day>.json (lines 43-50). No candidate code is executed.",
+    "Read tests/test.sh in full. It creates /logs/verifier with mode 700, writes reward 0 first, and runs pytest with `python3 -I` from a fresh mktemp cwd, with -p no:cacheprovider. The reward is 1 only when pytest returns rc==0. Candidate stdout cannot write reward.txt.",
+    "Confirmed that tests/targets.json and environment/app/days/targets.json have the same manifest hash. The targets are disclosed on purpose (instruction.md:1). They are cost upper bounds, not expected plans.",
+    "Confirmed that tests/check_plan.py and environment/app/tools/check_plan.py are identical by manifest hash. The candidate sees the scoring code by design, and the verifier uses its own copy, so editing /app/tools cannot affect grading.",
+    "Confirmed the roster SHA-256 values equal the manifest hashes of environment/app/days/day-*.json. If the candidate edits /app/days (for example, deleting transfers), grading does not change because the verifier never reads /app/days.",
+    "Checked the environment build. .dockerignore excludes solution/ and tests/, and environment/Dockerfile copies only app/. No reference plan, solver or golden is present in the candidate image.",
+    "Checked the plan-loading path in tests/check_plan.py:59-73. Size limit, UTF-8, no NaN/Infinity, no duplicate keys, digit limit and depth limit are enforced before evaluate(). A malformed plan can only cause a failure, never credit.",
+    "Checked evaluate() in tests/check_plan.py:76-131. Stand and turn ids must exist in the verifier-owned day, and every turn must appear exactly once. Cost is computed from verifier-owned day data only, so the plan cannot supply cost values.",
+    "Checked the environment-variable channel. STAND_PLANS (test_outputs.py:21) is read from the verifier process environment, which the candidate does not control. Because of -I, PYTHON* variables are ignored.",
+    "Checked plugin and conftest injection. The verifier invokes pytest on /tests/test_outputs.py from a mktemp cwd, so rootdir/ini/conftest discovery covers /tests and its ancestors, not /app. -I removes cwd and user site from sys.path, and the tests/Dockerfile pins pytest plugins at image build."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Keep expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "Grading has no golden plan or expected answer. It checks validity and compares the computed cost against a disclosed target. The solution is not in the environment (.dockerignore excludes solution/ and tests/; Dockerfile copies only app/). The verifier executes no candidate code.",
+      "evidence": ["environment/.dockerignore:11-12", "environment/Dockerfile:5-7", "tests/test_outputs.py:1-6", "tests/test_outputs.py:43-55", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths: symlink and path-traversal escapes",
+      "status": "checked",
+      "reason": "The one candidate-influenced read is /app/plans/<day>.json, opened with follow semantics (getsize/open). If a symlink survived staging, it could only point the loader at verifier files (/tests/targets.json, roster.json, the gz days, check_plan.py). None of these is a valid plan object with a complete 'stands' mapping over the day's turns, so each is rejected or scored as invalid. No golden plan exists that a symlink could reuse. A symlink to a device such as /dev/zero could at most make the run fail, never pass.",
+      "evidence": ["tests/test_outputs.py:43-50", "tests/check_plan.py:59-73", "tests/check_plan.py:78-96"],
+      "finding_ids": []
+    },
+    {
+      "category": "Compute expected values independently of the submitted artifact",
+      "status": "checked",
+      "reason": "Cost is computed by the verifier's own check_plan.evaluate over the verifier's own SHA-pinned day copy. The plan supplies only turn-to-stand assignments; it cannot supply cost, walk or bus values, and top-level keys other than 'stands' are ignored.",
+      "evidence": ["tests/check_plan.py:120-131", "tests/test_outputs.py:30-40", "tests/test_outputs.py:53-55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes exposed through filenames, arguments, working directories or environment variables",
+      "status": "checked",
+      "reason": "Grading passes nothing to any candidate process. Targets are public by design, and plan paths are the fixed day names the instruction states. No outcome can be learned from any label.",
+      "evidence": ["instruction.md:1-3", "tests/test_outputs.py:21", "tests/test_outputs.py:58-87"],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading results kept in a trusted channel (stdout or early exit cannot impersonate verification)",
+      "status": "checked",
+      "reason": "test.sh writes 0 up front and writes 1 only when pytest exits 0. No candidate process runs during verification, so no candidate stdout or exit code is involved.",
+      "evidence": ["tests/test.sh:4-5", "tests/test.sh:13-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Test the access boundary from the candidate's execution context; separate verifier container does not by itself protect goldens",
+      "status": "checked",
+      "reason": "Candidate code runs only in the agent environment, which contains app/ with the public days, targets, check tool and baseline planner, and no tests or solution. The verifier image is built from tests/ (COPY . /tests/). Its trusted inputs are /tests/*, not /app, except for the plan data files. The verifier executes no candidate code, so no candidate process ever shares the verifier's context.",
+      "evidence": ["environment/Dockerfile:1-7", "tests/Dockerfile:1-6", "tests/test_outputs.py:17-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Persisted or candidate-writable state trusted as a baseline (cache carryover)",
+      "status": "checked",
+      "reason": "The verifier trusts no candidate-writable state as a baseline. /app/days, /app/days/targets.json and /app/tools/check_plan.py can all be edited by the candidate, but the verifier reads none of them and uses the /tests copies instead. pytest runs with -p no:cacheprovider in a fresh mktemp directory.",
+      "evidence": ["tests/test_outputs.py:22-40", "tests/test.sh:13-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Verifier code-loading path (sys.path, conftest, plugins) influenced by candidate files",
+      "status": "checked",
+      "reason": "`python3 -I` ignores PYTHON* variables and user site, and puts no cwd on sys.path. test_outputs inserts /tests first, so `check_plan` resolves to /tests/check_plan.py. The test path /tests and the mktemp cwd keep conftest/ini discovery out of /app.",
+      "evidence": ["tests/test.sh:15", "tests/test_outputs.py:17-19", "tests/Dockerfile:3-6"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["candidate may use /app/tools/check_plan.py and /app/days freely (instruction.md:3)", "verifier scores with its own day and checker copies"],
+      "case_or_path": "The candidate edits /app/days/day-1.json to remove transfers, or patches /app/tools/check_plan.py to return 0, then writes a plan that scores under the edited copies. The verifier ignores both: it loads /tests/days/day-1.json.gz, SHA-pinned to the original bytes, and uses /tests/check_plan.py, so the true cost is recomputed.",
+      "status": "checked",
+      "evidence": ["instruction.md:3", "tests/test_outputs.py:17-19", "tests/test_outputs.py:30-40", "tests/days/roster.json:2-25"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["targets are disclosed as the office's best known cost (instruction.md:1)", "reward requires cost <= target (test_outputs.py:53-55)"],
+      "case_or_path": "Knowing the target does not yield a plan. The candidate still has to produce a complete valid assignment whose independently computed cost is at or below the bound. The disclosed number is a threshold, not the graded artifact.",
+      "status": "checked",
+      "evidence": ["instruction.md:1", "environment/app/days/targets.json:1-6", "tests/targets.json:1-6", "tests/test_outputs.py:53-55"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["the plan file's top-level keys other than 'stands' are ignored (stand-rules.md:66-67)", "cost is computed only from verifier day data"],
+      "case_or_path": "A plan that adds a key such as 'cost': 0 or 'valid': true is ignored by evaluate(), which reads only plan['stands'] and verifier day fields.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:61-67", "tests/check_plan.py:78-131"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["plan path read with symlink-following open", "no golden plan exists in the verifier image"],
+      "case_or_path": "Suppose /app/plans/day-1.json were staged as a symlink to /tests/targets.json or /tests/days/roster.json. load_plan parses a dict whose 'stands' key is missing or not a stand-to-list mapping, so evaluate raises PlanError and the test fails. No verifier file is a valid plan.",
+      "status": "checked",
+      "evidence": ["tests/check_plan.py:61-64", "tests/check_plan.py:78-79", "tests/days/roster.json:1-26", "tests/targets.json:1-6"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

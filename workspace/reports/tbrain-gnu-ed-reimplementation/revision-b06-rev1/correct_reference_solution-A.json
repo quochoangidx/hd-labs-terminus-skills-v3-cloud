@@ -1,0 +1,294 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "91c1543a6e432eab3048360f35fe83aaf9fdaf0742a265e2187a222c5ab8b101",
+  "severity": "Minor",
+  "summary": "The ed.py command layer closely follows GNU ed 1.19 and every errata item traced correctly. The custom regex parser in posixre.py has two concrete syntax divergences on in-scope expressions. In BRE, a quantifier after a leading ^ binds to the anchor instead of starting a new expression. In ERE, an unmatched ')' is rejected even though POSIX and glibc treat it as a literal.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/ed.txt",
+      "environment/app/docs/ed-errata.txt",
+      "environment/app/pyed/ed.py",
+      "solution/solve.sh",
+      "solution/pyed/ed.py",
+      "solution/pyed/posixre.py"
+    ],
+    "missing_dependencies": [
+      "task.toml is not in the packet manifest or directory listing",
+      "tests/Dockerfile is not in the packet, as expected for this axis (no tests surface)"
+    ],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "CRS-1",
+      "severity": "Minor",
+      "claim": "In BRE, repetition operators after a leading '^' are applied to the anchor or to an anchor-plus-literal-star composite. GNU ed (glibc regcomp) instead starts a new expression after the anchor. As a result, ^**, ^*\\+, ^*\\{n\\}, ^\\+ and ^\\? match different text from GNU ed 1.19.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "In the manual, '*' at the start of an RE matches itself (ed.txt:517-521), and so do '\\+' and '\\?' at the start of an RE or subexpression (ed.txt:555-566). POSIX BRE makes '*' literal after an initial '^'. glibc parse_expression returns right after an ANCHOR token, so the next operator is parsed at expression start. The reference already follows this rule for a single '*' (posixre.py:169-171) and for '\\{' (posixre.py:100, consistent with errata 4). So ^** means '^' followed by zero or more '*', and ^\\+ means '^' followed by a literal '+'.",
+        "actual_behavior": "posixre.py:166-171 consumes '^*' as one atom, ('cat', [bol, '*']). concat (line 73) then passes that atom to quantifiers(). There the anchor test (line 78) is false for a 'cat' node, and the BRE '*' check (line 85) only tests 'repeated'. A following '*', '\\+', '\\?' or '\\{n\\}' therefore repeats the whole (^\\*) group. For a bare '^' followed by '\\+' or '\\?', the BRE branch at lines 94-98 has no anchor check, so it builds rep(bol).",
+        "trace_or_receipt": "Static trace, not executed. (1) Line '**x', command s/^**/X/: the atom is cat(bol,'*') and the second '*' makes rep(cat,0,inf). Iteration 1 matches bol at 0 and '*' up to 1. Iteration 2 needs bol at 1, which fails (line 365). The match is [0,1), giving 'X*x'. GNU gives ^ plus \\** matching [0,2), so 'Xx'. (2) Line '+a', command s/^\\+/X/: this compiles to rep(bol,1,inf), which matches the empty string at 0, giving 'X+a'. GNU gives 'Xa'. (3) Line 'abc', command s/^\\+/X/: GNU finds no match, prints '?', and exits non-zero when stdin is a regular file. The reference prints nothing extra and writes 'Xabc'. (4) Line '**', command s/^*\\{2\\}/X/: this compiles to two copies of (bol,'*'). The second bol fails, so the reference reports No match and '?'. GNU matches '**'."
+      },
+      "reachable_case_or_path": "Buffer line '**x', script: 's/^**/X/', then ',p', then 'q'. Pipe that to python3 /app/pyed/ed.py -s FILE. The reference prints '*' from the unmatched second star ('X*x'), while GNU ed 1.19 prints 'Xx'. A similar case is s/^\\+/X/ on line 'abc', where GNU prints '?' and the reference substitutes.",
+      "graded_effect": "Standard output, file contents and the exit status (on the no-match variant) all differ from GNU ed 1.19. The instruction compares all three byte for byte. Any hidden script that uses these in-contract BRE forms would fail the reference, or else its goldens would be regenerated from GNU and disagree with the reference.",
+      "citations": [
+        "solution/pyed/posixre.py:65-75",
+        "solution/pyed/posixre.py:77-106",
+        "solution/pyed/posixre.py:166-173",
+        "solution/pyed/posixre.py:363-365",
+        "instruction.md:1",
+        "instruction.md:7",
+        "environment/app/docs/ed.txt:500-503",
+        "environment/app/docs/ed.txt:517-521",
+        "environment/app/docs/ed.txt:555-566",
+        "environment/app/docs/ed-errata.txt:27-30"
+      ],
+      "root_invariant": "In BRE, the position right after a start anchor (at the start of the RE, after \\( or after \\|) is an expression start. '*', '\\+' and '\\?' there are literal characters that can themselves be quantified. '\\{' there is an error.",
+      "authority": [
+        "instruction.md:1",
+        "instruction.md:7",
+        "environment/app/docs/ed.txt:517-521",
+        "environment/app/docs/ed.txt:555-566",
+        "environment/app/docs/ed-errata.txt:27-30"
+      ],
+      "implementation_sites": [
+        "solution/pyed/posixre.py:166-173",
+        "solution/pyed/posixre.py:77-98"
+      ],
+      "sibling_variants": [
+        "^** (second star repeats the anchor composite instead of the literal star)",
+        "^*\\+ and ^*\\{n,m\\} (quantifier applied to cat(bol,'*'))",
+        "^\\+ (rep(bol,1,inf) instead of literal '+')",
+        "^\\? (rep(bol,0,1) instead of literal '?')",
+        "the same forms after \\( or \\|, where concat starts again with start=True (posixre.py:65-75, 190-198), e.g. \\(^**\\) and a\\|^\\+"
+      ],
+      "interaction_variants": [
+        "Global commands: g/^\\+/d with -s selects every line in the reference, but only lines starting with '+' in GNU ed.",
+        "s with the g suffix: s/^\\+/X/g on a line without '+' fails in GNU and succeeds in the reference.",
+        "Address search: /^\\?/ matches the first following line in the reference, but only a line starting with '?' in GNU ed."
+      ],
+      "minimal_repair_boundary": "Make the BRE parser treat the token after any start anchor as a new expression start. Return the bare ('bol',) atom and let concat parse the next item with start=True, so '*' and the escaped '+' and '?' become literal atoms that later quantifiers can apply to. Stop bundling '^*' into a composite atom.",
+      "closure_evidence": [
+        "s/^**/X/ on '**x' yields 'Xx'",
+        "s/^*\\{2\\}/X/ on '**y' yields 'Xy'",
+        "s/^\\+/X/ on '+a' yields 'Xa' and on 'abc' fails with '?'",
+        "s/^\\?/X/ on '?a' yields 'Xa'",
+        "s/\\(^**\\)/[\\1]/ on '**z' yields '[**]z'",
+        "the existing ^* and ^\\{2\\} (error) behaviour is unchanged"
+      ]
+    },
+    {
+      "id": "CRS-2",
+      "severity": "Minor",
+      "claim": "With -E, an unmatched ')' makes the reference reject the regular expression. POSIX ERE and glibc (RE_SYNTAX_POSIX_EXTENDED includes RE_UNMATCHED_RIGHT_PAREN_ORD) treat an unmatched ')' as an ordinary character, so GNU ed 1.19 -E accepts it.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "The instruction puts extended regular expressions in scope and requires GNU ed 1.19 behaviour (instruction.md:1, 7). The manual says only that -E uses extended regular expressions (ed.txt:275-278), so ERE syntax follows POSIX and glibc regcomp(REG_EXTENDED). POSIX makes ')' special only when it matches a preceding '(', and glibc parses an unmatched ')' as a CHARACTER token. So with -E, /a)/ matches the text 'a)'.",
+        "actual_behavior": "Parser.concat (posixre.py:68) stops at any ')' in ERE mode because at_close() is true at line 55, even at nesting depth 0. alt() returns, and parse() (lines 42-46) finds i != len(s) and raises RegexError. Ed.compile_regex (ed.py:430-437) turns that into 'Invalid regular expression', and the command fails with '?'.",
+        "trace_or_receipt": "Static trace, not executed. With -E, line 'a)b', command s/a)/X/: get_pattern_for_s returns 'a)', and set_subst_regex calls compile_regex, which calls Regex('a)', ere=True). parse, then alt, then concat reads atom 'a'. at_close() is true, so concat returns. alt sees no '|' and returns, and parse raises because i=1 != 2. command_s returns False, the main loop prints '?', and with a regular-file stdin the process exits with status 1. GNU ed -E compiles 'a)' with ')' as a literal and substitutes, giving 'Xb'."
+      },
+      "reachable_case_or_path": "Run python3 /app/pyed/ed.py -E -s FILE, where FILE holds the line 'f(x) = y)'. Script: 's/y)/z/', then ',p', then 'q'. GNU ed 1.19 prints 'f(x) = z'. The reference prints '?' and stops with a regular-file stdin, or with a pipe prints '?' and then the unchanged line.",
+      "graded_effect": "Standard output, the resulting file contents and the exit status differ from GNU ed 1.19 for any -E script that uses an unmatched ')'. This form is in-contract POSIX ERE syntax.",
+      "citations": [
+        "solution/pyed/posixre.py:42-46",
+        "solution/pyed/posixre.py:53-56",
+        "solution/pyed/posixre.py:58-63",
+        "solution/pyed/posixre.py:65-75",
+        "solution/pyed/ed.py:430-437",
+        "instruction.md:1",
+        "instruction.md:7",
+        "environment/app/docs/ed.txt:275-278"
+      ],
+      "root_invariant": "In ERE, ')' is a group closer only when it matches an open '('. At nesting depth 0 it is an ordinary character.",
+      "authority": [
+        "instruction.md:1",
+        "instruction.md:7",
+        "environment/app/docs/ed.txt:275-278"
+      ],
+      "implementation_sites": [
+        "solution/pyed/posixre.py:53-56",
+        "solution/pyed/posixre.py:65-75"
+      ],
+      "sibling_variants": [
+        "a lone ')' as the whole ERE (concat returns empty and parse raises)",
+        "(a))b, where the second ')' is at depth 0",
+        "a|), where ')' starts the second branch at depth 0",
+        "the BRE counterpart \\) is correctly rejected when unmatched (glibc POSIX_BASIC lacks the flag), so it is not affected"
+      ],
+      "interaction_variants": [
+        "Address search: -E with /x)/ fails in the reference but finds the line in GNU ed.",
+        "Global command: -E with g/)/d errors before any line is deleted in the reference.",
+        "Regular-file stdin: the spurious error ends the script early, so later commands and writes never run."
+      ],
+      "minimal_repair_boundary": "Track the group nesting depth in the ERE parser. At depth 0, do not let at_close() end concat; parse ')' as a literal atom there.",
+      "closure_evidence": [
+        "-E s/a)/X/ on 'a)b' yields 'Xb'",
+        "-E /)/ finds a line containing ')'",
+        "-E (a))b matches 'a)b'",
+        "-E (a still fails",
+        "BRE a\\) still fails"
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read every file in the packet manifest, all ranges, and reconciled the manifest with the directory listing. task.toml and tests/ are absent.",
+    "Traced ordinary a/p/s/w/q flows through Ed.exec_command, main_loop and write_file, including byte-count output and the -s suppression.",
+    "Traced errata 1-3 (unset marks with an empty buffer, mark clearing and restore through undo, reversed one-address pairs) through get_line_node_addr, clear_undo_stack and extract_addresses.",
+    "Traced errata 4, 5, 7, 9 and 10 through posixre Parser.quantifiers, atom, interval and bracket_item, and ed.extract_pattern.",
+    "Traced errata 6 and 20 through line_replace and replace_matched_text: s/a*/X/g on 'b' and 'a', s/x*/-/2 on 'ab', and \\N with N greater than nsub.",
+    "Traced errata 11-19 and 21 through the f, j, a/i/c, g, m, W and e/E branches and exec_global (continuation lines, the empty command list, s without a final delimiter, a no-match s inside g).",
+    "Traced the EOF-as-q path and the exit status for pipe versus regular-file stdin, with and without -l.",
+    "Checked the option parser for -E, -l and -s placed before or after FILE and combined in one argument, and a missing FILE with pipe stdin.",
+    "Checked the leftmost-longest search and memoisation in Regex._walk/search: longest end retained, capture priority is first DFS path, repc run memo.",
+    "Checked BRE and ERE syntax cases against POSIX/glibc: consecutive duplication, anchors in context, \\| in BRE and ERE, brackets with classes and ranges, back-reference closure. This found CRS-1 and CRS-2.",
+    "Considered [a-m-o]-style ranges (glibc REG_ERANGE; the reference accepts them). Excluded because POSIX leaves them undefined and the manual does not describe them."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced the ordinary edit, print and write flows plus address boundaries (0, $, reversed pairs, ';' updating current, out-of-range results) and regex boundaries. The regex boundary cases found CRS-1 and CRS-2.",
+      "evidence": [
+        "solution/pyed/ed.py:837-920",
+        "solution/pyed/ed.py:1114-1344",
+        "solution/pyed/posixre.py:65-188"
+      ],
+      "finding_ids": ["CRS-1", "CRS-2"]
+    },
+    {
+      "category": "Output bytes: widths, delimiters, paths",
+      "status": "checked",
+      "reason": "Checked '?\\n' on stdout, byte counts as '%d\\n', the n suffix as '%d\\t', f printing the name, '=' output, and latin-1 round-trip encoding of files and stdout. No defect found.",
+      "evidence": [
+        "solution/pyed/ed.py:727",
+        "solution/pyed/ed.py:750-751",
+        "solution/pyed/ed.py:773-775",
+        "solution/pyed/ed.py:1172",
+        "solution/pyed/ed.py:1332",
+        "solution/pyed/ed.py:1412",
+        "solution/pyed/ed.py:1528"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches: deletion, replacement, move, undo, marks, global active list",
+      "status": "checked",
+      "reason": "Checked delete_lines current-address rules, join, move with a destination equal to the range end, copy into its own range, the undo stack swap and atom inversion, marks cleared on stack clear, active-list unsetting in globals, and modified/u_modified tracking. No defect found.",
+      "evidence": [
+        "solution/pyed/ed.py:210-234",
+        "solution/pyed/ed.py:278-354",
+        "solution/pyed/ed.py:374-427",
+        "solution/pyed/ed.py:637-661"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no crash-recovery or interrupt promise that scripts can exercise. The ed.hup and interrupt behaviour in the manual are not reachable with non-terminal streams and complete scripts.",
+      "evidence": ["instruction.md:10", "environment/app/docs/ed.txt:601-602", "environment/app/docs/ed.txt:939-940"],
+      "finding_ids": []
+    },
+    {
+      "category": "Errata conformance (documented departures from the manual)",
+      "status": "checked",
+      "reason": "Traced each errata entry from 1 to 22 to its implementing branch. All match the stated behaviour.",
+      "evidence": ["environment/app/docs/ed-errata.txt:12-106", "solution/pyed/ed.py:1114-1385", "solution/pyed/ed.py:602-635"],
+      "finding_ids": []
+    },
+    {
+      "category": "Invocation, exit status and stdin-type rules",
+      "status": "checked",
+      "reason": "Checked option placement and combination, the missing FILE with pipe stdin (no ret -2 path, so no initial error), stopping on the first error when stdin is a regular file, the EOF-as-q warning and exit status 2, and loose mode. No defect found.",
+      "evidence": ["solution/pyed/ed.py:1387-1424", "solution/pyed/ed.py:1461-1530", "instruction.md:5", "instruction.md:10"],
+      "finding_ids": []
+    },
+    {
+      "category": "Environment and allowed-imports restriction",
+      "status": "checked",
+      "reason": "The reference imports only os, stat, sys, string and the sibling posixre.py installed under /app/pyed, and starts no subprocess. solve.sh copies both files into /app/pyed.",
+      "evidence": ["solution/pyed/ed.py:6-11", "solution/pyed/posixre.py:4", "solution/solve.sh:30-31", "environment/Dockerfile:1-6"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["BRE leading '^' anchor", "BRE repetition operators *, \\+, \\?, \\{\\}"],
+      "case_or_path": "^**, ^*\\+, ^*\\{2\\}, ^\\+ and ^\\? parsed through atom() and quantifiers()",
+      "status": "checked",
+      "evidence": ["solution/pyed/posixre.py:77-106", "solution/pyed/posixre.py:166-173"],
+      "finding_ids": ["CRS-1"]
+    },
+    {
+      "rules": ["-E extended syntax", "parenthesis grouping"],
+      "case_or_path": "An unmatched ')' at depth 0 in a/ , (a)) and a|) forms",
+      "status": "checked",
+      "evidence": ["solution/pyed/posixre.py:42-75"],
+      "finding_ids": ["CRS-2"]
+    },
+    {
+      "rules": ["global command list", "s without a final delimiter (errata 17) and s with no match in a global list (errata 18)"],
+      "case_or_path": "g/x/s/x/y: the leftover newline becomes a null command. A no-match s does not fail inside g.",
+      "status": "checked",
+      "evidence": ["solution/pyed/ed.py:541-571", "solution/pyed/ed.py:658-661", "solution/pyed/ed.py:1380-1384"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["undo", "marks cleared on change (errata 2)"],
+      "case_or_path": "1ka, then 1s/a/A/, then 'a fails, then u, then 'a resolves again",
+      "status": "checked",
+      "evidence": ["solution/pyed/ed.py:210-224", "solution/pyed/ed.py:168-179", "solution/pyed/ed.py:1110-1112"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["s g suffix", "zero-length matches (errata 6)"],
+      "case_or_path": "s/a*/X/g on 'b' fails and on 'a' succeeds. s/x*/-/2 on 'ab' gives '-ab'.",
+      "status": "checked",
+      "evidence": ["solution/pyed/ed.py:602-635"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["EOF acts as q", "stdin regular file versus pipe"],
+      "case_or_path": "A modified buffer at EOF: a regular file prints '?' and exits 2. A pipe prints '?' then quits with status 2 on the repeated EOF.",
+      "status": "checked",
+      "evidence": ["solution/pyed/ed.py:1398-1424"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["e/E failure (errata 21)", "modified warning on q"],
+      "case_or_path": "e missing: the buffer is emptied, the default filename is set and the command fails. = prints 0 and q quits without a warning.",
+      "status": "checked",
+      "evidence": ["solution/pyed/ed.py:1144-1163"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["m destination", "range end (errata 15)"],
+      "case_or_path": "1,3m3 is accepted as a no-op move and 1,3m2 is refused",
+      "status": "checked",
+      "evidence": ["solution/pyed/ed.py:1225-1238", "solution/pyed/ed.py:329-354"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "After a regular expression fails to compile, GNU ed 1.19 may forget the previous pattern (its compile slot is regfree'd before regcomp), so a following // would fail with 'No previous pattern'. The reference keeps last_regexp unchanged on failure (ed.py:430-437).",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "Either the GNU ed 1.19 regex.c source or a GNU ed receipt for the script '/fo/', then '/\\(/', then '//' on a buffer containing 'foo'."
+    },
+    {
+      "concern": "For nested repetitions, the capture groups chosen by the reference's priority-ordered DFS with (instruction, position) memoisation may differ from glibc's sifted-state set_regs choice. That would change \\N replacement text without changing the overall match.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "GNU ed receipts for nested-repeat capture cases such as s/\\(\\(a*\\)b\\)*/[\\1|\\2]/ on varied inputs."
+    }
+  ],
+  "uncertainty": ""
+}

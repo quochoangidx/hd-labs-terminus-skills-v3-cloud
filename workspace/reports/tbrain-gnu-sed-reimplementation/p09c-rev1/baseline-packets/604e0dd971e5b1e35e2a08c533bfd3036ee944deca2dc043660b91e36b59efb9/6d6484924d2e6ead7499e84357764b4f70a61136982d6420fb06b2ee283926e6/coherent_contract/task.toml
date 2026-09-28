@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-gnu-sed-reimplementation"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Software"
+subcategory = "Languages"
+languages = ["python"]
+tags = ["gnu-sed", "posix-regex", "leftmost-longest", "stream-editor", "reimplementation"]
+expert_time_estimate_hours = 5
+difficulty_explanation = "A drop-in GNU sed 4.9 has to reproduce a stream-editor semantics from its manual: a script parser with sed's quirky text, label and delimiter rules; the cycle model with pattern and hold space, the append queue, n/N at end of input, D restarts without reading, and the t flag's reset on every read; every address form, including per-file numbering under -s and the GNU range forms; and a regular-expression engine for BRE and ERE with the GNU escapes that takes the leftmost match and then the longest one, which Python's own re does not do, within a five-second limit that rules out a backtracking matcher. The expertise is knowing which details the manual actually pins down and reading them exactly, for instance that addr1,~N runs to the next multiple of N after addr1 even when addr1 is itself a multiple, and that a script whose first two characters are #n turns on -n. A capable engineer who implements from memory of sed rather than from the manual gets those wrong while everything else passes. The image keeps GNU sed for comparison, which shows that an output is wrong but not why, and cannot be called at grading time, so the matcher and the cycle model still have to be built and reasoned out."
+solution_explanation = "The reference is a standard-library implementation in two files: posixre.py parses GNU BRE and ERE into a tree, compiles it to a thread program and simulates it in the style of a Pike VM, so matching takes time linear in the input for a fixed pattern; it keeps the leftmost start and the longest end, with groups from the first path in traversal order that reaches that end. sed.py parses scripts (addresses, blocks, labels, a/i/c text and s) and runs the sed cycle with pattern and hold space, the append queue, D restarts, n/N at end of input, the t flag reset on each read but kept across a D restart, per-file numbering, ranges and n/N end of file under -s, and q/Q exit codes; input files are opened only when the run reaches them, so a missing file after a q never changes its exit status."
+verification_explanation = "A separate verifier image holds 1,266 cases in five case files plus a table of shared inputs (options, script, input and optional files, including a missing one, an empty one and -); the verifier refuses to run unless the loaded families and counts match its roster. For every case the verifier runs the image's own GNU sed 4.9 as root to get the expected standard output and exit status, then runs /app/pysed/sed.py as an unprivileged user in a fresh directory with LC_ALL=C, with a five-second limit per run and under a Python audit hook, without site-packages, that ends the run if it starts another program or loads native code through ctypes or an extension module outside Python's lib-dynload, and compares stdout byte for byte and the exit status. The sed binary is made root-only and /app unwritable for the candidate first, so the candidate cannot delegate to sed or change /app during the run, and a separate test rejects any compiled executable or shared library under /app. Cases are grouped into one named test per area of the manual, four buckets of mixed generated scripts, and a contract matrix that walks the instruction clause by clause (every escape in every position, every order of the s flags, each group number, q/Q codes, ranges on blocks, - among files, the append queue on n/N, anchors in multi-line pattern spaces); every case uses only behaviour the manual describes."
+relevant_experience = "Years of Unix tooling and text-processing work: writing and debugging sed and awk pipelines, porting shell tooling to minimal containers, and implementing regular-expression engines with POSIX leftmost-longest semantics."
+
+[verifier]
+timeout_sec = 3600
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 7200
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

@@ -1,0 +1,60 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-car-rental-agreement-billing",
+ "report_path": "revision-v2/platform-report.md",
+ "returned_snapshot_sha256": "a5339e8cc1e4f8740c17715d5f76733044e8f0df42545549a5383a12e06b13ba",
+ "repaired_snapshot_sha256": "6ca1a173755f27b3067d9dd315db09db73ed65b9271a51944ba464c9461212f7",
+ "findings": [
+  {
+   "id": "1",
+   "axis": "coherent_contract",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Core-adjacent output schema. The README bill schema said id plus the figures were 'all integers' and instruction.md said every README key is compared as a JSON integer, while the agreement schema, run.py and the verifier keep id a string. README now gives id as 'the agreement's id string, as given' and limits 'all integers' to the figures; instruction.md says the branch and each id are compared as the strings given, every other figure as a JSON integer. The verifier already enforced this; the numeric-id-as-integer mutant (id '0' in order_and_totals) is rejected on test_bill_order_and_file_totals.",
+   "reproduction": "revision-v2/repro/f1-id-declared-integer.json",
+   "closure": "revision-v2/closure/f1-id-declared-integer.json",
+   "siblings": [
+    "f1-numeric-id-as-integer"
+   ],
+   "gate": {
+    "rule": "declared output types: every 'all integers'/'as JSON integer' umbrella must exempt the string keys it lists (id, branch)"
+   }
+  },
+  {
+   "id": "2",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Core (rule 3.3 applies to every refuelling rental). traps_combined now bills C5 (1 min, 8->7 eighths, the report's exact case: fuel_charge 2100, total 7513), C6 (30 min, 5->2, turnover), C7 (10 h, 8->0, rate 0) and C8 (1,439 min, 1->0). The fee scoped to day rentals, to an hour or more, or to ten hours or more each fails test_figures_left_to_todays_code_together.",
+   "reproduction": "revision-v2/repro/f2-fee-day-rentals-only.json",
+   "closure": "revision-v2/closure/f2-fee-day-rentals-only.json",
+   "siblings": [
+    "s5-fee-only-from-an-hour",
+    "s6-no-refuel-rule-under-a-day"
+   ],
+   "gate": {
+    "rule": "combined-condition coverage: every governed rule is graded on each silent-branch input class it can meet (sub-hour, sub-day) in the combined family"
+   }
+  },
+  {
+   "id": "3",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Core (rule 3.2 on the day charged). traps_combined now bills C4 (59 min, 151 miles: mileage_charge 30, total 5445, the report's case), C6 (30 min, 400 miles over a turnover), C7 (10 h, 151 miles at rate 1) and C8 (1,439 min, exactly 150). A zero mileage charge under an hour or under a day, and turnover only on day rentals, each fail.",
+   "reproduction": "revision-v2/repro/f3-sub-hour-no-mileage.json",
+   "closure": "revision-v2/closure/f3-sub-hour-no-mileage.json",
+   "siblings": [
+    "s7-sub-day-no-mileage",
+    "s8-turnover-day-rentals-only"
+   ],
+   "gate": {
+    "rule": "same class as finding 2"
+   }
+  }
+ ],
+ "previous_findings": []
+}

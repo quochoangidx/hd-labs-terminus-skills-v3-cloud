@@ -1,0 +1,184 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "2591b8ab9770d08a431ff4a35b457f6cee29c52526185def06a2bd64f885a27c",
+  "severity": "None",
+  "summary": "Reading the files, I found no confirmed verifier defect. For every container the verifier compares each README key (id, dwell, free, days, charge), plus terminal, total and container order. The comparison is exact and type-strict, runs over sealed hand-checkable fixtures, and uses the verifier's own copy of the driver. Each named tariff rule has a case whose outcome changes if the rule is wrong: rule 2.1 end-inclusive dwell, rule 2.2 reefer 3 free days against dry 5 on the edge and one past, and rule 3.1 doubling after the 4th demurrage day at 1, 4 and 5 days. The two figures the tariff leaves to today's code are also isolated. Tank free days stay at 5. Days and charge for a container not on demurrage are dwell-free and days*rate, and the negative, zero and positive sign partitions are graded for DRY, REEFER and TANK, including a negative total. These cases reject the plausible wrong versions: the old off-by-one dwell, reefer free days of 5, reefer or tank free days of 3, off-by-one rate tiers, clamping or loop-style zero for non-positive days, old dwell in the untouched step, sorted output, a total of positives only, and float output. I found no false rejection of a contract-valid alternative, since extra keys are ignored and JSON is parsed rather than byte-compared. I hand-checked the expected arithmetic for families 01-07 and spot-checked 08-09.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/demurrage-tariff.md",
+      "environment/app/examples/north-quay-0611.json",
+      "environment/app/src/demurrage/__init__.py",
+      "environment/app/src/demurrage/charges.py",
+      "environment/app/src/demurrage/dwell.py",
+      "environment/app/src/demurrage/statement.py",
+      "environment/app/tools/demurrage_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-dwell.jsonl",
+      "tests/expected/02-reefer.jsonl",
+      "tests/expected/03-higher_rate.jsonl",
+      "tests/expected/04-order_and_total.jsonl",
+      "tests/expected/05-tank.jsonl",
+      "tests/expected/06-not_on_demurrage.jsonl",
+      "tests/expected/07-together.jsonl",
+      "tests/expected/08-generated.jsonl",
+      "tests/expected/09-limits.jsonl",
+      "tests/shipped/app/tools/demurrage_run.py",
+      "tests/shipped/app/src/demurrage/__init__.py",
+      "tests/shipped/app/src/demurrage/charges.py",
+      "tests/shipped/app/src/demurrage/dwell.py",
+      "tests/shipped/app/src/demurrage/statement.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled packet-manifest.json with the files read. All 33 listed files were read. The tests/shipped/** hashes equal the environment/app hashes, and the contents were also read and confirmed identical.",
+    "Mapped tariff rules 2.1, 2.2, 2.3, 3.1 and 3.2, the README keys and order, and the instruction's today's-step rule to test families. The mapping is in test_outputs.py:211-252 and in expected/01-07 and 09.",
+    "Hand-recomputed every expected statement in families 01-07. Spot-checked 08 (HJMEICL0, 57X5Q89J6, HKX5) and 09 (L7, L3, and the DM3-0014 total of 4,600,000,000). All agree with the tariff plus today's steps.",
+    "Traced these plausible wrong implementations against the fixtures: old dwell (picked_up-discharged), reefer free=5, non-DRY free=3 (tank), strict KeyError on TANK, doubling from day 4 or from day 6, doubling all days once past 4, max(0,days) clamp, loop-sum charge (0 for non-positive days), today's days computed from the old dwell, sort by id, total of positive charges only, float output. Each fails at least one sealed row.",
+    "Traced contract-valid alternatives: tier formulas rate*min(d,4)+2*rate*max(d-4,0), rate*d+rate*max(0,d-4), explicit fall-back to d*rate for d<=free, extra output keys, different JSON whitespace and key order. All pass compare() (test_outputs.py:189-203).",
+    "Checked the type-strict comparison: type(actual) is type(expected) rejects bool and float stand-ins for int (test_outputs.py:189-190).",
+    "Checked the driver provenance. The verifier's copy is os.replace-d onto the documented path before any run (test_outputs.py:59-67). The delivered bytes must equal the shipped driver (test_outputs.py:301-304), and test.sh:23 re-checks with cmp.",
+    "Checked the relabel test. Relabelled files stay within rule 1.2, and the expected lines follow the same permutation and ids (test_outputs.py:255-281). Charges do not depend on the absolute discharge day or the id, so the relabelling is semantically neutral.",
+    "Checked the family-guard self-consistency. silent() plus GRADES keeps tank and idle containers inside the tank, not_on_demurrage and together families only (test_outputs.py:151-186). A sweep of the fixtures found no violating container, for example reefer '9' and L21 have dwell 4 > 3.",
+    "Checked the execution context. Runs use python3 -I -S as uid 65534. The candidate package is made readable by test.sh:16, and stdlib-only code is unaffected by -S."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Each tariff rule and each today's-step figure has a dedicated family, and compare() checks every README key, so a missing or reversed rule changes at least one compared value.",
+      "evidence": ["tests/test_outputs.py:189-252", "environment/app/docs/demurrage-tariff.md:23-42", "instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result (values, membership, order, required outputs)",
+      "status": "checked",
+      "reason": "compare() checks terminal, total, container count, per-index order and all five container keys with exact type. It is not a schema-only check.",
+      "evidence": ["tests/test_outputs.py:193-203", "environment/app/README.md:23-31"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case per named domain rule",
+      "status": "checked",
+      "reason": "Rule 2.1 is isolated by D2 and D4, where old dwell would give days 0 and 1. Rule 2.2 by R1 (dwell 4 → 1 day) and R2 against R3 (dry). Rule 3.1 by H1-H5 at 1, 4 and 5 days. Rule 3.2 and order by DM3-0004 with unsorted ids. Tank free days by T1-T4. The not-on-demurrage days and charge by N1-N6 and X1, X2, X4.",
+      "evidence": ["tests/expected/01-dwell.jsonl:1", "tests/expected/02-reefer.jsonl:1", "tests/expected/03-higher_rate.jsonl:1", "tests/expected/04-order_and_total.jsonl:1", "tests/expected/05-tank.jsonl:1", "tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions rejected",
+      "status": "checked",
+      "reason": "Every wrong implementation traced in checks_performed fails a sealed row. For example, a clamp gives N1 days 0 and charge 0 against the expected -2 and -15000. A loop-sum charge gives N1 charge 0. Non-DRY free=3 gives T1 free 3.",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/05-tank.jsonl:1", "tests/expected/03-higher_rate.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "The output is parsed as JSON, extra keys are ignored, and there is no byte comparison of the statement. All the algebraically equivalent tier formulas agree on negative, zero and positive days. The one byte-exact check is on the driver, which instruction.md:1 explicitly requires to match byte for byte.",
+      "evidence": ["tests/test_outputs.py:147-148", "tests/test_outputs.py:193-203", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: legal sign partitions discriminated",
+      "status": "checked",
+      "reason": "Days and charge are graded negative (N1, N2, N4, N6, X1, X4), zero (N3, N5, X2) and positive, across DRY, REEFER and TANK. The statement total is graded negative (-34401) and positive.",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding / representation promises",
+      "status": "checked",
+      "reason": "The contract requires JSON integers and strings (instruction.md:5, README.md:28-31). The verifier's type-strict int and str check matches that promise and imposes no other representation.",
+      "evidence": ["tests/test_outputs.py:189-190", "instruction.md:5", "environment/app/README.md:28-31"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle (driver unchanged)",
+      "status": "checked",
+      "reason": "The byte-identical driver requirement is enforced on the delivered bytes, again after all runs, and in test.sh. Grading uses the verifier's copy, so a modified driver cannot influence results.",
+      "evidence": ["tests/test_outputs.py:59-67", "tests/test_outputs.py:301-307", "tests/test.sh:23-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries / Oracle-specific representation / self-controlled comparisons",
+      "status": "checked",
+      "reason": "The candidate's /app/src is run fresh through the verifier-owned driver, and the expectations are sealed and hash-pinned. No candidate output is compared against itself. The shipped-copy run path (run(shipped=True)) is never used for grading.",
+      "evidence": ["tests/test_outputs.py:131-148", "tests/test_outputs.py:174-186", "tests/expected/ROSTER:1-9"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable or vacuous test cases",
+      "status": "checked",
+      "reason": "Every family is loaded and run, and the roster row counts match the files (1,1,1,2,1,1,1,4,2). The limits assertions on the fixture itself (200 containers, total > 2^32) hold for the DM3-0014 row. The docstring says 'stays of 1', but no dwell-1 container is in the limits family. Dwell-1 containers are graded in not_on_demurrage (N2, N4), so this comment inaccuracy has no grading effect.",
+      "evidence": ["tests/expected/ROSTER:1-9", "tests/test_outputs.py:246-252", "tests/expected/09-limits.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localization",
+      "status": "checked",
+      "reason": "There is one test per rule, and failure messages name the family, the terminal, the container index and id, and the key. Families also depend on the dwell fix, so a dwell bug fails several tests. That reduces localization but does not affect reward correctness.",
+      "evidence": ["tests/test_outputs.py:189-208"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 2.1 dwell", "today's days step for not-on-demurrage"],
+      "case_or_path": "The untouched days step must use the corrected dwell. N1 expects -2, where the old dwell would give -3.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 3.1 tiered charge", "today's charge step for non-positive days"],
+      "case_or_path": "The new tier formula applied to negative or zero days. Natural closed forms give days*rate and pass. Clamping or loop-sum forms give 0 and fail N1, N2, N4, N6, X1 and X4, as the instruction's no-clamp clause requires.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.2 reefer free days", "today's tank free days"],
+      "case_or_path": "A reefer fix that over-generalises to all non-DRY types. It fails T1 and X1-X3, where free=5 is expected.",
+      "status": "checked",
+      "evidence": ["tests/expected/05-tank.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.2 reefer free days", "rule 3.1 tier threshold"],
+      "case_or_path": "Reefer demurrage of exactly 4 and 5 days (H4, H5), and 118 days at rate 100,000 (R4).",
+      "status": "checked",
+      "evidence": ["tests/expected/03-higher_rate.jsonl:1", "tests/expected/02-reefer.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 3.2 total", "negative today's-step charges"],
+      "case_or_path": "A total that mixes negative, zero and positive charges (-34401, 21600). This rejects a total of positive charges only.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-not_on_demurrage.jsonl:1", "tests/expected/07-together.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["container order", "relabelled generated files"],
+      "case_or_path": "A shuffled order with random ids. The expected lines follow the same permutation, and the total is invariant.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:255-281"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": "This review is static only; nothing was executed. Families 08 and 09 were spot-checked, not fully recomputed, because they have 200+ rows. The family-guard sweep over 09-limits was done by reading the rows. The verdict None means no confirmed defect was found in this bounded review."
+}

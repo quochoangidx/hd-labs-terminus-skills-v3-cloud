@@ -1,0 +1,119 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-A",
+  "snapshot_sha256": "9157208d95100765d2c5d6735d478c4fc366a4c2313e87acdfd3915049193a5d",
+  "severity": "None",
+  "summary": "No candidate-reachable path to read, replace, or influence the verifier's trusted inputs or reward. The verifier treats the four layout files as data only. It parses them with a hardened JSON loader and scores them with its own sealed copies of the checker, the editions and the targets. It runs no /app code, uses python -I in a fresh temp cwd, and writes the reward only from pytest's exit code. The targets and editions the candidate can see are public thresholds and inputs for an optimization task, not answers, and the verifier never trusts the candidate's copies.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/planner/plan_edition.py",
+      "environment/app/editions/targets.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_layout.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/tools/check_layout.py, tests/targets.json, and tests/editions/{mon,wed,fri,sat}.json were not opened separately: packet-manifest.json lines 11-25 give them the same sha256 as tests/check_layout.py, environment/app/editions/targets.json, and environment/app/editions/*.json. Byte-identity is established by hash, and their contents are public inputs whose values do not matter to this axis.",
+      "environment/app/editions/{mon,wed,fri,sat}.json ad data was not read line by line. These are candidate-visible problem inputs, and the only thing that matters here is that the verifier reads its own sealed copies (tests/test_outputs.py:24-26)."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced the reward channel: test.sh writes 0 first, runs pytest in a mktemp dir with python -I, and writes 1 only when pytest rc==0 (tests/test.sh:4-21).",
+    "Confirmed the verifier imports check_layout from /tests (sys.path.insert HERE) and reads editions and targets from /tests, not /app (tests/test_outputs.py:15-26).",
+    "Confirmed the verifier image builds /tests only from tests/ and creates an empty /app/layouts. No candidate code or /app tree is installed there (tests/Dockerfile:1-6).",
+    "Confirmed .dockerignore excludes tests/ and solution/ from the candidate image (environment/.dockerignore:11-12). The candidate image copies only app/ (environment/Dockerfile:5-7).",
+    "Inspected load_layout: size cap, UTF-8 JSON only, no constants, digit cap, duplicate-key rejection, depth cap. There is no eval, pickle, or import of candidate content (tests/check_layout.py:59-73).",
+    "Inspected evaluate: every placement is validated against the verifier-held edition, and cost comes only from the verifier-held rates and percents (tests/check_layout.py:76-152).",
+    "Checked symlinks: load_layout follows a symlink at /app/layouts/<ed>.json (tests/check_layout.py:61-64). The verifier container holds no golden layout, and the only reachable verifier files (editions, targets) do not form a valid layout. The worst outcomes are a parse error or a hang, both of which give reward 0.",
+    "Checked environment channels: AD_LAYOUTS is read from the verifier's own environment (tests/test_outputs.py:19). The candidate cannot set it, and -I blocks PYTHONPATH and user site.",
+    "Checked whether modifying the candidate-visible editions, targets, or checker under /app could change grading. It cannot, because the verifier uses its sealed tests/ copies."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Expected answers and live reference implementations kept away from candidate code",
+      "status": "checked",
+      "reason": "The packet has no golden layout. The pass condition is validity plus cost <= a public target. The planner in /app is the deliberately weak baseline, not a reference solution. The verifier executes no candidate code.",
+      "evidence": ["tests/test_outputs.py:1-7", "tests/test_outputs.py:39-41", "tests/Dockerfile:1-6", "environment/.dockerignore:11-12"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths (symlink / traversal)",
+      "status": "checked",
+      "reason": "The only candidate-influenced read is /app/layouts/<ed>.json, which follows symlinks. The verifier has no secret golden to redirect to, and any redirected content must still pass evaluate against the sealed edition data. No credit path exists.",
+      "evidence": ["tests/test_outputs.py:29-36", "tests/check_layout.py:59-73"],
+      "finding_ids": []
+    },
+    {
+      "category": "Expected values computed independently of the submitted artifact",
+      "status": "checked",
+      "reason": "Cost is computed from verifier-held edition data and the target comes from verifier-held targets.json. Nothing the candidate reports (such as a self-declared cost) is trusted, and extra keys are ignored.",
+      "evidence": ["tests/check_layout.py:134-152", "tests/test_outputs.py:20-21", "environment/app/docs/makeup-rules.md:64-65"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes exposed via filenames, arguments, cwd, or environment variables",
+      "status": "checked",
+      "reason": "No candidate program is invoked, so no argv, cwd, or env is exposed to candidate code. Targets are disclosed on purpose by the instruction and are not hidden outcomes.",
+      "evidence": ["instruction.md:1-3", "tests/test.sh:13-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Trusted reward channel (stdout / early exit impersonation)",
+      "status": "checked",
+      "reason": "The reward comes only from the pytest exit code in test.sh. The candidate has no process in the verifier, and /logs/verifier is created mode 700 by the verifier.",
+      "evidence": ["tests/test.sh:4-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Access boundary tested from the candidate's execution context; build hooks, plugins, import shadowing",
+      "status": "checked",
+      "reason": "python -I plus a fresh mktemp cwd prevents cwd and PYTHONPATH import shadowing. The pytest conftest and rootdir search starts from /tests, which the candidate cannot write. Plugins come only from the verifier image's pip install. No build step consumes candidate files.",
+      "evidence": ["tests/test.sh:13-15", "tests/Dockerfile:3-6", "tests/test_outputs.py:15-17"],
+      "finding_ids": []
+    },
+    {
+      "category": "Persisted or partially reset state trusted as a baseline",
+      "status": "not_applicable",
+      "reason": "Grading is single-phase. No candidate-writable state is reused as an expected value.",
+      "evidence": ["tests/test_outputs.py:44-73"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["Candidate may produce layouts any way it likes (instruction)", "Verifier uses its own copy of editions and checker"],
+      "case_or_path": "A candidate edits /app/editions/*.json or /app/tools/check_layout.py to make a cheap invalid layout look valid locally. The verifier ignores /app copies and reads tests/editions and tests/check_layout.py, so the layout is rejected.",
+      "status": "checked",
+      "evidence": ["instruction.md:3", "tests/test_outputs.py:15-26"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Layout file read follows symlinks", "Separate verifier image with sealed /tests"],
+      "case_or_path": "/app/layouts/mon.json is a symlink to /tests/targets.json or /tests/editions/mon.json. evaluate requires a 'placements' object mapping known ad ids to int positions, so these files raise LayoutError and the reward is 0.",
+      "status": "checked",
+      "evidence": ["tests/check_layout.py:61-64", "tests/check_layout.py:78-79"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Public targets.json", "Cost <= target pass condition"],
+      "case_or_path": "Knowing the targets reveals the threshold but not a layout that meets it. The candidate must still produce a valid placement set whose computed cost meets the target.",
+      "status": "checked",
+      "evidence": ["environment/app/editions/targets.json:1-6", "tests/test_outputs.py:39-41"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

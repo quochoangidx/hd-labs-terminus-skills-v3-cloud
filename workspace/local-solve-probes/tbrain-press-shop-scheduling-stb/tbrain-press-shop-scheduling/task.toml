@@ -1,0 +1,32 @@
+artifacts = ["/app/schedules/"]
+name = "tbrain-press-shop-scheduling"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Operations"
+subcategory = "Supply chain"
+languages = ["python"]
+tags = ["machine-scheduling", "sequence-dependent-setups", "weighted-tardiness", "metaheuristics", "production-planning"]
+expert_time_estimate_hours = 6
+difficulty_explanation = "Each week is unrelated parallel-machine scheduling with sequence-dependent die changeovers, press tonnage eligibility, release times, weighted tardiness and maintenance windows that no changeover or run may overlap. Changeover cost and lateness pull in opposite directions: grouping a die family saves hours of changeover but pushes other families' jobs past their due times, and the maintenance windows make the timing of a sequence non-obvious (a job that no longer fits before a window slips past it, and the knock-on delay moves every later job). The targets are the best schedules found by several rounds of multi-seed ruin-and-recreate search and local search, pooled with the best schedules from trial runs, so a production planner has to build a search that works on assignment and sequence together; dispatch rules like the shipped earliest-due-date planner land two to four times over target. The weeks are synthetic but modelled on a stamping line: six die families, a changeover matrix of 35-120 minutes between families and 10 minutes within one, presses of 200-800 t with different stroke rates, and one or two maintenance windows per press."
+solution_explanation = "The reference schedules come from a ruin-and-recreate search: remove a few jobs (random, one die family, jobs with nearby due times, or a run of consecutive jobs on one press), reinsert each at its cheapest position on any press with enough tonnage, occasionally skipping a position, and accept by simulated annealing; several seeds per week, half an hour each. Schedules from trial runs were pooled with the search's own and the search restarted from the cheapest in further rounds; weeks 37-39 were finished with an iterated local search (exhaustive relocation, swaps and moves of blocks of up to eight consecutive jobs, with small ruin-and-recreate kicks). Rounds stopped when restarts no longer improved any week. solve.sh copies the four schedules and runs the checker on each."
+verification_explanation = "The verifier reads the four schedule files as JSON data and runs them with its own copy of the press rules and its own copies of the weeks and targets, so nothing the agent edits under /app affects grading and no candidate code runs. For each week one test checks that the schedule is valid (every job exactly once, on a press with enough tonnage, known ids) and one checks that its integer cost, computed by simulating changeovers, releases and maintenance windows, is at or below the target. The reference schedules pass all eight tests; the shipped planner's schedules cost 100000, 160603, 307200 and 410333 against targets of 33983, 47936, 77699 and 112876."
+relevant_experience = "Production scheduling and operations research: sequence-dependent setup scheduling on parallel machines, weighted tardiness objectives, and large-neighbourhood search for shop-floor planning."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "public"
+
+[agent]
+timeout_sec = 5400
+network_mode = "public"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

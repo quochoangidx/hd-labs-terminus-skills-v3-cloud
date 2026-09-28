@@ -1,0 +1,36 @@
+        if rnd.random() < PW:
+            s1, s2 = s0, s
+            if rnd.random() < 0.1:
+                lo, hi = -10**9, 10**9
+            else:
+                lo = A[t] - rnd.randint(0, WIN); hi = D[t] + rnd.randint(0, WIN)
+            X1 = [x for x in occ[s1] if lo <= A[x] <= hi]
+            X2 = [x for x in occ[s2] if lo <= A[x] <= hi]
+            if any(s2 not in eset[x] for x in X1) or any(s1 not in eset[x] for x in X2):
+                continue
+            for x in X1: occ[s1].discard(x)
+            for x in X2: occ[s2].discard(x)
+            ok = True
+            done = []
+            for x, ns_ in [(x, s2) for x in X1] + [(x, s1) for x in X2]:
+                if conflicts(x, ns_):
+                    ok = False; break
+                occ[ns_].add(x); st[x] = ns_; done.append(x)
+            if ok:
+                M = X1 + X2
+                after = local(M)
+                for x in X1: st[x] = s1
+                for x in X2: st[x] = s2
+                before = local(M)
+                for x in X1: st[x] = s2
+                for x in X2: st[x] = s1
+                delta = after - before
+                if delta <= 0 or rnd.random() < math.exp(-delta / temp):
+                    cur += delta
+                    if cur < best:
+                        best = cur; bestst = st[:]
+                    continue
+            for x in done: occ[st[x]].discard(x)
+            for x in X1: st[x] = s1; occ[s1].add(x)
+            for x in X2: st[x] = s2; occ[s2].add(x)
+            continue

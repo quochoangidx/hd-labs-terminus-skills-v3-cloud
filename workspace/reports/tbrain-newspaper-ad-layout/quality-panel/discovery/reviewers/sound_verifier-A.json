@@ -1,0 +1,171 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "9157208d95100765d2c5d6735d478c4fc366a4c2313e87acdfd3915049193a5d",
+  "severity": "None",
+  "summary": "The verifier grades exactly the promised outcome: each of the four layouts must be valid under makeup-rules.md and cost no more than the target. It uses sealed copies of the checker, editions and targets that are byte-identical to the candidate-visible ones. Every numbered rule, cost term and file-format restriction in the rules document is enforced in check_layout.evaluate/load_layout with the documented semantics. A static trace of the unmodified greedy planner on mon gives a cost of about 7114 against a target of 4635, so the baseline is rejected. No false rejection of a contract-valid layout was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/planner/plan_edition.py",
+      "environment/app/editions/targets.json",
+      "environment/app/tools/check_layout.py (key lines grepped; identical sha256 to tests/check_layout.py per manifest, which was read in full)",
+      "environment/app/editions/mon.json, wed.json, fri.json, sat.json (identical sha256 to tests/editions/* per manifest, which were read in full)",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_layout.py",
+      "tests/targets.json",
+      "tests/editions/mon.json",
+      "tests/editions/wed.json",
+      "tests/editions/fri.json",
+      "tests/editions/sat.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped each makeup rule (1 bounds/overlap, 2 support, 3 front-page strip and per-page share, 4 competitor page/spread, 5 booked placement) to its enforcing branch in tests/check_layout.py:84-136",
+    "Mapped the three cost terms and per-ad floor division to tests/check_layout.py:138-152, including section and right-hand penalties stacking on one ad",
+    "Checked file-format restrictions (object/placements type, unknown ids, JSON-integer type excluding bool/float, BOM, NaN/Infinity, size, digit count, duplicate names, nesting depth, ignored extra keys) against load_layout/evaluate at tests/check_layout.py:22-73,78-88",
+    "Confirmed the verifier uses its own copies of check_layout.py, editions and targets (tests/test_outputs.py:15-26), which are sha256-identical to the candidate-visible copies (packet-manifest.json:12-27), so no candidate-controlled comparison and no drift between the visible tool and the grader",
+    "Confirmed that reward requires all 8 tests to pass (tests/test.sh:15-21) and that every test is collected and reachable (tests/test_outputs.py:44-73)",
+    "Static trace (not executed) of plan_edition.py greedy on mon.json: 14 unbooked ads left out (about 5959) plus about 1155 in section/left-hand penalties, total about 7114, above the mon target of 4635, so the unmodified planner is rejected",
+    "Checked that every ad section name in all four editions exists in that edition's sections map, so the cost path cannot raise KeyError on a valid layout",
+    "Checked that the targets are not below an obvious structural lower bound: mon ad area 2726 cells exceeds capacity 2301 (15*151+36), and width-6 depth-42 ads (wed AD032, fri AD045, sat AD018/AD043) are unplaceable and unbooked. Target reachability itself belongs to other axes"
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails when it is missing or reversed",
+      "status": "checked",
+      "reason": "Validity is enforced by LayoutError branches for each rule. Cost is checked against the target per edition. Both are required for all four editions.",
+      "evidence": ["environment/app/docs/makeup-rules.md:32-41", "tests/check_layout.py:84-136", "tests/test_outputs.py:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result, not just existence/keys",
+      "status": "checked",
+      "reason": "The whole placements object is evaluated cell by cell and the complete cost is recomputed from sealed edition data. It is not a presence or schema check.",
+      "evidence": ["tests/check_layout.py:82-152", "tests/test_outputs.py:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rules each have an outcome-changing case",
+      "status": "checked",
+      "reason": "Competitor groups, sections, right_hand flags, booked ads, the front-page strip and the 151-cell share cap all appear in the graded editions, and the cost-minimizing objective makes them bind. Examples: mon area 2726 exceeds capacity 2301, and multiple competitor groups have several members. Any rule violation is a hard reject.",
+      "evidence": ["tests/editions/mon.json:3-27", "tests/check_layout.py:110-132"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solution is rejected",
+      "status": "checked",
+      "reason": "Unmodified greedy planner: statically traced mon cost is about 7114, above 4635, so it fails. Booked-only layout: cost includes nearly all unbooked rates, so it fails. Floating ads, competitors on 2k/2k+1 (for example, a 2k-1/2k spread misreading), and ads above the front strip are rejected by the checker.",
+      "evidence": ["environment/app/planner/plan_edition.py:15-65", "tests/check_layout.py:102-132", "tests/targets.json:1-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, ordering, implementation)",
+      "status": "checked",
+      "reason": "JSON is parsed rather than compared as text. Extra keys are ignored as documented. Any key order or whitespace is accepted. Placement order is irrelevant, and any layout with cost at or below the target passes. The 4300-digit and depth limits match the documented inclusive bounds. No undocumented restriction was found.",
+      "evidence": ["environment/app/docs/makeup-rules.md:57-72", "tests/check_layout.py:26-73,84-88"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle behavior enforced",
+      "status": "checked",
+      "reason": "The only restrictions are about the layout files, and all are enforced. The no-network and no-install notes describe the environment and are not graded promises. 'Only the four layout files are used' matches the verifier, which reads only /app/layouts/<edition>.json.",
+      "evidence": ["instruction.md:3", "tests/test_outputs.py:19,29-36"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons",
+      "status": "checked",
+      "reason": "No code from /app runs. Expected data and targets come from verifier-owned copies. There are no compiled artifacts and no representation tied to a reference output.",
+      "evidence": ["tests/test_outputs.py:1-26", "tests/Dockerfile:1-6"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases",
+      "status": "checked",
+      "reason": "All 8 test functions are collected by pytest on /tests/test_outputs.py. The reward is 1 only when pytest exits 0.",
+      "evidence": ["tests/test.sh:15-21", "tests/test_outputs.py:44-73"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization-to-first-event transition",
+      "status": "not_applicable",
+      "reason": "Grading evaluates a static layout. There is no stateful event sequence in the contract.",
+      "evidence": ["environment/app/docs/makeup-rules.md:26-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities / sign partitions",
+      "status": "not_applicable",
+      "reason": "Cost is a sum of non-negative integer terms compared with <= target. There is no signed quantity or approximate-zero check.",
+      "evidence": ["environment/app/docs/makeup-rules.md:43-55", "tests/check_layout.py:138-152"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding / layout / package shape / diagnostic output",
+      "status": "checked",
+      "reason": "The encoding promises the contract retains (UTF-8 without BOM, standard JSON, JSON integers) are enforced. Other representation choices are left open. Candidate stdout and diagnostics are not graded.",
+      "evidence": ["environment/app/docs/makeup-rules.md:61-72", "tests/check_layout.py:59-73,87"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["Rule 4 competitor spreads", "Page 1 stands alone / even last page faces nothing"],
+      "case_or_path": "spread(1)=0 and spread(p)=p//2 for p>=2. All editions have an even page count (16/20/24/32), so the last page N maps to N//2 alone. Two same-group ads on pages 2 and 3 are rejected, and pages 1 and 2 are allowed.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:11-13,39-40", "tests/check_layout.py:119-132"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 3 front-page strip", "Rule 3 per-page cell cap"],
+      "case_or_path": "Page 1 limit is front_page_ad_rows*cols=36, plus a row check r >= rows-6. Other pages have a limit of 60*42*6//100=151.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:36-38", "tests/check_layout.py:110-117"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Wrong-section penalty", "Left-hand penalty"],
+      "case_or_path": "An ad with both a section and right_hand set, placed on an even page outside its section, receives both floor-divided terms independently.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:47-54", "tests/check_layout.py:144-151"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Rule 2 support", "Rule 1 overlap"],
+      "case_or_path": "Support is checked after all placements are stamped on the grid, so placement order in the JSON object cannot change validity.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:32-35", "tests/check_layout.py:84-108"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Booked ads must be placed", "Unplaceable width-6 depth-42 ads"],
+      "case_or_path": "The 252-cell ads exceed the 151-cell cap. None of them is booked (wed AD032, fri AD045, sat AD018/AD043), so the booked requirement does not force an unsatisfiable case.",
+      "status": "checked",
+      "evidence": ["tests/editions/wed.json:370-380", "tests/editions/fri.json:513-523", "tests/editions/sat.json:216-226,491-501"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Ignored extra keys", "Digit-count and depth limits"],
+      "case_or_path": "An extra key holding a number longer than 4300 digits or a 65-level container is rejected, as documented, even though the key is otherwise ignored.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/makeup-rules.md:64-72", "tests/check_layout.py:26-73"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

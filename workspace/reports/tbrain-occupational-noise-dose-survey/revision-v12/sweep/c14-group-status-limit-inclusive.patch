@@ -1,0 +1,160 @@
+diff --git a/app/src/noisedose/flags.py b/app/src/noisedose/flags.py
+--- a/app/src/noisedose/flags.py
++++ b/app/src/noisedose/flags.py
+@@ -9,5 +9,5 @@
+ 
+ 
+ def has_impulse(peaks):
+-    """True when a held peak is above the impulse level."""
+-    return any(peak > IMPULSE_DBC for peak in peaks)
++    """True when a held peak reaches the impulse level."""
++    return any(peak >= IMPULSE_DBC for peak in peaks)
+diff --git a/app/src/noisedose/groups.py b/app/src/noisedose/groups.py
+--- a/app/src/noisedose/groups.py
++++ b/app/src/noisedose/groups.py
+@@ -4,7 +4,7 @@
+ gets one row with its own dose, TWA and status.
+ """
+ 
+-from .twa import status_for, to_tenth
++from .twa import status_for, to_tenth, twa_for
+ 
+ 
+ def group_rows(worker_rows):
+@@ -14,12 +14,10 @@
+         members.setdefault(row["group"], []).append(row)
+     rows = []
+     for code in sorted(members):
+-        levels = [row["twa"] for row in members[code] if row["twa"] is not None]
+-        if levels:
+-            twa = to_tenth(sum(levels) / len(levels))
+-            dose = 100.0 * 10.0 ** ((twa - 90.0) / 16.61)
+-        else:
+-            twa = None
+-            dose = 0.0
+-        rows.append({"group": code, "dose": dose, "twa": twa, "status": status_for(twa)})
++        doses = [row["dose"] for row in members[code]]
++        dose = sum(doses) / len(doses)
++        twa = twa_for(dose)
++        if twa is not None:
++            twa = to_tenth(twa)
++        rows.append({"group": code, "dose": dose, "twa": twa, "status": "over" if twa is not None and twa >= 85.0 else status_for(twa)})
+     return rows
+diff --git a/app/src/noisedose/levels.py b/app/src/noisedose/levels.py
+--- a/app/src/noisedose/levels.py
++++ b/app/src/noisedose/levels.py
+@@ -6,9 +6,10 @@
+ 
+ EIGHT_HOURS = 480  # minutes in the reference working day
+ 
+-CRITERION_DBA = 90.0  # steady level that gives a 100 per cent dose over eight hours
+-EXCHANGE_DB = 5.0  # change in level that halves or doubles the allowed time
+-THRESHOLD_DBA = 80.0  # runs at or below this level add no dose
++CRITERION_DBA = 85.0  # steady level that gives a 100 per cent dose over eight hours
++EXCHANGE_DB = 3.0  # change in level that halves or doubles the allowed time
++THRESHOLD_DBA = 80.0  # readings below this level add no dose
++READING_FLOOR_DBA = 40.0  # bottom of the dosimeter's measuring range
+ CEILING_DBA = 115.0  # continuous-level ceiling
+ IMPULSE_DBC = 140.0  # peak level treated as impulse noise
+ 
+@@ -20,4 +21,9 @@
+ 
+ def adds_dose(level):
+     """True when a run logged at ``level`` counts toward the dose."""
+-    return level > THRESHOLD_DBA
++    return level >= THRESHOLD_DBA
++
++
++def is_reading(level):
++    """True when a run logged at ``level`` is a reading (manual 2.2)."""
++    return level >= READING_FLOOR_DBA
+diff --git a/app/src/noisedose/runs.py b/app/src/noisedose/runs.py
+--- a/app/src/noisedose/runs.py
++++ b/app/src/noisedose/runs.py
+@@ -4,21 +4,23 @@
+ dosimeter logged it.
+ """
+ 
+-from .levels import CEILING_DBA, adds_dose, reference_minutes
++from .levels import CEILING_DBA, adds_dose, is_reading, reference_minutes
+ 
+ 
+ def measure(log):
+     """Return ``(sampled_minutes, measured_dose)`` for a log.
+ 
+-    The measured dose is in per cent: the sum over the runs that count of each
+-    run's minutes divided by its reference duration, times 100.
++    Sampled time is the length of every reading. The measured dose is in per
++    cent: the sum over the counted readings of each reading's minutes divided
++    by the reference duration at the level it is counted at, times 100.
+     """
+     sampled = 0
+     fraction = 0.0
+     for minutes, level in log:
+-        counted = min(level, CEILING_DBA)
+-        if not adds_dose(counted):
++        if not is_reading(level):
+             continue
+         sampled += minutes
+-        fraction += minutes / reference_minutes(counted)
++        counted = min(level, CEILING_DBA)
++        if adds_dose(counted):
++            fraction += minutes / reference_minutes(counted)
+     return sampled, 100.0 * fraction
+diff --git a/app/src/noisedose/shift.py b/app/src/noisedose/shift.py
+--- a/app/src/noisedose/shift.py
++++ b/app/src/noisedose/shift.py
+@@ -11,10 +11,14 @@
+ def shift_dose(log, shift_minutes):
+     """Dose for the worker's shift in per cent, projecting a partial survey.
+ 
+-    A survey that sampled less than a full day is scaled up to it on the
+-    assumption that the unsampled time looked like the sampled time.
++    A partial survey is scaled up to the shift on the assumption that the
++    unsampled time looked like the sampled time.
+     """
+     sampled, measured = measure(log)
++    if sampled >= shift_minutes:
++        return measured
++    if 4 * sampled >= 3 * shift_minutes:  # a partial survey (manual 2.5, 3.3)
++        return measured * shift_minutes / sampled
+     if sampled == 0:
+         return 0.0
+     if sampled < EIGHT_HOURS:
+diff --git a/app/src/noisedose/twa.py b/app/src/noisedose/twa.py
+--- a/app/src/noisedose/twa.py
++++ b/app/src/noisedose/twa.py
+@@ -2,20 +2,20 @@
+ 
+ import math
+ 
+-ACTION_LEVEL_DB = 85.0
+-EXPOSURE_LIMIT_DB = 90.0
++ACTION_LEVEL_DB = 82.0
++EXPOSURE_LIMIT_DB = 85.0
+ 
+ 
+ def twa_for(dose):
+     """Eight-hour TWA in dB for a dose in per cent, or None for no dose."""
+     if dose <= 0.0:
+         return None
+-    return 90.0 + 16.61 * math.log10(dose / 100.0)
++    return 85.0 + 3.0 * math.log2(dose / 100.0)
+ 
+ 
+ def to_tenth(value):
+     """A level as reported, to a tenth of a decibel."""
+-    return math.floor(value * 10.0) / 10.0
++    return math.floor(value * 10.0 + 0.5) / 10.0
+ 
+ 
+ def status_for(twa):
+@@ -25,7 +25,7 @@
+     """
+     if twa is None:
+         return "below"
+-    if twa >= EXPOSURE_LIMIT_DB:
++    if twa > EXPOSURE_LIMIT_DB:
+         return "over"
+     if twa >= ACTION_LEVEL_DB:
+         return "action"

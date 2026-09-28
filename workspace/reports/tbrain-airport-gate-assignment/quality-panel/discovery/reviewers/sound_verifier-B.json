@@ -1,0 +1,168 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "f9e2a843946feb803bea831bc197043b8ff4892295c4cbe2c5db018ff2b20e91",
+  "severity": "None",
+  "summary": "The verifier reads each of the four plans as data and grades it with a byte-identical copy of the candidate-visible checker, run against hash-pinned copies of the day files. It enforces every validity rule in stand-rules.md and the full cost formula, then compares the cost with targets.json. This is exactly the contract ('follows the rules and costs no more than the target'). It rejects the plausible wrong or incomplete plans I traced, accepts the representation freedoms the contract allows, and imposes no undocumented restriction.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/planner/plan_day.py",
+      "environment/app/tools/check_plan.py",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json (lines 1-419, 1270-1349, 2895-2924: header, stands, walk_metres start/end, wingtip_pairs, turns start/end, transfers start)",
+      "environment/app/days/day-2.json, day-3.json, day-4.json (structure checked with targeted greps: buffer_minutes, bus_cost_per_passenger, turn-id counts, wingtip_pairs location)",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/targets.json",
+      "tests/days/roster.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/days/day-{1,2,3,4}.json.gz: the gzip content was not decoded. This is not a verifier-semantics gap: test_outputs.py:36 asserts that the decompressed bytes have the roster SHA-256, and each roster hash (tests/days/roster.json:6,12,18,24) equals the manifest hash of the matching environment/app/days/day-N.json (packet-manifest.json:12-15). The verifier therefore grades against bytes identical to the candidate-visible days or fails closed.",
+      "Bulk numeric data in the day JSON files (the rest of walk_metres, individual turns and transfers) was sampled rather than read row by row. The only verifier-relevant domain assumptions (string ids, the counts of unique T-ids per day matching the roster, arrive < depart in the sampled turns, positive buffer) were checked, and the data carries no grading logic."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Confirmed that tests/check_plan.py and environment/app/tools/check_plan.py are byte-identical (same manifest hash 603464e7...), as are tests/targets.json and environment/app/days/targets.json (b97e3aa0...). So the grader applies exactly the candidate-visible rules and targets, and stand-rules.md:4 names that checker as authoritative.",
+    "Confirmed that the verifier's day copies are pinned by SHA-256 and by stand, turn and transfer counts to bytes equal to the environment day files (test_outputs.py:30-40, roster.json, packet-manifest.json:12-15). Editing /app/days cannot change the graded instance.",
+    "Traced evaluate() rule by rule against stand-rules.md:33-44. Exactly-one-stand: 'placed twice' at check_plan.py:91-92 and 'missing' at :94-96. Size: :103. International: :105. Buffer: :107-110. Wingtip: :112-118.",
+    "Proved that the adjacent-pair buffer check is equivalent to the pairwise rule. After sorting by arrival, if every adjacent pair satisfies d_i + b <= a_{i+1}, then a_{i+1} <= d_{i+1} gives transitivity for non-adjacent pairs. The other disjunct (d2 + b <= a1 with a1 <= a2 <= d2) is impossible for b = 15 > 0, the value in all four days.",
+    "Checked that the wingtip check uses strict overlap with no buffer and considers only size-3 turns, matching stand-rules.md:41-44. Touching times are accepted.",
+    "Traced the cost at check_plan.py:120-131. The bus charge covers every turn on a remote stand at bus_cost_per_passenger * (pax_in + pax_out). The walking charge applies to every transfer at walk[idx[from_stand]][idx[to_stand]], including the non-zero diagonal and the charge added to bus costs, matching stand-rules.md:48-59.",
+    "Checked that the pass condition is cost <= target, matching instruction.md:1 'costs no more than the day's target' (test_outputs.py:53-55). Both the validity test and the target test must pass for each of the four days, and reward is 1 only when pytest exits 0 (test.sh:15-21).",
+    "Plausible wrong plans traced as rejected: a missing turn, a duplicated turn, a turn on an unknown stand, an oversize turn, an international turn on a domestic stand, a buffer violation, a concurrent widebody wingtip pair, a non-string turn id, a stands value that is not a list, a missing 'stands' object, a missing plan file (test_outputs.py:45), and a valid plan above the target. A candidate cannot lower its graded cost by editing /app/days or /app/tools, because the grader uses its own copies and imports check_plan from /tests under python -I.",
+    "Contract-valid alternatives traced as accepted: any turn order within a stand list (the checker sorts), omitted stands or empty lists (.items() and .get(a, [])), extra top-level keys (only 'stands' is read), any whitespace or indentation, and a file of exactly 2,000,000 bytes ('>' comparison at :61).",
+    "Checked that the file-format restrictions in stand-rules.md:69-74 are enforced as written and no stricter. A BOM is rejected through JSONDecodeError. NaN and Infinity are rejected through parse_constant. The 4300-digit limit counts all digits (:26-28), consistent with sys.set_int_max_str_digits(4300). Duplicate names are rejected (:40-46). Depth over 64 counting the top level as 1 is rejected (:49-56), and extreme nesting is caught as RecursionError (:70-71). Every raised error is a PlanError or is converted to one, so test_outputs.py:49-50 reports it as a failure rather than crashing.",
+    "Considered the existing greedy planner (plan_day.py) as the obvious plausible-incomplete answer. The verifier grades it by the same contract criterion (valid and cost <= target), so whether it falls above the target is a difficulty and solvability property of the targets, not a mismatch between verifier and contract. No packet evidence suggests that the grading differs from the contract for it."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails when it is missing or reversed",
+      "status": "checked",
+      "reason": "Each of the 4 validity rules, the exactly-one-stand requirement, the file-format limits, and the cost-versus-target condition has its own raising branch or assertion. Each of the four days has separate valid and target tests.",
+      "evidence": ["environment/app/docs/stand-rules.md:33-44", "tests/check_plan.py:78-118", "tests/test_outputs.py:43-87"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result (values, membership, uniqueness), not just existence",
+      "status": "checked",
+      "reason": "Membership of every turn, uniqueness of placement, known stand and turn ids, and the full cost recomputed from the pinned day data are all checked. Nothing is accepted on existence or schema alone.",
+      "evidence": ["tests/check_plan.py:83-96", "tests/check_plan.py:120-131", "tests/test_outputs.py:53-55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Each named domain rule has a case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "The verifier is a full rule checker applied to the candidate's own plan, not a fixture comparison. Any plan that violates size, international, buffer or wingtip on any placement is rejected, and a cost computation that omits the diagonal, the remote-transfer walk or the bus charge cannot make the verifier's own cost wrong. The wingtip rule is live data in every day (day-1 C01/C02, both size 3, at day-1.json:1280-1284).",
+      "evidence": ["tests/check_plan.py:103-118", "environment/app/days/day-1.json:1280-1285", "environment/app/docs/stand-rules.md:55-58"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Traced these as rejected: incomplete plans, duplicate placements, rule violations, a missing file, a cost above the target, and attempts to make the graded instance or checker easier by editing /app/days or /app/tools.",
+      "evidence": ["tests/test_outputs.py:30-50", "tests/check_plan.py:83-118", "tests/test.sh:15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives (ordering, formatting, omitted stands, extra keys) are accepted",
+      "status": "checked",
+      "reason": "Any list order, omitted or empty stands, extra top-level keys and arbitrary whitespace are all accepted. The size boundary is inclusive. No undocumented output restriction was found.",
+      "evidence": ["environment/app/docs/stand-rules.md:63-74", "tests/check_plan.py:59-73", "tests/check_plan.py:107", "tests/check_plan.py:113-114"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle behavior are enforced",
+      "status": "checked",
+      "reason": "The only restriction is 'only the four plan files are used; no network, no installs' (instruction.md:3). This is a constraint on the environment, not a graded promise. The file-format restrictions are enforced exactly as documented. There is no lifecycle, recovery or cleanup obligation.",
+      "evidence": ["instruction.md:3", "environment/app/docs/stand-rules.md:69-74", "tests/check_plan.py:59-73"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "No Oracle output or golden plan is compared. The grader does not run candidate code. The expected values (targets and day data) are verifier-owned and hash-pinned. All 8 tests are reachable for any submission.",
+      "evidence": ["tests/test_outputs.py:1-7", "tests/test_outputs.py:21-40", "tests/Dockerfile:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Initialization-to-first-event state transitions",
+      "status": "not_applicable",
+      "reason": "Grading is a static evaluation of one plan per day, with no state machine. The buffer check has no special first-turn branch: sorting plus adjacent pairs covers the first pair with no initial sentinel.",
+      "evidence": ["tests/check_plan.py:107-110"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities / sign partitions",
+      "status": "not_applicable",
+      "reason": "Cost is a sum of non-negative products. The only comparison is cost <= target on integers, and no signed quantity is graded.",
+      "evidence": ["tests/check_plan.py:122-131", "tests/test_outputs.py:55"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content versus native encoding / layout / package shape / diagnostic output",
+      "status": "checked",
+      "reason": "Plans are parsed as JSON and graded semantically. The byte-level constraints enforced (UTF-8, no BOM, size, digits, depth, duplicate names) are each promised in stand-rules.md:69-74. Candidate stdout is not graded.",
+      "evidence": ["environment/app/docs/stand-rules.md:69-74", "tests/check_plan.py:59-73"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localization",
+      "status": "checked",
+      "reason": "Separate tests for validity and target per day. PlanError messages name the stand, turn and rule, and target failures report cost versus target.",
+      "evidence": ["tests/test_outputs.py:50", "tests/test_outputs.py:55", "tests/test_outputs.py:58-87"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["buffer separation on one stand (rule 3)", "wingtip clash without buffer (rule 4)"],
+      "case_or_path": "Two size-3 turns on C01 and C02 where one departs at the same minute the other arrives. The wingtip check uses strict < on both sides, so this is accepted, as documented. The same pair on one stand would need depart + 15 <= arrive, and the buffer check enforces that separately.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:38-44", "tests/check_plan.py:107-118"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["remote bus charge", "transfer walking charge including remote stands and the diagonal"],
+      "case_or_path": "A transfer from a turn on R01 to another turn on R01 is charged the diagonal walk entry (non-zero), plus the bus charge for each turn once. The code adds both independently, with no special-casing of same-stand or remote transfers.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:50-58", "tests/check_plan.py:122-130", "environment/app/days/day-1.json:1272-1277"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["exactly one stand per turn", "stand may be omitted or empty"],
+      "case_or_path": "A plan that lists only the non-empty stands passes the membership check. The wingtip lookup uses .get(a, []) for omitted stands, so no KeyError can turn a valid plan into an error.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:66-67", "tests/check_plan.py:83-96", "tests/check_plan.py:113-114"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["file-format limits (digits, depth, duplicate names)", "extra top-level keys ignored"],
+      "case_or_path": "An ignored extra key holding a number with 4301 digits, 65 nesting levels, or a duplicated name is rejected. The rules document states these limits for the whole file, not only for 'stands', so the rejection is contract-backed.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/stand-rules.md:67-74", "tests/check_plan.py:26-56"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["verifier-owned day copy", "candidate-writable /app/days"],
+      "case_or_path": "A candidate edits /app/days/day-1.json to shrink walk distances and writes a plan that is cheap only under the edited data. The verifier evaluates against its own gz copy, pinned by SHA-256 to the original bytes, so the plan is graded at its true cost.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:30-40", "tests/days/roster.json:1-26", "packet-manifest.json:12-15"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

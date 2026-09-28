@@ -1,0 +1,131 @@
+diff --git a/app/src/commission/bonus.py b/app/src/commission/bonus.py
+--- a/app/src/commission/bonus.py
++++ b/app/src/commission/bonus.py
+@@ -2,6 +2,8 @@
+ 
+ from .figures import figure
+ from .money import rep_share, share_of
++
++NEW_LOGO_CENTS = 250000  # plan 2.4
+ 
+ 
+ def bonus_lines(counted):
+@@ -11,7 +13,7 @@
+         if not first:
+             continue
+         credit = rep_share(value, split)
+-        if credit < figure("bonus_floor"):
++        if value < NEW_LOGO_CENTS and credit < figure("bonus_floor"):
+             lines.append(0)
+         else:
+             lines.append(share_of(credit, figure("bonus_rate")))
+diff --git a/app/src/commission/bookings.py b/app/src/commission/bookings.py
+--- a/app/src/commission/bookings.py
++++ b/app/src/commission/bookings.py
+@@ -1,6 +1,7 @@
+ """A rep's bookings for the quarter."""
+ 
+ from .dates import in_quarter, parse_day
++from .money import rep_share
+ 
+ 
+ def quarter_orders(orders, quarter):
+@@ -15,6 +16,6 @@
+ def bookings(orders, quarter):
+     """The rep's bookings in cents."""
+     total = 0
+-    for value, _split, _first in quarter_orders(orders, quarter):
+-        total += value
++    for value, split, _first in quarter_orders(orders, quarter):
++        total += rep_share(value, split)
+     return total
+diff --git a/app/src/commission/clawback.py b/app/src/commission/clawback.py
+--- a/app/src/commission/clawback.py
++++ b/app/src/commission/clawback.py
+@@ -3,6 +3,8 @@
+ from .dates import days_between, in_quarter, parse_day
+ from .figures import figure
+ from .money import rep_share, share_of
++
++REVERSAL_CENTS = 50000  # plan 2.3
+ 
+ 
+ def clawback_lines(credits, quarter):
+@@ -11,7 +13,8 @@
+     for raised, booked, amount, split in credits:
+         if not in_quarter(parse_day(raised), quarter):
+             continue
+-        if days_between(booked, raised) > figure("clawback_age"):
++        limit = figure("reversal_age") if amount >= REVERSAL_CENTS else figure("clawback_age")
++        if days_between(booked, raised) > limit:
+             lines.append(0)
+             continue
+         lines.append(share_of(rep_share(amount, split), figure("clawback_rate")))
+diff --git a/app/src/commission/commission.py b/app/src/commission/commission.py
+--- a/app/src/commission/commission.py
++++ b/app/src/commission/commission.py
+@@ -1,17 +1,19 @@
+ """Commission on bookings against quota."""
+ 
+ from .figures import figure
++from .money import share_of
+ 
+ 
+-def band_rate(bookings, quota):
+-    """The rate in basis points of the band the bookings reach."""
+-    if bookings > 2 * quota:
+-        return figure("top_rate")
+-    if bookings > quota:
+-        return figure("above_quota_rate")
+-    return figure("band_rate")
++def bands(bookings, quota):
++    """The parts of the bookings up to the quota, up to twice the quota, and above that."""
++    low = min(bookings, quota)
++    mid = min(max(bookings - quota, 0), quota - 1)
++    top = max(bookings - 2 * quota + 1, 0)
++    return low, mid, top
+ 
+ 
+ def commission(bookings, quota):
+-    """The rep's commission in cents."""
+-    return bookings * band_rate(bookings, quota) // 10000
++    """The rep's commission in cents: each band at its own rate, rounded on its own."""
++    low, mid, top = bands(bookings, quota)
++    return (share_of(low, figure("band_rate")) + share_of(mid, figure("above_quota_rate"))
++            + share_of(top, figure("top_rate")))
+diff --git a/app/src/commission/figures.py b/app/src/commission/figures.py
+--- a/app/src/commission/figures.py
++++ b/app/src/commission/figures.py
+@@ -8,6 +8,8 @@
+     "logo_bp": 300,
+     "window_days": 90,
+     "small_cents": 10000,
++    "reversal_days": 120,
++    "payment_cents": 25000,
+ }
+ 
+ # Which figure each use of the package reads.
+@@ -17,9 +19,10 @@
+     "top_rate": "top_bp",
+     "clawback_rate": "base_bp",
+     "clawback_age": "window_days",
++    "reversal_age": "reversal_days",
+     "bonus_rate": "logo_bp",
+     "bonus_floor": "small_cents",
+-    "minimum_payment": "small_cents",
++    "minimum_payment": "payment_cents",
+ }
+ 
+ 
+diff --git a/app/src/commission/payout.py b/app/src/commission/payout.py
+--- a/app/src/commission/payout.py
++++ b/app/src/commission/payout.py
+@@ -7,7 +7,7 @@
+     """(recovered, owed, paid, carried) in cents for a rep's total."""
+     if total < draw:
+         return 0, owed + draw - total, draw, 0
+-    recovered = min(owed, total)
++    recovered = min(owed, total - draw)
+     due = total - recovered
+     owed -= recovered
+     if draw == 0 and due < figure("minimum_payment"):

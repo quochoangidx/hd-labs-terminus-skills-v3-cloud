@@ -1,0 +1,1595 @@
+[?2004hroot@c5deb98b1c63:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@c5deb98b1c63:/app# clear
+[?2004l[H[J[3J[?2004hroot@c5deb98b1c63:/app# find /app -maxdepth 3 -type f -printf '%p\n' | sort
+[?2004l/app/README.md
+/app/docs/dispatch-rules.md
+/app/orders/harbour-lanes.json
+/app/orders/north-ring.json
+/app/orders/old-town.json
+/app/orders/riverside.json
+/app/orders/targets.json
+/app/planner/plan_morning.py
+/app/tools/check_plan.py
+[?2004hroot@c5deb98b1c63:/app# cat /app/docs/dispatch-rules.md && printf '\n--- TARGETS ---\n' && cat /app/orders/targets.json
+[?2004l# Morning dispatch rules
+
+These rules decide whether a delivery plan can be run and what it costs. They
+are the rules `tools/check_plan.py` applies.
+
+## Orders
+
+Each file in `orders/` is one morning. It lists the bakery (`depot`), the
+customers to deliver to, and the vehicles available (`fleet`). Positions are
+integer grid coordinates `x`, `y` in units of 100 m; times are seconds after
+midnight. The bakery opens at `open` and closes at `close`.
+
+A customer has an integer `id`, a position, a `demand` in crates, a delivery
+window `ready`..`due`, and a `service` time in seconds for unloading. Its
+`kind` (cafe, grocer, hotel, market) is for information only and changes no
+rule.
+
+A fleet entry is one kind of vehicle, named by its `type`: `count` vehicles of it are available,
+each carrying up to `capacity` crates. It travels at `pace` seconds per unit of
+distance, costs `fixed` for being used at all and `per_unit` for every unit of
+distance it drives, may be out for at most `shift` seconds from leaving the
+bakery to getting back, and, where `range` is not null, may drive at most
+`range` units of distance in the morning. Costs are in cents.
+
+## Distance and time
+
+The distance between two points is the Euclidean distance between them,
+rounded up to a whole unit. A vehicle takes `distance * pace` seconds to drive
+it.
+
+## A route
+
+A route is one vehicle's morning: it leaves the bakery at its departure time,
+visits its customers in order, and comes back. Every route visits at least one
+customer, and each vehicle runs at most one route.
+
+- The departure is a whole number of seconds, not before the bakery opens.
+- At each customer the vehicle unloads from the later of its arrival and the
+  customer's `ready` time, and that must not be after `due`. Unloading takes the
+  customer's `service` time; the vehicle leaves as soon as it is done.
+- The vehicle must be back at the bakery no later than it closes, and no more
+  than `shift` seconds after its departure.
+- The crates on the route (the sum of its customers' demands) must fit the
+  vehicle's `capacity`, and the distance driven must be within its `range`
+  where it has one. The distance driven is the sum of the rounded legs, from
+  the bakery through each customer in turn and back to the bakery.
+
+## A plan
+
+A plan delivers to every customer of the morning exactly once, uses no more
+vehicles of a kind than the fleet has, and costs the sum over its routes of the
+vehicle's `fixed` cost plus `per_unit` times the route's distance.
+
+It is written as JSON:
+
+    {"routes": [{"type": "van", "depart": 18000, "stops": [12, 4, 31]}, ...]}
+
+where `type` names a fleet entry, `depart` is the departure time as a JSON
+integer (`18000`, not `18000.0`) and `stops` lists customer ids, as the
+integers in the orders file, in visiting order. Other keys are ignored.
+
+--- TARGETS ---
+{
+ "harbour-lanes": 77867,
+ "old-town": 147362,
+ "riverside": 201921,
+ "north-ring": 288705
+}[?2004hroot@c5deb98b1c63:/app# printf '%s\n' '--- CHECKER ---'; sed -n '1,260p' /app/tools/check_plan.py; printf '%s\n' '--- PLANNER ---'; sed -n '1,320p' /app/planner/plan_morning.py
+[?2004l--- CHECKER ---
+"""Check a delivery plan against docs/dispatch-rules.md and print its cost.
+
+Usage: python3 tools/check_plan.py orders/<morning>.json plans/<morning>.json
+"""
+
+import json
+import math
+import sys
+
+
+class PlanError(ValueError):
+    pass
+
+
+def distance(a, b):
+    sq = (a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2
+    d = math.isqrt(sq)
+    return d if d * d == sq else d + 1
+
+
+def evaluate(orders, plan):
+    depot = orders["depot"]
+    customers = {c["id"]: c for c in orders["customers"]}
+    fleet = {f["type"]: f for f in orders["fleet"]}
+    used = {t: 0 for t in fleet}
+    served = set()
+    total = 0
+    if not isinstance(plan, dict) or not isinstance(plan.get("routes"), list):
+        raise PlanError("a plan is a JSON object with a routes list")
+    for number, route in enumerate(plan["routes"], start=1):
+        where = f"route {number}"
+        if not isinstance(route, dict):
+            raise PlanError(f"{where}: not a JSON object")
+        kind = fleet.get(route.get("type")) if isinstance(route.get("type"), str) else None
+        if kind is None:
+            raise PlanError(f"{where}: unknown vehicle type {route.get('type')!r}")
+        stops = route.get("stops")
+        if not isinstance(stops, list) or not stops:
+            raise PlanError(f"{where}: no stops")
+        depart = route.get("depart")
+        if not isinstance(depart, int) or isinstance(depart, bool) or depart < depot["open"]:
+            raise PlanError(f"{where}: departure must be a whole second, not before opening")
+        used[route["type"]] += 1
+        clock, here, crates, driven = depart, depot, 0, 0
+        for cid in stops:
+            if not isinstance(cid, int) or isinstance(cid, bool) or cid not in customers:
+                raise PlanError(f"{where}: unknown customer {cid!r}")
+            if cid in served:
+                raise PlanError(f"{where}: customer {cid} delivered twice")
+            served.add(cid)
+            customer = customers[cid]
+            leg = distance(here, customer)
+            driven += leg
+            start = max(clock + leg * kind["pace"], customer["ready"])
+            if start > customer["due"]:
+                raise PlanError(f"{where}: customer {cid} reached at {start}, after its window closes at {customer['due']}")
+            clock = start + customer["service"]
+            crates += customer["demand"]
+            here = customer
+        leg = distance(here, depot)
+        driven += leg
+        back = clock + leg * kind["pace"]
+        if back > depot["close"]:
+            raise PlanError(f"{where}: back at {back}, after the bakery closes")
+        if back - depart > kind["shift"]:
+            raise PlanError(f"{where}: out for {back - depart} s, longer than the {kind['shift']} s shift")
+        if crates > kind["capacity"]:
+            raise PlanError(f"{where}: {crates} crates on a vehicle that carries {kind['capacity']}")
+        if kind["range"] is not None and driven > kind["range"]:
+            raise PlanError(f"{where}: drives {driven} units, beyond its range of {kind['range']}")
+        total += kind["fixed"] + kind["per_unit"] * driven
+    for name, count in used.items():
+        if count > fleet[name]["count"]:
+            raise PlanError(f"{count} routes use a {name}; only {fleet[name]['count']} are available")
+    missing = sorted(set(customers) - served)
+    if missing:
+        raise PlanError(f"{len(missing)} customers get no delivery, first {missing[:5]}")
+    return total
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.exit(__doc__)
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    with open(argv[2]) as fh:
+        plan = json.load(fh)
+    try:
+        cost = evaluate(orders, plan)
+    except PlanError as exc:
+        print(f"INFEASIBLE: {exc}")
+        return 1
+    print(f"feasible, cost {cost}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+--- PLANNER ---
+"""Current dispatch planner: nearest-next greedy, vans first.
+
+Usage: python3 planner/plan_morning.py orders/<morning>.json plans/<morning>.json
+
+Builds one route at a time. A route leaves when the bakery opens and keeps
+driving to the nearest customer it can still reach inside that customer's window
+with room on board; when nothing fits, it goes home and the next vehicle starts.
+"""
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from check_plan import distance, evaluate  # noqa: E402
+
+ORDER = ("van", "truck", "bike")
+
+
+def plan(orders):
+    depot = orders["depot"]
+    left = {c["id"]: c for c in orders["customers"]}
+    fleet = sorted(orders["fleet"], key=lambda f: ORDER.index(f["type"]) if f["type"] in ORDER else 99)
+    routes = []
+    for kind in fleet:
+        for _ in range(kind["count"]):
+            if not left:
+                break
+            clock, here, crates, driven, stops = depot["open"], depot, 0, 0, []
+            while True:
+                best = None
+                for c in left.values():
+                    leg = distance(here, c)
+                    start = max(clock + leg * kind["pace"], c["ready"])
+                    if start > c["due"] or crates + c["demand"] > kind["capacity"]:
+                        continue
+                    back = start + c["service"] + distance(c, depot) * kind["pace"]
+                    if back > depot["close"] or back - depot["open"] > kind["shift"]:
+                        continue
+                    total = driven + leg + distance(c, depot)
+                    if kind["range"] is not None and total > kind["range"]:
+                        continue
+                    if best is None or leg < best[0]:
+                        best = (leg, c, start)
+                if best is None:
+                    break
+                leg, c, start = best
+                stops.append(c["id"])
+                clock, here, crates, driven = start + c["service"], c, crates + c["demand"], driven + leg
+                del left[c["id"]]
+            if stops:
+                routes.append({"type": kind["type"], "depart": depot["open"], "stops": stops})
+    return {"routes": routes}
+
+
+def main(argv):
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    result = plan(orders)
+    with open(argv[2], "w") as fh:
+        json.dump(result, fh, indent=1)
+    try:
+        print("cost", evaluate(orders, result))
+    except ValueError as exc:
+        print("INFEASIBLE:", exc)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
+[?2004hroot@c5deb98b1c63:/app# for f in /app/orders/*.json; do echo "--- $f ---"; python3 - "$f" <<'PY'
+[?2004l[?2004h> import json,sys
+[?2004l[?2004h> p=sys.argv[1]; x=json.load(open(p))
+[?2004l[?2004h> print(type(x).__name__)
+[?2004l[?2004h> if isinstance(x,dict):
+[?2004l[?2004h>  print('keys:',list(x))
+[?2004l[?2004h>  for k,v in x.items():
+[?2004l[?2004h>   if isinstance(v,list): print(k,'count',len(v),'sample',v[:3])
+[?2004l[?2004h>   else: print(k,repr(v))
+[?2004l[?2004h> else: print('count',len(x),'sample',x[:3])
+[?2004l[?2004h> PY
+[?2004l[?2004h> done
+[?2004l--- /app/orders/harbour-lanes.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name 'harbour-lanes'
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+customers count 60 sample [{'id': 1, 'x': 99, 'y': 25, 'demand': 2, 'ready': 32400, 'due': 37800, 'service': 290, 'kind': 'cafe'}, {'id': 2, 'x': 155, 'y': -80, 'demand': 14, 'ready': 18000, 'due': 21600, 'service': 590, 'kind': 'grocer'}, {'id': 3, 'x': 147, 'y': -145, 'demand': 13, 'ready': 28800, 'due': 32400, 'service': 565, 'kind': 'grocer'}]
+fleet count 3 sample [{'type': 'bike', 'count': 5, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 7, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 3, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+--- /app/orders/north-ring.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name 'north-ring'
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+customers count 220 sample [{'id': 1, 'x': 66, 'y': -48, 'demand': 24, 'ready': 16200, 'due': 21600, 'service': 840, 'kind': 'market'}, {'id': 2, 'x': 18, 'y': -53, 'demand': 12, 'ready': 21600, 'due': 24300, 'service': 540, 'kind': 'grocer'}, {'id': 3, 'x': 4, 'y': -48, 'demand': 2, 'ready': 23400, 'due': 27000, 'service': 290, 'kind': 'cafe'}]
+fleet count 3 sample [{'type': 'bike', 'count': 18, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 27, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 11, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+--- /app/orders/old-town.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name 'old-town'
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+customers count 110 sample [{'id': 1, 'x': 7, 'y': -22, 'demand': 33, 'ready': 16200, 'due': 21600, 'service': 1065, 'kind': 'market'}, {'id': 2, 'x': -15, 'y': -20, 'demand': 11, 'ready': 21600, 'due': 32400, 'service': 515, 'kind': 'grocer'}, {'id': 3, 'x': 42, 'y': -44, 'demand': 25, 'ready': 16200, 'due': 21600, 'service': 865, 'kind': 'market'}]
+fleet count 3 sample [{'type': 'bike', 'count': 9, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 13, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 5, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+--- /app/orders/riverside.json ---
+dict
+keys: ['name', 'depot', 'customers', 'fleet']
+name 'riverside'
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+customers count 160 sample [{'id': 1, 'x': 49, 'y': 102, 'demand': 32, 'ready': 16200, 'due': 21600, 'service': 1040, 'kind': 'market'}, {'id': 2, 'x': 123, 'y': 40, 'demand': 4, 'ready': 32400, 'due': 36000, 'service': 340, 'kind': 'cafe'}, {'id': 3, 'x': 125, 'y': 20, 'demand': 6, 'ready': 28800, 'due': 32400, 'service': 390, 'kind': 'grocer'}]
+fleet count 3 sample [{'type': 'bike', 'count': 13, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 20, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 8, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+--- /app/orders/targets.json ---
+dict
+keys: ['harbour-lanes', 'old-town', 'riverside', 'north-ring']
+harbour-lanes 77867
+old-town 147362
+riverside 201921
+north-ring 288705
+[?2004hroot@c5deb98b1c63:/app# cat /app/README.md; printf '\n--- FULL PLANNER ---\n'; cat /app/planner/plan_morning.py
+[?2004l# Morning dispatch
+
+Wholesale deliveries from the bakery: cafes, grocers, hotels and the two market
+halls, by cargo bike, van and truck.
+
+- `orders/` - one file per morning: customers, windows, crates, and the vehicles on hand
+- `docs/dispatch-rules.md` - what makes a plan runnable and what it costs
+- `tools/check_plan.py` - checks a plan and prints its cost
+- `planner/plan_morning.py` - the planner in use today
+- `plans/` - the plans dispatch will run
+
+    python3 planner/plan_morning.py orders/old-town.json plans/old-town.json
+    python3 tools/check_plan.py orders/old-town.json plans/old-town.json
+
+--- FULL PLANNER ---
+"""Current dispatch planner: nearest-next greedy, vans first.
+
+Usage: python3 planner/plan_morning.py orders/<morning>.json plans/<morning>.json
+
+Builds one route at a time. A route leaves when the bakery opens and keeps
+driving to the nearest customer it can still reach inside that customer's window
+with room on board; when nothing fits, it goes home and the next vehicle starts.
+"""
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from check_plan import distance, evaluate  # noqa: E402
+
+ORDER = ("van", "truck", "bike")
+
+
+def plan(orders):
+    depot = orders["depot"]
+    left = {c["id"]: c for c in orders["customers"]}
+    fleet = sorted(orders["fleet"], key=lambda f: ORDER.index(f["type"]) if f["type"] in ORDER else 99)
+    routes = []
+    for kind in fleet:
+        for _ in range(kind["count"]):
+            if not left:
+                break
+            clock, here, crates, driven, stops = depot["open"], depot, 0, 0, []
+            while True:
+                best = None
+                for c in left.values():
+                    leg = distance(here, c)
+                    start = max(clock + leg * kind["pace"], c["ready"])
+                    if start > c["due"] or crates + c["demand"] > kind["capacity"]:
+                        continue
+                    back = start + c["service"] + distance(c, depot) * kind["pace"]
+                    if back > depot["close"] or back - depot["open"] > kind["shift"]:
+                        continue
+                    total = driven + leg + distance(c, depot)
+                    if kind["range"] is not None and total > kind["range"]:
+                        continue
+                    if best is None or leg < best[0]:
+                        best = (leg, c, start)
+                if best is None:
+                    break
+                leg, c, start = best
+                stops.append(c["id"])
+                clock, here, crates, driven = start + c["service"], c, crates + c["demand"], driven + leg
+                del left[c["id"]]
+            if stops:
+                routes.append({"type": kind["type"], "depart": depot["open"], "stops": stops})
+    return {"routes": routes}
+
+
+def main(argv):
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    result = plan(orders)
+    with open(argv[2], "w") as fh:
+        json.dump(result, fh, indent=1)
+    try:
+        print("cost", evaluate(orders, result))
+    except ValueError as exc:
+        print("INFEASIBLE:", exc)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
+[?2004hroot@c5deb98b1c63:/app# mkdir -p /app/plans; for n in harbour-lanes old-town riverside north-ring; do echo "=== $n planner ==="; python3 /app/planner/plan_morning.py /app/orders/$n.json /app/plans/$n.json; echo "=== $n checker ==="; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json || true; done
+[?2004l=== harbour-lanes planner ===
+INFEASIBLE: 3 customers get no delivery, first [2, 17, 28]
+=== harbour-lanes checker ===
+INFEASIBLE: 3 customers get no delivery, first [2, 17, 28]
+=== old-town planner ===
+INFEASIBLE: 4 customers get no delivery, first [8, 30, 62, 73]
+=== old-town checker ===
+INFEASIBLE: 4 customers get no delivery, first [8, 30, 62, 73]
+=== riverside planner ===
+cost 313212
+=== riverside checker ===
+feasible, cost 313212
+=== north-ring planner ===
+cost 425927
+=== north-ring checker ===
+feasible, cost 425927
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,collections,math
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); cs=o['customers']
+[?2004l[?2004h>  print('\n',n,'customers',len(cs),'demand',sum(c['demand'] for c in cs))
+[?2004l[?2004h>  print('windows',sorted(collections.Counter((c['ready'],c['due']) for c in cs).items()))
+[?2004l[?2004h>  print('demand bands',collections.Counter('bike' if c['demand']<=14 else 'van' if c['demand']<=60 else 'truck' for c in cs))
+[?2004l[?2004h>  p=json.load(open('/app/plans/'+n+'.json'))
+[?2004l[?2004h>  print('baseline routes',collections.Counter(r['type'] for r in p['routes']),'served',sum(map(lambda r:len(r['stops']),p['routes'])))
+[?2004l[?2004h> PY
+[?2004l
+ harbour-lanes customers 60 demand 616
+windows [((16200, 21600), 5), ((18000, 21600), 5), ((18000, 25200), 1), ((19800, 23400), 2), ((19800, 25200), 2), ((19800, 27000), 1), ((21600, 24300), 2), ((21600, 25200), 4), ((21600, 27000), 1), ((21600, 28800), 3), ((21600, 32400), 2), ((23400, 27000), 2), ((23400, 34200), 1), ((25200, 27900), 3), ((25200, 28800), 3), ((25200, 30600), 3), ((25200, 32400), 1), ((25200, 36000), 2), ((27000, 30600), 3), ((27000, 32400), 1), ((28800, 31500), 2), ((28800, 32400), 4), ((28800, 34200), 1), ((28800, 36000), 2), ((28800, 39600), 1), ((32400, 37800), 3)]
+demand bands Counter({'bike': 49, 'van': 11})
+baseline routes Counter({'van': 7, 'truck': 3}) served 57
+
+ old-town customers 110 demand 1282
+windows [((16200, 21600), 12), ((18000, 20700), 1), ((18000, 21600), 1), ((18000, 23400), 2), ((18000, 25200), 2), ((18000, 28800), 2), ((19800, 23400), 3), ((19800, 25200), 1), ((19800, 30600), 1), ((21600, 24300), 6), ((21600, 25200), 5), ((21600, 27000), 3), ((21600, 28800), 3), ((21600, 32400), 5), ((23400, 26100), 1), ((23400, 28800), 3), ((23400, 34200), 1), ((25200, 27900), 3), ((25200, 28800), 8), ((25200, 30600), 3), ((25200, 32400), 3), ((25200, 36000), 5), ((27000, 29700), 1), ((27000, 30600), 2), ((27000, 37800), 2), ((28800, 31500), 2), ((28800, 32400), 4), ((28800, 34200), 5), ((28800, 36000), 4), ((28800, 39600), 1), ((32400, 35100), 5), ((32400, 36000), 4), ((32400, 37800), 1), ((32400, 39600), 2), ((32400, 43200), 3)]
+demand bands Counter({'bike': 83, 'van': 27})
+baseline routes Counter({'van': 13, 'truck': 5}) served 106
+
+ riverside customers 160 demand 1786
+windows [((16200, 21600), 15), ((18000, 20700), 3), ((18000, 21600), 6), ((18000, 23400), 2), ((18000, 25200), 3), ((18000, 28800), 4), ((19800, 22500), 3), ((19800, 23400), 3), ((19800, 25200), 3), ((19800, 27000), 2), ((19800, 30600), 3), ((21600, 24300), 4), ((21600, 25200), 8), ((21600, 27000), 3), ((21600, 28800), 6), ((21600, 32400), 2), ((23400, 27000), 7), ((23400, 28800), 4), ((23400, 30600), 2), ((23400, 34200), 2), ((25200, 27900), 4), ((25200, 28800), 15), ((25200, 30600), 3), ((25200, 32400), 4), ((25200, 36000), 2), ((27000, 29700), 1), ((27000, 30600), 6), ((27000, 32400), 2), ((27000, 34200), 1), ((27000, 37800), 2), ((28800, 31500), 6), ((28800, 32400), 5), ((28800, 34200), 5), ((28800, 36000), 3), ((28800, 39600), 5), ((32400, 35100), 2), ((32400, 36000), 4), ((32400, 39600), 2), ((32400, 43200), 3)]
+demand bands Counter({'bike': 119, 'van': 41})
+baseline routes Counter({'van': 20, 'truck': 8}) served 160
+
+ north-ring customers 220 demand 2686
+windows [((16200, 21600), 29), ((18000, 20700), 2), ((18000, 21600), 4), ((18000, 23400), 2), ((18000, 25200), 4), ((18000, 28800), 2), ((19800, 22500), 3), ((19800, 23400), 10), ((19800, 25200), 2), ((19800, 27000), 5), ((19800, 30600), 2), ((21600, 24300), 8), ((21600, 25200), 11), ((21600, 27000), 8), ((21600, 28800), 3), ((21600, 32400), 3), ((23400, 26100), 3), ((23400, 27000), 11), ((23400, 28800), 4), ((23400, 30600), 2), ((23400, 34200), 2), ((25200, 27900), 7), ((25200, 28800), 14), ((25200, 30600), 7), ((25200, 32400), 6), ((25200, 36000), 7), ((27000, 29700), 3), ((27000, 30600), 7), ((27000, 32400), 4), ((27000, 34200), 4), ((27000, 37800), 1), ((28800, 31500), 1), ((28800, 32400), 5), ((28800, 34200), 5), ((28800, 36000), 2), ((28800, 39600), 5), ((32400, 35100), 3), ((32400, 36000), 8), ((32400, 37800), 5), ((32400, 39600), 2), ((32400, 43200), 4)]
+demand bands Counter({'bike': 159, 'van': 61})
+baseline routes Counter({'van': 27, 'truck': 11}) served 220
+[?2004hroot@c5deb98b1c63:/app# cat > /app/solve.py <<'PY'
+[?2004l'range']: return None
+        # Latest departure permitting all due times and closing time.
+        t=dep['close']-D[seq[-1],0]*k['pace']
+        for i in range(len(seq)-1,-1,-1):
+            c=C[seq[i]]
+            start=min(c['due'],t-c['service'])
+            if start<c['ready']: return None
+            t=start-(D[0,seq[i]] if i==0 else D[seq[i-1],seq[i]])*k['pace']
+        depart=max(dep['open'],t)
+        # Forward verification and duration.
+        clock=depart; here=0
+        for x in seq:
+            c=C[x]; clock=max(clock+D[here,x]*k['pace'],c['ready'])
+            if clock>c['due']: return None
+            clock+=c['service']; here=x
+        clock+=D[here,0]*k['pace']
+        if clock>dep['close'] or clock-depart>k['shift']: return None
+        return dd,depart,load
+
+    def build(rng):
+        routes=[[] for _ in vehicle_types]; meta=[None]*len(routes)
+        # Tight windows and large demands first, with randomized perturbation.
+        order=ids[:]
+        rng.shuffle(order)
+        order.sort(key=lambda x:(C[x]['due']+rng.randrange(-1800,1801), -C[x]['demand']))
+        un=set(order)
+        while un:
+            # Sample constrained early-due customers and use insertion regret.
+            pool=sorted(un,key=lambda x:C[x]['due'])[:min(18,len(un))]
+            if len(un)>18: pool += rng.sample(list(un-set(pool)),min(5,len(un)-18))
+            choices=[]
+            for x in pool:
+                cand=[]
+                for r,(seq,typ) in enumerate(zip(routes,vehicle_types)):
+                    if C[x]['demand']>kinds[typ]['capacity']-(meta[r][2] if meta[r] else 0): continue
+                    for p in range(len(seq)+1):
+                        ns=seq[:p]+[x]+seq[p:]
+                        z=info(ns,typ)
+                        if z:
+                            old=meta[r][0] if meta[r] else 0
+                            delta=(z[0]-old)*kinds[typ]['per_unit']
+                            # Preserve larger vehicles for demands bikes cannot carry.
+                            opp=0
+                            if C[x]['demand']<=14:
+                                opp={'bike':0,'van':1300,'truck':2400}[typ]
+                            elif typ=='truck': opp=900
+                            # Mild preference for filling already-open routes.
+                            openpen=250 if not seq else 0
+                            cand.append((delta+opp+openpen,r,p,z))
+                if not cand: continue
+                cand.sort(key=lambda q:q[0])
+                regret=(cand[min(3,len(cand)-1)][0]-cand[0][0]) if len(cand)>1 else 100000
+                urgency=400000/(1+len(cand))
+                choices.append((regret+urgency+rng.random()*800,cand,x))
+            if not choices: return None
+            _,cand,x=max(choices,key=lambda q:q[0])
+            # Randomized choice among the few best insertions.
+            lim=min(4,len(cand)); weights=[math.exp(-(cand[i][0]-cand[0][0])/1800) for i in range(lim)]
+            q=rng.choices(cand[:lim],weights=weights)[0]
+            _,r,p,z=q; routes[r].insert(p,x); m[?2004h> import json, math, random, sys, time, os
+[?2004l[?2004h> 
+[?2004l[?2004h> def dist(a,b):
+[?2004l[?2004h>     q=(a['x']-b['x'])**2+(a['y']-b['y'])**2
+[?2004l[?2004h>     r=math.isqrt(q); return r if r*r==q else r+1
+[?2004l[?2004h> 
+[?2004l[?2004h> def solve(path, out, seconds=12):
+[?2004l[?2004h>     o=json.load(open(path)); dep=o['depot']; C={c['id']:c for c in o['customers']}; ids=list(C)
+[?2004l[?2004h>     D={(a,b):dist(dep if a==0 else C[a],dep if b==0 else C[b]) for a in [0]+ids for b in [0]+ids if a!=b}
+[?2004leta[r]=z; un.remove(x)
+        if any(not s for s in routes):
+            # Empty vehicles are harmless, but should not normally occur.
+            pass
+        cost=sum((kinds[t]['fixed']+m[0]*kinds[t]['per_unit']) for s,t,m in zip(routes,vehicle_types,meta) if s)
+        return cost,routes,meta
+
+    best=None; start=time.time(); it=0
+    while time.time()-start<seconds:
+        z=build(random.Random(7919*it+[?2004h>     kinds={f['type']:f for f in o['fleet']}
+[?2004l[?2004h>     demand=sum(c['demand'] for c in C.values())
+[?2004l[?2004h>     base=kinds['bike']['count']*kinds['bike']['capacity']+kinds['van']['count']*kinds['van']['capacity']
+[?2004l[?2004h>     nt=max(0,math.ceil((demand-base)/kinds['truck']['capacity']))
+[?2004l[?2004h>     vehicle_types=['bike']*kinds['bike']['count']+['van']*kinds['van']['count']+['truck']*nt
+[?2004l[?2004h> 
+[?2004l[?2004h>     def info(seq, typ):
+[?2004l[?2004h>         k=kinds[typ]
+[?2004l[?2004h>         load=sum(C[x]['demand'] for x in seq)
+[?2004l[?2004h>         if load>k['capacity']: return None
+[?2004lip(routes,vehicle_types,meta) if s]}
+    os.makedirs(os.path.dirname(out),exist_ok=True); json.dump(plan,open(out,'w'),indent=1)
+    print(o['name'],'final',cost,'iterations',i[?2004h>         dd=D[0,seq[0]]+sum(D[a,b] for a,b in zip(seq,seq[1:]))+D[seq[-1],0]
+[?2004l[?2004h>         if k['range'] is not None and dd>k['range']: return None
+[?2004l[?2004h>         # Latest departure permitting all due times and closing time.
+[?2004l[?2004h>         t=dep['close']-D[seq[-1],0]*k['pace']
+[?2004lapp/solve.py /app/orders/$n.json /app/plans/$n.json 12; done
+[?2004h>         for i in range(len(seq)-1,-1,-1):
+[?2004l[?2004h>             c=C[seq[i]]
+[?2004l[?2004h>             start=min(c['due'],t-c['service'])
+[?2004l[?2004h>             if start<c['ready']: return None
+[?2004l[?2004h>             t=start-(D[0,seq[i]] if i==0 else D[seq[i-1],seq[i]])*k['pace']
+[?2004l[?2004h>         depart=max(dep['open'],t)
+[?2004l[?2004h>         # Forward verification and duration.
+[?2004l[?2004h>         clock=depart; here=0
+[?2004l[?2004h>         for x in seq:
+[?2004l[?2004h>             c=C[x]; clock=max(clock+D[here,x]*k['pace'],c['ready'])
+[?2004l[?2004h>             if clock>c['due']: return None
+[?2004l[?2004h>             clock+=c['service']; here=x
+[?2004l[?2004h>         clock+=D[here,0]*k['pace']
+[?2004l[?2004h>         if clock>dep['close'] or clock-depart>k['shift']: return None
+[?2004l[?2004h>         return dd,depart,load
+[?2004l[?2004h> 
+[?2004l[?2004h>     def build(rng):
+[?2004l[?2004h>         routes=[[] for _ in vehicle_types]; meta=[None]*len(routes)
+[?2004l[?2004h>         # Tight windows and large demands first, with randomized perturbation.
+[?2004l[?2004h>         order=ids[:]
+[?2004l[?2004h>         rng.shuffle(order)
+[?2004l[?2004h>         order.sort(key=lambda x:(C[x]['due']+rng.randrange(-1800,1801), -C[x]['demand']))
+[?2004l[?2004h>         un=set(order)
+[?2004l[?2004h>         while un:
+[?2004l[?2004h>             # Sample constrained early-due customers and use insertion regret.
+[?2004l[?2004h>             pool=sorted(un,key=lambda x:C[x]['due'])[:min(18,len(un))]
+[?2004l[?2004h>             if len(un)>18: pool += rng.sample(list(un-set(pool)),min(5,len(un)-18))
+[?2004l[?2004h>             choices=[]
+[?2004l[?2004h>             for x in pool:
+[?2004l[?2004h>                 cand=[]
+[?2004l[?2004h>                 for r,(seq,typ) in enumerate(zip(routes,vehicle_types)):
+[?2004l[?2004h>                     if C[x]['demand']>kinds[typ]['capacity']-(meta[r][2] if meta[r] else 0): continue
+[?2004l[?2004h>                     for p in range(len(seq)+1):
+[?2004l[?2004h>                         ns=seq[:p]+[x]+seq[p:]
+[?2004l[?2004h>                         z=info(ns,typ)
+[?2004l[?2004h>                         if z:
+[?2004l[?2004h>                             old=meta[r][0] if meta[r] else 0
+[?2004l[?2004h>                             delta=(z[0]-old)*kinds[typ]['per_unit']
+[?2004l[?2004h>                             # Preserve larger vehicles for demands bikes cannot carry.
+[?2004l[?2004h>                             opp=0
+[?2004l[?2004h>                             if C[x]['demand']<=14:
+[?2004l[?2004h>                                 opp={'bike':0,'van':1300,'truck':2400}[typ]
+[?2004l[?2004h>                             elif typ=='truck': opp=900
+[?2004l[?2004h>                             # Mild preference for filling already-open routes.
+[?2004l[?2004h>                             openpen=250 if not seq else 0
+[?2004l[?2004h>                             cand.append((delta+opp+openpen,r,p,z))
+[?2004l[?2004h>                 if not cand: continue
+[?2004l[?2004h>                 cand.sort(key=lambda q:q[0])
+[?2004l[?2004h>                 regret=(cand[min(3,len(cand)-1)][0]-cand[0][0]) if len(cand)>1 else 100000
+[?2004l[?2004h>                 urgency=400000/(1+len(cand))
+[?2004l[?2004h>                 choices.append((regret+urgency+rng.random()*800,cand,x))
+[?2004l[?2004h>             if not choices: return None
+[?2004l[?2004h>             _,cand,x=max(choices,key=lambda q:q[0])
+[?2004l[?2004h>             # Randomized choice among the few best insertions.
+[?2004l[?2004h>             lim=min(4,len(cand)); weights=[math.exp(-(cand[i][0]-cand[0][0])/1800) for i in range(lim)]
+[?2004l[?2004h>             q=rng.choices(cand[:lim],weights=weights)[0]
+[?2004l[?2004h>             _,r,p,z=q; routes[r].insert(p,x); meta[r]=z; un.remove(x)
+[?2004l[?2004h>         if any(not s for s in routes):
+[?2004l[?2004h>             # Empty vehicles are harmless, but should not normally occur.
+[?2004l[?2004h>             pass
+[?2004l[?2004h>         cost=sum((kinds[t]['fixed']+m[0]*kinds[t]['per_unit']) for s,t,m in zip(routes,vehicle_types,meta) if s)
+[?2004l[?2004h>         return cost,routes,meta
+[?2004l[?2004h> 
+[?2004l[?2004h>     best=None; start=time.time(); it=0
+[?2004l[?2004h>     while time.time()-start<seconds:
+[?2004l[?2004h>         z=build(random.Random(7919*it+hash(o['name'])%100000)); it+=1
+[?2004l[?2004h>         if z and (best is None or z[0]<best[0]):
+[?2004l[?2004h>             best=z; print(o['name'],'iteration',it,'cost',z[0],flush=True)
+[?2004l[?2004h>     if best is None: raise RuntimeError('no construction')
+[?2004l[?2004h>     cost,routes,meta=best
+[?2004l[?2004h>     plan={'routes':[{'type':t,'depart':int(m[1]),'stops':s} for s,t,m in zip(routes,vehicle_types,meta) if s]}
+[?2004l[?2004h>     os.makedirs(os.path.dirname(out),exist_ok=True); json.dump(plan,open(out,'w'),indent=1)
+[?2004l[?2004h>     print(o['name'],'final',cost,'iterations',it)
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__': solve(sys.argv[1],sys.argv[2],float(sys.argv[3]) if len(sys.argv)>3 else 12)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /app/solve.py /app/orders/$n.json /app/plans/$n.json 12; done
+[?2004lharbour-lanes iteration 12 cost 96428
+harbour-lanes final 96428 iterations 112
+Traceback (most recent call last):
+  File [35m"/app/solve.py"[0m, line [35m98[0m, in [35m<module>[0m
+    if __name__=='__main__': [31msolve[0m[1;31m(sys.argv[1],sys.argv[2],float(sys.argv[3]) if len(sys.argv)>3 else 12)[0m
+                             [31m~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/app/solve.py"[0m, line [35m92[0m, in [35msolve[0m
+    if best is None: [1;31mraise RuntimeError('no construction')[0m
+                     [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mRuntimeError[0m: [35mno construction[0m
+Traceback (most recent call last):
+  File [35m"/app/solve.py"[0m, line [35m98[0m, in [35m<module>[0m
+    if __name__=='__main__': [31msolve[0m[1;31m(sys.argv[1],sys.argv[2],float(sys.argv[3]) if len(sys.argv)>3 else 12)[0m
+                             [31m~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/app/solve.py"[0m, line [35m92[0m, in [35msolve[0m
+    if best is None: [1;31mraise RuntimeError('no construction')[0m
+                     [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mRuntimeError[0m: [35mno construction[0m
+Traceback (most recent call last):
+  File [35m"/app/solve.py"[0m, line [35m98[0m, in [35m<module>[0m
+    if __name__=='__main__': [31msolve[0m[1;31m(sys.argv[1],sys.argv[2],float(sys.argv[3]) if len(sys.argv)>3 else 12)[0m
+                             [31m~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/app/solve.py"[0m, line [35m92[0m, in [35msolve[0m
+    if best is None: [1;31mraise RuntimeError('no construction')[0m
+                     [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mRuntimeError[0m: [35mno construction[0m
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do printf '%-16s ' "$n"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes    feasible, cost 96428
+old-town         INFEASIBLE: 4 customers get no delivery, first [8, 30, 62, 73]
+riverside        feasible, cost 313212
+north-ring       feasible, cost 425927
+[?2004hroot@c5deb98b1c63:/app# cat > /app/greedies.py <<'PY'
+[?2004l[?2004h> import json,math,itertools,random,os,sys
+[?2004l[?2004h> from pathlib import Path
+[?2004l[?2004h> sys.path.insert(0,'/app/tools'); from check_plan import distance,evaluate
+[?2004l[?2004h> 
+[?2004l[?2004h> def make(o,order,mode,seed):
+[?2004l[?2004h>  d=o['depot']; left={c['id']:c for c in o['customers']}; routes=[]; rng=random.Random(seed)
+[?2004l[?2004h>  fs={f['type']:f for f in o['fleet']}
+[?2004l[?2004h>  for typ in order:
+[?2004l[?2004h>   k=fs[typ]
+[?2004l[?2004h>   for z in range(k['count']):
+[?2004l[?2004h>    if not left: break
+[?2004l[?2004h>    clock=d['open']; here=d; load=driven=0; stops=[]
+[?2004l[?2004h>    while 1:
+[?2004l[?2004h>     opts=[]
+[?2004l[?2004h>     for c in left.values():
+[?2004l[?2004h>      leg=distance(here,c); st=max(clock+leg*k['pace'],c['ready'])
+[?2004l[?2004h>      tot=driven+leg+distance(c,d); back=st+c['service']+distance(c,d)*k['pace']
+[?2004l[?2004h>      if load+c['demand']>k['capacity'] or st>c['due'] or back>d['close'] or back-d['open']>k['shift'] or (k['range'] is not None and tot>k['range']): continue M[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ke
+[?2004l[?2004h>      if mode==0: score=leg
+[?2004l[?2004h>      elif mode==1: score=leg+.03*max(0,c['ready']-(clock+leg*k['pace']))
+[?2004l[?2004h>      elif mode==2: score=c['due']+.8*leg*k['pace']
+[?2004l[?2004h>      elif mode==3: score=leg-2*c['demand']+rng.random()*30
+[?2004l[?2004h>      else: score=c['due']+.3*leg*k['pace']+rng.random()*900
+[?2004l[?2004h>      opts.append((score,c,leg,st))
+[?2004l[?2004h>     if not opts: break
+[?2004l[?2004h>     _,c,leg,st=min(opts,key=lambda x:x[0]); stops.append(c['id']); load+=c['demand']; driven+=leg; clock=st+c['service']; here=c; del left[c['id']]
+[?2004l[?2004h>    if stops: routes.append({'type':typ,'depart':d['open'],'stops':stops})
+[?2004l[?2004h>  return {'routes':routes}
+[?2004l[?2004h> 
+[?2004l[?2004h> for name in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+name+'.json')); best=None
+[?2004l[?2004h>  # preserve any feasible current plan
+[?2004l[?2004h>  try:
+[?2004l[?2004h>   p=json.load(open('/app/plans/'+name+'.json')); best=(evaluate(o,p),p,'existing')
+[?2004l[?2004h>  except: pass
+[?2004l[?2004h>  for order in itertools.permutations(['bike','van','truck']):
+[?2004l[?2004h>   for mode in range(5):
+[?2004l[?2004h>    for seed in range(4):
+[?2004l[?2004h>     p=make(o,order,mode,seed)
+[?2004l[?2004h>     try: cost=evaluate(o,p)
+[?2004l[?2004h>     except: continue
+[?2004l[?2004h>     if best is None or cost<best[0]: best=(cost,p,(order,mode,seed)); print(name,best[0],best[2],flush=True)
+[?2004l[?2004h>  if best:
+[?2004l[?2004h>   json.dump(best[1],open('/app/plans/'+name+'.json','w'),indent=1); print(name,'BEST',best[0],best[2])
+[?2004l[?2004h>  else: print(name,'NO FEASIBLE')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 /app/greedies.py
+[?2004lharbour-lanes BEST 96428 existing
+old-town 212317 (('bike', 'truck', 'van'), 0, 0)
+old-town 181875 (('bike', 'truck', 'van'), 1, 0)
+old-town BEST 181875 (('bike', 'truck', 'van'), 1, 0)
+riverside 296205 (('bike', 'van', 'truck'), 0, 0)
+riverside 290304 (('bike', 'van', 'truck'), 1, 0)
+riverside 256546 (('bike', 'truck', 'van'), 1, 0)
+riverside 254085 (('truck', 'bike', 'van'), 1, 0)
+riverside 249827 (('truck', 'van', 'bike'), 1, 0)
+riverside BEST 249827 (('truck', 'van', 'bike'), 1, 0)
+north-ring 422202 (('bike', 'van', 'truck'), 1, 0)
+north-ring 412101 (('bike', 'truck', 'van'), 0, 0)
+north-ring 348390 (('bike', 'truck', 'van'), 1, 0)
+north-ring 340555 (('truck', 'bike', 'van'), 1, 0)
+north-ring BEST 340555 (('truck', 'bike', 'van'), 1, 0)
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do printf '%-16s ' "$n"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes    feasible, cost 96428
+old-town         feasible, cost 181875
+riverside        feasible, cost 249827
+north-ring       feasible, cost 340555
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,sys,collections,math
+[?2004l[?2004h> sys.path.insert(0,'/app/tools'); from check_plan import distance
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); p=json.load(open('/app/plans/'+n+'.json')); C={c['id']:c for c in o['customers']}; F={f['type']:f for f in o['fleet']}; d=o['depot']; agg=collections.defaultdict(lambda:[0,0,0,0])
+[?2004l[?2004h>  print('\n'+n)
+[?2004l[?2004h>  for r in p['routes']:
+[?2004l[?2004h>   s=r['stops']; dd=distance(d,C[s[0]])+sum(distance(C[a],C[b]) for a,b in zip(s,s[1:]))+distance(C[s[-1]],d); load=sum(C[x]['demand'] for x in s); a=agg[r['type']]; a[0]+=1;a[1]+=dd;a[2]+=load;a[3]+=F[r['type']]['fixed']+dd*F[r['type']]['per_unit']
+[?2004l[?2004h>  for t,a in agg.items(): print(t,'routes dist load cost',a)
+[?2004l[?2004h>  print('total routes',len(p['routes']))
+[?2004l[?2004h> PY
+[?2004l
+harbour-lanes
+bike routes dist load cost [5, 1171, 67, 6842]
+van routes dist load cost [7, 3720, 406, 70320]
+truck routes dist load cost [1, 514, 143, 19266]
+total routes 13
+
+old-town
+bike routes dist load cost [9, 1518, 120, 11136]
+truck routes dist load cost [5, 2071, 749, 86849]
+van routes dist load cost [9, 4190, 413, 83890]
+total routes 23
+
+riverside
+truck routes dist load cost [8, 4204, 1180, 155876]
+van routes dist load cost [11, 4341, 606, 93951]
+total routes 19
+
+north-ring
+truck routes dist load cost [11, 4294, 1647, 186086]
+bike routes dist load cost [18, 3111, 228, 22422]
+van routes dist load cost [15, 6277, 811, 132047]
+total routes 44
+[?2004hroot@c5deb98b1c63:/app# cat > /app/improve.py <<'PY'
+[?2004l[?2004h> import json,math,random,time,sys,os
+[?2004l[?2004h> 
+[?2004l[?2004h> def improve(name,secs):
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+name+'.json')); plan=json.load(open('/app/plans/'+name+'.json'))
+[?2004l[?2004h>  dep=o['depot']; C={c['id']:c for c in o['customers']}; ids=list(C); F={f['type']:f for f in o['fleet']}
+[?2004l[?2004h>  def dst(a,b):
+[?2004l[?2004h>   A=dep if a==0 else C[a]; B=dep if b==0 else C[b]; q=(A['x']-B['x'])**2+(A['y']-B['y'])**2; z=math.isqrt(q); return z if z*z==q else z+1
+[?2004l[?2004h>  D={(a,b):dst(a,b) for a in [0]+ids for b in [0]+ids if a!=b}
+[?2004l[?2004h>  def inf(s,t):
+[?2004l[?2004h>   if not s:return (0,dep['open'],0)
+[?2004l[?2004h>   k=F[t]; load=sum(C[x]['demand'] for x in s)
+[?2004l[?2004h>   if load>k['capacity']:return None
+[?2004l[?2004h>   dd=D[0,s[0]]+sum(D[a,b] for a,b in zip(s,s[1:]))+D[s[-1],0]
+[?2004l[?2004h>   if k['range'] is not None and dd>k['range']:return None
+[?2004l[?2004h>   # derive latest departure, then verify forwards
+[?2004l[?2004h>   lim=dep['close']-D[s[-1],0]*k['pace']
+[?2004l[?2004h>   for i in range(len(s)-1,-1,-1):
+[?2004l[?2004h>    c=C[s[i]]; st=min(c['due'],lim-c['service'])
+[?2004l[?2004h>    if st<c['ready']:return None
+[?2004l[?2004h>    lim=st-(D[0,s[i]] if i==0 else D[s[i-1],s[i]])*k['pace']
+[?2004l[?2004h>   leave=max(dep['open'],lim); clock=leave; prev=0
+[?2004l[?2004h>   for x in s:
+[?2004l[?2004h>    c=C[x]; clock=max(clock+D[prev,x]*k['pace'],c['ready'])
+[?2004l[?2004h>    if clock>c['due']:return None
+[?2004l[?2004h>    clock+=c['service']; prev=x
+[?2004l[?2004h>   clock+=D[prev,0]*k['pace']
+[?2004l[?2004h>   if clock>dep['close'] or clock-leave>k['shift']:return None
+[?2004l[?2004h>   return (k['fixed']+dd*k['per_unit'],int(leave),load)
+[?2004l[?2004h>  # slots, retaining input assignments
+[?2004l[?2004h>  routes=[r['stops'][:] for r in plan['routes']]; types=[r['type'] for r in plan['routes']]
+[?2004l[?2004h>  for t,k in F.items():
+[?2004l[?2004h>   for _ in range(k['count']-types.count(t)):routes.append([]);types.append(t)
+[?2004l[?2004h>  meta=[inf(s,t) for s,t in zip(routes,types)]; score=sum(x[0] for x in meta)
+[?2004l[?2004h>  best=score; bestR=[x[:] for x in routes]; bestM=meta[:]
+[?2004l[?2004h>  rng=random.Random(12345+sum(map(ord,name))); start=time.time(); it=0; accepted=0
+[?2004l[?2004h>  while time.time()-start<secs:
+[?2004l[?2004h>   elapsed=(time.time()-start)/secs
+[?2004l[?2004h>   # repeated cooling cycles avoid permanent freezing
+[?2004l[?2004h>   phase=(it%250000)/250000; temp=3500*(1-phase)**2+25
+[?2004l[?2004h>   it+=1
+[?2004l[?2004h>   move=rng.random()
+[?2004l[?2004h>   if move<.62:
+[?2004l[?2004h>    non=[i for i,s in enumerate(routes) if s]; a=rng.choice(non); ia=rng.randrange(len(routes[a])); x=routes[a][ia]
+[?2004l[?2004h>    # bias destination toward compatible nearby routes, but include empties
+[?2004l[?2004h>    candidates=[]
+[?2004l[?2004h>    for b,s in enumerate(routes):
+[?2004l[?2004h>     if b==a:continue
+[?2004l[?2004h>     if meta[b][2]+C[x]['demand']<=F[types[b]]['capacity']:
+[?2004l[?2004h>      proximity=min([D[x,y] for y in s],default=D[0,x])
+[?2004l[?2004h>      candidates.append((proximity+rng.random()*100,b))
+[?2004l[?2004h>    if not candidates:continue
+[?2004l[?2004h>    candidates.sort(); b=rng.choice(candidates[:min(8,len(candidates))])[1]
+[?2004l[?2004h>    # test every insertion and choose near-best
+[?2004l[?2004h>    opts=[]
+[?2004l[?2004h>    nsA=routes[a][:ia]+routes[a][ia+1:]; ma=inf(nsA,types[a])
+[?2004l[?2004h>    if ma is None:continue
+[?2004l[?2004h>    for ib in range(len(routes[b])+1):
+[?2004l[?2004h>     nsB=routes[b][:ib]+[x]+routes[b][ib:]; mb=inf(nsB,types[b])
+[?2004l[?2004h>     if mb:opts.append((ma[0]+mb[0]-meta[a][0]-meta[b][0],ib,mb))
+[?2004l[?2004h>    if not opts:continue
+[?2004l[?2004h>    opts.sort(); delta,ib,mb=opts[0] if rng.random()<.8 else rng.choice(opts[:min(3,len(opts))])
+[?2004l[?2004h>    if delta<=0 or rng.random()<math.exp(-delta/temp):
+[?2004l[?2004h>     routes[a]=nsA;routes[b].insert(ib,x);meta[a]=ma;meta[b]=mb;score+=delta;accepted+=1
+[?2004l[?2004h>   elif move<.88:
+[?2004l[?2004h>    non=[i for i,s in enumerate(routes) if s]; a,b=rng.sample(non,2); ia=rng.randrange(len(routes[a]));ib=rng.randrange(len(routes[b])); x,y=routes[a][ia],routes[b][ib]
+[?2004l[?2004h>    if meta[a][2]-C[x]['demand']+C[y]['demand']>F[types[a]]['capacity'] or meta[b][2]-C[y]['demand']+C[x]['demand']>F[types[b]]['capacity']:continue
+[?2004l[?2004h>    A=routes[a][:];B=routes[b][:];A[ia]=y;B[ib]=x; ma=inf(A,types[a]);mb=inf(B,types[b])
+[?2004l[?2004h>    if not ma or not mb:continue
+[?2004l[?2004h>    delta=ma[0]+mb[0]-meta[a][0]-meta[b][0]
+[?2004l[?2004h>    if delta<=0 or rng.random()<math.exp(-delta/temp):routes[a]=A;routes[b]=B;meta[a]=ma;meta[b]=mb;score+=delta;accepted+=1
+[?2004l[?2004h>   else:
+[?2004l[?2004h>    cand=[i for i,s in enumerate(routes) if len(s)>=3]
+[?2004l[?2004h>    if not cand:continue
+[?2004l[?2004h>    a=rng.choice(cand); i,j=sorted(rng.sample(range(len(routes[a])),2)); A=routes[a][:i]+list(reversed(routes[a][i:j+1]))+routes[a][j+1:];ma=inf(A,types[a])
+[?2004l[?2004h>    if not ma:continue
+[?2004l[?2004h>    delta=ma[0]-meta[a][0]
+[?2004l[?2004h>    if delta<=0 or rng.random()<math.exp(-delta/temp):routes[a]=A;meta[a]=ma;score+=delta;accepted+=1
+[?2004l[?2004h>   if score<best:
+[?2004l[?2004h>    best=score;bestR=[x[:] for x in routes];bestM=meta[:]
+[?2004l[?2004h>    if best%100<5:print(name,it,best,flush=True)
+[?2004l[?2004h>  # exact departures from saved metadata
+[?2004l[?2004h>  out={'routes':[{'type':t,'depart':m[1],'stops':s} for s,t,m in zip(bestR,types,bestM) if s]}
+[?2004l[?2004h>  json.dump(out,open('/app/plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h>  print(name,'best',best,'iterations',it,'accepted',accepted,flush=True)
+[?2004l[?2004h> if __name__=='__main__':improve(sys.argv[1],float(sys.argv[2]))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /app/improve.py $n 20; done
+[?2004lharbour-lanes 212511 84001
+harbour-lanes best 82492 iterations 537685 accepted 127852
+old-town 198527 170603
+old-town 199183 170602
+old-town 215623 167200
+old-town 217367 166904
+old-town 221751 166304
+old-town 232186 164002
+old-town best 163449 iterations 407491 accepted 112545
+riverside 169158 248503
+riverside 184122 238501
+riverside 205539 232503
+riverside 208637 231501
+riverside 209922 230901
+riverside 214976 228604
+riverside best 223033 iterations 346495 accepted 100261
+north-ring 205848 339502
+north-ring 220284 332303
+north-ring 230845 330303
+north-ring 232224 329904
+north-ring 232298 329900
+north-ring 243607 328402
+north-ring 245697 328201
+north-ring 248615 327801
+north-ring best 327716 iterations 253999 accepted 62214
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do printf '%-16s target=%-7s ' "$n" "$(python3 -c "import json;print(json.load(open('/app/orders/targets.json'))['$n'])")"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes    target=77867   feasible, cost 82492
+old-town         target=147362  feasible, cost 163449
+riverside        target=201921  feasible, cost 223033
+north-ring       target=288705  feasible, cost 327716
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,sys,collections
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import distance
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));p=json.load(open('/app/plans/'+n+'.json')); C={c['id']:c for c in o['customers']};F={f['type']:f for f in o['fleet']};d=o['depot'];A=collections.defaultdict(lambda:[0,0,0,0])
+[?2004l[?2004h>  for r in p['routes']:
+[?2004l[?2004h>   s=r['stops'];dd=distance(d,C[s[0]])+sum(distance(C[a],C[b]) for a,b in zip(s,s[1:]))+distance(C[s[-1]],d);load=sum(C[x]['demand'] for x in s);a=A[r['type']];a[0]+=1;a[1]+=dd;a[2]+=load;a[3]+=F[r['type']]['fixed']+dd*F[r['type']]['per_unit']
+[?2004l[?2004h>  print(n,dict(A))
+[?2004l[?2004h> PY
+[?2004lharbour-lanes {'bike': [3, 740, 41, 4180], 'van': [5, 1937, 284, 42307], 'truck': [2, 895, 291, 36005]}
+old-town {'bike': [3, 692, 37, 4084], 'truck': [5, 2005, 727, 85595], 'van': [9, 3270, 518, 73770]}
+riverside {'truck': [8, 3052, 1160, 133988], 'van': [11, 3895, 626, 89045]}
+north-ring {'truck': [11, 3946, 1576, 179474], 'bike': [1, 188, 14, 1276], 'van': [19, 6106, 1096, 146966]}
+[?2004hroot@c5deb98b1c63:/app# cp /app/improve.py /app/improve2.py; python3 - <<'PY'
+[?2004l[?2004h> p='/app/improve2.py';s=open(p).read()
+[?2004l[?2004h> s=s.replace("phase=(it%250000)/250000; temp=3500*(1-phase)**2+25", "phase=((time.time()-start)/secs*4)%1; temp=1800*(1-phase)**3+2")
+[?2004l[?2004h> # Select source routes inversely by load fraction, encouraging route deletion.
+[?2004l[?2004h> s=s.replace("a=rng.choice(non); ia=rng.randrange(len(routes[a])); x=routes[a][ia]", "a=rng.choices(non,weights=[1/(0.08+meta[q][2]/F[types[q]]['capacity'])**2 for q in non])[0]; ia=rng.randrange(len(routes[a])); x=routes[a][ia]")
+[?2004l[?2004h> # Consider more nearby destinations.
+[?2004l[?2004h> s=s.replace("min(8,len(candidates))", "min(14,len(candidates))")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /app/improve2.py $n 35; done
+[?2004lharbour-lanes best 82492 iterations 1175031 accepted 106791
+old-town best 163449 iterations 846639 accepted 90746
+riverside best 223033 iterations 761014 accepted 83759
+north-ring best 327716 iterations 605097 accepted 62938
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do printf '%-16s ' "$n"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes    feasible, cost 82492
+old-town         feasible, cost 163449
+riverside        feasible, cost 223033
+north-ring       feasible, cost 327716
+[?2004hroot@c5deb98b1c63:/app# mkdir -p /app/backup; cp /app/plans/*.json /app/backup/; cat > /app/seed_bikes.py <<'PY'
+[?2004l[?2004h> import json,sys
+[?2004l[?2004h> sys.path.insert(0,'/app'); import greedies
+[?2004l[?2004h> sys.path.insert(0,'/app/tools'); from check_plan import evaluate
+[?2004l[?2004h> settings={
+[?2004l[?2004h>  'harbour-lanes':(('bike','van','truck'),1,0),
+[?2004l[?2004h>  'old-town':(('bike','truck','van'),1,0),
+[?2004l[?2004h>  'riverside':(('bike','truck','van'),1,0),
+[?2004l[?2004h>  'north-ring':(('bike','truck','van'),1,0)}
+[?2004l[?2004h> for n,(order,mode,seed) in settings.items():
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));p=greedies.make(o,order,mode,seed)
+[?2004l[?2004h>  try:
+[?2004l[?2004h>   print(n,evaluate(o,p));json.dump(p,open('/app/plans/'+n+'.json','w'),indent=1)
+[?2004l[?2004h>  except Exception as e:print(n,'bad',e)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 /app/seed_bikes.py
+[?2004lharbour-lanes BEST 82492 existing
+old-town BEST 163449 existing
+riverside BEST 223033 existing
+north-ring BEST 327716 existing
+harbour-lanes 115827
+old-town 181875
+riverside 256546
+north-ring 348390
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /app/improve.py $n 35; done
+[?2004lharbour-lanes 80035 111602
+harbour-lanes 150038 96302
+harbour-lanes 210745 84402
+harbour-lanes 228032 83602
+harbour-lanes 234167 83302
+harbour-lanes 481104 81804
+harbour-lanes best 81163 iterations 1250452 accepted 277241
+old-town 198527 170603
+old-town 199183 170602
+old-town 215623 167200
+old-town 217367 166904
+old-town 221751 166304
+old-town 232186 164002
+old-town best 163449 iterations 825844 accepted 208545
+riverside 164329 251503
+riverside 182491 240403
+riverside 187589 235203
+riverside 195587 233100
+riverside 220740 226904
+riverside 220778 226901
+riverside 220922 226804
+riverside 221595 226803
+riverside 238403 224502
+riverside 239767 224302
+riverside 244906 223501
+riverside 247577 223100
+riverside best 223020 iterations 459866 accepted 119208
+north-ring 197944 347804
+north-ring 214490 342101
+north-ring 223332 340903
+north-ring 240287 337100
+north-ring 243025 336601
+north-ring best 333891 iterations 448439 accepted 119882
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,sys,shutil,os
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); new=json.load(open('/app/plans/'+n+'.json')); old=json.load(open('/app/backup/'+n+'.json'))
+[?2004l[?2004h>  cn=evaluate(o,new);co=evaluate(o,old)
+[?2004l[?2004h>  if co<cn: shutil.copy('/app/backup/'+n+'.json','/app/plans/'+n+'.json'); cn=co
+[?2004l[?2004h>  print(n,'kept',cn)
+[?2004l[?2004h> PY
+[?2004lharbour-lanes kept 81163
+old-town kept 163449
+riverside kept 223020
+north-ring kept 327716
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lfeasible, cost 81163
+feasible, cost 163449
+feasible, cost 223020
+feasible, cost 327716
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,collections
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  p=json.load(open('/app/plans/'+n+'.json')); print(n,collections.Counter(r['type'] for r in p['routes']),sorted((r['type'],len(r['stops'])) for r in p['routes']))
+[?2004l[?2004h> PY
+[?2004lharbour-lanes Counter({'bike': 5, 'van': 5, 'truck': 2}) [('bike', 1), ('bike', 2), ('bike', 3), ('bike', 3), ('bike', 4), ('truck', 9), ('truck', 10), ('van', 4), ('van', 4), ('van', 6), ('van', 6), ('van', 8)]
+old-town Counter({'van': 9, 'truck': 5, 'bike': 3}) [('bike', 2), ('bike', 2), ('bike', 3), ('truck', 7), ('truck', 8), ('truck', 8), ('truck', 9), ('truck', 16), ('van', 4), ('van', 5), ('van', 5), ('van', 6), ('van', 6), ('van', 6), ('van', 7), ('van', 7), ('van', 9)]
+riverside Counter({'van': 11, 'truck': 8}) [('truck', 8), ('truck', 8), ('truck', 9), ('truck', 10), ('truck', 11), ('truck', 12), ('truck', 14), ('truck', 16), ('van', 3), ('van', 4), ('van', 5), ('van', 6), ('van', 6), ('van', 6), ('van', 8), ('van', 8), ('van', 8), ('van', 9), ('van', 9)]
+north-ring Counter({'van': 19, 'truck': 11, 'bike': 1}) [('bike', 4), ('truck', 6), ('truck', 7), ('truck', 8), ('truck', 8), ('truck', 9), ('truck', 9), ('truck', 10), ('truck', 10), ('truck', 11), ('truck', 11), ('truck', 12), ('van', 2), ('van', 2), ('van', 3), ('van', 3), ('van', 4), ('van', 5), ('van', 5), ('van', 5), ('van', 6), ('van', 6), ('van', 6), ('van', 7), ('van', 7), ('van', 7), ('van', 8), ('van', 8), ('van', 10), ('van', 10), ('van', 11)]
+[?2004hroot@c5deb98b1c63:/app# cat > /app/descent.py <<'PY'
+[?2004l[?2004h> # Deterministic/random segment-exchange descent using improve.py's feasibility logic pattern.
+[?2004l[?2004h> import json,math,random,time,sys
+[?2004l[?2004h> name=sys.argv[1]; secs=float(sys.argv[2]); o=json.load(open('/app/orders/'+name+'.json')); p=json.load(open('/app/plans/'+name+'.json'))
+[?2004l=0 else D[s[i-1],s[i]])*k['pace']
+ leave=max(dep['open'],lim);clock=leave;prev=0
+ for x in s:
+  c=C[x];clock=max(clock+D[prev,x]*k['pace'],c['ready'])
+  if clock>c['due']:return None
+  clock+=c['service'];prev=x
+ clock+=D[prev,0]*k['pace']
+ if clock>dep['close'] or clock-leave>k['shift']:return None
+ return F[t]['fixed']+dd*F[t]['per_unit'],int(leave),load
+R=[r['stops'][:] for r in p['routes']];T=[r['type'] for r in p['routes']]
+for t,k in F.items():
+ for _ in range(k['count']-T.count(t)):R.append([]);T.append(t)
+M=[info(s,t) for s,t in zip(R,T)];score=sum(m[0] for m in M);best=score;rng=random.Random(991+sum(map(ord,name)));start=time.time();it=0
+while time.time()-start<secs:
+ it+=1;a,b=rng.sample(range(len(R)),2)
+ if not R[a]:continue
+ # Exchange segments of length 0..3 (0 means relocation), favor short segments.
+ la=rng.randint(1,min(3,len(R[a]))); ia=rng.randrange(len(R[a])-la+1); Aseg=R[a][ia:ia+la]
+ lb=0 if rng.random()<.45 or not R[b] else rng.randint(1,min(3,len(R[b])))
+ ib=rng.randrange(len(R[b])-lb+1) if lb else rng.randrange(len(R[b])+1); Bseg=R[b][ib:ib+lb]
+ loadA=M[a][2]-sum(C[x]['demand'] for x in Aseg)+sum(C[x]['demand'] for x in Bseg)
+ loadB=M[b][2]-sum(C[x]['demand'] for x in Bseg)+sum(C[x]['demand'] for x in Aseg)
+ if loadA>F[T[a]]['capacity'] or loadB>F[T[b]]['capacity']:continue
+ # Test both orientations of exchanged segments.
+ bestmove=None
+ for sa in (Aseg,Aseg[::-1]):
+  for sb in (Bseg,Bseg[::-1]):
+   na=R[a][:ia]+sb+R[a][ia+la:]; nb=R[b][:ib]+sa+R[b][ib+lb:]
+   ma=info(na,T[a]);mb=info(nb,T[b])
+   if ma and mb:
+    delta=ma[0]+mb[0]-M[a][0]-M[b][0]
+    if bestmove is None or delta<bestmove[0]:bestmove=(delta,na,nb,ma,mb)
+ if bestmove and bestmove[0]<0:
+  delta,R[a],R[b],M[a],M[b]=bestmove;score+=delta
+  if score<best:best=score;print(name,it,best,flush=True)
+# Final exhaustive feasible 2-opt until stable.
+changed=True
+while changed:
+ changed=False
+ for a,s in enumerate(R):
+  for i in range(len(s)):
+   for j in range(i+1,len(s)):
+    ns=s[:i]+s[i:j+1][::-1]+s[j+1:];m=info(ns,T[a])
+    if m and m[0]<M[a][0]:R[a]=s=ns;score+=m[0]-M[a][0];M[a]=m;changed=True
+out={'routes':[{'type':t,'depart':m[1],'stops':s} for s,t,m in zip(R,T,M) if s]};json.dump(out,open('/app/plans/'+name+'.json','w'),indent=1);print(name,'final',score,it)
+PY
+for n in harbour-lanes old-town riverside north-ring; do python3 /app/descent.py $n 40; done
+[?2004h> dep=o['depot'];C={c['id']:c for c in o['customers']};F={f['type']:f for f in o['fleet']}; ids=list(C)
+[?2004l[?2004h> def dst(a,b):
+[?2004l[?2004h>  A=dep if a==0 else C[a];B=dep if b==0 else C[b];q=(A['x']-B['x'])**2+(A['y']-B['y'])**2;z=math.isqrt(q);return z if z*z==q else z+1
+[?2004l[?2004h> D={(a,b):dst(a,b) for a in [0]+ids for b in [0]+ids if a!=b}
+[?2004l[?2004h> def info(s,t):
+[?2004l[?2004h>  if not s:return (0,dep['open'],0)
+[?2004l[?2004h>  k=F[t];load=sum(C[x]['demand'] for x in s)
+[?2004l[?2004h>  if load>k['capacity']:return None
+[?2004l[?2004h>  dd=D[0,s[0]]+sum(D[a,b] for a,b in zip(s,s[1:]))+D[s[-1],0]
+[?2004l[?2004h>  if k['range'] is not None and dd>k['range']:return None
+[?2004l[?2004h>  lim=dep['close']-D[s[-1],0]*k['pace']
+[?2004l[?2004h>  for i in range(len(s)-1,-1,-1):
+[?2004l[?2004h>   c=C[s[i]];st=min(c['due'],lim-c['service'])
+[?2004l[?2004h>   if st<c['ready']:return None
+[?2004l[?2004h>   lim=st-(D[0,s[i]] if i==0 else D[s[i-1],s[i]])*k['pace']
+[?2004l[?2004h>  leave=max(dep['open'],lim);clock=leave;prev=0
+[?2004l[?2004h>  for x in s:
+[?2004l[?2004h>   c=C[x];clock=max(clock+D[prev,x]*k['pace'],c['ready'])
+[?2004l[?2004h>   if clock>c['due']:return None
+[?2004l[?2004h>   clock+=c['service'];prev=x
+[?2004l[?2004h>  clock+=D[prev,0]*k['pace']
+[?2004l[?2004h>  if clock>dep['close'] or clock-leave>k['shift']:return None
+[?2004l[?2004h>  return F[t]['fixed']+dd*F[t]['per_unit'],int(leave),load
+[?2004l[?2004h> R=[r['stops'][:] for r in p['routes']];T=[r['type'] for r in p['routes']]
+[?2004l[?2004h> for t,k in F.items():
+[?2004l[?2004h>  for _ in range(k['count']-T.count(t)):R.append([]);T.append(t)
+[?2004l[?2004h> M=[info(s,t) for s,t in zip(R,T)];score=sum(m[0] for m in M);best=score;rng=random.Random(991+sum(map(ord,name)));start=time.time();it=0
+[?2004l[?2004h> while time.time()-start<secs:
+[?2004l[?2004h>  it+=1;a,b=rng.sample(range(len(R)),2)
+[?2004l[?2004h>  if not R[a]:continue
+[?2004l[?2004h>  # Exchange segments of length 0..3 (0 means relocation), favor short segments.
+[?2004l[?2004h>  la=rng.randint(1,min(3,len(R[a]))); ia=rng.randrange(len(R[a])-la+1); Aseg=R[a][ia:ia+la]
+[?2004l[?2004h>  lb=0 if rng.random()<.45 or not R[b] else rng.randint(1,min(3,len(R[b])))
+[?2004l[?2004h>  ib=rng.randrange(len(R[b])-lb+1) if lb else rng.randrange(len(R[b])+1); Bseg=R[b][ib:ib+lb]
+[?2004l[?2004h>  loadA=M[a][2]-sum(C[x]['demand'] for x in Aseg)+sum(C[x]['demand'] for x in Bseg)
+[?2004l[?2004h>  loadB=M[b][2]-sum(C[x]['demand'] for x in Bseg)+sum(C[x]['demand'] for x in Aseg)
+[?2004l[?2004h>  if loadA>F[T[a]]['capacity'] or loadB>F[T[b]]['capacity']:continue
+[?2004l[?2004h>  # Test both orientations of exchanged segments.
+[?2004l[?2004h>  bestmove=None
+[?2004l[?2004h>  for sa in (Aseg,Aseg[::-1]):
+[?2004l[?2004h>   for sb in (Bseg,Bseg[::-1]):
+[?2004l[?2004h>    na=R[a][:ia]+sb+R[a][ia+la:]; nb=R[b][:ib]+sa+R[b][ib+lb:]
+[?2004l[?2004h>    ma=info(na,T[a]);mb=info(nb,T[b])
+[?2004l[?2004h>    if ma and mb:
+[?2004l[?2004h>     delta=ma[0]+mb[0]-M[a][0]-M[b][0]
+[?2004l[?2004h>     if bestmove is None or delta<bestmove[0]:bestmove=(delta,na,nb,ma,mb)
+[?2004l[?2004h>  if bestmove and bestmove[0]<0:
+[?2004l[?2004h>   delta,R[a],R[b],M[a],M[b]=bestmove;score+=delta
+[?2004l[?2004h>   if score<best:best=score;print(name,it,best,flush=True)
+[?2004l[?2004h> # Final exhaustive feasible 2-opt until stable.
+[?2004l[?2004h> changed=True
+[?2004l[?2004h> while changed:
+[?2004l[?2004h>  changed=False
+[?2004l[?2004h>  for a,s in enumerate(R):
+[?2004l[?2004h>   for i in range(len(s)):
+[?2004l[?2004h>    for j in range(i+1,len(s)):
+[?2004l[?2004h>     ns=s[:i]+s[i:j+1][::-1]+s[j+1:];m=info(ns,T[a])
+[?2004l[?2004h>     if m and m[0]<M[a][0]:R[a]=s=ns;score+=m[0]-M[a][0];M[a]=m;changed=True
+[?2004l[?2004h> out={'routes':[{'type':t,'depart':m[1],'stops':s} for s,t,m in zip(R,T,M) if s]};json.dump(out,open('/app/plans/'+name+'.json','w'),indent=1);print(name,'final',score,it)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do python3 /app/descent.py $n 40; done
+[?2004lharbour-lanes final 81163 1607955
+old-town 2163 163403
+old-town 8117 163194
+old-town 17712 161429
+old-town 20576 161410
+old-town 73835 161296
+old-town 325498 161285
+old-town 350541 161258
+old-town final 161011 2090129
+riverside 10722 222690
+riverside 133633 222652
+riverside 135635 222481
+riverside 138902 222386
+riverside 215365 222367
+riverside 255504 222071
+riverside 351884 221893
+riverside 359750 221860
+riverside 396912 221803
+riverside 402914 221792
+riverside 567478 221704
+riverside 666233 221438
+riverside 720511 221431
+riverside 794640 221241
+riverside 911551 221195
+riverside 944201 221024
+riverside 1135771 220870
+riverside 1173710 220862
+riverside 1333262 220846
+riverside 1384566 220835
+riverside 1495712 220740
+riverside 1583991 220691
+riverside 1679200 220672
+riverside 1746125 220539
+riverside 1799389 220515
+riverside 1913511 220351
+riverside 1927256 220256
+riverside 1965429 220220
+riverside 2180729 220187
+riverside 2239786 220054
+riverside 2317345 219944
+riverside final 219547 2404466
+north-ring 2685 327226
+north-ring 3933 327219
+north-ring 16642 326796
+north-ring 23609 326790
+north-ring 42319 326757
+north-ring 64227 326596
+north-ring 75812 326577
+north-ring 82672 326560
+north-ring 102783 325909
+north-ring 104342 325524
+north-ring 105188 325194
+north-ring 110069 324738
+north-ring 143731 324661
+north-ring 224894 324562
+north-ring 227152 324541
+north-ring 247313 324354
+north-ring 247806 324255
+north-ring 263007 323742
+north-ring 265499 323731
+north-ring 309486 323489
+north-ring 326662 323371
+north-ring 339200 323327
+north-ring 347863 323184
+north-ring 361261 323151
+north-ring 369463 323140
+north-ring 382499 323118
+north-ring 390347 322915
+north-ring 398232 322896
+north-ring 398378 322885
+north-ring 413235 322808
+north-ring 417851 322782
+north-ring 468049 322504
+north-ring 522719 322442
+north-ring 537417 322266
+north-ring 540102 322079
+north-ring 621617 321789
+north-ring 635234 321712
+north-ring 663946 321635
+north-ring 684104 321030
+north-ring 761340 320986
+north-ring 769748 320815
+north-ring 783804 320667
+north-ring 818566 320601
+north-ring 823214 320281
+north-ring 835111 319984
+north-ring 942405 319882
+north-ring 943198 319871
+north-ring 1015723 319810
+north-ring 1095184 319493
+north-ring 1183853 319474
+north-ring 1207758 319441
+north-ring 1218962 319376
+north-ring 1232682 319332
+north-ring 1329249 319244
+north-ring 1394203 319216
+north-ring 1423170 319150
+north-ring 1476589 319051
+north-ring 1488352 319018
+north-ring 1614646 318812
+north-ring 1688213 318641
+north-ring 1757798 318508
+north-ring 1827959 318453
+north-ring 1840380 318130
+north-ring 1893662 318053
+north-ring 1946524 317976
+north-ring 1969106 317957
+north-ring 2214155 317880
+north-ring 2351977 317869
+north-ring 2371579 317858
+north-ring 2374539 317836
+north-ring 2379639 317748
+north-ring 2387370 317737
+north-ring final 316784 2444891
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do printf '%-16s ' "$n"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes    feasible, cost 81163
+old-town         feasible, cost 161011
+riverside        feasible, cost 219547
+north-ring       feasible, cost 316784
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> s=open('/app/descent.py').read()
+[?2004l[?2004h> # Replace strict descent loop setup with annealing state.
+[?2004l[?2004h> s=s.replace("start=time.time();it=0\nwhile time.time()-start<secs:", "start=time.time();it=0; bestR=[x[:] for x in R];bestM=M[:]\nwhile time.time()-start<secs:")
+[?2004l[?2004h> s=s.replace("la=rng.randint(1,min(3,len(R[a])))", "la=rng.randint(1,min(4,len(R[a])))")
+[?2004l[?2004h> s=s.replace("rng.randint(1,min(3,len(R[b])))", "rng.randint(1,min(4,len(R[b])))")
+[?2004l[?2004h> old="if bestmove and bestmove[0]<0:\n  delta,R[a],R[b],M[a],M[b]=bestmove;score+=delta\n  if score<best:best=score;print(name,it,best,flush=True)"
+[?2004l[?2004h> new="""if bestmove:
+[?2004l[?2004h>   delta,na,nb,ma,mb=bestmove
+[?2004l[?2004h>   phase=((time.time()-start)/secs*8)%1; temp=1200*(1-phase)**3+1
+[?2004l[?2004h>   if delta<0 or rng.random()<math.exp(-delta/temp):
+[?2004l[?2004h>    R[a],R[b],M[a],M[b]=na,nb,ma,mb;score+=delta
+[?2004l[?2004h>    if score<best:
+[?2004l[?2004h>     best=score;bestR=[x[:] for x in R];bestM=M[:]
+[?2004l[?2004h>     if best%200<10:print(name,it,best,flush=True)"""
+[?2004l[?2004h> s=s.replace(old,new)
+[?2004l[?2004h> # Restore best before deterministic final descent.
+[?2004l[?2004h> s=s.replace("# Final exhaustive feasible 2-opt until stable.\nchanged=True", "R=[x[:] for x in bestR];M=bestM[:];score=best\n# Final exhaustive feasible 2-opt until stable.\nchanged=True")
+[?2004l[?2004h> open('/app/segment_anneal.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 -m py_compile /app/segment_anneal.py
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do (python3 /app/segment_anneal.py $n 120 > /app/$n.log 2>&1) & done; wait
+[?2004l[1] 458
+[2] 459
+[3] 460
+[4] 461
+[1]   Done                    ( python3 /app/segment_anneal.py $n 120 > /app/$n.log 2>&1 )
+[2]   Done                    ( python3 /app/segment_anneal.py $n 120 > /app/$n.log 2>&1 )
+[3]-  Done                    ( python3 /app/segment_anneal.py $n 120 > /app/$n.log 2>&1 )
+[4]+  Done                    ( python3 /app/segment_anneal.py $n 120 > /app/$n.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# tail -n 5 /app/harbour-lanes.log /app/old-town.log /app/riverside.log /app/north-ring.log; for n in harbour-lanes old-town riverside north-ring; do printf '%-16s target=%-7s ' "$n" "$(python3 -c "import json;print(json.load(open('/app/orders/targets.json'))['$n'])")"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004l==> /app/harbour-lanes.log <==
+harbour-lanes final 81163 2747925
+
+==> /app/old-town.log <==
+old-town 1785476 160001
+old-town final 156369 3093991
+
+==> /app/riverside.log <==
+riverside final 219547 3047821
+
+==> /app/north-ring.log <==
+north-ring final 316784 3073342
+harbour-lanes    target=77867   feasible, cost 81163
+old-town         target=147362  feasible, cost 156369
+riverside        target=201921  feasible, cost 219547
+north-ring       target=288705  feasible, cost 316784
+[?2004hroot@c5deb98b1c63:/app# cp /app/plans/*.json /app/backup/; python3 - <<'PY'
+[?2004l[?2004h> s=open('/app/segment_anneal.py').read()
+[?2004l[?2004h> s=s.replace("return F[t]['fixed']+dd*F[t]['per_unit'],int(leave),load", "return {'bike':-25000,'van':-12000,'truck':30000}[t]+dd*F[t]['per_unit'],int(leave),load")
+[?2004l[?2004h> open('/app/forcefleet.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 -m py_compile /app/forcefleet.py
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do (python3 /app/forcefleet.py $n 150 > /app/force-$n.log 2>&1) & done; wait
+[?2004l[1] 508
+[2] 509
+[3] 510
+[4] 511
+[1]   Done                    ( python3 /app/forcefleet.py $n 150 > /app/force-$n.log 2>&1 )
+[2]   Done                    ( python3 /app/forcefleet.py $n 150 > /app/force-$n.log 2>&1 )
+[3]-  Done                    ( python3 /app/forcefleet.py $n 150 > /app/force-$n.log 2>&1 )
+[4]+  Done                    ( python3 /app/forcefleet.py $n 150 > /app/force-$n.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,collections,sys
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));p=json.load(open('/app/plans/'+n+'.json'))
+[?2004l[?2004h>  print(n,collections.Counter(r['type'] for r in p['routes']),'official',evaluate(o,p))
+[?2004l[?2004h> PY
+[?2004lharbour-lanes Counter({'van': 7, 'bike': 5, 'truck': 2}) official 89268
+old-town Counter({'van': 13, 'bike': 9, 'truck': 3}) official 155977
+riverside Counter({'van': 20, 'bike': 13, 'truck': 5}) official 239019
+north-ring Counter({'van': 27, 'bike': 18, 'truck': 7}) official 325915
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do (python3 /app/descent.py $n 120 > /app/post-$n.log 2>&1) & done; wait
+[?2004l[1] 548
+[2] 549
+[3] 550
+[4] 551
+[1]   Done                    ( python3 /app/descent.py $n 120 > /app/post-$n.log 2>&1 )
+[2]   Done                    ( python3 /app/descent.py $n 120 > /app/post-$n.log 2>&1 )
+[3]-  Done                    ( python3 /app/descent.py $n 120 > /app/post-$n.log 2>&1 )
+[4]+  Done                    ( python3 /app/descent.py $n 120 > /app/post-$n.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,sys,shutil,collections
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); p=json.load(open('/app/plans/'+n+'.json')); b=json.load(open('/app/backup/'+n+'.json')); cp=evaluate(o,p);cb=evaluate(o,b)
+[?2004l[?2004h>  if cb<cp: shutil.copy('/app/backup/'+n+'.json','/app/plans/'+n+'.json');p=b;cp=cb
+[?2004l[?2004h>  print(n,collections.Counter(r['type'] for r in p['routes']),cp)
+[?2004l[?2004h> PY
+[?2004lharbour-lanes Counter({'bike': 5, 'van': 5, 'truck': 2}) 81163
+old-town Counter({'van': 13, 'bike': 8, 'truck': 3}) 154241
+riverside Counter({'van': 18, 'truck': 5, 'bike': 3}) 217377
+north-ring Counter({'van': 27, 'bike': 8, 'truck': 7}) 310566
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do printf '%-16s ' "$n"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes    feasible, cost 81163
+old-town         feasible, cost 154241
+riverside        feasible, cost 217377
+north-ring       feasible, cost 310566
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do (python3 /app/forcefleet.py $n 90 > /app/reforce-$n.log 2>&1) & done; wait
+[?2004l[1] 592
+[2] 593
+[3] 594
+[4] 595
+[1]   Done                    ( python3 /app/forcefleet.py $n 90 > /app/reforce-$n.log 2>&1 )
+[2]   Done                    ( python3 /app/forcefleet.py $n 90 > /app/reforce-$n.log 2>&1 )
+[3]-  Done                    ( python3 /app/forcefleet.py $n 90 > /app/reforce-$n.log 2>&1 )
+[4]+  Done                    ( python3 /app/forcefleet.py $n 90 > /app/reforce-$n.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> s=open('/app/segment_anneal.py').read()
+[?2004l[?2004h> # Do not append unused fleet slots: optimize exactly the active composition.
+[?2004l[?2004h> a="for t,k in F.items():\n for _ in range(k['count']-T.count(t)):R.append([]);T.append(t)"
+[?2004l[?2004h> s=s.replace(a,"pass")
+[?2004l[?2004h> # Forbid moves which empty an active route.
+[?2004l[?2004h> s=s.replace("ma=info(na,T[a]);mb=info(nb,T[b])", "ma=info(na,T[a]) if na else None;mb=info(nb,T[b]) if nb else None")
+[?2004l[?2004h> # Lower temperature for mileage refinement in a fixed fleet basin.
+[?2004l[?2004h> s=s.replace("temp=1200*(1-phase)**3+1", "temp=450*(1-phase)**3+.2")
+[?2004l[?2004h> open('/app/fixedfleet.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 -m py_compile /app/fixedfleet.py
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,collections
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  p=json.load(open('/app/plans/'+n+'.json'));print(n,collections.Counter(r['type'] for r in p['routes']))
+[?2004l[?2004h> PY
+[?2004lharbour-lanes Counter({'van': 7, 'bike': 5, 'truck': 1})
+old-town Counter({'van': 13, 'bike': 9, 'truck': 3})
+riverside Counter({'van': 20, 'bike': 13, 'truck': 5})
+north-ring Counter({'van': 27, 'bike': 18, 'truck': 7})
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do (python3 /app/fixedfleet.py $n 180 > /app/fixed-$n.log 2>&1) & done; wait
+[?2004l[1] 610
+[2] 611
+[3] 612
+[4] 613
+[1]   Done                    ( python3 /app/fixedfleet.py $n 180 > /app/fixed-$n.log 2>&1 )
+[2]   Done                    ( python3 /app/fixedfleet.py $n 180 > /app/fixed-$n.log 2>&1 )
+[3]-  Done                    ( python3 /app/fixedfleet.py $n 180 > /app/fixed-$n.log 2>&1 )
+[4]+  Done                    ( python3 /app/fixedfleet.py $n 180 > /app/fixed-$n.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# tail -n 3 /app/fixed-*.log; for n in harbour-lanes old-town riverside north-ring; do printf '%-16s target=%-7s ' "$n" "$(python3 -c "import json;print(json.load(open('/app/orders/targets.json'))['$n'])")"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004l==> /app/fixed-harbour-lanes.log <==
+harbour-lanes 522663 80002
+harbour-lanes final 78990 6164391
+
+==> /app/fixed-north-ring.log <==
+north-ring 1353934 319008
+north-ring 1372362 318607
+north-ring final 316246 4554315
+
+==> /app/fixed-old-town.log <==
+old-town final 155014 5322166
+
+==> /app/fixed-riverside.log <==
+riverside 390471 237403
+riverside 424663 237006
+riverside final 235912 3378275
+harbour-lanes    target=77867   feasible, cost 78990
+old-town         target=147362  feasible, cost 155014
+riverside        target=201921  feasible, cost 235912
+north-ring       target=288705  feasible, cost 316246
+[?2004hroot@c5deb98b1c63:/app# cp /app/plans/*.json /app/backup/; python3 - <<'PY'
+[?2004l[?2004h> s=open('/app/segment_anneal.py').read()
+[?2004l[?2004h> s=s.replace("return F[t]['fixed']+dd*F[t]['per_unit'],int(leave),load", "return {'bike':-100000,'van':-70000,'truck':400000}[t]+dd*F[t]['per_unit'],int(leave),load")
+[?2004l[?2004h> s=s.replace("temp=1200*(1-phase)**3+1", "temp=12000*(1-phase)**3+2")
+[?2004l[?2004h> open('/app/hardforce.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in riverside north-ring; do (python3 /app/hardforce.py $n 240 > /app/hard-$n.log 2>&1) & done
+[?2004l[1] 666
+[2] 667
+[?2004hroot@c5deb98b1c63:/app# # Different-seed fixed-fleet refinements for the two already-correct smaller instances.
+[?2004l[?2004hroot@c5deb98b1c63:/app# for pair in 'harbour-lanes 1777' 'old-town 2888'; do set -- $pair; sed "s/991+sum(map(ord,name))/$2+sum(map(ord,name))/" /app/fixedfleet.py > /app/fixed-$2.py; (python3 /app/fixed-$2.py $1 240 > /app/more-$1.log 2>&1) & done
+[?2004l[3] 669
+[4] 671
+[?2004hroot@c5deb98b1c63:/app# wait
+[?2004l[1]   Done                    ( python3 /app/hardforce.py $n 240 > /app/hard-$n.log 2>&1 )
+[2]   Done                    ( python3 /app/hardforce.py $n 240 > /app/hard-$n.log 2>&1 )
+[3]-  Done                    ( python3 /app/fixed-$2.py $1 240 > /app/more-$1.log 2>&1 )
+[4]+  Done                    ( python3 /app/fixed-$2.py $1 240 > /app/more-$1.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,collections,sys,shutil
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));p=json.load(open('/app/plans/'+n+'.json'));b=json.load(open('/app/backup/'+n+'.json'));cp=evaluate(o,p);cb=evaluate(o,b)
+[?2004l[?2004h>  if cb<cp:shutil.copy('/app/backup/'+n+'.json','/app/plans/'+n+'.json');p=b;cp=cb
+[?2004l[?2004h>  print(n,collections.Counter(r['type'] for r in p['routes']),cp)
+[?2004l[?2004h> PY
+[?2004lharbour-lanes Counter({'van': 7, 'bike': 5, 'truck': 1}) 78990
+old-town Counter({'van': 13, 'bike': 9, 'truck': 3}) 154270
+riverside Counter({'van': 20, 'bike': 13, 'truck': 4}) 232135
+north-ring Counter({'van': 27, 'bike': 18, 'truck': 7}) 316246
+[?2004hroot@c5deb98b1c63:/app# mkdir -p /app/best2; cp /app/plans/*.json /app/best2/; python3 - <<'PY'
+[?2004l[?2004h> # New seeds for hard fleet forcing.
+[?2004l[?2004h> s=open('/app/hardforce.py').read().replace('991+sum(map(ord,name))','7349+sum(map(ord,name))')
+[?2004l[?2004h> s=s.replace("'truck':400000", "'truck':1000000")
+[?2004l[?2004h> open('/app/hardforce2.py','w').write(s)
+[?2004l[?2004h> # Add single-route arbitrary swaps by increasing frequency of same-route segment permutations:
+[?2004l[?2004h> s=open('/app/fixedfleet.py').read().replace('991+sum(map(ord,name))','9127+sum(map(ord,name))')
+[?2004l[?2004h> # Allow a=b, making segment replacement/reversal inside a route difficult in existing code, so retain interroute engine;
+[?2004l[?2004h> # lower temperature further for intensive local mileage optimization.
+[?2004l[?2004h> s=s.replace("temp=450*(1-phase)**3+.2", "temp=180*(1-phase)**3+.05")
+[?2004l[?2004h> open('/app/fixedfleet2.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in riverside north-ring; do (python3 /app/hardforce2.py $n 360 > /app/hard2-$n.log 2>&1) & done
+[?2004l[1] 724
+[2] 725
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town; do (python3 /app/fixedfleet2.py $n 360 > /app/fixed2-$n.log 2>&1) & done
+[?2004l[3] 726
+[4] 727
+[?2004hroot@c5deb98b1c63:/app# wait
+[?2004l[1]   Done                    ( python3 /app/hardforce2.py $n 360 > /app/hard2-$n.log 2>&1 )
+[3]-  Done                    ( python3 /app/fixedfleet2.py $n 360 > /app/fixed2-$n.log 2>&1 )
+[4]+  Done                    ( python3 /app/fixedfleet2.py $n 360 > /app/fixed2-$n.log 2>&1 )
+[2]+  Done                    ( python3 /app/hardforce2.py $n 360 > /app/hard2-$n.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,collections,sys,shutil
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));p=json.load(open('/app/plans/'+n+'.json'));b=json.load(open('/app/best2/'+n+'.json'));cp=evaluate(o,p);cb=evaluate(o,b)
+[?2004l[?2004h>  if cb<cp:shutil.copy('/app/best2/'+n+'.json','/app/plans/'+n+'.json');p=b;cp=cb
+[?2004l[?2004h>  print(n,collections.Counter(r['type'] for r in p['routes']),cp)
+[?2004l[?2004h> PY
+[?2004lharbour-lanes Counter({'van': 7, 'bike': 5, 'truck': 1}) 78560
+old-town Counter({'van': 13, 'bike': 9, 'truck': 3}) 152664
+riverside Counter({'van': 20, 'bike': 13, 'truck': 4}) 228962
+north-ring Counter({'van': 27, 'bike': 18, 'truck': 7}) 316246
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> s=open('/app/improve.py').read()
+[?2004l[?2004h> # Work with exactly active routes and forbid emptying any route.
+[?2004l[?2004h> s=s.replace("for t,k in F.items():\n  for _ in range(k['count']-types.count(t)):routes.append([]);types.append(t)", "pass")
+[?2004l[?2004h> s=s.replace("nsA=routes[a][:ia]+routes[a][ia+1:]; ma=inf(nsA,types[a])", "nsA=routes[a][:ia]+routes[a][ia+1:]; ma=inf(nsA,types[a]) if nsA else None")
+[?2004l[?2004h> # Time-based repeated cooling and a different seed.
+[?2004l[?2004h> s=s.replace("rng=random.Random(12345+sum(map(ord,name)))", "rng=random.Random(48271+sum(map(ord,name)))")
+[?2004l[?2004h> s=s.replace("phase=(it%250000)/250000; temp=3500*(1-phase)**2+25", "phase=((time.time()-start)/secs*10)%1; temp=500*(1-phase)**3+.1")
+[?2004l[?2004h> # Search every destination route rather than only a proximity shortlist.
+[?2004l[?2004h> s=s.replace("candidates.sort(); b=rng.choice(candidates[:min(8,len(candidates))])[1]", "candidates.sort(); b=rng.choice(candidates[:min(len(candidates),20)])[1]")
+[?2004l[?2004h> open('/app/fixed_reloc.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 -m py_compile /app/fixed_reloc.py
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,collections
+[?2004l[?2004h> for n in ['riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));C={c['id']:c for c in o['customers']};p=json.load(open('/app/plans/'+n+'.json'));F={f['type']:f for f in o['fleet']}
+[?2004l[?2004h>  print('\n',n,'total demand',sum(c['demand'] for c in C.values()))
+[?2004l[?2004h>  for t in ['bike','van','truck']:
+[?2004l[?2004h>   loads=sorted(sum(C[x]['demand'] for x in r['stops']) for r in p['routes'] if r['type']==t)
+[?2004l[?2004h>   print(t,loads,'spare',len(loads)*F[t]['capacity']-sum(loads))
+[?2004l[?2004h> PY
+[?2004l
+ riverside total demand 1786
+bike [2, 8, 8, 9, 10, 10, 11, 11, 11, 12, 13, 14, 14] spare 49
+van [16, 40, 47, 51, 51, 53, 54, 54, 56, 56, 57, 58, 58, 59, 59, 59, 59, 59, 60, 60] spare 134
+truck [143, 146, 149, 149] spare 13
+
+ north-ring total demand 2686
+bike [8, 10, 11, 12, 12, 12, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14] spare 24
+van [39, 41, 48, 52, 52, 53, 54, 55, 55, 57, 57, 57, 58, 58, 58, 58, 58, 58, 59, 59, 59, 59, 59, 59, 60, 60, 60] spare 118
+truck [125, 126, 135, 140, 141, 144, 145] spare 94
+[?2004hroot@c5deb98b1c63:/app# cp /app/plans/harbour-lanes.json /app/harbour-before.json; cp /app/plans/old-town.json /app/old-before.json
+[?2004l[?2004hroot@c5deb98b1c63:/app# (python3 /app/fixed_reloc.py harbour-lanes 300 > /app/reloc-harbour.log 2>&1) & (python3 /app/fixed_reloc.py old-town 300 > /app/reloc-old.log 2>&1) & wait
+[?2004l[1] 794
+[2] 795
+[1]-  Done                    ( python3 /app/fixed_reloc.py harbour-lanes 300 > /app/reloc-harbour.log 2>&1 )
+[2]+  Done                    ( python3 /app/fixed_reloc.py old-town 300 > /app/reloc-old.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# tail -n 5 /app/reloc-harbour.log /app/reloc-old.log; python3 /app/tools/check_plan.py /app/orders/harbour-lanes.json /app/plans/harbour-lanes.json; python3 /app/tools/check_plan.py /app/orders/old-town.json /app/plans/old-town.json
+[?2004l==> /app/reloc-harbour.log <==
+harbour-lanes best 78439 iterations 16571785 accepted 641397
+
+==> /app/reloc-old.log <==
+old-town 2142196 152304
+old-town 4331700 151904
+old-town 4331744 151903
+old-town best 151749 iterations 10631068 accepted 596708
+feasible, cost 78439
+feasible, cost 151749
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> s=open('/app/descent.py').read()
+[?2004l[?2004h> # Identify the least-loaded truck after metadata initialization and penalize its remaining load.
+[?2004l[?2004h> s=s.replace("M=[info(s,t) for s,t in zip(R,T)];score=sum(m[0] for m in M);best=score", "M=[info(s,t) for s,t in zip(R,T)]; target=min((i for i,t in enumerate(T) if t=='truck' and R[i]),key=lambda i:M[i][2]); PEN=10000; score=sum(m[0] for m in M)+PEN*M[target][2];best=score")
+[?2004l[?2004h> s=s.replace("delta=ma[0]+mb[0]-M[a][0]-M[b][0]", "delta=ma[0]+mb[0]-M[a][0]-M[b][0]+PEN*((ma[2]-M[a][2] if a==target else 0)+(mb[2]-M[b][2] if b==target else 0))")
+[?2004l[?2004h> # Do not append additional empty fleet slots; only redistribute among currently active routes.
+[?2004l[?2004h> s=s.replace("for t,k in F.items():\n for _ in range(k['count']-T.count(t)):R.append([]);T.append(t)", "pass")
+[?2004l[?2004h> # Skip final 2-opt accounting, whose score excludes the temporary penalty; write the evacuated best directly.
+[?2004l[?2004h> pos=s.index("# Final exhaustive feasible 2-opt until stable.")
+[?2004l[?2004h> end=s.index("out={'routes'",pos)
+[?2004l[?2004h> s=s[:pos]+"# Temporary objective complete.\n"+s[end:]
+[?2004l[?2004h> open('/app/evacuate.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# python3 -m py_compile /app/evacuate.py
+[?2004l[?2004hroot@c5deb98b1c63:/app# cp /app/plans/riverside.json /app/river-pre-evac.json; cp /app/plans/north-ring.json /app/north-pre-evac.json
+[?2004l[?2004hroot@c5deb98b1c63:/app# # Independent relocation seeds for small instances.
+[?2004l[?2004hroot@c5deb98b1c63:/app# sed 's/48271+sum(map(ord,name))/137111+sum(map(ord,name))/' /app/fixed_reloc.py > /app/fixed_reloc2.py
+[?2004l[?2004hroot@c5deb98b1c63:/app# (python3 /app/evacuate.py riverside 240 > /app/evac-river.log 2>&1) &
+[?2004l[1] 857
+[?2004hroot@c5deb98b1c63:/app# (python3 /app/evacuate.py north-ring 240 > /app/evac-north.log 2>&1) &
+[?2004l[2] 858
+[?2004hroot@c5deb98b1c63:/app# (python3 /app/fixed_reloc2.py harbour-lanes 240 > /app/reloc2-harbour.log 2>&1) &
+[?2004l[3] 859
+[?2004hroot@c5deb98b1c63:/app# (python3 /app/fixed_reloc2.py old-town 240 > /app/reloc2-old.log 2>&1) &
+[?2004l[4] 860
+[?2004hroot@c5deb98b1c63:/app# wait
+[?2004l[1]   Done                    ( python3 /app/evacuate.py riverside 240 > /app/evac-river.log 2>&1 )
+[3]-  Done                    ( python3 /app/fixed_reloc2.py harbour-lanes 240 > /app/reloc2-harbour.log 2>&1 )
+[4]+  Done                    ( python3 /app/fixed_reloc2.py old-town 240 > /app/reloc2-old.log 2>&1 )
+[2]+  Done                    ( python3 /app/evacuate.py north-ring 240 > /app/evac-north.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# tail -n 4 /app/evac-*.log /app/reloc2-*.log; python3 - <<'PY'
+[?2004l[?2004h> import json,collections,sys
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json'));p=json.load(open('/app/plans/'+n+'.json'));print(n,collections.Counter(r['type'] for r in p['routes']),evaluate(o,p))
+[?2004l[?2004h> PY
+[?2004l==> /app/evac-north.log <==
+north-ring 1773699 310761
+north-ring 1793549 310134
+north-ring 2080155 310123
+north-ring final 310123 10877801
+
+==> /app/evac-river.log <==
+riverside 1494568 221486
+riverside 2805961 221437
+riverside 2837699 221333
+riverside final 221333 10562128
+
+==> /app/reloc2-harbour.log <==
+harbour-lanes best 78439 iterations 6843705 accepted 265220
+
+==> /app/reloc2-old.log <==
+old-town best 151586 iterations 4451725 accepted 253943
+harbour-lanes Counter({'van': 7, 'bike': 5, 'truck': 1}) 78439
+old-town Counter({'van': 13, 'bike': 9, 'truck': 3}) 151586
+riverside Counter({'van': 20, 'bike': 13, 'truck': 3}) 221333
+north-ring Counter({'van': 27, 'bike': 16, 'truck': 6}) 310123
+[?2004hroot@c5deb98b1c63:/app# mkdir -p /app/multi; python3 - <<'PY'
+[?2004l[?2004h> import json,shutil
+[?2004l[?2004h> names=['harbour-lanes','old-town','riverside','north-ring']
+[?2004l[?2004h> for n in names:
+[?2004l[?2004h>  for k in range(4):
+[?2004l[?2004h>   a=f'{n}-m{k}';o=json.load(open(f'/app/orders/{n}.json'));o['name']=a
+[?2004l[?2004h>   json.dump(o,open(f'/app/orders/{a}.json','w'));shutil.copy(f'/app/plans/{n}.json',f'/app/plans/{a}.json')
+[?2004l[?2004h> for k,seed in enumerate([314159,271828,161803,141421]):
+[?2004l[?2004h>  s=open('/app/fixed_reloc.py').read().replace('48271+sum(map(ord,name))',f'{seed}+sum(map(ord,name))')
+[?2004l[?2004h>  open(f'/app/multi/reloc{k}.py','w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do for k in 0 1 2 3; do (python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1) & done; done; wait
+[?2004l[1] 912
+[2] 913
+[3] 914
+[4] 915
+[5] 916
+[6] 917
+[7] 918
+[8] 919
+[9] 920
+[10] 921
+[11] 922
+[12] 923
+[13] 924
+[14] 925
+[15] 926
+[16] 927
+[1]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[2]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[3]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[4]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[5]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[6]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[7]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[8]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[9]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[10]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[11]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[12]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[13]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[14]   Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[15]-  Done                    ( python3 /app/multi/reloc$k.py $n-m$k 300 > /app/multi/$n-$k.log 2>&1 )
+[?2004hroot@c5deb98b1c63:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,sys,shutil,collections
+[?2004l[?2004h> sys.path.insert(0,'/app/tools');from check_plan import evaluate
+[?2004l[?2004h> for n in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('/app/orders/'+n+'.json')); candidates=[('/app/plans/'+n+'.json',json.load(open('/app/plans/'+n+'.json')))]
+[?2004l[?2004h>  for k in range(4): candidates.append((f'/app/plans/{n}-m{k}.json',json.load(open(f'/app/plans/{n}-m{k}.json'))))
+[?2004l[?2004h>  vals=[(evaluate(o,p),path,p) for path,p in candidates]; cost,path,p=min(vals)
+[?2004l[?2004h>  json.dump(p,open('/app/plans/'+n+'.json','w'),indent=1)
+[?2004l[?2004h>  print(n,'candidates',[x[0] for x in vals],'kept',cost,collections.Counter(r['type'] for r in p['routes']))
+[?2004l[?2004h> PY
+[?2004lharbour-lanes candidates [78439, 78439, 78439, 78439, 78439] kept 78439 Counter({'van': 7, 'bike': 5, 'truck': 1})
+old-town candidates [151586, 151586, 151586, 151586, 151586] kept 151586 Counter({'van': 13, 'bike': 9, 'truck': 3})
+riverside candidates [221333, 221333, 221333, 221333, 221333] kept 221333 Counter({'van': 20, 'bike': 13, 'truck': 3})
+north-ring candidates [310123, 310123, 309845, 310123, 310123] kept 309845 Counter({'van': 27, 'bike': 16, 'truck': 6})
+[?2004hroot@c5deb98b1c63:/app# for n in harbour-lanes old-town riverside north-ring; do printf '%-16s ' "$n"; python3 /app/tools/check_plan.py /app/orders/$n.json /app/plans/$n.json; done
+[?2004lharbour-lanes    feasible, cost 78439
+old-town         feasible, cost 151586
+riverside        feasible, cost 221333
+north-ring       feasible, cost 309845
+[?2004hroot@c5deb98b1c63:/app# 

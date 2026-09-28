@@ -1,0 +1,137 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 25 items
+
+../../tests/test_outputs.py .....F...........F...F...                    [100%]
+
+=================================== FAILURES ===================================
+___________________ test_rule_2_6_net_exactly_on_a_threshold ___________________
+
+    def test_rule_2_6_net_exactly_on_a_threshold():
+        """Net purchases exactly on a threshold reach that tier, directly and after returns; a cent short does not."""
+>       check_family("tier_threshold")
+
+/tests/test_outputs.py:248: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'settlements': [{'account': 'ENQM3-V', 'purchases': 1200000, 'returns': 0, 'net': 1200000, ...}, {'account': 'WN3D42D...: 0, 'net': 1200000, ...}, {'account': 'DUD3PZHCV81-K', 'purchases': 1300000, 'returns': 100000, 'net': 1200000, ...}]}
+expected = [{'account': 'ENQM3-V', 'purchases': 1200000, 'returns': 0, 'net': 1200000, ...}, {'account': 'WN3D42DUR5', 'purchases...': 0, 'net': 3600012, ...}, {'account': 'DUD3PZHCV81-K', 'purchases': 1300000, 'returns': 100000, 'net': 1200000, ...}]
+label = 'tier_threshold job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, settlements in job order, each with exactly the README's keys, every value
+        but the account code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["settlements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["settlements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} settlements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} settlement {index} ({ref['account']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: tier_threshold job 0 settlement 3 ('DTMN6CKK') purchases: 1200000, expected 3600012
+E               assert (<class 'int'> is <class 'int'> and 1200000 == 3600012)
+E                +  where <class 'int'> = type(1200000)
+E                +  and   <class 'int'> = type(3600012)
+
+/tests/test_outputs.py:211: AssertionError
+_________________ test_loose_units_keep_their_invoice_quarter __________________
+
+    def test_loose_units_keep_their_invoice_quarter():
+        """A line below a carton keeps counting toward the quarter of its invoice date, as the shipped package counts it."""
+>       rows = check_family("loose_units")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'settlements': [{'account': 'YCS', 'purchases': 7136040, 'returns': 0, 'net': 7136040, ...}, {'account': '8149NZLVSHM2VQUB', 'purchases': 6007144, 'returns': 0, 'net': 6007144, ...}]}
+expected = [{'account': 'YCS', 'purchases': 9681735, 'returns': 0, 'net': 9681735, ...}, {'account': '8149NZLVSHM2VQUB', 'purchases': 7640752, 'returns': 0, 'net': 7640752, ...}]
+label = 'loose_units job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, settlements in job order, each with exactly the README's keys, every value
+        but the account code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["settlements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["settlements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} settlements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} settlement {index} ({ref['account']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: loose_units job 0 settlement 0 ('YCS') purchases: 7136040, expected 9681735
+E               assert (<class 'int'> is <class 'int'> and 7136040 == 9681735)
+E                +  where <class 'int'> = type(7136040)
+E                +  and   <class 'int'> = type(9681735)
+
+/tests/test_outputs.py:211: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """12 tier rows, thresholds of 10^11, 100 accounts, 400 lines, 100 returns, 50 notices, 200 sales, every field end."""
+>       check_family("limits_accounts")
+
+/tests/test_outputs.py:380: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'settlements': [{'account': 'KU85Y9Y', 'purchases': 501200100, 'returns': 4999800060, 'net': -4498599960, ...}, {'acc...60, 'net': -4498599960, ...}, {'account': 'BD1E', 'purchases': 0, 'returns': 499980000000, 'net': -499980000000, ...}]}
+expected = [{'account': 'KU85Y9Y', 'purchases': 5012000100, 'returns': 4999800060, 'net': 12200040, ...}, {'account': 'Y', 'purch...800060, 'net': 12200040, ...}, {'account': 'BD1E', 'purchases': 0, 'returns': 499980000000, 'net': -499980000000, ...}]
+label = 'limits_accounts job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, settlements in job order, each with exactly the README's keys, every value
+        but the account code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["settlements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["settlements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} settlements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} settlement {index} ({ref['account']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: limits_accounts job 0 settlement 0 ('KU85Y9Y') purchases: 501200100, expected 5012000100
+E               assert (<class 'int'> is <class 'int'> and 501200100 == 5012000100)
+E                +  where <class 'int'> = type(501200100)
+E                +  and   <class 'int'> = type(5012000100)
+
+/tests/test_outputs.py:211: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_carton_shipment_counts_by_receipt
+PASSED ../../tests/test_outputs.py::test_rule_2_2_line_of_exactly_12_units_is_a_carton
+PASSED ../../tests/test_outputs.py::test_rule_3_3_returns_less_40_cents_a_unit
+PASSED ../../tests/test_outputs.py::test_rule_3_3_returns_on_the_quarter_edges
+PASSED ../../tests/test_outputs.py::test_rule_3_5_tier_is_picked_on_net_purchases
+PASSED ../../tests/test_outputs.py::test_rule_2_6_net_below_nought_reaches_no_tier
+PASSED ../../tests/test_outputs.py::test_rule_3_6_volume_rebate_rounded_half_up
+PASSED ../../tests/test_outputs.py::test_rule_4_1_growth_bonus_on_the_increase
+PASSED ../../tests/test_outputs.py::test_rule_4_1_growth_exactly_110_per_cent
+PASSED ../../tests/test_outputs.py::test_rule_4_1_no_prior_purchases_no_bonus
+PASSED ../../tests/test_outputs.py::test_rule_5_1_price_drop_earns_cut_times_on_hand
+PASSED ../../tests/test_outputs.py::test_rule_2_4_cut_of_exactly_250_cents_is_a_price_drop
+PASSED ../../tests/test_outputs.py::test_rule_5_2_contract_sale_chargeback
+PASSED ../../tests/test_outputs.py::test_rule_2_5_sale_exactly_100_cents_under_cost_is_a_contract_sale
+PASSED ../../tests/test_outputs.py::test_rule_6_2_minimum_settlement
+PASSED ../../tests/test_outputs.py::test_rule_6_2_settlement_of_exactly_25000_cents
+PASSED ../../tests/test_outputs.py::test_tidy_up_notices_keep_todays_credit
+PASSED ../../tests/test_outputs.py::test_price_match_sales_keep_todays_chargeback
+PASSED ../../tests/test_outputs.py::test_statement_order_and_keys
+PASSED ../../tests/test_outputs.py::test_generated_jobs
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_2_6_net_exactly_on_a_threshold
+FAILED ../../tests/test_outputs.py::test_loose_units_keep_their_invoice_quarter
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+========================= 3 failed, 22 passed in 1.02s =========================

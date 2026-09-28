@@ -1,0 +1,156 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-gnu-sed-reimplementation",
+ "report_path": "workspace/revision/12e6eda4-8ced-4dcd-928d-7abc22b133a9/v8/12e6eda4-8ced-4dcd-928d-7abc22b133a9.md",
+ "returned_snapshot_sha256": "b091600c616a33ffbb2d51b2c5bbaeb1021d8d2b9baa1ef6f257188ad352ddfd",
+ "repaired_snapshot_sha256": "1d540e54c2e83a8c84e73245eb671d5c1d4e27c2b5f0a834cc0bd4a6a8cc3d5b",
+ "note": "v8 quality panel: 10 blocking findings (7 Sound Verifier, 3 Correct Reference). Coherent Contract, Protected Ground Truth and Deterministic Execution were clean. Besides the named findings, a 6,400-script random differential of the reference against GNU sed 4.9 (rev8/fuzz.py) found three reference classes the panel had not named: a b/t/T/: label ended by } or whitespace, first~0 opening a range, and a line-number range end that n/N read past (GNU closes the range without selecting that line). The reference now follows the binary on all three, 0~0 and [a-c-e] now fail as in GNU sed, and the three manual departures among them are listed in scope.md as left open (receipts ledger-receipts-v8/reference-fuzz-*.json). instruction.md is unchanged; environment/ changes only in scope.md's departure sentence.",
+ "findings": [
+  {
+   "id": "v8-1",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Confirmed: a 1024-byte chunking reader scored reward 1 on the returned verifier. Line length is not limited by the contract, so this is backed: sweep_long_lines (14 cases) runs lines of 1025, 1401 and 4100 characters and pattern spaces past 12 KB through =, p, s with a large number flag, N/P/D, G and a 1025-repeat interval.",
+   "reproduction": "ledger-receipts-v8/repro-long-line-chunked-reader.json",
+   "closure": "wrong-paths/long-line-chunked-reader.json",
+   "witness": "test_outputs.py::test_sweep_long_lines",
+   "gate": {
+    "rule": "rev8 sweeps.json (built by rev8/gen_sweeps.py, every case kept only when GNU sed exits as expected and its output equals what the manual says) plus wrong_path_runner receipts; candidate for blueprint \u00a75: numeric parameters at two or more digits, character sets over the whole input alphabet, every delimiter, runtime-vs-parse-time state"
+   }
+  },
+  {
+   "id": "v8-2",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Confirmed (reward 1 on returned). sweep_numbers (41 cases) takes every numeric parameter at two digits or more: line addresses, addr1,+N, addr1,~N, first~step on both sides, s number flags, q/Q exit codes and BRE/ERE interval bounds.",
+   "reproduction": "ledger-receipts-v8/repro-plus-offset-one-digit.json",
+   "closure": "wrong-paths/plus-offset-one-digit.json",
+   "witness": "test_outputs.py::test_sweep_numbers",
+   "gate": {
+    "rule": "rev8 sweeps.json (built by rev8/gen_sweeps.py, every case kept only when GNU sed exits as expected and its output equals what the manual says) plus wrong_path_runner receipts; candidate for blueprint \u00a75: numeric parameters at two or more digits, character sets over the whole input alphabet, every delimiter, runtime-vs-parse-time state"
+   }
+  },
+  {
+   "id": "v8-3",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Confirmed (reward 1 on returned). Two-digit lower and upper interval bounds in BRE and ERE, on groups and in addresses, are part of sweep_numbers.",
+   "reproduction": "ledger-receipts-v8/repro-interval-bounds-one-digit.json",
+   "closure": "wrong-paths/interval-bounds-one-digit.json",
+   "witness": "test_outputs.py::test_sweep_numbers",
+   "gate": {
+    "rule": "rev8 sweeps.json (built by rev8/gen_sweeps.py, every case kept only when GNU sed exits as expected and its output equals what the manual says) plus wrong_path_runner receipts; candidate for blueprint \u00a75: numeric parameters at two or more digits, character sets over the whole input alphabet, every delimiter, runtime-vs-parse-time state"
+   }
+  },
+  {
+   "id": "v8-4",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Confirmed (reward 1 on returned). sweep_classes (42 cases) runs every [:class:] name, its negation, the \\w \\W \\s \\S \\b escapes, . and full-range brackets over one line holding every ASCII byte 1-127 except newline, so any class that is wrong on any byte fails.",
+   "reproduction": "ledger-receipts-v8/repro-cntrl-without-del.json",
+   "closure": "wrong-paths/cntrl-without-del.json",
+   "witness": "test_outputs.py::test_sweep_classes",
+   "gate": {
+    "rule": "rev8 sweeps.json (built by rev8/gen_sweeps.py, every case kept only when GNU sed exits as expected and its output equals what the manual says) plus wrong_path_runner receipts; candidate for blueprint \u00a75: numeric parameters at two or more digits, character sets over the whole input alphabet, every delimiter, runtime-vs-parse-time state"
+   }
+  },
+  {
+   "id": "v8-5",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Confirmed (reward 1 on returned). sweep_delimiters (201 cases) uses every printable ASCII character and backslash as the delimiter of s (with the g flag) and of a regex address, and twelve punctuation delimiters escaped inside both regexp and replacement.",
+   "reproduction": "ledger-receipts-v8/repro-s-backslash-delimiter-rejected.json",
+   "closure": "wrong-paths/s-backslash-delimiter-rejected.json",
+   "witness": "test_outputs.py::test_sweep_delimiters",
+   "gate": {
+    "rule": "rev8 sweeps.json (built by rev8/gen_sweeps.py, every case kept only when GNU sed exits as expected and its output equals what the manual says) plus wrong_path_runner receipts; candidate for blueprint \u00a75: numeric parameters at two or more digits, character sets over the whole input alphabet, every delimiter, runtime-vs-parse-time state"
+   }
+  },
+  {
+   "id": "v8-6",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Reproduced as a contract gap rather than a reference bug: GNU sed 4.9 prints x with status 0 for -n 1,0p, and the reference does the same, while manual 4.5 says any other use of 0 gives an error and scope.md did not list the departure. Repair: scope.md now lists 'a 0 as the second address of a range' among the places where the binary departs from its manual, which are left open; no graded case uses it. The reference keeps the binary's behaviour.",
+   "reproduction": "ledger-receipts-v8/contract-findings-6-7-8-returned.json",
+   "closure": "ledger-receipts-v8/contract-findings-6-8-repaired.json",
+   "gate": {
+    "not_mechanizable": "finding binary-vs-manual departures needs the binary; recorded as the fuzz differential in rev8/fuzz.py, which surfaced three more such places"
+   }
+  },
+  {
+   "id": "v8-7",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "disputed",
+   "rationale": "Refuted by execution: bracket() only starts a range when the character after the current one is '-', so in [-a] the leading '-' is a literal. python3 sed.py -n '/[-a]/p' on Z, -, a prints '-\\na\\n' with status 0, byte-identical to GNU sed 4.9; the panel's mutant (leading '-' opens a range) is already rejected by test_bracket_expressions and test_matrix_brackets on the returned snapshot. rev8 adds sweep_bracket_edges (32 cases: leading/trailing '-', leading ']', [^-a], [--/], [!--], BRE and ERE) as a further witness.",
+   "contract_citation": {
+    "file": "environment/app/docs/sed.txt",
+    "anchor": "A list may include sequences like"
+   },
+   "counterexample": "ledger-receipts-v8/contract-findings-6-7-8-returned.json",
+   "supporting_receipts": [
+    "ledger-receipts-v8/repro-leading-hyphen-starts-range.json",
+    "wrong-paths/leading-hyphen-starts-range.json"
+   ],
+   "contested_in_channel": null,
+   "gate": {
+    "rule": "wrong path leading-hyphen-starts-range kept in the regression suite (witness test_sweep_bracket_edges)"
+   }
+  },
+  {
+   "id": "v8-8",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Reproduced as a contract gap rather than a reference bug: with backslash as the delimiter, GNU sed 4.9 rejects an escaped embedded backslash (status 1, 'unknown command'), and so does the reference, while the manual's \\%REGEXP% entry says embedded delimiters are escaped by a backslash. Under 'Scripts never fail' such a script is outside the checks, but scope.md did not say so. Repair: scope.md lists 'a backslash as the delimiter of a regular expression that itself contains a backslash' as a departure left open. Backslash as a plain delimiter is now graded (sweep_delimiters).",
+   "reproduction": "ledger-receipts-v8/contract-findings-6-7-8-returned.json",
+   "closure": "ledger-receipts-v8/contract-findings-6-8-repaired.json",
+   "gate": {
+    "not_mechanizable": "same as v8-6"
+   }
+  },
+  {
+   "id": "v8-9",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Confirmed (reward 1 on returned). sweep_empty_regex (10 cases) reaches // after commands skipped by a line address, by !, by b and t branches, after an address regex that did not match, and across n.",
+   "reproduction": "ledger-receipts-v8/repro-empty-regex-bound-at-parse-time.json",
+   "closure": "wrong-paths/empty-regex-bound-at-parse-time.json",
+   "witness": "test_outputs.py::test_sweep_empty_regex",
+   "gate": {
+    "rule": "rev8 sweeps.json (built by rev8/gen_sweeps.py, every case kept only when GNU sed exits as expected and its output equals what the manual says) plus wrong_path_runner receipts; candidate for blueprint \u00a75: numeric parameters at two or more digits, character sets over the whole input alphabet, every delimiter, runtime-vs-parse-time state"
+   }
+  },
+  {
+   "id": "v8-10",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Confirmed (reward 1 on returned: the mutant appends site-packages to sys.path and imports pytest). test.sh now makes /usr/local/lib/python3*/site-packages mode 700 before any candidate code runs, so the demoted candidate cannot import from it whatever it does to sys.path; test_editing_is_done_in_python also checks that the job user cannot list it.",
+   "reproduction": "ledger-receipts-v8/repro-readds-site-packages.json",
+   "closure": "wrong-paths/readds-site-packages.json",
+   "witness": "test_outputs.py::test_several_files",
+   "gate": {
+    "rule": "tests/test.sh seals every verifier-only package directory root-only (same pattern as the sed binary); candidate for verifier_static_checks: a demoted Python candidate plus pip packages in the verifier image without a root-only seal"
+   }
+  }
+ ],
+ "previous_findings": []
+}

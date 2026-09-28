@@ -1,0 +1,275 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "86597fbb316d02cf994afb5122b87997c8187770131bafad402e65327dae7997",
+  "severity": "Advisory",
+  "summary": "Every manual rule (1.1-6.1) and both carve-outs left to today's code (edge-payday corrections and weeks under 1,000 cents) have fixtures that isolate them and change the outcome when the rule is wrong. Every expected figure I recomputed by hand from the manual agrees with the sealed value. Comparison is type-strict and ignores key order. The only issue is an Advisory false-rejection path: the read-probe control depends on the candidate-editable /app/README.md.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "instruction.md",
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/td-benefits-manual.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/tools/tdbenefit_run.py",
+      "environment/app/src/tdbenefit/__init__.py",
+      "environment/app/src/tdbenefit/dates.py",
+      "environment/app/src/tdbenefit/disability.py",
+      "environment/app/src/tdbenefit/money.py",
+      "environment/app/src/tdbenefit/partial.py",
+      "environment/app/src/tdbenefit/payroll.py",
+      "environment/app/src/tdbenefit/rates.py",
+      "environment/app/src/tdbenefit/statement.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/average_weekly_wage.jsonl",
+      "tests/expected/base_period.jsonl",
+      "tests/expected/corrections.jsonl",
+      "tests/expected/differential-corrections.jsonl",
+      "tests/expected/differential-low_partial_weeks.jsonl",
+      "tests/expected/disability_days.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/limits_claims.jsonl",
+      "tests/expected/limits_job.jsonl",
+      "tests/expected/low_partial_weeks.jsonl",
+      "tests/expected/low_wage_rate.jsonl",
+      "tests/expected/no_base_wages.jsonl",
+      "tests/expected/no_wage_loss.jsonl",
+      "tests/expected/partial_benefit.jsonl",
+      "tests/expected/partial_week_threshold.jsonl",
+      "tests/expected/rate_bounds.jsonl",
+      "tests/expected/rate_two_thirds.jsonl",
+      "tests/expected/retroactive_days.jsonl",
+      "tests/expected/row_in_force.jsonl",
+      "tests/expected/statement_order.jsonl",
+      "tests/expected/ttd_rounding.jsonl",
+      "tests/expected/waiting_period.jsonl",
+      "tests/expected/weeks_pay.jsonl",
+      "tests/expected/weeks_pay_threshold.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/shipped/app/** not opened individually: packet-manifest.json lists SHA-256 values identical to the environment/app counterparts I read (e.g. tdbenefit_run.py 272fd415..., payroll.py 24af57c7...), so the content was reviewed through those files."
+    ]
+  },
+  "findings": [
+    {
+      "id": "AXIS-1",
+      "severity": "Advisory",
+      "claim": "The read-probe control in test_candidate_cannot_read_verifier_state uses /app/README.md as its world-readable file. A candidate that deletes or moves the README, which the contract does not forbid, makes that control fail and turns the reward to 0 without any statement being wrong.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "The instruction only fixes /app/tools/tdbenefit_run.py byte for byte (instruction.md:1). It asks for statements from the driver and places no requirement on README.md bytes or presence, so a submission with correct statements and an unchanged driver should earn reward 1.",
+        "actual_behavior": "If /app/README.md is missing, the probe's open() raises OSError and the probe exits 0. _unreadable_by_candidate then returns True, so `assert not _unreadable_by_candidate('/app/README.md')` fails.",
+        "trace_or_receipt": "test_outputs.py:450-453: the probe exits 0 on OSError, and a return code of 0 means 'unreadable'. test_outputs.py:460 asserts that README.md is readable, as a control. test.sh:16 applies chmod -R a+rX /app, which fixes permissions but cannot restore a deleted file. test.sh:20-26 sets reward 1 only when pytest returns 0."
+      },
+      "reachable_case_or_path": "The candidate fixes src/tdbenefit correctly, leaves the driver untouched, and removes or renames /app/README.md (for example while restructuring docs). test_candidate_cannot_read_verifier_state fails, pytest returns non-zero and the reward is 0.",
+      "graded_effect": "A solution with correct statements can be rejected over a file the contract does not grade. The action is implausible for a normal solver, so I leave this outside the blocking decision.",
+      "citations": [
+        "tests/test_outputs.py:450-460",
+        "tests/test.sh:16",
+        "tests/test.sh:20-26",
+        "instruction.md:1"
+      ],
+      "root_invariant": "Verifier self-checks should depend only on state the verifier creates or the contract pins, not on candidate-editable files that are not graded.",
+      "authority": [
+        "instruction.md:1"
+      ],
+      "implementation_sites": [
+        "tests/test_outputs.py:460"
+      ],
+      "sibling_variants": [
+        "No other control reads candidate-editable files. The driver checks at test_outputs.py:463-469 rest on the contract-pinned driver path, and /tests, ROSTER, the shipped copy and /logs/verifier are all verifier-owned."
+      ],
+      "interaction_variants": [
+        "test.sh:16 chmod -R a+rX /app handles permissions but not deletion or replacement with a directory. A README.md replaced by a directory is still readable through os.listdir in the probe, so only deletion or rename triggers the failure."
+      ],
+      "minimal_repair_boundary": "Make the control probe read a world-readable file the verifier creates itself (for example in a fresh 0755 tempdir), not /app/README.md.",
+      "closure_evidence": [
+        "Delete /app/README.md in an otherwise-correct submission and confirm the reward stays 1.",
+        "Confirm that the control still fails when the probe user cannot read the verifier-created file."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Mapped every numbered manual rule (1.1-6.1) and both carve-outs left to today's code to a named test and fixture in test_outputs.py:243-342.",
+    "Recomputed sealed expectations by hand from the manual (not from any reference). Claims checked: W601086, W543087, W217093 (low_partial_weeks); W774079, W854080, W514085 (corrections); W950007 (weeks_pay); W104035, W834038 (rate_bounds); W214027, W735028, W358032 (row_in_force); W937042, W884039, W799040, W771041 (low_wage_rate); W783045 (399-day period); W784054 (14-day retro); W661070 (partial cap); W727076 (no wage loss); W297107, W369105, W189103 (limits); W100111 (generated); and the four hand-worked row-figure claims. Every recomputed value matched.",
+    "Traced the shipped package for each differential pair and job to confirm the pairs are contract-grounded. differential-corrections: the 1,999- and 777-cent edge lines keep the payday week. differential-low_partial_weeks: shipped and manual agree on AWW and rate (150,000/80,000 max-capped and 80,001/60,000 min-held); rows 3-4 separate 3/5 from 2/3.",
+    "Checked the plausible wrong implementations below against the fixtures and found each one fails: divide by weeks paid, 3/5 rate, newest row, row effective after the injury, missing 3.5 or <= in 3.5, 3.5 tested against the 2/3 figure, exclusive period days, 7 waiting days, retro at >14, floored ttd, uncapped partial, 3/5 or 2/3 applied to all partial weeks, zero benefit for low weeks, tpd_weeks counting only weeks of 1,000 cents or more, corrections shifted like a week's pay or dropped, negative wage loss, and weeks' pay not shifted.",
+    "Checked that compare() parses the JSON, compares keys as a set (not in order), compares values type-strictly (rejecting bool and float) and checks statement order. The instruction and README require these.",
+    "Checked the execution path: the driver is replaced by the verifier's copy, /app is sealed, then setpriv runs as the unprivileged uid with -I -S under the same pinned python 3.13 image as the environment, the job file has a neutral name and cwd is fresh. The stdlib-only package runs under -S.",
+    "Checked that within_limits enforces section 1 on every sealed job and on every relabelled or hand-worked job, and that trap_inputs confines inputs the manual leaves open to their declared families."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails when it is missing or reversed",
+      "status": "checked",
+      "reason": "Each rule family compares complete statements type-strictly. Every rule has at least one fixture whose outcome changes when the rule is wrong, e.g. W854080 for corrections, W809008/W616009 for the 2,000-cent threshold, W358032 for row in force, W834038 for 3.5 compared against the 2/3 figure, and the 13/14/15 retro claims.",
+      "evidence": [
+        "tests/test_outputs.py:225-240",
+        "tests/test_outputs.py:243-342",
+        "tests/expected/weeks_pay_threshold.jsonl:1",
+        "tests/expected/row_in_force.jsonl:3",
+        "tests/expected/rate_bounds.jsonl:1",
+        "tests/expected/retroactive_days.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result (values, membership, uniqueness, required outputs)",
+      "status": "checked",
+      "reason": "compare() requires exactly one top-level key, the statement count, the exact key set, integer types and equal values for all ten fields.",
+      "evidence": [
+        "tests/test_outputs.py:225-235",
+        "environment/app/README.md:35-50"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case for each named domain rule (not only held-out variation)",
+      "status": "checked",
+      "reason": "There is one family per rule, and the fixtures are built to isolate it: every weekday of injury, both base-period edges, 1/5/9/12-week divisors, rate at, above and below max and min, the day before, on and after a row change, one-day and 399-day periods, 1-4 waiting days, remainders in ttd rounding, and 999/1,000/1,001-cent weeks. Hand-worked row-figure jobs cover the 40th row and the extreme max and min figures.",
+      "evidence": [
+        "tests/expected/weeks_pay.jsonl:1-4",
+        "tests/expected/base_period.jsonl:1",
+        "tests/expected/average_weekly_wage.jsonl:1-2",
+        "tests/expected/disability_days.jsonl:1",
+        "tests/expected/waiting_period.jsonl:1",
+        "tests/test_outputs.py:414-437"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Try plausible incorrect solutions and confirm rejection",
+      "status": "checked",
+      "reason": "About 20 wrong variants traced statically (see checks_performed). Each fails on at least one sealed fixture. The 3/5 low-week share is separated from 2/3 by W601086/W543087 and by differential rows 3-4 (80,001 AWW, rate held at the 60,000 minimum). The low-week cap is shown by W217093 and differential rows 1-2.",
+      "evidence": [
+        "tests/expected/low_partial_weeks.jsonl:1-3",
+        "tests/expected/differential-low_partial_weeks.jsonl:1-4",
+        "tests/expected/corrections.jsonl:1-2",
+        "tests/expected/differential-corrections.jsonl:1-2"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Accept contract-valid alternatives (formatting, ordering, implementation choices)",
+      "status": "checked",
+      "reason": "Output is parsed JSON with key order ignored, and the driver is fixed. The shuffled wage-line order, which the README permits, is exercised by relabel(). Claim names are drawn from the full 1-24 character domain, including spaces, quotes and non-ASCII. Guards that act only outside section 1 cannot change graded results. The one false-rejection path, a file outside the contract, is reported as AXIS-1.",
+      "evidence": [
+        "tests/test_outputs.py:228-235",
+        "tests/test_outputs.py:345-383",
+        "environment/app/README.md:24-26"
+      ],
+      "finding_ids": [
+        "AXIS-1"
+      ]
+    },
+    {
+      "category": "Enforce documented restrictions (driver unchanged, carve-outs left to today's code)",
+      "status": "checked",
+      "reason": "The delivered driver's bytes are recorded before replacement and compared with the shipped copy, which hash-matches the environment copy. test.sh re-checks the driver with cmp. Both carve-outs are enforced by sealed expectations plus differentials against the shipped package, and trap_inputs keeps other families free of those inputs.",
+      "evidence": [
+        "tests/test_outputs.py:63-71",
+        "tests/test_outputs.py:463-469",
+        "tests/test.sh:22-26",
+        "tests/test_outputs.py:191-222",
+        "packet-manifest.json:20",
+        "packet-manifest.json:56"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "The expectations are sealed and pinned by digest. The shipped comparison copy is verifier-owned (uid 65533, mode 0700). Every sealed job passes the section 1 check, so every graded case is reachable. PYTHONDONTWRITEBYTECODE and -I -S are set. No comparison depends on candidate-controlled data.",
+      "evidence": [
+        "tests/test_outputs.py:74-81",
+        "tests/test_outputs.py:156-189",
+        "tests/test_outputs.py:206-222",
+        "tests/test_outputs.py:36"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization and signed-quantity partitions",
+      "status": "checked",
+      "reason": "There is no state machine. For the signed wage loss, earnings below the AWW, equal to it (47,662 vs 47,662) and above it (500,000) are all present, as is AWW 0 with earnings of 1,000 or more.",
+      "evidence": [
+        "tests/expected/no_wage_loss.jsonl:1",
+        "tests/expected/no_base_wages.jsonl:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding/layout/diagnostic output",
+      "status": "checked",
+      "reason": "The only representation promise, integer JSON values with the claim as a string, is enforced type-strictly. Bytes, key order and whitespace are not imposed. stderr is ignored except on failure.",
+      "evidence": [
+        "instruction.md:5",
+        "tests/test_outputs.py:233-235",
+        "tests/test_outputs.py:139-140"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["3.1 week's pay shift", "2.2 2,000-cent threshold at the base-period edge"],
+      "case_or_path": "W809008: a 2,000-cent line on 2028-10-27 shifts into base week 10-22, and treated as a correction it would sit in week 10-29, outside the base period. W616009: a 2,000-cent line on 2021-04-09 shifts out of the base period.",
+      "status": "checked",
+      "evidence": ["tests/expected/weeks_pay_threshold.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["corrections keep today's payday week", "2.3 base-period edges (both ends)"],
+      "case_or_path": "W854080/W145081: an edge line after the base period is excluded. W595082: an edge line at the first base week is included. Differential pair 2 checks the first-week edge against the shipped package.",
+      "status": "checked",
+      "evidence": ["tests/expected/corrections.jsonl:1-2", "tests/expected/differential-corrections.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["low-week share at today's 3/5 with a cap at the rate", "3.4 maximum and 3.5/minimum"],
+      "case_or_path": "Max-capped rate: 3/5 of the loss exceeds the rate, so the cap binds (W217093, differential rows 1-2). Rate held at the minimum: 3/5 applies uncapped (differential rows 3-4). Uncapped rate: W601086 and W543087.",
+      "status": "checked",
+      "evidence": ["tests/expected/low_partial_weeks.jsonl:1-3", "tests/expected/differential-low_partial_weeks.jsonl:1-4"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 row in force", "3.5 low-wage rate against that row's minimum"],
+      "case_or_path": "W358032: AWW 58,286 is below the newest row's minimum of 60,000 but above the in-force minimum of 52,000, so the rate is 52,000. W735028 and W372030 have AWW below the in-force minimum.",
+      "status": "checked",
+      "evidence": ["tests/expected/row_in_force.jsonl:1-3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 AWW zero", "3.5 rate = AWW and 5.1 partial on zero wage loss"],
+      "case_or_path": "W345021 has no wage lines and W440022 has only out-of-base lines. Both give AWW 0 and rate 0. A 1,000-cent partial week gives tpd 0, and retro days are paid at a rate of 0.",
+      "status": "checked",
+      "evidence": ["tests/expected/no_base_wages.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.6 waiting period", "4.1 retro threshold across multiple periods"],
+      "case_or_path": "W784054 reaches 14 days from three periods (5+4+5). W515046 has 12 periods. W755044 has 4 one- or two-day periods totalling 5 days.",
+      "status": "checked",
+      "evidence": ["tests/expected/retroactive_days.jsonl:1", "tests/expected/disability_days.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["verifier read-probe control", "candidate may edit /app files outside the driver"],
+      "case_or_path": "The control depends on /app/README.md existing.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:460"],
+      "finding_ids": ["AXIS-1"]
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

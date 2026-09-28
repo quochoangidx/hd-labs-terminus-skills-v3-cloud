@@ -1,0 +1,57 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-water-utility-tiered-billing",
+ "stage": "phase 1 (before contract_review and skeleton pair)",
+ "design_rule": "in both traps the minimal natural fix of the driving departure is a one-line change inside a loop that the silent case flows through; keeping it needs an added `if`; an additive branch beside untouched code cannot fix the departure without also reaching the silent case",
+ "traps": [
+  {
+   "id": "T1_span_under_20_days_keeps_the_schedule_widths",
+   "kind": "apply-the-formula-everywhere edge inside the width loop D1 forces the solver to rewrite",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "D1 (4.2) forces tiers.block_widths(); the shipped loop appends every width unchanged, so the minimal fix `width = whole(width * days, 30)` scales every span",
+    "bare_two_hop_representation": "a span is only two read dates; nothing but its day count tells a special-read span apart; 2.3 'a regular cycle is a span of 20 days or more' is the only boundary; 1.5 describes special reads in domain words (check read a few days after a disputed read, closing read soon after the route read) without a figure",
+    "one_routing_decision": "scale the widths or not",
+    "keeping_requires_adding_code": "`if days >= 20:` around the scaling",
+    "definition_chain": "1.5 -> 2.3 (threshold) -> 4.2 (subject 'a regular cycle') -> 4.1 (every span's use billed through the row's blocks; closes the exclusion reading) -> reach rule keeps today's widths"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none after removing the sentence 'The widths in the schedule are widths for 30 days' from 4.2; 3.1 scales the service charge by every span's days but governs only the service charge",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "moderate: proration of blocks for any short bill is common practice; the reach rule is the only support",
+    "unnamed_shared_step": "no: the unruled figure is the block widths of a span that is not a regular cycle",
+    "trap_in_several_tests": "no: only family T1 carries a span under 20 days whose water charge changes when scaled (checked by gen.trap_inputs in every scorer run)"
+   },
+   "flags": "0 hard, 1 moderate (contrary instinct)",
+   "evidence": {
+    "minimal_fix_T1-scale-every-span": "fails only T1 (receipts/score-skeleton-validation.json; receipts/fuzz-model-vs-oracle.json)",
+    "shipped_step_equals_model": "1266/1266 short-span row widths (receipts/fuzz-model-vs-oracle.json silent_check)"
+   }
+  },
+  {
+   "id": "T2_multi_unit_meter_keeps_its_sewer_volume",
+   "kind": "two-hop bare-value exclusion inside the sewer-volume function D3 forces the solver to rewrite",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "D3 (5.2) forces sewer.sewer_volume(); shipped returns the use for every account, so the minimal fix `min(use, allowance)` caps every account",
+    "bare_two_hop_representation": "`units` is a bare integer 1-8 that the governed service charge (3.1, D2) multiplies for every account; 2.4 'a household is an account whose meter serves one dwelling unit' is the only boundary; 1.4 describes duplexes and small apartment buildings in domain words; every account carries winter spans, so the allowance is computable for all",
+    "one_routing_decision": "cap the volume or not",
+    "keeping_requires_adding_code": "`if units == 1:` around the cap",
+    "definition_chain": "1.4 -> 2.4 (threshold) -> 2.6 (a household's winter average) -> 5.2 (subject 'a household's sewer volume') -> 5.1 (every span charged on its sewer volume; closes the exclusion reading) -> reach rule keeps today's volume, the use"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 5.1 governs the charge on a volume, not the volume; no sentence gives a non-household a volume",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "soft: practice varies (many utilities do not winter-average multi-family meters)",
+    "unnamed_shared_step": "no: the unruled figure is the sewer volume of an account that is not a household",
+    "trap_in_several_tests": "no: only family T2 has a multi-unit span whose use exceeds the allowance formula; other families give multi-unit meters winters of 1,500 cubic feet a day (checked)"
+   },
+   "flags": "0 hard, 1 soft",
+   "evidence": {
+    "minimal_fix_T2-cap-every-account": "fails only T2",
+    "exclusion_reading_T2-no-sewer-for-multi-unit": "fails T2 (and broad/D2/D4/D6/D7)",
+    "shipped_step_equals_model": "1581/1581 multi-unit spans (receipts/fuzz-model-vs-oracle.json silent_check)"
+   }
+  }
+ ],
+ "independence": "different nodes (tiers.py width loop vs sewer.py volume), different departures (D1 vs D3), different definitions and thresholds (2.3 days vs 2.4 dwelling units), different input fields (read dates vs units); the reach rule names neither",
+ "risk_note": "batch-8 evidence (medication PDC) says defined-term complements are often kept on claude-opus-5; both traps follow the workers-comp loop shape the orchestrator asked for, and the governed per-span service scaling (3.1) and per-unit service charge (3.1) are the pull toward over-reach. Only the skeleton pair decides."
+}

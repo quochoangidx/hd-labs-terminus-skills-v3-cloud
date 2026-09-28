@@ -1,0 +1,138 @@
+diff -ruN a/app/src/cellbank/banks.py b/app/src/cellbank/banks.py
+--- a/app/src/cellbank/banks.py
++++ b/app/src/cellbank/banks.py
+@@ -2,7 +2,12 @@
+ 
+ 
+ def summarise(records, frozen, line_of):
++    thawed = {}
++    for rec in records:
++        if rec["kind"] == "thaw" and rec["vial"] is not None:
++            thawed[rec["vial"]] = thawed.get(rec["vial"], 0) + 1
+     banks = {}
++    stocked = {}
+     for rec in records:
+         if rec["kind"] != "freeze":
+             continue
+@@ -10,6 +15,15 @@
+         if bank is None:
+             bank = {"bank": rec["bank"], "line": line_of[rec["id"]], "vials_left": 0}
+             banks[rec["bank"]] = bank
+-        bank["vials_left"] += rec["vials"]
++            stocked[rec["bank"]] = []
++        left = rec["vials"] - thawed.get(rec["id"], 0)
++        bank["vials_left"] += left
+         bank["pdl"] = frozen[rec["id"]][0]
++        if left > 0:
++            stocked[rec["bank"]].append(frozen[rec["id"]][0])
++    for name, bank in banks.items():
++        # SOP 6.2: a bank in use (2.5) takes the highest PDL of its vials in stock. A bank
++        # not in use has no rule, so today's figure (its latest freeze) stays.
++        if stocked[name]:
++            bank["pdl"] = max(stocked[name])
+     return list(banks.values())
+diff -ruN a/app/src/cellbank/growth.py b/app/src/cellbank/growth.py
+--- a/app/src/cellbank/growth.py	2026-09-26 21:46:54
++++ b/app/src/cellbank/growth.py	2026-09-26 21:59:08
+@@ -2,6 +2,24 @@
+ 
+ import math
+ 
++VALID_VIABILITY = 70.0
+ 
+-def doublings(culture):
+-    return math.log2(culture["harvested"] / culture["seeded"])
++
++def viable(cells, viability):
++    """SOP 2.3: the viable count of a valid count (70.0 or more); no other count has one."""
++    if viability < VALID_VIABILITY:
++        return None
++    return cells * viability / 100
++
++
++def doublings(culture, seed_viability):
++    """SOP 3.1: log2 of the viable harvest over the viable seed.
++
++    The seed is counted at the viability of its source suspension (2.4). Where either
++    count is not valid, 3.1 has no rule for the figure, so today's calculation stays.
++    """
++    harvest = viable(culture["harvested"], culture["viability"])
++    seed = viable(culture["seeded"], seed_viability)
++    if harvest is None or seed is None:
++        return math.log2(culture["harvested"] / culture["seeded"])
++    return math.log2(harvest / seed)
+diff -ruN a/app/src/cellbank/lineage.py b/app/src/cellbank/lineage.py
+--- a/app/src/cellbank/lineage.py
++++ b/app/src/cellbank/lineage.py
+@@ -2,13 +2,13 @@
+ 
+ from cellbank import growth
+ 
+-NEAR_BAND = 5.0
++NEAR_BAND = 3.0
+ 
+ 
+-def flag(pdl, line):
+-    if pdl >= line["max_pdl"]:
++def flag(age, line):
++    if age > line["max_pdl"]:
+         return "LIMIT"
+-    if pdl >= line["max_pdl"] - NEAR_BAND:
++    if age > line["max_pdl"] - NEAR_BAND:
+         return "NEAR"
+     return ""
+ 
+@@ -16,34 +16,40 @@
+ def walk(lines, records):
+     """Return the culture rows, each freeze's (pdl, passage) and each record's line."""
+     line_of = {}
+-    current = {}
++    suspension = {}
+     frozen = {}
+     rows = []
+     for rec in records:
+         kind = rec["kind"]
+         if kind == "thaw":
+-            line = lines[rec["line"]]
+             line_of[rec["id"]] = rec["line"]
+-            current[rec["line"]] = [line["seed_pdl"], line["seed_passage"] + 1]
++            if rec["vial"] is None:
++                line = lines[rec["line"]]
++                pdl, passage, age = line["seed_pdl"], line["seed_passage"], line["seed_pdl"]
++            else:
++                pdl, passage, age = frozen[rec["vial"]]
++            suspension[rec["id"]] = (pdl, passage, age, rec["viability"])
+         elif kind == "culture":
+             name = line_of[rec["source"]]
+             line_of[rec["id"]] = name
+-            state = current[name]
+-            gained = growth.doublings(rec)
+-            state[0] += gained
+-            state[1] += 1
++            pdl, passage, age, seed_viability = suspension[rec["source"]]
++            gained = growth.doublings(rec, seed_viability)
++            pdl += gained
++            passage += 1
++            age = max(age, pdl)
++            suspension[rec["id"]] = (pdl, passage, age, rec["viability"])
+             rows.append(
+                 {
+                     "id": rec["id"],
+                     "line": name,
+-                    "passage": state[1],
++                    "passage": passage,
+                     "doublings": gained,
+-                    "pdl": state[0],
+-                    "flag": flag(state[0], lines[name]),
++                    "pdl": pdl,
++                    "flag": flag(age, lines[name]),
+                 }
+             )
+         elif kind == "freeze":
+-            name = line_of[rec["source"]]
+-            line_of[rec["id"]] = name
+-            frozen[rec["id"]] = (current[name][0], current[name][1])
++            line_of[rec["id"]] = line_of[rec["source"]]
++            pdl, passage, age, _ = suspension[rec["source"]]
++            frozen[rec["id"]] = (pdl, passage, age)
+     return rows, frozen, line_of

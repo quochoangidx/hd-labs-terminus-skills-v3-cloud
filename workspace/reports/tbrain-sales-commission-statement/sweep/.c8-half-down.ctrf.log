@@ -1,0 +1,236 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 24 items
+
+../../tests/test_outputs.py F....F....F.F......F.F..                     [100%]
+
+=================================== FAILURES ===================================
+__________________ test_rule_3_2_bookings_take_the_reps_split __________________
+
+    def test_rule_3_2_bookings_take_the_reps_split():
+        """Bookings add the rep's split share of each order, rounded half up, not the whole order value."""
+>       check_family("split_bookings")
+
+/tests/test_outputs.py:214: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'UFKZ2KH1B0', 'bookings': 1089200097, 'commission': 172474621, 'bonus': 0, ...}, {'rep': '0', ...00108, 'bonus': 0, ...}, {'rep': 'P5QTCM7WKAU2-GY', 'bookings': 1049993031, 'commission': 167045267, 'bonus': 0, ...}]}
+expected = [{'rep': 'UFKZ2KH1B0', 'bookings': 1089200099, 'commission': 172474622, 'bonus': 0, ...}, {'rep': '0', 'bookings': 310...400109, 'bonus': 0, ...}, {'rep': 'P5QTCM7WKAU2-GY', 'bookings': 1049993033, 'commission': 167045267, 'bonus': 0, ...}]
+label = 'split_bookings job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: split_bookings job 0 statement 0 ('UFKZ2KH1B0') bookings: 1089200097, expected 1089200099
+E               assert (<class 'int'> is <class 'int'> and 1089200097 == 1089200099)
+E                +  where <class 'int'> = type(1089200097)
+E                +  and   <class 'int'> = type(1089200099)
+
+/tests/test_outputs.py:202: AssertionError
+____________________ test_rule_5_1_reversals_up_to_120_days ____________________
+
+    def test_rule_5_1_reversals_up_to_120_days():
+        """A reversal raised in the quarter claws back 800 bp of the rep's share up to an age of 120 days, nothing after."""
+>       check_family("reversal_window")
+
+/tests/test_outputs.py:239: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'G', 'bookings': 74082624, 'commission': 11039485, 'bonus': 0, ...}, {'rep': 'W6K9DLA12D4QJ9R'...mmission': 1116845, 'bonus': 0, ...}, {'rep': 'FHSY', 'bookings': 130201789, 'commission': 10416143, 'bonus': 0, ...}]}
+expected = [{'rep': 'G', 'bookings': 74082624, 'commission': 11039485, 'bonus': 0, ...}, {'rep': 'W6K9DLA12D4QJ9R', 'bookings': 6...ommission': 1116845, 'bonus': 0, ...}, {'rep': 'FHSY', 'bookings': 130201790, 'commission': 10416143, 'bonus': 0, ...}]
+label = 'reversal_window job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: reversal_window job 0 statement 3 ('FHSY') bookings: 130201789, expected 130201790
+E               assert (<class 'int'> is <class 'int'> and 130201789 == 130201790)
+E                +  where <class 'int'> = type(130201789)
+E                +  and   <class 'int'> = type(130201790)
+
+/tests/test_outputs.py:202: AssertionError
+_________________ test_rule_6_1_new_logo_bonus_on_small_splits _________________
+
+    def test_rule_6_1_new_logo_bonus_on_small_splits():
+        """A new-logo order earns 300 bp of the rep's share, shares below 10,000 cents included; other orders none."""
+>       check_family("new_logo")
+
+/tests/test_outputs.py:270: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'VX5X', 'bookings': 49800827, 'commission': 3984066, 'bonus': 51507, ...}, {'rep': '352MV0W7V9...327, 'bonus': 246379, ...}, {'rep': 'GJZPNQL4Y0P', 'bookings': 32362442, 'commission': 2588995, 'bonus': 175198, ...}]}
+expected = [{'rep': 'VX5X', 'bookings': 49800827, 'commission': 3984066, 'bonus': 51508, ...}, {'rep': '352MV0W7V9RFN-C', 'bookin...7327, 'bonus': 246380, ...}, {'rep': 'GJZPNQL4Y0P', 'bookings': 32362442, 'commission': 2588995, 'bonus': 175199, ...}]
+label = 'new_logo job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: new_logo job 0 statement 0 ('VX5X') bonus: 51507, expected 51508
+E               assert (<class 'int'> is <class 'int'> and 51507 == 51508)
+E                +  where <class 'int'> = type(51507)
+E                +  and   <class 'int'> = type(51508)
+
+/tests/test_outputs.py:202: AssertionError
+___________________ test_trial_orders_keep_todays_bonus_line ___________________
+
+    def test_trial_orders_keep_todays_bonus_line():
+        """A first order that is not a new-logo order keeps the bonus line the shipped package gives it."""
+>       for number, row in enumerate(check_family("trial_orders")):
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:280: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'FB0RY', 'bookings': 36946936, 'commission': 2955755, 'bonus': 1107365, ...}, {'rep': 'A', 'bo..., 'bonus': 27836, ...}, {'rep': 'JCS-6V1TYPA3J1', 'bookings': 51747563, 'commission': 4139805, 'bonus': 1546170, ...}]}
+expected = [{'rep': 'FB0RY', 'bookings': 36946936, 'commission': 2955755, 'bonus': 1107366, ...}, {'rep': 'A', 'bookings': 993895...2, 'bonus': 27836, ...}, {'rep': 'JCS-6V1TYPA3J1', 'bookings': 51747563, 'commission': 4139805, 'bonus': 1546170, ...}]
+label = 'trial_orders job 1'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: trial_orders job 1 statement 0 ('FB0RY') bonus: 1107365, expected 1107366
+E               assert (<class 'int'> is <class 'int'> and 1107365 == 1107366)
+E                +  where <class 'int'> = type(1107365)
+E                +  and   <class 'int'> = type(1107366)
+
+/tests/test_outputs.py:202: AssertionError
+________________________ test_statement_order_and_keys _________________________
+
+    def test_statement_order_and_keys():
+        """Statements come in job order with codes as given (1 and 16 characters, spaces, quotes, non-ASCII)."""
+>       check_family("statement_order")
+
+/tests/test_outputs.py:361: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'A', 'bookings': 514420, 'commission': 41154, 'bonus': 15433, ...}, {'rep': 'ZZZZZZZZZZZZZZZZ'...ission': 4073961, 'bonus': 0, ...}, {'rep': 'x', 'bookings': 231571021, 'commission': 18525682, 'bonus': 0, ...}, ...]}
+expected = [{'rep': 'A', 'bookings': 514420, 'commission': 41154, 'bonus': 15433, ...}, {'rep': 'ZZZZZZZZZZZZZZZZ', 'bookings': 3...mission': 4073961, 'bonus': 0, ...}, {'rep': 'x', 'bookings': 231571021, 'commission': 18525682, 'bonus': 0, ...}, ...]
+label = 'statement_order job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: statement_order job 0 statement 1 ('ZZZZZZZZZZZZZZZZ') bookings: 32373378, expected 32373379
+E               assert (<class 'int'> is <class 'int'> and 32373378 == 32373379)
+E                +  where <class 'int'> = type(32373378)
+E                +  and   <class 'int'> = type(32373379)
+
+/tests/test_outputs.py:202: AssertionError
+_____________________________ test_generated_jobs ______________________________
+
+    def test_generated_jobs():
+        """Seeded jobs over the governed domain, as sealed and under fresh codes and orders."""
+>       rows = check_family("generated")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:381: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'FD3R10G5', 'bookings': 20574192, 'commission': 2579555, 'bonus': 0, ...}, {'rep': '7C', 'book...5609, 'bonus': 24554252, ...}, {'rep': '7HU3G8Q', 'bookings': 53812346, 'commission': 4304988, 'bonus': 1167451, ...}]}
+expected = [{'rep': 'FD3R10G5', 'bookings': 20574192, 'commission': 2579555, 'bonus': 0, ...}, {'rep': '7C', 'bookings': 0, 'comm...05609, 'bonus': 24554252, ...}, {'rep': '7HU3G8Q', 'bookings': 53812346, 'commission': 4304988, 'bonus': 1167452, ...}]
+label = 'generated job 1'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: generated job 1 statement 5 ('7HU3G8Q') bonus: 1167451, expected 1167452
+E               assert (<class 'int'> is <class 'int'> and 1167451 == 1167452)
+E                +  where <class 'int'> = type(1167451)
+E                +  and   <class 'int'> = type(1167452)
+
+/tests/test_outputs.py:202: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_orders_on_the_quarter_edges
+PASSED ../../tests/test_outputs.py::test_rule_4_1_accelerators_apply_to_the_part_above_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_1_bookings_on_the_quota_and_twice_the_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_2_each_band_rounds_half_up
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reversal_ages_120_and_121
+PASSED ../../tests/test_outputs.py::test_rule_2_3_credit_note_of_exactly_50000
+PASSED ../../tests/test_outputs.py::test_rule_5_2_credit_notes_outside_the_quarter
+PASSED ../../tests/test_outputs.py::test_courtesy_credits_keep_todays_clawback_line
+PASSED ../../tests/test_outputs.py::test_rule_2_4_first_order_of_exactly_250000
+PASSED ../../tests/test_outputs.py::test_rule_7_2_shortfall_added_to_owed
+PASSED ../../tests/test_outputs.py::test_rule_7_2_total_exactly_on_the_draw
+PASSED ../../tests/test_outputs.py::test_rule_7_2_total_below_nought
+PASSED ../../tests/test_outputs.py::test_rule_7_3_recovery_only_above_the_draw
+PASSED ../../tests/test_outputs.py::test_rule_7_4_minimum_payment
+PASSED ../../tests/test_outputs.py::test_rule_7_4_due_of_24999_and_25000
+PASSED ../../tests/test_outputs.py::test_section_one_limits_reached
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_3_2_bookings_take_the_reps_split
+FAILED ../../tests/test_outputs.py::test_rule_5_1_reversals_up_to_120_days - ...
+FAILED ../../tests/test_outputs.py::test_rule_6_1_new_logo_bonus_on_small_splits
+FAILED ../../tests/test_outputs.py::test_trial_orders_keep_todays_bonus_line
+FAILED ../../tests/test_outputs.py::test_statement_order_and_keys - Assertion...
+FAILED ../../tests/test_outputs.py::test_generated_jobs - AssertionError: gen...
+========================= 6 failed, 18 passed in 1.13s =========================

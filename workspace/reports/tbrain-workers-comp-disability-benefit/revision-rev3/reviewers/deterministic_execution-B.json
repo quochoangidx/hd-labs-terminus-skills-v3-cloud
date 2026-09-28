@@ -1,0 +1,179 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-B",
+  "snapshot_sha256": "6e03014ae132b3dfd5ffbbca869982a71072d5b4d9e0bfc844510125b87d42da",
+  "severity": "None",
+  "summary": "No uncontrolled input changes the grade of a fixed submission. Every graded job is either sealed bytes pinned by SHA-256 and row count in ROSTER, or drawn at run time from fixed integer seeds (RELABEL_SEED, DRAW_SEEDS) in random.Random on a digest-pinned CPython 3.13 image. Nothing reads the clock. Dependencies are pinned and the verifier has no network. Random temp directory names never reach a graded value, statement order is fixed by the contract, and no readiness sleeps exist.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "task.toml",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/td-benefits-manual.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/tools/tdbenefit_run.py",
+      "environment/app/src/tdbenefit/__init__.py",
+      "environment/app/src/tdbenefit/dates.py",
+      "environment/app/src/tdbenefit/disability.py",
+      "environment/app/src/tdbenefit/money.py",
+      "environment/app/src/tdbenefit/partial.py",
+      "environment/app/src/tdbenefit/payroll.py",
+      "environment/app/src/tdbenefit/rates.py",
+      "environment/app/src/tdbenefit/statement.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/manual_model.py",
+      "tests/shipped/app/tools/tdbenefit_run.py",
+      "tests/shipped/app/src/tdbenefit/__init__.py",
+      "tests/shipped/app/src/tdbenefit/dates.py",
+      "tests/shipped/app/src/tdbenefit/disability.py",
+      "tests/shipped/app/src/tdbenefit/money.py",
+      "tests/shipped/app/src/tdbenefit/partial.py",
+      "tests/shipped/app/src/tdbenefit/payroll.py",
+      "tests/shipped/app/src/tdbenefit/rates.py",
+      "tests/shipped/app/src/tdbenefit/statement.py",
+      "tests/expected/ROSTER",
+      "tests/expected/differential-corrections.jsonl",
+      "tests/expected/differential-low_partial_weeks.jsonl",
+      "tests/expected/waiting_period.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/limits_job.jsonl",
+      "tests/expected/corrections.jsonl",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/seal.py",
+      "solution/jobgen.py",
+      "solution/model.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "solution/model.py lines 41-188 not re-read: the manifest hash (fecaa279...) matches tests/manual_model.py, which was read in full",
+      "tests/expected/{average_weekly_wage,base_period,disability_days,limits_claims,low_partial_weeks,low_wage_rate,no_base_wages,no_wage_loss,partial_benefit,partial_week_threshold,rate_bounds,rate_two_thirds,retroactive_days,row_in_force,statement_order,ttd_rounding,weeks_pay,weeks_pay_threshold}.jsonl were sampled (row counts via Grep and ROSTER), not read row by row, as the brief allows. They are static sealed bytes, pinned by SHA-256 and row count in ROSTER and checked by load() at tests/test_outputs.py:213-217, so their contents cannot vary between runs"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Traced each use of the random module in tests/test_outputs.py. random.Random(RELABEL_SEED) is used at lines 400 and 447; random.Random(seed) for DRAW_SEEDS=(5,6,31,139) at line 544. Each test builds its own seeded generator, so no generator state crosses tests. No module-level or OS-seeded randomness exists.",
+    "Confirmed that pytest test order is fixed: test.sh:20 uses -p no:randomly and runs one file in definition order, and no seeded generator is shared across tests, so reordering could not change draws anyway.",
+    "Confirmed the verifier interpreter is pinned: tests/Dockerfile:2 uses a sha256 digest for the python:3.13 base, so random.Random algorithms (randint, sample, shuffle, choice, random) give the same streams on every clean run. The self-assertions on the draws (lines 545-546, 550) are therefore stable.",
+    "Clock and time: nothing calls date.today, datetime.now or time.time. time.monotonic is used only for the 1500 s DEADLINE budget (lines 41, 137-138, 140), against a verifier timeout of 1800 (task.toml:19). With about 70 short driver runs of linear work, a correct submission comes nowhere near that budget.",
+    "Traced the tempfile.mkdtemp names (lines 80, 129-133) to every use. They are scratch storage and the job path argument only; none is compared or placed in expected output (the D-3 pattern).",
+    "Checked ordering: compare() at lines 229-239 requires statements in job order, which README:37-39 and instruction.md:5 both mandate. Key order is not enforced because set(row)==FIELDS. Wage-line order is deliberately shuffled in relabel() with a fixed seed, and README:26 says wage lines are 'in no particular order'.",
+    "Hash randomization: the env -i and -I flags leave PYTHONHASHSEED random for each process. The verifier uses sets (base_weeks, trap_inputs, FIELDS) only for membership and subset tests, or sorted(FIELDS). manual_model uses sets only for membership, and all sums are integer sums whose order does not matter. The shipped package and the reference patch likewise use sets only for membership and len.",
+    "Dependencies: pytest==9.1.1 and pytest-json-ctrf==0.5.2 are pinned (tests/Dockerfile:4), and the verifier has network_mode no-network (task.toml:21). The environment apt-get packages (environment/Dockerfile:4) are unpinned, but they serve only the agent environment; the verifier image is separate (task.toml:20) and runs its own python3.",
+    "Sealed expectations: load() checks the SHA-256 and row count against ROSTER before use (lines 213-217). Sampled rows show fixed dates and figures, with no time-relative values.",
+    "Differential tests run the verifier's own byte copy of the shipped package (tests/shipped hashes match environment/app hashes in the manifest) on fixed sealed job pairs, so they are deterministic.",
+    "No sleeps or readiness waits exist. run_as uses a blocking communicate() with a timeout and kills the process group (lines 103-124)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fixed fixtures or explicit stable seeds for generated cases",
+      "status": "checked",
+      "reason": "Sealed families are static and roster-pinned. Run-time generation uses fixed integer seeds on a digest-pinned interpreter. jobgen.py (SEED=20260927) is authoring-only and never runs in the verifier.",
+      "evidence": ["tests/test_outputs.py:44", "tests/test_outputs.py:400", "tests/test_outputs.py:447", "tests/test_outputs.py:492", "tests/test_outputs.py:544", "tests/test_outputs.py:213-217", "solution/jobgen.py:16", "tests/Dockerfile:2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Important boundary cases are guaranteed fixtures, not random draws",
+      "status": "checked",
+      "reason": "Every named boundary lives in a sealed family or a hand-worked job: 2,000 and 1,000 cent thresholds, 13/14/15 days, 399-day and 12-period claims, row the day before, on and after a change, rate at/above/below max and min, 40 rows, 200 claims, >52 paydays, correction and low-week traps. The drawn jobs only add variation, and their structural guarantees are asserted deterministically.",
+      "evidence": ["tests/test_outputs.py:247-346", "tests/test_outputs.py:418-441", "tests/test_outputs.py:476-487", "tests/test_outputs.py:545-550"],
+      "finding_ids": []
+    },
+    {
+      "category": "Evaluation clock fixed when expiry or time windows are graded",
+      "status": "checked",
+      "reason": "All graded dates are literal job data. No wall-clock date is read anywhere in the verifier, model, shipped package or reference. The only clock is monotonic and used for the overall time budget.",
+      "evidence": ["tests/test_outputs.py:41", "tests/test_outputs.py:137-138", "tests/manual_model.py:25-26", "environment/app/src/tdbenefit/dates.py:8-15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Dependencies pinned and required inputs local",
+      "status": "checked",
+      "reason": "The verifier base image is digest-pinned, pytest and the ctrf plugin are version-pinned, and the verifier has no network. Expectations, the model and the shipped copy all live under /tests. Unpinned apt packages affect only the agent environment image.",
+      "evidence": ["tests/Dockerfile:2-8", "task.toml:18-21", "environment/Dockerfile:2-4"],
+      "finding_ids": []
+    },
+    {
+      "category": "Sort where the contract requires order; accept equivalent orderings otherwise",
+      "status": "checked",
+      "reason": "Statement order is required by the contract and compared in order. Key order is free and compared as a set. Wage-line order is free and shuffled with a fixed seed. There is no filesystem-order dependence in graded data; rglob order in _seal_app does not affect grading.",
+      "evidence": ["tests/test_outputs.py:229-239", "tests/test_outputs.py:373-387", "environment/app/README.md:26", "environment/app/README.md:37-39", "tests/test_outputs.py:88-95"],
+      "finding_ids": []
+    },
+    {
+      "category": "Readiness condition instead of fixed sleep",
+      "status": "not_applicable",
+      "reason": "There is no service or background process. Each job is a synchronous subprocess whose stdout is collected after it exits.",
+      "evidence": ["tests/test_outputs.py:103-124"],
+      "finding_ids": []
+    },
+    {
+      "category": "Timing and resource assumptions",
+      "status": "checked",
+      "reason": "A single 1500 s monotonic budget within an 1800 s verifier timeout covers roughly 70 short driver runs, including the 200-claim and 60-claim jobs, all doing linear work. It is not a race and cannot flip a correct submission.",
+      "evidence": ["tests/test_outputs.py:41", "tests/test_outputs.py:137-140", "task.toml:19"],
+      "finding_ids": []
+    },
+    {
+      "category": "Random values traced to graded use (temp names, hash seeds)",
+      "status": "checked",
+      "reason": "mkdtemp names are scratch storage only. Per-process hash randomization affects only set iteration, and every set use is membership, subset, len, or goes through sorted().",
+      "evidence": ["tests/test_outputs.py:80", "tests/test_outputs.py:129-136", "tests/test_outputs.py:155-157", "tests/test_outputs.py:195-207", "tests/test_outputs.py:238", "tests/manual_model.py:52-61"],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated clean-run stability of the correct and wrong submissions (static trace)",
+      "status": "checked",
+      "reason": "Every input to each graded comparison is fixed: sealed bytes, seeded draws on a pinned interpreter, the exact-Fraction model, and a fixed shipped copy. So the same submission gets the same reward. This is a static trace, not an execution.",
+      "evidence": ["tests/test_outputs.py:242-244", "tests/test_outputs.py:542-551", "tests/test.sh:20-27"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["relabelled generated jobs (seeded shuffle of claims and wage lines)", "statements in job order"],
+      "case_or_path": "relabel() shuffles claim order with a seeded rng and reorders the expected statements to match, so order is fixed per run and is the new job order. The wage-line shuffle is contract-neutral (README:26) and seeded.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:373-387", "tests/test_outputs.py:444-451"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["run-time drawn jobs", "trap-free domain and >52 paydays guarantees"],
+      "case_or_path": "_draw_job over seeds 5, 6, 31 and 139. Lines 545-550 assert 1 and 40 rows, a 2016-01-02 row, no trap inputs and >52 paydays. With a pinned interpreter these assertions hold identically every run, so they cannot flip nondeterministically.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:492-551", "tests/Dockerfile:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["shipped-package differential", "sealed job pairs"],
+      "case_or_path": "differential-corrections and differential-low_partial_weeks jobs run under the verifier-owned shipped copy. Its inputs are sealed and its code is fixed bytes, so the reference value is identical every run.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:327-346", "tests/expected/differential-corrections.jsonl:1-2", "tests/expected/differential-low_partial_weeks.jsonl:1-4"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["200-claim limits job built with fresh names from RELABEL_SEED", "claim-number domain (1-24 chars, non-ASCII)"],
+      "case_or_path": "fresh_names(Random(RELABEL_SEED), 200) is deterministic, and within_limits is asserted before grading.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:351-370", "tests/test_outputs.py:395-407"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["time budget DEADLINE", "per-run timeout"],
+      "case_or_path": "The remaining budget is passed as each subprocess timeout. For a linear-time correct submission the budget is never approached, so there is no timing race on the grade.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:41", "tests/test_outputs.py:137-140"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

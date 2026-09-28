@@ -1,0 +1,132 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "673a31e29e8ec8e46c69e24d873670315f77f1c35a6f15fa483a43e42c37b01f",
+  "severity": "None",
+  "summary": "The patched package (solution/fix.patch applied by solve.sh) implements every HC-4 rule the instruction makes graded (reading floor, 80.0 threshold inclusive, 85/3 reference duration, sampled time over all readings, partial-survey projection to the worker's own shift, whole-shift-or-longer measured dose, 85+3log2 TWA, half-up tenth rounding, 82/85 status bands on the reported TWA, impulse at >=140.0, group dose as mean of all member shift doses with status from TWA alone), keeps today's step exactly where the manual is silent (above-ceiling counted level, sub-three-quarter surveys), and leaves the driver untouched. No concrete incorrect behaviour found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/noise-survey-manual.md",
+      "environment/app/examples/press-shop-day.json",
+      "environment/app/tools/noisedose_run.py",
+      "environment/app/src/noisedose/__init__.py",
+      "environment/app/src/noisedose/flags.py",
+      "environment/app/src/noisedose/groups.py",
+      "environment/app/src/noisedose/levels.py",
+      "environment/app/src/noisedose/report.py",
+      "environment/app/src/noisedose/runs.py",
+      "environment/app/src/noisedose/shift.py",
+      "environment/app/src/noisedose/survey.py",
+      "environment/app/src/noisedose/twa.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 24 manifest entries against files read in full (no truncation).",
+    "Verified every fix.patch hunk header and context against the shipped files (flags.py 9-13, groups.py 4-10 and 14-25, levels.py 6-14 and 20-23, runs.py 4-24, shift.py 11-20, twa.py 2-21 and 25-31) so `patch -p1` from / applies cleanly to /app/src; tools/noisedose_run.py is not in the patch.",
+    "Traced patched runs.measure: non-readings (0.0) skipped; every reading (>=40.0) adds to sampled time; counted level min(level,115.0); dose added only when counted >= 80.0 using 480/2^((L-85)/3).",
+    "Traced patched shift.shift_dose branches: sampled>=shift -> measured; 4*sampled>=3*shift -> measured*shift/sampled (exact integer three-quarter test); else original step (0 when nothing sampled, scale to 480 when sampled<480, else measured).",
+    "Traced twa_for (85+3log2(D/100), None at dose 0), to_tenth (floor(10v+0.5)/10), status_for (>85.0 over, >=82.0 action) applied to the reported TWA; report.worker_row forces 'over' when ceiling or impulse.",
+    "Traced patched groups.group_rows: mean of every member's shift dose including zero doses, TWA from that mean, status without flags; codes sorted by Python string order (ASCII digits before capitals, matching README).",
+    "Hand-traced ordinary and boundary cases: steady 80.0 dBA 480 min (counted, dose 50%), 79.9 dBA (reading, no dose), 115.0 vs 115.1 (ceiling flag only above), peak 140.0 (impulse), shift 600 with 450 sampled (partial, projected to 600), shift 360 with 420 sampled (measured unscaled), quiet group member dose 0 included in mean.",
+    "Considered exact-half TWA rounding: in real arithmetic an unrounded TWA cannot equal an odd multiple of 0.05 for one-decimal levels (a rational combination of 2^(j/30) cannot equal 2^(odd/60)), so floor(10v+0.5) and exact half-up agree on the contract domain apart from float noise within ~1e-13 dB, which is not a contract-defined case."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace ordinary case and each relevant boundary through reference logic",
+      "status": "checked",
+      "reason": "Threshold 80.0 inclusive, reading floor 40.0, ceiling 115.0 exclusive for flag, 140.0 impulse inclusive, 3/4 shift partial boundary, sampled==shift and >shift, action 82.0 and limit 85.0 on reported TWA all traced through patched code.",
+      "evidence": ["solution/fix.patch:52-69", "solution/fix.patch:94-102", "solution/fix.patch:115-119", "solution/fix.patch:130-159", "environment/app/docs/noise-survey-manual.md:44-103"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes, precision, rounding, paths",
+      "status": "checked",
+      "reason": "Driver unchanged prints json.dump of the report; dose left unrounded; TWA rounded half-up to a tenth; README key set and list order respected.",
+      "evidence": ["environment/app/tools/noisedose_run.py:12-20", "environment/app/src/noisedose/report.py:10-32", "solution/fix.patch:144-147", "environment/app/README.md:29-41", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state (loop accumulators, grouping, identifier handling)",
+      "status": "checked",
+      "reason": "measure() accumulators updated per run with correct skip order; group membership dict keyed by code; duplicate ids are explicitly left open by the instruction.",
+      "evidence": ["solution/fix.patch:90-102", "environment/app/src/noisedose/groups.py:12-16", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Manual-silent figures keep today's step (instruction paragraph 2)",
+      "status": "checked",
+      "reason": "Above-ceiling counted level keeps min(level,115.0); sub-three-quarter shift dose keeps the original 0/480-scaling/measured step fed with manual-defined sampled time and measured dose; no new clamp or guard added.",
+      "evidence": ["solution/fix.patch:99-101", "solution/fix.patch:116-122", "environment/app/src/noisedose/shift.py:17-22", "instruction.md:3", "solution/solve.sh:7-17"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract is a pure batch reduction with no persistence, recovery or interruption semantics.",
+      "evidence": ["instruction.md:1-5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Driver byte-identity and solve.sh application",
+      "status": "checked",
+      "reason": "solve.sh only applies fix.patch from / with -p1; patch touches only src files; Dockerfile installs patch.",
+      "evidence": ["solution/solve.sh:31-33", "environment/Dockerfile:4", "instruction.md:1"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2/2.4 sampled time includes sub-threshold readings", "3.3 partial-survey projection"],
+      "case_or_path": "Shift 600, log [(300,90.0),(200,60.0),(100,40.0)]: sampled 600 >= shift so measured dose is used, not a scaled one; 0.0 runs excluded from sampled time.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:94-101", "solution/fix.patch:116-119"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.3 above-ceiling counted level (manual-silent)", "5.1 ceiling flag / 5.3 status"],
+      "case_or_path": "Reading 118.5 dBA: counted at 115.0 for dose, flags ceiling, worker status 'over' regardless of TWA.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:99-101", "environment/app/src/noisedose/flags.py:6-8", "environment/app/src/noisedose/report.py:23"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 status judged on reported TWA", "5.3 bands"],
+      "case_or_path": "Unrounded TWA 85.04 -> reported 85.0 -> 'action' (not over); 81.96 -> 82.0 -> 'action'.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:147", "solution/fix.patch:155-159", "environment/app/src/noisedose/report.py:13-15"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["6.1 group dose mean of shift doses", "4.1 no TWA at dose nought / flags not carried to groups"],
+      "case_or_path": "Group of a flagged member plus quiet members with dose 0: group mean includes zeros, group status from group TWA only (may be 'below' or have null TWA).",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:35-40", "environment/app/docs/noise-survey-manual.md:100-102"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 whole-shift-or-longer", "manual-silent sub-three-quarter step (480 scaling)"],
+      "case_or_path": "Shift 360 sampled 420 -> measured (new branch precedes old 480 scaling); shift 720 sampled 300 -> old step scales to 480.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:116-125"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

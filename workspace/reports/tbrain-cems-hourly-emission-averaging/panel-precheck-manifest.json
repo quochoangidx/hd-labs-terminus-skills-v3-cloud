@@ -1,0 +1,343 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-cems-hourly-emission-averaging",
+ "primary_outcome": "the report printed by /app/tools/cemsqr_run.py gives every operating hour's kind, corrected concentration and mass rate, every operating day's rolling average and exceedance flag, the operating and valid hour counts and the quarter's NOx tons as procedure DRP-4 gives them",
+ "obligations": [
+  {
+   "id": "HOUR_VALIDITY",
+   "class": "core",
+   "contribution": "valid readings are OK records of operating quarters; a valid hour has one for every operating quarter, or two or more with a CAL record; hourly averages use valid readings only",
+   "authority": {
+    "file": "environment/app/docs/data-reduction-procedure.md",
+    "anchor": "A valid hour is an operating hour with a valid reading for each of its"
+   },
+   "implementation_sites": [
+    "environment/app/src/cemsqr/hours.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides which hours are valid, their averages, every corrected figure, substitution and the rolling averages"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_3_valid_hour_and_calibration_allowance",
+     "test_outputs.py::test_rule_3_1_averages_use_valid_readings_only"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_3_calibration_hour_with_exactly_two_valid_readings",
+     "test_outputs.py::test_rule_2_1_hour_with_one_operating_quarter"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "hours of one to four operating quarters with OK and non-OK off quarters; CAL hours with one, two and three valid readings",
+   "wrong_but_plausible": "four OK records per hour and every record averaged (shipped)",
+   "selfdescription_phrase": "valid hour"
+  },
+  {
+   "id": "CORRECTION",
+   "class": "core",
+   "contribution": "a firing hour (valid, oxygen average below 190) is corrected with 209; any other valid hour keeps today's correction (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/data-reduction-procedure.md",
+    "anchor": "The corrected concentration of a firing hour is its NOx average times"
+   },
+   "implementation_sites": [
+    "environment/app/src/cemsqr/correction.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the corrected concentration is the reported figure, feeds substitution and the rolling averages"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_firing_hour_uses_209",
+     "test_outputs.py::test_valid_hour_that_is_not_firing_keeps_todays_correction"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_oxygen_average_just_below_190",
+     "test_outputs.py::test_valid_hour_that_is_not_firing_keeps_todays_correction"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "firing hours at reference 0, 30 and 150 and oxygen averages up to 189.75; separately valid hours with oxygen averages of 190 to 205",
+   "wrong_but_plausible": "210 (shipped); AMBIENT_O2 = 209 for every hour (minimal natural fix); uncapped 209 formula for every hour",
+   "selfdescription_phrase": "corrected concentration"
+  },
+  {
+   "id": "MASS",
+   "class": "core",
+   "contribution": "mass rate from the measured NOx average and flow average; quarter tons weight each hour's mass rate by its operating time",
+   "authority": {
+    "file": "environment/app/docs/data-reduction-procedure.md",
+    "anchor": "The mass rate of a valid hour is 1.194 x 10^-7 pounds per scf per ppm"
+   },
+   "implementation_sites": [
+    "environment/app/src/cemsqr/report.py",
+    "environment/app/src/cemsqr/correction.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "mass rates are reported per hour and summed into the quarter tons"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_mass_rate_uses_measured_nox",
+     "test_outputs.py::test_rule_5_1_tons_use_operating_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_1_tons_use_operating_time"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "full hours at reference 0 and 150; hours of one to three operating quarters",
+   "wrong_but_plausible": "corrected concentration in the mass rate; a whole hour of mass each (shipped)",
+   "selfdescription_phrase": "mass rate"
+  },
+  {
+   "id": "SUBSTITUTE",
+   "class": "core",
+   "contribution": "a lost hour (no valid reading) takes the before/after average of the valid hours, one side's figures, or nought; an operating hour neither valid nor lost keeps today's carried figures (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/data-reduction-procedure.md",
+    "anchor": "A lost hour takes, for each of the two figures, the average of the"
+   },
+   "implementation_sites": [
+    "environment/app/src/cemsqr/substitute.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "substitute figures are reported and enter the quarter tons"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_lost_hour_averages_its_neighbours",
+     "test_outputs.py::test_hour_with_some_valid_readings_keeps_todays_figures"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_3_lost_hours_at_either_end_and_without_a_valid_hour",
+     "test_outputs.py::test_hour_with_some_valid_readings_keeps_todays_figures"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "runs of lost hours between, before and after valid hours; separately hours with one to three valid readings that are not valid",
+   "wrong_but_plausible": "carry forward every substitute hour (shipped); the 4.2 fill for every substitute hour (minimal natural fix); the hour's own partial averages",
+   "selfdescription_phrase": "lost hour"
+  },
+  {
+   "id": "ROLLING",
+   "class": "core",
+   "contribution": "an operating day's rolling average covers it and the 29 operating days before it, averaging the valid hours' corrected concentrations; exceedance above the limit",
+   "authority": {
+    "file": "environment/app/docs/data-reduction-procedure.md",
+    "anchor": "An operating day has a rolling average once the job holds at least"
+   },
+   "implementation_sites": [
+    "environment/app/src/cemsqr/rolling.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "rolling averages and exceedance flags are the compliance outcome"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_1_thirty_operating_days",
+     "test_outputs.py::test_rule_6_1_valid_hours_only",
+     "test_outputs.py::test_rule_6_2_exceedance_above_the_limit"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_1_twenty_ninth_and_thirtieth_operating_day",
+     "test_outputs.py::test_rule_6_2_rolling_average_at_the_limit"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "shut-down days between operating days; days with lost hours and differing hour counts; limits equal to a rolling average",
+   "wrong_but_plausible": "30 calendar days, mean of daily means of every hour, at-or-above (shipped)",
+   "selfdescription_phrase": "rolling average"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver printing the report",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/cemsqr_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "HOUR_VALIDITY",
+    "to": "CORRECTION"
+   },
+   {
+    "from": "HOUR_VALIDITY",
+    "to": "MASS"
+   },
+   {
+    "from": "HOUR_VALIDITY",
+    "to": "SUBSTITUTE"
+   },
+   {
+    "from": "CORRECTION",
+    "to": "SUBSTITUTE"
+   },
+   {
+    "from": "MASS",
+    "to": "SUBSTITUTE"
+   },
+   {
+    "from": "CORRECTION",
+    "to": "ROLLING"
+   },
+   {
+    "from": "HOUR_VALIDITY",
+    "to": "ROLLING"
+   },
+   {
+    "from": "SUBSTITUTE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "MASS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ROLLING",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "CORRECTION",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "validity-sets-averages-and-substitution",
+   "obligation_ids": [
+    "HOUR_VALIDITY",
+    "SUBSTITUTE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_3_valid_hour_and_calibration_allowance",
+    "test_outputs.py::test_rule_4_2_lost_hour_averages_its_neighbours"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "corrected-figures-feed-fill-and-rolling",
+   "obligation_ids": [
+    "CORRECTION",
+    "SUBSTITUTE",
+    "ROLLING"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_2_firing_hour_uses_209",
+    "test_outputs.py::test_rule_6_1_valid_hours_only"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "mass-rate-times-operating-time",
+   "obligation_ids": [
+    "HOUR_VALIDITY",
+    "MASS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_1_tons_use_operating_time",
+    "test_outputs.py::test_generated_jobs"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "each of its rules holds for every job inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "that none of the procedure's rules settles keeps the calculation the package performs for it today",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/data-reduction-procedure.md",
+     "anchor": "A lost hour is an operating hour in which no reading is valid",
+     "witness_ids": [
+      "test_outputs.py::test_hour_with_some_valid_readings_keeps_todays_figures"
+     ]
+    },
+    {
+     "file": "environment/app/docs/data-reduction-procedure.md",
+     "anchor": "A firing hour is a valid hour whose oxygen average is below 190",
+     "witness_ids": [
+      "test_outputs.py::test_valid_hour_that_is_not_firing_keeps_todays_correction"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The jobs we run hold from a single record up to 120 days of the export"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "workspace/reports/tbrain-cems-hourly-emission-averaging/authoring/gen.py seeds (authoring only; graded jobs will be sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave /app/tools/cemsqr_run.py exactly as it is",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED), before and after candidate code",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness",
+  "test_outputs.py::test_generated_jobs": "seeded trap-free jobs over the governed section 1 domain",
+  "test_outputs.py::test_report_order_and_keys": "README report layout"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the permit reporting tool reads these keys in order; README fixes them",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "A JSON object with exactly these keys"
+   }
+  },
+  {
+   "id": "HALF-UP-ROUNDING",
+   "domain_required": true,
+   "rationale": "the procedure's 1.1 fixes exact arithmetic and half-up rounding to the reported unit",
+   "authority_anchor": {
+    "file": "environment/app/docs/data-reduction-procedure.md",
+    "anchor": "an exact half goes up"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": []
+}

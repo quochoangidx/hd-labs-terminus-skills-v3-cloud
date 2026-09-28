@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-library-overdue-fines"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Operations"
+subcategory = "Finance"
+languages = ["python"]
+tags = ["library-circulation", "overdue-fines", "calendar-days", "policy-compliance", "fine-caps"]
+expert_time_estimate_hours = 2
+difficulty_explanation = "This is the work of a library circulation manager who keeps a county library's fines tooling in line with its published overdue policy. The package carries slips real circulation systems make. It gives every item a 14-day loan where the policy gives a book 21 days and a DVD 7, counts every calendar day after the due day where the policy never counts a Sunday, when every branch is shut, and lets a fine grow past the item's replacement cost where the policy caps it there. The harder half is knowing where the policy stops. It gives a loan period only for books and DVDs, and late days and a fine only for a late loan. A journal keeps today's 14 days, and a loan returned on or before its due day keeps today's step: its return day less its due day, nought or negative, charged at the daily fine as a credit. The late-day step has to be rewritten to skip Sundays, and the natural rewrite counts nothing for a loan that is not late, which gives nought where today's step gives a negative figure. A hand-built reference fuzzed against the package will not flag the difference. No real patron data is used. The return files are synthetic, shaped like circulation exports, with hand-built files that sit on every limit."
+solution_explanation = "The reference patch gives a book a 21-day and a DVD a 7-day loan period, counts a late loan's late days as the days after its due day up to and including its return day that are not Sundays (day numbers leaving 6 when divided by 7), and caps a late loan's fine at its replacement cost. Where the policy gives no rule it keeps today's step: a journal keeps a 14-day loan period, and a loan that is not late keeps its return day less its due day as its late days and that many days at its daily fine as its fine, nought or a credit. All arithmetic is integer. The driver is untouched."
+verification_explanation = "A separate verifier image records the delivered driver's bytes, puts its own copy on /app/tools/finebook_run.py, seals /app as root-owned, and runs the documented command against the delivered /app/src. Each run is made as an unprivileged user in its own session with an isolated interpreter, on each file staged under one neutral name. It compares every README key as a JSON integer or string, and the loan order. Expected statements were sealed ahead of time into tests/expected by solution/seal.py from solution/model.py, a model written from the policy that never imports the package, and are pinned by SHA-256 and row count in tests/expected/ROSTER. There are 11 tests over 9 sealed files: one named test for each of rules 2.1, 2.2, 3.1 and 3.2, one for each of the two figures left to today's code, one combining them, a limits test, a seeded family and two harness tests. Journals and loans that are not late appear only in the tests that grade them. Named files put due days and return days on Sundays, a late span made of a single Sunday, spans over one Sunday and many, loans one day late for each kind, and fines short of, exactly on and past the replacement cost. Every rule 1.2 limit is reached: 200 loans, borrowing days 0 and 3,650, returns on the borrowing day and 180 days later, daily fines of 1 and 500 cents, replacement costs of 100 and 20,000 cents, and ids of 1 and 10 characters. The seeded family is also worked out under run-time labels drawn from os.urandom: new ids and a new name, with loans shuffled and moved by whole weeks. Locally the Oracle scores 1 and the unfixed package 0. Fifteen one-edit mutants of the reference each fail their own test, among them every departure reverted, Saturday taken for Sunday, the due day counted or the return day left out, a cap one cent low, 7 or 21 days for a journal, late days or fine floored at nought for a loan that is not late, a 147-day late cap and a 199-loan cap. A contract-valid alternative scores 1, and a test proves the candidate cannot read /tests, the expectations, the shipped copy or /logs/verifier."
+relevant_experience = "Public library circulation: loan periods by material type, overdue fine policies with closed-day rules and replacement-cost caps, and the integrated library systems that assess them."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 3600
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

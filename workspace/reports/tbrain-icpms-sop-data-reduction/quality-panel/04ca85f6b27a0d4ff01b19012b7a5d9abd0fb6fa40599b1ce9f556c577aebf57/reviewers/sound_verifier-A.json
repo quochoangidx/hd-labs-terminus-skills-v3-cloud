@@ -1,0 +1,203 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "04ca85f6b27a0d4ff01b19012b7a5d9abd0fb6fa40599b1ce9f556c577aebf57",
+  "severity": "Unsure",
+  "summary": "Every readable named-rule family (15 JSONL files) compares the complete report and includes a case that isolates its SOP rule. By hand I recomputed the goldens and each matches the SOP and the instruction's keep-the-shipped-calculation rule. Each plausible wrong implementation I traced fails at least one exact or tolerance assertion, and the comparator accepts valid alternatives such as key order, int/float and dyadic-exact arithmetic paths. I found no confirmed defect. The two gzip-compressed graded families (generated.jsonl.gz, 24 batches, and capacity.jsonl.gz, 1 batch) could not be decoded with the available read-only tools, so their goldens and possible floating-point knife-edges on exactly compared flag and pass values are unverified.",
+  "input_completeness": {
+    "status": "incomplete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/tools/metalquant_run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/metalquant_run.py",
+      "tests/expected/ROSTER",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/spike_recovery.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/expected/generated.jsonl.gz (binary gzip; the Read tool refuses binary files, and no decompression tool is permitted in this review; 24 graded batches per tests/expected/ROSTER:13)",
+      "tests/expected/capacity.jsonl.gz (binary gzip; same limitation; 1 graded batch per tests/expected/ROSTER:6; only its shape assertion at tests/test_outputs.py:198-202 was inspected)"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped each SOP rule (reduction-sop.md sections 2-8) and each instruction clause (instruction.md:3-7) to a named test function (tests/test_outputs.py:134-202) and its JSONL family.",
+    "Recomputed by hand every expected report in the 15 readable JSONL families from the batch inputs (for example, calibration row 3 OLS slope 9.9177 and intercept 101.877 give 11.6583 and 106.123; spike_recovery row 2 gives (116-40)/20 = 380; spike_nondetects row 1 gives (40-1)/(40*2) = 48.75). All match the SOP, and the rows where the SOP gives no rule match the shipped calculation applied to SOP-defined values.",
+    "Traced shipped defects as plausible wrong implementations: fit through the origin, first blank used as the level, reading*dil - level, flags judged on the amount, J including the LOQ, strict unrounded CCV limits, before-only bracketing, and dividing by added*dilution on results. Each fails at least one readable family.",
+    "Traced other plausible wrong variants: clamping negative readings or amounts, blank level returning 0.0 when no blank is a result, a running blank mean over prior blanks only, blank exclusion with > instead of >= mdl, blank-correcting CCVs, run-level instead of per-analyte CCV status, OR instead of AND bracketing, the SOP formula applied to non-detect spikes, and treating a non-detect parent as zero. Each is rejected by a concrete fixture row.",
+    "Checked the comparator (tests/test_outputs.py:103-126): exact type and value for id/analyte/flag/ccv_ok/pass and null values; the relative/absolute 1e-6 bound matches instruction.md:7; blank_levels key order is ignored as SOP section 8 allows; bool is excluded from numbers.",
+    "Checked that exact-boundary fixtures (MB-10 = mdl, W-91 = mdl, W-92 = loq, W-95 mdl = loq, CCV-1/CCV-7 = 90.0) use power-of-two is_counts and integer-sum OLS, so the alternative OLS formulas (centered, n*Sxy-SxSy, statistics.linear_regression) and reading formulas evaluate exactly. Near-boundary cases keep a margin of about 5e-8, far above float noise.",
+    "Checked the grading path: the verifier-owned driver copy at /opt/driver links to /app/src (tests/Dockerfile:6-12). The byte-equality driver test (tests/test_outputs.py:205-206) matches instruction.md:3. The shipped driver matches the environment driver (identical manifest hashes).",
+    "Checked that every readable fixture batch lies within the SOP section 1 limits (standards count, is_counts >= 1000, CCV true >= 10*loq, CCV reading within 0.5-1.5x true, mdl <= loq, dilution 1-1000, spike parent is an earlier sample).",
+    "Considered whether running python3 -I -S in a separate verifier image imposes an undisclosed restriction. instruction.md:3 states that reduction runs the driver against the delivered /app/src and the environment ships no third-party packages, so I report no finding."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Every SOP rule has a dedicated test and family whose full-report comparison fails when that rule is reverted to the shipped code or reversed.",
+      "evidence": ["tests/test_outputs.py:134-202", "environment/app/docs/reduction-sop.md:39-112", "environment/app/src/metalquant/calib.py:8-14", "environment/app/src/metalquant/blanks.py:4-9", "environment/app/src/metalquant/samples.py:8-18", "environment/app/src/metalquant/qc.py:8-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result (values, membership, uniqueness, required outputs)",
+      "status": "checked",
+      "reason": "compare() checks the exact top-level key set, the blank_levels key set and values, list lengths, per-entry key sets and every field of every entry.",
+      "evidence": ["tests/test_outputs.py:109-126"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rules each have an isolating case",
+      "status": "checked",
+      "reason": "Fitted intercept (calibration.jsonl), blank mean anywhere (blank_mean rows 1-2), non-detect blanks excluded with an mdl boundary (blank_nondetects rows 2-3), a single result (blank_single_result), no results (blank_no_results rows 2-4), blank before dilution (dilution), flag basis (flag_basis), mdl/loq boundaries (flag_limits), no clamping (negative_readings), rounded inclusive CCV (ccv_limits), bracketing (ccv_bracketing), unbracketed (ccv_unbracketed rows 1-4), spike recovery without dilution (spike_recovery rows 1-2), non-detect spikes (spike_nondetects), ordering (report_order).",
+      "evidence": ["tests/expected/calibration.jsonl:1-4", "tests/expected/blank_nondetects.jsonl:2-3", "tests/expected/flag_limits.jsonl:1-3", "tests/expected/ccv_limits.jsonl:1", "tests/expected/ccv_bracketing.jsonl:1", "tests/expected/ccv_unbracketed.jsonl:1-4", "tests/expected/spike_recovery.jsonl:1-3", "tests/expected/spike_nondetects.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Traced shipped-bug reversions plus about ten other plausible variants (see checks_performed). Each fails a readable fixture.",
+      "evidence": ["tests/expected/negative_readings.jsonl:1", "tests/expected/report_order.jsonl:1", "tests/expected/blank_mean.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, ordering, implementation choices)",
+      "status": "checked",
+      "reason": "Parsed-JSON comparison, set comparison for blank_levels keys, int/float accepted for numbers, tolerance per instruction.md:7. Exact flag/pass boundaries in readable fixtures are exact in binary under alternative OLS and reading formulas. Rounding-tie ambiguity is excluded by the section 1 guarantee. Not verified for the unreadable gz families.",
+      "evidence": ["tests/test_outputs.py:103-126", "instruction.md:7", "environment/app/docs/reduction-sop.md:35-37"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced",
+      "status": "checked",
+      "reason": "The driver-unchanged restriction is enforced by byte comparison, and the verifier runs its own driver copy. 'Add no correction/guard' is enforced indirectly by exact reports (for example, the clamping guard fails negative_readings). No lifecycle or recovery promises exist.",
+      "evidence": ["instruction.md:3", "instruction.md:5", "tests/test_outputs.py:205-206", "tests/Dockerfile:6-12"],
+      "finding_ids": []
+    },
+    {
+      "category": "Initialization-to-first-event transition (state machine)",
+      "status": "checked",
+      "reason": "Runs before the first CCV: ccv_unbracketed row 1 (W-121, true) and row 4 (W-128 before the only, failing CCV, true) isolate the shipped no-prior-CCV default from a 'use next CCV' variant.",
+      "evidence": ["tests/expected/ccv_unbracketed.jsonl:1", "tests/expected/ccv_unbracketed.jsonl:4", "environment/app/src/metalquant/qc.py:12-17"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: sign partitions discriminated",
+      "status": "checked",
+      "reason": "Spike recovery has positive (spike_recovery row 1), large positive (380) and negative values (-150, -16.04, -15). Negative blank level: blank_no_results row 2, negative_readings. Negative readings of samples near zero: W-102 (-0.5, which a clamp would turn to J). Negative amounts: W-141T.",
+      "evidence": ["tests/expected/spike_recovery.jsonl:3", "tests/expected/spike_nondetects.jsonl:1", "tests/expected/negative_readings.jsonl:1", "tests/expected/blank_no_results.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs representation (key order, types, encoding)",
+      "status": "checked",
+      "reason": "Only the promised representation is enforced: list order (SOP section 8) and exact types for id/analyte/flag/ccv_ok/pass/null (instruction.md:7). blank_levels key order is not enforced, consistent with SOP section 8.",
+      "evidence": ["tests/test_outputs.py:110-126", "environment/app/docs/reduction-sop.md:100-110"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries / self-controlled comparisons / proxy behavior",
+      "status": "checked",
+      "reason": "Goldens are precomputed files pinned by ROSTER hashes. The candidate can influence only /app/src, which is re-read on every reduce() run. The driver is verifier-owned. No candidate-produced checksum or self-comparison exists.",
+      "evidence": ["tests/test_outputs.py:39-59", "tests/test_outputs.py:86-100", "tests/Dockerfile:6-12"],
+      "finding_ids": []
+    },
+    {
+      "category": "Generated and capacity family goldens and float robustness",
+      "status": "unresolved",
+      "reason": "generated.jsonl.gz and capacity.jsonl.gz are gzip binaries that could not be decoded with the permitted read-only tools, so their expected reports and any knife-edge flag/pass values were not inspected.",
+      "evidence": ["tests/expected/ROSTER:6", "tests/expected/ROSTER:13", "tests/test_outputs.py:194-202"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["SOP section 4 blank results (>= mdl)", "instruction keep-shipped-calculation when the SOP gives no rule"],
+      "case_or_path": "All blanks are non-detects: the level is the first blank's reading (blank_no_results rows 2-4: -1.0, 0.25, 0.5), which distinguishes it from 0.0 and from the mean of all blanks.",
+      "status": "checked",
+      "evidence": ["tests/expected/blank_no_results.jsonl:2-4", "environment/app/src/metalquant/blanks.py:4-9"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP section 5 flag on corrected reading", "SOP section 5 amount = corrected * dilution"],
+      "case_or_path": "W-81 corrected 0.5 but amount 5 is ND; W-82 corrected 3 but amount 12 is J; W-84 corrected 0.5 but amount 50 is ND.",
+      "status": "checked",
+      "evidence": ["tests/expected/flag_basis.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP section 7 spike recovery of results", "SOP section 3 non-detect gives no rule, so keep the shipped formula with SOP amounts"],
+      "case_or_path": "Parent ND with spike result (W-141S 48.75, W-143S 52.5), spike ND with parent result (W-142S), both ND (W-141T), and a mixed per-analyte case in report_order row 1 (As 47.5 and Cd 50.0 via the shipped formula; Tl and Pb via the SOP formula).",
+      "status": "checked",
+      "evidence": ["tests/expected/spike_nondetects.jsonl:1-2", "tests/expected/report_order.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP section 6 per-analyte CCV pass", "SOP section 6 bracketing by nearest CCVs"],
+      "case_or_path": "A-CCV fails Tl and Pb but passes As and Cd: Z-9 and B-SPK get ccv_ok false for Tl/Pb and true for As/Cd; blanks between CCVs are ignored.",
+      "status": "checked",
+      "evidence": ["tests/expected/report_order.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP section 6 unbracketed runs (shipped nearest-before check)", "SOP section 6 rounded inclusive pass"],
+      "case_or_path": "Runs after the last CCV inherit that CCV's SOP pass status (true in ccv_unbracketed row 1, false in row 2 and report_order row 1 C-1). No fixture has an after-last run whose CCV pass differs between the shipped strict rule and the SOP rounded rule, but that variant (keeping shipped ccv_passes) already fails ccv_limits.",
+      "status": "checked",
+      "evidence": ["tests/expected/ccv_unbracketed.jsonl:1-2", "tests/expected/ccv_limits.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP section 3 blanks/CCVs judged on reading", "SOP section 4 blank level"],
+      "case_or_path": "A nonzero blank level plus CCVs in report_order: blank-correcting CCV readings would change recovery (for example, Tl 98.75 vs 100).",
+      "status": "checked",
+      "evidence": ["tests/expected/report_order.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["exact flag comparison", "values landing exactly on mdl/loq"],
+      "case_or_path": "In readable fixtures, exact landings are dyadic-exact across the alternative arithmetic paths I traced. For the generated/capacity batches this was not verifiable.",
+      "status": "unresolved",
+      "evidence": ["tests/expected/flag_limits.jsonl:1-3", "tests/expected/blank_nondetects.jsonl:2", "tests/test_outputs.py:125-126"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "The expected reports in generated.jsonl.gz (24 batches) and capacity.jsonl.gz (1 batch, 80 runs x 4 analytes x 8 standards) may contain an incorrect golden, or a sample/blank value that lands on mdl/loq only up to float rounding. With exact flag comparison, that could reject a contract-valid alternative arithmetic path.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "Decompressed contents of tests/expected/generated.jsonl.gz and tests/expected/capacity.jsonl.gz, or a receipt showing each batch's minimum distance of corrected readings, blank readings and CCV recoveries from mdl, loq and the rounding thresholds, and an independent recomputation of those goldens."
+    }
+  ],
+  "uncertainty": "No defect was found in any readable file. The verdict stays Unsure only because two graded gzip families (25 of 57 graded batches) could not be decoded and inspected. If they are consistent with the readable families, this axis would be None."
+}

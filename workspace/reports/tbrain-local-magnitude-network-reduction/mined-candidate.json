@@ -1,0 +1,374 @@
+{
+  "candidate": {
+    "task_slug": "tbrain-local-magnitude-network-reduction",
+    "category": "Science",
+    "subcategory": "Earth",
+    "category_rationale": "Correctness is decided by regional seismic network practice for local magnitude (Wood-Anderson record amplitude, -log A0 distance correction, station terms, reading selection, robust network aggregation), which is observational seismology. Closest rejected pair: Science / Physics (wave attenuation physics is background, but the graded object is a network's magnitude reduction procedure, not a physical model); Software / Data engineering rejected because the deliverable's correctness is domain arithmetic, not pipeline plumbing.",
+    "target_difficulty": "core",
+    "artifacts": [
+      "/app"
+    ],
+    "verifier_landing_dirs": [
+      "/app"
+    ],
+    "agent_network_mode": "no-network",
+    "verifier_network_mode": "no-network",
+    "closest_gallery_task": "none known in-repo (gallery snapshot file absent from this checkout; nearest team tasks: tbrain-river-gauge-daily-discharge, tbrain-legacy-snowpack-bitexact-port, both Earth but hydrology/snow, different setting, authority, departures and data)",
+    "gallery_novelty": "novel",
+    "objective_type": "seeded-departure repair of a seismic network local-magnitude reduction package against its numbered in-environment processing manual",
+    "classification_timing": "post_crux",
+    "disposition": "active",
+    "rejection_reason": null,
+    "domain_crux": {
+      "failure_mode": "a regional network's ML reduction drifts from its own processing manual in the ways real networks drift from Richter memory (nominal 2800 Wood-Anderson gain, peak-to-peak not halved, epicentral distance, log-distance interpolation, largest-channel station value, station term sign, mean network value, no minimum station count)",
+      "native_work_surface": "small Python bulletin-reduction package plus the network's numbered manual part NPM-4 with its own -log A0 table",
+      "native_artifact_or_behavior": "per-event report of station magnitudes, hypocentral distances, contributor flags and network ML",
+      "difficulty_without_incidental_conventions": "with every exact convention stated in NPM-4, the solver must still (a) apply the reading definition inside the station mean it has to rebuild (the shipped largest-channel code never needed it because a sub-noise amplitude rarely wins a max and the rule never applied), and (b) stop the new linear-in-distance interpolation at the table's ends, keeping the shipped log-distance extrapolation for stations the table does not reach; both are scope judgements a self-built reference from the manual does not settle for them"
+    },
+    "pattern_blind_crux_card": {
+      "natural_domain_failure_mode": "an analyst modernises a magnitude routine from the manual and either averages every trace the picker produced (noise-swamped strong-motion channels included) or extends the corrected interpolation past the calibrated table",
+      "native_work_surface_and_artifact": "bulletin package + NPM-4 manual -> JSON magnitude report per event",
+      "why_difficulty_survives_removing_incidental_schema": "both traps live in domain definitions (what a reading is; how far the calibration reaches) inside aggregates the departures force the solver to rewrite, not in field names or ordering",
+      "two_natural_but_wrong_repairs_on_distinct_surfaces": [
+        "station.py: station_magnitude rebuilt as the mean over every amplitude of the recording (reading definition 2.3 not applied inside the new mean)",
+        "attenuation.py: minus_log_a0 converted from log-distance to linear-in-distance for every distance, so stations nearer than 10 km or farther than 600 km get a linearly extrapolated (or clamped) correction instead of the shipped log-distance extrapolation"
+      ],
+      "direct_observable": "report.events[].stations[].ml for the station carrying the trap input; everything else in the report unchanged"
+    },
+    "scope_ledger": {
+      "primary_outcome": "the bulletin report (station ML, hypocentral distance, contributor flag, network ML per event) that NPM-4 defines, printed by the frozen driver",
+      "causal_core": "picker amplitude -> record amplitude (gain, half p2p) -> readings (2.3) -> channel magnitude (+ -log A0 at hypocentral distance, + station correction) -> station mean -> contributors by table reach -> median with a three-station minimum",
+      "core_obligations": [
+        {
+          "id": "WA_GAIN",
+          "contribution": "record amplitude at magnification 2080",
+          "authority": "NPM-4 2.2",
+          "witness": "test_rule_2_2_record_amplitude_uses_magnification_2080",
+          "plausible_wrong": "keep Richter's nominal 2800"
+        },
+        {
+          "id": "HALF_P2P",
+          "contribution": "record amplitude is half the peak-to-peak value",
+          "authority": "NPM-4 2.2",
+          "witness": "test_rule_2_2_record_amplitude_is_half_peak_to_peak",
+          "plausible_wrong": "use the picker's peak-to-peak value as the record amplitude"
+        },
+        {
+          "id": "HYPOCENTRAL",
+          "contribution": "distance is sqrt(epi^2 + depth^2), feeding correction, contributor test and distance_km",
+          "authority": "NPM-4 3.1",
+          "witness": "test_rule_3_1_distance_is_hypocentral",
+          "plausible_wrong": "keep epicentral distance"
+        },
+        {
+          "id": "LINEAR_INTERP",
+          "contribution": "between listed distances the correction is linear in distance",
+          "authority": "NPM-4 3.3",
+          "witness": "test_rule_3_3_correction_linear_between_listed_distances",
+          "plausible_wrong": "keep log-distance interpolation"
+        },
+        {
+          "id": "OFF_TABLE_KEPT",
+          "contribution": "TRAP T2: the correction for a distance the table does not reach keeps the shipped log-distance end-segment extrapolation, fed with the hypocentral distance",
+          "authority": "instruction silence clause + NPM-4 3.2 'The table runs from 10 km to 600 km' + 3.3 'Between two listed distances'",
+          "witness": "test_station_beyond_the_table_keeps_the_shipped_correction",
+          "plausible_wrong": "linear-in-distance extrapolation of the end segments, or clamping to the end values"
+        },
+        {
+          "id": "CORRECTION_SIGN",
+          "contribution": "station correction is added",
+          "authority": "NPM-4 4.1/4.2",
+          "witness": "test_rule_4_2_station_correction_is_added",
+          "plausible_wrong": "keep subtracting it"
+        },
+        {
+          "id": "STATION_MEAN",
+          "contribution": "station ML is the mean of its readings' channel magnitudes",
+          "authority": "NPM-4 4.3",
+          "witness": "test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes",
+          "plausible_wrong": "keep the largest channel alone"
+        },
+        {
+          "id": "READINGS",
+          "contribution": "TRAP T1: only amplitudes at least three times their channel noise enter the station mean",
+          "authority": "NPM-4 2.3 + 4.1 + 4.3",
+          "witness": "test_station_mean_leaves_out_amplitudes_under_three_times_noise",
+          "plausible_wrong": "average every amplitude of the recording"
+        },
+        {
+          "id": "NETWORK_MEDIAN",
+          "contribution": "network ML is the median of contributors (mean of middle two when even)",
+          "authority": "NPM-4 5.2",
+          "witness": "test_rule_5_2_network_magnitude_is_median_of_contributors",
+          "plausible_wrong": "keep the mean; or take the lower middle value for even counts"
+        },
+        {
+          "id": "MIN_THREE",
+          "contribution": "fewer than three contributors gives null",
+          "authority": "NPM-4 5.3",
+          "witness": "test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude",
+          "plausible_wrong": "report the median/mean of one or two stations"
+        }
+      ],
+      "support_obligations": [
+        {
+          "id": "DRIVER",
+          "supplied_boundary": "/app/tools/ml_bulletin.py (frozen, byte-checked)",
+          "why_not_core": "JSON load/dump only"
+        },
+        {
+          "id": "REPORT_ASSEMBLY",
+          "supplied_boundary": "/app/mlnet/bulletin.py (already correct: file order, recording order, keys of 6.1)",
+          "why_not_core": "serialisation and ordering are shipped-correct and not a departure"
+        }
+      ],
+      "non_goals": [
+        "epicentral distance computation from coordinates (supplied as epi_km)",
+        "rounding for publication (NPM-4 0.3: nothing rounded)",
+        "malformed files, figures past section 1 limits, missing stations, recordings with no reading (tier 3, never graded)",
+        "vertical channels, clipped traces, magnitude types other than ML",
+        "direct-call helper promises (graded through the driver only)"
+      ]
+    },
+    "restraint_traps": {
+      "designed_before_departures": true,
+      "T1_READINGS": {
+        "kind": "exclusion via a definition hop inside an aggregate a departure forces the solver to rebuild",
+        "site": "mlnet/station.py station_magnitude (rebuilt for departure 4.3 max -> mean)",
+        "subtype": "an amplitude whose amplitude_nm is below 3 x noise_nm, in the same homogeneous `amplitudes` list; bare values, no label; excluded only by the domain-word definition 2.3 'A reading is an amplitude at least three times the noise of its channel'",
+        "hops": "list field is `amplitudes` -> rule 4.3 speaks of readings -> definition 2.3 decides membership from two bare numbers",
+        "why_shipped_hides_it": "shipped takes max(amplitude_nm); a sub-noise amplitude only changes a max when it is the largest, so the shipped code carries no filter and the solver's rebuilt mean inherits none",
+        "correct_fix": "filter amplitudes by amplitude_nm >= 3*noise_nm before forming channel magnitudes and their mean",
+        "natural_wrong_repair": "mean over every amplitude of the recording",
+        "isolated_test": "test_station_mean_leaves_out_amplitudes_under_three_times_noise (only test whose inputs carry a sub-noise amplitude; includes an exact 3x integer boundary where product and ratio forms agree)",
+        "screen_4_3": {
+          "competing_positive_enumeration": "none: no sentence says every amplitude gives a channel magnitude; 4.1 says 'Each reading gives a channel magnitude'; 2.1 describes measurement only",
+          "definitional_chain": "yes: 2.3 defines reading; 4.1 and 4.3 speak only of readings",
+          "contrary_expert_instinct": "none: seismologists routinely drop low-SNR amplitudes; instinct agrees with the definition",
+          "unnamed_shared_step": "none: the line is drawn by the defined term 'reading'",
+          "trap_in_several_tests": "no: sweeps, generated and limits fixtures carry only amplitudes >= 4x noise",
+          "flags": 0
+        },
+        "status_after_contract_review": "demoted to a departure (CR-3: the blind reviewer read rule 2.3 as a plainly stated departure); kept in its own isolated test, not counted as a trap"
+      },
+      "T2_OFF_TABLE_KEPT": {
+        "kind": "'apply the formula everywhere' edge in a function already being edited, with the book bounding the rule's range",
+        "site": "mlnet/attenuation.py minus_log_a0 (rewritten for departure 3.3 log-distance -> linear-in-distance)",
+        "subtype": "hypocentral distance below 10 km or above 600 km; section 1 admits 1 to ~1001.8 km",
+        "why_silent": "3.2 gives values 10-600 km and says 'The table runs from 10 km to 600 km'; 3.3 governs only 'Between two listed distances'; 4.1 needs 'the distance correction at the station's distance', a value the manual does not define there -> instruction value-level silence: keep the code's calculation fed with manual-defined quantities (hypocentral distance)",
+        "correct_fix": "linear in distance inside [10, 600]; outside keep the shipped end-segment log-distance extrapolation, evaluated at the hypocentral distance",
+        "natural_wrong_repair": "swap log10(d) for d in the shipped segment formula (linear extrapolation beyond the ends), or clamp to the end values",
+        "isolated_test": "test_station_beyond_the_table_keeps_the_shipped_correction (only test with an off-table station; its event keeps >= 3 in-table contributors so the network value is unaffected by the trap)",
+        "screen_4_3": {
+          "competing_positive_enumeration": "checked: 3.3 is bounded by 'Between two listed distances'; 4.1 references the correction without defining it; 6.1 requires an ml for every station, which the kept calculation supplies; no sentence supplies an off-table value",
+          "definitional_chain": "yes: 3.2 table reach + 5.1 contributor reach (same bounds) + 3.3 bounded domain + instruction silence clause",
+          "contrary_expert_instinct": "mild: some analysts would null or clamp an uncalibrated station value; the silence clause forbids adding exclusions or clamps; extrapolation itself is the common practice so keeping one is not counter-intuitive",
+          "unnamed_shared_step": "the interpolation step is shared, but the governed/silent line is drawn by the defined bounds (listed distances, 10 to 600 km)",
+          "trap_in_several_tests": "no: every other fixture keeps hypocentral distances within [10, 600]",
+          "flags": 0.5
+        }
+      },
+      "independence": "T2 (attenuation.py, distance correction, apply-everywhere edge, silent) and T3 (bulletin.py/station.py, recordings list, definition-hop grouping, governed) differ in file, list, subtype, manual section and instruction phrase",
+      "T3_STATION_GROUPING": {
+        "kind": "bare-value two-hop grouping/inclusion decision inside the aggregates departures 4.3 (station mean) and 5.2/5.3 (median, three-station minimum) force the solver to rebuild",
+        "site": "mlnet/bulletin.py reduce_event (per-recording loop) + station.py station_magnitude",
+        "subtype": "a station code that appears in two recordings of one event (broadband and strong-motion sensors processed separately, same epi_km, distinct channels); nothing labels it, it is a repeated code in the homogeneous `recordings` list",
+        "hops": "1.2 defines a recording as one sensor's share of an event at a station -> 4.3 a station's magnitude is the mean of ITS readings (all its recordings) -> 5.2/5.3 speak of contributing stations, so the station votes once",
+        "why_shipped_hides_it": "the shipped loop computes one magnitude per recording and averages rows; the generated/sample data never repeat a code, so a self-built reference written per recording agrees with the natural rebuild",
+        "correct_fix": "pool amplitudes by station code within the event, one station magnitude reported on each of its recordings, median and count over stations",
+        "natural_wrong_repairs": [
+          "per-recording station magnitude and per-recording counting (shipped structure kept)",
+          "readings pooled but median/count taken over recordings (double vote)"
+        ],
+        "isolated_test": "test_two_sensors_of_one_site_are_one_station (only family with a repeated station; includes a two-station/three-recording event that must stay null and 1+2-reading splits where pooled mean != mean of means)",
+        "screen_4_3": {
+          "competing_positive_enumeration": "checked: 6.1 'one object per recording' with ml 'the station magnitude, rule 4.3' is consistent; no sentence says a recording gives a station magnitude",
+          "definitional_chain": "yes: 1.2 recording definition, 4.3 station's readings, 5.2/5.3 stations",
+          "contrary_expert_instinct": "none: one station one vote and pooling co-located sensors agree with practice",
+          "unnamed_shared_step": "none: line drawn by the defined terms station vs recording",
+          "trap_in_several_tests": "no: jobgen.trap_inputs() asserts no other family repeats a station",
+          "flags": 0
+        },
+        "signposting": "1.2 says sites may send one recording per sensor; the instruction envelope names 'sites whose broadband and strong-motion sensors arrive as separate recordings' as an input family (names the input class, not the rule)"
+      }
+    },
+    "departures": [
+      {
+        "id": "D1",
+        "rule": "2.2",
+        "shipped": "WOOD_ANDERSON_GAIN = 2800",
+        "manual": "2080",
+        "memory_flag": "Richter's nominal 2800"
+      },
+      {
+        "id": "D2",
+        "rule": "2.2",
+        "shipped": "record amplitude = full peak-to-peak",
+        "manual": "half of peak-to-peak"
+      },
+      {
+        "id": "D3",
+        "rule": "3.1",
+        "shipped": "distance = epicentral",
+        "manual": "hypocentral sqrt(epi^2 + depth^2)",
+        "memory_flag": "Richter drew against epicentral distance"
+      },
+      {
+        "id": "D4",
+        "rule": "3.3",
+        "shipped": "interpolation in log10 distance",
+        "manual": "linear in distance between listed distances",
+        "memory_flag": "some agencies interpolate on log distance",
+        "hosts_trap": "T2"
+      },
+      {
+        "id": "D5",
+        "rule": "4.1/4.2",
+        "shipped": "correction subtracted",
+        "manual": "correction added"
+      },
+      {
+        "id": "D6",
+        "rule": "4.3",
+        "shipped": "largest channel amplitude alone",
+        "manual": "mean of channel magnitudes of readings",
+        "memory_flag": "some agencies take the largest channel",
+        "hosts_trap": "T1"
+      },
+      {
+        "id": "D7",
+        "rule": "5.2",
+        "shipped": "mean of contributors",
+        "manual": "median, mean of middle two when even"
+      },
+      {
+        "id": "D8",
+        "rule": "5.3",
+        "shipped": "any non-empty contributor set gives a value",
+        "manual": "fewer than three contributors -> null"
+      },
+      {
+        "id": "D9",
+        "rule": "2.3",
+        "shipped": "every amplitude counts (hidden by max)",
+        "manual": "only readings (>= 3x noise) enter the station mean",
+        "note": "formerly trap T1"
+      }
+    ],
+    "public_surfaces": [
+      {
+        "id": "driver_report",
+        "surface": "python3 /app/tools/ml_bulletin.py BULLETIN.json stdout report"
+      },
+      {
+        "id": "driver_file",
+        "surface": "/app/tools/ml_bulletin.py bytes"
+      }
+    ],
+    "verifier_architecture": {
+      "schema_version": 1,
+      "status": "pass",
+      "profile": "cheap_deterministic",
+      "planned_platform_visible_unit_count": 16,
+      "semantic_clusters": [
+        {
+          "id": "amplitude",
+          "description": "record amplitude gain and halving",
+          "planned_unit_count": 2
+        },
+        {
+          "id": "distance",
+          "description": "hypocentral distance, linear interpolation, off-table keep (T2)",
+          "planned_unit_count": 3
+        },
+        {
+          "id": "station",
+          "description": "correction sign, station mean, readings (T1)",
+          "planned_unit_count": 3
+        },
+        {
+          "id": "network",
+          "description": "median, minimum three",
+          "planned_unit_count": 2
+        },
+        {
+          "id": "envelope",
+          "description": "section-1 limits reached, generated trap-free bulletins, report shape and order",
+          "planned_unit_count": 3
+        },
+        {
+          "id": "harness",
+          "description": "driver byte-identical before and after candidate code, sandbox cannot read ground truth, sample not graded",
+          "planned_unit_count": 3
+        }
+      ],
+      "public_surface_ids": [
+        "driver_report",
+        "driver_file"
+      ],
+      "public_surface_cluster_ids": {
+        "driver_report": [
+          "amplitude",
+          "distance",
+          "station",
+          "network",
+          "envelope"
+        ],
+        "driver_file": [
+          "harness"
+        ]
+      },
+      "cross_cluster_scenarios": [
+        {
+          "id": "depth_moves_contributor",
+          "cluster_ids": [
+            "distance",
+            "network"
+          ],
+          "discriminating_scenario": "epi 6 km, depth 12 km: hypocentral 13.4 km contributes and is interpolated; epicentral would exclude it and change the median"
+        },
+        {
+          "id": "readings_move_median",
+          "cluster_ids": [
+            "station",
+            "network"
+          ],
+          "discriminating_scenario": "station mean over readings changes which station is the median"
+        }
+      ],
+      "verifier_shapes": [
+        "driver-run whole-report comparison against sealed expectations",
+        "byte comparison of the submitted driver",
+        "sandbox read-denial check"
+      ],
+      "authority_corpus_substitute": false,
+      "platform_visibility_strategy": "one named test per rule and per trap; no parametrize",
+      "nop_discrimination_strategy": "shipped package fails every departure test (D1 and D2 shift every magnitude)"
+    },
+    "solver_path_screen": {
+      "premortem": "A strong solver reads NPM-4, writes a ~60-line reference (half p2p x 2080e-6, hypot, linear interp, +S, mean, median, >=3), diffs it against the package on the sample and random bulletins, and converges on all eight departures. Its reference inherits its own reading of the two scope points: whether 'readings' filters the list it averages (it may just average `amplitudes`), and what the correction is off the table (its linear interpolation extrapolates or clamps). Differential testing against that reference pushes the package toward both over-repairs. It passes only if it reads definition 2.3 into rule 4.3 and treats 3.3 as bounded, keeping the shipped extrapolation.",
+      "reference_unreachable": 2,
+      "authority_incomplete_for_grading": 3,
+      "hidden_state_not_closed_form": 1,
+      "restraint_traps": 4,
+      "fuzz_blind_spot": 3,
+      "self_verification_resistance": 3,
+      "prediction": "resists",
+      "confidence": "low-medium",
+      "decisive_reason": "two independent traps of mixed kind (definition hop in the rebuilt station mean; apply-everywhere edge in the rebuilt interpolation) that a self-built reference does not settle"
+    },
+    "scoring": {
+      "subsystem_interaction": 4,
+      "deterministic_reproducibility": 5,
+      "runtime_viability": 5,
+      "anti_shortcut_hardness": 4,
+      "self_verification_resistance": 3,
+      "verifier_complexity": 4,
+      "runtime_cost": 5,
+      "leakage_risk": 5
+    },
+    "v3_shape_screen": "pass",
+    "conformance_collapse_screen": "not_applicable",
+    "forbidden_domain_check": "not in the forbidden list (no rebilling, irrigation, royalty, inventory, fuel tax, genomics, feedlot, retainage, LLP, retail, groundwater, ULD, ICP-MS, HPLC, health plan, LTL, river gauge, snowpack, Fortran band, orbit, geodesic, VOC, metering, PID, thermostat); not optimisation"
+  }
+}

@@ -1,0 +1,354 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "91c1543a6e432eab3048360f35fe83aaf9fdaf0742a265e2187a222c5ab8b101",
+  "severity": "Minor",
+  "summary": "The differential design is sound: every expected result comes from the root-only GNU ed 1.19 binary, run at test time over 678 committed and 640 seeded generated scripts. The comparison checks stdout bytes, whether the exit status is zero, and the whole working-directory tree, and it discriminates the named rules and errata well. One defect remains. The in-process launcher that grades every candidate run ends the run with its own sys.stdout.flush() followed by posix._exit(). That exit path differs from normal interpreter shutdown in ways the contract does not state. As a result, an implementation that matches GNU ed when run as `python3 /app/pyed/ed.py` can still be rejected.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/ed.txt",
+      "environment/app/docs/ed-errata.txt",
+      "environment/app/pyed/ed.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/guard.py",
+      "tests/scope.py",
+      "tests/generated.py",
+      "tests/guardcheck/launcher.py",
+      "tests/guardcheck/exec_launcher.py",
+      "tests/guardcheck/vendored.py",
+      "tests/guardcheck/native.py",
+      "tests/guardcheck/installed.py",
+      "tests/guardcheck/forkexec.py",
+      "tests/guardcheck/reimport.py",
+      "tests/guardcheck/gcreach.py",
+      "tests/guardcheck/tamper.py",
+      "tests/guardcheck/sqlite_ext.py",
+      "tests/guardcheck/plain.py",
+      "tests/guardcheck/bytecode.py",
+      "tests/guardvendor/thirdparty.py",
+      "tests/cases/roster.json",
+      "tests/cases/fixtures.json",
+      "tests/cases/addresses.jsonl",
+      "tests/cases/append_insert_change.jsonl",
+      "tests/cases/delete_join_move_copy.jsonl",
+      "tests/cases/errors_and_exit.jsonl",
+      "tests/cases/files_and_write.jsonl",
+      "tests/cases/options.jsonl",
+      "tests/cases/global_commands.jsonl",
+      "tests/cases/undo.jsonl",
+      "tests/cases/print_list_number.jsonl",
+      "tests/cases/substitute.jsonl",
+      "tests/cases/regex.jsonl",
+      "tests/cases/regex_extended.jsonl",
+      "tests/cases/mixed_scripts_1.jsonl",
+      "tests/cases/mixed_scripts_2.jsonl",
+      "tests/cases/mixed_scripts_3.jsonl",
+      "tests/cases/mixed_scripts_4.jsonl",
+      "tests/cases/mixed_scripts_5.jsonl",
+      "tests/cases/mixed_scripts_6.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "AXIS-1",
+      "severity": "Minor",
+      "claim": "The launcher (tests/guard.py) runs every graded candidate in-process and ends the run with its own shutdown: sys.stdout.flush() followed by posix._exit(status). Normal interpreter shutdown does more than that. It flushes and finalizes other open file objects, runs atexit handlers, and ignores an already-closed sys.stdout. Two contract-valid implementations are rejected because of this. (a) A program that writes its output through its own stream on fd 1 (for example a module-level os.fdopen(1, 'wb')) loses all buffered output. (b) A program that closes sys.stdout before exiting 0 gets exit status 1, because the launcher's unguarded sys.stdout.flush() raises ValueError.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "instruction.md:1 defines the graded program as `python3 /app/pyed/ed.py [OPTIONS] [FILE]`, compared on stdout bytes, exit-status zeroness and files. instruction.md:10 restricts only imports, native code and starting programs. Nothing in the contract requires output to go through sys.stdout, forbids closing sys.stdout, or forbids relying on atexit or finalizers. A program whose stdout and status match GNU ed under plain `python3` must therefore pass.",
+        "actual_behavior": "Case (a): any bytes still buffered in a stream other than the current sys.stdout are discarded, so the candidate's stdout is empty or truncated and every case that prints fails. Case (b): the guard's own uncaught ValueError ends the process with status 1, so every case where GNU ed exits 0 fails the zero-status comparison.",
+        "trace_or_receipt": "tests/test_outputs.py:93 and :172 run every candidate case as DEMOTE + [python3, /opt/pyedguard/guard.py, /app/pyed/ed.py]. In guard.py:211 main() executes the program with runpy.run_path. It catches SystemExit (212-214) and other exceptions (215-220), then calls sys.stdout.flush() with only BrokenPipeError caught (221-224), then posix._exit(status) (225). posix._exit skips interpreter finalization: no atexit handlers and no flush-on-dealloc of other io objects. Case (a): ed.py defines `OUT = os.fdopen(1, 'wb')` at module level and `def main(): ...; OUT.write(b'...\\n'); return 0`, then calls `sys.exit(main())`. run_path runs this in a temporary module whose globals dict is kept alive by the function objects' __globals__ reference cycle, so OUT is not deallocated before guard.py:225, and its 8 KiB buffer (larger than any ed output here) is never written. Plain `python3 ed.py` finalizes __main__ at shutdown, deallocates OUT and flushes it. Case (b): ed.py ends with `sys.stdout.flush(); sys.stdout.close(); sys.exit(0)`. Plain python3 skips flushing a closed stdout at exit and returns 0. guard.py:222 calls flush() on the closed TextIOWrapper, which raises ValueError. That is not BrokenPipeError, so it escapes main() at guard.py:228, and the interpreter prints a traceback and exits 1. test_outputs.py:160 records `proc.returncode == 0` as False, so check() (173-180) fails for any case whose GNU status is 0. Not executed; static trace only."
+      },
+      "reachable_case_or_path": "Any committed case that prints, for example tests/cases/addresses.jsonl:1 (`-s f.txt`, script `,p`), graded against an ed.py that emits its output through a module-level os.fdopen(1, 'wb'). Any case where GNU exits 0, for example addresses.jsonl:1, graded against an ed.py that closes sys.stdout before sys.exit(0).",
+      "graded_effect": "An implementation whose stdout, exit status and files match GNU ed exactly under the stated invocation gets reward 0. This is a false rejection caused by a representation the contract never promises: output must reach fd 1 through the object bound to sys.stdout, and sys.stdout must stay open.",
+      "citations": [
+        "tests/guard.py:197-228",
+        "tests/test_outputs.py:89-93",
+        "tests/test_outputs.py:149-160",
+        "tests/test_outputs.py:166-180",
+        "instruction.md:1",
+        "instruction.md:10"
+      ],
+      "root_invariant": "The grading launcher must preserve the observable process semantics of `python3 /app/pyed/ed.py`, meaning every byte written to fd 1 and the exit status, for any program that obeys the three stated construction rules. Its end-of-run path must not replace interpreter shutdown with a narrower one.",
+      "authority": [
+        "instruction.md:1",
+        "instruction.md:10"
+      ],
+      "implementation_sites": [
+        "tests/guard.py:210-225",
+        "tests/guard.py:86-95"
+      ],
+      "sibling_variants": [
+        "atexit-registered work (for example a final flush or cleanup registered with atexit.register) is skipped by posix._exit at guard.py:225, so output or file state produced there is lost.",
+        "Files written through a long-lived module-level handle that is never closed (for example a cached open() for W appends) are not flushed at guard.py:225. The working-directory snapshot (test_outputs.py:118-131) would then show truncated contents.",
+        "After os.close(1) with pending sys.stdout data, the launcher raises an uncaught OSError at guard.py:222 and exits 1, where plain python3 reports the flush failure with its own status 120. The zeroness matches here, but the path shows the same unguarded divergence.",
+        "stop() at guard.py:86-95 also flushes only sys.stdout before posix._exit(120). This only affects runs that are already rejected, so it has no graded effect."
+      ],
+      "interaction_variants": [
+        "The SystemExit path (guard.py:212-214) interacts with the reference cycle: the temporary __main__ globals created by runpy stay alive past posix._exit, so a normal sys.exit(main()) ending still loses a non-sys.stdout buffer.",
+        "File-regular stdin (the stop-on-error rule, instruction.md:10): after an early error the candidate exits right away, and under the guard any output buffered outside sys.stdout before the error is lost. This is exactly the '?' line that errors_and_exit.jsonl:20-27 compares."
+      ],
+      "minimal_repair_boundary": "The end-of-run path in tests/guard.py main(). Either end with normal interpreter shutdown (raise SystemExit(status) or sys.exit(status) after run_path instead of posix._exit, keeping the hook installed), or explicitly reproduce CPython's finalization semantics: run atexit handlers, collect and finalize the program's globals, and treat a closed sys.stdout as nothing to flush. Alternatively, state in instruction.md that output must go through sys.stdout, which stays open, and that atexit is not run. That would narrow the contract instead.",
+      "closure_evidence": [
+        "A guardcheck probe that writes 'x\\n' through a module-level os.fdopen(1, 'wb') and returns via sys.exit(main()) produces b'x\\n' under guard.py, the same as plain python3.",
+        "A probe that prints, closes sys.stdout and exits 0 reports status 0 under guard.py.",
+        "A probe that writes in an atexit handler produces the same stdout under guard.py and plain python3.",
+        "The existing launcher probes (test_outputs.py:221-238) still return 120 with no forbidden marker, and plain.py still returns (0, b'plain plain.py x\\nre bb\\n') and 3."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read every file listed in packet-manifest.json (task.toml and solution/ are withheld from this axis's packet by design; tests/Dockerfile was read).",
+    "Traced test.sh -> pytest -> load_cases (roster/fixture/count checks, generated buckets, scope.case_problems) -> check() -> run() for GNU ed as root and the candidate under setpriv + guard.py.",
+    "Confirmed the expected results come from the verifier-run GNU ed binary installed by tests/Dockerfile:3 (Debian bookworm ed) and made root-only at test.sh:16. The candidate cannot supply, modify or read the comparison target.",
+    "Checked the comparison tuple (stdout bytes, returncode==0, recursive file/dir snapshot) against the three promises in instruction.md:1. Stderr is discarded (test_outputs.py:150), matching 'What goes to standard error is not compared'.",
+    "Checked the root-vs-nobody asymmetry between the GNU and candidate runs. Workdir and subdirs are 0777 and fixture files 0666 (test_outputs.py:99-115). No committed or generated case names an absolute or out-of-tree path (FILE_NAMES generated.py:63; all file arguments in the jsonl families are relative), so privilege cannot change a GNU result the candidate is compared with.",
+    "Checked the pipe versus regular-file stdin plumbing (test_outputs.py:143-152) against the stop-on-error rule. Both modes are exercised in errors_and_exit.jsonl:20-27 and many mixed/global/undo cases.",
+    "Walked the guard: allowed stdlib/lib-dynload, rejection of site-packages, rejection of non-.py files under /app, process/ctypes/sqlite audit events, gc reach, __code__ replacement, and the plain.py positive control. Found no false rejection of ordinary stdlib usage apart from the end-of-run path in AXIS-1.",
+    "Mapped each instruction bullet and each of the 22 errata entries to at least one discriminating committed case (see coverage_sweep).",
+    "Read generated.py for determinism of the case set (fixed SEED; MIN_USES enforcement) and the in-scope guarantee (scope.py), and checked that generated cases hold no expected values.",
+    "Looked for alternative-valid rejections due to representation: file modes, stderr and temp-file names are not compared. Directories appear in the snapshot, but the candidate cannot create them through ed commands in scope.",
+    "Static reasoning only; nothing was executed."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "Each command in instruction.md:8 has dedicated cases compared byte-for-byte against GNU. Examples: a/i/c in append_insert_change.jsonl; d/j/m/t in delete_join_move_copy.jsonl; e/E/f/r/w/wq/W in files_and_write.jsonl; g/v in global_commands.jsonl; u in undo.jsonl; k/marks in addresses.jsonl:25-26,45,58-92; =, # and null in addresses.jsonl:32-36,53,57 and print_list_number.jsonl:3-7; s forms and flags in substitute.jsonl. Any missing or reversed behavior changes stdout, status or files.",
+      "evidence": [
+        "tests/test_outputs.py:166-180",
+        "tests/cases/substitute.jsonl:1-84",
+        "tests/cases/files_and_write.jsonl:1-85"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result, not only existence or counts",
+      "status": "checked",
+      "reason": "run() returns the full stdout bytes, the status zeroness, and every file's bytes plus the directory entries. The whole tuple is compared with !=.",
+      "evidence": [
+        "tests/test_outputs.py:118-131",
+        "tests/test_outputs.py:160",
+        "tests/test_outputs.py:173"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Each named domain rule has an isolating case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "Errata are isolated as follows. 1: addresses.jsonl:40-41,61-62,81-82. 2: addresses.jsonl:45,58,63,67-68. 3: addresses.jsonl:64,66,73-75 and append_insert_change.jsonl:22-30. 4: regex.jsonl:46-47,50,55-59. 5: regex_extended.jsonl:6,9-12. 6: substitute.jsonl:48,50,56-57,79. 7: substitute.jsonl:55. 8: regex.jsonl:10-11 and regex_extended.jsonl:7. 9: regex.jsonl:12-13. 10: regex.jsonl:66-69,79 and regex_extended.jsonl:16,21-22. 11: files_and_write.jsonl:32,38,47,50. 12: undo.jsonl:5,13-14. 13: append_insert_change.jsonl:31-35. 14: undo.jsonl:4,11,16. 15: delete_join_move_copy.jsonl:12,19,22. 16: global_commands.jsonl:36-54. 17: global_commands.jsonl:19,32,62-63. 18: global_commands.jsonl:59-60. 19: files_and_write.jsonl:30-34. 20: substitute.jsonl:80-82. 21: files_and_write.jsonl:78-79 and errors_and_exit.jsonl:24. 22 (stdout '?'): every error case. The instruction's own rules are also isolated. BRE \\| alternation versus ERE literal |: substitute.jsonl:23 and regex_extended.jsonl:13-14. Leftmost-longest: regex.jsonl:10,53-54. Missing FILE on a pipe: options.jsonl:3-5. Options before or after FILE and combined: options.jsonl:6-8 plus generated OPTIONS.",
+      "evidence": [
+        "environment/app/docs/ed-errata.txt:12-106",
+        "instruction.md:5-10",
+        "tests/cases/regex.jsonl:10-13",
+        "tests/cases/global_commands.jsonl:36-63"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solution is rejected",
+      "status": "checked",
+      "reason": "The following wrong implementations are rejected, each by a cited case. Python `re` leftmost-first instead of POSIX leftmost-longest: regex.jsonl:10-11,53-54. Ignoring stop-on-error for regular-file stdin: errors_and_exit.jsonl:20-23. Printing '?' to stderr: all error cases. Treating EOF as a single q: files_and_write.jsonl:12-13. Rejecting a missing FILE on a pipe with a non-zero status: options.jsonl:3-5. Ignoring -s byte counts: files_and_write.jsonl:23-29. Delegating to /usr/bin/ed: the binary is root-only (test.sh:16) and the guard stops process creation, as launcher probes show (test_outputs.py:221-234).",
+      "evidence": [
+        "tests/cases/errors_and_exit.jsonl:20-27",
+        "tests/test.sh:16",
+        "tests/test_outputs.py:210-238"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, ordering, implementation choice)",
+      "status": "checked",
+      "reason": "Stderr, file modes and temporary names are not compared, and the comparison is purely behavioral. However, the launcher's end-of-run path rejects valid I/O implementation choices (AXIS-1).",
+      "evidence": [
+        "tests/test_outputs.py:149-150",
+        "tests/guard.py:210-225"
+      ],
+      "finding_ids": [
+        "AXIS-1"
+      ]
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced (construction rules, stop-on-error, EOF-as-q)",
+      "status": "checked",
+      "reason": "The three construction rules are enforced at runtime by guard.py's audit hook and import warden. Their effectiveness is covered by 11 probes plus a positive control (test_outputs.py:210-238). The stdlib compiled-module allowance is honoured (guard.py:80-115 allows lib-dynload under platstdlib; plain.py imports math). Lifecycle rules for stop-on-error and repeated EOF q are exercised with both stdin kinds.",
+      "evidence": [
+        "tests/guard.py:97-181",
+        "tests/guardcheck/plain.py:1-27",
+        "tests/cases/files_and_write.jsonl:12-13"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior / self-controlled comparison / Oracle-specific representation",
+      "status": "checked",
+      "reason": "Expected outputs are produced by GNU ed run by the root verifier. The candidate controls neither the binary (chmod 700) nor the /tests tree (chmod 700). The guard runs only on the candidate's side and decides no expected value. No Oracle-derived golden exists (generated.py:1-12; the cases hold only inputs).",
+      "evidence": [
+        "tests/test.sh:13-17",
+        "tests/test_outputs.py:9-15",
+        "tests/generated.py:1-12"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries",
+      "status": "checked",
+      "reason": "The candidate is executed from source at /app/pyed/ed.py on every run with PYTHONDONTWRITEBYTECODE=1. Bytecode-only delivered modules are refused (guard.py:104-107, bytecode.py probe). The reference binary comes from the tests image, not the candidate image.",
+      "evidence": [
+        "tests/test_outputs.py:92-96",
+        "tests/Dockerfile:3"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases / domain validity",
+      "status": "checked",
+      "reason": "scope.py statically rejects any committed or generated case outside the stated domain before anything runs, and roster counts are enforced. In file-stdin scripts, lines after an early error are never reached. GNU and the candidate share the same reachability, so this adds no false grading, only less coverage per script, and the committed families compensate.",
+      "evidence": [
+        "tests/scope.py:157-178",
+        "tests/test_outputs.py:36-82"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "State machine initialization-to-first-event transition",
+      "status": "checked",
+      "reason": "The initial current address after loading a file (last line) versus an empty buffer (0) is exercised: addresses.jsonl:2 ('p' after load), print_list_number.jsonl:7 (newline at the last line), and many no_files_01 cases starting with an address or 'a'. The first-command undo state is exercised by undo.jsonl:6 and addresses.jsonl:76. Initial default filename from FILE versus none: files_and_write.jsonl:15,42,50.",
+      "evidence": [
+        "tests/cases/addresses.jsonl:2",
+        "tests/cases/print_list_number.jsonl:7",
+        "tests/cases/files_and_write.jsonl:42"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities (address offsets)",
+      "status": "checked",
+      "reason": "Negative and above-$ intermediate and final addresses are discriminated: addresses.jsonl:54-56 (1-2+2, 10+2-2, 0-1), 88-89 (1+60, 30---+++-, 1--), 29-31 (5,3 / 0 / 11).",
+      "evidence": [
+        "tests/cases/addresses.jsonl:29-31",
+        "tests/cases/addresses.jsonl:54-56",
+        "tests/cases/addresses.jsonl:88-89"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding / layout / diagnostic output",
+      "status": "checked",
+      "reason": "The contract retains byte-exact stdout and file contents, and the verifier compares exactly those. File modes, inode data and stderr are not compared. The directory entries in the snapshot are ones the candidate cannot change with ed commands in scope. The only imposed representation is the launcher's requirement that stdout go through sys.stdout and that the process not rely on normal shutdown (AXIS-1).",
+      "evidence": [
+        "tests/test_outputs.py:118-131",
+        "instruction.md:1"
+      ],
+      "finding_ids": [
+        "AXIS-1"
+      ]
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "stop on error when stdin is a regular file",
+        "? written to stdout"
+      ],
+      "case_or_path": "errors_and_exit.jsonl:20-24 compare '?' on stdout followed by an immediate stop, against the pipe twins at :1,4,3,10",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/errors_and_exit.jsonl:1-24"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "undo",
+        "marks cleared by change (errata 2)"
+      ],
+      "case_or_path": "addresses.jsonl:58,67,80: ka, then s, d or j, then u, then 'a",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/addresses.jsonl:58",
+        "tests/cases/addresses.jsonl:67",
+        "tests/cases/addresses.jsonl:80"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "global command list continuation (errata 16/17)",
+        "EOF acts as repeated q"
+      ],
+      "case_or_path": "global_commands.jsonl:39,43-44,47-48,54: q inside or after a g list with a modified buffer, and a trailing backslash at EOF",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/global_commands.jsonl:39-54"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "-E extended syntax",
+        "\\| literal in ERE vs alternation in BRE"
+      ],
+      "case_or_path": "regex_extended.jsonl:13-14 versus substitute.jsonl:23",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/regex_extended.jsonl:13-14",
+        "tests/cases/substitute.jsonl:23"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "e/E failure empties buffer (errata 21)",
+        "undo / q warning"
+      ],
+      "case_or_path": "files_and_write.jsonl:78-79: E nothere.txt, then u, =, q",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/files_and_write.jsonl:78-79"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "construction rules checked while it runs (launcher)",
+        "byte-exact stdout and exit-status zeroness"
+      ],
+      "case_or_path": "The launcher's end-of-run flush and posix._exit meet a program that writes via its own fd-1 stream or closes sys.stdout",
+      "status": "checked",
+      "evidence": [
+        "tests/guard.py:210-225",
+        "tests/test_outputs.py:160"
+      ],
+      "finding_ids": [
+        "AXIS-1"
+      ]
+    },
+    {
+      "rules": [
+        "missing FILE only with pipe stdin",
+        "default filename then w"
+      ],
+      "case_or_path": "options.jsonl:3-5: missing.txt with ,p / a+w / q; w creates missing.txt, which appears in the snapshot",
+      "status": "checked",
+      "evidence": [
+        "tests/cases/options.jsonl:3-5"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

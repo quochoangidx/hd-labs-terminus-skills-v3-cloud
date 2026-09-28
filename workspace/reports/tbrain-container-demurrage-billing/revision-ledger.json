@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-container-demurrage-billing",
+ "report_path": "workspace/revision/12e6eda4-8ced-4dcd-928d-7abc22b133a9/v15/12e6eda4-8ced-4dcd-928d-7abc22b133a9.md",
+ "returned_snapshot_sha256": "a99c43b5e1f69059216cfe5754639bc81b13067b1c9426877a669502b980c796",
+ "repaired_snapshot_sha256": "ad335e9b7724f38004d12ad3dbbe3512e32ac8edb6c7cb6b2e7c9cb7967240fa",
+ "findings": [
+  {
+   "id": "1",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "Reproduced: min(total, 2^31-1) scored reward 1 on the returned bytes, because the largest sealed total was 1,949,204,504. Rule 3.2 (the total is the sum) is core, so it is backed rather than dropped. solution/jobgen.py limits() now adds a second sealed file (DM3-0014) of 200 containers, alternating DRY/REEFER, discharge days 0/3,650, 121-day stays at 100,000 cents: total 4,600,000,000, past 2^31 and 2^32. test_rule_1_2_limits_reached also asserts that some sealed total exceeds 2^32. The other 8 sealed files are byte-identical. Class swept (fixed-width total): clamp at 2^31-1 and 2^32-1, and a signed and an unsigned 32-bit wrap. All survived or were only incidentally caught on the returned bytes, and all are rejected on the limits witness now. Per-line charges (max 23,200,000) and the most negative total (-80,000,000) cannot reach 32 bits, so the class has no other member. instruction.md, environment/, solution/solve.sh, fix.patch and model.py are byte-identical.",
+   "reproduction": "revision-v15/repro/clamp-int32-max.json",
+   "closure": "revision-v15/closure/clamp-int32-max.json",
+   "gate": {
+    "rule": "derived-extreme fixtures (AGENTS.md section 2 'Range edges include derived extremes'): the top of every sum of ranged fields must be reached; here the statement total at 200 x the largest charge"
+   }
+  }
+ ],
+ "previous_findings": []
+}

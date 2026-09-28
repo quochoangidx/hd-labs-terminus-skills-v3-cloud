@@ -1,0 +1,131 @@
+diff -ruN a/app/src/cemsqr/correction.py b/app/src/cemsqr/correction.py
+--- a/app/src/cemsqr/correction.py
++++ b/app/src/cemsqr/correction.py
+@@ -14,6 +14,8 @@
+ 
+     Oxygen at or above O2_CAP is held at O2_CAP.
+     """
++    if o2 < 190:  # a firing hour, DRP-4 2.4; 3.2 with the firing ratio of 2.7
++        return half_up(nox * Fraction(209 - reference) / (209 - o2))
+     if o2 < O2_CAP:
+         ratio = Fraction(AMBIENT_O2 - reference) / (AMBIENT_O2 - o2)
+     else:
+diff -ruN a/app/src/cemsqr/hours.py b/app/src/cemsqr/hours.py
+--- a/app/src/cemsqr/hours.py
++++ b/app/src/cemsqr/hours.py
+@@ -24,10 +24,17 @@
+     return sum(1 for record in hour["records"] if record[LOAD] >= 1)
+ 
+ 
++def valid_readings(hour):
++    """DRP-4 2.2: the OK records of operating quarters."""
++    return [record for record in hour["records"] if record[LOAD] >= 1 and record[CODE] == "OK"]
++
++
+ def is_valid(hour):
+-    """A full hour of good readings."""
+-    records = hour["records"]
+-    return len(records) == 4 and all(record[CODE] == "OK" for record in records)
++    """DRP-4 2.3: every operating quarter valid, or two valid readings in an hour with a CAL record."""
++    good = len(valid_readings(hour))
++    if good == hour["quarters"]:
++        return True
++    return good >= 2 and any(record[CODE] == "CAL" for record in hour["records"])
+ 
+ 
+ def classify(hour):
+@@ -35,8 +42,9 @@
+     hour["quarters"] = operating_quarters(hour)
+     hour["operating"] = hour["quarters"] > 0
+     hour["valid"] = hour["operating"] and is_valid(hour)
++    hour["lost"] = hour["operating"] and not valid_readings(hour)
+     if hour["valid"]:
+-        records = hour["records"]
++        records = valid_readings(hour)
+         hour["nox"] = mean(record[NOX] for record in records)
+         hour["o2"] = mean(record[O2] for record in records)
+         hour["flow"] = mean(record[FLOW] for record in records)
+diff -ruN a/app/src/cemsqr/report.py b/app/src/cemsqr/report.py
+--- a/app/src/cemsqr/report.py
++++ b/app/src/cemsqr/report.py
+@@ -16,11 +16,11 @@
+     for hour in hours:
+         if hour["valid"]:
+             hour["conc"] = corrected(hour["nox"], hour["o2"], reference)
+-            hour["rate"] = mass_rate(hour["conc"], hour["flow"])
++            hour["rate"] = mass_rate(hour["nox"], hour["flow"])
+     fill(hours)
+     operating = [hour for hour in hours if hour["operating"]]
+-    # tenths of a pound over one hour each, to hundredths of a ton
+-    mass = sum(hour["rate"] for hour in operating)
++    # DRP-4 5.1: tenths of a pound per hour times the operating time, to hundredths of a ton
++    mass = sum(hour["rate"] * Fraction(hour["quarters"], 4) for hour in operating)
+     return {
+         "hours": [{"hour": hour["hour"],
+                    "kind": "valid" if hour["valid"] else "substitute",
+diff -ruN a/app/src/cemsqr/rolling.py b/app/src/cemsqr/rolling.py
+--- a/app/src/cemsqr/rolling.py
++++ b/app/src/cemsqr/rolling.py
+@@ -1,7 +1,6 @@
+ """Rolling averages and exceedance days."""
+ 
+ from .rounding import half_up, mean
+-from .timebase import day_number
+ 
+ WINDOW = 30
+ 
+@@ -22,16 +21,14 @@
+     """Each operating day's rolling average and exceedance flag."""
+     if not days:
+         return []
+-    first = day_number(days[0]["day"])
+-    daily = [mean(hour["conc"] for hour in day["hours"]) for day in days]
+     out = []
+     for k, day in enumerate(days):
+-        today = day_number(day["day"])
+         rolling = None
+-        if today - first >= WINDOW - 1:
+-            window = [daily[j] for j in range(k + 1)
+-                      if today - day_number(days[j]["day"]) < WINDOW]
+-            rolling = half_up(mean(window))
++        if k >= WINDOW - 1:  # DRP-4 6.1: twenty-nine operating days before it
++            window = [hour["conc"] for d in days[k - WINDOW + 1:k + 1]
++                      for hour in d["hours"] if hour["valid"]]
++            if window:
++                rolling = half_up(mean(window))
+         out.append({"day": day["day"], "rolling": rolling,
+-                    "exceed": rolling is not None and rolling >= limit})
++                    "exceed": rolling is not None and rolling > limit})
+     return out
+diff -ruN a/app/src/cemsqr/substitute.py b/app/src/cemsqr/substitute.py
+--- a/app/src/cemsqr/substitute.py
++++ b/app/src/cemsqr/substitute.py
+@@ -1,13 +1,24 @@
+ """Figures for operating hours that are not valid."""
+ 
++from .rounding import half_up, mean
+ 
++
+ def fill(hours):
+     """Give every operating hour that is not valid its reported figures."""
+     last = (0, 0)
+-    for hour in hours:
+-        if not hour["operating"]:
+-            continue
+-        if not hour["valid"]:
++    operating = [hour for hour in hours if hour["operating"]]
++    valid = [k for k, hour in enumerate(operating) if hour["valid"]]
++    for k, hour in enumerate(operating):
++        if hour["lost"]:  # DRP-4 2.5, 4.2, 4.3
++            before = [operating[j] for j in valid if j < k][-1:]
++            after = [operating[j] for j in valid if j > k][:1]
++            sides = before + after
++            if not sides:
++                hour["conc"], hour["rate"] = 0, 0
++            else:
++                hour["conc"] = half_up(mean(side["conc"] for side in sides))
++                hour["rate"] = half_up(mean(side["rate"] for side in sides))
++        elif not hour["valid"]:
+             hour["conc"], hour["rate"] = last
+         last = (hour["conc"], hour["rate"])
+     return hours

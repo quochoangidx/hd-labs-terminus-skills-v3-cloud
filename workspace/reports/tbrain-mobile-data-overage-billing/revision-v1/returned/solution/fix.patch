@@ -1,0 +1,38 @@
+diff --git a/app/src/usagebill/charges.py b/app/src/usagebill/charges.py
+index 8029928..f5dbbd1 100644
+--- a/app/src/usagebill/charges.py
++++ b/app/src/usagebill/charges.py
+@@ -5,5 +5,12 @@ def overage(megabytes, included):
+     return megabytes - included
+ 
+ 
++FULL_RATE_MB = 1024
++LATER_RATE = 1
++
++
+ def charge(line, over):
+-    return over * line["rate"]
++    if over <= 0:
++        return over * line["rate"]
++    later = max(over - FULL_RATE_MB, 0)
++    return (over - later) * line["rate"] + later * LATER_RATE
+diff --git a/app/src/usagebill/usage.py b/app/src/usagebill/usage.py
+index d45e6ea..cd984b2 100644
+--- a/app/src/usagebill/usage.py
++++ b/app/src/usagebill/usage.py
+@@ -2,12 +2,13 @@
+ 
+ KB_PER_MB = 1024
+ ALLOWANCE_MB = 5120
++PLAN_ALLOWANCE_MB = {"BASIC": 2048, "PLUS": 10240}
+ 
+ 
+ def used(line):
+     """Megabytes used over the cycle."""
+-    return sum(line["sessions"]) // KB_PER_MB
++    return sum(-(-kilobytes // KB_PER_MB) for kilobytes in line["sessions"])
+ 
+ 
+ def allowance(line):
+-    return ALLOWANCE_MB
++    return PLAN_ALLOWANCE_MB.get(line["plan"], ALLOWANCE_MB)

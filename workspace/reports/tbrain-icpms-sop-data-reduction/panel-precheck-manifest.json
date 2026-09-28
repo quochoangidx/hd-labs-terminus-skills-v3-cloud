@@ -1,0 +1,532 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-icpms-sop-data-reduction",
+ "task_snapshot_sha256": "440dbb352c55eaa28f3f707ee93317eee936643e7303c29669b870fdd702e7a5",
+ "primary_outcome": "the batch report the fixed driver prints follows SOP TM-07: blank levels, sample amounts and flags with CCV qualifiers, CCV recoveries and spike recoveries",
+ "obligations": [
+  {
+   "id": "CALIBRATION",
+   "class": "core",
+   "contribution": "readings come from the least-squares line with its intercept fitted",
+   "authority": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "its intercept fitted (not forced through the origin)"
+   },
+   "implementation_sites": [
+    "environment/app/src/metalquant/calib.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the reported amounts, flags or QC figures of the same batch report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_calibration_line_has_fitted_intercept"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "standards on a line with a large intercept, and standards at concentration 1000, counts 0 and 10^9, is_counts 1000 and 10^9, only two different concentrations, and a slope of 2 x 10^-12",
+   "wrong_but_plausible": "keep the fit through the origin",
+   "selfdescription_phrase": "calibration line"
+  },
+  {
+   "id": "BLANK_LEVEL",
+   "class": "core",
+   "contribution": "the blank level is the mean of the batch's blank results, every blank wherever it sits; with no result the SOP gives no rule and the shipped first-blank reading stands",
+   "authority": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "The blank level of an analyte is the mean of the batch's method-blank results"
+   },
+   "implementation_sites": [
+    "environment/app/src/metalquant/blanks.py",
+    "environment/app/src/metalquant/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the reported amounts, flags or QC figures of the same batch report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_blank_level_is_mean_of_results_anywhere",
+     "test_outputs.py::test_single_blank_result_is_the_level"
+    ],
+    "boundary": [
+     "test_outputs.py::test_nondetect_blanks_stay_out_of_the_mean",
+     "test_outputs.py::test_batch_without_blank_results_keeps_shipped_level",
+     "test_outputs.py::test_readings_below_nought_are_not_clamped"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "blanks after the samples, non-detect blanks among results, and a batch whose blanks are all non-detects",
+   "wrong_but_plausible": "average every blank reading, or use 0.0 when no blank is a result",
+   "selfdescription_phrase": "blank level"
+  },
+  {
+   "id": "AMOUNT",
+   "class": "core",
+   "contribution": "the blank level comes off the reading before the dilution multiplies",
+   "authority": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "Its amount is the corrected reading multiplied by its `dilution`"
+   },
+   "implementation_sites": [
+    "environment/app/src/metalquant/samples.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the reported amounts, flags or QC figures of the same batch report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_blank_comes_off_before_dilution"
+    ],
+    "boundary": [
+     "test_outputs.py::test_readings_below_nought_are_not_clamped"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a non-zero blank level with dilutions 1, 10, 37 and 1000, and a reading of 10^4 at dilution 1000 (an amount of 10^7)",
+   "wrong_but_plausible": "multiply the reading by the dilution and then subtract the blank level",
+   "selfdescription_phrase": "amount"
+  },
+  {
+   "id": "FLAGS",
+   "class": "core",
+   "contribution": "ND, J and unflagged are judged on the corrected reading, J only below the loq",
+   "authority": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "`J` when the corrected reading is at or above the `mdl` and below the `loq`"
+   },
+   "implementation_sites": [
+    "environment/app/src/metalquant/samples.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the reported amounts, flags or QC figures of the same batch report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_flags_judged_on_corrected_reading"
+    ],
+    "boundary": [
+     "test_outputs.py::test_flags_just_either_side_of_mdl_and_loq",
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "corrected readings a hair either side of the mdl and the loq, and diluted samples whose amount crosses the mdl while the corrected reading does not",
+   "wrong_but_plausible": "judge the flag on the amount, or add a tolerance to a limit",
+   "selfdescription_phrase": "flags"
+  },
+  {
+   "id": "CCV",
+   "class": "core",
+   "contribution": "a CCV passes on its recovery rounded to one decimal, 90.0 to 110.0 inclusive; a run with a CCV on each side needs both to pass; otherwise the shipped nearest-earlier check stands",
+   "authority": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "The CCV passes for that analyte when the recovery, rounded to one"
+   },
+   "implementation_sites": [
+    "environment/app/src/metalquant/qc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the reported amounts, flags or QC figures of the same batch report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_bracketed_runs_need_both_ccvs"
+    ],
+    "boundary": [
+     "test_outputs.py::test_ccv_pass_on_rounded_recovery_inclusive",
+     "test_outputs.py::test_unbracketed_runs_keep_shipped_check"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "recoveries of 90.0, 110.00000000000001, 110.04, 110.06, 89.96 and 89.94; runs before the first and after the last CCV",
+   "wrong_but_plausible": "compare the unrounded recovery, or use the CCV on whichever side exists",
+   "selfdescription_phrase": "CCV"
+  },
+  {
+   "id": "SPIKE",
+   "class": "core",
+   "contribution": "spike recovery is (spike amount - parent amount) / added when both are results; otherwise the shipped calculation stands",
+   "authority": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "A spike's recovery for an analyte is the amount of the spike's result less the"
+   },
+   "implementation_sites": [
+    "environment/app/src/metalquant/qc.py",
+    "environment/app/src/metalquant/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the value feeds the reported amounts, flags or QC figures of the same batch report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_spike_recovery_of_results"
+    ],
+    "boundary": [
+     "test_outputs.py::test_nondetect_spikes_keep_shipped_recovery"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a non-detect parent, a non-detect spike and a spike with a different dilution from its parent",
+   "wrong_but_plausible": "divide by the amount added for every spike, or take a non-detect parent as zero",
+   "selfdescription_phrase": "spike recovery"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "CALIBRATION",
+    "to": "BLANK_LEVEL"
+   },
+   {
+    "from": "CALIBRATION",
+    "to": "CCV"
+   },
+   {
+    "from": "BLANK_LEVEL",
+    "to": "AMOUNT"
+   },
+   {
+    "from": "BLANK_LEVEL",
+    "to": "FLAGS"
+   },
+   {
+    "from": "AMOUNT",
+    "to": "SPIKE"
+   },
+   {
+    "from": "FLAGS",
+    "to": "SPIKE"
+   },
+   {
+    "from": "CCV",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "SPIKE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "AMOUNT",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "FLAGS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "blank-level-decides-detection",
+   "obligation_ids": [
+    "BLANK_LEVEL",
+    "FLAGS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_flags_just_either_side_of_mdl_and_loq",
+    "test_outputs.py::test_generated_batches"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "detection-decides-spike-rule",
+   "obligation_ids": [
+    "FLAGS",
+    "SPIKE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_nondetect_spikes_keep_shipped_recovery"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "calibration-sets-ccv-and-blank-readings",
+   "obligation_ids": [
+    "CALIBRATION",
+    "CCV",
+    "BLANK_LEVEL"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_calibration_line_has_fitted_intercept",
+    "test_outputs.py::test_bracketed_runs_need_both_ccvs",
+    "test_outputs.py::test_generated_batches"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "ccv-verdict-qualifies-samples",
+   "obligation_ids": [
+    "CCV",
+    "FLAGS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_bracketed_runs_need_both_ccvs",
+    "test_outputs.py::test_report_order_and_types"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "blank-and-dilution-make-the-amount",
+   "obligation_ids": [
+    "BLANK_LEVEL",
+    "AMOUNT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_blank_comes_off_before_dilution"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Every rule in the SOP holds for every batch within the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the SOP gives no rule for a value, keep the calculation the code makes for that value today",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Batches of one to eighty runs and one to four analytes will be reduced"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/seal.py SEED=20260926 (authoring only; graded batches are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "Leave /app/tools/metalquant_run.py exactly as it is",
+   "enforced_by": [
+    "test_outputs.py::test_driver_is_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_driver_is_unchanged": "restriction witness (DRIVER-UNCHANGED)",
+  "test_outputs.py::test_candidate_cannot_read_expected_reports": "isolation witness: the candidate user cannot read the sealed expectations",
+  "test_outputs.py::test_candidate_cannot_read_verifier_logs": "isolation witness: the candidate user cannot read /logs/verifier",
+  "test_outputs.py::test_report_order_and_types": "section 8 report shape over four analytes and every run kind; exercises all obligations together",
+  "test_outputs.py::test_generated_batches": "6 seeded batches across the section 1 domain; exercises all obligations together",
+  "test_outputs.py::test_capacity_batch": "80 runs, four analytes, eight standards, dilution 1000: the section 1 maxima"
+ },
+ "removed_obligations": [
+  {
+   "id": "ON_LIMIT",
+   "reason": "v9 panel finding 3: an ordinary double-precision reduction cannot decide a value mathematically on a decimal limit (0.1 + 0.2); exact on-limit inclusivity is not core to the task (its hard part is where the SOP stops), so SOP section 1 now keeps every judged value 10^-5 from each limit and the fixtures sit a hair either side",
+   "former_anchor": {
+    "file": "instruction.md",
+    "anchor": "values that land exactly on a detection limit"
+   }
+  }
+ ],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the laboratory's reporting step reads this JSON report; its keys, list order and null for ND are fixed by SOP section 8",
+   "authority_anchor": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "prints one JSON object"
+   }
+  },
+  {
+   "id": "FLAG-STRINGS",
+   "domain_required": true,
+   "rationale": "ND and J are the standard laboratory data qualifiers; the SOP names them",
+   "authority_anchor": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "`ND` when the corrected reading is below the `mdl`"
+   }
+  },
+  {
+   "id": "CCV-ROUNDING",
+   "domain_required": true,
+   "rationale": "laboratories judge CCV acceptance on the recovery reported to one decimal place",
+   "authority_anchor": {
+    "file": "environment/app/docs/reduction-sop.md",
+    "anchor": "rounded to one"
+   }
+  },
+  {
+   "id": "TOLERANCE",
+   "domain_required": true,
+   "rationale": "numbers are compared to one part in a million, stated in the instruction",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "within one part in a million of its size"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "cal-through-origin",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CALIBRATION"
+   ],
+   "receipt": "wrong-paths/cal-through-origin.json"
+  },
+  {
+   "id": "blank-first-blank-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "BLANK_LEVEL"
+   ],
+   "receipt": "wrong-paths/blank-first-blank-only.json"
+  },
+  {
+   "id": "blank-mean-of-all-blanks",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "BLANK_LEVEL"
+   ],
+   "receipt": "wrong-paths/blank-mean-of-all-blanks.json"
+  },
+  {
+   "id": "blank-no-results-zero",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "BLANK_LEVEL"
+   ],
+   "receipt": "wrong-paths/blank-no-results-zero.json"
+  },
+  {
+   "id": "blank-level-floor-zero",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "BLANK_LEVEL",
+    "AMOUNT"
+   ],
+   "receipt": "wrong-paths/blank-level-floor-zero.json"
+  },
+  {
+   "id": "amount-dilute-then-subtract",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "AMOUNT"
+   ],
+   "receipt": "wrong-paths/amount-dilute-then-subtract.json"
+  },
+  {
+   "id": "flag-on-amount",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FLAGS"
+   ],
+   "receipt": "wrong-paths/flag-on-amount.json"
+  },
+  {
+   "id": "ccv-exclusive-unrounded",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CCV"
+   ],
+   "receipt": "wrong-paths/ccv-exclusive-unrounded.json"
+  },
+  {
+   "id": "ccv-inclusive-unrounded",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CCV"
+   ],
+   "receipt": "wrong-paths/ccv-inclusive-unrounded.json"
+  },
+  {
+   "id": "bracket-preceding-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CCV"
+   ],
+   "receipt": "wrong-paths/bracket-preceding-only.json"
+  },
+  {
+   "id": "bracket-either-side",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CCV"
+   ],
+   "receipt": "wrong-paths/bracket-either-side.json"
+  },
+  {
+   "id": "unbracketed-is-not-ok",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CCV"
+   ],
+   "receipt": "wrong-paths/unbracketed-is-not-ok.json"
+  },
+  {
+   "id": "spike-dilution-in-denominator",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SPIKE"
+   ],
+   "receipt": "wrong-paths/spike-dilution-in-denominator.json"
+  },
+  {
+   "id": "spike-added-for-every-spike",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SPIKE"
+   ],
+   "receipt": "wrong-paths/spike-added-for-every-spike.json"
+  },
+  {
+   "id": "spike-nondetect-parent-as-zero",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SPIKE"
+   ],
+   "receipt": "wrong-paths/spike-nondetect-parent-as-zero.json"
+  },
+  {
+   "id": "spike-result-on-spike-only",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "SPIKE",
+    "FLAGS"
+   ],
+   "receipt": "wrong-paths/spike-result-on-spike-only.json"
+  },
+  {
+   "id": "reads-expected-files",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/reads-expected-files.json"
+  },
+  {
+   "id": "driver-shim",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/driver-shim.json"
+  }
+ ]
+}

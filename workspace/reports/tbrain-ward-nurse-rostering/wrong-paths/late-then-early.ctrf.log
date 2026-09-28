@@ -1,0 +1,206 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 8 items
+
+../../tests/test_outputs.py ..FF....                                     [100%]
+
+=================================== FAILURES ===================================
+__________________________ test_birch_roster_is_valid __________________________
+
+name = 'birch'
+
+    def _penalty(name):
+        path = os.path.join(ROSTERS, name + ".json")
+        assert os.path.isfile(path), f"no roster at {path}"
+        try:
+            roster = load_roster(path)
+>           return evaluate(_ward(name), roster)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ward = {'name': 'birch', 'days': 28, 'shift_hours': {'E': 8, 'L': 8, 'N': 10}, 'rules': {'max_consecutive_days': 6, 'rest_days_after_nights': 2, 'max_weekends': 2}, ...}
+roster = {'roster': {'B01': '.LLL.LLLL.LLLL.EELL..EEEEL..', 'B02': '...........ENNNN..ELLL..EL..', 'B03': 'LLLLL...EEL.EEELNN...LNN..EE', 'B04': 'EEEEL..EEELL..EEL..EE.ELL.EE', ...}}
+
+    def evaluate(ward, roster):
+        """Return the integer penalty of the roster, or raise RosterError."""
+        if not isinstance(roster, dict) or not isinstance(roster.get("roster"), dict):
+            raise RosterError('the roster must be an object with a "roster" object')
+        days = ward["days"]
+        nurses = {n["id"]: n for n in ward["nurses"]}
+        rows = roster["roster"]
+        for nid in rows:
+            if nid not in nurses:
+                raise RosterError(f"unknown nurse {nid!r}")
+        for nid in nurses:
+            row = rows.get(nid)
+            if not isinstance(row, str) or len(row) != days:
+                raise RosterError(f"nurse {nid}: expected a string of {days} characters")
+            bad = [c for c in row if c not in "ELN."]
+            if bad:
+                raise RosterError(f"nurse {nid}: unknown shift code {bad[0]!r}")
+    
+        hours = ward["shift_hours"]
+        w = ward["weights"]
+        rules = ward["rules"]
+        penalty = 0
+    
+        # cover, day by day and shift by shift
+        for d in range(days):
+            for s in SHIFTS:
+                on = [nurses[nid] for nid in nurses if rows[nid][d] == s]
+                need = ward["cover"][s]
+                rn = sum(1 for n in on if n["grade"] in ("RN", "senior"))
+                senior = sum(1 for n in on if n["grade"] == "senior")
+                if len(on) < need["minimum"]:
+                    raise RosterError(f"day {d} shift {s}: {len(on)} on duty, minimum {need['minimum']}")
+                if rn < need["registered"]:
+                    raise RosterError(f"day {d} shift {s}: {rn} registered nurses, need {need['registered']}")
+                if senior < 1:
+                    raise RosterError(f"day {d} shift {s}: no senior nurse on duty")
+                if len(on) < need["preferred"]:
+                    penalty += w["short_of_preferred"] * (need["preferred"] - len(on))
+    
+        for nid, n in nurses.items():
+            row = rows[nid]
+            for d in n["leave"]:
+                if row[d] != ".":
+                    raise RosterError(f"nurse {nid} is on leave on day {d}")
+            for d in range(days - 1):
+                pair = row[d] + row[d + 1]
+                if pair in ("NE", "NL", "LE"):
+>                   raise RosterError(f"nurse {nid}: {row[d]} on day {d} is followed by {row[d + 1]}, too little rest")
+E                   check_roster.RosterError: nurse B17: N on day 25 is followed by E, too little rest
+
+/tests/check_roster.py:125: RosterError
+
+During handling of the above exception, another exception occurred:
+
+    def test_birch_roster_is_valid():
+>       _penalty("birch")
+
+/tests/test_outputs.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+name = 'birch'
+
+    def _penalty(name):
+        path = os.path.join(ROSTERS, name + ".json")
+        assert os.path.isfile(path), f"no roster at {path}"
+        try:
+            roster = load_roster(path)
+            return evaluate(_ward(name), roster)
+        except RosterError as exc:
+>           pytest.fail(f"{name}: roster breaks the rostering rules: {exc}")
+E           Failed: birch: roster breaks the rostering rules: nurse B17: N on day 25 is followed by E, too little rest
+
+/tests/test_outputs.py:36: Failed
+________________________ test_birch_roster_meets_target ________________________
+
+name = 'birch'
+
+    def _penalty(name):
+        path = os.path.join(ROSTERS, name + ".json")
+        assert os.path.isfile(path), f"no roster at {path}"
+        try:
+            roster = load_roster(path)
+>           return evaluate(_ward(name), roster)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ward = {'name': 'birch', 'days': 28, 'shift_hours': {'E': 8, 'L': 8, 'N': 10}, 'rules': {'max_consecutive_days': 6, 'rest_days_after_nights': 2, 'max_weekends': 2}, ...}
+roster = {'roster': {'B01': '.LLL.LLLL.LLLL.EELL..EEEEL..', 'B02': '...........ENNNN..ELLL..EL..', 'B03': 'LLLLL...EEL.EEELNN...LNN..EE', 'B04': 'EEEEL..EEELL..EEL..EE.ELL.EE', ...}}
+
+    def evaluate(ward, roster):
+        """Return the integer penalty of the roster, or raise RosterError."""
+        if not isinstance(roster, dict) or not isinstance(roster.get("roster"), dict):
+            raise RosterError('the roster must be an object with a "roster" object')
+        days = ward["days"]
+        nurses = {n["id"]: n for n in ward["nurses"]}
+        rows = roster["roster"]
+        for nid in rows:
+            if nid not in nurses:
+                raise RosterError(f"unknown nurse {nid!r}")
+        for nid in nurses:
+            row = rows.get(nid)
+            if not isinstance(row, str) or len(row) != days:
+                raise RosterError(f"nurse {nid}: expected a string of {days} characters")
+            bad = [c for c in row if c not in "ELN."]
+            if bad:
+                raise RosterError(f"nurse {nid}: unknown shift code {bad[0]!r}")
+    
+        hours = ward["shift_hours"]
+        w = ward["weights"]
+        rules = ward["rules"]
+        penalty = 0
+    
+        # cover, day by day and shift by shift
+        for d in range(days):
+            for s in SHIFTS:
+                on = [nurses[nid] for nid in nurses if rows[nid][d] == s]
+                need = ward["cover"][s]
+                rn = sum(1 for n in on if n["grade"] in ("RN", "senior"))
+                senior = sum(1 for n in on if n["grade"] == "senior")
+                if len(on) < need["minimum"]:
+                    raise RosterError(f"day {d} shift {s}: {len(on)} on duty, minimum {need['minimum']}")
+                if rn < need["registered"]:
+                    raise RosterError(f"day {d} shift {s}: {rn} registered nurses, need {need['registered']}")
+                if senior < 1:
+                    raise RosterError(f"day {d} shift {s}: no senior nurse on duty")
+                if len(on) < need["preferred"]:
+                    penalty += w["short_of_preferred"] * (need["preferred"] - len(on))
+    
+        for nid, n in nurses.items():
+            row = rows[nid]
+            for d in n["leave"]:
+                if row[d] != ".":
+                    raise RosterError(f"nurse {nid} is on leave on day {d}")
+            for d in range(days - 1):
+                pair = row[d] + row[d + 1]
+                if pair in ("NE", "NL", "LE"):
+>                   raise RosterError(f"nurse {nid}: {row[d]} on day {d} is followed by {row[d + 1]}, too little rest")
+E                   check_roster.RosterError: nurse B17: N on day 25 is followed by E, too little rest
+
+/tests/check_roster.py:125: RosterError
+
+During handling of the above exception, another exception occurred:
+
+    def test_birch_roster_meets_target():
+>       check_target("birch")
+
+/tests/test_outputs.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:40: in check_target
+    penalty = _penalty(name)
+              ^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+name = 'birch'
+
+    def _penalty(name):
+        path = os.path.join(ROSTERS, name + ".json")
+        assert os.path.isfile(path), f"no roster at {path}"
+        try:
+            roster = load_roster(path)
+            return evaluate(_ward(name), roster)
+        except RosterError as exc:
+>           pytest.fail(f"{name}: roster breaks the rostering rules: {exc}")
+E           Failed: birch: roster breaks the rostering rules: nurse B17: N on day 25 is followed by E, too little rest
+
+/tests/test_outputs.py:36: Failed
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_ash_roster_is_valid
+PASSED ../../tests/test_outputs.py::test_ash_roster_meets_target
+PASSED ../../tests/test_outputs.py::test_cedar_roster_is_valid
+PASSED ../../tests/test_outputs.py::test_cedar_roster_meets_target
+PASSED ../../tests/test_outputs.py::test_dale_roster_is_valid
+PASSED ../../tests/test_outputs.py::test_dale_roster_meets_target
+FAILED ../../tests/test_outputs.py::test_birch_roster_is_valid - Failed: birc...
+FAILED ../../tests/test_outputs.py::test_birch_roster_meets_target - Failed: ...
+========================= 2 failed, 6 passed in 0.04s ==========================

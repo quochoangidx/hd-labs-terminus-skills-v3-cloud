@@ -1,0 +1,31 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The summary printed by /app/tools/coopsum_run.py gives, for every station, the lacking-day counts, completeness,
+  mean maximum, mean minimum, mean temperature, extremes with their days, degree days, threshold-day counts,
+  precipitation total, precipitation-day counts and greatest precipitation with its day, as handbook CN-7 part 3 gives them.
+causal_core: >
+  form entries (1.1-1.3) -> crediting of maxima, minima and a day's precipitation to calendar days by
+  observation hour (2.1-2.4, 3.1-3.4; accumulated amounts outside 3.3's reach keep today's form-day crediting)
+  -> lacking days and completeness (2.6, 2.7) -> means (4.1) and the mean temperature (4.3; a month that is
+  not complete keeps today's mean of daily means) -> degree days from rounded daily means (4.4), threshold
+  days (4.5), extremes (4.2) -> day totals, trace nought (1.2, 5.1) -> month total, precipitation days,
+  greatest (5.2-5.4).
+core_obligations:
+  - {id: CREDIT_MAX, contribution: "a maximum read at a morning observation belongs to the day before its form day; next's to the last day", authority: "2.2, 2.3, 3.1, 3.4", witness: test_rule_3_1_morning_maximum_on_the_day_before, plausible_wrong: "every maximum on its form day (shipped); minimum moved too; midnight (hour 0) or noon misrouted"}
+  - {id: CREDIT_PRECIP, contribution: "a day's precipitation read at a morning observation belongs to the day before its form day; an accumulated amount keeps its form day", authority: "1.3, 2.4, 3.3, 3.4; instruction reach rule", witness: "test_rule_3_3_morning_precipitation_on_the_day_before; test_accumulated_amount_keeps_its_form_day (trap T1)", plausible_wrong: "every amount on its form day (shipped); every amount including accumulated ones moved (natural over-repair)"}
+  - {id: TRACE, contribution: "a trace counts nought in totals and comparisons", authority: "1.2, 5.1", witness: test_rule_1_2_trace_counts_nought, plausible_wrong: "a trace as 0.01 (shipped)"}
+  - {id: MEAN_TEMP, contribution: "a complete month's mean is the average of mean maximum and mean minimum; a month not complete keeps the mean of its days' means", authority: "2.5, 2.7, 4.1, 4.3; instruction reach rule", witness: "test_rule_4_3_complete_month_mean; test_incomplete_month_keeps_its_mean_of_daily_means (trap T2)", plausible_wrong: "mean of daily means everywhere (shipped); null for a month not complete, or the 4.3 formula everywhere (natural over-repairs)"}
+  - {id: DEGREE_DAYS, contribution: "each day's degree days from its mean rounded to the whole degree", authority: "1.4, 4.4", witness: test_rule_4_4_degree_days_from_the_rounded_daily_mean, plausible_wrong: "unrounded daily means with the month rounded (shipped); truncation or half-even"}
+  - {id: THRESHOLDS, contribution: "90.0 or above, 32.0 or below, 0.0 or below include the value", authority: "4.5", witness: test_rule_4_5_threshold_days_include_their_value, plausible_wrong: "strict comparisons (shipped)"}
+  - {id: EXTREMES, contribution: "tied extremes are given with the latest day", authority: "4.2, 5.4", witness: test_rule_4_2_tied_extremes_take_the_latest_day, plausible_wrong: "the first day (shipped)"}
+  - {id: PRECIP_COUNTS, contribution: "0.10 and 1.00 inch or more include the value", authority: "5.3", witness: test_rule_5_3_heavy_days_include_their_threshold, plausible_wrong: "strict comparisons (shipped)"}
+  - {id: COMPLETENESS, contribution: "lacking days and completeness from the credited days (governed, unchanged code)", authority: "2.6, 2.7", witness: test_rule_2_7_completeness_from_credited_days, plausible_wrong: "counting M entries on the form instead of credited days"}
+support_obligations:
+  - {id: ENTRY_DECODE, supplied_boundary: "entries.py decodes temperatures and amounts to whole tenths and hundredths, and the calendar", why_not_core: "decoding is complete and exact"}
+  - {id: DRIVER, supplied_boundary: "tools/coopsum_run.py, frozen and byte-checked", why_not_core: "the harness runs its own copy"}
+  - {id: LAYOUT, supplied_boundary: "section 6 keys and station order, already right in summary.py", why_not_core: "serialization already right"}
+non_goals:
+  - forms outside handbook 1.5 (left entirely open)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - snowfall, snow depth, observation-time changes within a month, quality control, normals, text output

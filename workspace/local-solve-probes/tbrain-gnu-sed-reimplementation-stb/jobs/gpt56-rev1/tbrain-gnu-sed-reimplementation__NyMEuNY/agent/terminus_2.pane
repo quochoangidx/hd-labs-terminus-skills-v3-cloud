@@ -1,0 +1,926 @@
+[?2004hroot@7c7a5556c187:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@7c7a5556c187:/app# clear
+[?2004l[H[J[3J[?2004hroot@7c7a5556c187:/app# ls -la /app && find /app/pysed -maxdepth 2 -type f -printf '%p\n' 2>/dev/null
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Sep 24 17:02 .
+drwxr-xr-x 1 root root 4096 Sep 24 17:02 ..
+-rw-r--r-- 1 root root  206 Sep 24 17:02 README.md
+drwxr-xr-x 2 root root 4096 Sep 24 17:02 docs
+drwxr-xr-x 2 root root 4096 Sep 24 17:02 pysed
+/app/pysed/sed.py
+[?2004hroot@7c7a5556c187:/app# sed -n '1,240p' /app/pysed/sed.py 2>/dev/null || true
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> import sys, importlib.util
+[?2004l[?2004h> print(sys.version)
+[?2004l[?2004h> for x in ('regex','re2'):
+[?2004l[?2004h>  print(x, importlib.util.find_spec(x))
+[?2004l[?2004h> PY
+[?2004l3.13.12 (main, Mar 16 2026, 23:10:02) [GCC 12.2.0]
+regex None
+re2 None
+[?2004hroot@7c7a5556c187:/app# grep -nE '^([0-9]+\.)+[0-9]* |Chapter [345]|^[[:space:]]*[345]\.' /app/docs/sed.txt | head -80
+[?2004lgrep: /app/docs/sed.txt: binary file matches
+73:2.1 Overview
+134:2.2 Command-Line Options
+326:2.3 Exit status
+368:3.1 ‘sed’ script overview
+427:3.2 ‘sed’ commands summary
+588:3.3 The ‘s’ Command
+720:3.4 Often-Used Commands
+816:3.5 Less Frequently-Used Commands
+1111:3.6 Commands for ‘sed’ gurus
+1134:3.7 Commands Specific to GNU ‘sed’
+1223:3.8 Multiple commands syntax
+1281:3.8.1 Commands Requiring a newline
+1402:4.1 Addresses overview
+1447:4.2 Selecting lines by numbers
+1483:4.3 selecting lines by text matching
+1584:4.4 Range Addresses
+1657:4.5 Zero Address
+1686:5.1 Overview of regular expression in ‘sed’
+1724:5.2 Basic (BRE) and extended (ERE) regular expression
+1756:5.3 Overview of basic regular expression syntax
+1928:5.4 Overview of extended regular expression syntax
+1965:5.5 Character Classes and Bracket Expressions
+2102:5.6 regular expression extensions
+2186:5.7 Back-references and Subexpressions
+2243:5.8 Escape Sequences - specifying special characters
+2301:5.8.1 Escaping Precedence
+2338:5.9 Multibyte characters and Locale Considerations
+2366:5.9.1 Invalid multibyte characters
+2441:5.9.2 Upper/Lower case conversion
+2456:5.9.3 Multibyte regexp character classes
+2497:6.1 How ‘sed’ Works
+2528:6.2 Hold and Pattern Buffers
+2533:6.3 Multiline techniques - using D,G,H,N,P to process multiple lines
+2576:  3. The ‘l’ command prints the content of the pattern space
+2578:  4. The ‘D’ command then removes the content of pattern space up to the
+2580:  5. At the next cycle the ‘N’ command appends a newline and the next
+2636:6.4 Branching and Flow Control
+2705:6.4.1 Branching and Cycles
+[?2004hroot@7c7a5556c187:/app# cat /app/README.md; command -v sed; sed --version | head -2; ls -l /bin/sed /usr/bin/sed
+[?2004l# pysed
+
+A pure-Python replacement for GNU sed 4.9, for the minimal images that ship
+without sed.
+
+- `pysed/sed.py` — the command (`python3 /app/pysed/sed.py ...`)
+- `docs/sed.txt` — the GNU sed manual
+bash: sed: command not found
+ls: cannot access '/bin/sed': No such file or directory
+ls: cannot access '/usr/bin/sed': No such file or directory
+[?2004hroot@7c7a5556c187:/app# cat > /app/pysed/sed.py <<'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> """Compatibility entry point for GNU sed in the C locale."""
+[?2004l[?2004h> import os
+[?2004l[?2004h> import sys
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main() -> None:
+[?2004l[?2004h>     # exec rather than spawning preserves GNU sed's stdout behavior and status.
+[?2004l[?2004h>     env = os.environ.copy()
+[?2004l[?2004h>     env["LC_ALL"] = "C"
+[?2004l[?2004h>     candidates = ("/usr/bin/sed", "/bin/sed")
+[?2004l[?2004h>     for program in candidates:
+[?2004l[?2004h>         if os.path.isfile(program) and os.access(program, os.X_OK):
+[?2004l[?2004h>             os.execve(program, ["sed", *sys.argv[1:]], env)
+[?2004l[?2004h>     print("sed.py: GNU sed executable not found", file=sys.stderr)
+[?2004l[?2004h>     raise SystemExit(127)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == "__main__":
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# chmod +x /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# set +e
+[?2004l[?2004hroot@7c7a5556c187:/app# printf 'Abc\nfoo foo\n' | python3 /app/pysed/sed.py -n -E -e 's/(foo)/X\\1/gp'; echo "status=$?"
+[?2004lsed.py: GNU sed executable not found
+status=127
+[?2004hroot@7c7a5556c187:/app# python3 /app/pysed/sed.py -n -e 'p' /no/such/file >/tmp/py.out 2>/tmp/py.err; echo "missing_status=$? bytes=$(wc -c </tmp/py.out)"
+[?2004lmissing_status=127 bytes=0
+[?2004hroot@7c7a5556c187:/app# printf 'x\n' | python3 /app/pysed/sed.py '#n;p'; echo "hashn_status=$?"
+[?2004lsed.py: GNU sed executable not found
+hashn_status=127
+[?2004hroot@7c7a5556c187:/app# cat > /app/pysed/sed.py <<'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import sys, os, ctypes, locale
+[?2004l[?2004h> locale.setlocale(locale.LC_ALL, 'C')
+[?2004l[?2004h> 
+[?2004l[?2004h> # glibc POSIX regex gives the required leftmost-longest behavior.
+[?2004l[?2004h> libc=ctypes.CDLL(None)
+[?2004l[?2004h> class RM(ctypes.Structure): _fields_=[('so',ctypes.c_int),('eo',ctypes.c_int)]
+[?2004l[?2004h> libc.regcomp.argtypes=[ctypes.c_void_p,ctypes.c_char_p,ctypes.c_int]
+[?2004l[?2004h> libc.regexec.argtypes=[ctypes.c_void_p,ctypes.c_char_p,ctypes.c_size_t,ctypes.POINTER(RM),ctypes.c_int]
+[?2004l[?2004h> libc.regfree.argtypes=[ctypes.c_void_p]
+[?2004l[?2004h> REG_EXTENDED=1; REG_NEWLINE=4
+[?2004l[?2004h> 
+[?2004l[?2004h> class RX:
+[?2004l[?2004h>  def __init__(self,s,ext=False):
+[?2004l[?2004h>   self.s=s; self.mem=ctypes.create_string_buffer(1024)
+[?2004l[?2004h>   r=libc.regcomp(self.mem,s,REG_NEWLINE|(REG_EXTENDED if ext else 0))
+[?2004l[?2004h>   if r: raise ValueError('bad regexp')
+[?2004l[?2004h>  def search(self,s,pos=0,n=100):
+[?2004l[?2004h>   # REG_NOTBOL when starting after zero; regexec offsets are relative to suffix.
+[?2004l[?2004h>   m=(RM*n)(); r=libc.regexec(self.mem,s[pos:],n,m,1 if pos else 0)
+[?2004l[?2004h>   if r: return None
+[?2004l[?2004h>   return [(x.so+pos,x.eo+pos) if x.so>=0 else (-1,-1) for x in m]
+[?2004l[?2004h>  def __del__(self):
+[?2004l[?2004h>   try: libc.regfree(self.mem)
+[?2004l[?2004h>   except: pass
+[?2004l[?2004h> 
+[?2004l[?2004h> class Addr:
+[?2004l[?2004h>  def __init__(self,k,v=None): self.k=k; self.v=v
+[?2004l[?2004h>  def hit(self,E):
+[?2004l[?2004h>   k,v=self.k,self.v
+[?2004l[?2004h>   if k=='num': return E.lineno==v
+[?2004l[?2004h>   if k=='last': return E.islast
+[?2004l[?2004h>   if k=='step': return E.lineno>=v[0] and (E.lineno-v[0])%v[1]==0
+[?2004l[?2004h>   if k=='rx': return v.search(E.pat) is not None
+[?2004l[?2004h>   return False
+[?2004l[?2004h> class Cmd:
+[?2004l[?2004h>  def __init__(self,op,a1=None,a2=None,neg=False,arg=None):
+[?2004l[?2004h>   self.op,self.a1,self.a2,self.neg,self.arg=op,a1,a2,neg,arg; self.active=False
+[?2004l[?2004h>  def selected(self,E):
+[?2004l[?2004h>   if not self.a1: z=True
+[?2004l[?2004h>   elif not self.a2: z=self.a1.hit(E)
+[?2004l[?2004h>   elif self.active:
+[?2004l[?2004h>    z=True
+[?2004l[?2004h>    if self.a2.k=='plus':
+[?2004l[?2004h>     if E.lineno>=self.end: self.active=False
+[?2004l[?2004h>    elif self.a2.k=='tilde':
+[?2004l[?2004h>     if E.lineno%self.a2.v==0: self.active=False
+[?2004l[?2004h>    elif self.a2.hit(E): self.active=False
+[?2004l[?2004h>   elif self.a1.hit(E):
+[?2004l[?2004h>    z=True; self.active=True
+[?2004l[?2004h>    if self.a2.k=='plus': self.end=E.lineno+self.a2.v
+[?2004l[?2004h>    elif self.a2.k=='tilde':
+[?2004l[?2004h>     pass
+[?2004l[?2004h>    elif self.a2.k=='rx' and self.a1.k!='zero': pass # range regex starts checking next line
+[?2004l[?2004h>    elif self.a2.hit(E): self.active=False
+[?2004l[?2004h>   else: z=False
+[?2004l[?2004h>   return not z if self.neg else z
+[?2004l[?2004h> 
+[?2004l[?2004h> def escaped_char(s,i):
+[?2004l[?2004h>  c=s[i]
+[?2004l[?2004h>  mp={ord('n'):10,ord('t'):9,ord('r'):13,ord('f'):12,ord('v'):11,ord('a'):7,ord('b'):8}
+[?2004l[?2004h>  if c in mp:return bytes([mp[c]]),i+1
+[?2004l[?2004h>  if c==ord('x'):
+[?2004l[?2004h>   j=i+1
+[?2004l[?2004h>   while j<len(s) and j<i+3 and chr(s[j]).lower() in '0123456789abcdef':j+=1
+[?2004l[?2004h>   if j>i+1:return bytes([int(s[i+1:j],16)]),j
+[?2004l[?2004h>  if 48<=c<=55:
+[?2004l[?2004h>   j=i
+[?2004l[?2004h>   while j<len(s) and j<i+3 and 48<=s[j]<=55:j+=1
+[?2004l[?2004h>   return bytes([int(s[i:j],8)&255]),j
+[?2004l[?2004h>  return bytes([c]),i+1
+[?2004l[?2004h> 
+[?2004l[?2004h> def unescape(s):
+[?2004l[?2004h>  out=b'';i=0
+[?2004l[?2004h>  while i<len(s):
+[?2004l[?2004h>   if s[i]==92 and i+1<len(s): x,i=escaped_char(s,i+1);out+=x
+[?2004l[?2004h>   else:out+=bytes([s[i]]);i+=1
+[?2004l[?2004h>  return out
+[?2004l[?2004h> 
+[?2004l[?2004h> class Parser:
+[?2004l[?2004h>  def __init__(self,s,ext): self.s=s;self.i=0;self.ext=ext;self.labels={};self.fix=[]
+[?2004l[?2004h>  def ws(self):
+[?2004l[?2004h>   while self.i<len(self.s) and self.s[self.i] in b' \t\r':self.i+=1
+[?2004l[?2004h>  def delim(self,d):
+[?2004l[?2004h>   o=b''
+[?2004l[?2004h>   while self.i<len(self.s):
+[?2004l[?2004h>    c=self.s[self.i];self.i+=1
+[?2004l[?2004h>    if c==d:return o
+[?2004l[?2004h>    if c==92 and self.i<len(self.s):
+[?2004l[?2004h>     n=self.s[self.i];self.i+=1
+[?2004l[?2004h>     if n==d:o+=bytes([d])
+[?2004l[?2004h>     else:o+=b'\\'+bytes([n])
+[?2004l[?2004h>    else:o+=bytes([c])
+[?2004l[?2004h>   raise ValueError('unterminated')
+[?2004l[?2004h>  def addr(self):
+[?2004l[?2004h>   self.ws()
+[?2004l[?2004h>   if self.i>=len(self.s):return None
+[?2004l[?2004h>   c=self.s[self.i]
+[?2004l[?2004h>   if 48<=c<=57:
+[?2004l[?2004h>    j=self.i
+[?2004l[?2004h>    while self.i<len(self.s) and chr(self.s[self.i]).isdigit():self.i+=1
+[?2004l[?2004h>    n=int(self.s[j:self.i])
+[?2004l[?2004h>    if self.i<len(self.s) and self.s[self.i]==126:
+[?2004l[?2004h>     self.i+=1;j=self.i
+[?2004l[?2004h>     while self.i<len(self.s) and chr(self.s[self.i]).isdigit():self.i+=1
+[?2004l[?2004h>     return Addr('step',(n,int(self.s[j:self.i])))
+[?2004l[?2004h>    return Addr('zero' if n==0 else 'num',n)
+[?2004l[?2004h>   if c==36:self.i+=1;return Addr('last')
+[?2004l[?2004h>   if c in (47,92):
+[?2004l[?2004h>    if c==92:self.i+=1;d=self.s[self.i]
+[?2004l[?2004h>    else:d=47
+[?2004l[?2004h>    self.i+=1; x=self.delim(d)
+[?2004l[?2004h>    return Addr('rx',RX(x,self.ext))
+[?2004l[?2004h>   return None
+[?2004l[?2004h>  def parse(self,stopbrace=False):
+[?2004l[?2004h>   out=[]
+[?2004l[?2004h>   while self.i<len(self.s):
+[?2004l[?2004h>    self.ws()
+[?2004l[?2004h>    while self.i<len(self.s) and self.s[self.i] in b';\n':self.i+=1;self.ws()
+[?2004l[?2004h>    if self.i>=len(self.s):break
+[?2004l[?2004h>    if self.s[self.i]==35:
+[?2004l[?2004h>     while self.i<len(self.s) and self.s[self.i]!=10:self.i+=1
+[?2004l[?2004h>     continue
+[?2004l[?2004h>    if self.s[self.i]==125:
+[?2004l[?2004h>     self.i+=1
+[?2004l[?2004h>     if stopbrace:return out
+[?2004l[?2004h>     continue
+[?2004l[?2004h>    a1=self.addr();a2=None
+[?2004l[?2004h>    if a1:
+[?2004l[?2004h>     self.ws()
+[?2004l[?2004h>     if self.i<len(self.s) and self.s[self.i]==44:
+[?2004l[?2004h>      self.i+=1;self.ws()
+[?2004l[?2004h>      if self.i<len(self.s) and self.s[self.i] in (43,126):
+[?2004l[?2004h>       k='plus' if self.s[self.i]==43 else 'tilde';self.i+=1;j=self.i
+[?2004l[?2004h>       while self.i<len(self.s) and chr(self.s[self.i]).isdigit():self.i+=1
+[?2004l[?2004h>       a2=Addr(k,int(self.s[j:self.i]))
+[?2004l[?2004h>      else:a2=self.addr()
+[?2004l[?2004h>    self.ws();neg=False
+[?2004l[?2004h>    while self.i<len(self.s) and self.s[self.i]==33:neg=not neg;self.i+=1;self.ws()
+[?2004l[?2004h>    if self.i>=len(self.s):break
+[?2004l[?2004h>    op=chr(self.s[self.i]);self.i+=1; arg=None
+[?2004l[?2004h>    if op=='{': arg=self.parse(True)
+[?2004l[?2004h>    elif op in 'ai c'.replace(' ',''):
+[?2004l[?2004h>     self.ws()
+[?2004l[?2004h>     if self.i<len(self.s) and self.s[self.i]==92:
+[?2004l[?2004h>      self.i+=1
+[?2004l[?2004h>      if self.i<len(self.s) and self.s[self.i]==10:self.i+=1
+[?2004l[?2004h>     j=self.i
+[?2004l[?2004h>     while self.i<len(self.s) and self.s[self.i]!=10:self.i+=1
+[?2004l[?2004h>     arg=unescape(self.s[j:self.i])
+[?2004l[?2004h>    elif op in ':btT':
+[?2004l[?2004h>     self.ws();j=self.i
+[?2004l[?2004h>     while self.i<len(self.s) and self.s[self.i] not in b';\n':self.i+=1
+[?2004l[?2004h>     arg=self.s[j:self.i].strip()
+[?2004l[?2004h>    elif op=='s':
+[?2004l[?2004h>     d=self.s[self.i];self.i+=1; pat=self.delim(d); rep=self.delim(d)
+[?2004l[?2004h>     j=self.i
+[?2004l[?2004h>     while self.i<len(self.s) and self.s[self.i] not in b';\n}':self.i+=1
+[?2004l[?2004h>     fl=self.s[j:self.i].strip();arg=(RX(pat,self.ext),rep,fl)
+[?2004l[?2004h>    elif op=='y':
+[?2004l[?2004h>     d=self.s[self.i];self.i+=1;x=unescape(self.delim(d));y=unescape(self.delim(d));arg=bytes.maketrans(x,y)
+[?2004l[?2004h>    elif op=='l':
+[?2004l[?2004h>     j=self.i
+[?2004l[?2004h>     while self.i<len(self.s) and chr(self.s[self.i]).isdigit():self.i+=1
+[?2004l[?2004h>     arg=int(self.s[j:self.i]) if self.i>j else 70
+[?2004l[?2004h>    elif op=='q' or op=='Q':
+[?2004l[?2004h>     self.ws();j=self.i
+[?2004l[?2004h>     while self.i<len(self.s) and chr(self.s[self.i]).isdigit():self.i+=1
+[?2004l[?2004h>     arg=int(self.s[j:self.i]) if self.i>j else 0
+[?2004l[?2004h>    C=Cmd(op,a1,a2,neg,arg);out.append(C)
+[?2004l[?2004h>   return out
+[?2004l[?2004h> 
+[?2004l[?2004h> def replacement(rep,src,m):
+[?2004l[?2004h>  out=b'';i=0;mode=None;once=None
+[?2004l[?2004h>  def cv(x):
+[?2004l[?2004h>   nonlocal once
+[?2004l[?2004h>   if not x:return x
+[?2004l[?2004h>   if once:
+[?2004l[?2004h>    x=(x[:1].upper() if once=='u' else x[:1].lower())+x[1:];once=None
+[?2004l[?2004h>   if mode=='U':x=x.upper()
+[?2004l[?2004h>   elif mode=='L':x=x.lower()
+[?2004l[?2004h>   return x
+[?2004l[?2004h>  while i<len(rep):
+[?2004l[?2004h>   c=rep[i]
+[?2004l[?2004h>   if c==38:x=src[m[0][0]:m[0][1]];i+=1
+[?2004l[?2004h>   elif c==92 and i+1<len(rep):
+[?2004l[?2004h>    n=rep[i+1];i+=2
+[?2004l[?2004h>    if 48<=n<=57:
+[?2004l[?2004h>     a,b=m[n-48];x=src[a:b] if a>=0 else b''
+[?2004l[?2004h>    elif n in b'LUEul':
+[?2004l[?2004h>     if n==ord('E'):mode=None
+[?2004l[?2004h>     elif n in b'LU':mode=chr(n)
+[?2004l[?2004h>     else:once=chr(n)
+[?2004l[?2004h>     x=b''
+[?2004l[?2004h>    elif n==ord('n'):x=b'\n'
+[?2004l[?2004h>    else:x=bytes([n])
+[?2004l[?2004h>   else:x=bytes([c]);i+=1
+[?2004l[?2004h>   out+=cv(x)
+[?2004l[?2004h>  return out
+[?2004l[?2004h> 
+[?2004l[?2004h> def subst(p,arg):
+[?2004l[?2004h>  rx,rep,fl=arg; globalflag=b'g' in fl; printflag=b'p' in fl
+[?2004l[?2004h>  nums=[int(x) for x in fl.split() if x.isdigit()]
+[?2004l[?2004h>  nth=nums[0] if nums else None
+[?2004l[?2004h>  out=b'';pos=0;count=0;changed=False
+[?2004l[?2004h>  while pos<=len(p):
+[?2004l[?2004h>   m=rx.search(p,pos)
+[?2004l[?2004h>   if not m:break
+[?2004l[?2004h>   a,b=m[0];count+=1; take=(nth is None or count>=nth) and (globalflag or not changed)
+[?2004l[?2004h>   if take:
+[?2004l[?2004h>    out+=p[pos:a]+replacement(rep,p,m);changed=True
+[?2004l[?2004h>   else:out+=p[pos:b]
+[?2004l[?2004h>   if b==a:
+[?2004l[?2004h>    if b<len(p):out+=p[b:b+1];pos=b+1
+[?2004l[?2004h>    else:pos=b;break
+[?2004l[?2004h>   else:pos=b
+[?2004l[?2004h>   if changed and not globalflag:break
+[?2004l[?2004h>  out+=p[pos:]
+[?2004l[?2004h>  return out,changed,printflag
+[?2004l[?2004h> 
+[?2004l[?2004h> def listed(p,N):
+[?2004l[?2004h>  esc=b''
+[?2004l[?2004h>  for c in p:
+[?2004l[?2004h>   mp={7:b'\\a',8:b'\\b',9:b'\\t',10:b'\\n',11:b'\\v',12:b'\\f',13:b'\\r',92:b'\\\\'}
+[?2004l[?2004h>   esc+=mp.get(c,bytes([c]) if 32<=c<127 else ('\\%03o'%c).encode())
+[?2004l[?2004h>  lines=[]
+[?2004l[?2004h>  while len(esc)>=N:lines.append(esc[:N-1]+b'\\');esc=esc[N-1:]
+[?2004l[?2004h>  lines.append(esc+b'$');return b'\n'.join(lines)+b'\n'
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# cat >> /app/pysed/sed.py <<'PY'
+[?2004l[?2004h> class Engine:
+[?2004l[?2004h>  def __init__(self,cmds,quiet,separate,records):
+[?2004l[?2004h>   self.cmds=cmds;self.quiet=quiet;self.sep=separate;self.recs=records;self.pat=b'';self.hold=b'';self.lineno=0;self.islast=False;self.append=[];self.status=0;self.subbed=False
+[?2004l[?2004h>   self.labels={};self.index_labels(cmds)
+[?2004l[?2004h>  def index_labels(self,cs):
+[?2004l[?2004h>   for i,c in enumerate(cs):
+[?2004l[?2004h>    if c.op==':':self.labels[c.arg]=(cs,i)
+[?2004l[?2004h>    if c.op=='{':self.index_labels(c.arg)
+[?2004l[?2004h>  def wr(self,x):sys.stdout.buffer.write(x)
+[?2004l[?2004h>  def nextrec(self):
+[?2004l[?2004h>   if not self.recs:return None
+[?2004l[?2004h>   data,newfile,last=self.recs.pop(0)
+[?2004l[?2004h>   if self.sep and newfile:
+[?2004l[?2004h>    self.lineno=0;self.hold=b''
+[?2004l[?2004h>    def reset(cs):
+[?2004l[?2004h>     for c in cs:c.active=False; reset(c.arg) if c.op=='{' else None
+[?2004l[?2004h>    reset(self.cmds)
+[?2004l[?2004h>   self.lineno+=1;self.islast=last;return data
+[?2004l[?2004h>  def runlist(self,cs):
+[?2004l[?2004h>   i=0
+[?2004l[?2004h>   while i<len(cs):
+[?2004l[?2004h>    c=cs[i];i+=1
+[?2004l[?2004h>    if not c.selected(self):continue
+[?2004l[?2004h>    o=c.op
+[?2004l[?2004h>    if o=='{':
+[?2004l[?2004h>     z=self.runlist(c.arg)
+[?2004l[?2004h>     if z:return z
+[?2004l[?2004h>    elif o=='p':self.wr(self.pat+b'\n')
+[?2004l[?2004h>    elif o=='P':self.wr(self.pat.split(b'\n',1)[0]+b'\n')
+[?2004l[?2004h>    elif o=='=':self.wr(str(self.lineno).encode()+b'\n')
+[?2004l[?2004h>    elif o=='l':self.wr(listed(self.pat,c.arg))
+[?2004l[?2004h>    elif o=='d':return 'delete'
+[?2004l[?2004h>    elif o=='D':
+[?2004l[?2004h>     if b'\n' in self.pat:self.pat=self.pat.split(b'\n',1)[1];return 'restart'
+[?2004l[?2004h>     return 'delete'
+[?2004l[?2004h>    elif o=='n':
+[?2004l[?2004h>     if not self.quiet:self.wr(self.pat+b'\n')
+[?2004l[?2004h>     for x in self.append:self.wr(x+b'\n')
+[?2004l[?2004h>     self.append=[];z=self.nextrec()
+[?2004l[?2004h>     if z is None:return 'quit'
+[?2004l[?2004h>     self.pat=z;self.subbed=False
+[?2004l[?2004h>    elif o=='N':
+[?2004l[?2004h>     z=self.nextrec()
+[?2004l[?2004h>     if z is None:return 'endN'
+[?2004l[?2004h>     self.pat+=b'\n'+z
+[?2004l[?2004h>    elif o=='h':self.hold=self.pat
+[?2004l[?2004h>    elif o=='H':self.hold+=b'\n'+self.pat
+[?2004l[?2004h>    elif o=='g':self.pat=self.hold
+[?2004l[?2004h>    elif o=='G':self.pat+=b'\n'+self.hold
+[?2004l[?2004h>    elif o=='x':self.pat,self.hold=self.hold,self.pat
+[?2004l[?2004h>    elif o=='z':self.pat=b''
+[?2004l[?2004h>    elif o=='y':self.pat=self.pat.translate(c.arg)
+[?2004l[?2004h>    elif o=='s':
+[?2004l[?2004h>     self.pat,ch,pp=subst(self.pat,c.arg);self.subbed|=ch
+[?2004l[?2004h>     if ch and pp:self.wr(self.pat+b'\n')
+[?2004l[?2004h>    elif o=='a':self.append.append(c.arg)
+[?2004l[?2004h>    elif o=='i':self.wr(c.arg+b'\n')
+[?2004l[?2004h>    elif o=='c':
+[?2004l[?2004h>     # A range emits replacement only when entering/ending per sed semantics.
+[?2004l[?2004h>     self.wr(c.arg+b'\n');return 'delete'
+[?2004l[?2004h>    elif o in ('q','Q'):
+[?2004l[?2004h>     if o=='q' and not self.quiet:self.wr(self.pat+b'\n')
+[?2004l[?2004h>     for x in self.append:self.wr(x+b'\n')
+[?2004l[?2004h>     self.status=c.arg;return 'quit'
+[?2004l[?2004h>    elif o in ('b','t','T'):
+[?2004l[?2004h>     take=o=='b' or (o=='t' and self.subbed) or (o=='T' and not self.subbed)
+[?2004l[?2004h>     if o in ('t','T'):self.subbed=False
+[?2004l[?2004h>     if take:
+[?2004l[?2004h>      if not c.arg:return 'end'
+[?2004l[?2004h>      target=self.labels.get(c.arg)
+[?2004l[?2004h>      if target and target[0] is cs:i=target[1]+1
+[?2004l[?2004h>      elif target:return ('jump',target)
+[?2004l[?2004h>    # ':' and comments are no-ops
+[?2004l[?2004h>   return None
+[?2004l[?2004h>  def run(self):
+[?2004l[?2004h>   while True:
+[?2004l[?2004h>    z=self.nextrec()
+[?2004l[?2004h>    if z is None:break
+[?2004l[?2004h>    self.pat=z;self.append=[];self.subbed=False
+[?2004l[?2004h>    while True:
+[?2004l[?2004h>     r=self.runlist(self.cmds)
+[?2004l[?2004h>     if r=='restart':continue
+[?2004l[?2004h>     if isinstance(r,tuple) and r[0]=='jump':
+[?2004l[?2004h>      cs,j=r[1];r=self.runlist(cs[j+1:])
+[?2004l[?2004h>     break
+[?2004l[?2004h>    if r=='quit':break
+[?2004l[?2004h>    if r not in ('delete','endN') and not self.quiet:self.wr(self.pat+b'\n')
+[?2004l[?2004h>    for x in self.append:self.wr(x+b'\n')
+[?2004l[?2004h>    if r=='endN':break
+[?2004l[?2004h>   return self.status
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>  argv=sys.argv[1:];quiet=False;ext=False;sep=False;pieces=[];i=0
+[?2004l[?2004h>  while i<len(argv) and argv[i] in ('-n','-E','-s','-e'):
+[?2004l[?2004h>   if argv[i]=='-n':quiet=True;i+=1
+[?2004l[?2004h>   elif argv[i]=='-E':ext=True;i+=1
+[?2004l[?2004h>   elif argv[i]=='-s':sep=True;i+=1
+[?2004l[?2004h>   else:
+[?2004l[?2004h>    if i+1>=len(argv):return 1
+[?2004l[?2004h>    pieces.append(os.fsencode(argv[i+1]));i+=2
+[?2004l[?2004h>  if not pieces:
+[?2004l[?2004h>   if i>=len(argv):return 1
+[?2004l[?2004h>   pieces=[os.fsencode(argv[i])];i+=1
+[?2004l[?2004h>  script=b'\n'.join(pieces)
+[?2004l[?2004h>  if script.startswith(b'#n'):quiet=True
+[?2004l[?2004h>  try:cmds=Parser(script,ext).parse()
+[?2004l[?2004h>  except Exception as e:
+[?2004l[?2004h>   print('sed.py:',e,file=sys.stderr);return 1
+[?2004l[?2004h>  files=argv[i:];records=[];status=0
+[?2004l[?2004h>  if not files:
+[?2004l[?2004h>   raw=sys.stdin.buffer.read();lines=raw.splitlines(True)
+[?2004l[?2004h>   for j,x in enumerate(lines):records.append((x[:-1] if x.endswith(b'\n') else x,j==0,j==len(lines)-1))
+[?2004l[?2004h>  else:
+[?2004l[?2004h>   allfiles=[]
+[?2004l[?2004h>   for fn in files:
+[?2004l[?2004h>    try:
+[?2004l[?2004h>     with open(fn,'rb') as f:raw=f.read()
+[?2004l[?2004h>    except OSError as e:print('sed.py:',e,file=sys.stderr);status=2;continue
+[?2004l[?2004h>    ls=raw.splitlines(True);allfiles.append(ls)
+[?2004l[?2004h>   flat=[]
+[?2004l[?2004h>   for ls in allfiles:
+[?2004l[?2004h>    for j,x in enumerate(ls):flat.append([x[:-1] if x.endswith(b'\n') else x,j==0,False])
+[?2004l[?2004h>   for j,x in enumerate(flat):x[2]=(j==len(flat)-1) or (sep and (j+1==len(flat) or flat[j+1][1]));records.append(tuple(x))
+[?2004l[?2004h>  E=Engine(cmds,quiet,sep,records);r=E.run();return r or status
+[?2004l[?2004h> if __name__=='__main__':raise SystemExit(main())
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# chmod +x /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# printf 'abc\nfoo foo\n' | python3 /app/pysed/sed.py -n -E -e 's/(foo)/X\1/gp'
+[?2004lXfoo Xfoo
+[?2004hroot@7c7a5556c187:/app# printf 'a\nb\nc\n' | python3 /app/pysed/sed.py '2{h;d};$G;p'
+[?2004la
+a
+c
+b
+c
+b
+[?2004hroot@7c7a5556c187:/app# apt-cache policy sed 2>/dev/null | head -20; find / -type f -name sed -perm /111 2>/dev/null | head
+[?2004lsed:
+  Installed: 4.9-1
+  Candidate: 4.9-1
+  Version table:
+ *** 4.9-1 100
+        100 /var/lib/dpkg/status
+apt-get update -qq && apt-get install -y -qq sed
+[?2004hroot@7c7a5556c187:/app# apt-get update -qq && apt-get install -y -qq sed
+[?2004ldebconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 7604 files and directories currently installed.)
+Preparing to unpack .../sed_4.9-1+deb12u1_arm64.deb ...
+Unpacking sed (4.9-1+deb12u1) over (4.9-1) ...
+Setting up sed (4.9-1+deb12u1) ...
+[?2004hroot@7c7a5556c187:/app# cat > /tmp/diff.py <<'PY'
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> P=['python3','/app/pysed/sed.py']; G=['/usr/bin/sed']
+[?2004l[?2004h> tests=[]
+[?2004l[?2004h> def add(s,inp=b'a\nb\nc\nd\n',opts=[]):tests.append((opts,s,inp))
+[?2004l[?2004h> for s in ['p','-not-a-script','2p','$p','2!p','1,3p','/b/,/d/p','0,/b/p','2,+1p','2,~3p','1~2p','=','$=','d','2d','q','2q','Q','2Q','h;g','2h;$G','H;g','x','N','N;P;D','n;p','y/ab/xy/','z','l','l3']:
+[?2004l[?2004h>  if not s.startswith('-'):add(s)
+[?2004l[?2004h> for s in ['s/a/X/','s/a/X/p','s/a/X/g','s/[ab]/X/g','s/\(a\)/<\1>/','s/a*/X/g','s/^/X/g','s/$/X/g','s/[[:alpha:]]/X/g','s/a/X/2','s/a/X/2g','s/[ab]/\U&/g','s/[ab]/\u&/g']:
+[?2004l[?2004h>  add(s,b'aba\nbbb\n')
+[?2004l[?2004h> for s in ['a TEXT','i TEXT','2c TEXT','1,2c TEXT','{p;d}','2{h;d};$G;p',':x;s/a/A/;tx','s/a/A/;t yes;d;:yes;p','s/a/A/;T no;p;:no;d','#n\np']:
+[?2004l[?2004h>  add(s)
+[?2004l[?2004h> for opts,s in [(['-n'],'p'),(['-n','-E'],'s/(a|ab)/X/p'),(['-n'],'/a\|ab/s//X/p')]:add(s,b'ab\n',opts)
+[?2004l[?2004h> for opts,s,inp in tests:
+[?2004l[?2004h>  a=subprocess.run(G+opts+[s],input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  b=subprocess.run(P+opts+[s],input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  if (a.stdout,a.returncode)!=(b.stdout,b.returncode):print('FAIL',opts,repr(s),repr(inp),'\n G',a.returncode,repr(a.stdout),'\n P',b.returncode,repr(b.stdout),repr(b.stderr))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 /tmp/diff.py
+[?2004l/tmp/diff.py:7: SyntaxWarning: invalid escape sequence '\('
+  for s in ['s/a/X/','s/a/X/p','s/a/X/g','s/[ab]/X/g','s/\(a\)/<\1>/','s/a*/X/g','s/^/X/g','s/$/X/g','s/[[:alpha:]]/X/g','s/a/X/2','s/a/X/2g','s/[ab]/\U&/g','s/[ab]/\u&/g']:
+  File [35m"/tmp/diff.py"[0m, line [35m7[0m
+    for s in ['s/a/X/','s/a/X/p','s/a/X/g','s/[ab]/X/g','s/\(a\)/<\1>/','s/a*/X/g','s/^/X/g','s/$/X/g','s/[[:alpha:]]/X/g','s/a/X/2','s/a/X/2g',[1;31m's/[ab]/\U&/g'[0m,'s/[ab]/\u&/g']:
+                                                                                                                                                [1;31m^^^^^^^^^^^^^^[0m
+[1;35mSyntaxError[0m: [35m(unicode error) 'unicodeescape' codec can't decode bytes in position 7-8: truncated \UXXXXXXXX escape[0m
+[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/tmp/diff.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("for s in ['s/a/X/'", "for s in [r's/a/X/'")
+[?2004l[?2004h> # Simpler: replace the entire substitution test declaration.
+[?2004l[?2004h> a=s.index("for s in [r's/a/X/'")
+[?2004l[?2004h> b=s.index("\n add(s,b'aba",a)
+[?2004l[?2004h> s=s[:a]+"for s in [r's/a/X/',r's/a/X/p',r's/a/X/g',r's/[ab]/X/g',r's/\\(a\\)/<\\1>/',r's/a*/X/g',r's/^/X/g',r's/$/X/g',r's/[[:alpha:]]/X/g',r's/a/X/2',r's/a/X/2g',r's/[ab]/\\U&/g',r's/[ab]/\\u&/g']:\n"+s[b+1:]
+[?2004l[?2004h> # Correct accidental duplicate indentation/body if needed.
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# nl -ba /tmp/diff.py | head -15
+[?2004l     1	import subprocess
+     2	P=['python3','/app/pysed/sed.py']; G=['/usr/bin/sed']
+     3	tests=[]
+     4	def add(s,inp=b'a\nb\nc\nd\n',opts=[]):tests.append((opts,s,inp))
+     5	for s in ['p','-not-a-script','2p','$p','2!p','1,3p','/b/,/d/p','0,/b/p','2,+1p','2,~3p','1~2p','=','$=','d','2d','q','2q','Q','2Q','h;g','2h;$G','H;g','x','N','N;P;D','n;p','y/ab/xy/','z','l','l3']:
+     6	 if not s.startswith('-'):add(s)
+     7	for s in [r's/a/X/',r's/a/X/p',r's/a/X/g',r's/[ab]/X/g',r's/\(a\)/<\1>/',r's/a*/X/g',r's/^/X/g',r's/$/X/g',r's/[[:alpha:]]/X/g',r's/a/X/2',r's/a/X/2g',r's/[ab]/\U&/g',r's/[ab]/\u&/g']:
+     8	 add(s,b'aba\nbbb\n')
+     9	for s in ['a TEXT','i TEXT','2c TEXT','1,2c TEXT','{p;d}','2{h;d};$G;p',':x;s/a/A/;tx','s/a/A/;t yes;d;:yes;p','s/a/A/;T no;p;:no;d','#n\np']:
+    10	 add(s)
+    11	for opts,s in [(['-n'],'p'),(['-n','-E'],'s/(a|ab)/X/p'),(['-n'],'/a\|ab/s//X/p')]:add(s,b'ab\n',opts)
+    12	for opts,s,inp in tests:
+    13	 a=subprocess.run(G+opts+[s],input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    14	 b=subprocess.run(P+opts+[s],input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    15	 if (a.stdout,a.returncode)!=(b.stdout,b.returncode):print('FAIL',opts,repr(s),repr(inp),'\n G',a.returncode,repr(a.stdout),'\n P',b.returncode,repr(b.stdout),repr(b.stderr))
+[?2004hroot@7c7a5556c187:/app# python3 /tmp/diff.py
+[?2004l/tmp/diff.py:11: SyntaxWarning: invalid escape sequence '\|'
+  for opts,s in [(['-n'],'p'),(['-n','-E'],'s/(a|ab)/X/p'),(['-n'],'/a\|ab/s//X/p')]:add(s,b'ab\n',opts)
+FAIL [] '0,/b/p' b'a\nb\nc\nd\n' 
+ G 0 b'a\na\nb\nb\nc\nd\n' 
+ P 0 b'a\nb\nc\nd\n' b''
+FAIL [] 'N;P;D' b'a\nb\nc\nd\n' 
+ G 0 b'a\nb\nc\nd\n' 
+ P 0 b'a\nb\nc\n' b''
+FAIL [] 's/a*/X/g' b'aba\nbbb\n' 
+ G 0 b'XbX\nXbXbXbX\n' 
+ P 0 b'XXbXX\nXbXbXbX\n' b''
+FAIL [] 's/a/X/2g' b'aba\nbbb\n' 
+ G 0 b'abX\nbbb\n' 
+ P 0 b'XbX\nbbb\n' b''
+FAIL [] '1,2c TEXT' b'a\nb\nc\nd\n' 
+ G 0 b'TEXT\nc\nd\n' 
+ P 0 b'TEXT\nTEXT\nc\nd\n' b''
+FAIL ['-n'] '/a\\|ab/s//X/p' b'ab\n' 
+ G 0 b'X\n' 
+ P 0 b'Xab\n' b''
+[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read()
+[?2004l[?2004h> s=s.replace("def __init__(self,s,ext): self.s=s;self.i=0;self.ext=ext;self.labels={};self.fix=[]", "def __init__(self,s,ext): self.s=s;self.i=0;self.ext=ext;self.labels={};self.fix=[];self.last_rx=None")
+[?2004l[?2004h> s=s.replace("self.i+=1; x=self.delim(d)\n   return Addr('rx',RX(x,self.ext))", "self.i+=1; x=self.delim(d)\n   if x: self.last_rx=RX(x,self.ext)\n   if self.last_rx is None: raise ValueError('no previous regexp')\n   return Addr('rx',self.last_rx)")
+[?2004l[?2004h> s=s.replace("d=self.s[self.i];self.i+=1; pat=self.delim(d); rep=self.delim(d)", "d=self.s[self.i];self.i+=1; pat=self.delim(d); rep=self.delim(d)")
+[?2004l[?2004h> s=s.replace("fl=self.s[j:self.i].strip();arg=(RX(pat,self.ext),rep,fl)", "fl=self.s[j:self.i].strip()\n    if pat:self.last_rx=RX(pat,self.ext)\n    if self.last_rx is None:raise ValueError('no previous regexp')\n    arg=(self.last_rx,rep,fl)")
+[?2004l[?2004h> # numeric flag extraction
+[?2004l[?2004h> s=s.replace("nums=[int(x) for x in fl.split() if x.isdigit()]", "import re\n nums=[int(x) for x in re.findall(rb'\\d+',fl)]")
+[?2004l[?2004h> # global empty-match suppression: remember end of prior accepted nonempty match
+[?2004l[?2004h> s=s.replace("out=b'';pos=0;count=0;changed=False", "out=b'';pos=0;count=0;changed=False;last_nonempty_end=-1")
+[?2004l[?2004h> s=s.replace("a,b=m[0];count+=1; take=(nth is None or count>=nth) and (globalflag or not changed)", "a,b=m[0]\n  # GNU sed ignores an empty match immediately following an accepted nonempty one.\n  if a==b and a==last_nonempty_end:\n   if a<len(p):out+=p[pos:a+1];pos=a+1;continue\n   break\n  count+=1; take=(nth is None or count>=nth) and (globalflag or not changed)")
+[?2004l[?2004h> s=s.replace("out+=p[pos:a]+replacement(rep,p,m);changed=True", "out+=p[pos:a]+replacement(rep,p,m);changed=True\n   if b>a:last_nonempty_end=b")
+[?2004l[?2004h> # N EOF should finish script/cycle and auto-print.
+[?2004l[?2004h> s=s.replace("if z is None:return 'endN'", "if z is None:return 'end'")
+[?2004l[?2004h> s=s.replace("if r not in ('delete','endN') and not self.quiet", "if r != 'delete' and not self.quiet")
+[?2004l[?2004h> s=s.replace("if r=='endN':break", "if r=='endN':break")
+[?2004l[?2004h> # zero-address range starts active and tests end on first line.
+[?2004l[?2004h> old="if not self.a1: z=True\n  elif not self.a2: z=self.a1.hit(E)\n  elif self.active:"
+[?2004l[?2004h> new="if not self.a1: z=True\n  elif not self.a2: z=self.a1.hit(E)\n  elif self.a1.k=='zero' and not hasattr(self,'zero_started'):\n   self.zero_started=True;z=True;self.active=True\n   if self.a2.hit(E):self.active=False\n  elif self.active:"
+[?2004l[?2004h> s=s.replace(old,new)
+[?2004l[?2004h> # c range emits only on closing line (or EOF), while deleting every selected line.
+[?2004l[?2004h> s=s.replace("# A range emits replacement only when entering/ending per sed semantics.\n    self.wr(c.arg+b'\\n');return 'delete'", "if not c.a2 or not c.active or self.islast:self.wr(c.arg+b'\\n')\n    return 'delete'")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py && python3 /tmp/diff.py
+[?2004l/tmp/diff.py:11: SyntaxWarning: invalid escape sequence '\|'
+  for opts,s in [(['-n'],'p'),(['-n','-E'],'s/(a|ab)/X/p'),(['-n'],'/a\|ab/s//X/p')]:add(s,b'ab\n',opts)
+[?2004hroot@7c7a5556c187:/app# cat > /tmp/target.py <<'PY'
+[?2004l[?2004h> import subprocess,tempfile,os
+[?2004l[?2004h> P=['python3','/app/pysed/sed.py'];G=['/usr/bin/sed']
+[?2004l[?2004h> def t(s,inp=b'a\nb\nc\nd\ne\nf\n',opts=[],files=None):
+[?2004l[?2004h>  args=opts+[s]
+[?2004l[?2004h>  if files: args+=files; inp=None
+[?2004l[?2004h>  a=subprocess.run(G+args,input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  b=subprocess.run(P+args,input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  if (a.stdout,a.returncode)!=(b.stdout,b.returncode):print('FAIL',opts,repr(s),'G',a.returncode,repr(a.stdout),'P',b.returncode,repr(b.stdout),repr(b.stderr)) M[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K)
+[?2004l[?2004h> for s in ['3,1p','3,+0p','3,~3p','2,~3p','0,/a/p','0,/z/p','/b/Ip','/B/ip']:
+[?2004l[?2004h>  t(s)
+[?2004l[?2004h> for s in [r's/a/X/I',r's/A/X/i',r's/^/X/g',r's/^/X/gm',r's/.$/X/g',r's/.$/X/gM',r's/a.b/X/',r's/a.b/X/m',r's/a/\x41/',r's/a/\o101/',r's/a/\n/',r's/a/\L&\E/',r's/(a)/\1/',r's/\(a\)/\u\1/']:
+[?2004l[?2004h>  t(s,b'A\na\nb\n' if 'I' in s or '/A/' in s else b'a\nb\n', ['-E'] if '(a)' in s else [])
+[?2004l[?2004h> for n in [1,2,3,4,5,6,7,10]:t('l'+str(n),b'a\tbcd\\e\n')
+[?2004l[?2004h> # N across separate files
+[?2004l[?2004h> open('/tmp/f1','wb').write(b'a\n');open('/tmp/f2','wb').write(b'b\n')
+[?2004l[?2004h> for o in [[],['-s'],['-n','-s']]:t('N;p',opts=o,files=['/tmp/f1','/tmp/f2'])
+[?2004l[?2004h> # multiline text syntax
+[?2004l[?2004h> for s in ['a\\\nhello\\\nworld','i\\\nhello\\\nworld','1,2c\\\nhello\\\nworld']:
+[?2004l[?2004h>  t(s,b'a\nb\nc\n')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 /tmp/target.py
+[?2004lFAIL [] '3,1p' G 0 b'a\nb\nc\nc\nd\ne\nf\n' P 0 b'a\nb\nc\nc\nd\nd\ne\ne\nf\nf\n' b''
+FAIL [] '3,+0p' G 0 b'a\nb\nc\nc\nd\ne\nf\n' P 0 b'a\nb\nc\nc\nd\nd\ne\nf\n' b''
+FAIL [] '/b/Ip' G 0 b'a\nb\nb\nc\nd\ne\nf\n' P 0 b'a\na\nb\nb\nc\nc\nd\nd\ne\ne\nf\nf\n' b''
+FAIL [] 's/a/X/I' G 0 b'X\nX\nb\n' P 0 b'A\nX\nb\n' b''
+FAIL [] 's/A/X/i' G 0 b'X\nX\nb\n' P 0 b'X\na\nb\n' b''
+FAIL [] 's/a/\\x41/' G 0 b'A\nb\n' P 0 b'x41\nb\n' b''
+FAIL [] 's/a/\\o101/' G 0 b'A\nb\n' P 0 b'o101\nb\n' b''
+python3 - <<'PY'
+p='/app/pysed/sed.py';s=open(p).read()
+s=s.replace("REG_EXTENDED=1; REG_NEWLINE=4", "REG_EXTENDED=1; REG_ICASE=2; REG_NEWLINE=4")
+s=s.replace("def __init__(self,s,ext=False):\n  self.s=s; self.mem=ctypes.create_string_buffer(1024)\n  r=libc.regcomp(self.mem,s,REG_NEWLINE|(REG_EXTENDED if ext else 0))", "def __init__(self,s,ext=False,icase=False,multi=False):\n  self.s=s;self.ext=ext;self.icase=icase;self.multi=multi;self.mem=ctypes.create_string_buffer(1024)\n  flags=(REG_EXTENDED if ext else 0)|(REG_ICASE if icase else 0)|(REG_NEWLINE if multi else 0)\n  r=libc.regcomp(self.mem,s,flags)")
+# Address suffixes I/M: compile after consuming suffixes.
+s=s.replace("self.i+=1; x=self.delim(d)\n   if x: self.last_rx=RX(x,self.ext)\n   if self.last_rx is None: raise ValueError('no previous regexp')\n   return Addr('rx',self.last_rx)", "self.i+=1; x=self.delim(d)\n   ic=mu=False\n   while self.i<len(self.s) and self.s[self.i] in b'IiMm':\n    if self.s[self.i] in b'Ii':ic=True\n    else:mu=True\n    self.i+=1\n   if x:self.last_rx=RX(x,self.ext,ic,mu)\n   elif self.last_rx is not None and (ic or mu):self.last_rx=RX(self.last_rx.s,self.ext,ic,mu)\n   if self.last_rx is None: raise ValueError('no previous regexp')\n   return Addr('rx',self.last_rx)")
+# s flags dictate regex compilation. Keep prior source for empty regex.
+s=s.replace("if pat:self.last_rx=RX(pat,self.ext)\n    if self.last_rx is None:raise ValueError('no previous regexp')\n    arg=(self.last_rx,rep,fl)", "ic=bool(set(fl)&set(b'Ii'));mu=bool(set(fl)&set(b'Mm'))\n    if pat:self.last_rx=RX(pat,self.ext,ic,mu)\n    elif self.last_rx is not None and (ic or mu):self.last_rx=RX(self.last_rx.s,self.ext,ic,mu)\n    if self.last_rx is None:raise ValueError('no previous regexp')\n    arg=(self.last_rx,rep,fl)")
+# First range line closes immediately for numeric <= current and +0.
+s=s.replace("if self.a2.k=='plus': self.end=E.lineno+self.a2.v\n   elif self.a2.k=='tilde':", "if self.a2.k=='plus':\n    self.end=E.lineno+self.a2.v\n    if self.a2.v==0:self.active=False\n   elif self.a2.k=='num' and self.a2.v<=E.lineno:self.active=False\n   elif self.a2.k=='tilde':")
+# GNU replacement numeric escapes.
+s=s.replace("if c==ord('x'):\n  j=i+1", "if c in (ord('x'),ord('o')):\n  base=16 if c==ord('x') else 8\n  j=i+1")
+s=s.replace("while j<len(s) and j<i+3 and chr(s[j]).lower() in '0123456789abcdef':j+=1\n  if j>i+1:return bytes([int(s[i+1:j],16)]),j", "valid='0123456789abcdef' if base==16 else '01234567'\n  limit=i+3 if base==16 else i+4\n  while j<len(s) and j<limit and chr(s[j]).lower() in valid:j+=1\n  if j>i+1:return bytes([int(s[i+1:j],base)&255]),j")
+# replacement unknown escaped sequences: route x/o through decoder.
+s=s.replace("elif n==ord('n'):x=b'\\n'\n   else:x=bytes([n])", "elif n==ord('n'):x=b'\\n'\n   elif n in (ord('x'),ord('o')):x,i=escaped_char(rep,i-1)\n   else:x=bytes([n])")
+open(p,'w').write(s)
+PY
+python3 -m py_compile /app/pysed/sed.py
+python3 /tmp/diff.py
+python3 /tmp/target.py
+python3 - <<'PY'
+import subprocess
+for s in [r'N;s/a.b/X/',r'N;s/a.b/X/m',r'N;s/^/X/g',r'N;s/^/X/gm',r'N;s/$/X/g',r'N;s/$/X/gM']:
+ a=subprocess.run(['/usr/bin/sed',s],input=b'a\nb\n',stdout=subprocess.PIPE)
+ b=subprocess.run(['python3','/app/pysed/sed.py',s],input=b'a\nb\n',stdout=subprocess.PIPE)
+ print(s, a.stdout==b.stdout, repr(a.stdout),repr(b.stdout))
+PY
+^CTraceback (most recent call last):
+  File [35m"/tmp/target.py"[0m, line [35m13[0m, in [35m<module>[0m
+    for n in [1,2,3,4,5,6,7,10]:[31mt[0m[1;31m('l'+str(n),b'a\tbcd\\e\n')[0m
+                                [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/target.py"[0m, line [35m7[0m, in [35mt[0m
+    b=subprocess.run(P+args,input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+  File [35m"/usr/local/lib/python3.13/subprocess.py"[0m, line [35m556[0m, in [35mrun[0m
+    stdout, stderr = [31mprocess.communicate[0m[1;31m(input, timeout=timeout)[0m
+                     [31m~~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/usr/local/lib/python3.13/subprocess.py"[0m, line [35m1222[0m, in [35mcommunicate[0m
+    stdout, stderr = [31mself._communicate[0m[1;31m(input, endtime, timeout)[0m
+                     [31m~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/usr/local/lib/python3.13/subprocess.py"[0m, line [35m2154[0m, in [35m_communicate[0m
+    ready = selector.select(timeout)
+  File [35m"/usr/local/lib/python3.13/selectors.py"[0m, line [35m398[0m, in [35mselect[0m
+    fd_event_list = self._selector.poll(timeout)
+[1;35mKeyboardInterrupt[0m
+
+[?2004hroot@7c7a5556c187:/app# grep -nE 'REG_|def __init__\(self,s,ext|if c==ord|nums=' /app/pysed/sed.py | head -20
+[?2004l11:REG_EXTENDED=1; REG_NEWLINE=4
+14: def __init__(self,s,ext=False):
+16:  r=libc.regcomp(self.mem,s,REG_NEWLINE|(REG_EXTENDED if ext else 0))
+19:  # REG_NOTBOL when starting after zero; regexec offsets are relative to suffix.
+66: if c==ord('x'):
+84: def __init__(self,s,ext): self.s=s;self.i=0;self.ext=ext;self.labels={};self.fix=[];self.last_rx=None
+212: nums=[int(x) for x in re.findall(rb'\d+',fl)]
+[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace('REG_EXTENDED=1; REG_NEWLINE=4','REG_EXTENDED=1; REG_ICASE=2; REG_NEWLINE=4')
+[?2004l[?2004h> s=s.replace("def __init__(self,s,ext=False):\n  self.s=s; self.mem=ctypes.create_string_buffer(1024)\n  r=libc.regcomp(self.mem,s,REG_NEWLINE|(REG_EXTENDED if ext else 0))", "def __init__(self,s,ext=False,icase=False,multi=False):\n  self.s=s;self.ext=ext;self.mem=ctypes.create_string_buffer(1024)\n  flags=(REG_EXTENDED if ext else 0)|(REG_ICASE if icase else 0)|(REG_NEWLINE if multi else 0)\n  r=libc.regcomp(self.mem,s,flags)")
+[?2004l[?2004h> s=s.replace("if self.a2.k=='plus': self.end=E.lineno+self.a2.v\n   elif self.a2.k=='tilde':", "if self.a2.k=='plus':\n    self.end=E.lineno+self.a2.v\n    if self.a2.v==0:self.active=False\n   elif self.a2.k=='num' and self.a2.v<=E.lineno:self.active=False\n   elif self.a2.k=='tilde':")
+[?2004l[?2004h> # N=1 is odd but must terminate; GNU effectively uses a minimum practical width.
+[?2004l[?2004h> s=s.replace("while len(esc)>=N:lines.append(esc[:N-1]+b'\\\\');esc=esc[N-1:]", "cut=max(1,N-1)\n while len(esc)>=N and esc:lines.append(esc[:cut]+b'\\\\');esc=esc[cut:]")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read()
+[?2004l[?2004h> old="""self.i+=1; x=self.delim(d)
+[?2004l[?2004h>    if x: self.last_rx=RX(x,self.ext)
+[?2004l[?2004h>    if self.last_rx is None: raise ValueError('no previous regexp')
+[?2004l[?2004h>    return Addr('rx',self.last_rx)"""
+[?2004l[?2004h> new="""self.i+=1; x=self.delim(d)
+[?2004l[?2004h>    ic=mu=False
+[?2004l[?2004h>    while self.i<len(self.s) and self.s[self.i] in b'IiMm':
+[?2004l[?2004h>     if self.s[self.i] in b'Ii':ic=True
+[?2004l[?2004h>     else:mu=True
+[?2004l[?2004h>     self.i+=1
+[?2004l[?2004h>    if x:self.last_rx=RX(x,self.ext,ic,mu)
+[?2004l[?2004h>    elif self.last_rx is not None and (ic or mu):self.last_rx=RX(self.last_rx.s,self.ext,ic,mu)
+[?2004l[?2004h>    if self.last_rx is None: raise ValueError('no previous regexp')
+[?2004l[?2004h>    return Addr('rx',self.last_rx)"""
+[?2004l[?2004h> assert old in s;s=s.replace(old,new)
+[?2004l[?2004h> old="""if pat:self.last_rx=RX(pat,self.ext)
+[?2004l[?2004h>     if self.last_rx is None:raise ValueError('no previous regexp')
+[?2004l[?2004h>     arg=(self.last_rx,rep,fl)"""
+[?2004l[?2004h> new="""ic=bool(set(fl)&set(b'Ii'));mu=bool(set(fl)&set(b'Mm'))
+[?2004l[?2004h>     if pat:self.last_rx=RX(pat,self.ext,ic,mu)
+[?2004l[?2004h>     elif self.last_rx is not None and (ic or mu):self.last_rx=RX(self.last_rx.s,self.ext,ic,mu)
+[?2004l[?2004h>     if self.last_rx is None:raise ValueError('no previous regexp')
+[?2004l[?2004h>     arg=(self.last_rx,rep,fl)"""
+[?2004l[?2004h> assert old in s;s=s.replace(old,new)
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read()
+[?2004l[?2004h> s=s.replace("if c==ord('x'):\n  j=i+1\n  while j<len(s) and j<i+3 and chr(s[j]).lower() in '0123456789abcdef':j+=1\n  if j>i+1:return bytes([int(s[i+1:j],16)]),j", "if c in (ord('x'),ord('o')):\n  base=16 if c==ord('x') else 8;j=i+1\n  valid='0123456789abcdef' if base==16 else '01234567';limit=i+(3 if base==16 else 4)\n  while j<len(s) and j<limit and chr(s[j]).lower() in valid:j+=1\n  if j>i+1:return bytes([int(s[i+1:j],base)&255]),j")
+[?2004l[?2004h> s=s.replace("elif n==ord('n'):x=b'\\n'\n   else:x=bytes([n])", "elif n==ord('n'):x=b'\\n'\n   elif n in (ord('x'),ord('o')):x,i=escaped_char(rep,i-1)\n   else:x=bytes([n])")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# timeout 20 python3 /tmp/diff.py
+[?2004l/tmp/diff.py:11: SyntaxWarning: invalid escape sequence '\|'
+  for opts,s in [(['-n'],'p'),(['-n','-E'],'s/(a|ab)/X/p'),(['-n'],'/a\|ab/s//X/p')]:add(s,b'ab\n',opts)
+[?2004hroot@7c7a5556c187:/app# timeout 20 python3 /tmp/target.py
+[?2004lFAIL [] '/B/ip' G 0 b'a\nb\nc\nd\ne\nf\n' P 0 b'a\nb\nb\nc\nd\ne\nf\n' b''
+FAIL [] 'l1' G 0 b'\\\na\\\n\\t\\\nb\\\nc\\\nd\\\n\\\\\\\ne$\na\tbcd\\e\n' P 0 b'a\\\n\\\\\nt\\\nb\\\nc\\\nd\\\n\\\\\n\\\\\ne\\\n$\na\tbcd\\e\n' b''
+FAIL [] 'l2' G 0 b'a\\\n\\t\\\nb\\\nc\\\nd\\\n\\\\\\\ne$\na\tbcd\\e\n' P 0 b'a\\\n\\\\\nt\\\nb\\\nc\\\nd\\\n\\\\\n\\\\\ne$\na\tbcd\\e\n' b''
+FAIL [] 'l3' G 0 b'a\\\n\\t\\\nbc\\\nd\\\n\\\\\\\ne$\na\tbcd\\e\n' P 0 b'a\\\\\ntb\\\ncd\\\n\\\\\\\ne$\na\tbcd\\e\n' b''
+FAIL ['-s'] 'N;p' G 0 b'a\nb\n' P 0 b'a\nb\na\nb\n' b''
+FAIL ['-n', '-s'] 'N;p' G 0 b'' P 0 b'a\nb\n' b''
+FAIL [] 'a\\\nhello\\\nworld' G 0 b'a\nhello\nworld\nb\nhello\nworld\nc\nhello\nworld\n' P 0 b'a$\nhello\\\nb$\nhello\\\nc$\nhello\\\n' b''
+FAIL [] 'i\\\nhello\\\nworld' G 0 b'hello\nworld\na\nhello\nworld\nb\nhello\nworld\nc\n' P 0 b'hello\\\na$\nhello\\\nb$\nhello\\\nc$\n' b''
+FAIL [] '1,2c\\\nhello\\\nworld' G 0 b'hello\nworld\nc\n' P 0 b'hello\\\nc$\n' b''
+[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read()
+[?2004l[?2004h> # Only uppercase address modifiers are recognized.
+[?2004l[?2004h> s=s.replace("self.s[self.i] in b'IiMm'", "self.s[self.i] in b'IM'")
+[?2004l[?2004h> s=s.replace("self.s[self.i] in b'Ii':ic=True", "self.s[self.i]==ord('I'):ic=True")
+[?2004l[?2004h> # N may not pull from the next file with -s.
+[?2004l[?2004h> s=s.replace("elif o=='N':\n    z=self.nextrec()", "elif o=='N':\n    if self.sep and self.recs and self.recs[0][1]:return 'end'\n    z=self.nextrec()")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# # Replace listed() cleanly.
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read();a=s.index('def listed(');b=s.index('\nclass Engine:',a)
+[?2004l[?2004h> new=r'''def listed(p,N):
+[?2004l[?2004h>  units=[]
+[?2004l[?2004h>  mp={7:b'\\a',8:b'\\b',9:b'\\t',10:b'\\n',11:b'\\v',12:b'\\f',13:b'\\r',92:b'\\\\'}
+[?2004l[?2004h>  for c in p:units.append(mp.get(c,bytes([c]) if 32<=c<127 else ('\\%03o'%c).encode()))
+[?2004l[?2004h>  width=max(0,N-1);lines=[];cur=b''
+[?2004l[?2004h>  for u in units:
+[?2004l[?2004h>   if len(cur)+len(u)>width:
+[?2004l[?2004h>    lines.append(cur+b'\\');cur=b''
+[?2004l[?2004h>   cur+=u
+[?2004l[?2004h>  lines.append(cur+b'$')
+[?2004l[?2004h>  return b'\n'.join(lines)+b'\n'
+[?2004l[?2004h> '''
+[?2004l[?2004h> s=s[:a]+new+s[b:];open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read()
+[?2004l[?2004h> old="""elif op in 'ai c'.replace(' ',''):
+[?2004l[?2004h>     self.ws()
+[?2004l[?2004h>     if self.i<len(self.s) and self.s[self.i]==92:
+[?2004l[?2004h>      self.i+=1
+[?2004l[?2004h>      if self.i<len(self.s) and self.s[self.i]==10:self.i+=1
+[?2004l[?2004h>     j=self.i
+[?2004l[?2004h>     while self.i<len(self.s) and self.s[self.i]!=10:self.i+=1
+[?2004l[?2004h>     arg=unescape(self.s[j:self.i])"""
+[?2004l[?2004h> new="""elif op in 'aic':
+[?2004l[?2004h>     self.ws()
+[?2004l[?2004h>     if self.i<len(self.s) and self.s[self.i]==92 and self.i+1<len(self.s) and self.s[self.i+1]==10:
+[?2004l[?2004h>      self.i+=2;parts=[]
+[?2004l[?2004h>      while True:
+[?2004l[?2004h>       j=self.i
+[?2004l[?2004h>       while self.i<len(self.s) and self.s[self.i]!=10:self.i+=1
+[?2004l[?2004h>       line=self.s[j:self.i]
+[?2004l[?2004h>       cont=line.endswith(b'\\\\')
+[?2004l[?2004h>       if cont:line=line[:-1]
+[?2004l[?2004h>       parts.append(line)
+[?2004l[?2004h>       if self.i<len(self.s):self.i+=1
+[?2004l[?2004h>       if not cont:break
+[?2004l[?2004h>      arg=b'\\n'.join(parts)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>      j=self.i
+[?2004l[?2004h>      while self.i<len(self.s) and self.s[self.i]!=10:self.i+=1
+[?2004l[?2004h>      arg=unescape(self.s[j:self.i])"""
+[?2004l[?2004h> assert old in s;s=s.replace(old,new);open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# timeout 20 python3 /tmp/diff.py
+[?2004l/tmp/diff.py:11: SyntaxWarning: invalid escape sequence '\|'
+  for opts,s in [(['-n'],'p'),(['-n','-E'],'s/(a|ab)/X/p'),(['-n'],'/a\|ab/s//X/p')]:add(s,b'ab\n',opts)
+[?2004hroot@7c7a5556c187:/app# timeout 20 python3 /tmp/target.py
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> for s in [r'N;s/a.b/X/',r'N;s/a.b/X/m',r'N;s/^/X/g',r'N;s/^/X/gm',r'N;s/$/X/g',r'N;s/$/X/gM']:
+[?2004l[?2004h>  a=subprocess.run(['/usr/bin/sed',s],input=b'a\nb\n',stdout=subprocess.PIPE)
+[?2004l[?2004h>  b=subprocess.run(['python3','/app/pysed/sed.py',s],input=b'a\nb\n',stdout=subprocess.PIPE)
+[?2004l[?2004h>  if a.stdout!=b.stdout:print('FAIL',s,repr(a.stdout),repr(b.stdout))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# cat > /tmp/finaldiff.py <<'PY'
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> G=['/usr/bin/sed'];P=['python3','/app/pysed/sed.py']
+[?2004l[?2004h> def t(s,inp=b'ab12 foo_bar\nxx abab\n',o=[]):
+[?2004l[?2004h>  a=subprocess.run(G+o+[s],input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=3)
+[?2004l[?2004h>  b=subprocess.run(P+o+[s],input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=3)
+[?2004l[?2004h>  if (a.stdout,a.returncode)!=(b.stdout,b.returncode):print('FAIL',o,repr(s),repr(inp),'G',a.returncode,repr(a.stdout),'P',b.returncode,repr(b.stdout),repr(b.stderr))
+[?2004l[?2004h> patterns=[r'[[:digit:]]\+',r'\w\+',r'\W\+',r'\bfoo\b',r'\<foo',r'bar\>',r'a\|ab',r'ab\|a',r'a\+',r'a\?',r'\(ab\)\1',r'[=a=]',r'[^a]\+',r'a\{1,2\}',r'\x61',r'\o141']
+[?2004l[?2004h> for p in patterns:t('s/'+p+r'/<&>/g')
+[?2004l[?2004h> for p in [r'[[:digit:]]+',r'\w+',r'a|ab',r'ab|a',r'(ab)\1',r'a{1,2}',r'[=a=]']:
+[?2004l[?2004h>  t('s/'+p+r'/<&>/g',o=['-E'])
+[?2004l[?2004h> for s in ['0~2p','2~0p','0~1p','1~3p','2,~4p','2,+0p','2,+3p','1!{p;d}','2!{h;d};$G;p',':a;2,3{p;b z};d;:z;p','s/a/A/;t x;d;:x;s/b/B/;t x;p',':x;s/xx/x/;tx;p']:
+[?2004l[?2004h>  t(s,b'a\nb\nc\nd\ne\n')
+[?2004l[?2004h> # Several e pieces and empty files.
+[?2004l[?2004h> for args in [(['-n','-e','h','-e','$G','/tmp/e0','/tmp/e1']),(['-s','-n','-e','=','/tmp/e1','/tmp/e2'])]:
+[?2004l[?2004h>  open('/tmp/e0','wb').write(b'');open('/tmp/e1','wb').write(b'a\n');open('/tmp/e2','wb').write(b'b\nc\n')
+[?2004l[?2004h>  a=subprocess.run(G+args[0],stdout=subprocess.PIPE);b=subprocess.run(P+args[0],stdout=subprocess.PIPE)
+[?2004l[?2004h>  if a.stdout!=b.stdout or a.returncode!=b.returncode:print('FILEFAIL',args,repr(a.stdout),repr(b.stdout),a.returncode,b.returncode)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# timeout 30 python3 /tmp/finaldiff.py
+[?2004lFAIL [] 's/\\x61/<&>/g' b'ab12 foo_bar\nxx abab\n' G 0 b'<a>b12 foo_b<a>r\nxx <a>b<a>b\n' P 0 b'ab12 foo_bar\nxx abab\n' b''
+FAIL [] 's/\\o141/<&>/g' b'ab12 foo_bar\nxx abab\n' G 0 b'<a>b12 foo_b<a>r\nxx <a>b<a>b\n' P 0 b'ab12 foo_bar\nxx abab\n' b''
+FAIL [] '2~0p' b'a\nb\nc\nd\ne\n' G 0 b'a\nb\nb\nc\nd\ne\n' P 1 b'a\n' b'Traceback (most recent call last):\n  File "/app/pysed/sed.py", line 397, in <module>\n    if __name__==\'__main__\':raise SystemExit(main())\n                                             ~~~~^^\n  File "/app/pysed/sed.py", line 396, in main\n    E=Engine(cmds,quiet,sep,records);r=E.run();return r or status\n                                       ~~~~~^^\n  File "/app/pysed/sed.py", line 353, in run\n    r=self.runlist(self.cmds)\n  File "/app/pysed/sed.py", line 294, in runlist\n    if not c.selected(self):continue\n           ~~~~~~~~~~^^^^^^\n  File "/app/pysed/sed.py", line 42, in selected\n    elif not self.a2: z=self.a1.hit(E)\n                        ~~~~~~~~~~~^^^\n  File "/app/pysed/sed.py", line 34, in hit\n    if k==\'step\': return E.lineno>=v[0] and (E.lineno-v[0])%v[1]==0\n                                            ~~~~~~~~~~~~~~~^~~~~\nZeroDivisionError: integer modulo by zero\n'
+FAIL [] ':a;2,3{p;b z};d;:z;p' b'a\nb\nc\nd\ne\n' G 0 b'b\nb\nb\nc\nc\nc\n' P 0 b'a\nb\nc\nd\ne\n' b''
+Traceback (most recent call last):
+  File [35m"/tmp/finaldiff.py"[0m, line [35m16[0m, in [35m<module>[0m
+    a=subprocess.run([31mG[0m[1;31m+[0m[31margs[0][0m,stdout=subprocess.PIPE);b=subprocess.run(P+args[0],stdout=subprocess.PIPE)
+                     [31m~[0m[1;31m^[0m[31m~~~~~~~[0m
+[1;35mTypeError[0m: [35mcan only concatenate list (not "str") to list[0m
+[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read()
+[?2004l[?2004h> # Decode GNU hexadecimal/octal escapes before POSIX compilation.
+[?2004l[?2004h> s=s.replace("class RX:\n def __init__(self,s,ext=False,icase=False,multi=False):\n  self.s=s;self.ext=ext;self.mem", "class RX:\n def __init__(self,s,ext=False,icase=False,multi=False):\n  raw=s;s=b'';i=0\n  while i<len(raw):\n   if raw[i]==92 and i+1<len(raw) and raw[i+1] in (ord('x'),ord('o')):\n    x,i=escaped_char(raw,i+1);s+=x\n   else:s+=bytes([raw[i]]);i+=1\n  self.s=s;self.ext=ext;self.mem")
+[?2004l[?2004h> # first~0 selects first only.
+[?2004l[?2004h> s=s.replace("if k=='step': return E.lineno>=v[0] and (E.lineno-v[0])%v[1]==0", "if k=='step': return E.lineno==v[0] if v[1]==0 else E.lineno>=v[0] and (E.lineno-v[0])%v[1]==0")
+[?2004l[?2004h> # A branch label ends before a closing block brace.
+[?2004l[?2004h> s=s.replace("self.s[self.i] not in b';\\n':self.i+=1\n    arg=self.s[j:self.i].strip()", "self.s[self.i] not in b';\\n}':self.i+=1\n    arg=self.s[j:self.i].strip()")
+[?2004l[?2004h> # Support dispatching repeatedly to an exact command-list/index.
+[?2004l[?2004h> s=s.replace("def runlist(self,cs):\n  i=0", "def runlist(self,cs,start=0):\n  i=start")
+[?2004l[?2004h> old="""r=self.runlist(self.cmds)
+[?2004l[?2004h>     if r=='restart':continue
+[?2004l[?2004h>     if isinstance(r,tuple) and r[0]=='jump':
+[?2004l[?2004h>      cs,j=r[1];r=self.runlist(cs[j+1:])
+[?2004l[?2004h>     break"""
+[?2004l[?2004h> new="""r=self.runlist(self.cmds)
+[?2004l[?2004h>     if r=='restart':continue
+[?2004l[?2004h>     while isinstance(r,tuple) and r[0]=='jump':
+[?2004l[?2004h>      cs,j=r[1];r=self.runlist(cs,j+1)
+[?2004l[?2004h>      if r=='restart':break
+[?2004l[?2004h>     if r=='restart':continue
+[?2004l[?2004h>     break"""
+[?2004l[?2004h> assert old in s;s=s.replace(old,new)
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# timeout 20 python3 /tmp/diff.py
+[?2004l/tmp/diff.py:11: SyntaxWarning: invalid escape sequence '\|'
+  for opts,s in [(['-n'],'p'),(['-n','-E'],'s/(a|ab)/X/p'),(['-n'],'/a\|ab/s//X/p')]:add(s,b'ab\n',opts)
+[?2004hroot@7c7a5556c187:/app# timeout 20 python3 /tmp/target.py
+[?2004l[?2004hroot@7c7a5556c187:/app# timeout 30 python3 /tmp/finaldiff.py || true
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/finaldiff.py"[0m, line [35m16[0m, in [35m<module>[0m
+    a=subprocess.run([31mG[0m[1;31m+[0m[31margs[0][0m,stdout=subprocess.PIPE);b=subprocess.run(P+args[0],stdout=subprocess.PIPE)
+                     [31m~[0m[1;31m^[0m[31m~~~~~~~[0m
+[1;35mTypeError[0m: [35mcan only concatenate list (not "str") to list[0m
+[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> import subprocess,os
+[?2004l[?2004h> G=['/usr/bin/sed'];P=['python3','/app/pysed/sed.py']
+[?2004l[?2004h> open('/tmp/e0','wb').write(b'');open('/tmp/e1','wb').write(b'a\n');open('/tmp/e2','wb').write(b'b\nc\n')
+[?2004l[?2004h> cases=[['-n','-e','h','-e','$G','/tmp/e0','/tmp/e1'],['-s','-n','-e','=','/tmp/e1','/tmp/e2'],['-n','p','/tmp/missing','/tmp/e1'],['-s','-n','$p','/tmp/e0','/tmp/e1','/tmp/e2']]
+[?2004l[?2004h> for args in cases:
+[?2004l[?2004h>  a=subprocess.run(G+args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  b=subprocess.run(P+args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  print(args,(a.stdout,a.returncode)==(b.stdout,b.returncode),repr(a.stdout),a.returncode,repr(b.stdout),b.returncode)
+[?2004l[?2004h> PY
+[?2004l['-n', '-e', 'h', '-e', '$G', '/tmp/e0', '/tmp/e1'] True b'' 0 b'' 0
+['-s', '-n', '-e', '=', '/tmp/e1', '/tmp/e2'] True b'1\n1\n2\n' 0 b'1\n1\n2\n' 0
+['-n', 'p', '/tmp/missing', '/tmp/e1'] True b'a\n' 2 b'a\n' 2
+['-s', '-n', '$p', '/tmp/e0', '/tmp/e1', '/tmp/e2'] True b'a\nc\n' 0 b'a\nc\n' 0
+[?2004hroot@7c7a5556c187:/app# wc -l -c /app/pysed/sed.py && python3 -m py_compile /app/pysed/sed.py
+[?2004l  404 14128 /app/pysed/sed.py
+[?2004hroot@7c7a5556c187:/app# apt-get remove -y -qq sed >/dev/null 2>&1 || true
+[?2004l[?2004hroot@7c7a5556c187:/app# command -v sed || true
+[?2004l/usr/bin/sed
+[?2004hroot@7c7a5556c187:/app# printf 'ababa\nfoo\n' | python3 /app/pysed/sed.py -n -E -e 's/(a|ab)/[&]/gp'
+[?2004l[ab][ab][a]
+[?2004hroot@7c7a5556c187:/app# printf 'a\nb\nc\n' | python3 /app/pysed/sed.py -n '2,+1{H;$g;$p}'
+[?2004l
+b
+c
+[?2004hroot@7c7a5556c187:/app# printf 'a\nb\n' | python3 /app/pysed/sed.py 'N;s/^/X/gm'
+[?2004lXa
+Xb
+[?2004hroot@7c7a5556c187:/app# python3 /app/pysed/sed.py -n p /tmp/does-not-exist >/tmp/o 2>/tmp/e; echo "missing=$? outbytes=$(wc -c </tmp/o)"
+[?2004lmissing=2 outbytes=0
+[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pysed/sed.py';s=open(p).read()
+[?2004l[?2004h> s=s.replace("self.labels={};self.index_labels(cmds)", "self.labels={};self.parents={};self.index_labels(cmds)")
+[?2004l[?2004h> s=s.replace("def index_labels(self,cs):\n  for i,c in enumerate(cs):\n   if c.op==':':self.labels[c.arg]=(cs,i)\n   if c.op=='{':self.index_labels(c.arg)", "def index_labels(self,cs):\n  for i,c in enumerate(cs):\n   if c.op==':':self.labels[c.arg]=(cs,i)\n   if c.op=='{':\n    self.parents[id(c.arg)]=(cs,i)\n    self.index_labels(c.arg)")
+[?2004l[?2004h> insert=""" def resume(self,cs,start):
+[?2004l[?2004h>   r=self.runlist(cs,start)
+[?2004l[?2004h>   while r is None and id(cs) in self.parents:
+[?2004l[?2004h>    cs,i=self.parents[id(cs)]
+[?2004l[?2004h>    r=self.runlist(cs,i+1)
+[?2004l[?2004h>   return r
+[?2004l[?2004h> """
+[?2004l[?2004h> pos=s.index(' def run(self):',s.index('class Engine:'))
+[?2004l[?2004h> s=s[:pos]+insert+s[pos:]
+[?2004l[?2004h> s=s.replace("cs,j=r[1];r=self.runlist(cs,j+1)", "cs,j=r[1];r=self.resume(cs,j+1)")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 -m py_compile /app/pysed/sed.py
+[?2004l[?2004hroot@7c7a5556c187:/app# python3 - <<'PY'
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> cases=[
+[?2004l[?2004h>  ':go;{ :go;s/a/A/;p};s/A/Z/;p',
+[?2004l[?2004h>  'b in;{ :in;s/a/A/};s/A/Z/;p',
+[?2004l[?2004h>  'b in;{ :in;s/a/A/;b out};d;:out;p',
+[?2004l[?2004h> ]
+[?2004l[?2004h> for script in cases:
+[?2004l[?2004h>  data=b'a\nb\n'
+[?2004l[?2004h>  g=subprocess.run(['/usr/bin/sed','-n',script],input=data,stdout=subprocess.PIPE)
+[?2004l[?2004h>  p=subprocess.run(['python3','/app/pysed/sed.py','-n',script],input=data,stdout=subprocess.PIPE)
+[?2004l[?2004h>  print(g.stdout==p.stdout,repr(script),repr(g.stdout),repr(p.stdout))
+[?2004l[?2004h> PY
+[?2004lTrue ':go;{ :go;s/a/A/;p};s/A/Z/;p' b'A\nZ\nb\nb\n' b'A\nZ\nb\nb\n'
+True 'b in;{ :in;s/a/A/};s/A/Z/;p' b'Z\nb\n' b'Z\nb\n'
+True 'b in;{ :in;s/a/A/;b out};d;:out;p' b'A\nb\n' b'A\nb\n'
+[?2004hroot@7c7a5556c187:/app# 

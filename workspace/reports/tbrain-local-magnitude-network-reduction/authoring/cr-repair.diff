@@ -1,0 +1,65 @@
+--- /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/2ba6a5c7-5c99-4636-8ff1-5dac5573fdef/scratchpad/instruction-before-cr.md	2026-09-26 20:36:56
++++ workspace/tasks/tbrain-local-magnitude-network-reduction/instruction.md	2026-09-26 20:37:17
+@@ -1,5 +1,5 @@
+ Our bulletin desk turns each located earthquake's amplitude picks into station and network local magnitudes with the package in `/app/mlnet`, and the analysts who spot-check it against part 4 of the network's processing manual, `/app/manual/npm4-local-magnitude.md` (NPM-4), keep finding disagreements: magnitudes come out a few tenths high across the board, stations close to a deep event are corrected as if it were at the surface, one station that reads well off the others can drag an event's magnitude a long way, and events that only two stations recorded still get a network value. NPM-4 is the authority for this work. Change the package so that the report printed by `python3 /app/tools/ml_bulletin.py BULLETIN.json` is the one NPM-4 describes, and read each of its rules as holding for every bulletin inside the limits of its section 1, not only for days like the one in `/app/samples/`. The driver `/app/tools/ml_bulletin.py` is not yours to change: bulletins are reduced by running our own copy of it against your `/app/mlnet`, and the `ml_bulletin.py` you leave there has to be identical to ours.
+ 
+-Only put right what NPM-4 actually governs. Where it gives no rule for a value, that value is still computed the way the code computes it today, fed with the quantities NPM-4 does define; add no exclusion, clamp or guard of your own for it. For such a value, keeping the present calculation takes precedence over the rest of this paragraph, and every other step it passes through still follows NPM-4. A few inputs are left entirely open, and the package may do whatever it likes with them, whether they arrive through the driver or through a direct call: any figure outside the limits of section 1, and any file that breaks one of that section's other rules.
++Only put right what NPM-4 actually governs. Where it gives no rule for a value, that value is still computed the way the code computes it today, fed with the quantities NPM-4 does define; add no exclusion, clamp or guard of your own for it. For such a value, keep the present calculation; every other step it passes through still follows NPM-4. A few inputs are left entirely open, and the package may do whatever it likes with them, whether they arrive through the driver or through a direct call: any figure outside the limits of section 1, and any file that breaks one of that section's other rules.
+ 
+-The bulletins we reduce hold one to fifty events and a station table of one to two hundred stations. They include events at every depth from the surface down to 60 km, recordings from a station sitting on the epicentre out to 1000 km away, stations with one to four horizontal channels, channels of every noise level, station corrections that are positive, zero and negative, and events with one, two, three or many contributing stations, in both odd and even numbers. Every bulletin keeps within the limits NPM-4 gives in section 1. In the report, every `id`, `code` and `contributes`, the order of every list, and whether an `ml` is null are compared exactly; every other number must agree with the expected one to within 10^-6.
++The bulletins we reduce hold one to fifty events and a station table of one to two hundred stations. They include events at every depth from the surface down to 60 km, recordings from a station sitting on the epicentre out to 1000 km away, stations with one to four horizontal channels, sites whose broadband and strong-motion sensors arrive as separate recordings, channels of every noise level, station corrections that are positive, zero and negative, and events with one, two, three or many contributing stations, in both odd and even numbers. Every bulletin keeps within the limits NPM-4 gives in section 1. In the report, every `id`, `code` and `contributes`, the order of every list, and whether an `ml` is null are compared exactly; every other number must agree with the expected one to within 10^-6.
+diff -ru /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/2ba6a5c7-5c99-4636-8ff1-5dac5573fdef/scratchpad/env-before-cr/app/manual/npm4-local-magnitude.md workspace/tasks/tbrain-local-magnitude-network-reduction/environment/app/manual/npm4-local-magnitude.md
+--- /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/2ba6a5c7-5c99-4636-8ff1-5dac5573fdef/scratchpad/env-before-cr/app/manual/npm4-local-magnitude.md	2026-09-26 20:36:56
++++ workspace/tasks/tbrain-local-magnitude-network-reduction/environment/app/manual/npm4-local-magnitude.md	2026-09-26 20:37:47
+@@ -30,14 +30,17 @@
+   has an `id` (one to twenty characters, distinct within the file), a
+   `depth_km` from 0 to 60, and `recordings`, one to forty of them.
+ 
+-1.2 A recording is what one station contributed to one event. It names the
+-station by `code` (a station of the table, and no station appears twice in one
+-event), gives the station's epicentral distance `epi_km` from 0 to 1000, and
+-lists one to four `amplitudes`, one for each horizontal channel of the station
+-that the picker measured. An amplitude gives its `channel` (a three-character
+-channel code, distinct within the recording), `amplitude_nm` from 0.1 to 10^8,
+-and the noise of that channel, `noise_nm`, from 0.01 to 10^7. No station lies
+-closer than 1 km to the hypocentre (rule 3.1).
++1.2 A recording is one sensor's share of an event at a station. It names the
++station by `code` (a station of the table), gives the station's epicentral
++distance `epi_km` from 0 to 1000, and lists one or two `amplitudes`, one for
++each horizontal channel of that sensor the picker measured. Sites whose
++broadband and strong-motion sensors are processed separately send one recording
++for each, so a station has one or two recordings in an event; two recordings of
++one station in one event give the same `epi_km`. An amplitude gives its
++`channel` (a three-character channel code; no two amplitudes of a station in one
++event share one), `amplitude_nm` from 0.1 to 10^8, and the noise of that
++channel, `noise_nm`, from 0.01 to 10^7. No station lies closer than 1 km to the
++hypocentre (rule 3.1).
+ 
+ 1.3 Every recording carries at least one reading (rule 2.3).
+ 
+@@ -80,8 +83,9 @@
+ | 500 | 4.510 |
+ | 600 | 4.790 |
+ 
+-The table runs from 10 km to 600 km. It is close to the Hutton–Boore curve and
+-to the IASPEI formula without being either, and neither is used in its place.
++The table runs from 10 km to 600 km, and this part gives no correction for a
++distance outside it. It is close to the Hutton–Boore curve and to the IASPEI
++formula without being either, and neither is used in its place.
+ 
+ 3.3 At a listed distance the correction is the listed value. Between two listed
+ distances it is interpolated linearly in distance. Some agencies interpolate on
+diff -ru /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/2ba6a5c7-5c99-4636-8ff1-5dac5573fdef/scratchpad/env-before-cr/app/samples/brsn-2026-04-12.json workspace/tasks/tbrain-local-magnitude-network-reduction/environment/app/samples/brsn-2026-04-12.json
+--- /private/tmp/claude-501/-Users-quochoangdev-HDTechLS-hd-labs-terminus-skills-v3/2ba6a5c7-5c99-4636-8ff1-5dac5573fdef/scratchpad/env-before-cr/app/samples/brsn-2026-04-12.json	2026-09-26 20:36:56
++++ workspace/tasks/tbrain-local-magnitude-network-reduction/environment/app/samples/brsn-2026-04-12.json	2026-09-26 20:37:47
+@@ -18,9 +18,7 @@
+         ]},
+         {"code": "CLDW", "epi_km": 47.3, "amplitudes": [
+           {"channel": "HHE", "amplitude_nm": 3920.0, "noise_nm": 95.0},
+-          {"channel": "HHN", "amplitude_nm": 4410.0, "noise_nm": 102.0},
+-          {"channel": "HNE", "amplitude_nm": 4105.0, "noise_nm": 880.0},
+-          {"channel": "HNN", "amplitude_nm": 4630.0, "noise_nm": 910.0}
++          {"channel": "HHN", "amplitude_nm": 4410.0, "noise_nm": 102.0}
+         ]},
+         {"code": "BRA1", "epi_km": 83.9, "amplitudes": [
+           {"channel": "HHE", "amplitude_nm": 1210.0, "noise_nm": 64.0},

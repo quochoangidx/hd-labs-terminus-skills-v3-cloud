@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-mobile-data-overage-billing"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Operations"
+subcategory = "Finance"
+languages = ["python"]
+tags = ["telecom-billing", "mobile-data", "usage-rating", "tariff-compliance", "overage-charges"]
+expert_time_estimate_hours = 2
+difficulty_explanation = "This is the work of a telecom billing analyst who keeps a carrier's business-account rating tooling in line with its published data tariff. The package carries slips real rating engines make. It adds up the cycle's kilobytes and drops the part megabyte where the tariff measures each session on its own and counts a part megabyte as a whole one, gives every plan 5,120 MB where the tariff gives BASIC 2,048 and PLUS 10,240, and charges the full overage rate on every megabyte where the tariff drops to 1 cent after the first 1,024 MB of overage. The harder half is knowing where the tariff stops. It gives an allowance only for BASIC and PLUS lines, and an overage and a charge only for a line over its allowance. A FLEX line keeps today's 5,120 MB, and a line inside its allowance keeps today's step: its usage less its allowance, nought or negative, charged at its rate as a credit. The charge step has to be rewritten for the lower rate, and the natural rewrite clamps the overage or the charge of a line inside its allowance at nought, which the tariff does not give. A hand-built reference fuzzed against the package will not flag the difference. No real subscriber data is used. The account files are synthetic, shaped like carrier usage exports, with hand-built files that sit on every limit."
+solution_explanation = "The reference patch measures each session in whole megabytes with a part megabyte rounded up and sums them, gives a BASIC line 2,048 MB and a PLUS line 10,240 MB, and charges a line over its allowance its rate for each of the first 1,024 MB of overage and 1 cent for each megabyte after. Where the tariff gives no rule it keeps today's step: a FLEX line keeps 5,120 MB, and a line not over its allowance keeps its usage less its allowance as its overage and that many megabytes at its rate as its charge, nought or a credit. All arithmetic is integer. The driver is untouched."
+verification_explanation = "A separate verifier image records the delivered driver's bytes, puts its own copy on /app/tools/usagebill_run.py, seals /app as root-owned, and runs the documented command against the delivered /app/src. Each run is made as an unprivileged user in its own session with an isolated interpreter, on each file staged under one neutral name. It compares every README key as a JSON integer or string, and the line order. Expected statements were sealed ahead of time into tests/expected by solution/seal.py from solution/model.py, a model written from the tariff that never imports the package, and are pinned by SHA-256 and row count in tests/expected/ROSTER. There are 11 tests over 9 sealed files: one named test per rule, one for each of the two figures left to today's code, one combining them, a limits test, a seeded family and two harness tests. FLEX lines and lines inside their allowance appear only in the tests that grade them. Named files put usage exactly on each allowance and one megabyte past it, overage of 1,023, 1,024, 1,025 and far more megabytes, sessions of one kilobyte and of whole and part megabytes, and lines with no sessions. Every rule 1.2 limit is reached: 200 lines, 0 and 60 sessions, sessions of 1 and 2,000,000 kilobytes, rates of 1 and 500 cents, and ids of 1 and 10 characters. The seeded family is also billed under run-time labels drawn from os.urandom: new ids and a new name, with lines and sessions shuffled. Locally the Oracle scores 1 and the unfixed package 0. Fifteen one-edit mutants of the reference each fail their own test, among them every departure reverted, part megabytes dropped per session or rounded once over the whole cycle, the lower rate starting after 1,000 or 1,025 MB, 0 or 2,048 MB for a FLEX line, overage or charge floored at nought inside the allowance, a 59-session cap and a 199-line cap. A contract-valid alternative scores 1, and a test proves the candidate cannot read /tests, the expectations, the shipped copy or /logs/verifier."
+relevant_experience = "Mobile carrier business billing: data allowances by plan, per-session usage rating, overage tariffs with volume tiers, and the rating engines that produce account statements."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 3600
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

@@ -1,0 +1,166 @@
+{
+  "axis": "coherent_contract",
+  "reviewer_id": "coherent_contract-B",
+  "snapshot_sha256": "3be6fd8fbf11f105cef6960826da318c8a9f9af1e1d10b8cef54c980a95bc280",
+  "severity": "None",
+  "summary": "The instruction plus NPM-4 fully determine every graded value: magnification 2080 and halving (2.2), the 3x-noise reading filter (2.3), hypocentral distance (3.1), linear in-table interpolation (3.3), added correction (4.2), mean over a station's pooled readings (4.3, 6.1), median with even-count rule (5.2), the three-station minimum (5.3), and the off-table correction kept as today's log-distance end-segment calculation (instruction paragraph 2). I spot-checked sealed expectations by hand against these rules (off-table near and far, pooled two-sensor site, sub-noise exclusion, linear interpolation, Z-suffixed channel codes), and each matched. The verifier's tolerance, exact fields, and section-1 input checks match the instruction. I found no hidden convention, contradiction, or instruction/test asymmetry.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/manual/npm4-local-magnitude.md",
+      "environment/app/mlnet/__init__.py",
+      "environment/app/mlnet/amplitude.py",
+      "environment/app/mlnet/distance.py",
+      "environment/app/mlnet/attenuation.py",
+      "environment/app/mlnet/station.py",
+      "environment/app/mlnet/network.py",
+      "environment/app/mlnet/bulletin.py",
+      "environment/app/tools/ml_bulletin.py",
+      "environment/app/samples/brsn-2026-04-12.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/ml_bulletin.py",
+      "tests/expected/ROSTER",
+      "tests/expected/gain.jsonl",
+      "tests/expected/half.jsonl",
+      "tests/expected/readings.jsonl",
+      "tests/expected/hypocentral.jsonl",
+      "tests/expected/interpolation.jsonl",
+      "tests/expected/table_ends.jsonl",
+      "tests/expected/off_table.jsonl",
+      "tests/expected/correction.jsonl",
+      "tests/expected/station_mean.jsonl",
+      "tests/expected/shared_station.jsonl",
+      "tests/expected/combined.jsonl",
+      "tests/expected/median.jsonl",
+      "tests/expected/median_even.jsonl",
+      "tests/expected/fewer_than_three.jsonl",
+      "tests/expected/three.jsonl",
+      "tests/expected/limits.jsonl",
+      "tests/expected/order.jsonl",
+      "tests/expected/generated.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 39 manifest file entries with files read; every packet file was opened in full, including the single-line limits.jsonl and generated.jsonl.",
+    "Mapped each verifier comparison (tests/test_outputs.py:148-173) to a contract source: key sets to NPM-4 6.1-6.2; exact id/code/contributes/order/null to instruction.md:5; the numeric band 1.5e-6 inside the instruction's 1e-6/2e-6 promise (instruction.md:5, tests/test_outputs.py:33-36).",
+    "Compared the section-1 load checks (tests/test_outputs.py:67-95) with NPM-4 1.1-1.3: counts, ranges, 1 km minimum, metre margins at 10/600 km, one-part-in-a-thousand noise margin (0.003*noise equals 0.001*3*noise), and at least one reading per recording. Visually confirmed shared-station pairs share epi_km and have distinct channels, which the test does not assert.",
+    "Hand-traced off_table.jsonl off-far OFFA (1000 km, 10 nm): log10(0.0104) plus the log-distance 500-600 extrapolation of 5.5745 gives 3.59153, matching the expected 3.5915329. A linear extrapolation (5.91) would differ, so the graded value follows the instruction's 'keep the present calculation' rule.",
+    "Hand-traced off-near OFFB (5 km, correction +0.1) as 0.017033 + 1.34 + 0.1 = 1.457033, which matches.",
+    "Hand-traced combined.jsonl tog-near-pair TC (9.434 km, pooled across two recordings, one sub-noise amplitude excluded): 1.158801, which matches.",
+    "Hand-traced shared_station.jsonl shared-null SITA as the pooled mean of three readings, 2.35037. This matches the expected value, and the event is correctly null with two stations; a mean of recording means would give about 2.017.",
+    "Hand-traced shared-two SITB, linear interpolation at 31.048 km: 2.623264, which matches.",
+    "Hand-traced station_mean.jsonl chan-1 CHB, which includes the HHZ-coded channel per 'any three-character channel codes': 2.32298, which matches.",
+    "Checked that the driver byte-identity test (tests/test_outputs.py:287-290) matches instruction.md:1, and that tests/shipped/tools/ml_bulletin.py has the same hash as environment/app/tools/ml_bulletin.py (packet-manifest.json:19,42).",
+    "Checked the execution context: stdlib-only python3 -I -S as nobody, with no network in the agent phase and no third-party packages in either image. No undisclosed dependency restriction is reachable by a contract-valid solution."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Contract: every grading rule traced to a sentence or authoritative artifact",
+      "status": "checked",
+      "reason": "Each graded field and value traces to NPM-4 sections 2-6 or instruction.md. The manual is declared authoritative (instruction.md:1; npm4 lines 5-7).",
+      "evidence": ["instruction.md:1", "environment/app/manual/npm4-local-magnitude.md:56-128", "tests/test_outputs.py:156-173"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract: permitted input domain and needed boundaries",
+      "status": "checked",
+      "reason": "Section 1 defines the domain. The verifier enforces it at load time, so no graded bulletin falls into the instruction's 'left entirely open' class. Margins keep inputs away from the 3x-noise and 10/600 km boundaries, where equality semantics would matter.",
+      "evidence": ["environment/app/manual/npm4-local-magnitude.md:24-47", "instruction.md:3", "tests/test_outputs.py:67-95"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract: values NPM-4 does not govern (off-table correction)",
+      "status": "checked",
+      "reason": "NPM-4 3.2 gives no correction outside 10-600 km. The instruction says to keep today's calculation, fed with NPM-4 quantities, and to add no clamp or guard. The sealed off-table values equal today's log-distance end-segment extrapolation at hypocentral distance, with the other steps following NPM-4.",
+      "evidence": ["environment/app/manual/npm4-local-magnitude.md:88-90", "instruction.md:3", "environment/app/mlnet/attenuation.py:22-38", "tests/expected/off_table.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract: rendered instruction, declared artifacts and verifier paths",
+      "status": "checked",
+      "reason": "The command, driver path, package path and report schema agree across instruction.md, README, the driver and the verifier. There is no broken template text or sentinel.",
+      "evidence": ["instruction.md:1", "environment/app/README.md:5-8", "tests/test_outputs.py:28-31", "tests/test_outputs.py:132-145", "task.toml:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract: examples support the stated rules",
+      "status": "checked",
+      "reason": "The sample bulletin is within section 1 and has no expected report attached, so it cannot contradict the rules. The instruction explicitly says rules hold beyond the sample.",
+      "evidence": ["environment/app/samples/brsn-2026-04-12.json:1-51", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract: representation-specific grading and output format",
+      "status": "checked",
+      "reason": "The verifier parses JSON and compares values, with exact key sets that NPM-4 6.2 mandates. Numbers are accepted as int or float within tolerance, and bool type is required for contributes (6.1: true or false). Unrounded figures are required by NPM-4 0.3.",
+      "evidence": ["tests/test_outputs.py:148-173", "environment/app/manual/npm4-local-magnitude.md:18-20", "environment/app/manual/npm4-local-magnitude.md:123-130"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract: instruction/test asymmetry and hidden arbitrary conventions",
+      "status": "checked",
+      "reason": "No test enforces anything beyond the contract. The pooling of two-sensor sites, the station counted once, and the per-recording rows with a shared station ml all follow from NPM-4 1.2, 4.3, 5.2 and 6.1. Arbitrary channel codes, including Z-suffixed ones, are covered by instruction.md:5.",
+      "evidence": ["environment/app/manual/npm4-local-magnitude.md:33-39", "environment/app/manual/npm4-local-magnitude.md:105-128", "tests/expected/shared_station.jsonl:2", "tests/expected/station_mean.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract: task.toml metadata consistent with the visible contract",
+      "status": "checked",
+      "reason": "The difficulty, solution and verification explanations describe the same rules and scope cases as the instruction and manual. The metadata introduces no extra graded requirement.",
+      "evidence": ["task.toml:13-15"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["NPM-4 2.3 reading filter", "instruction: off-table value keeps present -log A0 calculation"],
+      "case_or_path": "combined.jsonl tog-near TA at 5 km with a sub-noise amplitude: filter applied, log extrapolation kept, giving 0.35703, which matches",
+      "status": "checked",
+      "evidence": ["tests/expected/combined.jsonl:1", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["NPM-4 4.3 station mean over readings", "NPM-4 1.2 two recordings per station / 6.1 one row per recording"],
+      "case_or_path": "shared_station.jsonl shared-null SITA: pooled readings, the same ml on both rows, the station counted once, and the event null",
+      "status": "checked",
+      "evidence": ["tests/expected/shared_station.jsonl:2", "environment/app/manual/npm4-local-magnitude.md:33-39"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["NPM-4 3.1 hypocentral distance", "NPM-4 5.1 contribution by distance"],
+      "case_or_path": "off_table.jsonl off-deep: OFFA at epi 0 and depth 60 contributes, while OFFC at epi 599 becomes 601.998 km and does not",
+      "status": "checked",
+      "evidence": ["tests/expected/off_table.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["two-sensor site", "off-table and sub-noise"],
+      "case_or_path": "combined.jsonl tog-near-pair TC at 9.434 km: two recordings pooled, one sub-noise amplitude excluded, log extrapolation, non-contributing; the event is null with two contributors",
+      "status": "checked",
+      "evidence": ["tests/expected/combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["NPM-4 5.2 median even count", "NPM-4 5.3 minimum three"],
+      "case_or_path": "shared-median: stations SITA, SITB and SITC give an odd count of 3 with median SITA 2.3503667, and the duplicate SITA row is not counted twice",
+      "status": "checked",
+      "evidence": ["tests/expected/shared_station.jsonl:2"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,155 @@
+diff -ruN a/app/src/stockbill/dates.py b/app/src/stockbill/dates.py
+--- a/app/src/stockbill/dates.py	2026-09-27 14:55:24
++++ b/app/src/stockbill/dates.py	2026-09-27 14:55:25
+@@ -20,5 +20,5 @@
+         return day in self.holidays
+ 
+     def is_out_of_hours(self, day):
+-        """A day the warehouse works out of hours."""
+-        return day.weekday() >= 5
++        """A day that is not a working day (2.4): a weekend or a public holiday."""
++        return day.weekday() >= 5 or day in self.holidays
+diff -ruN a/app/src/stockbill/handling.py b/app/src/stockbill/handling.py
+--- a/app/src/stockbill/handling.py	2026-09-27 14:55:24
++++ b/app/src/stockbill/handling.py	2026-09-27 14:55:25
+@@ -14,12 +14,11 @@
+ 
+ def handling(lot, client, calendar, start, end):
+     """The lot's handling over the period, in cents."""
+-    rates = rates_for(client)["handling"]
+     total = 0
+     received = parse(lot["received"])
+     if start <= received <= end:
+-        total += lot["pallets"] * movement_rate(rates, received, calendar, "in")
+-    for when, _pallets in dispatches(lot):
++        total += lot["pallets"] * movement_rate(rates_for(client, received)["handling"], received, calendar, "in")
++    for when, pallets in dispatches(lot):
+         if start <= when <= end:
+-            total += movement_rate(rates, when, calendar, "out")
++            total += pallets * movement_rate(rates_for(client, when)["handling"], when, calendar, "out")
+     return total
+diff -ruN a/app/src/stockbill/lots.py b/app/src/stockbill/lots.py
+--- a/app/src/stockbill/lots.py	2026-09-27 14:55:24
++++ b/app/src/stockbill/lots.py	2026-09-27 14:55:25
+@@ -12,7 +12,7 @@
+     """How many of the lot's pallets are in the warehouse on `day`."""
+     left = lot["pallets"]
+     for when, pallets in dispatches(lot):
+-        if when <= day:
++        if when < day:
+             left -= pallets
+     return left
+ 
+diff -ruN a/app/src/stockbill/rates.py b/app/src/stockbill/rates.py
+--- a/app/src/stockbill/rates.py	2026-09-27 14:55:24
++++ b/app/src/stockbill/rates.py	2026-09-27 14:55:25
+@@ -1,14 +1,29 @@
+ """Rate cards and storage tiers (billing schedule sections 3 and 4.3)."""
+ 
++from .dates import parse
+ 
++
+ def current_revision(client):
+-    """The client's revision in force: the latest one on its rate card."""
++    """The latest revision on the client's rate card."""
+     return client["revisions"][-1]
+ 
+ 
+-def rates_for(client):
+-    """The rates a client is billed on: {"storage": tiers, "handling": {...}}."""
+-    return current_revision(client)["rates"]
++def revision_in_force(client, day):
++    """3.1: the latest revision effective on or before `day`, or None before the earliest one."""
++    found = None
++    for revision in client["revisions"]:
++        if parse(revision["effective"]) <= day:
++            found = revision
++    return found
++
++
++def rates_for(client, day):
++    """The rates in force on `day`: {"storage": tiers, "handling": {...}}."""
++    revision = revision_in_force(client, day)
++    if revision is None:
++        # 3.1 gives no rule here, so the package's own choice stands: the latest revision.
++        revision = current_revision(client)
++    return revision["rates"]
+ 
+ 
+ def tier_rate(number, tiers):
+diff -ruN a/app/src/stockbill/statement.py b/app/src/stockbill/statement.py
+--- a/app/src/stockbill/statement.py	2026-09-27 14:55:24
++++ b/app/src/stockbill/statement.py	2026-09-27 14:55:25
+@@ -6,8 +6,12 @@
+ from .storage import storage
+ 
+ 
+-def discount_on(amount, percent):
++def discount_on(amount, percent, closed):
+     """The client discount on a lot's amount, in cents."""
++    if closed:
++        return (amount * percent + 50) // 100
++    # An open lot's storage is an accrual, not a charge (6.2), so 6.3 gives no rule: the
++    # package's own step stands.
+     return amount * percent // 100
+ 
+ 
+@@ -17,11 +21,12 @@
+     weeks, stored = storage(lot, client, start, end)
+     handled = handling(lot, client, calendar, start, end)
+     amount = stored + handled
+-    discount = discount_on(amount, client["discount_percent"])
++    closed = is_closed(lot)
++    discount = discount_on(amount, client["discount_percent"], closed)
+     return {
+         "id": lot["id"],
+         "client": lot["client"],
+-        "status": "closed" if is_closed(lot) else "open",
++        "status": "closed" if closed else "open",
+         "storage_weeks": weeks,
+         "storage": stored,
+         "handling": handled,
+diff -ruN a/app/src/stockbill/storage.py b/app/src/stockbill/storage.py
+--- a/app/src/stockbill/storage.py	2026-09-27 14:55:24
++++ b/app/src/stockbill/storage.py	2026-09-27 14:55:25
+@@ -1,18 +1,22 @@
+ """Storage weeks (billing schedule section 4)."""
+ 
+-from .dates import ONE_DAY, parse
++from datetime import timedelta
++
++from .dates import parse
+ from .lots import on_hand
+ from .rates import rates_for, tier_rate
+ 
++WEEK = timedelta(days=7)
+ 
++
+ def week_starts(lot, start, end):
+-    """First days of the lot's storage weeks that fall in the period."""
+-    day = max(start, parse(lot["received"]))
++    """First days of the lot's storage weeks (every seventh day from receipt) that fall in the period."""
++    day = parse(lot["received"])
+     out = []
+     while day <= end:
+-        if day.weekday() == 0:
++        if day >= start:
+             out.append(day)
+-        day += ONE_DAY
++        day += WEEK
+     return out
+ 
+ 
+@@ -23,11 +27,10 @@
+ 
+ def storage(lot, client, start, end):
+     """(billed weeks, storage in cents) for the lot over the period."""
+-    rate = tier_rate(week_number(lot, end), rates_for(client)["storage"])
+     weeks, total = 0, 0
+     for first in week_starts(lot, start, end):
+         pallets = on_hand(lot, first)
+         if pallets > 0:
+             weeks += 1
+-            total += pallets * rate
++            total += pallets * tier_rate(week_number(lot, first), rates_for(client, first)["storage"])
+     return weeks, total

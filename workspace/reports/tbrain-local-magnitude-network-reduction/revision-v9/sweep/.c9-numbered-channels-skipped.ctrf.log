@@ -1,0 +1,721 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 19 items
+
+../../tests/test_outputs.py ..FFFFF.FFFFFFFFF..                          [100%]
+
+=================================== FAILURES ===================================
+___ test_rule_2_3_station_mean_leaves_out_amplitudes_under_three_times_noise ___
+
+    def test_rule_2_3_station_mean_leaves_out_amplitudes_under_three_times_noise():
+        """Only amplitudes at least three times their channel's noise enter a station's mean, on either side close to the line."""
+>       check_file("readings.jsonl")
+
+/tests/test_outputs.py:192: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 51.9, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}, {...}], 'code': 'DFZV', 'epi_km....01}, {'code': 'P', 'correction': 0.57}, {'code': '70019', 'correction': 0.0}, {'code': 'W', 'correction': 0.03}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+____________________ test_rule_3_1_distance_is_hypocentral _____________________
+
+    def test_rule_3_1_distance_is_hypocentral():
+        """The distance reported, corrected for and tested against the table is the hypocentral distance."""
+>       check_file("hypocentral.jsonl")
+
+/tests/test_outputs.py:197: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 8.3, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}], 'code': 'LKG5', 'epi_km': 8.0},..., {'code': '6X', 'correction': 0.6}, {'code': 'XCMSM', 'correction': 0.96}, {'code': 'LKG5', 'correction': 0.15}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+___________ test_rule_3_3_correction_linear_between_listed_distances ___________
+
+    def test_rule_3_3_correction_linear_between_listed_distances():
+        """Between two listed distances the correction is interpolated linearly in distance."""
+>       check_file("interpolation.jsonl")
+
+/tests/test_outputs.py:202: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 0, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}], 'code': '4', 'epi_km': 261.6}, {'...code': '3OV', 'correction': 0.74}, {'code': 'J3H57', 'correction': 0.53}, {'code': '0ISFA', 'correction': -0.91}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+________________ test_rule_3_3_listed_distances_and_table_ends _________________
+
+    def test_rule_3_3_listed_distances_and_table_ends():
+        """At listed distances the correction is the listed value; stations just inside either end of the table contribute."""
+>       check_file("table_ends.jsonl")
+
+/tests/test_outputs.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 0.0, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}], 'code': 'F', 'epi_km': 10.01}, ...2}, {'code': 'F', 'correction': 0.73}, {'code': 'T', 'correction': -0.54}, {'code': '4UAQ7', 'correction': 0.91}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+__________ test_station_beyond_the_table_keeps_the_shipped_correction __________
+
+    def test_station_beyond_the_table_keeps_the_shipped_correction():
+        """A station nearer than 10 km or beyond 600 km keeps today's correction calculation and does not contribute."""
+>       check_file("off_table.jsonl")
+
+/tests/test_outputs.py:212: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 0.0, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}], 'code': 'J7D', 'epi_km': 32.2},...code': 'NLPF2', 'correction': -0.45}, {'code': 'YPRI', 'correction': -0.26}, {'code': 'KZ', 'correction': -0.35}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+________ test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes _________
+
+    def test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes():
+        """A station's magnitude is the mean of its readings' channel magnitudes, whatever their channel codes, not its largest channel."""
+>       check_file("station_mean.jsonl")
+
+/tests/test_outputs.py:222: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 54.7, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}, {...}], 'code': 'ZGV4', 'epi_km... {'code': 'FV5', 'correction': 0.7}, {'code': '601R', 'correction': -0.61}, {'code': 'UVK3', 'correction': 0.08}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+_________________ test_two_sensors_of_one_site_are_one_station _________________
+
+    def test_two_sensors_of_one_site_are_one_station():
+        """A station with two recordings pools their readings and counts once in the median and the three-station minimum."""
+>       check_file("shared_station.jsonl")
+
+/tests/test_outputs.py:227: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 29.0, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}, {...}], 'code': 'N', 'epi_km': ... {'code': 'N', 'correction': -0.42}, {'code': 'UJD', 'correction': -0.17}, {'code': 'FVK6F', 'correction': 0.36}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+__________ test_rule_5_2_network_magnitude_is_median_of_contributors ___________
+
+    def test_rule_5_2_network_magnitude_is_median_of_contributors():
+        """With an odd number of contributing stations the network magnitude is the middle one."""
+>       check_file("median.jsonl")
+
+/tests/test_outputs.py:232: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 40.7, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}, {...}], 'code': '0', 'epi_km': ...'code': 'MP0', 'correction': 0.44}, {'code': 'MZZ7', 'correction': -0.78}, {'code': '9C3CS', 'correction': 0.21}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+______________ test_rule_5_2_even_number_takes_mean_of_middle_two ______________
+
+    def test_rule_5_2_even_number_takes_mean_of_middle_two():
+        """With an even number of contributing stations the network magnitude is the mean of the two middle ones."""
+>       check_file("median_even.jsonl")
+
+/tests/test_outputs.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 4.9, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}], 'code': 'I', 'epi_km': 24.2}, {... {'code': '2', 'correction': -0.93}, {'code': '21Q1A', 'correction': 0.43}, {'code': '8KGS', 'correction': 0.17}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+_____ test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude _____
+
+    def test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude():
+        """Events with one or two contributing stations report a null network magnitude."""
+>       check_file("fewer_than_three.jsonl")
+
+/tests/test_outputs.py:242: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 58.0, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}, {...}], 'code': 'RY', 'epi_km':...6}, {'code': 'NLC', 'correction': 0.09}, {'code': 'Y', 'correction': -0.94}, {'code': 'RY', 'correction': -0.79}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+__________ test_rule_5_3_three_contributors_give_a_network_magnitude ___________
+
+    def test_rule_5_3_three_contributors_give_a_network_magnitude():
+        """Events with exactly three contributing stations get a network magnitude."""
+>       check_file("three.jsonl")
+
+/tests/test_outputs.py:247: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 21.9, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}], 'code': '0F', 'epi_km': 18.1},...'code': '3EU', 'correction': -0.29}, {'code': 'X4', 'correction': -0.56}, {'code': 'GB2B7', 'correction': -0.28}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """Fifty events, two hundred stations, forty recordings, and every amplitude, noise, depth and correction limit."""
+        rows = load("limits.jsonl")
+        bulletin = rows[0]["bulletin"]
+        assert len(bulletin["events"]) == 50 and len(bulletin["stations"]) == 200
+        assert max(len(e["recordings"]) for e in bulletin["events"]) == 40
+>       check_file("limits.jsonl")
+
+/tests/test_outputs.py:256: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 60.0, 'id': 'LLLLLLLLLLLLLLLLLLLL', 'recordings': [{'amplitudes': [{...}, {...}], 'code': 'K2...}, {'code': 'Z', 'correction': -0.13}, {'code': '3', 'correction': 0.26}, {'code': 'K8UMC', 'correction': -0.77}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+__________________ test_report_keeps_file_and_recording_order __________________
+
+    def test_report_keeps_file_and_recording_order():
+        """Events keep file order and station rows keep recording order, whatever the ids and codes, at any length they may have."""
+>       check_file("order.jsonl")
+
+/tests/test_outputs.py:261: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 30.0, 'id': 'v77vy7uvv97vu64', 'recordings': [{'amplitudes': [{...}, {...}], 'code': '9JK', '... {'code': 'K', 'correction': 0.26}, {'code': '5Z2O', 'correction': -0.01}, {'code': '11VBY', 'correction': 0.95}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+___________________________ test_generated_bulletins ___________________________
+
+    def test_generated_bulletins():
+        """Generated bulletins across the envelope: depths, distances, one or two channels, corrections, event sizes."""
+>       check_file("generated.jsonl")
+
+/tests/test_outputs.py:266: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:177: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bulletin = {'events': [{'depth_km': 24.2, 'id': 'ev000001', 'recordings': [{'amplitudes': [{...}], 'code': 'B87GA', 'epi_km': 68....{'code': '6NZ07', 'correction': 0.04}, {'code': 'H', 'correction': -0.11}, {'code': 'PERG', 'correction': -0.12}, ...]}
+
+    def reduce(bulletin):
+        """Run the documented command on one bulletin as the unprivileged user; return its parsed stdout."""
+        stage, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "bulletin.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(bulletin, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        code, out, err = run_unprivileged(["python3", "-I", "-S", str(DELIVERED_DRIVER), path], work, remaining)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/ml_bulletin.py", line 24, in <module>
+E             sys.exit(main(sys.argv))
+E                      ~~~~^^^^^^^^^^
+E           File "/app/tools/ml_bulletin.py", line 18, in main
+E             json.dump(reduce_bulletin(bulletin), sys.stdout)
+E                       ~~~~~~~~~~~~~~~^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 39, in reduce_bulletin
+E             return {"events": [reduce_event(event, corrections) for event in bulletin["events"]]}
+E                                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/bulletin.py", line 28, in reduce_event
+E             "ml": station_magnitude(items, distance_km, corrections[code]),
+E                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../mlnet/station.py", line 27, in station_magnitude
+E             return sum(magnitudes) / len(magnitudes)
+E                    ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+E         ZeroDivisionError: division by zero
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:143: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_2_2_record_amplitude_uses_magnification_2080
+PASSED ../../tests/test_outputs.py::test_rule_2_2_record_amplitude_is_half_peak_to_peak
+PASSED ../../tests/test_outputs.py::test_rule_4_2_station_correction_is_added
+PASSED ../../tests/test_outputs.py::test_sandbox_cannot_read_ground_truth
+PASSED ../../tests/test_outputs.py::test_submitted_driver_matches_ours
+FAILED ../../tests/test_outputs.py::test_rule_2_3_station_mean_leaves_out_amplitudes_under_three_times_noise
+FAILED ../../tests/test_outputs.py::test_rule_3_1_distance_is_hypocentral - A...
+FAILED ../../tests/test_outputs.py::test_rule_3_3_correction_linear_between_listed_distances
+FAILED ../../tests/test_outputs.py::test_rule_3_3_listed_distances_and_table_ends
+FAILED ../../tests/test_outputs.py::test_station_beyond_the_table_keeps_the_shipped_correction
+FAILED ../../tests/test_outputs.py::test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes
+FAILED ../../tests/test_outputs.py::test_two_sensors_of_one_site_are_one_station
+FAILED ../../tests/test_outputs.py::test_rule_5_2_network_magnitude_is_median_of_contributors
+FAILED ../../tests/test_outputs.py::test_rule_5_2_even_number_takes_mean_of_middle_two
+FAILED ../../tests/test_outputs.py::test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude
+FAILED ../../tests/test_outputs.py::test_rule_5_3_three_contributors_give_a_network_magnitude
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+FAILED ../../tests/test_outputs.py::test_report_keeps_file_and_recording_order
+FAILED ../../tests/test_outputs.py::test_generated_bulletins - AssertionError...
+========================= 14 failed, 5 passed in 0.70s =========================

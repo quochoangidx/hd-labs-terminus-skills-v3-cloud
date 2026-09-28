@@ -1,0 +1,119 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-B",
+  "snapshot_sha256": "9157208d95100765d2c5d6735d478c4fc366a4c2313e87acdfd3915049193a5d",
+  "severity": "None",
+  "summary": "No reachable path lets candidate-controlled bytes read, replace, or influence the verifier's trusted inputs or reward. The verifier runs in its own image. It parses the four layout files only as size-, depth-, digit- and duplicate-key-limited JSON data, and checks them with its own copies of check_layout.py, the editions and targets.json from /tests. No candidate code runs during grading, and test.sh derives the reward only from the pytest exit status. The environment copies of the targets and editions are candidate-visible by design. They are the published thresholds and inputs, not answers, and no reference layout is shipped.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/planner/plan_edition.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_layout.py",
+      "tests/targets.json",
+      "tests/editions/mon.json",
+      "tests/editions/wed.json",
+      "tests/editions/fri.json",
+      "tests/editions/sat.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked that the packet manifest matches the Glob listing: 23 files, all accounted for. The environment copies (environment/app/tools/check_layout.py, environment/app/editions/{mon,wed,fri,sat,targets}.json) have the same sha256 as their tests/ counterparts (packet-manifest.json:10-25). Reading the tests/ copies in full therefore covered their bytes.",
+    "Traced the verifier's inputs. test_outputs.py:15-26 loads check_layout, targets.json and editions from HERE=/tests, not from /app. Only the layout path comes from LAYOUTS=/app/layouts (test_outputs.py:19,30). The docstring states that no code from /app runs (test_outputs.py:3-5).",
+    "Traced the verifier image. tests/Dockerfile:1-6 builds a separate image that installs pytest and copies tests/ to /tests. The environment image excludes tests/ and solution/ (environment/.dockerignore:11-12) and copies only app/ (environment/Dockerfile:6).",
+    "Traced the reward channel. test.sh:4-5 pre-writes 0, runs pytest with -I in a fresh mktemp cwd with the cacheprovider disabled (test.sh:13-15), and writes 1 only on rc 0 (test.sh:16-21). No candidate process runs in the verifier, so candidate stdout or an early exit cannot impersonate a verdict.",
+    "Checked how a layout is parsed. check_layout.load_layout (tests/check_layout.py:59-73) reads bytes with a size cap. It rejects NaN/Infinity, duplicate keys, oversize numbers and excessive depth, and returns plain JSON values. Nothing is evaluated, imported or executed.",
+    "Checked symlinks and path traversal. The only candidate-influenced reads are /app/layouts/<fixed edition>.json. Even if a symlink survived staging, the only readable targets are /tests files (test code, editions, targets) and system files. None of them is an object with a 'placements' object that evaluate() would accept at or below target (tests/check_layout.py:78-79), so following a symlink cannot yield credit.",
+    "Checked for disclosed answers. The environment ships the greedy planner (plan_edition.py), the checker, the editions, targets.json and the rules. targets.json holds only thresholds (tests/targets.json:1-6), and the instruction discloses them on purpose (instruction.md:1). No optimal layout or reference solver is present in environment/.",
+    "Checked environment-variable and argument leakage. AD_LAYOUTS (test_outputs.py:19) is read in the verifier process, which the candidate does not control. The test names and paths carry no answer-bearing information that candidate code could see, because no candidate code runs."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Keep expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "The verifier executes no candidate code. The trusted checker, editions and targets are loaded from /tests in a separate image. The candidate-visible copies are byte-identical inputs and thresholds, not answers, and no reference layout or optimiser is shipped.",
+      "evidence": ["tests/test_outputs.py:3-5", "tests/test_outputs.py:15-26", "tests/Dockerfile:5", "environment/.dockerignore:11-12", "packet-manifest.json:10-25"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths: symlink and path-traversal escapes",
+      "status": "checked",
+      "reason": "The layout path uses a fixed edition name under /app/layouts. A symlink to any known verifier-side file yields content that fails the 'placements' object check or the cost check, so there is no self-comparison channel as in example C-1. Expected values are not read from anything at a candidate path.",
+      "evidence": ["tests/test_outputs.py:29-36", "tests/check_layout.py:59-79"],
+      "finding_ids": []
+    },
+    {
+      "category": "Expected values computed independently of the submitted artifact",
+      "status": "checked",
+      "reason": "The cost is recomputed from the verifier's own edition data and compared with the verifier's own targets.json. The layout supplies no checksum or claimed cost that the verifier trusts. Extra keys are ignored.",
+      "evidence": ["tests/test_outputs.py:39-41", "tests/check_layout.py:76-152", "environment/app/docs/makeup-rules.md:61-65"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes exposed through filenames, arguments, working directories or environment variables",
+      "status": "checked",
+      "reason": "No candidate process is invoked, so no argv, cwd or env is exposed to candidate code. The targets are intentionally public thresholds.",
+      "evidence": ["tests/test.sh:13-15", "tests/test_outputs.py:19", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading results kept in a trusted channel",
+      "status": "checked",
+      "reason": "reward.txt is written only by test.sh from the pytest return code, after a default of 0. The CTRF output goes to /logs/verifier, a directory the verifier creates. pytest -I and a fresh cwd prevent candidate-placed conftest or path injection.",
+      "evidence": ["tests/test.sh:4-5", "tests/test.sh:13-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Test the access boundary from the candidate's execution context; confirm another test defeats a suspected shortcut",
+      "status": "checked",
+      "reason": "The candidate context is the agent container, which has only /app. The files there that matter to grading are the verifier's duplicates, and editing them has no effect because the verifier uses its /tests copies. No shortcut was identified that needs another test to defeat it.",
+      "evidence": ["environment/Dockerfile:5-7", "tests/test_outputs.py:15-26"],
+      "finding_ids": []
+    },
+    {
+      "category": "Setuid, privilege drop, and persisted or partially reset state (examples C-3, C-7, C-9)",
+      "status": "not_applicable",
+      "reason": "The verifier compiles, installs and runs no candidate binary, and there is no multi-phase trusted state.",
+      "evidence": ["tests/test_outputs.py:29-41", "tests/test.sh:15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Oracle or reference executable reachable by candidate (example C-8)",
+      "status": "checked",
+      "reason": "The environment contains only the greedy planner described as flawed (instruction.md:1) and the checker. Neither produces a layout that meets the target by construction, and no reference solver is present.",
+      "evidence": ["environment/app/planner/plan_edition.py:1-65", "environment/app/README.md:3-7"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["Candidate may write any content to /app/layouts (instruction.md:3)", "Verifier trusts only its own /tests copies of the rules, editions and targets"],
+      "case_or_path": "The candidate edits /app/editions/targets.json or /app/tools/check_layout.py, then submits layouts. The verifier ignores /app copies (test_outputs.py:15-26), so the edits cannot raise targets or weaken checks.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:15-26", "packet-manifest.json:10-25"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["Layout file parsed as JSON data", "Rewards derived from pytest exit status"],
+      "case_or_path": "A malformed, oversized, deep or symlinked layout can at most raise a LayoutError, another exception or a hang. Each of these fails the candidate's own test and cannot set reward to 1.",
+      "status": "checked",
+      "evidence": ["tests/check_layout.py:59-73", "tests/test.sh:16-21"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

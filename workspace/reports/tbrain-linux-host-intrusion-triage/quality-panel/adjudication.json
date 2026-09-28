@@ -1,0 +1,98 @@
+{
+ "stage": "discovery (creation mode, builder_certified); one consolidated remediation batch applied on precheck snapshot fb804b041c1f74f893920b8d338d7493b2e52baa10f6240e27684b761e2795c5",
+ "packet_manifest": "../quality-panel-packets/fa3d5d1ee0370a144e73521d4f98adcc12f305c4fc6402caf6137800aa961dbf/4c0892743df059b6166221d6db6f617e85f6b0812c8fac412ea8bed85d672d0c/packet-manifest.json",
+ "reviewers_dir": "discovery",
+ "axes": {
+  "correct_reference_solution": {
+   "verdict": "Minor",
+   "reviewers": [
+    "discovery/correct_reference_solution-CRS-A.json",
+    "discovery/correct_reference_solution-CRS-B.json"
+   ],
+   "findings": [
+    {
+     "id": "CRS-1 (A and B)",
+     "disposition": "retained",
+     "root_cause": "R1 clock direction: rule 1 allows a host clock that ran fast; the reference only handled d > 0",
+     "repair": "solution/triage.py: clock error of either sign; the step is the first collector-correct sshd line; auth-log lines before it in file order and other host-clock readings below its host time are corrected"
+    }
+   ]
+  },
+  "sound_verifier": {
+   "verdict": "Minor",
+   "reviewers": [
+    "discovery/sound_verifier-SV-A.json",
+    "discovery/sound_verifier-SV-B.json"
+   ],
+   "findings": [
+    {
+     "id": "SV-2 (B) / SV-A Unsure",
+     "disposition": "retained",
+     "root_cause": "R1: generator emitted only forward steps",
+     "repair": "model.py backward steps (own RNG stream; case-1 unchanged); within_limits keeps every graded host-clock record, auth-log lines included, out of a backward step's overlap of host times, so each record's side follows from its host time; backward cases sealed in clock, broad, edge_lo, key, brute, tz, rootlogin; wrong path always_add_correction rejected on the clock test; a host-time split at the step is a contract-valid alternative (scores 1)",
+     "removed_trap": "an interim version placed the intruder's first sudo inside the overlap (a new trap from a remediation batch, both cycle-2 runs missed it); removed by orchestrator decision"
+    },
+    {
+     "id": "SV-1 (B)",
+     "disposition": "narrowed",
+     "severity_after": "Advisory",
+     "downgrade_reason": "rule 6 counts files the intruder created or changed; with no intruder session open no intruder action exists, so no graded expectation depends on the case; no change"
+    },
+    {
+     "id": "final-review F1",
+     "disposition": "retained",
+     "repair": "rootlogin family sealed (root reached by a root password login, no sudo); wrong path drop_root_login_branch rejected on test_rule_5_escalation_by_a_root_login_without_sudo"
+    }
+   ]
+  },
+  "coherent_contract": {
+   "verdict": "None",
+   "source": "gate",
+   "gate_receipts": [
+    "../contract-review-adjudication.md",
+    "../final-review.md"
+   ]
+  },
+  "protected_ground_truth": {
+   "verdict": "None",
+   "source": "gate",
+   "gate_receipts": [
+    "../preflight.json",
+    "../wrong-paths/harness-bypass.json"
+   ]
+  },
+  "deterministic_execution": {
+   "verdict": "None",
+   "source": "gate",
+   "gate_receipts": [
+    "../preflight.json"
+   ]
+  }
+ },
+ "clearance": {
+  "snapshot_precheck": "fb804b041c1f74f893920b8d338d7493b2e52baa10f6240e27684b761e2795c5",
+  "result": "blocking",
+  "disposition": "rescope_required",
+  "reviewers": {
+   "correct_reference_solution": [
+    "clearance/correct_reference_solution-CRS-C.json (Minor: backward steps across a month end, collector-settled login in the overlap, rotation removing every pre-step auth line)",
+    "CRS-D (None)"
+   ],
+   "sound_verifier": [
+    "SV-C (Advisory)",
+    "SV-D (None)"
+   ]
+  }
+ },
+ "rescope_E2": {
+  "authority": "orchestrator batch authority, one rescope",
+  "snapshot_precheck": "630a37884e0850928296bfe8e37341232d86bbb56820d480609abf3752e432b2",
+  "removed_obligations": [
+   "BACKWARD_STEP (former_anchor: case-guide rule 1 'may have been wrong by a fixed amount')"
+  ],
+  "added_guarantee": "case-guide rule 1: the auth logs always keep at least one line from before the step that the collector also holds (model.within_limits)",
+  "environment_change": "environment/app/docs/case-guide.md rule 1 only",
+  "status": "awaiting a fresh skeleton pair and a new discovery panel on the rescoped contract",
+  "rule6_clarification": "cycle-3 pair discarded as ambiguity (run_2 read 'during the intrusion' as initial access to collection; SV-1/SV-D same point): rules 4, 6 and 7 now tie accounts to intruder logins and persistence/history to open intruder sessions; reference and seals unchanged"
+ }
+}

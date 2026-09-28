@@ -1,0 +1,27 @@
+{
+ "task_slug": "tbrain-bod5-dilution-data-reduction",
+ "scorer": "builder self-score after redesign r1",
+ "pre_mortem": "The solver reads SOP WQ-14, fixes the two thresholds, the bottle BOD formula, the less-than bottle, the blank maximum, the RPD denominator and the rounding, writes a reference from the SOP and fuzzes it against the package. All eight departures are self-verifiable. Its reference must decide on its own what the seed factor is when no seed control is usable (3.2 is a mean over an empty set) and what RPD a duplicate pair has when one side is only a bound (6.1 uses measured BODs, 5.1 gives a bound none). A reference that returns 0.0 / raises / averages every control, or applies the new RPD formula to reported values, pushes the package to the over-repair under fuzzing. The code shows both kept expressions (the pooled loop; the parent-denominator line), but D3 and D7 make the solver rewrite exactly those lines.",
+ "scores": {
+  "reference_unreachable": 2,
+  "authority_incomplete_for_grading": 4,
+  "hidden_state_not_closed_form": 1,
+  "restraint_traps": 3,
+  "fuzz_blind_spot": 3
+ },
+ "score_notes": {
+  "restraint_traps": "two traps of the held shape (inside an expression a departure rewrites; operand bound by a separate defined term; keeping needs added code); both follow one reading policy, so one careful pass may disarm both",
+  "fuzz_blind_spot": "a solver's random batches rarely have every seed control unusable; bound duplicates are commoner",
+  "authority_incomplete_for_grading": "both kept figures come from the shipped code, not the SOP"
+ },
+ "self_verification_resistance": 2,
+ "prediction": "unsure (reviewer r1 predicted collapse on the old design)",
+ "confidence": "low",
+ "decisive_reason": "One silent trap (T2) plus one governed hop (T1) that punishes the opposite reading policy; T1 is plainly written, so resistance rests mostly on T2 and on the two policies conflicting.",
+ "icpms_abstract_mapping": {
+  "traps_behind_defined_term": "icpms: result (value at or above mdl). Here: usable (2.4) for T1 via 3.2, and measured BOD (5.1, itself built on usable) for T2 via 6.1",
+  "value_level_silence_sentence": "instruction: 'Where the SOP leaves a figure without a definition for a particular batch, that figure is still reported, worked out the way the package works it out today from the quantities the SOP does define'; no authority sentence names a case",
+  "non_detect_like_case_kept_inside_rebuilt_aggregate": "T2 is the closest analogue of the icpms spike/parent non-detect (a sample exists with a numeric value but no measured BOD; the RPD expression is rebuilt by D7). T1 is the analogue of icpms 'no blank result' (mean over an empty defined set; the seed-factor expression is rebuilt by D3)",
+  "contrary_expert_instinct": "both: a reviewer would reject a batch with no usable seed control and would not compute RPD against a bound"
+ }
+}

@@ -1,0 +1,119 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-B",
+  "snapshot_sha256": "f9e2a843946feb803bea831bc197043b8ff4892295c4cbe2c5db018ff2b20e91",
+  "severity": "Unsure",
+  "summary": "No reference defect found. solve.sh copies four precomputed plans and runs the shipped checker. A full hand trace of the day-1 plan found it feasible under every rule in stand-rules.md. Two reward-relevant properties cannot be settled by static reading without execution: whether each plan's cost is at most its target (the cost sums over hundreds of transfers per day), and whether the day-2 to day-4 plans are feasible. solve.sh never compares cost with the target.",
+  "input_completeness": {
+    "status": "incomplete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/stand-rules.md",
+      "environment/app/tools/check_plan.py",
+      "environment/app/planner/plan_day.py",
+      "environment/app/days/targets.json",
+      "environment/app/days/day-1.json (lines 1-3256: stands, walk matrix, wingtip pairs, all 180 turns, first transfers)",
+      "solution/solve.sh",
+      "solution/plans/day-1.json",
+      "solution/plans/day-2.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/days/day-1.json:3257-6485 (remaining transfers; needed only for a cost recomputation)",
+      "environment/app/days/day-2.json (read only through a grep of header fields and wingtip_pairs at 2193-2209)",
+      "environment/app/days/day-3.json (read only through a grep of header fields and wingtip_pairs at 3233-3249)",
+      "environment/app/days/day-4.json (read only through a grep of header fields and wingtip_pairs at 4608-4624)",
+      "solution/plans/day-3.json (not read)",
+      "solution/plans/day-4.json (not read)"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read solve.sh: it creates /app/plans, copies /solution/plans/*.json and runs check_plan.py on each day under set -euo pipefail. An invalid plan makes check_plan exit 1 and aborts the script. There is no comparison of cost with targets.json (solution/solve.sh:13-18).",
+    "Confirmed that solve.sh writes the four required paths /app/plans/day-{1..4}.json named in instruction.md:1 (solution/solve.sh:14-15).",
+    "Hand-traced every stand of solution/plans/day-1.json against day-1 turns (environment/app/days/day-1.json:1286-2907) and stands (day-1.json:5-254). Checked size fit, international rule, 15-minute buffer between consecutive turns on each stand, and the C01/C02 wingtip pair (day-1.json:1280-1285). No violation found. Tight boundaries hold with equality: A03 T154->T177 (1283+15=1298), B05 T063->T079 (741+15=756), B08 T028->T041 (518+15=533), C01 T055->T075 (724+15=739), C05 T080->T091 (841+15=856).",
+    "Counted day-1 placements: 24 on A, 75 on B, 60 on C and 21 on R, 180 in total, equal to the 180 turns T001-T180. No repeated id was seen during the trace.",
+    "Checked day-1 wingtip C01/C02 size-3 overlaps: C01 holds T018, T055, T075 and T178; C02 holds T103 and T134. None of them overlap in time.",
+    "Checked that the plan JSON format ({\"stands\": {...}} with string ids, and stands such as A06/A08/A09 left empty) matches stand-rules.md:61-74 and check_plan.py load_plan/evaluate (check_plan.py:59-96).",
+    "Read the day-2 plan structure: it uses stands A01-A12, B01-B12, C01-C10 and R01-R08. I did not cross-check it against the day-2 turns."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "unresolved",
+      "reason": "The day-1 feasibility trace is complete, including equality-buffer boundaries and the wingtip pair. I did not trace feasibility for day-2, day-3 and day-4, which have more stands and several wingtip pairs, including chained ones such as C01-C02-C03-C04.",
+      "evidence": ["solution/plans/day-1.json:1-243", "environment/app/days/day-1.json:1286-2907", "environment/app/days/day-2.json:2193-2209", "environment/app/days/day-4.json:4608-4624"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "Output paths /app/plans/<day>.json match instruction.md. The plan files are plain JSON objects with a stands map of string-id lists, well under the size, depth and digit limits in stand-rules.md.",
+      "evidence": ["instruction.md:1", "solution/solve.sh:14-15", "environment/app/docs/stand-rules.md:61-74", "solution/plans/day-1.json:1-243"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check every branch that updates state (deletion, expiry, replacement, identifier reuse)",
+      "status": "not_applicable",
+      "reason": "The reference ships static plan files and copies them. It has no stateful update logic. I checked identifier uniqueness through the day-1 placement count.",
+      "evidence": ["solution/solve.sh:15"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or durability claim.",
+      "evidence": ["instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Cost no more than the day's target (core graded requirement)",
+      "status": "unresolved",
+      "reason": "Checking this means summing bus charges and passengers x walk_metres over every transfer (several hundred per day) for four days. That cannot be done reliably by static reading. solve.sh does not assert cost <= target. The only evidence is the comment saying each target is the cost of the cheapest plan seen (solve.sh:11-12).",
+      "evidence": ["instruction.md:1", "environment/app/days/targets.json:1-6", "solution/solve.sh:11-18", "environment/app/docs/stand-rules.md:46-59"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["buffer rule 3", "wingtip rule 4 (no buffer)"],
+      "case_or_path": "Day-1 C01 T075 (size 3, 739-924) against C02 T103 (size 3, 936-1056): no temporal overlap, so there is no wingtip clash. On C01, T055 departs at 724 and T075 arrives at 739, which meets the buffer exactly.",
+      "status": "checked",
+      "evidence": ["solution/plans/day-1.json:135-167", "environment/app/days/day-1.json:1280-1285"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["international rule 2", "size rule 1"],
+      "case_or_path": "Day-1 international size-3 turns sit only on C01/C02/C04/C06 (size 3, international) or R stands. International size-2 turns sit on C03/C05/C07 (size 2, international). Domestic turns on C and R stands are allowed.",
+      "status": "checked",
+      "evidence": ["solution/plans/day-1.json:135-241", "environment/app/days/day-1.json:150-253"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["wingtip rule 4", "chained wingtip pairs"],
+      "case_or_path": "Day-2 pairs B09-B10, C01-C02, C02-C03, C03-C04 and so on, and day-3/day-4 chains. I did not trace these.",
+      "status": "unresolved",
+      "evidence": ["environment/app/days/day-2.json:2193-2209", "environment/app/days/day-3.json:3233-3249", "environment/app/days/day-4.json:4608-4624"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "Each shipped plan's cost may exceed its target in targets.json. That would make the reference fail the core requirement, and solve.sh would not detect it.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "The output of python3 /app/tools/check_plan.py for each day, compared with targets.json (day-1 7241380, day-2 9017700, day-3 10098740, day-4 15505590)."
+    },
+    {
+      "concern": "Feasibility of the day-2, day-3 and day-4 plans (size, international, buffer, chained wingtip pairs, complete placement) was not statically traced.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "A full stand-by-stand trace of solution/plans/day-{2,3,4}.json against their day files, or a check_plan.py receipt showing 'valid' for each."
+    }
+  ],
+  "uncertainty": "The core reward condition (valid plan with cost <= target for all four days) depends on arithmetic over thousands of data values, which static reading cannot confirm. Day-1 feasibility is confirmed by a hand trace. Day-2 to day-4 feasibility and every cost-versus-target comparison remain unverified. A check_plan.py run on the four shipped plans, compared with targets.json, would resolve this."
+}

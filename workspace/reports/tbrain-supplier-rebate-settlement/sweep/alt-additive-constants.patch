@@ -1,0 +1,92 @@
+diff --git a/app/src/rebate/growth.py b/app/src/rebate/growth.py
+--- a/app/src/rebate/growth.py
++++ b/app/src/rebate/growth.py
+@@ -12,4 +12,4 @@
+         return 0
+     if net * GROWTH_TARGET[1] < prior * GROWTH_TARGET[0]:
+         return 0
+-    return half_up(net * GROWTH_SHARE_BP, 10000)
++    return half_up((net - prior) * GROWTH_SHARE_BP, 10000)
+diff --git a/app/src/rebate/ledger.py b/app/src/rebate/ledger.py
+--- a/app/src/rebate/ledger.py
++++ b/app/src/rebate/ledger.py
+@@ -1,6 +1,13 @@
+ """Purchase lines from the ledger export and the purchases of a quarter."""
+ 
++import datetime
++
+ from .dates import in_quarter, parse_day
++
++# A carton shipment (12 units or more) travels by road freight and is received on the fourth
++# day after its invoice date; it counts toward the quarter it is received in.
++CARTON_UNITS = 12
++TRANSIT = datetime.timedelta(days=4)
+ 
+ 
+ def dated_lines(lines):
+@@ -12,6 +19,8 @@
+     dated = []
+     for invoiced, units, unit_cents in lines:
+         day = parse_day(invoiced)
++        if units >= CARTON_UNITS:
++            day += TRANSIT
+         dated.append((day, units, units * unit_cents))
+     return dated
+ 
+diff --git a/app/src/rebate/returns.py b/app/src/rebate/returns.py
+--- a/app/src/rebate/returns.py
++++ b/app/src/rebate/returns.py
+@@ -9,5 +9,5 @@
+     credit = 0
+     for taken, units, unit_cents in returns:
+         if in_quarter(parse_day(taken), quarter):
+-            credit += units * (unit_cents - figure("return_charge"))
++            credit += units * (unit_cents - 40)
+     return credit
+diff --git a/app/src/rebate/settle.py b/app/src/rebate/settle.py
+--- a/app/src/rebate/settle.py
++++ b/app/src/rebate/settle.py
+@@ -5,6 +5,6 @@
+ 
+ def settle(total):
+     """(paid, carried) in cents for a settlement total."""
+-    if total < figure("settlement_minimum"):
++    if total < 25000:
+         return 0, total
+     return total, 0
+diff --git a/app/src/rebate/statement.py b/app/src/rebate/statement.py
+--- a/app/src/rebate/statement.py
++++ b/app/src/rebate/statement.py
+@@ -14,7 +14,7 @@
+     purchases = quarter_purchases(account["purchases"], quarter)
+     returned = returns_credit(account["returns"], quarter)
+     net = purchases - returned
+-    bp = tier_rate(purchases, tiers)
++    bp = tier_rate(net, tiers)
+     rebate = volume_rebate(net, bp)
+     growth = growth_bonus(net, account["prior"])
+     protection = protection_credit(account["notices"], quarter)
+diff --git a/app/src/rebate/tiers.py b/app/src/rebate/tiers.py
+--- a/app/src/rebate/tiers.py
++++ b/app/src/rebate/tiers.py
+@@ -1,4 +1,6 @@
+ """The volume tier table and the volume rebate."""
++
++from .money import half_up
+ 
+ 
+ def load_tiers(rows):
+@@ -10,11 +12,11 @@
+     """The rate in basis points of the tier an amount of purchases reaches."""
+     rate = 0
+     for threshold, bp in tiers:
+-        if amount > threshold:
++        if amount >= threshold:
+             rate = bp
+     return rate
+ 
+ 
+ def volume_rebate(net, bp):
+     """The volume rebate in cents on net purchases at a rate in basis points."""
+-    return net * bp // 10000
++    return half_up(net * bp, 10000)

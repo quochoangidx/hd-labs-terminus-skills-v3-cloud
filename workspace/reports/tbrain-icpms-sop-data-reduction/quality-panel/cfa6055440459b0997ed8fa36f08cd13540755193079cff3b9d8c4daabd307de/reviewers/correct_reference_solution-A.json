@@ -1,0 +1,126 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "cfa6055440459b0997ed8fa36f08cd13540755193079cff3b9d8c4daabd307de",
+  "severity": "None",
+  "summary": "The patched package (solve.sh applying fix.patch) implements every SOP TM-07 rule (fitted-intercept OLS, blank mean of results only, (reading-level)*dilution, flags on corrected reading with exclusive loq, rounded inclusive CCV pass, two-sided bracketing, SOP 7 spike recovery when both are results) and keeps the shipped calculation exactly where the SOP gives no rule; no concrete incorrect behavior found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/tools/metalquant_run.py",
+      "solution/solve.sh",
+      "solution/fix.patch",
+      "solution/model.py",
+      "solution/jobgen.py",
+      "solution/fixtures.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 22 manifest files with files read; all read in full, none truncated.",
+    "Verified every fix.patch hunk header and context line against the shipped sources (blanks.py 1-8, calib.py 9-17, qc.py 6-21, report.py 15-21/30-35/38-43/60-65, samples.py 6-18) so `patch -p1` from / applies cleanly; Dockerfile installs patch.",
+    "Traced SOP 2: patched fit_line uses centered sxy/sxx with intercept mean_y - slope*mean_x; sxx>0 guaranteed by SOP 1 (two distinct concentrations).",
+    "Traced SOP 3: reading = (response - intercept)/slope unchanged and unclamped; negative readings flow through.",
+    "Traced SOP 4: blank_level averages blank readings >= mdl across all blanks regardless of position; with no blank result falls back to shipped first-blank reading or 0.0 (SOP silent per SOP 3 last sentence and instruction line 5).",
+    "Traced SOP 5: amount = (reading - level)*dilution; flag uses corrected reading: < mdl ND, < loq J, else ''; mdl==loq at corrected==mdl gives ''; value null only for ND.",
+    "Traced SOP 6: recovery unrounded in report; pass = 90.0 <= round(recovery,1) <= 110.0; SOP 1 excludes rounding ties within 1e-6 so Python round-half-even cannot differ; true >= 10*loq > 0 so no division by zero.",
+    "Traced SOP 6 bracketing: nearest CCV before and after both required to pass when both exist; otherwise shipped rule (nearest before, else True) retained for runs before first CCV, after last CCV, and CCV-free batches.",
+    "Traced SOP 7: detected = corrected >= mdl for spike and parent (SOP 3: sample/spike judged on corrected reading); both results -> (spike amount - parent amount)/added*100; otherwise shipped (added*dilution) denominator over SOP amounts; recovery always numeric.",
+    "Traced SOP 8 report: samples/ccvs/spikes lists in run order then batch analyte order; blank_levels keyed by name; numbers unrounded; driver untouched.",
+    "Walked small-batch.json path (CCV-1, MB-1, sample, spike, sample, CCV-2) through patched report.py to confirm no KeyError on parent lookup (detected/amounts populated for all sample runs before spike loop)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Ordinary example batch and boundaries (value on mdl/loq, mdl==loq, negative readings, no/one/several blanks, dilution 1-1000) traced through patched samples.py/blanks.py/report.py against SOP 3-5.",
+      "evidence": ["environment/app/docs/reduction-sop.md:47-77", "solution/fix.patch:8-16", "solution/fix.patch:106-119", "environment/app/examples/small-batch.json:12-19"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "Report JSON printed by unchanged driver; SOP 8 requires unrounded numbers and null for ND; reference emits raw floats and None; CCV recovery reported unrounded while pass uses rounded value.",
+      "evidence": ["environment/app/tools/metalquant_run.py:16-20", "environment/app/docs/reduction-sop.md:96-112", "environment/app/src/metalquant/report.py:42-50"],
+      "finding_ids": []
+    },
+    {
+      "category": "Every state-updating branch (blank level selection, bracketing state, spike detection map)",
+      "status": "checked",
+      "reason": "blank results list vs fallback, before/after CCV lists vs legacy loop, detected map populated for every sample/spike before the spike loop.",
+      "evidence": ["solution/fix.patch:11-16", "solution/fix.patch:47-56", "solution/fix.patch:79-96"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery/durability at interruption points",
+      "status": "not_applicable",
+      "reason": "Pure batch reduction CLI; the contract makes no recovery or durability claim.",
+      "evidence": ["instruction.md:1-7"],
+      "finding_ids": []
+    },
+    {
+      "category": "SOP-silent cases keep shipped calculation and no added guard/qualifier",
+      "status": "checked",
+      "reason": "Blank level with no result, unbracketed runs, and spike/parent non-detects keep the exact shipped expressions; no extra clamp, tolerance or exclusion introduced.",
+      "evidence": ["instruction.md:5", "environment/app/docs/reduction-sop.md:56-58", "environment/app/src/metalquant/blanks.py:6-9", "environment/app/src/metalquant/qc.py:14-21", "solution/fix.patch:53-63"],
+      "finding_ids": []
+    },
+    {
+      "category": "Driver byte-identity and patch applicability",
+      "status": "checked",
+      "reason": "fix.patch touches only src/metalquant files; hunk contexts match the shipped sources.",
+      "evidence": ["instruction.md:3", "solution/solve.sh:21-23", "solution/fix.patch:1-120"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["SOP 4 blank level from blank results", "SOP 5 flags on corrected reading"],
+      "case_or_path": "Several blanks with some below mdl; level = mean of those >= mdl; sample flag judged on reading - level, amount then multiplied by dilution (flag independent of dilution).",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:11-13", "solution/fix.patch:106-119"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 3 result definition", "SOP 7 spike recovery"],
+      "case_or_path": "Spike or parent corrected reading below mdl -> both_results False -> shipped denominator; exactly on mdl -> result -> SOP 7 formula.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/reduction-sop.md:54-58", "environment/app/docs/reduction-sop.md:91-94", "solution/fix.patch:88", "solution/fix.patch:59-63"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 6 CCV pass rounding", "SOP 6 bracketing"],
+      "case_or_path": "Sample between passing CCV and CCV at 110.04 (rounds to 110.0, passes) -> ccv_ok true; between passing and failing CCV -> false; sample after last CCV -> nearest-before rule.",
+      "status": "checked",
+      "evidence": ["environment/app/docs/reduction-sop.md:81-89", "solution/fix.patch:42-56"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 4 no-result fallback", "SOP 5 amount"],
+      "case_or_path": "All blanks below mdl (or no blank) -> level = first blank reading (possibly negative) or 0.0, then amount = (reading - level)*dilution per SOP 5.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:11-17", "solution/fix.patch:106-107"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

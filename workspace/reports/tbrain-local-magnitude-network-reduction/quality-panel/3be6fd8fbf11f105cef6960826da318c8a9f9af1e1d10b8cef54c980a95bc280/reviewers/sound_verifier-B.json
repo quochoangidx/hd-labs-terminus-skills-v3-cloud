@@ -1,0 +1,200 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "3be6fd8fbf11f105cef6960826da318c8a9f9af1e1d10b8cef54c980a95bc280",
+  "severity": "None",
+  "summary": "Every graded report is compared in full against sealed expectations that are pinned by SHA-256 and validated against the domain. Each NPM-4 rule (2.2 gain and half, 2.3 readings, 3.1 hypocentral, 3.3 linear interpolation, off-table retained calculation, 4.2 sign, 4.3 mean, pooling of two-sensor sites, 5.1 contribution, 5.2 odd and even median, 5.3 threshold) has an isolating fixture whose expected value changes under the plausible wrong implementation. I found no false rejection of contract-valid output.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/manual/npm4-local-magnitude.md",
+      "environment/app/mlnet/__init__.py",
+      "environment/app/mlnet/amplitude.py",
+      "environment/app/mlnet/distance.py",
+      "environment/app/mlnet/attenuation.py",
+      "environment/app/mlnet/station.py",
+      "environment/app/mlnet/network.py",
+      "environment/app/mlnet/bulletin.py",
+      "environment/app/tools/ml_bulletin.py",
+      "environment/app/samples/brsn-2026-04-12.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/ml_bulletin.py",
+      "tests/expected/ROSTER",
+      "tests/expected/gain.jsonl",
+      "tests/expected/half.jsonl",
+      "tests/expected/readings.jsonl",
+      "tests/expected/hypocentral.jsonl",
+      "tests/expected/interpolation.jsonl",
+      "tests/expected/table_ends.jsonl",
+      "tests/expected/off_table.jsonl",
+      "tests/expected/correction.jsonl",
+      "tests/expected/station_mean.jsonl",
+      "tests/expected/shared_station.jsonl",
+      "tests/expected/combined.jsonl",
+      "tests/expected/median.jsonl",
+      "tests/expected/median_even.jsonl",
+      "tests/expected/fewer_than_three.jsonl",
+      "tests/expected/three.jsonl",
+      "tests/expected/limits.jsonl",
+      "tests/expected/order.jsonl",
+      "tests/expected/generated.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 39 task files in packet-manifest.json with the files read; tests/shipped/tools/ml_bulletin.py and environment/app/tools/ml_bulletin.py share hash ab4bfed8...",
+    "Listed the defects in the shipped package (gain 2800 without halving, epicentral distance, log-distance interpolation, subtracted correction, largest channel without noise filtering, mean network magnitude with no three-station minimum) and mapped each one to a fixture that rejects it",
+    "Hand-recomputed half.jsonl HALF (log10(1000*1040e-6)+3.0 = 3.0170333), readings.jsonl line-1 LNA and LNB (near-line readings 1.51 vs 1.5 and 300.5 vs 300), off_table.jsonl OFFB (d=5, today's log extrapolation 1.34, +0.1 gives 1.4570333) and OFFA (d=1000, 3.5915329), shared_station.jsonl SITA pooled mean (2.3503667)",
+    "Traced the variant that counts each recording of a shared station in the median against shared_station.jsonl ev000003 (distinct 4.742 vs duplicated 5.321) and combined.jsonl tog-far (2.538 vs 2.718)",
+    "Traced a threshold that counts recordings (shared-null, shared_station ev000001) and one that counts every station instead of contributors (off-deep, tog-near-pair, off_table ev000007)",
+    "Traced contribution decided on epicentral distance (hypo-12 NEAR epi 6/hypo 13.4; off-deep OFFA epi 0/hypo 60; OFFC epi 599/hypo 602)",
+    "Traced reading tests that use half amplitude or record amplitude (readings line-1 LNC 0.76 vs noise 0.25) and median without sorting (median.jsonl ev000001)",
+    "Checked the tolerance: TOL 1.5e-6 against the stored 7-decimal expectations (5.1e-8) meets the instruction's 1e-6 pass / 2e-6 fail band",
+    "Checked that the _classes domain validator matches NPM-4 section 1 (1 m table-end margin, one part in a thousand of 3x noise, at least one reading per recording, at most two recordings per station) and that the carrier restriction limits special inputs to the named files",
+    "Checked the comparator: exact key sets, exact id/code/contributes/null, bool is excluded from numbers, order compared positionally",
+    "Checked the execution path: verifier driver os.replace-d before candidate code, python3 -I -S as nobody, stdout parsed as JSON, driver byte-identity required as instructed"
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "One test per NPM-4 rule, each comparing the complete report. gain/half isolate rule 2.2, readings rule 2.3, hypocentral rule 3.1, interpolation rule 3.3, off_table the retained extrapolation, correction rule 4.2, station_mean rule 4.3, median/median_even rule 5.2, fewer_than_three/three rule 5.3, order rule 6.1.",
+      "evidence": ["tests/test_outputs.py:181-272", "environment/app/manual/npm4-local-magnitude.md:56-128"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result, not existence/keys/row count",
+      "status": "checked",
+      "reason": "compare() checks the event count, id, network ml, each station row's code, distance_km, ml and contributes, with exact key sets.",
+      "evidence": ["tests/test_outputs.py:148-178"],
+      "finding_ids": []
+    },
+    {
+      "category": "Each named domain rule has a case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "I recomputed or traced the wrong-rule variants: 2800 gain, no halving, epicentral distance, log interpolation, subtracted correction, largest channel, unfiltered channels, log of mean amplitude, per-recording station magnitude, duplicate median entries, recording-count threshold, all-stations threshold, unsorted median, lower-middle even median, linear or clamped extrapolation off-table. Each changes a compared figure in a named fixture.",
+      "evidence": ["tests/expected/half.jsonl:1", "tests/expected/readings.jsonl:2", "tests/expected/hypocentral.jsonl:2", "tests/expected/shared_station.jsonl:1", "tests/expected/shared_station.jsonl:2", "tests/expected/off_table.jsonl:2", "tests/expected/combined.jsonl:1", "tests/expected/median.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solution is rejected",
+      "status": "checked",
+      "reason": "The untouched package fails nearly every fixture. Partial repairs such as mean for median or per-recording shared stations are rejected by specific fixtures (see checks_performed).",
+      "evidence": ["environment/app/mlnet/station.py:15-22", "environment/app/mlnet/network.py:14-22", "environment/app/mlnet/attenuation.py:31-38"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted (formatting, ordering, implementation)",
+      "status": "checked",
+      "reason": "Output is parsed as JSON and key order is irrelevant. Ints and floats are both accepted within the tolerance. Fixed driver output means no formatting freedom is at stake. Imports are limited to the stdlib under -I -S, and the package is pure-stdlib. No undocumented representation is imposed.",
+      "evidence": ["tests/test_outputs.py:143-153", "tests/test_outputs.py:169-173", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle (driver unchanged)",
+      "status": "checked",
+      "reason": "Delivered driver bytes are captured before any candidate code runs and must equal the verifier's copy. The verifier's copy is then installed, so a changed driver cannot affect grading.",
+      "evidence": ["tests/test_outputs.py:53-64", "tests/test_outputs.py:287-290", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases / out-of-domain fixtures",
+      "status": "checked",
+      "reason": "Every fixture bulletin is validated against NPM-4 section 1 when loaded, including the table-end and three-times-noise exclusion margins. Special input classes are restricted to their named carrier files.",
+      "evidence": ["tests/test_outputs.py:67-109", "environment/app/manual/npm4-local-magnitude.md:22-47"],
+      "finding_ids": []
+    },
+    {
+      "category": "Self-controlled comparisons, stale binaries, Oracle-specific representation",
+      "status": "checked",
+      "reason": "Expectations come from sealed files pinned by ROSTER digests under chmod 700 /tests and are read by root. Candidate code runs as nobody. The live /app/mlnet source is executed through the verifier's driver, and no candidate-produced reference is compared against itself.",
+      "evidence": ["tests/test.sh:13-16", "tests/test_outputs.py:98-109", "tests/test_outputs.py:112-145"],
+      "finding_ids": []
+    },
+    {
+      "category": "Tolerance band matches contract",
+      "status": "checked",
+      "reason": "TOL 1.5e-6 is inside the open band between 1e-6 and 2e-6. With expectations stored to 1e-7, a candidate within 1e-6 of exact passes and one more than 2e-6 off fails.",
+      "evidence": ["tests/test_outputs.py:33-36", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: sign partitions discriminated",
+      "status": "checked",
+      "reason": "Station corrections of -1.0, negative, 0 and +1.0 appear in correction.jsonl, so a reversed sign changes the figures. Negative station magnitudes are compared (e.g. -1.2419554, -3.2826067). Extrapolation is exercised on both sides of the table.",
+      "evidence": ["tests/expected/correction.jsonl:1", "tests/expected/off_table.jsonl:1", "tests/expected/limits.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization to first event",
+      "status": "not_applicable",
+      "reason": "The reduction is a stateless per-event function with no carried state between events. Events are independent in the contract.",
+      "evidence": ["environment/app/mlnet/bulletin.py:13-33"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding / candidate diagnostics",
+      "status": "checked",
+      "reason": "Only parsed JSON values are compared. Stderr is ignored except on failure. No inode, layout or byte-format requirement is imposed beyond the contract's driver identity.",
+      "evidence": ["tests/test_outputs.py:132-145", "tests/test_outputs.py:156-173"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 2.3 readings", "off-table retained correction"],
+      "case_or_path": "combined.jsonl tog-near TA: 1000 nm below 3x400 noise is dropped at 5 km, so ml = log10(0.104)+1.34 = 0.3570333",
+      "status": "checked",
+      "evidence": ["tests/expected/combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 4.3 pooled station mean over two recordings", "rule 5.2 median counts station once"],
+      "case_or_path": "shared_station.jsonl ev000003: counting V3CDK twice gives 5.321 instead of 4.742. combined tog-far: counting TB twice gives 2.718 instead of 2.538",
+      "status": "checked",
+      "evidence": ["tests/expected/shared_station.jsonl:1", "tests/expected/combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 5.1 contribution", "rule 5.3 three-station minimum"],
+      "case_or_path": "off-deep (3 stations, 1 contributing) and tog-near-pair (TC off-table twice, 2 contributors) require null",
+      "status": "checked",
+      "evidence": ["tests/expected/off_table.jsonl:2", "tests/expected/combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 3.1 hypocentral distance", "rule 5.1 table limits"],
+      "case_or_path": "hypo-12 NEAR (epi 6 km, hypo 13.4 km) contributes. off-deep OFFA (epi 0, hypo 60) contributes. OFFC (epi 599, hypo 602) does not",
+      "status": "checked",
+      "evidence": ["tests/expected/hypocentral.jsonl:2", "tests/expected/off_table.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 3.1 hypocentral distance", "off-table retained extrapolation"],
+      "case_or_path": "off-near OFFB: extrapolation is evaluated at hypocentral 5 km (not epi 4 km), giving 1.4570333",
+      "status": "checked",
+      "evidence": ["tests/expected/off_table.jsonl:2", "environment/app/mlnet/attenuation.py:22-38"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2.2 half peak-to-peak", "rule 2.3 comparison on peak-to-peak values"],
+      "case_or_path": "readings line-1 LNC: 0.76 vs noise 0.25 is a reading on raw values but not if the amplitude is halved before comparison",
+      "status": "checked",
+      "evidence": ["tests/expected/readings.jsonl:2", "environment/app/manual/npm4-local-magnitude.md:51-62"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

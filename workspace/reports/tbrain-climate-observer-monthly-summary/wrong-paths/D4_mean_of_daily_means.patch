@@ -1,0 +1,158 @@
+diff --git a/app/src/coopsum/crediting.py b/app/src/coopsum/crediting.py
+--- a/app/src/coopsum/crediting.py
++++ b/app/src/coopsum/crediting.py
+@@ -1,6 +1,13 @@
+ """Which day of the month each reading on a station's form belongs to."""
+ 
+-from .entries import hundredths, tenths
++from .entries import UNREAD, hundredths, tenths
++
++LAST_MORNING_HOUR = 11
++
++
++def morning(station):
++    """Whether the station's observation is a morning observation (hour 0 through 11)."""
++    return station["hour"] <= LAST_MORNING_HOUR
+ 
+ 
+ def form_rows(station):
+@@ -18,10 +25,11 @@
+ def credit_temperatures(station, days):
+     """The maxima and minima credited to the month's days, each as {day: tenths}."""
+     maxima, minima = {}, {}
++    shift = 1 if morning(station) else 0
+     for day, entry in form_rows(station):
+         high = tenths(entry["max"])
+         if high is not None:
+-            maxima[day] = high
++            maxima[day - shift] = high
+         low = tenths(entry["min"])
+         if low is not None:
+             minima[day] = low
+@@ -31,9 +39,18 @@
+ def credit_precipitation(station, days):
+     """The precipitation credited to the month's days, as {day: hundredths}."""
+     totals = {}
++    shift = 1 if morning(station) else 0
++    unread = False
+     for day, entry in form_rows(station):
++        if entry["precip"] == UNREAD:
++            unread = True
++            continue
+         amount = hundredths(entry["precip"])
+         if amount is None:
+             continue
+-        totals[day] = totals.get(day, 0) + amount
++        # An accumulated amount (after unread days) holds two or more observation days, so it is not a
++        # day's precipitation (2.4) and 3.3 does not reach it; it stays on its form day as before.
++        credited = day if unread else day - shift
++        unread = False
++        totals[credited] = totals.get(credited, 0) + amount
+     return in_month(totals, days)
+diff --git a/app/src/coopsum/entries.py b/app/src/coopsum/entries.py
+--- a/app/src/coopsum/entries.py
++++ b/app/src/coopsum/entries.py
+@@ -23,7 +23,7 @@
+     if text in (MISSING, UNREAD):
+         return None
+     if text == TRACE:
+-        return 1
++        return 0
+     whole, _, frac = text.partition(".")
+     return int(whole) * 100 + int(frac)
+ 
+diff --git a/app/src/coopsum/precipitation.py b/app/src/coopsum/precipitation.py
+--- a/app/src/coopsum/precipitation.py
++++ b/app/src/coopsum/precipitation.py
+@@ -18,14 +18,14 @@
+ def heavy_days(totals):
+     """How many days had 0.10 inch or more, and 1.00 inch or more."""
+     wet = precipitation_days(totals)
+-    return (sum(1 for day in wet if totals[day] > TENTH),
+-            sum(1 for day in wet if totals[day] > INCH))
++    return (sum(1 for day in wet if totals[day] >= TENTH),
++            sum(1 for day in wet if totals[day] >= INCH))
+ 
+ 
+ def greatest_day(totals):
+     """The day of the month's greatest precipitation, or None for a month without a precipitation day."""
+     chosen = None
+     for day in precipitation_days(totals):
+-        if chosen is None or totals[day] > totals[chosen]:
++        if chosen is None or totals[day] >= totals[chosen]:
+             chosen = day
+     return chosen
+diff --git a/app/src/coopsum/summary.py b/app/src/coopsum/summary.py
+--- a/app/src/coopsum/summary.py
++++ b/app/src/coopsum/summary.py
+@@ -35,7 +35,7 @@
+         "lacking_min": temperature.lacking(minima, days),
+         "mean_max": degrees(temperature.mean_of(maxima)),
+         "mean_min": degrees(temperature.mean_of(minima)),
+-        "mean": degrees(temperature.monthly_mean(maxima, minima)),
++        "mean": degrees(temperature.monthly_mean(maxima, minima, days)),
+         "highest": None if high_day is None else degrees(maxima[high_day]),
+         "highest_day": None if high_day is None else day_label(month, high_day),
+         "lowest": None if low_day is None else degrees(minima[low_day]),
+diff --git a/app/src/coopsum/temperature.py b/app/src/coopsum/temperature.py
+--- a/app/src/coopsum/temperature.py
++++ b/app/src/coopsum/temperature.py
+@@ -2,7 +2,7 @@
+ 
+ from .entries import half_up
+ 
+-BASE_TWICE = 1300  # twice the 65 F degree-day base, in tenths
++BASE = 65  # the degree-day base, whole degrees F
+ 
+ 
+ def lacking(credited, days):
+@@ -22,8 +22,9 @@
+     return half_up(sum(by_day.values()), len(by_day))
+ 
+ 
+-def monthly_mean(maxima, minima):
+-    """The month's mean temperature in tenths: the mean of its days' mean temperatures."""
++def monthly_mean(maxima, minima, days):
++    """The month's mean temperature in tenths: for a complete month the average of its standard means
++    (its mean maximum and mean minimum); otherwise, as before, the mean of its days' mean temperatures."""
+     both = [day for day in sorted(maxima) if day in minima]
+     if not both:
+         return None
+@@ -37,9 +38,9 @@
+         value = by_day[day]
+         if chosen is None:
+             chosen = day
+-        elif highest and value > by_day[chosen]:
++        elif highest and value >= by_day[chosen]:
+             chosen = day
+-        elif not highest and value < by_day[chosen]:
++        elif not highest and value <= by_day[chosen]:
+             chosen = day
+     return chosen
+ 
+@@ -50,17 +51,17 @@
+     for day in sorted(maxima):
+         if day not in minima:
+             continue
+-        twice = maxima[day] + minima[day]
+-        heating += max(0, BASE_TWICE - twice)
+-        cooling += max(0, twice - BASE_TWICE)
+-    return half_up(heating, 20), half_up(cooling, 20)
++        rounded = half_up(maxima[day] + minima[day], 20)
++        heating += max(0, BASE - rounded)
++        cooling += max(0, rounded - BASE)
++    return heating, cooling
+ 
+ 
+ def threshold_days(maxima, minima):
+     """Days with a maximum of 90.0 or above, a maximum of 32.0 or below, a minimum of 32.0 or below
+     and a minimum of 0.0 or below."""
+-    hot = sum(1 for value in maxima.values() if value > 900)
+-    cold_max = sum(1 for value in maxima.values() if value < 320)
+-    freezing = sum(1 for value in minima.values() if value < 320)
+-    zero = sum(1 for value in minima.values() if value < 0)
++    hot = sum(1 for value in maxima.values() if value >= 900)
++    cold_max = sum(1 for value in maxima.values() if value <= 320)
++    freezing = sum(1 for value in minima.values() if value <= 320)
++    zero = sum(1 for value in minima.values() if value <= 0)
+     return hot, cold_max, freezing, zero

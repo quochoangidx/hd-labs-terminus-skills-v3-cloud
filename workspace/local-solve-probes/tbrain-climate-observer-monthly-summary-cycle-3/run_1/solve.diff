@@ -1,0 +1,203 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/crediting.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/crediting.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/crediting.py	2026-09-27 16:38:31
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/crediting.py	2026-09-27 17:45:33
+@@ -2,7 +2,14 @@
+ 
+ from .entries import hundredths, tenths
+ 
++LAST_MORNING_HOUR = 11  # an observation at hour 0 through 11 is a morning observation (2.2)
+ 
++
++def is_morning(station):
++    """Whether the station's observations are morning observations (2.2)."""
++    return station["hour"] <= LAST_MORNING_HOUR
++
++
+ def form_rows(station):
+     """The station's entries with their form days: 1 to N for the month's own days, N + 1 for `next`,
+     the first observation of the following month."""
+@@ -15,25 +22,32 @@
+     return {day: value for day, value in by_day.items() if 1 <= day <= days}
+ 
+ 
++def credited_day(station, form_day):
++    """The day a maximum or an amount read on `form_day` is credited to (3.1, 3.3): the day before
++    the form day at a morning observation, the form day itself at an afternoon observation."""
++    return form_day - 1 if is_morning(station) else form_day
++
++
+ def credit_temperatures(station, days):
+     """The maxima and minima credited to the month's days, each as {day: tenths}."""
+     maxima, minima = {}, {}
+-    for day, entry in form_rows(station):
++    for form_day, entry in form_rows(station):
+         high = tenths(entry["max"])
+         if high is not None:
+-            maxima[day] = high
++            maxima[credited_day(station, form_day)] = high
+         low = tenths(entry["min"])
+         if low is not None:
+-            minima[day] = low
++            minima[form_day] = low  # a minimum is credited to its form day at every hour (3.2)
+     return in_month(maxima, days), in_month(minima, days)
+ 
+ 
+ def credit_precipitation(station, days):
+     """The precipitation credited to the month's days, as {day: hundredths}."""
+     totals = {}
+-    for day, entry in form_rows(station):
++    for form_day, entry in form_rows(station):
+         amount = hundredths(entry["precip"])
+         if amount is None:
+             continue
++        day = credited_day(station, form_day)
+         totals[day] = totals.get(day, 0) + amount
+     return in_month(totals, days)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/entries.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/entries.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/entries.py	2026-09-27 16:38:31
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/entries.py	2026-09-27 17:45:18
+@@ -23,7 +23,7 @@
+     if text in (MISSING, UNREAD):
+         return None
+     if text == TRACE:
+-        return 1
++        return 0  # a trace counts as nought wherever amounts are added or compared (1.2)
+     whole, _, frac = text.partition(".")
+     return int(whole) * 100 + int(frac)
+ 
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/precipitation.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/precipitation.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/precipitation.py	2026-09-27 16:38:31
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/precipitation.py	2026-09-27 17:46:02
+@@ -18,14 +18,14 @@
+ def heavy_days(totals):
+     """How many days had 0.10 inch or more, and 1.00 inch or more."""
+     wet = precipitation_days(totals)
+-    return (sum(1 for day in wet if totals[day] > TENTH),
+-            sum(1 for day in wet if totals[day] > INCH))
++    return (sum(1 for day in wet if totals[day] >= TENTH),
++            sum(1 for day in wet if totals[day] >= INCH))
+ 
+ 
+ def greatest_day(totals):
+     """The day of the month's greatest precipitation, or None for a month without a precipitation day."""
+     chosen = None
+     for day in precipitation_days(totals):
+-        if chosen is None or totals[day] > totals[chosen]:
+-            chosen = day
++        if chosen is None or totals[day] >= totals[chosen]:
++            chosen = day  # matched later, the latest of those days is given (5.4)
+     return chosen
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/summary.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/summary.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/summary.py	2026-09-27 16:38:31
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/summary.py	2026-09-27 17:46:02
+@@ -35,7 +35,7 @@
+         "lacking_min": temperature.lacking(minima, days),
+         "mean_max": degrees(temperature.mean_of(maxima)),
+         "mean_min": degrees(temperature.mean_of(minima)),
+-        "mean": degrees(temperature.monthly_mean(maxima, minima)),
++        "mean": degrees(temperature.monthly_mean(maxima, minima, days)),
+         "highest": None if high_day is None else degrees(maxima[high_day]),
+         "highest_day": None if high_day is None else day_label(month, high_day),
+         "lowest": None if low_day is None else degrees(minima[low_day]),
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/temperature.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/temperature.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/baseline/environment/app/src/coopsum/temperature.py	2026-09-27 16:38:31
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-climate-observer-monthly-summary-cycle-3/run_1/solve/environment/app/src/coopsum/temperature.py	2026-09-27 17:45:51
+@@ -2,7 +2,8 @@
+ 
+ from .entries import half_up
+ 
+-BASE_TWICE = 1300  # twice the 65 F degree-day base, in tenths
++BASE = 65  # the degree-day base, in whole degrees
++GAP_LIMIT = 5  # a well-observed month's gap count is five or fewer (2.8)
+ 
+ 
+ def lacking(credited, days):
+@@ -10,9 +11,15 @@
+     return days - len(credited)
+ 
+ 
++def gap_count(maxima, minima, days):
++    """The month's gap count (2.7): the larger of its numbers of days lacking a maximum and a
++    minimum."""
++    return max(lacking(maxima, days), lacking(minima, days))
++
++
+ def complete(maxima, minima, days):
+-    """Whether the month is complete for temperature."""
+-    return lacking(maxima, days) <= 5 and lacking(minima, days) <= 5
++    """Whether the month is well observed (2.8)."""
++    return gap_count(maxima, minima, days) <= GAP_LIMIT
+ 
+ 
+ def mean_of(by_day):
+@@ -22,11 +29,23 @@
+     return half_up(sum(by_day.values()), len(by_day))
+ 
+ 
+-def monthly_mean(maxima, minima):
+-    """The month's mean temperature in tenths: the mean of its days' mean temperatures."""
+-    both = [day for day in sorted(maxima) if day in minima]
++def days_with_mean(maxima, minima):
++    """The month's days that have a mean temperature (2.5), in date order."""
++    return [day for day in sorted(maxima) if day in minima]
++
++
++def monthly_mean(maxima, minima, days):
++    """The month's mean temperature in tenths (4.3): for a well-observed month the average of its two
++    standard means, to tenths. For a month that is not well observed no rule of the handbook applies,
++    and the package's own figure, the mean of its days' mean temperatures, is kept. None when no day
++    of the month has a mean temperature."""
++    both = days_with_mean(maxima, minima)
+     if not both:
+         return None
++    if complete(maxima, minima, days):
++        mean_max, mean_min = mean_of(maxima), mean_of(minima)
++        if mean_max is not None and mean_min is not None:
++            return half_up(mean_max + mean_min, 2)
+     return half_up(sum(maxima[day] + minima[day] for day in both), 2 * len(both))
+ 
+ 
+@@ -37,30 +56,29 @@
+         value = by_day[day]
+         if chosen is None:
+             chosen = day
+-        elif highest and value > by_day[chosen]:
++        elif highest and value >= by_day[chosen]:
++            chosen = day  # a reading matched later is given on the latest of those days (4.2)
++        elif not highest and value <= by_day[chosen]:
+             chosen = day
+-        elif not highest and value < by_day[chosen]:
+-            chosen = day
+     return chosen
+ 
+ 
+ def degree_days(maxima, minima):
+     """The month's heating and cooling degree days."""
+     heating = cooling = 0
+-    for day in sorted(maxima):
+-        if day not in minima:
+-            continue
+-        twice = maxima[day] + minima[day]
+-        heating += max(0, BASE_TWICE - twice)
+-        cooling += max(0, twice - BASE_TWICE)
+-    return half_up(heating, 20), half_up(cooling, 20)
++    for day in days_with_mean(maxima, minima):
++        # the day's mean temperature, in twentieths of a degree, rounded to the whole degree (4.4)
++        rounded = half_up(maxima[day] + minima[day], 20)
++        heating += max(0, BASE - rounded)
++        cooling += max(0, rounded - BASE)
++    return heating, cooling
+ 
+ 
+ def threshold_days(maxima, minima):
+     """Days with a maximum of 90.0 or above, a maximum of 32.0 or below, a minimum of 32.0 or below
+     and a minimum of 0.0 or below."""
+-    hot = sum(1 for value in maxima.values() if value > 900)
+-    cold_max = sum(1 for value in maxima.values() if value < 320)
+-    freezing = sum(1 for value in minima.values() if value < 320)
+-    zero = sum(1 for value in minima.values() if value < 0)
++    hot = sum(1 for value in maxima.values() if value >= 900)
++    cold_max = sum(1 for value in maxima.values() if value <= 320)
++    freezing = sum(1 for value in minima.values() if value <= 320)
++    zero = sum(1 for value in minima.values() if value <= 0)
+     return hot, cold_max, freezing, zero

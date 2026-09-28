@@ -1,0 +1,797 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 28 items
+
+../../tests/test_outputs.py F.F.FFFFFFFFFFFFFFFFFFFFFFF.                 [100%]
+
+=================================== FAILURES ===================================
+________________________ test_share_rounds_half_to_even ________________________
+
+    def test_share_rounds_half_to_even():
+        cases = [(2, 2_500), (6, 2_500), (10, 2_500), (-6, 2_500), (-10, 2_500), (5, 5_000),
+                 (7, 5_000), (123_457, 3_333), (99_999, 1), (7, 10_000), (7, 0), (0, 4_000)]
+>       check([{"op": "share", "amount": a, "rate": r} for a, r in cases])
+
+/tests/test_outputs.py:95: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'share', 'amount': 2, 'rate': 2500}, {'op': 'share', 'amount': 6, 'rate': 2500}, {'op': 'share', 'amount': 10,...unt': -6, 'rate': 2500}, {'op': 'share', 'amount': -10, 'rate': 2500}, {'op': 'share', 'amount': 5, 'rate': 5000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 0 {'op': 'share', 'amount': 2, 'rate': 2500}: expected {'share': 0}, got {'share': 1}
+E           assert {'share': 1} == {'share': 0}
+E             
+E             Differing items:
+E             {'share': 1} != {'share': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+________________ test_facility_coinsurance_rounds_half_to_even _________________
+
+    def test_facility_coinsurance_rounds_half_to_even():
+        ops = [{"op": "new", "plan": plan(deductible=0, family_deductible=0)},
+               line("A", "facility", 10), line("A", "facility", 2), line("B", "facility", 14),
+               line("B", "facility", 4_006)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:108: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 0, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}}, {'o...}, {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 14}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 10}: expected {'allowed': 10, 'deductible': 0, 'copay': 0, 'coinsurance': 2, 'member_total': 2, 'plan_pays': 8}, got {'allowed': 10, 'coinsurance': 3, 'copay': 0, 'deductible': 0, 'member_total': 3, 'plan_pays': 7}
+E           assert {'allowed': 1...ible': 0, ...} == {'allowed': 1...ance': 2, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 7} != {'plan_pays': 8}
+E             {'member_total': 3} != {'member_total': 2}
+E             {'coinsurance': 3} != {'coinsurance': 2}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+________________ test_other_kinds_are_priced_as_facility_lines _________________
+
+    def test_other_kinds_are_priced_as_facility_lines():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "lab", 30_000), line("A", "imaging", 40_000), line("B", "", 1_000),
+               left("A"), left("B")]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, .... 40000}, {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': '', 'allowed': 1000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'lab', 'allowed': 30000}: expected {'allowed': 30000, 'deductible': 30000, 'copay': 0, 'coinsurance': 0, 'member_total': 30000, 'plan_pays': 0}, got {'allowed': 30000, 'coinsurance': 7500, 'copay': 0, 'deductible': 30000, 'member_total': 37500, 'plan_pays': -7500}
+E           assert {'allowed': 3...': 30000, ...} == {'allowed': 3...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -7500} != {'plan_pays': 0}
+E             {'member_total': 37500} != {'member_total': 30000}
+E             {'coinsurance': 7500} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+________________ test_preventive_line_is_free_and_adds_nothing _________________
+
+    def test_preventive_line_is_free_and_adds_nothing():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "facility", 20_000), line("A", "preventive", 30_000),
+               line("B", "preventive", 5_000), left("A"), line("A", "facility", 40_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:137: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'preventive', 'allowed': 5000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 20000}: expected {'allowed': 20000, 'deductible': 20000, 'copay': 0, 'coinsurance': 0, 'member_total': 20000, 'plan_pays': 0}, got {'allowed': 20000, 'coinsurance': 5000, 'copay': 0, 'deductible': 20000, 'member_total': 25000, 'plan_pays': -5000}
+E           assert {'allowed': 2...': 20000, ...} == {'allowed': 2...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -5000} != {'plan_pays': 0}
+E             {'member_total': 25000} != {'member_total': 20000}
+E             {'coinsurance': 5000} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_____________ test_office_copay_is_the_allowed_amount_when_smaller _____________
+
+    def test_office_copay_is_the_allowed_amount_when_smaller():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "office", 1_800), line("A", "office", 1), line("B", "office", 2_999),
+               line("B", "office", 3_000), line("C", "office", 3_001)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:147: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....}, {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'office', 'allowed': 2999}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 1800}: expected {'allowed': 1800, 'deductible': 0, 'copay': 1800, 'coinsurance': 0, 'member_total': 1800, 'plan_pays': 0}, got {'allowed': 1800, 'coinsurance': -300, 'copay': 3000, 'deductible': 0, 'member_total': 2700, 'plan_pays': -900}
+E           assert {'allowed': 1...ible': 0, ...} == {'allowed': 1...ance': 0, ...}
+E             
+E             Omitting 2 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -900} != {'plan_pays': 0}
+E             {'copay': 3000} != {'copay': 1800}
+E             {'member_total': 2700} != {'member_total': 1800}
+E             {'coinsurance': -300} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+___________ test_office_line_of_zero_or_less_still_charges_the_copay ___________
+
+    def test_office_line_of_zero_or_less_still_charges_the_copay():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "office", 0), line("A", "office", -2_500), line("B", "office", -1)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:153: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....00}, {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'office', 'allowed': -1}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 0}: expected {'allowed': 0, 'deductible': 0, 'copay': 3000, 'coinsurance': 0, 'member_total': 3000, 'plan_pays': -3000}, got {'allowed': 0, 'coinsurance': -750, 'copay': 3000, 'deductible': 0, 'member_total': 2250, 'plan_pays': -2250}
+E           assert {'allowed': 0...ible': 0, ...} == {'allowed': 0...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -2250} != {'plan_pays': -3000}
+E             {'member_total': 2250} != {'member_total': 3000}
+E             {'coinsurance': -750} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_____________ test_office_line_takes_no_deductible_or_coinsurance ______________
+
+    def test_office_line_takes_no_deductible_or_coinsurance():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "office", 20_000), left("A"), line("A", "office", 3_004),
+               line("A", "facility", 10_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:160: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....}, {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 3004}, {'op': 'totals', 'members': ['A', 'B', 'C']}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 20000}: expected {'allowed': 20000, 'deductible': 0, 'copay': 3000, 'coinsurance': 0, 'member_total': 3000, 'plan_pays': 17000}, got {'allowed': 20000, 'coinsurance': 4250, 'copay': 3000, 'deductible': 0, 'member_total': 7250, 'plan_pays': 12750}
+E           assert {'allowed': 2...ible': 0, ...} == {'allowed': 2...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 12750} != {'plan_pays': 17000}
+E             {'member_total': 7250} != {'member_total': 3000}
+E             {'coinsurance': 4250} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_________________ test_deductible_is_met_part_way_across_lines _________________
+
+    def test_deductible_is_met_part_way_across_lines():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "facility", 30_000), left("A"), line("A", "facility", 30_000), left("A"),
+               line("A", "facility", 1_000), left("A")]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:170: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....{'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 30000}, {'op': 'totals', 'members': ['A', 'B', 'C']}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 30000}: expected {'allowed': 30000, 'deductible': 30000, 'copay': 0, 'coinsurance': 0, 'member_total': 30000, 'plan_pays': 0}, got {'allowed': 30000, 'coinsurance': 7500, 'copay': 0, 'deductible': 30000, 'member_total': 37500, 'plan_pays': -7500}
+E           assert {'allowed': 3...': 30000, ...} == {'allowed': 3...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -7500} != {'plan_pays': 0}
+E             {'member_total': 37500} != {'member_total': 30000}
+E             {'coinsurance': 7500} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+__________________ test_family_deductible_limits_what_is_left __________________
+
+    def test_family_deductible_limits_what_is_left():
+        ops = [{"op": "new", "plan": plan(family_deductible=60_000)},
+               line("A", "facility", 40_000), left("B"), line("B", "facility", 30_000),
+               left("A"), left("C"), line("C", "facility", 8_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:177: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 60000, 'coinsurance': 2500, 'office_copay': 3000, .....{'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 30000}, {'op': 'totals', 'members': ['A', 'B', 'C']}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 40000}: expected {'allowed': 40000, 'deductible': 40000, 'copay': 0, 'coinsurance': 0, 'member_total': 40000, 'plan_pays': 0}, got {'allowed': 40000, 'coinsurance': 10000, 'copay': 0, 'deductible': 40000, 'member_total': 50000, 'plan_pays': -10000}
+E           assert {'allowed': 4...': 40000, ...} == {'allowed': 4...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -10000} != {'plan_pays': 0}
+E             {'member_total': 50000} != {'member_total': 40000}
+E             {'coinsurance': 10000} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+________ test_plan_without_family_deductible_uses_the_member_remainder _________
+
+    def test_plan_without_family_deductible_uses_the_member_remainder():
+        for family in (0, -1):
+            ops = [{"op": "new", "plan": plan(family_deductible=family)},
+                   line("A", "facility", 40_000), left("B"), line("B", "facility", 30_000),
+                   left("B"), line("C", "facility", 60_000)]
+>           check(with_totals(ops))
+
+/tests/test_outputs.py:185: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}},...{'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 30000}, {'op': 'totals', 'members': ['A', 'B', 'C']}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 40000}: expected {'allowed': 40000, 'deductible': 40000, 'copay': 0, 'coinsurance': 0, 'member_total': 40000, 'plan_pays': 0}, got {'allowed': 40000, 'coinsurance': 10000, 'copay': 0, 'deductible': 40000, 'member_total': 50000, 'plan_pays': -10000}
+E           assert {'allowed': 4...': 40000, ...} == {'allowed': 4...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -10000} != {'plan_pays': 0}
+E             {'member_total': 50000} != {'member_total': 40000}
+E             {'coinsurance': 10000} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_____________________ test_deductible_left_is_not_clamped ______________________
+
+    def test_deductible_left_is_not_clamped():
+        ops = [{"op": "new", "plan": plan(deductible=-2_000, family_deductible=0)},
+               left("A"), line("A", "facility", 10_000), left("A"), line("B", "facility", 400)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:191: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': -2000, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}},...'A', 'B', 'C']}, {'op': 'left', 'member': 'A'}, {'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 400}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 2 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 10000}: expected {'allowed': 10000, 'deductible': -2000, 'copay': 0, 'coinsurance': 3000, 'member_total': 1000, 'plan_pays': 9000}, got {'allowed': 10000, 'coinsurance': 2500, 'copay': 0, 'deductible': -2000, 'member_total': 500, 'plan_pays': 9500}
+E           assert {'allowed': 1...': -2000, ...} == {'allowed': 1...e': 3000, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 9500} != {'plan_pays': 9000}
+E             {'member_total': 500} != {'member_total': 1000}
+E             {'coinsurance': 2500} != {'coinsurance': 3000}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+___________ test_coinsurance_is_taken_on_what_the_deductible_leaves ____________
+
+    def test_coinsurance_is_taken_on_what_the_deductible_leaves():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "facility", 50_400), line("B", "facility", 20_000), line("B", "facility", 40_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:197: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....{'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 40000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 50400}: expected {'allowed': 50400, 'deductible': 50000, 'copay': 0, 'coinsurance': 100, 'member_total': 50100, 'plan_pays': 300}, got {'allowed': 50400, 'coinsurance': 12600, 'copay': 0, 'deductible': 50000, 'member_total': 62600, 'plan_pays': -12200}
+E           assert {'allowed': 5...': 50000, ...} == {'allowed': 5...ce': 100, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -12200} != {'plan_pays': 300}
+E             {'member_total': 62600} != {'member_total': 50100}
+E             {'coinsurance': 12600} != {'coinsurance': 100}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+______________________ test_member_maximum_cuts_the_share ______________________
+
+    def test_member_maximum_cuts_the_share():
+        ops = [{"op": "new", "plan": plan(deductible=10_000, oop_max=20_000)},
+               line("A", "facility", 30_000), line("A", "facility", 40_000), line("A", "office", 5_000),
+               line("A", "facility", 9_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 10000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....}, {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 5000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 30000}: expected {'allowed': 30000, 'deductible': 10000, 'copay': 0, 'coinsurance': 5000, 'member_total': 15000, 'plan_pays': 15000}, got {'allowed': 30000, 'coinsurance': 7500, 'copay': 0, 'deductible': 10000, 'member_total': 17500, 'plan_pays': 12500}
+E           assert {'allowed': 3...': 10000, ...} == {'allowed': 3...e': 5000, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 12500} != {'plan_pays': 15000}
+E             {'member_total': 17500} != {'member_total': 15000}
+E             {'coinsurance': 7500} != {'coinsurance': 5000}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+__________ test_family_maximum_cuts_before_a_member_reaches_their_own __________
+
+    def test_family_maximum_cuts_before_a_member_reaches_their_own():
+        ops = [{"op": "new", "plan": plan(deductible=10_000, family_deductible=0, oop_max=20_000,
+                                          family_oop_max=30_000)},
+               line("A", "facility", 42_000), line("B", "facility", 18_000), line("C", "facility", 20_000),
+               line("C", "office", 4_000), line("A", "facility", 1_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:215: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 10000, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}},...{'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'C', 'kind': 'facility', 'allowed': 20000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 42000}: expected {'allowed': 42000, 'deductible': 10000, 'copay': 0, 'coinsurance': 8000, 'member_total': 18000, 'plan_pays': 24000}, got {'allowed': 42000, 'coinsurance': 10500, 'copay': 0, 'deductible': 9500, 'member_total': 20000, 'plan_pays': 22000}
+E           assert {'allowed': 4...e': 9500, ...} == {'allowed': 4...e': 8000, ...}
+E             
+E             Omitting 2 identical items, use -vv to show
+E             Differing items:
+E             {'deductible': 9500} != {'deductible': 10000}
+E             {'plan_pays': 22000} != {'plan_pays': 24000}
+E             {'member_total': 20000} != {'member_total': 18000}
+E             {'coinsurance': 10500} != {'coinsurance': 8000}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_____________ test_family_maximum_applies_without_a_member_maximum _____________
+
+    def test_family_maximum_applies_without_a_member_maximum():
+        for member_max in (0, -5):
+            ops = [{"op": "new", "plan": plan(deductible=10_000, family_deductible=0, oop_max=member_max,
+                                              family_oop_max=25_000)},
+                   line("A", "facility", 42_000), line("B", "office", 5_000), line("B", "facility", 20_000),
+                   line("C", "facility", 3_000)]
+>           check(with_totals(ops))
+
+/tests/test_outputs.py:224: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 10000, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}},...{'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 20000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 42000}: expected {'allowed': 42000, 'deductible': 10000, 'copay': 0, 'coinsurance': 8000, 'member_total': 18000, 'plan_pays': 24000}, got {'allowed': 42000, 'coinsurance': 10500, 'copay': 0, 'deductible': 10000, 'member_total': 20500, 'plan_pays': 21500}
+E           assert {'allowed': 4...': 10000, ...} == {'allowed': 4...e': 8000, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 21500} != {'plan_pays': 24000}
+E             {'member_total': 20500} != {'member_total': 18000}
+E             {'coinsurance': 10500} != {'coinsurance': 8000}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+____________ test_share_landing_exactly_on_a_maximum_leaves_no_room ____________
+
+    def test_share_landing_exactly_on_a_maximum_leaves_no_room():
+        ops = [{"op": "new", "plan": plan(deductible=10_000, family_deductible=0, oop_max=15_000,
+                                          family_oop_max=0)},
+               line("A", "facility", 30_000), line("A", "office", 5_000), line("A", "facility", 800)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:231: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 10000, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}},..., {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 800}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 30000}: expected {'allowed': 30000, 'deductible': 10000, 'copay': 0, 'coinsurance': 5000, 'member_total': 15000, 'plan_pays': 15000}, got {'allowed': 30000, 'coinsurance': 7500, 'copay': 0, 'deductible': 7500, 'member_total': 15000, 'plan_pays': 15000}
+E           assert {'allowed': 3...e': 7500, ...} == {'allowed': 3...e': 5000, ...}
+E             
+E             Omitting 4 identical items, use -vv to show
+E             Differing items:
+E             {'deductible': 7500} != {'deductible': 10000}
+E             {'coinsurance': 7500} != {'coinsurance': 5000}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+____________ test_cut_takes_coinsurance_then_copay_then_deductible _____________
+
+    def test_cut_takes_coinsurance_then_copay_then_deductible():
+        ops = [{"op": "new", "plan": plan(deductible=10_000, family_deductible=0, oop_max=12_000,
+                                          family_oop_max=0)},
+               line("A", "facility", 30_000),
+               {"op": "new", "plan": plan(deductible=10_000, family_deductible=0, oop_max=4_000,
+                                          family_oop_max=0)},
+               line("B", "facility", 30_000),
+               {"op": "new", "plan": plan(deductible=0, family_deductible=0, oop_max=1_000,
+                                          family_oop_max=0)},
+               line("C", "office", 8_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:244: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 10000, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}},...{'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 30000}, {'op': 'totals', 'members': ['A', 'B', 'C']}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 30000}: expected {'allowed': 30000, 'deductible': 10000, 'copay': 0, 'coinsurance': 2000, 'member_total': 12000, 'plan_pays': 18000}, got {'allowed': 30000, 'coinsurance': 7500, 'copay': 0, 'deductible': 4500, 'member_total': 12000, 'plan_pays': 18000}
+E           assert {'allowed': 3...e': 4500, ...} == {'allowed': 3...e': 2000, ...}
+E             
+E             Omitting 4 identical items, use -vv to show
+E             Differing items:
+E             {'deductible': 4500} != {'deductible': 10000}
+E             {'coinsurance': 7500} != {'coinsurance': 2000}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+____________ test_a_part_at_or_below_zero_gives_nothing_to_the_cut _____________
+
+    def test_a_part_at_or_below_zero_gives_nothing_to_the_cut():
+        ops = [{"op": "new", "plan": plan(deductible=1_000, family_deductible=0, coinsurance=-1_000,
+                                          oop_max=500, family_oop_max=0)},
+               line("A", "facility", 2_000), left("A"), line("A", "facility", 300)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:251: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 1000, 'family_deductible': 0, 'coinsurance': -1000, 'office_copay': 3000, ...}},... 'A'}, {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 300}, {'op': 'totals', 'members': ['A', 'B', 'C']}]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 2000}: expected {'allowed': 2000, 'deductible': 600, 'copay': 0, 'coinsurance': -100, 'member_total': 500, 'plan_pays': 1500}, got {'allowed': 2000, 'coinsurance': 0, 'copay': 0, 'deductible': 700, 'member_total': 700, 'plan_pays': 1300}
+E           assert {'allowed': 2...le': 700, ...} == {'allowed': 2...e': -100, ...}
+E             
+E             Omitting 2 identical items, use -vv to show
+E             Differing items:
+E             {'deductible': 700} != {'deductible': 600}
+E             {'plan_pays': 1300} != {'plan_pays': 1500}
+E             {'member_total': 700} != {'member_total': 500}
+E             {'coinsurance': 0} != {'coinsurance': -100}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+________ test_deductible_total_counts_the_deductible_part_after_the_cut ________
+
+    def test_deductible_total_counts_the_deductible_part_after_the_cut():
+        ops = [{"op": "new", "plan": plan(deductible=30_000, family_deductible=0, oop_max=40_000,
+                                          family_oop_max=0)},
+               line("A", "office", 5_000), line("A", "office", 5_000), line("A", "office", 5_000),
+               line("A", "office", 5_000), line("A", "office", 5_000), line("A", "office", 5_000),
+               line("A", "office", 5_000), line("A", "office", 5_000), line("A", "office", 5_000),
+               line("A", "office", 5_000), line("A", "facility", 20_000), left("A"),
+               line("A", "facility", 20_000)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:265: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 30000, 'family_deductible': 0, 'coinsurance': 2500, 'office_copay': 3000, ...}},...}, {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 5000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 5000}: expected {'allowed': 5000, 'deductible': 0, 'copay': 3000, 'coinsurance': 0, 'member_total': 3000, 'plan_pays': 2000}, got {'allowed': 5000, 'coinsurance': 500, 'copay': 3000, 'deductible': 0, 'member_total': 3500, 'plan_pays': 1500}
+E           assert {'allowed': 5...ible': 0, ...} == {'allowed': 5...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 1500} != {'plan_pays': 2000}
+E             {'member_total': 3500} != {'member_total': 3000}
+E             {'coinsurance': 500} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_________________ test_out_of_pocket_totals_include_the_copay __________________
+
+    def test_out_of_pocket_totals_include_the_copay():
+        ops = [{"op": "new", "plan": plan()},
+               line("A", "office", 5_000), line("B", "office", 2_000), line("A", "facility", 20_000),
+               line("C", "office", 0)]
+>       check(with_totals(ops))
+
+/tests/test_outputs.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....{'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 20000}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 5000}: expected {'allowed': 5000, 'deductible': 0, 'copay': 3000, 'coinsurance': 0, 'member_total': 3000, 'plan_pays': 2000}, got {'allowed': 5000, 'coinsurance': 500, 'copay': 3000, 'deductible': 0, 'member_total': 3500, 'plan_pays': 1500}
+E           assert {'allowed': 5...ible': 0, ...} == {'allowed': 5...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 1500} != {'plan_pays': 2000}
+E             {'member_total': 3500} != {'member_total': 3000}
+E             {'coinsurance': 500} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_________ test_family_total_without_a_family_maximum_keeps_todays_sum __________
+
+    def test_family_total_without_a_family_maximum_keeps_todays_sum():
+        for family_max in (0, -3):
+            ops = [{"op": "new", "plan": plan(deductible=0, family_deductible=0, coinsurance=0,
+                                              family_oop_max=family_max)},
+                   line("A", "office", 5_000), line("B", "facility", 7_000), line("B", "office", 4_000)]
+            check(with_totals(ops), shipped_too=True)
+            ops = [{"op": "new", "plan": plan(family_oop_max=family_max)},
+                   line("A", "office", 5_000), line("A", "facility", 60_000), line("B", "office", 1_200),
+                   line("B", "facility", 9_000)]
+>           check(with_totals(ops))
+
+/tests/test_outputs.py:284: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....}, {'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'office', 'allowed': 1200}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'office', 'allowed': 5000}: expected {'allowed': 5000, 'deductible': 0, 'copay': 3000, 'coinsurance': 0, 'member_total': 3000, 'plan_pays': 2000}, got {'allowed': 5000, 'coinsurance': 500, 'copay': 3000, 'deductible': 0, 'member_total': 3500, 'plan_pays': 1500}
+E           assert {'allowed': 5...ible': 0, ...} == {'allowed': 5...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': 1500} != {'plan_pays': 2000}
+E             {'member_total': 3500} != {'member_total': 3000}
+E             {'coinsurance': 500} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+______________________ test_ledger_record_called_directly ______________________
+
+    def test_ledger_record_called_directly():
+        for family_max in (350_000, 0):
+            ops = [{"op": "new", "plan": plan(family_oop_max=family_max)},
+                   {"op": "record", "member": "A", "deductible": 1_000, "copay": 3_000, "coinsurance": 250},
+                   {"op": "record", "member": "B", "deductible": 0, "copay": 4_000, "coinsurance": 0},
+                   {"op": "record", "member": "A", "deductible": -500, "copay": -3_000, "coinsurance": 7},
+                   left("A"), left("B")]
+>           check(with_totals(ops))
+
+/tests/test_outputs.py:294: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....: 'totals', 'members': ['A', 'B', 'C']}, {'op': 'record', 'member': 'A', 'deductible': -500, 'copay': -3000, ...}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 2 {'op': 'totals', 'members': ['A', 'B', 'C']}: expected {'deductible': {'A': 1000, 'B': 0, 'C': 0}, 'oop': {'A': 4250, 'B': 0, 'C': 0}, 'family_deductible': 1000, 'family_oop': 4250}, got {'deductible': {'A': 1000, 'B': 0, 'C': 0}, 'family_deductible': 1000, 'family_oop': 1250, 'oop': {'A': 4250, 'B': 0, 'C': 0}}
+E           assert {'deductible'...': 0, 'C': 0}} == {'deductible'...ly_oop': 4250}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'family_oop': 1250} != {'family_oop': 4250}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_______________________ test_long_session_ordinary_plan ________________________
+
+    def test_long_session_ordinary_plan():
+>       check(lcg_session(11, {}, 250))
+
+/tests/test_outputs.py:318: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 50000, 'family_deductible': 100000, 'coinsurance': 2500, 'office_copay': 3000, ....{'op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'B', 'kind': 'facility', 'allowed': 28143}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 31496}: expected {'allowed': 31496, 'deductible': 31496, 'copay': 0, 'coinsurance': 0, 'member_total': 31496, 'plan_pays': 0}, got {'allowed': 31496, 'coinsurance': 7874, 'copay': 0, 'deductible': 31496, 'member_total': 39370, 'plan_pays': -7874}
+E           assert {'allowed': 3...': 31496, ...} == {'allowed': 3...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -7874} != {'plan_pays': 0}
+E             {'member_total': 39370} != {'member_total': 31496}
+E             {'coinsurance': 7874} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+_______________________ test_long_session_tight_maximums _______________________
+
+    def test_long_session_tight_maximums():
+>       check(lcg_session(23, {"deductible": 40_000, "family_deductible": 70_000, "coinsurance": 3_500,
+                               "oop_max": 90_000, "family_oop_max": 150_000}, 300))
+
+/tests/test_outputs.py:322: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 40000, 'family_deductible': 70000, 'coinsurance': 3500, 'office_copay': 3000, .....op': 'totals', 'members': ['A', 'B', 'C']}, {'op': 'line', 'member': 'C', 'kind': 'preventive', 'allowed': 19256}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 1 {'op': 'line', 'member': 'C', 'kind': 'facility', 'allowed': 8856}: expected {'allowed': 8856, 'deductible': 8856, 'copay': 0, 'coinsurance': 0, 'member_total': 8856, 'plan_pays': 0}, got {'allowed': 8856, 'coinsurance': 3100, 'copay': 0, 'deductible': 8856, 'member_total': 11956, 'plan_pays': -3100}
+E           assert {'allowed': 8...e': 8856, ...} == {'allowed': 8...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -3100} != {'plan_pays': 0}
+E             {'member_total': 11956} != {'member_total': 8856}
+E             {'coinsurance': 3100} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+______________________ test_long_session_unusual_settings ______________________
+
+    def test_long_session_unusual_settings():
+>       check(lcg_session(37, {"deductible": 25_000, "family_deductible": 0, "coinsurance": 11_500,
+                               "oop_max": 0, "family_oop_max": 120_000}, 250))
+
+/tests/test_outputs.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ops = [{'op': 'new', 'plan': {'deductible': 25000, 'family_deductible': 0, 'coinsurance': 11500, 'office_copay': 3000, ...}}...'}, {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 4}, {'op': 'totals', 'members': ['A', 'B', 'C']}, ...]
+shipped_too = False
+
+    def check(ops, shipped_too=False):
+        expected = model.run_ops(ops)
+        got = run_job(ops)
+        for index, (op, want, have) in enumerate(zip(ops, expected, got)):
+>           assert have == want, f"step {index} {op}: expected {want}, got {have}"
+E           AssertionError: step 4 {'op': 'line', 'member': 'A', 'kind': 'facility', 'allowed': 4}: expected {'allowed': 4, 'deductible': 4, 'copay': 0, 'coinsurance': 0, 'member_total': 4, 'plan_pays': 0}, got {'allowed': 4, 'coinsurance': 5, 'copay': 0, 'deductible': 4, 'member_total': 9, 'plan_pays': -5}
+E           assert {'allowed': 4...ible': 4, ...} == {'allowed': 4...ance': 0, ...}
+E             
+E             Omitting 3 identical items, use -vv to show
+E             Differing items:
+E             {'plan_pays': -5} != {'plan_pays': 0}
+E             {'member_total': 9} != {'member_total': 4}
+E             {'coinsurance': 5} != {'coinsurance': 0}
+E             Use -v to get more diff
+
+/tests/test_outputs.py:81: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_share_outside_the_described_rates_keeps_todays_rounding
+PASSED ../../tests/test_outputs.py::test_rates_outside_the_whole_price_with_todays_rounding
+PASSED ../../tests/test_outputs.py::test_driver_runs_the_delivered_package
+FAILED ../../tests/test_outputs.py::test_share_rounds_half_to_even - Assertio...
+FAILED ../../tests/test_outputs.py::test_facility_coinsurance_rounds_half_to_even
+FAILED ../../tests/test_outputs.py::test_other_kinds_are_priced_as_facility_lines
+FAILED ../../tests/test_outputs.py::test_preventive_line_is_free_and_adds_nothing
+FAILED ../../tests/test_outputs.py::test_office_copay_is_the_allowed_amount_when_smaller
+FAILED ../../tests/test_outputs.py::test_office_line_of_zero_or_less_still_charges_the_copay
+FAILED ../../tests/test_outputs.py::test_office_line_takes_no_deductible_or_coinsurance
+FAILED ../../tests/test_outputs.py::test_deductible_is_met_part_way_across_lines
+FAILED ../../tests/test_outputs.py::test_family_deductible_limits_what_is_left
+FAILED ../../tests/test_outputs.py::test_plan_without_family_deductible_uses_the_member_remainder
+FAILED ../../tests/test_outputs.py::test_deductible_left_is_not_clamped - Ass...
+FAILED ../../tests/test_outputs.py::test_coinsurance_is_taken_on_what_the_deductible_leaves
+FAILED ../../tests/test_outputs.py::test_member_maximum_cuts_the_share - Asse...
+FAILED ../../tests/test_outputs.py::test_family_maximum_cuts_before_a_member_reaches_their_own
+FAILED ../../tests/test_outputs.py::test_family_maximum_applies_without_a_member_maximum
+FAILED ../../tests/test_outputs.py::test_share_landing_exactly_on_a_maximum_leaves_no_room
+FAILED ../../tests/test_outputs.py::test_cut_takes_coinsurance_then_copay_then_deductible
+FAILED ../../tests/test_outputs.py::test_a_part_at_or_below_zero_gives_nothing_to_the_cut
+FAILED ../../tests/test_outputs.py::test_deductible_total_counts_the_deductible_part_after_the_cut
+FAILED ../../tests/test_outputs.py::test_out_of_pocket_totals_include_the_copay
+FAILED ../../tests/test_outputs.py::test_family_total_without_a_family_maximum_keeps_todays_sum
+FAILED ../../tests/test_outputs.py::test_ledger_record_called_directly - Asse...
+FAILED ../../tests/test_outputs.py::test_long_session_ordinary_plan - Asserti...
+FAILED ../../tests/test_outputs.py::test_long_session_tight_maximums - Assert...
+FAILED ../../tests/test_outputs.py::test_long_session_unusual_settings - Asse...
+========================= 25 failed, 3 passed in 0.95s =========================

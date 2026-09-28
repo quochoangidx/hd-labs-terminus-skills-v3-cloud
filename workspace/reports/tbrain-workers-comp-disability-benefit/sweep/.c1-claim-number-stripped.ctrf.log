@@ -1,0 +1,154 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 23 items
+
+../../tests/test_outputs.py ..................FFF..                      [100%]
+
+=================================== FAILURES ===================================
+________________________ test_statement_order_and_keys _________________________
+
+    def test_statement_order_and_keys():
+        """Statements come in job order with claim numbers as given, exactly the README's keys, integer figures."""
+>       check_family("statement_order")
+
+/tests/test_outputs.py:387: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:239: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'Z', 'aww': 94357, 'rate': 62905, 'waiting_days': 3, ...}, {'claim': '0000000000000000000000...0, 'rate': 102353, 'waiting_days': 3, ...}, {'claim': 'a', 'aww': 101443, 'rate': 67629, 'waiting_days': 3, ...}, ...]}
+expected = {'statements': [{'claim': 'Z', 'aww': 94357, 'rate': 62905, 'waiting_days': 3, ...}, {'claim': '0000000000000000000000...0, 'rate': 102353, 'waiting_days': 3, ...}, {'claim': 'a', 'aww': 101443, 'rate': 67629, 'waiting_days': 3, ...}, ...]}
+label = 'statement_order job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: statement_order job 0 statement 4 (' sp ') claim: 'sp', expected ' sp '
+E               assert (<class 'str'> is <class 'str'> and 'sp' == ' sp '
+E                +  where <class 'str'> = type('sp')
+E                +  and   <class 'str'> = type(' sp ')
+E                 
+E                 -  sp 
+E                 + sp)
+
+/tests/test_outputs.py:234: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """40 rate rows, 200 claims, 120 wage lines, 12 periods, 104 partial weeks, 1 and 500,000 cents, 2016 and 2035."""
+        check_family("limits_claims")
+        row = load("limits_job")[0]
+        job, statements = row["job"], row["statements"]
+        rng = random.Random(RELABEL_SEED)
+        names = fresh_names(rng, 200)
+        claims = [dict(job["claims"][k % len(job["claims"])], claim=names[k]) for k in range(200)]
+        rows = [dict(statements["statements"][k % len(job["claims"])], claim=names[k]) for k in range(200)]
+        big = dict(job, claims=claims)
+        within_limits(big)
+        assert len(big["rates"]) == 40 and len(big["claims"]) == 200
+>       compare(run(big), {"statements": rows}, f"limits job of 200 claims (seed {RELABEL_SEED})")
+
+/tests/test_outputs.py:402: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'S', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, {'claim': 'RD48Y9W7EFA32VATKULMHG...1992, 'rate': 1992, 'waiting_days': 2, ...}, {'claim': 'F', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, ...]}
+expected = {'statements': [{'claim': 'S', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, {'claim': 'RD48Y9W7EFA32VATKULMHG...1992, 'rate': 1992, 'waiting_days': 2, ...}, {'claim': 'F', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, ...]}
+label = 'limits job of 200 claims (seed 3672773363954871837)'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: limits job of 200 claims (seed 3672773363954871837) statement 2 (' 1EKW0Z ') claim: '1EKW0Z', expected ' 1EKW0Z '
+E               assert (<class 'str'> is <class 'str'> and '1EKW0Z' == ' 1EKW0Z '
+E                +  where <class 'str'> = type('1EKW0Z')
+E                +  and   <class 'str'> = type(' 1EKW0Z ')
+E                 
+E                 -  1EKW0Z 
+E                 ? -      -
+E                 + 1EKW0Z)
+
+/tests/test_outputs.py:234: AssertionError
+_____________________________ test_generated_jobs ______________________________
+
+    def test_generated_jobs():
+        """Seeded jobs over the governed domain, as sealed and under fresh claim numbers and orders."""
+        check_family("generated")
+        rng = random.Random(RELABEL_SEED)
+        for number, row in enumerate(load("generated")):
+            job, expected = relabel(row["job"], row["statements"], rng)
+            within_limits(job)
+>           compare(run(job), expected, f"generated job {number} relabelled (seed {RELABEL_SEED})")
+
+/tests/test_outputs.py:412: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'R', 'aww': 64587, 'rate': 43058, 'waiting_days': 3, ...}, {'claim': '48Y9W7EFA32VATKULMHGPH...42, 'rate': 50495, 'waiting_days': 3, ...}, {'claim': 'KW0ZCW', 'aww': 128045, 'rate': 85363, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'R', 'aww': 64587, 'rate': 43058, 'waiting_days': 3, ...}, {'claim': '48Y9W7EFA32VATKULMHGPH..., 'rate': 50495, 'waiting_days': 3, ...}, {'claim': ' KW0ZCW ', 'aww': 128045, 'rate': 85363, 'waiting_days': 3, ...}]}
+label = 'generated job 0 relabelled (seed 3672773363954871837)'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: generated job 0 relabelled (seed 3672773363954871837) statement 2 (' KW0ZCW ') claim: 'KW0ZCW', expected ' KW0ZCW '
+E               assert (<class 'str'> is <class 'str'> and 'KW0ZCW' == ' KW0ZCW '
+E                +  where <class 'str'> = type('KW0ZCW')
+E                +  and   <class 'str'> = type(' KW0ZCW ')
+E                 
+E                 -  KW0ZCW 
+E                 ? -      -
+E                 + KW0ZCW)
+
+/tests/test_outputs.py:234: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays
+PASSED ../../tests/test_outputs.py::test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay
+PASSED ../../tests/test_outputs.py::test_rule_2_3_base_period_ends_before_the_week_of_injury
+PASSED ../../tests/test_outputs.py::test_rule_3_3_average_weekly_wage_divides_by_thirteen
+PASSED ../../tests/test_outputs.py::test_rule_3_3_no_week_paid_gives_nought
+PASSED ../../tests/test_outputs.py::test_rule_3_4_rate_is_two_thirds
+PASSED ../../tests/test_outputs.py::test_rule_3_4_maximum_and_minimum_bound_the_rate
+PASSED ../../tests/test_outputs.py::test_rule_2_4_row_in_force_on_the_date_of_injury
+PASSED ../../tests/test_outputs.py::test_rule_3_5_low_wage_rate_is_the_aww
+PASSED ../../tests/test_outputs.py::test_rule_2_5_both_ends_of_a_period_count
+PASSED ../../tests/test_outputs.py::test_rule_2_6_three_waiting_days
+PASSED ../../tests/test_outputs.py::test_rule_4_1_retroactive_from_fourteen_days
+PASSED ../../tests/test_outputs.py::test_rule_4_3_amount_rounded_to_the_cent
+PASSED ../../tests/test_outputs.py::test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate
+PASSED ../../tests/test_outputs.py::test_rule_2_8_week_of_exactly_1000_cents_is_partial_disability
+PASSED ../../tests/test_outputs.py::test_rule_2_7_week_earning_the_aww_has_no_wage_loss
+PASSED ../../tests/test_outputs.py::test_correction_below_a_weeks_pay_keeps_its_paydays_week
+PASSED ../../tests/test_outputs.py::test_week_below_1000_cents_keeps_todays_share
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_statement_order_and_keys - Assertion...
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+FAILED ../../tests/test_outputs.py::test_generated_jobs - AssertionError: gen...
+========================= 3 failed, 20 passed in 1.33s =========================

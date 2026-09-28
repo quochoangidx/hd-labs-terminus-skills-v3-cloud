@@ -1,0 +1,173 @@
+{
+  "axis": "deterministic_execution",
+  "reviewer_id": "deterministic_execution-B",
+  "snapshot_sha256": "cfa6055440459b0997ed8fa36f08cd13540755193079cff3b9d8c4daabd307de",
+  "severity": "None",
+  "summary": "Every graded batch and expected report is a committed fixture pinned by SHA-256 and row count in tests/expected/ROSTER. No random draw, wall clock, network fetch, filesystem-order dependence or fixed sleep can change what is graded or how it is scored. Boundary cases are hand-built exact fixtures, not random draws. The seeded generator runs only at authoring time. Base images are pinned by digest and the verifier's pytest version is pinned.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "task.toml",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/tools/metalquant_run.py",
+      "solution/fix.patch",
+      "solution/fixtures.py",
+      "solution/jobgen.py",
+      "solution/model.py",
+      "solution/seal.py",
+      "solution/solve.sh",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/tools/metalquant_run.py",
+      "tests/expected/ROSTER",
+      "tests/expected/blank_mean.jsonl",
+      "tests/expected/blank_no_results.jsonl",
+      "tests/expected/blank_nondetects.jsonl",
+      "tests/expected/blank_single_result.jsonl",
+      "tests/expected/calibration.jsonl",
+      "tests/expected/capacity.jsonl",
+      "tests/expected/ccv_bracketing.jsonl",
+      "tests/expected/ccv_limits.jsonl",
+      "tests/expected/ccv_unbracketed.jsonl",
+      "tests/expected/dilution.jsonl",
+      "tests/expected/flag_basis.jsonl",
+      "tests/expected/flag_limits.jsonl",
+      "tests/expected/generated-1.jsonl",
+      "tests/expected/generated-2.jsonl",
+      "tests/expected/negative_readings.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/spike_nondetects.jsonl",
+      "tests/expected/spike_recovery.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 45 files in packet-manifest.json with the files read above; every file was read in full.",
+    "Traced where graded inputs come from. test_outputs.py:49-58 loads only tests/expected/*.jsonl, checks each file against its SHA-256 and row count in ROSTER, and check_family (test_outputs.py:128-130) reduces exactly those committed batches. Nothing is generated at grading time.",
+    "Confirmed that seal.py (random.Random(SEED=20260926), seal.py:31,117) and jobgen.py run only at authoring time. seal.py:10-11 says so, and nothing in tests/ imports solution code or random.",
+    "Confirmed that the limit boundary cases (exact MDL/LOQ, a hair below each limit, mdl=loq, CCV 90.0/110.0 inclusive and rounding at 110.04/110.06/89.96/89.94) are hand-built fixtures in fixtures.py:142-172 and are present in flag_limits.jsonl and ccv_limits.jsonl, not random draws.",
+    "Checked the use of time. test_outputs.py:28 DEADLINE = monotonic()+1500 is only an overall timeout budget, passed to communicate(). About 46 short driver runs fit well inside it and inside the verifier timeout_sec=1800 (task.toml:19). No test compares against the wall clock or date, and the SOP has no time-window rules.",
+    "Checked readiness and timing: each batch is one synchronous subprocess whose exit and stdout are collected by Popen.communicate (test_outputs.py:61-82). There are no sleeps and no services to wait for.",
+    "Checked randomness in the harness: tempfile.mkdtemp names (test_outputs.py:87-88) are scratch only. The batch file is always named batch.json, and neither path is compared with the report, so this matches D-3 and cannot change the grade.",
+    "Checked ordering. The report lists must follow run order (SOP 8, reduction-sop.md:109) and are compared position by position. blank_levels, whose key order the SOP says carries no meaning (reduction-sop.md:100-101), is compared as a key set plus values (test_outputs.py:110-113). Entry keys are compared as sets and the JSON is parsed, not compared as text.",
+    "Checked hash randomization. env -i clears PYTHONHASHSEED, so string hashing is randomized on every run. The shipped package and the reference iterate only lists and insertion-ordered dicts, so the output order is stable, and the contract requires list order anyway.",
+    "Checked float determinism. Hand-built fixtures use is_counts=1024 and exactly representable lines (fixtures.py:1-13), and seal.py:35-56 checks them in exact rational arithmetic. Generated batches keep every judged value at least 1e-5 relative away from its limit or rounding tie (jobgen.py:18-22,139-146), so no flag or pass depends on float summation order. The verifier writes batches with json.dump, which round-trips floats exactly.",
+    "Checked pinning. Both Dockerfiles use python:3.13-slim-bookworm@sha256:01f4... (environment/Dockerfile:1, tests/Dockerfile:1), and the verifier pins pytest==9.1.1 and pytest-json-ctrf==0.5.2 (tests/Dockerfile:3). The only unpinned apt packages (tmux, asciinema, patch) are in the agent image, and the separate verifier image does not use them to grade. The verifier runs with network disabled (task.toml:21), and all inputs are local.",
+    "Checked test-order independence. Each reduce() call uses fresh stage and work directories, and tests share no state. pytest is invoked with -p no:cacheprovider -p no:randomly (tests/test.sh:20).",
+    "Checked the reward channel: test.sh writes 0 first and 1 only on pytest exit 0 (test.sh:5,21-26), and there is no race on reward.txt."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Fixed fixtures or explicit stable seed; boundary cases guaranteed",
+      "status": "checked",
+      "reason": "All graded batches are committed JSONL files pinned by SHA-256. The seeded generator runs only at authoring time. Limit and tie boundary cases are explicit hand-built fixtures in named families.",
+      "evidence": ["tests/test_outputs.py:38-58", "tests/test_outputs.py:128-203", "tests/expected/ROSTER:1-18", "solution/seal.py:10-11", "solution/seal.py:31", "solution/seal.py:117", "solution/fixtures.py:142-172", "tests/expected/flag_limits.jsonl:1-3", "tests/expected/ccv_limits.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Evaluation clock fixed when expiry/time windows are graded",
+      "status": "not_applicable",
+      "reason": "Neither the SOP nor the tests contain dates, expiry or time windows. The only time use is a monotonic timeout budget that does not choose inputs or expected values.",
+      "evidence": ["environment/app/docs/reduction-sop.md:1-113", "tests/test_outputs.py:28", "tests/test_outputs.py:95-97"],
+      "finding_ids": []
+    },
+    {
+      "category": "Dependencies pinned and required inputs local",
+      "status": "checked",
+      "reason": "Base images are pinned by digest and verifier pytest packages are pinned by version. The verifier runs with network disabled, and every batch and golden is local under /tests. Unpinned apt packages exist only in the agent image and do not affect grading.",
+      "evidence": ["environment/Dockerfile:1-6", "tests/Dockerfile:1-13", "task.toml:18-21"],
+      "finding_ids": []
+    },
+    {
+      "category": "Ordering sorted where the contract requires; equivalent orderings accepted where not",
+      "status": "checked",
+      "reason": "The report lists must follow run order and analyte order under the contract, and they are compared position by position. blank_levels key order carries no meaning, and it is compared as a set. JSON is parsed before comparison.",
+      "evidence": ["environment/app/docs/reduction-sop.md:100-110", "instruction.md:7", "tests/test_outputs.py:108-125"],
+      "finding_ids": []
+    },
+    {
+      "category": "Readiness condition instead of fixed sleep",
+      "status": "checked",
+      "reason": "There are no services or sleeps. Each reduction is a synchronous subprocess that is waited on with communicate(), and its process group is killed afterwards.",
+      "evidence": ["tests/test_outputs.py:61-99"],
+      "finding_ids": []
+    },
+    {
+      "category": "Filesystem/iteration ordering and hash randomization",
+      "status": "checked",
+      "reason": "Families are loaded by explicit name, not by directory listing. The ROSTER is parsed line by line. The reference output depends only on list order and insertion-ordered dicts, so the randomized PYTHONHASHSEED under env -i cannot change the order.",
+      "evidence": ["tests/test_outputs.py:27", "tests/test_outputs.py:38-46", "environment/app/src/metalquant/report.py:8-66", "solution/fix.patch:1-120"],
+      "finding_ids": []
+    },
+    {
+      "category": "Random scratch values that cannot change grading (D-3)",
+      "status": "checked",
+      "reason": "mkdtemp directory names are scratch only. The batch filename is always batch.json, and neither path is compared with the output.",
+      "evidence": ["tests/test_outputs.py:85-99"],
+      "finding_ids": []
+    },
+    {
+      "category": "Floating-point stability at graded limits",
+      "status": "checked",
+      "reason": "Hand-built fixtures are exactly representable and are checked in Fraction arithmetic. Generated batches keep a 1e-5 margin from every MDL/LOQ and rounding tie, and numeric values are compared with 1e-6 tolerance. The same submission gets the same flags on every run.",
+      "evidence": ["solution/fixtures.py:1-13", "solution/seal.py:35-56", "solution/jobgen.py:18-22", "solution/jobgen.py:111-154", "tests/test_outputs.py:102-105"],
+      "finding_ids": []
+    },
+    {
+      "category": "Repeated clean-run stability of reward channel and test isolation",
+      "status": "checked",
+      "reason": "Reward is 0 by default and set to 1 only when pytest exits 0. Tests share no mutable state, since each batch gets fresh directories. The pytest cache and random-order plugins are disabled.",
+      "evidence": ["tests/test.sh:1-26", "tests/test_outputs.py:85-99"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["SOP 6 CCV pass on recovery rounded to one decimal (inclusive)", "SOP 1 recoveries never within 1e-6 of a rounding tie"],
+      "case_or_path": "The generated CCV targets 0.8996, 0.9004, 1.1003 and 1.1006 x true land near the 90/110 limits. jobgen.valid rejects any draw within 1e-5 of rec*10 of a .5 tie, so pass/fail is the same on every run and for any valid float evaluation order. The ccv_limits hand-built values are 0.01 or more from a tie.",
+      "status": "checked",
+      "evidence": ["solution/jobgen.py:78", "solution/jobgen.py:135-142", "environment/app/docs/reduction-sop.md:35-37", "tests/expected/ccv_limits.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 5 flags at exact MDL/LOQ on the corrected reading", "SOP 4 blank level as mean of blank results"],
+      "case_or_path": "In flag_limits batch 0, the blank mean is 2.5 and W-91's corrected reading is exactly 1.0 (MDL), which gives J. seal.check_exact asserts that the reading, the mean from three summation methods and the corrected value are exact, so the flag cannot vary between runs.",
+      "status": "checked",
+      "evidence": ["solution/fixtures.py:143-150", "solution/seal.py:44-56", "tests/expected/flag_limits.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 8 list order follows run order", "per-run analyte key order differing from analytes order"],
+      "case_or_path": "report_order batch 1 lists per-run keys as Cd, Pb while analytes are Pb, Cd. The expected order comes from the analytes list, and blank_levels is compared by key set, so a correct submission gets the same verdict whatever the dict order.",
+      "status": "checked",
+      "evidence": ["solution/fixtures.py:256-272", "tests/expected/report_order.jsonl:2", "tests/test_outputs.py:110-125"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["per-batch subprocess timeout", "shared 1500 s verifier budget"],
+      "case_or_path": "The remaining budget is passed as each subprocess timeout. With about 46 short invocations, 1500 s leaves ample slack below the 1800 s verifier timeout, so ordinary scheduling jitter cannot turn a pass into a timeout.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:28", "tests/test_outputs.py:95-97", "task.toml:19"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

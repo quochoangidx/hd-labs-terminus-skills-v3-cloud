@@ -1,0 +1,56 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-fleet-tire-tread-compliance",
+ "stage": "after contract-review-r1 repair (F1 upheld), before the skeleton pair",
+ "design_rule": "in both traps the minimal natural fix of the driving departure is a one-line change the silent case flows through; keeping it needs an added `if`; no additive branch beside untouched code fixes the departure without reaching the silent case",
+ "traps": [
+  {
+   "id": "T1_wear_bar_reading_keeps_the_figure_shown",
+   "kind": "apply-everywhere edge inside the per-reading depth loop D1 forces the solver to rewrite",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "D1 (3.1) forces gauges.reading_depths(); the shipped loop appends every figure shown, so the minimal fix `depth = shown + table[gauge]` corrects every reading",
+    "bare_two_hop_representation": "a reading is [date, odometer, shown, gauge]; nothing but the shown figure marks a wear-bar reading; 2.1 'a measurement is a reading whose gauge showed 10 tenths or more' is the only boundary; 1.5 describes the probe on the wear bar in domain words ('only a few tenths') without a figure",
+    "one_routing_decision": "add the offset or not",
+    "keeping_requires_adding_code": "`if shown >= 10:` around the correction",
+    "definition_chain": "1.5 -> 2.1 (threshold) -> 3.1 (a measurement's measured depth) -> 4.1 (latest depth is the measured depth of the latest reading; a wear-bar reading has none) -> 4.2/5.1 take only the latest depth -> reach rule keeps today's figure shown"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none after contract-review-r1 F1: 4.1 no longer says 'the depth of its latest reading' for every reading; every figure sections 4-5 take comes from 'measured depth', whose domain is measurements. Soft risk remains: 1.3 describes the offset as what must be added to what a gauge shows",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "moderate: a calibration offset is a property of the gauge, so correcting every reading is natural",
+    "unnamed_shared_step": "no",
+    "trap_in_several_tests": "no: only family T1 carries a first or latest reading under 10 tenths on a gauge with a nonzero offset (gen.trap_inputs, asserted by the scorer)"
+   },
+   "flags": "0 hard, 1 moderate (contrary instinct), 1 soft (1.3 wording)",
+   "evidence": {
+    "minimal_fix_T1-correct-every-reading": "fails only T1 (receipts/score-skeleton-validation.json, receipts/fuzz-model-vs-oracle.json)",
+    "shipped_step_equals_model": "470/470 wear-bar readings (fuzz silent_check)"
+   }
+  },
+  {
+   "id": "T2_part_worn_tire_keeps_first_reading_basis",
+   "kind": "two-hop exclusion inside the per-tire wear expression D2 forces the solver to rewrite",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "D2 (4.2) forces wear.tread_worn(); the minimal fix replaces the baseline (first depth, first odometer) by (new depth, mounting odometer) for every tire",
+    "bare_two_hop_representation": "every tire carries new_depth and mounted_km, so the new-depth basis is computable for all; only 2.3 'a fresh tire is one whose first reading's depth is no more than 10 tenths below its new depth' separates them; 1.4 describes tires moved over part-worn in domain words without a figure",
+    "one_routing_decision": "which basis the tread worn is measured from",
+    "keeping_requires_adding_code": "`if new_depth - first_depth <= 10:` around the new basis",
+    "definition_chain": "1.4 -> 2.3 (threshold) -> 4.2 (subject 'a fresh tire') -> 4.3 (every tire has a wear rate over the distance it was worn; closes the exclusion reading) -> reach rule keeps today's first-reading basis"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 4.3 uses 'tread worn' and 'distance' without placing them; only 4.2 does, for a fresh tire",
+    "no_definitional_chain": "no",
+    "contrary_expert_instinct": "soft: for a part-worn tire the new depth and the mounting odometer belong to different histories, so measuring from its first reading here is what a tire manager would do",
+    "unnamed_shared_step": "no",
+    "trap_in_several_tests": "no: only family T2 has a tire that is not fresh"
+   },
+   "flags": "0 hard, 1 soft",
+   "evidence": {
+    "minimal_fix_T2-new-depth-basis-for-every-tire": "fails only T2",
+    "exclusion_reading_T2-no-wear-for-part-worn": "fails T2",
+    "shipped_step_equals_model": "446/446 part-worn tires (fuzz silent_check, shipped wear step fed governed depths)"
+   }
+  }
+ ],
+ "independence": "different loops and files (per-reading depth in gauges.py vs per-tire basis in wear.py), different departures (D1 vs D2), different definitions and thresholds (2.1 shown >= 10 vs 2.3 new - first <= 10), different fields; the reach rule names neither. Coupling: the fresh test reads the corrected first depth (first readings are 20 tenths or more, so never a wear-bar reading)."
+}

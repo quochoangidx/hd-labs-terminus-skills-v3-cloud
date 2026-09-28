@@ -1,0 +1,168 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 22 items
+
+../../tests/test_outputs.py .................FFF..                       [100%]
+
+=================================== FAILURES ===================================
+______________________ test_report_order_and_group_codes _______________________
+
+    def test_report_order_and_group_codes():
+        """Workers stay in survey order; groups come in ascending character order of their codes."""
+>       check_family("report_order")
+
+/tests/test_outputs.py:325: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'id': 'M-123456', 'group': 'A1B2C3D4', 'dose': 62.99605249474366, 'twa': 83.0, ...}
+expected = {'id': 'M-12345678AB', 'group': 'A1B2C3D4', 'dose': 62.9960524947, 'twa': 83.0, ...}
+keys = {'ceiling', 'dose', 'group', 'id', 'impulse', 'status', ...}
+where = 'report_order HC4-0029 workers[2] (M-12345678AB)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: report_order HC4-0029 workers[2] (M-12345678AB) id: 'M-123456', expected 'M-12345678AB'
+E               assert (<class 'str'> is <class 'str'> and 'M-123456' == 'M-12345678AB'
+E                +  where <class 'str'> = type('M-123456')
+E                +  and   <class 'str'> = type('M-12345678AB')
+E                 
+E                 - M-12345678AB
+E                 ?         ----
+E                 + M-123456)
+
+/tests/test_outputs.py:204: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """300 workers under 40 codes, a 1,500-run log, a 2,880-minute log, 500 peaks and the range ends."""
+        rows = load("limits_workers") + load("limits_logs")
+        workers = rows[0]["survey"]["workers"]
+        assert len(workers) == 300 and len({w["group"] for w in workers}) == 40
+        logs = rows[1]["survey"]["workers"]
+        assert len(logs[0]["log"]) == 1500 and sum(m for m, _ in logs[1]["log"]) == 2880 and len(logs[2]["peaks"]) == 500
+>       check_family("limits_workers")
+
+/tests/test_outputs.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'id': 'L000-XXX', 'group': 'ABCDEFGH', 'dose': 0.0, 'twa': None, ...}
+expected = {'id': 'L000-XXXXXXX', 'group': 'ABCDEFGH', 'dose': 0.0, 'twa': None, ...}
+keys = {'ceiling', 'dose', 'group', 'id', 'impulse', 'status', ...}
+where = 'limits_workers HC4-0030 workers[0] (L000-XXXXXXX)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: limits_workers HC4-0030 workers[0] (L000-XXXXXXX) id: 'L000-XXX', expected 'L000-XXXXXXX'
+E               assert (<class 'str'> is <class 'str'> and 'L000-XXX' == 'L000-XXXXXXX'
+E                +  where <class 'str'> = type('L000-XXX')
+E                +  and   <class 'str'> = type('L000-XXXXXXX')
+E                 
+E                 - L000-XXXXXXX
+E                 ?         ----
+E                 + L000-XXX)
+
+/tests/test_outputs.py:204: AssertionError
+____________________________ test_generated_surveys ____________________________
+
+    def test_generated_surveys():
+        """Seeded surveys over the rest of the section 1 domain, as sealed and under fresh labels."""
+>       check_family("generated")
+
+/tests/test_outputs.py:363: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:219: in check_family
+    compare(reduce(row["survey"]), row["report"], f"{name} {row['survey']['survey']}")
+/tests/test_outputs.py:214: in compare
+    _row(row, ref, keys, f"{label} {section}[{index}] ({ref.get('id', ref['group'])})")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'id': 'VLHL-RHZ', 'group': 'G', 'dose': 3304.2339536820323, 'twa': 100.1, ...}
+expected = {'id': 'VLHL-RHZXX', 'group': 'G', 'dose': 3304.23395368, 'twa': 100.1, ...}
+keys = {'ceiling', 'dose', 'group', 'id', 'impulse', 'status', ...}
+where = 'generated HC4-0033 workers[1] (VLHL-RHZXX)'
+
+    def _row(actual, expected, keys, where):
+        """Every key the README lists, compared; a group row carries no ceiling or impulse flag (6.1); any other
+        further key is not part of the contract and is ignored."""
+        assert isinstance(actual, dict) and set(actual) >= keys, f"{where}: keys {actual!r}"
+        if keys == GROUP_KEYS:
+            assert not {"ceiling", "impulse"} & set(actual), f"{where}: a group carries no ceiling or impulse flag, got {actual!r}"
+        for key in sorted(keys):
+            a, e = actual[key], expected[key]
+            if key == "dose":
+                _number(a, e, f"{where} dose")
+            elif key == "twa" and e is not None:
+                assert isinstance(a, (int, float)) and not isinstance(a, bool) and a == e, f"{where} twa: {a!r}, expected {e!r}"
+            else:
+>               assert type(a) is type(e) and a == e, f"{where} {key}: {a!r}, expected {e!r}"
+E               AssertionError: generated HC4-0033 workers[1] (VLHL-RHZXX) id: 'VLHL-RHZ', expected 'VLHL-RHZXX'
+E               assert (<class 'str'> is <class 'str'> and 'VLHL-RHZ' == 'VLHL-RHZXX'
+E                +  where <class 'str'> = type('VLHL-RHZ')
+E                +  and   <class 'str'> = type('VLHL-RHZXX')
+E                 
+E                 - VLHL-RHZXX
+E                 ?         --
+E                 + VLHL-RHZ)
+
+/tests/test_outputs.py:204: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_reference_duration_uses_85_dba_and_3_db
+PASSED ../../tests/test_outputs.py::test_rule_2_3_reading_at_the_threshold_counts
+PASSED ../../tests/test_outputs.py::test_rule_2_4_sampled_time_includes_readings_below_threshold
+PASSED ../../tests/test_outputs.py::test_rule_2_2_run_logged_at_nought_is_not_a_reading
+PASSED ../../tests/test_outputs.py::test_rule_3_3_partial_survey_projected_to_own_shift
+PASSED ../../tests/test_outputs.py::test_rule_3_3_survey_as_long_as_shift_keeps_measured_dose
+PASSED ../../tests/test_outputs.py::test_rule_2_5_partial_survey_at_exactly_three_quarters
+PASSED ../../tests/test_outputs.py::test_survey_below_three_quarters_keeps_todays_projection
+PASSED ../../tests/test_outputs.py::test_survey_that_measured_nothing_keeps_todays_dose
+PASSED ../../tests/test_outputs.py::test_reading_above_ceiling_keeps_todays_counted_level
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reading_at_the_ceiling_level_is_not_flagged
+PASSED ../../tests/test_outputs.py::test_rule_5_2_impulse_at_140_dbc
+PASSED ../../tests/test_outputs.py::test_rule_4_1_twa_formula
+PASSED ../../tests/test_outputs.py::test_rule_1_2_twa_rounded_to_nearest_tenth
+PASSED ../../tests/test_outputs.py::test_rule_5_3_status_bands_at_82_and_85
+PASSED ../../tests/test_outputs.py::test_rule_6_1_group_dose_is_mean_of_shift_doses
+PASSED ../../tests/test_outputs.py::test_rule_6_1_quiet_member_counts_in_group_mean
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_report_order_and_group_codes - Asser...
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+FAILED ../../tests/test_outputs.py::test_generated_surveys - AssertionError: ...
+========================= 3 failed, 19 passed in 2.68s =========================

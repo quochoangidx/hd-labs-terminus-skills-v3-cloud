@@ -1,0 +1,135 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "b3c59dde5d43ad90cf30cd2b3087fbe083a0a126286609a93c5bb7b6d61a961c",
+  "severity": "None",
+  "summary": "The reference patch (solution/fix.patch applied by solve.sh) implements every rule SOP TM-07 states: fitted-intercept OLS, the blank mean over blank results, amounts corrected before dilution, flags judged on the corrected reading with a strict loq bound, CCV pass on the recovery rounded to one decimal with inclusive bounds, two-sided bracketing, and spike recovery over added. Where the SOP is silent (no blank result, unbracketed runs, a non-detect spike or parent), it keeps today's shipped calculation as instruction.md requires. The patch hunks match the shipped sources line for line and the driver is left untouched. No incorrect behavior was found.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/reduction-sop.md",
+      "environment/app/examples/small-batch.json",
+      "environment/app/src/metalquant/__init__.py",
+      "environment/app/src/metalquant/blanks.py",
+      "environment/app/src/metalquant/calib.py",
+      "environment/app/src/metalquant/qc.py",
+      "environment/app/src/metalquant/report.py",
+      "environment/app/src/metalquant/samples.py",
+      "environment/app/tools/metalquant_run.py",
+      "solution/fix.patch",
+      "solution/solve.sh",
+      "solution/model.py",
+      "solution/fixtures.py",
+      "solution/jobgen.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 22 manifest entries with the files read; every file was read in full.",
+    "Traced each patch hunk's context and line counts against the shipped blanks.py, calib.py, qc.py, report.py and samples.py. They apply at the stated offsets with `cd / && patch -p1`, which targets /app/src.",
+    "Confirmed that solve.sh does not modify tools/metalquant_run.py (instruction.md:3).",
+    "SOP 2: the centered OLS slope and intercept = mean_y - slope*mean_x (fix.patch:27-32). With at least two distinct concentrations, sxx > 0 and there is no division by zero.",
+    "SOP 3: reading = (response - intercept)/slope, unchanged and correct (calib.py:17-19). There is no clamping, so negative readings and readings above the top standard stay possible.",
+    "SOP 4: the mean of blank readings >= mdl from every blank in any position (fix.patch:11-13). With no blank result, the fallback is the shipped first-blank reading, else 0.0 (fix.patch:14-16; blanks.py:6-9).",
+    "SOP 5: amount = (reading - level)*dilution (fix.patch:108). The flag is judged on the corrected reading: < mdl gives ND, < loq gives J, otherwise '' (fix.patch:113-118). The value is null only for ND (report.py:46).",
+    "SOP 6: pass when 90.0 <= round(recovery,1) <= 110.0 (fix.patch:44). Section 1 excludes ties within 1e-6, so binary-float rounding cannot flip a result. The unrounded recovery is reported (report.py:30).",
+    "SOP 6 bracketing: with CCVs on both sides, the nearest before and nearest after must both pass (fix.patch:49-52). Otherwise the shipped nearest-before-else-True behavior is kept (qc.py:14-17).",
+    "SOP 7: when spike and parent are both results (corrected >= mdl), recovery = (spike amount - parent amount)/added*100 (fix.patch:60-62, 88, 96). Otherwise the shipped divisor added*dilution is kept, applied to the SOP-defined amounts (fix.patch:63).",
+    "SOP 8: list order follows run order, then the analytes order (report.py:21-64), and blank_levels is keyed by every analyte name. Numbers are not rounded.",
+    "Numerical check at section 1 extremes (slope 1e-12 to 1e6, intercept up to 1e4*slope, readings up to +/-1e4, dilution 1000, amounts up to 1e7): float error stays far below the 1e-5 limit margin and the 1e-6 grading tolerance.",
+    "Compared the independent model.py with the patched package for every rule and silent-case fallback. They agree, but that agreement was not used as the correctness argument."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced an ordinary sample/spike/CCV/blank batch and these boundaries: values either side of mdl and loq, mdl == loq, negative readings, no/one/several blanks with non-detect blanks, CCV recovery near 89.95/110.05, and unbracketed runs. All follow the SOP or the mandated shipped fallback.",
+      "evidence": ["solution/fix.patch:8-119", "environment/app/docs/reduction-sop.md:44-117", "instruction.md:5-7"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, padding, delimiters, paths",
+      "status": "checked",
+      "reason": "The output is JSON from the untouched driver. Numbers are unrounded as SOP 8 requires, keys and list order match section 8, and value is null for ND.",
+      "evidence": ["environment/app/tools/metalquant_run.py:16-19", "environment/app/src/metalquant/report.py:42-66", "environment/app/docs/reduction-sop.md:101-117"],
+      "finding_ids": []
+    },
+    {
+      "category": "Branches that update state (deletion, expiry, replacement, identifier reuse)",
+      "status": "checked",
+      "reason": "The only state is per-analyte dictionaries keyed by run id. Ids are distinct per section 1. The amounts and detected maps are filled before the spike loop reads them, and a parent precedes its spike.",
+      "evidence": ["environment/app/src/metalquant/report.py:32-64", "solution/fix.patch:80-97", "environment/app/docs/reduction-sop.md:18-26"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability at interruption points",
+      "status": "not_applicable",
+      "reason": "This is a pure batch computation with no persisted state or recovery claims.",
+      "evidence": ["instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "SOP-silent cases keep today's calculation (instruction rule)",
+      "status": "checked",
+      "reason": "Checked three silent cases. With no blank result, the level is the first blank reading or 0.0. An unbracketed run gets the nearest CCV before it, or True. A spike or parent non-detect uses the added*dilution divisor. Each matches the shipped code applied to SOP-defined values, and no extra guard or qualifier is added.",
+      "evidence": ["instruction.md:5", "environment/app/src/metalquant/blanks.py:6-9", "environment/app/src/metalquant/qc.py:12-21", "solution/fix.patch:14-16,53-56,63"],
+      "finding_ids": []
+    },
+    {
+      "category": "Patch applicability and driver immutability",
+      "status": "checked",
+      "reason": "Every hunk's header counts and context lines match the shipped files. solve.sh runs from /, and -p1 maps app/src to /app/src. The driver is not in the patch.",
+      "evidence": ["solution/solve.sh:21-23", "solution/fix.patch:1-119"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["SOP 4 blank level with no result (silent fallback)", "SOP 5 flag on corrected reading"],
+      "case_or_path": "All blanks are below the mdl: the level is the first blank reading, and the sample's corrected reading = reading - that level is judged against mdl/loq.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:11-16", "solution/fix.patch:113-118"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 5 result status", "SOP 7 spike recovery"],
+      "case_or_path": "A detected spike whose parent is ND takes the fallback divisor added*dilution. When both are detected, the divisor is added. Detection is tested on the corrected reading, not the amount.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:88", "solution/fix.patch:96", "solution/fix.patch:60-63"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 6 CCV pass rounding", "SOP 6 bracketing"],
+      "case_or_path": "A sample between a CCV at 89.96% (rounds to 90.0, pass) and one at 110.06% (rounds to 110.1, fail) gets ccv_ok false. The pass map is built from the rounded rule before bracketing reads it.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:44-52", "environment/app/src/metalquant/report.py:20-30"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 5 dilution", "SOP 7 added in as-received units"],
+      "case_or_path": "Spike and parent have different dilutions: each amount uses its own dilution, and the difference is divided by added with no dilution factor.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:106-108", "solution/fix.patch:60-62", "environment/app/docs/reduction-sop.md:22-26"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["SOP 2 intercept below nought", "SOP 3 negative readings"],
+      "case_or_path": "A negative intercept and a zero-count run give a negative reading with no clamp. It propagates to a negative corrected reading and an ND flag.",
+      "status": "checked",
+      "evidence": ["solution/fix.patch:27-32", "environment/app/src/metalquant/calib.py:17-19"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

@@ -1,0 +1,30 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The statements printed by /app/tools/rebate_run.py give, for every account of a job, the purchases,
+  returns credited, net purchases, rebate rate and volume rebate, growth bonus, price protection,
+  chargebacks, settlement, amount paid and amount carried that Schedule R edition R-4 gives.
+causal_core: >
+  purchase lines -> quarter each line counts toward (2.2 carton threshold and receipt day, 3.1, 3.2; a
+  line below a carton keeps the export's date) -> purchases; returns less 40 cents a unit (3.3) -> net
+  (3.4) -> tier reached at or above its threshold on net (2.6, 3.5) -> volume rebate rounded half up
+  (1.1, 3.6); growth bonus on the increase (4.1); price protection on price drops (2.4, 5.1; tidy-ups keep
+  today's step with today's MINIMUM_CREDIT); chargebacks on contract sales (2.5, 5.2; price-match sales keep
+  today's step with today's HANDLING_PER_UNIT) -> settlement (6.1) -> paid or carried at 25,000 cents (6.2).
+core_obligations:
+  - {id: QUARTER_CREDIT, contribution: "a carton shipment counts toward the quarter it is received in (invoice + 4 days); a smaller line keeps the export's date", authority: "schedule 1.4, 2.2, 3.1, 3.2; instruction reach rule", witness: "carton lines on both quarter edges; loose-unit lines in the last four days before either edge (trap TC)", plausible_wrong: "invoice date for every line (shipped) / shift every line (minimal natural fix) / drop loose lines"}
+  - {id: RETURNS, contribution: "returns credited at value less 40 cents a unit", authority: "schedule 3.3", witness: "returns in the quarter", plausible_wrong: "25 cents a unit (shipped)"}
+  - {id: TIER, contribution: "tier reached by net purchases, at or above the threshold; below nought none", authority: "schedule 2.6, 3.4, 3.5", witness: "heavy returns across a threshold; net exactly on a threshold; net below nought", plausible_wrong: "gross purchases / strict comparison (shipped)"}
+  - {id: REBATE, contribution: "bp of net purchases, rounded half up", authority: "schedule 1.1, 3.6", witness: "fractional cents including exact halves", plausible_wrong: "truncation (shipped)"}
+  - {id: GROWTH, contribution: "200 bp of the increase over a positive prior, at 110 per cent or more", authority: "schedule 4.1", witness: "growth 110 to 300 per cent; prior nought", plausible_wrong: "200 bp of all net purchases (shipped)"}
+  - {id: PROTECTION, contribution: "a price drop (cut of 250 cents or more) earns cut x on hand; a tidy-up keeps today's step (credit dropped below 5,000 cents)", authority: "schedule 1.6, 2.4, 5.1; instruction reach rule", witness: "tidy-ups with credits below 5,000, 5,000-24,999 and above (trap TA)", plausible_wrong: "editing the shared MINIMUM_CREDIT to 25,000 (natural fix of 6.2) / no credit for tidy-ups / removing the guard"}
+  - {id: CHARGEBACK, contribution: "a contract sale (100 cents or more below cost) earns below x units; a price-match sale keeps today's step (skipped below 25 cents a unit)", authority: "schedule 1.7, 2.5, 5.2; instruction reach rule", witness: "price-match sales 25-39 and 1-99 cents under cost (trap TB)", plausible_wrong: "editing the shared HANDLING_PER_UNIT to 40 (natural fix of 3.3) / no chargeback for price-match sales"}
+  - {id: SETTLEMENT, contribution: "sum; paid at 25,000 cents or more, else carried", authority: "schedule 6.1, 6.2", witness: "settlements 5,000-24,999 and at 25,000", plausible_wrong: "5,000 (shipped)"}
+support_obligations:
+  - {id: DRIVER, supplied_boundary: "tools/rebate_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: STATEMENT_LAYOUT, supplied_boundary: "README statement keys and order, already produced by statement.py", why_not_core: "serialization already right"}
+  - {id: DATES, supplied_boundary: "dates.py ISO parsing and quarter bounds", why_not_core: "already right"}
+non_goals:
+  - malformed or out-of-range job files (left entirely open in the instruction)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - payment-term discounts, co-op funds, multi-currency, anything the schedule does not mention

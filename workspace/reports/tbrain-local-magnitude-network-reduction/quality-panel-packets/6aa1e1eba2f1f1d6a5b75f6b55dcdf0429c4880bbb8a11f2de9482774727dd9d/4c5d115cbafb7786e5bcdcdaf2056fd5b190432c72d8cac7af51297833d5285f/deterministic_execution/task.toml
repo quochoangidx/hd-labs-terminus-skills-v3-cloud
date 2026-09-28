@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-local-magnitude-network-reduction"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "core"
+category = "Science"
+subcategory = "Earth"
+languages = ["python"]
+tags = ["seismology", "local-magnitude", "seismic-network", "wood-anderson", "earthquake-bulletin"]
+expert_time_estimate_hours = 3
+difficulty_explanation = "This is the work of a network seismologist or bulletin analyst whose local-magnitude package has drifted from the network's own processing manual in the ways real networks drift from Richter-era habits: the Wood-Anderson record amplitude taken at the nominal magnification 2800 instead of the measured 2080 and at the picker's full peak-to-peak value instead of half of it, epicentral instead of hypocentral distance, the network's -log A0 table interpolated on the logarithm of distance, the station correction subtracted, the station value taken from its largest channel, a mean network value and no minimum station count. Each of those is an ordinary slip for anyone who has run ML processing. The harder half is knowing where each rule stops, because the natural rewrite of each function carries the new rule further than the manual does. Changing minus_log_a0 from log10(distance) to distance in its segment formula also turns the extrapolation beyond the 10-600 km table linear, although the manual gives no correction there and the code's log-distance end-segment calculation has to stay (fed with the hypocentral distance); clamping to the end values is the other tempting fix and is equally wrong. Rebuilding station_magnitude as the mean over every amplitude of a recording lets amplitudes below three times their channel's noise in, which the largest-channel code never had to exclude. And keeping the per-recording loop in reduce_event, which the report's one-row-per-recording layout invites, gives a site whose broadband and strong-motion sensors report separately two magnitudes and two votes in the median and in the three-station minimum, where the manual defines one station magnitude over all of the station's readings and counts stations. The bulletins are synthetic, drawn to resemble a regional network's picks, with hand-built cases for amplitudes just either side of three times their noise, stations just inside the table's ends, channel codes of any three characters and the two-sensor sites."
+solution_explanation = "The patch sets the Wood-Anderson magnification to 2080 and halves the peak-to-peak amplitude (amplitude.py), computes hypocentral distance (distance.py), and in minus_log_a0 interpolates linearly in distance between listed distances while leaving the shipped end-segment log-distance calculation for distances outside 10-600 km, where the manual gives no correction (attenuation.py). It adds the station correction and forms the station magnitude as the mean of the channel magnitudes of the readings, amplitudes at least three times their noise (station.py); pools a station's amplitudes over all its recordings in the event and reports that one magnitude on each of its rows (bulletin.py); and takes the network magnitude as the median of the contributing stations, each counted once, mean of the middle two for an even count, null below three (network.py). The report layout, the contributor test and the driver are unchanged."
+verification_explanation = "A separate verifier image records the delivered driver's bytes, puts its own copy of the driver on /app/tools/ml_bulletin.py with os.replace and runs the documented command against the delivered /app/mlnet as an unprivileged user (setpriv --no-new-privs, python3 -I -S, own session), each bulletin staged under the same neutral name in a fresh directory. It compares the complete report: ids, codes, contributes flags, list order and null network values exactly, distances and magnitudes to 1e-6 (plus 1e-9 for the stored values' own rounding, which a 50-digit recomputation puts below 5.1e-10). Expected reports were written ahead of time into tests/expected by a model written from the manual that never imports the package, pinned by SHA-256 and row count; every bulletin is checked against the manual's section 1 when it is loaded, including its margins that keep amplitudes a part in a thousand clear of three times their noise and stations a metre clear of 10 and 600 km. There is one named test per manual rule and per scope case (sub-noise amplitudes, some just under three times their noise, stations nearer than 10 km or beyond 600 km, two-sensor sites including a two-station, three-recording event that must stay null), each on its own bulletins; only those three files carry those inputs. Stations sit just inside both table ends; readings use channel codes of any three characters, and event ids and station codes span their full lengths and character sets. Section-1 limits are reached in one bulletin with 50 events, 200 stations and a 40-recording event. Further tests check that the delivered driver is unchanged before and after the runs and that the unprivileged user cannot read /tests or /logs/verifier. Each departure reverted alone fails its own test, and the ones that shift every magnitude (magnification, halving, correction sign, interpolation, distance, largest channel, mean network value) fail most files; each natural over-repair (linear extrapolation or clamping beyond the table, averaging every amplitude, per-recording station magnitudes, a median over recordings, a mean of recording means) fails only its own test."
+relevant_experience = "Several years of regional seismic network operations: routine local-magnitude processing, Wood-Anderson simulation and amplitude picking, station-correction calibration, and review of earthquake bulletins before publication."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 3600
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

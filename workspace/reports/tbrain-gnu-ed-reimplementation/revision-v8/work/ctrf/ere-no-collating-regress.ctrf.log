@@ -1,0 +1,67 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 27 items
+
+../../tests/test_outputs.py .........F.................                  [100%]
+
+=================================== FAILURES ===================================
+_____________________________ test_regex_extended ______________________________
+
+    def test_regex_extended():
+>       check("regex_extended")
+
+/tests/test_outputs.py:256: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+family = 'regex_extended'
+
+    def check(family):
+        cases = [c for c in CASES if c["family"] == family]
+        assert cases, f"no cases for {family}"
+        # each case runs in its own fresh directories, so cases are independent and can run
+        # side by side; map() keeps the corpus order, so the first failure reported is stable
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            results = list(pool.map(lambda case: (case, run([GNU_ED], case), run(DEMOTE + CANDIDATE, case)), cases))
+        failures = [(case, want, got) for case, want, got in results if got != want]
+        if failures:
+            case, want, got = failures[0]
+            detail = (f"{len(failures)} of {len(cases)} cases differ; first: ed {case['args']!r} with "
+                      f"files {[n for n, _t in case['files']]} and script {case['script']!r} on a "
+                      f"{case['stdin']}: expected output {want[0]!r} (zero status: {want[1]}, files: "
+                      f"{want[2]!r}), got {got[0]!r} (zero status: {got[1]}, files: {got[2]!r})")
+>           raise AssertionError(detail)
+E           AssertionError: 1 of 19 cases differ; first: ed ['-E', 'f.txt'] with files ['f.txt'] and script 'g/[[.-.]]/p\ng/[[=a=]]b/p\ns/[[.-.]]+/_/\n,p\nQ\n' on a pipe: expected output b'7\na-b\nab\n?\na-b\nab\n' (zero status: False, files: {'f.txt': b'a-b\nab\n'}), got b'7\n?\n?\n?\na-b\nab\n' (zero status: False, files: {'f.txt': b'a-b\nab\n'})
+
+/tests/test_outputs.py:179: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_launcher_stops_delegation_and_foreign_code
+PASSED ../../tests/test_outputs.py::test_addresses
+PASSED ../../tests/test_outputs.py::test_append_insert_change
+PASSED ../../tests/test_outputs.py::test_delete_join_move_copy
+PASSED ../../tests/test_outputs.py::test_substitute
+PASSED ../../tests/test_outputs.py::test_global_commands
+PASSED ../../tests/test_outputs.py::test_undo
+PASSED ../../tests/test_outputs.py::test_print_list_number
+PASSED ../../tests/test_outputs.py::test_regex
+PASSED ../../tests/test_outputs.py::test_files_and_write
+PASSED ../../tests/test_outputs.py::test_errors_and_exit
+PASSED ../../tests/test_outputs.py::test_options
+PASSED ../../tests/test_outputs.py::test_mixed_scripts_1
+PASSED ../../tests/test_outputs.py::test_mixed_scripts_2
+PASSED ../../tests/test_outputs.py::test_mixed_scripts_3
+PASSED ../../tests/test_outputs.py::test_mixed_scripts_4
+PASSED ../../tests/test_outputs.py::test_mixed_scripts_5
+PASSED ../../tests/test_outputs.py::test_mixed_scripts_6
+PASSED ../../tests/test_outputs.py::test_generated_1
+PASSED ../../tests/test_outputs.py::test_generated_2
+PASSED ../../tests/test_outputs.py::test_generated_3
+PASSED ../../tests/test_outputs.py::test_generated_4
+PASSED ../../tests/test_outputs.py::test_generated_5
+PASSED ../../tests/test_outputs.py::test_generated_6
+PASSED ../../tests/test_outputs.py::test_generated_7
+PASSED ../../tests/test_outputs.py::test_generated_8
+FAILED ../../tests/test_outputs.py::test_regex_extended - AssertionError: 1 o...
+======================== 1 failed, 26 passed in 13.04s =========================

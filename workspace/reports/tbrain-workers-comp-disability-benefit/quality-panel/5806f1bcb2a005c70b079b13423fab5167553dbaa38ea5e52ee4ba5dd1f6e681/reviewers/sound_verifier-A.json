@@ -1,0 +1,236 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "5806f1bcb2a005c70b079b13423fab5167553dbaa38ea5e52ee4ba5dd1f6e681",
+  "severity": "Minor",
+  "summary": "The verifier compares the full statements, types included, against sealed expectations that my spot checks found to follow the manual. It isolates every named manual rule and both preserved-behaviour traps. One gap remains: no graded case makes today's cap at the weekly rate bind on a partial-earnings week below 1,000 cents. An implementation that drops or changes that cap is therefore accepted.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/td-benefits-manual.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/tools/tdbenefit_run.py",
+      "environment/app/src/tdbenefit/__init__.py",
+      "environment/app/src/tdbenefit/dates.py",
+      "environment/app/src/tdbenefit/money.py",
+      "environment/app/src/tdbenefit/rates.py",
+      "environment/app/src/tdbenefit/payroll.py",
+      "environment/app/src/tdbenefit/disability.py",
+      "environment/app/src/tdbenefit/partial.py",
+      "environment/app/src/tdbenefit/statement.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/weeks_pay.jsonl",
+      "tests/expected/weeks_pay_threshold.jsonl",
+      "tests/expected/base_period.jsonl",
+      "tests/expected/average_weekly_wage.jsonl",
+      "tests/expected/no_base_wages.jsonl",
+      "tests/expected/rate_two_thirds.jsonl",
+      "tests/expected/rate_bounds.jsonl",
+      "tests/expected/row_in_force.jsonl",
+      "tests/expected/low_wage_rate.jsonl",
+      "tests/expected/disability_days.jsonl",
+      "tests/expected/waiting_period.jsonl",
+      "tests/expected/retroactive_days.jsonl",
+      "tests/expected/ttd_rounding.jsonl",
+      "tests/expected/partial_benefit.jsonl",
+      "tests/expected/partial_week_threshold.jsonl",
+      "tests/expected/no_wage_loss.jsonl",
+      "tests/expected/corrections.jsonl",
+      "tests/expected/differential-corrections.jsonl",
+      "tests/expected/low_partial_weeks.jsonl",
+      "tests/expected/differential-low_partial_weeks.jsonl",
+      "tests/expected/statement_order.jsonl",
+      "tests/expected/limits_claims.jsonl",
+      "tests/expected/limits_job.jsonl",
+      "tests/expected/generated.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "SV-1",
+      "severity": "Minor",
+      "claim": "Today's cap at the weekly rate on a partial-earnings week below 1,000 cents is never exercised in a way that changes the result. An implementation that drops that cap, or caps against a different rate, still earns full reward.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "Manual rule 5.1 reaches only weeks of partial disability, which are weeks of 1,000 cents or more. Rule 5.2 still requires a benefit for every week. Under instruction.md:3, a week below 1,000 cents therefore keeps today's calculation from partial.py:16-17: min(ratio_of(wage_loss(aww, earned), (3,5)), rate), with the manual's aww and weekly rate. In-domain example: one rate row with max 20,000 and min 1,000 (allowed by manual 1.3), thirteen base-period week's-pay lines of 40,000 cents (aww 40,000), and one earnings week of 0 cents. Rate = min(26,667, 20,000) = 20,000. The low week pays min(24,000, 20,000) = 20,000, so tpd = 20,000.",
+        "actual_behavior": "An implementation that pays low weeks ratio_of(loss, (3,5)) without min(..., rate) reports tpd = 24,000. So does one that caps against today's shipped rate instead of the manual rate. No graded job has this shape, so both pass every test.",
+        "trace_or_receipt": "The cap binds on a low week only when 3/5 of the week's loss exceeds the rate. When rate = aww (rule 3.5) or rate = min, the rate is at least 3/5 of aww, which is at least 3/5 of the loss. The cap can therefore bind only when the rate is held at the row maximum and 3/5 of the loss exceeds that maximum. test_outputs.py:43-48 and 188-219 allow low weeks only in the low_partial_weeks families; every other family fails load() if it carries one. Every low_partial_weeks job has max 400,000 (low_partial_weeks.jsonl:1-2, differential-low_partial_weeks.jsonl:1-2). Their aww values are 65,994, 121,341, 118,657 and 119,071. For the differential pairs, the sum of wage lines is below 1,000,000, so aww is below 77,000. Low-week benefits are 39,596, 72,804 (earned 1), 72,205 (earned 999), 70,894, 71,194 and 70,843, all below the matching rates of 43,996, 80,894, 79,105 and 79,381. The differential in test_outputs.py:330-338 checks only the 597-cent step between earning 0 and earning 995, which assumes the cap does not bind. No case discriminates a capped low week from an uncapped one. This is a static trace, not an execution."
+      },
+      "reachable_case_or_path": "A candidate splits partial_disability into two branches: weeks of 1,000 cents or more pay min(ratio_of(loss,(2,3)), rate), and lower weeks pay ratio_of(loss, RATE_FRACTION) without the min. This is a natural reading of the test docstring's 'keeps the share' and of instruction.md's 'add no ... clamp'. All families pass, because no low week in the graded data has 3/5 of its loss above a rate held at the row maximum.",
+      "graded_effect": "A wrong implementation receives reward 1.0. It overpays low weeks whenever the rate is held at the row maximum, which the domain allows: maxima of 20,000 to 400,000 cents, aww above 5/3 of the maximum, and weeks the instruction explicitly lists ('partial weeks earning nothing, a few dollars').",
+      "citations": [
+        "instruction.md:3",
+        "instruction.md:5",
+        "environment/app/docs/td-benefits-manual.md:105-109",
+        "environment/app/docs/td-benefits-manual.md:72-73",
+        "environment/app/src/tdbenefit/partial.py:12-18",
+        "tests/test_outputs.py:43-48",
+        "tests/test_outputs.py:188-219",
+        "tests/test_outputs.py:330-338",
+        "tests/expected/low_partial_weeks.jsonl:1-2",
+        "tests/expected/differential-low_partial_weeks.jsonl:1-2"
+      ],
+      "root_invariant": "Every part of a preserved 'today's calculation' branch whose result the manual's own values can change needs at least one graded case where that part changes the output. Here that includes the cap at the manual weekly rate, not only the 3/5 share.",
+      "authority": [
+        "instruction.md:3",
+        "environment/app/docs/td-benefits-manual.md:105-109",
+        "environment/app/src/tdbenefit/partial.py:16-17"
+      ],
+      "implementation_sites": [
+        "tests/test_outputs.py:330-338",
+        "tests/test_outputs.py:43-48",
+        "tests/expected/low_partial_weeks.jsonl:1-2",
+        "tests/expected/differential-low_partial_weeks.jsonl:1-2"
+      ],
+      "sibling_variants": [
+        "A low-week cap against today's shipped rate (3/5 of aww, clamped by the newest row) instead of the manual rate. Undetected for the same reason: the cap never binds.",
+        "A low-week cap against aww, or against the row maximum directly. Also undetected.",
+        "The same cap on weeks of 1,000 cents or more IS exercised: partial_benefit.jsonl:1 with max 70,000, limits_claims.jsonl:2 with rate 400,000, and generated.jsonl:2 claim WC-9825325-112. So the gap is confined to the low-week branch."
+      ],
+      "interaction_variants": [
+        "Rule 3.4 maximum x low-week branch: the only interaction in which the preserved cap can bind, and it is not graded.",
+        "Rule 3.5 low-wage rate x low-week branch: the cap cannot bind (3/5 of the loss is at most 3/5 of aww, which is below aww). No distinguishing case is needed."
+      ],
+      "minimal_repair_boundary": "Add to the low_partial_weeks family (and optionally to its differential) a job whose row in force has a small maximum, such as 20,000, and an aww above 5/3 of that maximum, with a low week (earning 0 or a few hundred cents) whose 3/5 share exceeds the rate. Seal the capped expectation. Alternatively, if the cap is not meant as a promise, narrow what the preserved branch covers.",
+      "closure_evidence": [
+        "A mutant that removes min(..., rate) from the low-week branch only fails the new case.",
+        "A mutant that caps low weeks against the shipped (3/5, newest-row) rate fails the new case.",
+        "The reference and today's-code structure with manual inputs still pass, and the differential's shipped 597-cent step is unaffected for pairs where the cap does not bind."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read the whole packet. environment/app/src and tools were read directly. The tests/shipped/app copies have the same SHA-256 as the environment files in packet-manifest.json:14-22,50-58, so their content was covered by reading the environment copies. task.toml is not in this packet (metadata is withheld for this axis) and was not needed.",
+    "Mapped every manual rule to the codebase defect it fixes and to the verifier family and assertion that isolates it: rules 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 3.1, 3.3, 3.4, 3.5, 4.1, 4.3, 5.1 and 5.2 (tpd_weeks counts every week).",
+    "Recomputed expected statements by hand for weeks_pay_threshold WC-9297056-008, weeks_pay WC-5090717-004, corrections WC-5867533-084, rate_bounds WC-1475344-033/WC-3760895-035, low_wage_rate WC-6310882-041, partial_benefit WC-1124398-076, low_partial_weeks WC-3330684-091, waiting_period WC-5546662-049/WC-9795882-050 and disability_days WC-4918110-046. All match the manual.",
+    "Checked that the rounding rule has no ties on any graded path (divide by 13, 2/3, divide by 7, 3/5), so half-up versus other nearest-cent tie rules cannot cause a false rejection.",
+    "Traced trap_inputs/TRAP_INPUTS so that edge corrections and low weeks appear only in their own families. Checked that differential-corrections covers both base-period edges: the payday in the week of injury (pair 1) and the payday in the earliest base week (pair 2).",
+    "Checked compare(): exact top-level key, statement count and order, the README key set (key order not enforced), and value equality with the exact type (bools and floats rejected).",
+    "Checked relabel/fresh_names: claim numbers and order are re-randomised but expectations follow them, within section-1 limits. A correct implementation cannot be rejected.",
+    "Checked the driver byte comparison and the -I -S isolated invocation against the contract's 'leave the driver exactly as it is'.",
+    "Searched for the reachable in-domain case in which each preserved-behaviour branch can change its output. Found the low-week cap gap (SV-1)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if it is missing or reversed",
+      "status": "checked",
+      "reason": "Each manual rule has a dedicated family compared in full. Codebase defects fixed: payday week versus paid week (weeks_pay), divide by weeks paid versus 13 (average_weekly_wage), 3/5 versus 2/3 (rate_two_thirds, rate_bounds 149998 -> 99999), newest row versus row in force (row_in_force, day before/on/after), clamp to minimum versus aww (low_wage_rate), exclusive versus inclusive days (disability_days), 7 versus 3 waiting days (waiting_period), floor versus nearest (ttd_rounding), no 1,000-cent threshold (low_partial_weeks). Each is discriminated.",
+      "evidence": ["tests/test_outputs.py:240-317", "tests/expected/rate_bounds.jsonl:1", "tests/expected/row_in_force.jsonl:1-3", "tests/expected/low_wage_rate.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result, not only existence, keys or count",
+      "status": "checked",
+      "reason": "compare() checks every one of the ten fields of every statement for equality and exact type, plus job order and the top-level key.",
+      "evidence": ["tests/test_outputs.py:222-232"],
+      "finding_ids": []
+    },
+    {
+      "category": "For each named domain rule, include a case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "Isolating cases exist for 2,000 cents exactly (weeks_pay_threshold), 1,000 cents exactly (partial_week_threshold), 13/14/15 days (retroactive_days), aww at, above and below the minimum and maximum, earnings at or above aww (no_wage_loss) and no base wages. The preserved low-week branch has an isolating case for the 3/5 share but none for its cap at the rate.",
+      "evidence": ["tests/expected/weeks_pay_threshold.jsonl:1", "tests/expected/partial_week_threshold.jsonl:1", "tests/expected/retroactive_days.jsonl:1", "tests/expected/low_partial_weeks.jsonl:1-2"],
+      "finding_ids": ["SV-1"]
+    },
+    {
+      "category": "Try plausible incorrect solutions and confirm rejection",
+      "status": "checked",
+      "reason": "Mutants traced statically, each rejected: shipping today's code unchanged, shifting correction lines like week's pay (corrections plus both differential edges), dropping correction lines (weeks_pay_threshold 1999 line changes aww), applying 2/3 to low weeks (low_partial_weeks), a strict >2000 threshold, a >1000 threshold, 2/3 of aww at the minimum boundary, and a hard-coded constant output (hidden, varied jobs). Not rejected: dropping the low-week cap, or capping low weeks against today's rate (SV-1).",
+      "evidence": ["tests/test_outputs.py:320-338", "tests/expected/differential-corrections.jsonl:1-2"],
+      "finding_ids": ["SV-1"]
+    },
+    {
+      "category": "Accept contract-valid alternatives for unconstrained formatting, ordering and implementation choices",
+      "status": "checked",
+      "reason": "JSON is parsed, not compared as text. Statement key order is not enforced. Wage-line order is shuffled and the expectations are invariant to it. Claim labels and job order are regenerated with the expectations following them. No graded rounding tie exists. The only byte-level check is the driver file, which the contract explicitly requires to be left unchanged.",
+      "evidence": ["tests/test_outputs.py:222-232", "tests/test_outputs.py:365-379", "tests/test_outputs.py:425-431", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Enforce documented restrictions and lifecycle behavior",
+      "status": "checked",
+      "reason": "The 'leave the driver as it is' promise is enforced by comparing the delivered bytes and by test.sh cmp. The verifier runs its own driver copy against the candidate's /app/src, as the instruction promises. No other lifecycle promise exists.",
+      "evidence": ["tests/test_outputs.py:62-70", "tests/test_outputs.py:425-431", "tests/test.sh:23-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries, self-controlled comparisons, Oracle-specific representation, unreachable cases",
+      "status": "checked",
+      "reason": "The candidate cannot supply the expectations: they are sealed, and ROSTER pins digests and counts. The shipped-package differential runs the verifier's own copy under a separate UID, and its self-checks (shipped a == b; shipped step == 597) keep the comparison honest. Every graded job is checked by within_limits against section 1, so none lies outside the contract domain.",
+      "evidence": ["tests/test_outputs.py:155-219", "tests/test_outputs.py:73-80", "tests/test_outputs.py:323-338"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization and signed derived quantities",
+      "status": "not_applicable",
+      "reason": "Statements are stateless per claim. Every derived quantity is non-negative: wage loss is floored at nought by rule 2.7, and the no-base-wage aww = 0 path is graded in no_base_wages.",
+      "evidence": ["environment/app/docs/td-benefits-manual.md:69-70", "tests/expected/no_base_wages.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["3.1 week's pay shifts one week", "3.2 plus instruction.md:3 correction keeps its payday week"],
+      "case_or_path": "A correction line on the payday in the week of injury (differential-corrections pair 1, corrections WC-5867533-084) and on the payday in the earliest base week (pair 2). Both edges discriminate a 'shift everything' implementation.",
+      "status": "checked",
+      "evidence": ["tests/expected/differential-corrections.jsonl:1-2", "tests/expected/corrections.jsonl:1-2", "tests/test_outputs.py:320-327"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.4 minimum clamp", "3.5 aww below the minimum becomes the rate"],
+      "case_or_path": "aww 44,999 / 45,000 with min 45,000, and aww 53,411 with min 52,000 (2/3 of aww below the minimum, aww not below it, so rate = min).",
+      "status": "checked",
+      "evidence": ["tests/expected/low_wage_rate.jsonl:1", "tests/expected/row_in_force.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 row in force", "3.4/3.5 bounds"],
+      "case_or_path": "Injury the day before, on and after a row change, with high and low earners, and bounds that differ from the newest row.",
+      "status": "checked",
+      "evidence": ["tests/expected/row_in_force.jsonl:1-3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.1 cap at the weekly rate", "3.4 maximum"],
+      "case_or_path": "Partial weeks of 1,000 cents or more with the rate held at the maximum (max 70,000; 400,000; a row-in-force maximum of 60,007).",
+      "status": "checked",
+      "evidence": ["tests/expected/partial_benefit.jsonl:1", "tests/expected/limits_claims.jsonl:2", "tests/expected/generated.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["preserved low-week share and cap (instruction.md:3, partial.py:16-17)", "3.4 maximum"],
+      "case_or_path": "A low week with the rate held at the maximum and 3/5 of the loss above it. No graded case.",
+      "status": "checked",
+      "evidence": ["tests/expected/low_partial_weeks.jsonl:1-2", "tests/expected/differential-low_partial_weeks.jsonl:1-2"],
+      "finding_ids": ["SV-1"]
+    },
+    {
+      "rules": ["2.6 waiting period", "4.1 retroactive from fourteen days across periods"],
+      "case_or_path": "One-day periods (1, 1+1, 1+2), 14 days in one and in three periods, 13 and 15 days.",
+      "status": "checked",
+      "evidence": ["tests/expected/waiting_period.jsonl:1", "tests/expected/retroactive_days.jsonl:1", "tests/expected/disability_days.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 no base wages gives aww 0", "2.7/5.2 partial weeks"],
+      "case_or_path": "aww 0 with partial weeks of 1,000 and 50,000 cents: rate 0, tpd 0, tpd_weeks 2.",
+      "status": "checked",
+      "evidence": ["tests/expected/no_base_wages.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

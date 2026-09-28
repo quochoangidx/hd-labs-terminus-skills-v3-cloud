@@ -1,0 +1,24 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The summary printed by /app/tools/treadcheck_run.py gives, for every tire of a job, the latest depth,
+  tread worn, distance, wear rate, status and retread eligibility that standard TS-6 gives.
+causal_core: >
+  readings -> depth (2.1, 3.1: a measurement takes its gauge offset; a wear-bar reading keeps the figure
+  shown, reach rule) -> latest depth (4.1) -> fresh test on the first depth (2.3) -> tread worn and
+  distance (4.2 for a fresh tire; a part-worn tire keeps the first-reading basis, reach rule) -> wear
+  rate (4.3, 1.1) ; latest depth -> removal depth by position and status (2.4, 5.1) -> retread only for
+  a pulled tire, casing age in days and retread count (6.1).
+core_obligations:
+  - {id: DEPTH, contribution: "measurement + gauge offset; wear-bar reading keeps figure shown", authority: "1.5, 2.1, 3.1; reach rule", witness: "test_rule_3_1_measurement_takes_its_gauge_offset; test_wear_bar_reading_keeps_the_figure_shown (T1)", plausible_wrong: "figure shown (shipped) / offset on every reading (natural over-repair)"}
+  - {id: WEAR, contribution: "fresh tire worn from new depth over distance from mounting; part-worn keeps first-reading basis", authority: "1.4, 2.3, 4.2; reach rule", witness: "test_rule_4_2_fresh_tire_worn_from_new_depth; test_part_worn_tire_keeps_first_reading_basis (T2)", plausible_wrong: "first-reading basis for all (shipped) / new-depth basis for all (natural over-repair)"}
+  - {id: RATE, contribution: "worn x 10,000 / distance, half up", authority: "1.1, 4.3", witness: "test_rule_1_1_exact_half_goes_up", plausible_wrong: "round half even (shipped)"}
+  - {id: STATUS, contribution: "removal 40 steer / 32 other; pull and watch at or below", authority: "2.4, 5.1", witness: "test_rule_2_4_steer_removal_depth; test_rule_5_1_status_at_or_below", plausible_wrong: "32 everywhere; strict comparisons (shipped)"}
+  - {id: RETREAD, contribution: "only a pulled tire; age in days < 2,190; fewer than 2 retreads", authority: "6.1", witness: "test_rule_6_1_*", plausible_wrong: "any tire; calendar-year age; 2 or fewer (shipped)"}
+support_obligations:
+  - {id: DRIVER, supplied_boundary: "tools/treadcheck_run.py, frozen and byte-checked", why_not_core: "plumbing"}
+  - {id: SUMMARY_LAYOUT, supplied_boundary: "README keys and order, already produced by summary.py", why_not_core: "serialization already right"}
+non_goals:
+  - malformed or out-of-range jobs (left entirely open)
+  - error messages and exit codes
+  - direct calls to package helpers
+  - pressure, alignment, rotation schedules, anything the standard does not mention

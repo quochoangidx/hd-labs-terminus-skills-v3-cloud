@@ -1,0 +1,28 @@
+# Bounded scope ledger (bounded-task-design.md), written before the verifier.
+primary_outcome: >
+  The survey report printed by /app/tools/noisedose_run.py gives, for every worker and every
+  similar-exposure group, the dose, TWA and status that manual HC-4 gives (plus worker ceiling
+  and impulse flags).
+causal_core: >
+  log runs -> readings and counted readings (2.2, 2.3) -> sampled time and measured dose (2.4, 3.1, 3.2)
+  -> full-shift test (2.5) and shift dose with projection for full-shift surveys, today's step for others (3.3, silence) -> TWA and its rounding (4.1, 1.2)
+  -> worker status with flags (5.1-5.3); shift doses -> group mean over every member (6.1, 1.3)
+  -> group TWA and status.
+core_obligations:
+  - {id: REFERENCE_DURATION, contribution: "85 dBA criterion, 3 dB exchange", authority: "manual 3.1", witness: test_rule_3_1_reference_duration_uses_85_dba_and_3_db, plausible_wrong: "keep 90 dBA / 5 dB"}
+  - {id: COUNTED_READING, contribution: "a reading exactly at 80.0 dBA adds dose", authority: "manual 2.3", witness: test_rule_2_3_reading_at_the_threshold_counts, plausible_wrong: "level > 80.0"}
+  - {id: SAMPLED_TIME, contribution: "sampled time is every reading's length, below-threshold readings included, runs at 0.0 excluded", authority: "manual 2.2, 2.4", witness: "test_rule_2_4_sampled_time_includes_readings_below_threshold; test_run_logged_at_nought_stays_out_of_sampled_time (trap T1)", plausible_wrong: "count only counted readings (shipped) / count every run (natural over-repair)"}
+  - {id: SHIFT_DOSE, contribution: "full-shift survey (>= 3/4 of shift) projected to its own shift when shorter, kept otherwise; any other survey keeps today's step", authority: "manual 2.5, 3.3; instruction silence clause", witness: "test_rule_3_3_full_shift_survey_projected_to_own_shift; test_rule_2_5_full_shift_at_exactly_three_quarters; test_survey_below_three_quarters_keeps_todays_projection (trap T3); test_survey_that_measured_nothing_keeps_todays_dose", plausible_wrong: "project to 480 (shipped) / own-shift projection for every survey or unprojected uncovered surveys (natural over-repairs)"}
+  - {id: TWA, contribution: "85 + 3 log2(D/100), reported to the nearest tenth", authority: "manual 4.1, 1.2", witness: "test_rule_4_1_twa_formula; test_rule_1_2_twa_rounded_to_nearest_tenth", plausible_wrong: "90 + 16.61 log10(D/100); truncation"}
+  - {id: FLAGS, contribution: "ceiling above 115.0 dBA reading; impulse at 140.0 dBC or more", authority: "manual 5.1, 5.2, 2.5", witness: "test_rule_5_1_ceiling_above_115_dba; test_rule_5_2_impulse_at_140_dbc", plausible_wrong: "peak > 140.0; level >= 115.0"}
+  - {id: STATUS, contribution: "over when flagged or TWA above 85.0; action from 82.0 to 85.0", authority: "manual 5.3", witness: test_rule_5_3_status_bands_at_82_and_85, plausible_wrong: "85/90 bands; over from 85.0 inclusive"}
+  - {id: GROUP_DOSE, contribution: "mean of every member's shift dose, quiet members' nought included; TWA from that dose, status from the TWA alone", authority: "manual 6.1, 1.3", witness: "test_rule_6_1_group_dose_is_mean_of_shift_doses; test_rule_6_1_quiet_member_counts_in_group_mean", plausible_wrong: "mean of member TWAs (shipped) / keep the has-a-TWA filter"}
+support_obligations:
+  - {id: SURVEY_LOADER, supplied_boundary: "src/noisedose/survey.py decodes runs and peaks", why_not_core: "decoding is complete and not a repair surface"}
+  - {id: DRIVER, supplied_boundary: "tools/noisedose_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: REPORT_LAYOUT, supplied_boundary: "README report keys and list order, already produced by report.py", why_not_core: "serialization already right"}
+non_goals:
+  - malformed or out-of-range survey files (left entirely open in the instruction)
+  - error messages, exit codes other than the report
+  - direct calls to package helpers (graded through the driver only)
+  - hearing-protector attenuation, audiometry, and anything the manual does not mention

@@ -1,0 +1,240 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/amplitude.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/amplitude.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/amplitude.py	2026-09-26 20:22:36
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/amplitude.py	2026-09-27 09:16:15
+@@ -2,18 +2,33 @@
+ 
+ import math
+ 
+-# Static magnification of the Wood-Anderson torsion seismometer.
+-WOOD_ANDERSON_GAIN = 2800.0
++# Static magnification the network's simulated Wood-Anderson actually delivers
++# (rule 2.2); Richter's tables assumed the nominal 2800.
++WOOD_ANDERSON_GAIN = 2080.0
+ 
+ # Nanometres of ground displacement to millimetres, before magnification.
+ NM_TO_MM = 1.0e-6
+ 
+ 
+ def record_amplitude_mm(amplitude_nm):
+-    """Trace amplitude on the simulated Wood-Anderson record, in millimetres."""
+-    return float(amplitude_nm) * WOOD_ANDERSON_GAIN * NM_TO_MM
++    """Trace amplitude on the simulated Wood-Anderson record, in millimetres.
+ 
++    The picker's ``amplitude_nm`` is a peak-to-peak value, so the record
++    amplitude is half of it, magnified (rule 2.2).
++    """
++    return float(amplitude_nm) / 2.0 * WOOD_ANDERSON_GAIN * NM_TO_MM
+ 
++
+ def log_record_amplitude(amplitude_nm):
+     """Base-ten logarithm of the record amplitude in millimetres."""
+     return math.log10(record_amplitude_mm(amplitude_nm))
++
++
++# An amplitude is a reading when it is at least this many times its channel's
++# noise (rule 2.3).
++NOISE_FACTOR = 3.0
++
++
++def is_reading(amplitude):
++    """Whether one amplitude object is a reading (rule 2.3)."""
++    return float(amplitude["amplitude_nm"]) >= NOISE_FACTOR * float(amplitude["noise_nm"])
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/attenuation.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/attenuation.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/attenuation.py	2026-09-26 20:22:36
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/attenuation.py	2026-09-27 09:16:40
+@@ -18,7 +18,11 @@
+     (600.0, 4.790),
+ )
+ 
++# The ends of the table (rule 3.2).
++NEAREST_KM = CALIBRATION[0][0]
++FARTHEST_KM = CALIBRATION[-1][0]
+ 
++
+ def _segment(distance_km):
+     """Index of the calibration segment used for ``distance_km``."""
+     last = len(CALIBRATION) - 2
+@@ -29,10 +33,21 @@
+ 
+ 
+ def minus_log_a0(distance_km):
+-    """Distance correction -log A0 at ``distance_km`` kilometres."""
++    """Distance correction -log A0 at ``distance_km`` kilometres.
++
++    Within the table, from 10 km to 600 km, a listed distance takes its listed
++    value and any distance between two listed ones is interpolated linearly in
++    distance (rule 3.3).  The manual gives no correction outside the table, so
++    outside it the package keeps the calculation it has always made: the
++    outermost segment carried on, interpolated in the logarithm of distance.
++    """
++    distance_km = float(distance_km)
+     index = _segment(distance_km)
+     (near_km, near_value), (far_km, far_value) = CALIBRATION[index], CALIBRATION[index + 1]
+-    x = math.log10(distance_km)
+-    x_near = math.log10(near_km)
+-    x_far = math.log10(far_km)
++    if NEAREST_KM <= distance_km <= FARTHEST_KM:
++        x, x_near, x_far = distance_km, near_km, far_km
++    else:
++        x = math.log10(distance_km)
++        x_near = math.log10(near_km)
++        x_far = math.log10(far_km)
+     return near_value + (far_value - near_value) * (x - x_near) / (x_far - x_near)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/bulletin.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/bulletin.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/bulletin.py	2026-09-26 20:22:56
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/bulletin.py	2026-09-27 09:16:40
+@@ -10,20 +10,42 @@
+     return {entry["code"]: float(entry["correction"]) for entry in stations}
+ 
+ 
++def _station_amplitudes(recordings):
++    """Every amplitude of each station of an event, by station code.
++
++    A site whose broadband and strong-motion sensors are processed separately
++    sends one recording for each, and both are the one station's share of the
++    event (rules 1.2 and 4.3).
++    """
++    pooled = {}
++    for recording in recordings:
++        pooled.setdefault(recording["code"], []).extend(recording["amplitudes"])
++    return pooled
++
++
+ def reduce_event(event, corrections):
+     """Report object for one event."""
+     depth_km = float(event["depth_km"])
++    pooled = _station_amplitudes(event["recordings"])
++    magnitudes = {}
+     rows = []
+     for recording in event["recordings"]:
+         code = recording["code"]
+         distance_km = station_distance_km(recording["epi_km"], depth_km)
++        if code not in magnitudes:
++            magnitudes[code] = station_magnitude(pooled[code], distance_km, corrections[code])
+         rows.append({
+             "code": code,
+             "distance_km": distance_km,
+-            "ml": station_magnitude(recording["amplitudes"], distance_km, corrections[code]),
++            "ml": magnitudes[code],
+             "contributes": contributes(distance_km),
+         })
+-    counted = [row["ml"] for row in rows if row["contributes"]]
++    counted = []
++    seen = set()
++    for row in rows:
++        if row["contributes"] and row["code"] not in seen:
++            seen.add(row["code"])
++            counted.append(row["ml"])
+     return {"id": event["id"], "ml": network_magnitude(counted), "stations": rows}
+ 
+ 
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/distance.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/distance.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/distance.py	2026-09-26 20:22:36
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/distance.py	2026-09-27 09:16:15
+@@ -1,10 +1,14 @@
+ """Source-station distance used by the magnitude."""
+ 
++import math
+ 
++
+ def station_distance_km(epi_km, depth_km):
+     """Distance, in kilometres, a station's magnitude is corrected for.
+ 
+     ``epi_km`` is the epicentral distance the locator gives for the station and
+-    ``depth_km`` the depth of the event.
++    ``depth_km`` the depth of the event.  The magnitude is corrected for the
++    hypocentral distance at every range (rule 3.1); station elevation is not
++    used.
+     """
+-    return float(epi_km)
++    return math.hypot(float(epi_km), float(depth_km))
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/network.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/network.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/network.py	2026-09-26 20:22:56
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/network.py	2026-09-27 09:16:40
+@@ -1,22 +1,32 @@
+ """Network magnitude of an event from its station magnitudes."""
+ 
+-from .attenuation import CALIBRATION
++from .attenuation import FARTHEST_KM, NEAREST_KM
+ 
+-NEAREST_KM = CALIBRATION[0][0]
+-FARTHEST_KM = CALIBRATION[-1][0]
++# Fewest contributing stations an event needs for a network magnitude (rule 5.3).
++LEAST_STATIONS = 3
+ 
+ 
+ def contributes(distance_km):
+-    """Whether a station at ``distance_km`` counts toward the network magnitude."""
+-    return NEAREST_KM <= distance_km <= FARTHEST_KM
++    """Whether a station at ``distance_km`` counts toward the network magnitude.
+ 
++    A station contributes when its distance lies within the calibration table,
++    from 10 km to 600 km, both ends included (rule 5.1).
++    """
++    return NEAREST_KM <= float(distance_km) <= FARTHEST_KM
+ 
++
+ def network_magnitude(station_magnitudes):
+     """Network local magnitude from the contributing stations' magnitudes.
+ 
+-    Returns ``None`` when no magnitude can be formed.
++    The median of the station magnitudes: the middle one of an odd number of
++    them, the mean of the two middle ones of an even number (rule 5.2).  An
++    event with fewer than three contributing stations has no network magnitude
++    (rule 5.3), and ``None`` is returned for it.
+     """
+-    values = [float(value) for value in station_magnitudes]
+-    if not values:
++    values = sorted(float(value) for value in station_magnitudes)
++    if len(values) < LEAST_STATIONS:
+         return None
+-    return sum(values) / len(values)
++    middle = len(values) // 2
++    if len(values) % 2:
++        return values[middle]
++    return (values[middle - 1] + values[middle]) / 2.0
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/station.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/station.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/baseline/environment/app/mlnet/station.py	2026-09-26 20:22:56
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-local-magnitude-network-reduction-rev-v9/run_2/solve/environment/app/mlnet/station.py	2026-09-27 09:16:15
+@@ -1,22 +1,33 @@
+ """Channel and station magnitudes."""
+ 
+-from .amplitude import log_record_amplitude
++from .amplitude import is_reading, log_record_amplitude
+ from .attenuation import minus_log_a0
+ 
+ 
+ def channel_magnitude(amplitude_nm, distance_km, correction):
+     """Local magnitude from one channel's amplitude at a station.
+ 
+-    ``correction`` is the station's entry in the station table.
++    The logarithm of the record amplitude, plus the distance correction at the
++    station's distance, plus the station's correction as it stands in the table
++    (rules 4.1 and 4.2).  ``correction`` is the station's entry in the station
++    table.
+     """
+-    return log_record_amplitude(amplitude_nm) + minus_log_a0(distance_km) - correction
++    return log_record_amplitude(amplitude_nm) + minus_log_a0(distance_km) + float(correction)
+ 
+ 
+ def station_magnitude(amplitudes, distance_km, correction):
+-    """Local magnitude of one station from the amplitudes of its recording.
++    """Local magnitude of one station from the amplitudes it read.
+ 
+-    ``amplitudes`` is the recording's list of amplitude objects, each with its
+-    ``channel``, ``amplitude_nm`` and ``noise_nm``.
++    ``amplitudes`` is the station's list of amplitude objects for the event --
++    every horizontal channel of each of its recordings -- each with its
++    ``channel``, ``amplitude_nm`` and ``noise_nm``.  The station's magnitude is
++    the mean of the channel magnitudes of its readings (rule 4.3).
+     """
+-    largest = max(float(item["amplitude_nm"]) for item in amplitudes)
+-    return channel_magnitude(largest, distance_km, correction)
++    values = [
++        channel_magnitude(item["amplitude_nm"], distance_km, correction)
++        for item in amplitudes
++        if is_reading(item)
++    ]
++    if not values:
++        return None
++    return sum(values) / len(values)

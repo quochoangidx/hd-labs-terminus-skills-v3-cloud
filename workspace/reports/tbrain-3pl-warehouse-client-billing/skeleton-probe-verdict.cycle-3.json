@@ -1,0 +1,23 @@
+{
+ "cycle": 3,
+ "mode": "exploratory_skeleton",
+ "task_snapshot_sha256": "8dc98398f2d8059c61379f9e1dc557efabe43965ec2bcf305c348d72cafe16b6",
+ "image": "tbrain-3pl-warehouse-client-billing:skeleton3 sha256:3fd36041583c5784cd85fe2d119b1e2d1123ef5da0e1e3123673def8dcb67359",
+ "served_models": {"run_1": ["claude-opus-5"], "run_2": ["claude-opus-5"]},
+ "raw": "0/2 (both runs fail exactly T1 8/8 and T2 8/8; every departure family, MIN and broad pass)",
+ "cause_analysis": {
+  "method": "builder re-ran both solve trees in process on the scorer's T1/T2 jobs field by field, and on 676 random lots holding returns (holidays, up to six revisions) to test the r3 F1/F2 return-pricing readings",
+  "run_1": {
+   "T1": "storage and amount differ on 8/8 (storage_weeks on 1/8); handling identical 8/8. Cause (a), the fair timing miss: on_hand() uses `when < day` for every entry, so a return keyed on a storage week's first day adds back from the next day instead of its own date. No (b) component: return handling matches the model's reading on 676/676 random return lots and on every T1 job.",
+   "T2": "peak differs 8/8 (0 instead of the shipped daily maximum). peak() is `most = 0; for ... billed_weeks: most = max(most, pallets)`: the shipped accumulator kept, its domain switched to billed weeks."
+  },
+  "run_2": {
+   "T1": "same as run_1: storage/amount 8/8, handling 0/8; `when < day` for every entry (the solver's note: 'returns change on-hand from the next day'). Pure (a).",
+   "T2": "same as run_1: `most = 0` accumulator over billed weeks, peak 0 (the solver's note: 'the existing code's max-from-zero behaviour with no added guard')."
+  },
+  "rescore_with_return_pricing_neutralised": "unchanged: neither run differs from the model on any return's handling, so T1's 16/16 failed jobs are timing only; T1 alone is a fair miss by both runs",
+  "T2_derivability": "ambiguous. The shipped peak() is a `most = 0` accumulator over the period's days; 'keep the calculation the package makes today' is read by both solvers as that accumulator over the new (empty) domain, which gives 0, and 'no guard' pushes the same way. The kept value (the shipped maximum over period days) is not uniquely derivable: two readings, both defensible. T2 also lacks a definitional chain for its kept value (a bare quirk of today's code) and meets contrary instinct (0), so it carries two or more blueprint §4.3 flags and was missed by every run."
+ },
+ "result": "0/2 raw; T2 misses discarded as ambiguity; T1 is a fair common miss (2/2 on the current contract, a 0/8 risk to screen)",
+ "disposition": "r3 F1/F2 closed by making a return's handling uniquely nothing (shipped handling skips entries below one pallet; 5.3 names receipt and dispatches); F4 closed (a lot's entries on distinct dates); T2 dropped (peak of a lot with no billed week governed as nought) and replaced by a definitional trap on a different node (a lot that arrived empty has no receipt, so no receipt fee); fresh pair needed"
+}

@@ -1,0 +1,214 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "396f374ad48c49716916b491fa816cc51c9c3668ed9fcc7a1c1f591380524fff",
+  "severity": "None",
+  "summary": "The verifier runs the documented driver (verifier-owned copy) on sealed, roster-pinned agreement files and compares every README key with exact type and value, plus bill order and file totals. Each named RC-3 rule and each figure the contract leaves to today's code has a case that separates the correct behaviour from the plausible wrong one on both sides of its boundary, and each signed partition (fuel short, equal or fuller; miles below, at or above the allowance; odometer turned over, equal or normal) is covered. I found no false rejection of a contract-valid implementation.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/rental-charges-manual.md",
+      "environment/app/examples/counter-2031-05.json",
+      "environment/app/tools/rentcharge_run.py",
+      "environment/app/src/rentcharge/__init__.py",
+      "environment/app/src/rentcharge/clock.py",
+      "environment/app/src/rentcharge/time_charge.py",
+      "environment/app/src/rentcharge/mileage.py",
+      "environment/app/src/rentcharge/fuel.py",
+      "environment/app/src/rentcharge/tax.py",
+      "environment/app/src/rentcharge/run.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/01-grace.jsonl",
+      "tests/expected/02-allowance.jsonl",
+      "tests/expected/03-turnover.jsonl",
+      "tests/expected/04-refuelling.jsonl",
+      "tests/expected/05-tax_base.jsonl",
+      "tests/expected/06-tax_rounding.jsonl",
+      "tests/expected/07-order_and_totals.jsonl",
+      "tests/expected/08-short_days.jsonl",
+      "tests/expected/09-short_allowance.jsonl",
+      "tests/expected/10-fuel_not_short.jsonl",
+      "tests/expected/11-traps_combined.jsonl",
+      "tests/expected/12-generated.jsonl",
+      "tests/expected/13-limits.jsonl",
+      "tests/shipped/app/tools/rentcharge_run.py",
+      "tests/shipped/app/src/rentcharge/__init__.py",
+      "tests/shipped/app/src/rentcharge/clock.py",
+      "tests/shipped/app/src/rentcharge/time_charge.py",
+      "tests/shipped/app/src/rentcharge/mileage.py",
+      "tests/shipped/app/src/rentcharge/fuel.py",
+      "tests/shipped/app/src/rentcharge/tax.py",
+      "tests/shipped/app/src/rentcharge/run.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled packet-manifest.json with the files read: all 46 entries were inspected. The tests/shipped copies were read in full and also match the environment copies by manifest SHA-256.",
+    "13-limits.jsonl (one 59,810-character line) was truncated by Read after about 38.6K characters. Its agreements were fully visible, and the rest of the bills, plus revenue and tax, were read by paginated Grep -o extraction of every bill object. 12-generated.jsonl was read by Grep -o extraction of every agreement and bill object and each file total (4 rows, 32 agreements).",
+    "Hand-traced the expected bills in families 01-11 against RC-3 rules 1.2, 2.3, 2.4, 3.1-3.3, 4.1-4.3 and the instruction's rule that today's code stands where the manual is silent. Spot-checked limits rows (AAAAAAAAAA, Z-9, B, L3, L5, L7B) and file totals (07, 11).",
+    "Traced compare(): exact type and value for branch, revenue, tax and every BILL_KEYS field, in index order with the bill count checked; extra keys are ignored and JSON key order is irrelevant (the output is parsed).",
+    "Traced the bill_run() harness: a verifier-owned driver is os.replace-d onto the documented path; the candidate package is run as uid 65534 with python3 -I -S from a fresh cwd; staged pathnames vary; only exit code 0 and stdout JSON are graded.",
+    "Traced relabel(): the time shift is a whole number of weeks, which keeps lengths unchanged, and the bounds keep times inside 2000-2099. Fresh ids are unique, the shuffle is mirrored in the expectations, and within_limits is re-asserted, so a correct package passes under every RELABEL_SEED.",
+    "Traced load(): roster digest and count, within_limits for rule 1.3, and silent_inputs, which confines short and fuller inputs to the families that grade them.",
+    "Mutant sweep (static): today's shipped code; grace applied to every rental (days=0 under an hour); ceil days used for the allowance; floor days used for the allowance; a 100-mile allowance; turnover when in<=out; a turnover modulus; refuelling fee always charged, charged when fuel is unequal, or charged without the rate part; fuller fuel charge clamped to 0; fuel taxed; floor tax; banker's rounding; bills sorted by id. Each fails at least one named case (details under coverage_sweep).",
+    "Checked the non-output tests (driver unchanged, UNGOVERNED file hashes, candidate cannot read verifier state) against instruction.md lines 1 and 3."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if missing or reversed",
+      "status": "checked",
+      "reason": "One family per rule. Rule 2.3: G3 (+59 min gives 3 days) and G4 (+60 gives 4). Rule 3.2: M1 (300 miles over 2 days gives 0) versus 3000 under the old 100-mile allowance. Rule 2.4: T1 and T2 turn over, T5 has equal readings. Rule 3.3: F1-F4. Rule 4.1: X1, where taxing the 11,495 fuel charge gives 3341 instead of 2393. Rule 1.2: R1 and R5. Order and totals: family 07. Each is compared exactly.",
+      "evidence": ["tests/test_outputs.py:235-294", "tests/expected/01-grace.jsonl:1", "tests/expected/02-allowance.jsonl:1", "tests/expected/03-turnover.jsonl:1", "tests/expected/04-refuelling.jsonl:1", "tests/expected/05-tax_base.jsonl:1", "tests/expected/06-tax_rounding.jsonl:1", "tests/expected/07-order_and_totals.jsonl:1", "environment/app/docs/rental-charges-manual.md:16-71"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result checked (values, membership, required outputs), not existence or shape",
+      "status": "checked",
+      "reason": "compare() checks branch, revenue and tax, the bill count, and all eight bill keys with type(actual) is type(expected), so bools and floats are rejected. The README promises exactly these keys and instruction.md:5 promises exact comparison and order.",
+      "evidence": ["tests/test_outputs.py:213-227", "environment/app/README.md:24-33", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Each named domain rule has an isolating case whose outcome changes when the rule is wrong",
+      "status": "checked",
+      "reason": "Grace boundary at 59/60 minutes (G3/G4, M4/M5), including year-end, leap-day and month-end rows (G7, G8, G9). Allowance at, above and below the limit (M1, M2, M3), with the days charged after grace separating ceil from grace days (M4: 500 versus 0). Turnover at 999999->0 and at equal readings. Refuelling fee with fuel rate 0 (F3). Half-cent tax (R1-R4). Short-rental allowance of 150 (L1: 0 versus 40 under the old 100). Held-out generated files are not the only check for any rule.",
+      "evidence": ["tests/expected/01-grace.jsonl:1-2", "tests/expected/02-allowance.jsonl:1-2", "tests/expected/03-turnover.jsonl:1", "tests/expected/04-refuelling.jsonl:1", "tests/expected/06-tax_rounding.jsonl:1", "tests/expected/09-short_allowance.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Unmodified shipped code fails G2-G3, M1, T1, F1, X1 and R1. Grace applied to every rental fails S1-S3 and C1/C4/C5/C6 (0 days). Fuller fuel clamped to 0 fails E2 and E3 (expected -650 and -16000). A fee on any unequal fuel fails E2. A fee always charged fails E1. Floor tax fails R1 (16) and R5 (99). Banker's rounding fails R1 (16.5 is exactly representable, so it rounds to 16). Turnover when in<=out fails T5. Sorting bills by id fails family 07 and the shuffled relabel runs.",
+      "evidence": ["tests/expected/08-short_days.jsonl:1", "tests/expected/10-fuel_not_short.jsonl:1", "tests/expected/11-traps_combined.jsonl:1", "tests/expected/06-tax_rounding.jsonl:1", "tests/expected/03-turnover.jsonl:1", "tests/test_outputs.py:297-332"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives for unconstrained formatting, ordering and implementation are accepted",
+      "status": "checked",
+      "reason": "Output is parsed, not compared as text; extra top-level and bill keys are ignored; key order and whitespace are free. The driver itself is fixed by contract (instruction.md:1), so its serialization is not a candidate choice. With -I -S only the standard library is importable, and the task needs nothing else (the environment Dockerfile installs no Python packages). Equivalent formulas, such as max(1, ceil((L-59)/1440)) or a modulus turnover, give identical results over the rule 1.3 domain.",
+      "evidence": ["tests/test_outputs.py:162-166", "tests/test_outputs.py:217-227", "environment/Dockerfile:4", "instruction.md:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle behavior are enforced (driver byte-identity, only change what the manual governs, no added guards)",
+      "status": "checked",
+      "reason": "Driver byte-identity is enforced (DELIVERED_BYTES compared, plus cmp in test.sh), matching instruction.md:1. The README, manual and example are hash-pinned under 'Only change what the manual governs' (instruction.md:3); editing them is not a plausible valid move because /app/src is the stated change surface. 'Add no clamp' is enforced through outputs: fuller-fuel negative charges (E2, E3, C1, C2) and short-rental days of 1.",
+      "evidence": ["tests/test_outputs.py:348-362", "tests/test.sh:22-27", "instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Figures left to today's code (contract rule: keep today's step where the manual is silent)",
+      "status": "checked",
+      "reason": "Manual 2.3 defines days only for day rentals (2.2), and 3.3 defines a fuel charge only for refuelling rentals (2.5). The expectations use today's ceil days (1) for rentals under a day (S1-S5, C1, C3-C8) and today's (fuel_out-fuel_in)*fuel_rate for equal or fuller fuel (E1-E4, C1-C2), as instruction.md:3 requires. silent_inputs keeps these inputs out of other families, so a wrong reading localizes to the named tests.",
+      "evidence": ["environment/app/src/rentcharge/time_charge.py:6-8", "environment/app/src/rentcharge/fuel.py:4-5", "environment/app/docs/rental-charges-manual.md:38-60", "instruction.md:3", "tests/test_outputs.py:55", "tests/test_outputs.py:189-209"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: legal sign partitions discriminated",
+      "status": "checked",
+      "reason": "Fuel difference: positive (F1-F4), zero (E1, X2), negative (E2-E4) and negative with rate 0 (E4 gives 0). Odometer difference: positive, zero (T5) and negative turned over (T1-T4, C6, L7B). Allowance excess: negative, zero and positive (M3, M1, M2). Bill total negative (E3 = -5175) and included in revenue.",
+      "evidence": ["tests/expected/04-refuelling.jsonl:1", "tests/expected/10-fuel_not_short.jsonl:1", "tests/expected/03-turnover.jsonl:1", "tests/expected/02-allowance.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "State machine initialization-to-first-event",
+      "status": "not_applicable",
+      "reason": "Each bill is a stateless function of one agreement; file totals are plain sums. There is no contract-relevant state machine.",
+      "evidence": ["environment/app/src/rentcharge/run.py:9-33"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "Expectations are sealed JSONL pinned by the roster, not produced by candidate code. The verifier's own driver copy is installed before any candidate code runs, so a stale or modified candidate driver cannot be graded. The unused shipped=True path is dead code with no graded effect. Every graded file passes within_limits, so no case lies outside the rule 1.3 domain.",
+      "evidence": ["tests/test_outputs.py:58-67", "tests/test_outputs.py:70-103", "tests/test_outputs.py:145-166", "tests/test_outputs.py:174-210"],
+      "finding_ids": []
+    },
+    {
+      "category": "Instruction-promised input coverage (1-200 agreements, 1 minute to 60 days, calendar ends, turnover, fuel 0-8, rates at their ends including 0, half cents)",
+      "status": "checked",
+      "reason": "200 agreements, 86,400-minute rentals, the years 2000 and 2099 and the 2000 leap year (limits). 1-minute rentals (S1, C5). Return on the minute, +59 and +60 (grace). Year, month and leap ends (G7, G8, G9, F1). Fuel 8->0 and 0->8. Mile, fuel and day rates at 0 or 100 and at their maxima. Half-cent taxes (R1-R4).",
+      "evidence": ["instruction.md:5", "tests/expected/13-limits.jsonl:1", "tests/expected/01-grace.jsonl:1-2", "tests/test_outputs.py:290-294"],
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localization",
+      "status": "checked",
+      "reason": "One test per rule. Failure messages name the family, branch, bill index, id and key along with actual versus expected values; relabel failures print the seed.",
+      "evidence": ["tests/test_outputs.py:213-232", "tests/test_outputs.py:332"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.3 grace on day rentals", "3.2 allowance per charged day"],
+      "case_or_path": "M4 (7 days + 59 min, 1051 miles, allowance 1050, charge 500) and M5 (7 days + 60 min, 8 days, 1201 miles, charge 1). A ceil-days allowance gives 0 for M4; a floor-days allowance gives 151 for M5.",
+      "status": "checked",
+      "evidence": ["tests/expected/02-allowance.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["today's days for rentals under a day", "3.2 150-mile allowance"],
+      "case_or_path": "L1 (5 h, 101 miles gives 0), L3 (1.5 h, 151 miles gives 500) and C4 (59 min, 151 miles gives 30). Grace applied to short rentals would give 0 days, 0 allowance and a time charge of 0 for C4.",
+      "status": "checked",
+      "evidence": ["tests/expected/09-short_allowance.jsonl:1", "tests/expected/11-traps_combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["today's fuel step for fuller cars", "4.1 fuel not taxed / 4.2 total / 4.3 revenue"],
+      "case_or_path": "E2 and E3: the negative fuel charge is excluded from tax (825) but included in the total (10175, -5175) and in revenue (26650).",
+      "status": "checked",
+      "evidence": ["tests/expected/10-fuel_not_short.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.4 turnover", "3.2 allowance on a rental under a day", "3.3 refuelling"],
+      "case_or_path": "C6: 30-minute rental, 999900->300 = 400 miles, 250 beyond at 500 = 125000, fuel 3*2000+1500 = 7500, tax 10725.",
+      "status": "checked",
+      "evidence": ["tests/expected/11-traps_combined.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 refuelling fee", "fuel rate of nought"],
+      "case_or_path": "F3 (1 eighth short, rate 0, charge 1500) and C7 (8 short, rate 0, charge 1500) versus E4 (fuller, rate 0, charge 0).",
+      "status": "checked",
+      "evidence": ["tests/expected/04-refuelling.jsonl:1", "tests/expected/11-traps_combined.jsonl:1", "tests/expected/10-fuel_not_short.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["1.2 half-up tax", "3.2 mileage in the taxable base"],
+      "case_or_path": "R6: 200 + 1 = 201, times 0.0825 = 16.58, which rounds to 17. M2: 10030 gives 827.475, which rounds to 827.",
+      "status": "checked",
+      "evidence": ["tests/expected/06-tax_rounding.jsonl:1", "tests/expected/02-allowance.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["bill order in file order", "relabelled generated files (shuffle, fresh ids, week shift, branch strings)"],
+      "case_or_path": "relabel() permutes agreements and expectations together, assigns fresh ids and shifts all times by the same weeks. The expected values do not depend on the labels, so any correct package passes and a sorting or lookup-by-id package fails.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:297-332"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2 day rental threshold at 1440", "today's ceil days"],
+      "case_or_path": "L=1440 gives 1 day under either reading (G9, R1), so the threshold's inclusive end has no observable effect. L in 1441-1499 (G7, MMMMMMMMMM) separates grace from ceil.",
+      "status": "checked",
+      "evidence": ["tests/expected/01-grace.jsonl:2", "tests/expected/07-order_and_totals.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

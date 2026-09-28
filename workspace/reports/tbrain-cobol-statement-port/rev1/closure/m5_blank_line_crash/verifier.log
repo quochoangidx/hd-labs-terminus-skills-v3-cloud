@@ -1,0 +1,1606 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 54 items
+
+../../tests/test_outputs.py ......................F.....F.FFFF.FF...FFFF [ 81%]
+FFFF.FFF..                                                               [100%]
+
+=================================== FAILURES ===================================
+_______________________________ test_short_lines _______________________________
+
+    def test_short_lines():
+>       check("short_lines")
+
+/tests/test_outputs.py:240: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/short_lines.dat'
+payments_source = '/tests/cases/short_lines.pay', tag = 'short_lines'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+____________________________ test_blank_line_first _____________________________
+
+    def test_blank_line_first():
+>       check("blank_line_first")
+
+/tests/test_outputs.py:264: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/blank_line_first.dat'
+payments_source = '/tests/cases/blank_line_first.pay', tag = 'blank_line_first'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_02 _______________________________
+
+    def test_generated_02():
+>       check("generated_02")
+
+/tests/test_outputs.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_02.dat'
+payments_source = '/tests/cases/generated_02.pay', tag = 'generated_02'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_03 _______________________________
+
+    def test_generated_03():
+>       check("generated_03")
+
+/tests/test_outputs.py:276: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_03.dat'
+payments_source = '/tests/cases/generated_03.pay', tag = 'generated_03'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_04 _______________________________
+
+    def test_generated_04():
+>       check("generated_04")
+
+/tests/test_outputs.py:280: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_04.dat'
+payments_source = '/tests/cases/generated_04.pay', tag = 'generated_04'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_05 _______________________________
+
+    def test_generated_05():
+>       check("generated_05")
+
+/tests/test_outputs.py:284: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_05.dat'
+payments_source = '/tests/cases/generated_05.pay', tag = 'generated_05'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_07 _______________________________
+
+    def test_generated_07():
+>       check("generated_07")
+
+/tests/test_outputs.py:292: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_07.dat'
+payments_source = '/tests/cases/generated_07.pay', tag = 'generated_07'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_08 _______________________________
+
+    def test_generated_08():
+>       check("generated_08")
+
+/tests/test_outputs.py:296: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_08.dat'
+payments_source = '/tests/cases/generated_08.pay', tag = 'generated_08'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_12 _______________________________
+
+    def test_generated_12():
+>       check("generated_12")
+
+/tests/test_outputs.py:312: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_12.dat'
+payments_source = '/tests/cases/generated_12.pay', tag = 'generated_12'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_13 _______________________________
+
+    def test_generated_13():
+>       check("generated_13")
+
+/tests/test_outputs.py:316: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_13.dat'
+payments_source = '/tests/cases/generated_13.pay', tag = 'generated_13'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_14 _______________________________
+
+    def test_generated_14():
+>       check("generated_14")
+
+/tests/test_outputs.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_14.dat'
+payments_source = '/tests/cases/generated_14.pay', tag = 'generated_14'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_15 _______________________________
+
+    def test_generated_15():
+>       check("generated_15")
+
+/tests/test_outputs.py:324: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_15.dat'
+payments_source = '/tests/cases/generated_15.pay', tag = 'generated_15'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_16 _______________________________
+
+    def test_generated_16():
+>       check("generated_16")
+
+/tests/test_outputs.py:328: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_16.dat'
+payments_source = '/tests/cases/generated_16.pay', tag = 'generated_16'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_17 _______________________________
+
+    def test_generated_17():
+>       check("generated_17")
+
+/tests/test_outputs.py:332: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_17.dat'
+payments_source = '/tests/cases/generated_17.pay', tag = 'generated_17'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_18 _______________________________
+
+    def test_generated_18():
+>       check("generated_18")
+
+/tests/test_outputs.py:336: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_18.dat'
+payments_source = '/tests/cases/generated_18.pay', tag = 'generated_18'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_19 _______________________________
+
+    def test_generated_19():
+>       check("generated_19")
+
+/tests/test_outputs.py:340: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_19.dat'
+payments_source = '/tests/cases/generated_19.pay', tag = 'generated_19'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_21 _______________________________
+
+    def test_generated_21():
+>       check("generated_21")
+
+/tests/test_outputs.py:348: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_21.dat'
+payments_source = '/tests/cases/generated_21.pay', tag = 'generated_21'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_22 _______________________________
+
+    def test_generated_22():
+>       check("generated_22")
+
+/tests/test_outputs.py:352: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_22.dat'
+payments_source = '/tests/cases/generated_22.pay', tag = 'generated_22'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+______________________________ test_generated_23 _______________________________
+
+    def test_generated_23():
+>       check("generated_23")
+
+/tests/test_outputs.py:356: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:112: in check
+    compare(_run_port(name), _expected(name))
+            ^^^^^^^^^^^^^^^
+/tests/test_outputs.py:94: in _run_port
+    return _run_port_paths(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+readings_source = '/tests/cases/generated_23.dat'
+payments_source = '/tests/cases/generated_23.pay', tag = 'generated_23'
+
+    def _run_port_paths(readings_source, payments_source, tag="run"):
+        """Run the port on one extract pair as an unprivileged user; return its output bytes.
+    
+        The three files sit in different directories under names taken from the case,
+        and the port runs from a fourth, empty directory, so only the paths it is given
+        lead to them."""
+        port_stat = os.lstat(PORT)
+        assert stat.S_ISREG(port_stat.st_mode), "the submitted port must be one regular Python file"
+        scratch = tempfile.mkdtemp(prefix="wbill-")
+        os.chmod(scratch, 0o755)
+        dirs = {}
+        for role in ("extract", "export", "print", "cwd"):
+            dirs[role] = os.path.join(scratch, f"{role}-{tag}")
+            os.mkdir(dirs[role])
+            os.chmod(dirs[role], 0o777 if role in ("print", "cwd") else 0o755)
+        readings = os.path.join(dirs["extract"], f"{tag}.readings")
+        payments = os.path.join(dirs["export"], f"{tag}-postings.txt")
+        output = os.path.join(dirs["print"], f"STMT.{tag}")
+        shutil.copyfile(readings_source, readings)
+        shutil.copyfile(payments_source, payments)
+        for path in (readings, payments):
+            os.chmod(path, 0o444)
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": dirs["cwd"], "LANG": "C.UTF-8"}
+        command = [PYTHON, "-I", "-S", RUNNER, PORT, readings, payments, output]
+        demote = os.geteuid() == 0
+        proc = subprocess.Popen(
+            ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups", "--no-new-privs"] + command
+            if demote else command,
+            cwd=dirs["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            _, err = proc.communicate(timeout=max(1.0, DEADLINE - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            err = b"ran past the verifier's time budget"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+        try:
+>           assert proc.returncode == 0, "the port failed:\n" + err.decode("utf-8", "replace")[-2000:]
+E           AssertionError: the port failed:
+E             Traceback (most recent call last):
+E               File "/opt/wbill-verifier/port_runner.py", line 40, in <module>
+E                 main()
+E                 ~~~~^^
+E               File "/opt/wbill-verifier/port_runner.py", line 36, in main
+E                 runpy.run_path(port, run_name="__main__")
+E                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               File "<frozen runpy>", line 287, in run_path
+E               File "<frozen runpy>", line 98, in _run_module_code
+E               File "<frozen runpy>", line 88, in _run_code
+E               File "/app/port/wbill.py", line 358, in <module>
+E                 main(sys.argv)
+E                 ~~~~^^^^^^^^^^
+E               File "/app/port/wbill.py", line 341, in main
+E                 if rec.strip()[0] == "C":
+E                    ~~~~~~~~~~~^^^
+E             IndexError: string index out of range
+E             
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['setpriv', '--reuid=65534', '--regid=65534', '-...>.returncode
+
+/tests/test_outputs.py:78: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_every_case_has_an_expected_statement
+PASSED ../../tests/test_outputs.py::test_band_boundaries
+PASSED ../../tests/test_outputs.py::test_credit_balances
+PASSED ../../tests/test_outputs.py::test_date_and_region
+PASSED ../../tests/test_outputs.py::test_district_run
+PASSED ../../tests/test_outputs.py::test_empty_file
+PASSED ../../tests/test_outputs.py::test_header_missing
+PASSED ../../tests/test_outputs.py::test_header_only
+PASSED ../../tests/test_outputs.py::test_header_out_of_place
+PASSED ../../tests/test_outputs.py::test_large_commercial_accounts
+PASSED ../../tests/test_outputs.py::test_long_run
+PASSED ../../tests/test_outputs.py::test_meter_rollover
+PASSED ../../tests/test_outputs.py::test_names_of_every_shape
+PASSED ../../tests/test_outputs.py::test_postings_amount_forms
+PASSED ../../tests/test_outputs.py::test_postings_empty
+PASSED ../../tests/test_outputs.py::test_postings_kinds_and_accounts
+PASSED ../../tests/test_outputs.py::test_postings_memos
+PASSED ../../tests/test_outputs.py::test_postings_ordinary
+PASSED ../../tests/test_outputs.py::test_postings_rounding_modes
+PASSED ../../tests/test_outputs.py::test_postings_with_fewer_fields
+PASSED ../../tests/test_outputs.py::test_rejected_records
+PASSED ../../tests/test_outputs.py::test_rounding_boundaries
+PASSED ../../tests/test_outputs.py::test_two_headers
+PASSED ../../tests/test_outputs.py::test_zero_amounts
+PASSED ../../tests/test_outputs.py::test_other_record_types
+PASSED ../../tests/test_outputs.py::test_short_header
+PASSED ../../tests/test_outputs.py::test_header_date_and_part_region
+PASSED ../../tests/test_outputs.py::test_generated_01
+PASSED ../../tests/test_outputs.py::test_generated_06
+PASSED ../../tests/test_outputs.py::test_generated_09
+PASSED ../../tests/test_outputs.py::test_generated_10
+PASSED ../../tests/test_outputs.py::test_generated_11
+PASSED ../../tests/test_outputs.py::test_generated_20
+PASSED ../../tests/test_outputs.py::test_generated_24
+PASSED ../../tests/test_outputs.py::test_supplied_production_sample
+FAILED ../../tests/test_outputs.py::test_short_lines - AssertionError: the po...
+FAILED ../../tests/test_outputs.py::test_blank_line_first - AssertionError: t...
+FAILED ../../tests/test_outputs.py::test_generated_02 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_03 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_04 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_05 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_07 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_08 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_12 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_13 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_14 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_15 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_16 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_17 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_18 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_19 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_21 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_22 - AssertionError: the p...
+FAILED ../../tests/test_outputs.py::test_generated_23 - AssertionError: the p...
+======================== 19 failed, 35 passed in 1.55s =========================

@@ -1,0 +1,74 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 26 items
+
+../../tests/test_outputs.py ...................F......                   [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """40 rate rows, 200 claims, 120 wage lines, 12 periods, 104 partial weeks, 1 and 500,000 cents, 2016 and 2035."""
+        check_family("limits_claims")
+        row = load("limits_job")[0]
+        job, statements = row["job"], row["statements"]
+        rng = random.Random(RELABEL_SEED)
+        names = fresh_names(rng, 200)
+        claims = [dict(job["claims"][k % len(job["claims"])], claim=names[k]) for k in range(200)]
+        rows = [dict(statements["statements"][k % len(job["claims"])], claim=names[k]) for k in range(200)]
+        big = dict(job, claims=claims)
+        within_limits(big)
+        assert len(big["rates"]) == 40 and len(big["claims"]) == 200
+>       compare(run(big), {"statements": rows}, f"limits job of 200 claims (seed {RELABEL_SEED})")
+
+/tests/test_outputs.py:406: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'X', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, {'claim': 'DWJBQYWBXWW2LHE047W2DU...1992, 'rate': 1992, 'waiting_days': 2, ...}, {'claim': 'W', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, ...]}
+expected = {'statements': [{'claim': 'X', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, {'claim': 'DWJBQYWBXWW2LHE047W2DU...1992, 'rate': 1992, 'waiting_days': 2, ...}, {'claim': 'W', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, ...]}
+label = 'limits job of 200 claims (seed 4983601552938430821)'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+>       assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+E       AssertionError: limits job of 200 claims (seed 4983601552938430821): 128 statements, expected 200
+E       assert (True and 128 == 200)
+E        +  where True = isinstance([{'claim': 'X', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, {'claim': 'DWJBQYWBXWW2LHE047W2DUE2', 'aww': 830... 1992, 'rate': 1992, 'waiting_days': 2, ...}, {'claim': 'W', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, ...], list)
+E        +  and   128 = len([{'claim': 'X', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, {'claim': 'DWJBQYWBXWW2LHE047W2DUE2', 'aww': 830... 1992, 'rate': 1992, 'waiting_days': 2, ...}, {'claim': 'W', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, ...])
+E        +  and   200 = len([{'claim': 'X', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, {'claim': 'DWJBQYWBXWW2LHE047W2DUE2', 'aww': 830... 1992, 'rate': 1992, 'waiting_days': 2, ...}, {'claim': 'W', 'aww': 10699, 'rate': 10699, 'waiting_days': 3, ...}, ...])
+
+/tests/test_outputs.py:233: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays
+PASSED ../../tests/test_outputs.py::test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay
+PASSED ../../tests/test_outputs.py::test_rule_2_3_base_period_ends_before_the_week_of_injury
+PASSED ../../tests/test_outputs.py::test_rule_3_3_average_weekly_wage_divides_by_thirteen
+PASSED ../../tests/test_outputs.py::test_rule_3_3_no_week_paid_gives_nought
+PASSED ../../tests/test_outputs.py::test_rule_3_4_rate_is_two_thirds
+PASSED ../../tests/test_outputs.py::test_rule_3_4_maximum_and_minimum_bound_the_rate
+PASSED ../../tests/test_outputs.py::test_rule_2_4_row_in_force_on_the_date_of_injury
+PASSED ../../tests/test_outputs.py::test_rule_3_5_low_wage_rate_is_the_aww
+PASSED ../../tests/test_outputs.py::test_rule_2_5_both_ends_of_a_period_count
+PASSED ../../tests/test_outputs.py::test_rule_2_6_three_waiting_days
+PASSED ../../tests/test_outputs.py::test_rule_4_1_retroactive_from_fourteen_days
+PASSED ../../tests/test_outputs.py::test_rule_4_3_amount_rounded_to_the_cent
+PASSED ../../tests/test_outputs.py::test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate
+PASSED ../../tests/test_outputs.py::test_rule_2_8_week_of_exactly_1000_cents_is_partial_disability
+PASSED ../../tests/test_outputs.py::test_rule_2_7_week_earning_the_aww_has_no_wage_loss
+PASSED ../../tests/test_outputs.py::test_correction_below_a_weeks_pay_keeps_its_paydays_week
+PASSED ../../tests/test_outputs.py::test_week_below_1000_cents_keeps_todays_share
+PASSED ../../tests/test_outputs.py::test_statement_order_and_keys
+PASSED ../../tests/test_outputs.py::test_rule_3_4_row_figures_at_their_ends_decide_the_rate
+PASSED ../../tests/test_outputs.py::test_generated_jobs
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+PASSED ../../tests/test_outputs.py::test_register_of_more_than_52_distinct_paydays
+PASSED ../../tests/test_outputs.py::test_jobs_drawn_at_run_time
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+========================= 1 failed, 25 passed in 1.85s =========================

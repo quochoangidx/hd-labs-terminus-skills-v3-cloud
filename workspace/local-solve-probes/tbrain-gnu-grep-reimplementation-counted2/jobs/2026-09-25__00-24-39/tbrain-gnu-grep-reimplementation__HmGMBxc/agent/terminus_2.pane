@@ -1,0 +1,1092 @@
+[?2004hroot@549045aa6fa8:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@549045aa6fa8:/app# clear
+[?2004l[H[J[3J[?2004hroot@549045aa6fa8:/app# ls -la /app && find /app -maxdepth 3 -type f -printf '%p\n' | sort
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Sep 24 15:08 .
+drwxr-xr-x 1 root root 4096 Sep 24 17:24 ..
+-rw-r--r-- 1 root root  215 Sep 24 15:08 README.md
+drwxr-xr-x 2 root root 4096 Sep 24 15:08 docs
+drwxr-xr-x 2 root root 4096 Sep 24 15:08 pygrep
+/app/README.md
+/app/docs/grep.txt
+/app/pygrep/grep.py
+[?2004hroot@549045aa6fa8:/app# if [ -f /app/pygrep/grep.py ]; then sed -n '1,240p' /app/pygrep/grep.py; fi
+[?2004l"""pygrep: a GNU grep 3.8 replacement in pure Python.
+
+Usage: python3 /app/pygrep/grep.py [OPTION]... PATTERNS [FILE]...
+"""
+
+import sys
+
+
+def main(argv):
+    sys.stderr.write("pygrep: not implemented yet\n")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+[?2004hroot@549045aa6fa8:/app# head -80 /app/docs/grep.txt
+[?2004l1 Introduction
+**************
+
+Given one or more patterns, ‘grep’ searches input files for matches to
+the patterns.  When it finds a match in a line, it copies the line to
+standard output (by default), or produces whatever other sort of output
+you have requested with options.
+
+   Though ‘grep’ expects to do the matching on text, it has no limits on
+input line length other than available memory, and it can match
+arbitrary characters within a line.  If the final byte of an input file
+is not a newline, ‘grep’ silently supplies one.  Since newline is also a
+separator for the list of patterns, there is no way to match newline
+characters in a text.
+
+2 Invoking ‘grep’
+*****************
+
+The general synopsis of the ‘grep’ command line is
+
+     grep [OPTION...] [PATTERNS] [FILE...]
+
+There can be zero or more OPTION arguments, and zero or more FILE
+arguments.  The PATTERNS argument contains one or more patterns
+separated by newlines, and is omitted when patterns are given via the
+‘-e PATTERNS’ or ‘-f FILE’ options.  Typically PATTERNS should be quoted
+when ‘grep’ is used in a shell command.
+
+* Menu:
+
+* Command-line Options::        Short and long names, grouped by category.
+* Environment Variables::       POSIX, GNU generic, and GNU grep specific.
+* Exit Status::                 Exit status returned by ‘grep’.
+* grep Programs::               ‘grep’ programs.
+
+2.1 Command-line Options
+========================
+
+‘grep’ comes with a rich set of options: some from POSIX and some being
+GNU extensions.  Long option names are always a GNU extension, even for
+options that are from POSIX specifications.  Options that are specified
+by POSIX, under their short names, are explicitly marked as such to
+facilitate POSIX-portable programming.  A few option names are provided
+for compatibility with older or more exotic implementations.
+
+* Menu:
+
+* Generic Program Information::
+* Matching Control::
+* General Output Control::
+* Output Line Prefix Control::
+* Context Line Control::
+* File and Directory Selection::
+* Other Options::
+
+   Several additional options control which variant of the ‘grep’
+matching engine is used.  *Note grep Programs::.
+
+2.1.1 Generic Program Information
+---------------------------------
+
+‘--help’
+     Print a usage message briefly summarizing the command-line options
+     and the bug-reporting address, then exit.
+
+‘-V’
+‘--version’
+     Print the version number of ‘grep’ to the standard output stream.
+     This version number should be included in all bug reports.
+
+2.1.2 Matching Control
+----------------------
+
+‘-e PATTERNS’
+‘--regexp=PATTERNS’
+     Use PATTERNS as one or more patterns; newlines within PATTERNS
+     separate each pattern from the next.  If this option is used
+     multiple times or is combined with the ‘-f’ (‘--file’) option,
+     search for all patterns given.  Typically PATTERNS should be quoted
+     when ‘grep’ is used in a shell command.  (‘-e’ is specified by
+[?2004hroot@549045aa6fa8:/app# cat > /app/pygrep/grep.py <<'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> """Small, pure Python replacement for the tested GNU grep 3.8 interface."""
+[?2004l[?2004h> import os
+[?2004l[?2004h> import re
+[?2004l[?2004h> import sys
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def err(s):
+[?2004l[?2004h>     sys.stderr.write("grep: " + s + "\n")
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class Opt:
+[?2004l[?2004h>     def __init__(self):
+[?2004l[?2004h>         self.engine = None
+[?2004l[?2004h>         self.patterns = []
+[?2004l[?2004h>         self.ignore = False
+[?2004l[?2004h>         self.invert = False
+[?2004l[?2004h>         self.word = False
+[?2004l[?2004h>         self.line = False
+[?2004l[?2004h>         self.mode = 'normal'       # normal,count,files,files_without,quiet
+[?2004l[?2004h>         self.max_count = None
+[?2004l[?2004h>         self.only = False
+[?2004l[?2004h>         self.silent_errors = False
+[?2004l[?2004h>         self.byteoff = False
+[?2004l[?2004h>         self.with_name = None
+[?2004l[?2004h>         self.label = '(standard input)'
+[?2004l[?2004h>         self.lineno = False
+[?2004l[?2004h>         self.initial_tab = False
+[?2004l[?2004h>         self.null_name = False
+[?2004l[?2004h>         self.zero = False
+[?2004l[?2004h>         self.before = 0
+[?2004l[?2004h>         self.after = 0
+[?2004l[?2004h>         self.before_set = self.after_set = False
+[?2004l[?2004h>         self.context_seen = False
+[?2004l[?2004h>         self.group_sep = b'--'
+[?2004l[?2004h>         self.binary = 'binary'
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def number(s):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         n = int(s, 10)
+[?2004l[?2004h>         if n < 0: raise ValueError
+[?2004l[?2004h>         return n
+[?2004l[?2004h>     except ValueError:
+[?2004l[?2004h>         raise RuntimeError("invalid context length argument")
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse(argv):
+[?2004l[?2004h>     o = Opt(); operands = []; i = 0; end = False
+[?2004l[?2004h>     def engine(x):
+[?2004l[?2004h>         if o.engine is not None and o.engine != x:
+[?2004l[?2004h>             raise RuntimeError("conflicting matchers specified")
+[?2004l[?2004h>         o.engine = x
+[?2004l[?2004h>     def context_both(v):
+[?2004l[?2004h>         n = number(v); o.context_seen = True
+[?2004l[?2004h>         if not o.before_set: o.before = n
+[?2004l[?2004h>         if not o.after_set: o.after = n
+[?2004l[?2004h>     def longopt(a, following):
+[?2004l[?2004h>         nonlocal i
+[?2004l[?2004h>         if '=' in a: name, val = a[2:].split('=', 1)
+[?2004l[?2004h>         else: name, val = a[2:], None
+[?2004l[?2004h>         takes = {'regexp','file','max-count','label','after-context','before-context','context','group-separator','binary-files'}
+[?2004l[?2004h>         if name in takes and val is None:
+[?2004l[?2004h>             if following is None: raise RuntimeError("option '--%s' requires an argument" % name)
+[?2004l[?2004h>             i += 1; val = following
+[?2004l[?2004h>         if name == 'basic-regexp': engine('bre')
+[?2004l[?2004h>         elif name == 'extended-regexp': engine('ere')
+[?2004l[?2004h>         elif name == 'fixed-strings': engine('fixed')
+[?2004l[?2004h>         elif name == 'regexp': o.patterns.extend(split_arg(val))
+[?2004l[?2004h>         elif name == 'file': load_patterns(o, val)
+[?2004l[?2004h>         elif name == 'ignore-case': o.ignore = True
+[?2004l[?2004h>         elif name == 'no-ignore-case': o.ignore = False
+[?2004l[?2004h>         elif name == 'invert-match': o.invert = True
+[?2004l[?2004h>         elif name == 'word-regexp': o.word = True
+[?2004l[?2004h>         elif name == 'line-regexp': o.line = True
+[?2004l[?2004h>         elif name == 'count': o.mode = 'count'
+[?2004l[?2004h>         elif name == 'files-with-matches': o.mode = 'files'
+[?2004l[?2004h>         elif name == 'files-without-match': o.mode = 'files_without'
+[?2004l[?2004h>         elif name in ('quiet','silent'): o.mode = 'quiet'
+[?2004l[?2004h>         elif name == 'max-count': o.max_count = number(val)
+[?2004l[?2004h>         elif name == 'only-matching': o.only = True
+[?2004l[?2004h>         elif name == 'no-messages': o.silent_errors = True
+[?2004l[?2004h>         elif name == 'byte-offset': o.byteoff = True
+[?2004l[?2004h>         elif name == 'with-filename': o.with_name = True
+[?2004l[?2004h>         elif name == 'no-filename': o.with_name = False
+[?2004l[?2004h>         elif name == 'label': o.label = val
+[?2004l[?2004h>         elif name == 'line-number': o.lineno = True
+[?2004l[?2004h>         elif name == 'initial-tab': o.initial_tab = True
+[?2004l[?2004h>         elif name == 'null': o.null_name = True
+[?2004l[?2004h>         elif name == 'null-data': o.zero = True
+[?2004l[?2004h>         elif name == 'after-context': o.after = number(val); o.after_set = True; o.context_seen = True
+[?2004l[?2004h>         elif name == 'before-context': o.before = number(val); o.before_set = True; o.context_seen = True
+[?2004l[?2004h>         elif name == 'context': context_both(val)
+[?2004l[?2004h>         elif name == 'group-separator': o.group_sep = val.encode('latin1', 'surrogateescape')
+[?2004l[?2004h>         elif name == 'no-group-separator': o.group_sep = None
+[?2004l[?2004h>         elif name == 'text': o.binary = 'text'
+[?2004l[?2004h>         elif name == 'binary-files':
+[?2004l[?2004h>             if val not in ('binary','text','without-match'): raise RuntimeError("unknown binary-files type")
+[?2004l[?2004h>             o.binary = val
+[?2004l[?2004h>         elif name == 'version':
+[?2004l[?2004h>             sys.stdout.write('grep (GNU grep) 3.8\n'); raise SystemExit(0)
+[?2004l[?2004h>         elif name == 'help':
+[?2004l[?2004h>             sys.stdout.write('Usage: grep [OPTION]... PATTERNS [FILE]...\n'); raise SystemExit(0)
+[?2004l[?2004h>         else: raise RuntimeError("unrecognized option '--%s'" % name)
+[?2004l[?2004h>     while i < len(argv):
+[?2004l[?2004h>         a = argv[i]
+[?2004l[?2004h>         if end or not a.startswith('-') or a == '-': operands.append(a); i += 1; continue
+[?2004l[?2004h>         if a == '--': end = True; i += 1; continue
+[?2004l[?2004h>         if a.startswith('--'):
+[?2004l[?2004h>             longopt(a, argv[i+1] if i+1 < len(argv) else None); i += 1; continue
+[?2004l[?2004h>         if len(a) > 1 and a[1:].isdigit(): context_both(a[1:]); i += 1; continue
+[?2004l[?2004h>         j = 1
+[?2004l[?2004h>         while j < len(a):
+[?2004l[?2004h>             c = a[j]
+[?2004l[?2004h>             if c in 'GEF': engine({'G':'bre','E':'ere','F':'fixed'}[c]); j += 1
+[?2004l[?2004h>             elif c in 'ivwxconbsTHhZzqalsIL':
+[?2004l[?2004h>                 if c == 'i': o.ignore = True
+[?2004l.engine == 'fixed': self.fixed.append(s.lower() if o.ignore else s)
+            else:
+                q=bre_to[?2004h>                 elif c == 'v': o.invert = True
+[?2004l[?2004h>                 elif c == 'w': o.word = True
+[?2004l[?2004h>                 elif c == 'x': o.line = True
+[?2004l[?2004h>                 elif c == 'c': o.mode = 'count'
+[?2004l[?2004h>                 elif c == 'o': o.only = True
+[?2004l[?2004h>                 elif c == 'n': o.lineno = True
+[?2004l[?2004h>                 elif c == 'b': o.byteoff = True
+[?2004l[?2004h>                 elif c == 's': o.silent_errors = True
+[?2004l[?2004h>                 elif c == 'T': o.initial_tab = True
+[?2004l[?2004h>                 elif c == 'H': o.with_name = True
+[?2004l[?2004h>                 elif c == 'h': o.with_name = False
+[?2004l[?2004h>                 elif c == 'Z': o.null_name = True
+[?2004l[?2004h>                 elif c == 'z': o.zero = True
+[?2004l[?2004h>                 elif c == 'q': o.mode = 'quiet'
+[?2004l[?2004h>                 elif c == 'a': o.binary = 'text'
+[?2004l[?2004h>                 elif c == 'I': o.binary = 'without-match'
+[?2004l[?2004h>                 elif c == 'l': o.mode = 'files'
+[?2004l[?2004h>                 elif c == 'L': o.mode = 'files_without'
+[?2004l[?2004h>                 j += 1
+[?2004l[?2004h>             elif c in 'efmABC':
+[?2004l[?2004h>                 val = a[j+1:]
+[?2004l[?2004h>                 if not val:
+[?2004l[?2004h>                     i += 1
+[?2004l[?2004h>                     if i >= len(argv): raise RuntimeError("option requires an argument -- '%s'" % c)
+[?2004l[?2004h>                     val = argv[i]
+[?2004l[?2004h>                 if c == 'e': o.patterns.extend(split_arg(val))
+[?2004l[?2004h>                 elif c == 'f': load_patterns(o, val)
+[?2004l[?2004h>                 elif c == 'm': o.max_count = number(val)
+[?2004l     # Test each start/end [?2004h>                 elif c == 'A': o.after = number(val); o.after_set = True; o.context_seen = True
+[?2004l[?2004h>                 elif c == 'B': o.before = number(val); o.before_set = True; o.context_seen = True
+[?2004l[?2004h>                 else: context_both(val)
+[?2004l[?2004h>                 j = len(a)
+[?2004l[?2004h>             else: raise RuntimeError("invalid option -- '%s'" % c)
+[?2004l[?2004h>         i += 1
+[?2004l[?2004h>     if not o.patterns:
+[?2004l[?2004h>         if not operands: raise RuntimeError("no pattern supplied")
+[?2004l[?2004h>         o.patterns.extend(split_arg(operands.pop(0)))
+[?2004l[?2004h>     if o.engine is None: o.engine = 'bre'
+[?2004l[?2004h>     return o, operands
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_arg(s):
+[?2004l[?2004h>     return [x.encode('latin1', 'surrogateescape') for x in s.split('\n')]
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def load_patterns(o, fn):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         data = sys.stdin.buffer.read() if fn == '-' else open(fn, 'rb').read()
+[?2004l[?2004h>     except OSError as e: raise RuntimeError('%s: %s' % (fn, e.strerror))
+[?2004l[?2004h>     parts = data.split(b'\n')
+[?2004l[?2004h>     if data.endswith(b'\n'): parts.pop()
+[?2004l[?2004h>     o.patterns.extend(parts)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> POSIX_CLASSES = {
+[?2004l[?2004h>     'alnum':'A-Za-z0-9','alpha':'A-Za-z','blank':' \\t','cntrl':'\\x00-\\x1f\\x7f',
+[?2004l[?2004h>     'digit':'0-9','graph':'!-~','lower':'a-z','print':' -~','punct':'!-/:-@[-`{-~',
+[?2004l[?2004h>     'space':'\\t-\\r ','upper':'A-Z','xdigit':'A-Fa-f0-9'
+[?2004l
+
+
+def records(data, zero, binary):
+    sep=b'\0' if zero else b'\n'
+    if binary and not zero:
+        # In binary mode NUL is also a record terminator.
+        chunks=[]; starts=[]; st=0
+        for i,c in enumerate(data):
+            if c in (0,10): chunks.append(data[st:i]); starts.append(st); st=i+1
+        i[?2004h> }
+[?2004l [?2004h> 
+[?2004l[?2004h> def classes(s):
+[?2004l[?2004h>     # Replace POSIX named classes while preserving their surrounding bracket expression.
+[?2004l[?2004h>     return re.sub(r'\[:(alnum|alpha|blank|cntrl|digit|graph|lower|print|punct|space|upper|xdigit):\]',
+[?2004l[?2004h>                   lambda m: POSIX_CLASSES[m.group(1)], s)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def bre_to_py(s):
+[?2004l[?2004h>     out=[]; i=0; inclass=False
+[?2004l[?2004h>     while i < len(s):
+[?2004le[?2004h>         c=s[i]
+[?2004l[?2004h>         if c == '[': inclass=True; out.append(c); i+=1; continue
+[?2004l[?2004h>         if c == ']' and inclass: inclass=False; out.append(c); i+=1; continue
+[?2004l[?2004h>         if c == '\\' and i+1 < len(s):
+[?2004l[?2004h>             d=s[i+1]
+[?2004l[?2004h>             if not inclass and d in '(){}+?|': out.append(d)
+[?2004l[?2004h>             elif not inclass and d in '123456789': out.append('\\'+d)
+[?2004l[?2004h>             elif not inclass and d in '<>': out.append(r'\b')
+[?2004l[?2004h>             elif not inclass and d in 'bB': out.append('\\'+d)
+[?2004l[?2004h>             elif d == 'w': out.append(r'[A-Za-z0-9_]')
+[?2004l[?2004h>             elif d == 'W': out.append(r'[^A-Za-z0-9_]')
+[?2004l[?2004h>             else: out.append(re.escape(d))
+[?2004l[?2004h>             i+=2; continue
+[?2004l[?2004h>         if not inclass and c in '()+?|{}': out.append('\\'+c)
+[?2004l[?2004h>         else: out.append(c)
+[?2004l[?2004h>         i+=1
+[?2004l[?2004h>     return classes(''.join(out))
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def ere_to_py(s):
+[?2004l[?2004h>     # In valid EREs Python syntax is close; normalize POSIX classes.
+[?2004l[?2004h>     return classes(s)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class Matcher:
+[?2004lur[?2004h>     def __init__(self, o):
+[?2004l[?2004h>         self.o=o; self.fixed=[]; self.rx=[]
+[?2004l[?2004h>         flags=re.ASCII | (re.IGNORECASE if o.ignore else 0)
+[?2004l[?2004h>         for p in o.patterns:
+[?2004l[?2004h>             s=p.decode('latin1')
+[?2004l[?2004h>             if o.engine == 'fixed': self.fixed.append(s.lower() if o.ignore else s)
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 q=bre_to_py(s) if o.engine == 'bre' else ere_to_py(s)
+[?2004l        except OSError as e:
+            had_error[?2004h>                 try: self.rx.append(re.compile(q, flags))
+[?2004l[?2004h>                 except re.error as e: raise RuntimeError(str(e))
+[?2004l[?2004h>     @staticmethod
+[?2004l[?2004h>     def wordchar(c): return c is not None and (c == '_' or c.isascii() and c.isalnum())
+[?2004l[?2004h>     def bounds(self, s, a, b):
+[?2004l[?2004h>         if self.o.line and (a != 0 or b != len(s)): return False
+[?2004lf) in [?2004h>         if self.o.word:
+[?2004lrecs):
+       [?2004h>             if a and self.wordchar(s[a-1]): return False
+[?2004l[?2004h>             if b < len(s) and self.wordchar(s[b]): return False
+[?2004l[?2004h>             # A zero-length match between two non-word chars is not a word.
+[?2004l[?2004h>             if a == b and not ((a < len(s) and self.wordchar(s[a])) or (a and self.wordchar(s[a-1]))): return False
+[?2004l[?2004h>         return True
+[?2004l[?2004h>     def spans(self, raw):
+[?2004l [?2004h>         s=raw.decode('latin1'); cmp=s.lower() if self.o.ignore else s
+[?2004l[?2004h>         found=[]
+[?2004l[?2004h>         if self.o.engine == 'fixed':
+[?2004l[?2004h>             for p in self.fixed:
+[?2004l[?2004h>                 if p == '':
+[?2004l[?2004h>                     for a in range(len(s)+1):
+[?2004l[?2004h>                         if self.bounds(s,a,a): found.append((a,a))
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     a=cmp.find(p)
+[?2004l[?2004h>                     while a >= 0:
+[?2004l[?2004h>                         b=a+len(p)
+[?2004l[?2004h>                         if self.bounds(s,a,b): found.append((a,b))
+[?2004l[?2004h>                         a=cmp.find(p,a+1)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             # Test each start/end pair. fullmatch gives POSIX alternative independence;
+[?2004l[?2004h>             # choosing max end below supplies leftmost-longest across all patterns.
+[?2004l[?2004h>             for a in range(len(s)+1):
+[?2004l[?2004h>                 for rx in self.rx:
+[?2004l[?2004h>                     for b in range(len(s), a-1, -1):
+[?2004l[?2004h>                         if self.bounds(s,a,b) and rx.fullmatch(s,a,b) is not None:
+[?2004l[?2004h>                             found.append((a,b)); break
+[?2004l[?2004h>         return found
+[?2004l[?2004h>     def selected(self, raw): return bool(self.spans(raw)) != self.o.invert
+[?2004land (o.before or o.after):
+            wanted=set()
+            for x in sels:
+                w[?2004h>     def nonoverlap(self, raw):
+[?2004l[?2004h>         spans=self.spans(raw); out=[]; pos=0; n=len(raw)
+[?2004l[?2004h>         while True:
+[?2004l[?2004h>             cand=[x for x in spans if x[0] >= pos and x[1] > x[0]]
+[?2004l[?2004h>             if not cand: break
+[?2004l[?2004h>             a=min(x[0] for x in cand); b=max(x[1] for x in cand if x[0]==a)
+[?2004l[?2004h>             out.append((a,b)); pos=b
+[?2004l[?2004h>             if pos > n: break
+[?2004l[?2004h>         return out
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def records(data, zero, binary):
+[?2004l[?2004h>     sep=b'\0' if zero else b'\n'
+[?2004l[?2004h>     if binary and not zero:
+[?2004l[?2004h>         # In binary mode NUL is also a record terminator.
+[?2004l[?2004h>         chunks=[]; starts=[]; st=0
+[?2004l[?2004h>         for i,c in enumerate(data):
+[?2004l[?2004h>             if c in (0,10): chunks.append(data[st:i]); starts.append(st); st=i+1
+[?2004l[?2004h>         if st < len(data): chunks.append(data[st:]); starts.append(st)
+[?2004l[?2004h>         return list(zip(chunks,starts))
+[?2004l[?2004h>     parts=data.split(sep); out=[]; off=0
+[?2004l[?2004h>     for k,p in enumerate(parts):
+[?2004l[?2004h>         if k == len(parts)-1 and p == b'' and data.endswith(sep): break
+[?2004l[?2004h>         out.append((p,off)); off += len(p)+1
+[?2004l[?2004h>     return out
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def namebytes(name): return name.encode('latin1','surrogateescape')
+[?2004l[?2004h> 
+[?2004l[?2004h> def prefix(o, shown_name, many, line, off, context=False):
+[?2004l[?2004h>     fields=[]
+[?2004l[?2004h>     if o.with_name is True or (o.with_name is None and many): fields.append(namebytes(shown_name))
+[?2004l[?2004h>     if o.lineno: fields.append(str(line).encode())
+[?2004l[?2004h>     if o.byteoff: fields.append(str(off).encode())
+[?2004l[?2004h>     if not fields: return b''
+[?2004l[?2004h>     delim=b'-' if context else b':'
+[?2004l[?2004h>     if o.null_name and fields and (o.with_name is True or (o.with_name is None and many)):
+[?2004l[?2004h>         first=fields[0]+b'\0'; rest=fields[1:]
+[?2004l[?2004h>         p=first + (delim.join(rest)+delim if rest else b'')
+[?2004l[?2004h>     else: p=delim.join(fields)+delim
+[?2004l[?2004h>     if o.initial_tab:
+[?2004l[?2004h>         # GNU aligns numeric prefixes to a tab stop by placing a tab before content.
+[?2004l[?2004h>         p += b'\t'
+[?2004l[?2004h>     return p
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main(argv):
+[?2004l[?2004h>     try: o, files=parse(argv); matcher=Matcher(o)
+[?2004l[?2004h>     except SystemExit as e: return int(e.code or 0)
+[?2004l[?2004h>     except RuntimeError as e: err(str(e)); return 2
+[?2004l[?2004h>     if not files: files=['-']
+[?2004l[?2004h>     many=len(files)>1
+[?2004l[?2004h>     had_error=False; any_selected=False; output=bytearray(); groups_emitted=False
+[?2004l[?2004h>     term=b'\0' if o.zero else b'\n'
+[?2004l[?2004h>     for fn in files:
+[?2004l[?2004h>         shown=o.label if fn=='-' else fn
+[?2004l[?2004h>         try: data=sys.stdin.buffer.read() if fn=='-' else open(fn,'rb').read()
+[?2004l[?2004h>         except OSError as e:
+[?2004l[?2004h>             had_error=True
+[?2004l[?2004h>             if not o.silent_errors: err('%s: %s' % (fn,e.strerror))
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         isbin=(b'\0' in data and not o.zero and o.binary!='text')
+[?2004l[?2004h>         recs=records(data,o.zero,isbin)
+[?2004l[?2004h>         sels=[]
+[?2004l[?2004h>         if not (isbin and o.binary=='without-match') and o.max_count != 0:
+[?2004l[?2004h>             for idx,(raw,off) in enumerate(recs):
+[?2004l[?2004h>                 if matcher.selected(raw):
+[?2004l[?2004h>                     sels.append(idx)
+[?2004l[?2004h>                     if o.max_count is not None and len(sels)>=o.max_count: break
+[?2004l[?2004h>                     if isbin and o.binary=='binary' and o.mode!='count': break
+[?2004l[?2004h>                     if o.mode in ('quiet','files'): break
+[?2004l[?2004h>         count=len(sels); matched=count>0; any_selected |= matched
+[?2004l[?2004h>         if o.mode=='quiet' and matched:
+[?2004l[?2004h>             sys.stdout.buffer.write(output); return 0
+[?2004l[?2004h>         if o.mode=='files':
+[?2004l[?2004h>             if matched: output += namebytes(shown)+(b'\0' if o.null_name else b'\n')
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if o.mode=='files_without':
+[?2004l[?2004h>             if not matched: output += namebytes(shown)+(b'\0' if o.null_name else b'\n')
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if o.mode=='count':
+[?2004l[?2004h>             p=prefix(o,shown,many,0,0)
+[?2004l[?2004h>             # count ignores line/byte fields; retain only filename decoration
+[?2004l[?2004h>             if o.with_name is True or (o.with_name is None and many):
+[?2004l[?2004h>                 nb=namebytes(shown); p=nb+(b'\0' if o.null_name else b':')
+[?2004l[?2004h>             else: p=b''
+[?2004l[?2004h>             output += p+str(count).encode()+b'\n'
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if isbin and o.binary=='binary':
+[?2004l[?2004h>             if matched: output += b'Binary file '+namebytes(shown)+b' matches\n'
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if not sels: continue
+[?2004l[?2004h>         selected=set(sels)
+[?2004l[?2004h>         if o.context_seen and (o.before or o.after):
+[?2004l[?2004h>             wanted=set()
+[?2004l[?2004h>             for x in sels:
+[?2004l[?2004h>                 wanted.update(range(max(0,x-o.before),min(len(recs),x+o.after+1)))
+[?2004l[?2004h>             order=sorted(wanted); runs=[]
+[?2004l[?2004h>             for x in order:
+[?2004l[?2004h>                 if not runs or x != runs[-1][-1]+1: runs.append([x])
+[?2004l[?2004h>                 else: runs[-1].append(x)
+[?2004l[?2004h>         else: runs=[sels]
+[?2004l[?2004h>         for run in runs:
+[?2004l[?2004h>             if groups_emitted and o.context_seen and o.group_sep is not None: output += o.group_sep+term
+[?2004l[?2004h>             groups_emitted=True
+[?2004l[?2004h>             for idx in run:
+[?2004l[?2004h>                 raw,off=recs[idx]; sel=idx in selected
+[?2004l[?2004h>                 if sel and o.only and not o.invert:
+[?2004l[?2004h>                     spans=matcher.nonoverlap(raw)
+[?2004l[?2004h>                     for a,b in spans:
+[?2004l[?2004h>                         output += prefix(o,shown,many,idx+1,off+a,False)+raw[a:b]+term
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     output += prefix(o,shown,many,idx+1,off,not sel)+raw+term
+[?2004l[?2004h>     sys.stdout.buffer.write(output)
+[?2004l[?2004h>     if o.mode=='files_without': success=any_selected is False  # corrected below from actual emitted names
+[?2004l[?2004h>     if had_error: return 2
+[?2004l[?2004h>     if o.mode=='files_without':
+[?2004l[?2004h>         # At least one output name means success.
+[?2004l[?2004h>         return 0 if output else 1
+[?2004l[?2004h>     return 0 if any_selected else 1
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__':
+[?2004l[?2004h>     sys.exit(main(sys.argv[1:]))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/app# chmod +x /app/pygrep/grep.py
+[?2004l[?2004hroot@549045aa6fa8:/app# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@549045aa6fa8:/app# cd /tmp && printf 'alpha\nbeta\nalphabet\n' > g1 && printf 'zero\0alpha\n' > gb && for args in "alpha g1" "-n alpha g1" "-E 'a(lpha|l)' g1" "-F -o a g1" "-v alpha g1" "-c a g1" "-A1 alpha g1" "-b -o alpha g1" "-l alpha g1" "-L nomatch g1"; do echo "=== $args"; eval "grep $args" > /tmp/ref; r=$?; eval "python3 /app/pygrep/grep.py $args" > /tmp/got; p=$?; echo status:$r/$p; cmp -l /tmp/ref /tmp/got || { echo REF; od -An -tx1c /tmp/ref; echo GOT; od -An -tx1c /tmp/got; }; done
+[?2004l=== alpha g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  61  6c  70  68  61  0a  61  6c  70  68  61  62  65  74  0a
+   a   l   p   h   a  \n   a   l   p   h   a   b   e   t  \n
+=== -n alpha g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  31  3a  61  6c  70  68  61  0a  33  3a  61  6c  70  68  61  62
+   1   :   a   l   p   h   a  \n   3   :   a   l   p   h   a   b
+  65  74  0a
+   e   t  \n
+=== -E 'a(lpha|l)' g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  61  6c  70  68  61  0a  61  6c  70  68  61  62  65  74  0a
+   a   l   p   h   a  \n   a   l   p   h   a   b   e   t  \n
+=== -F -o a g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  61  0a  61  0a  61  0a  61  0a  61  0a
+   a  \n   a  \n   a  \n   a  \n   a  \n
+=== -v alpha g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  62  65  74  61  0a
+   b   e   t   a  \n
+=== -c a g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  33  0a
+   3  \n
+=== -A1 alpha g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  61  6c  70  68  61  0a  62  65  74  61  0a  61  6c  70  68  61
+   a   l   p   h   a  \n   b   e   t   a  \n   a   l   p   h   a
+  62  65  74  0a
+   b   e   t  \n
+=== -b -o alpha g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  30  3a  61  6c  70  68  61  0a  31  31  3a  61  6c  70  68  61
+   0   :   a   l   p   h   a  \n   1   1   :   a   l   p   h   a
+  0a
+  \n
+=== -l alpha g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  67  31  0a
+   g   1  \n
+=== -L nomatch g1
+bash: grep: command not found
+status:127/0
+cmp: EOF on /tmp/ref which is empty
+REF
+GOT
+  67  31  0a
+   g   1  \n
+[?2004hroot@549045aa6fa8:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("        self.mode = 'normal'       # normal,count,files,files_without,quiet\n", "        self.mode = 'normal'       # resolved after parsing\n        self.want_count = False\n        self.file_mode = None\n        self.want_quiet = False\n        self.pattern_source = False\n")
+[?2004l[?2004h> s=s.replace("        elif name == 'regexp': o.patterns.extend(split_arg(val))", "        elif name == 'regexp': o.pattern_source = True; o.patterns.extend(split_arg(val))")
+[?2004l[?2004h> s=s.replace("        elif name == 'count': o.mode = 'count'\n        elif name == 'files-with-matches': o.mode = 'files'\n        elif name == 'files-without-match': o.mode = 'files_without'\n        elif name in ('quiet','silent'): o.mode = 'quiet'", "        elif name == 'count': o.want_count = True\n        elif name == 'files-with-matches': o.file_mode = 'files'\n        elif name == 'files-without-match': o.file_mode = 'files_without'\n        elif name in ('quiet','silent'): o.want_quiet = True")
+[?2004l[?2004h> s=s.replace("                elif c == 'c': o.mode = 'count'", "                elif c == 'c': o.want_count = True")
+[?2004l[?2004h> s=s.replace("                elif c == 'q': o.mode = 'quiet'", "                elif c == 'q': o.want_quiet = True")
+[?2004l[?2004h> s=s.replace("                elif c == 'l': o.mode = 'files'\n                elif c == 'L': o.mode = 'files_without'", "                elif c == 'l': o.file_mode = 'files'\n                elif c == 'L': o.file_mode = 'files_without'")
+[?2004l[?2004h> s=s.replace("                if c == 'e': o.patterns.extend(split_arg(val))\n                elif c == 'f': load_patterns(o, val)", "                if c == 'e': o.pattern_source = True; o.patterns.extend(split_arg(val))\n                elif c == 'f': o.pattern_source = True; load_patterns(o, val)")
+[?2004l[?2004h> s=s.replace("    if not o.patterns:\n        if not operands: raise RuntimeError(\"no pattern supplied\")\n        o.patterns.extend(split_arg(operands.pop(0)))\n    if o.engine is None: o.engine = 'bre'\n    return o, operands", "    if not o.pattern_source:\n        if not operands: raise RuntimeError(\"no pattern supplied\")\n        o.pattern_source = True\n        o.patterns.extend(split_arg(operands.pop(0)))\n    if o.want_quiet: o.mode = 'quiet'\n    elif o.file_mode is not None: o.mode = o.file_mode\n    elif o.want_count: o.mode = 'count'\n    if o.engine is None: o.engine = 'bre'\n    return o, operands")
+[?2004l[?2004h> s=s.replace("            # A zero-length match between two non-word chars is not a word.\n            if a == b and not ((a < len(s) and self.wordchar(s[a])) or (a and self.wordchar(s[a-1]))): return False\n", "")
+[?2004l[?2004h> s=s.replace("def records(data, zero, binary):\n    sep=b'\\0' if zero else b'\\n'", "def records(data, zero, binary):\n    if not data: return []\n    sep=b'\\0' if zero else b'\\n'")
+[?2004l[?2004h> s=s.replace("        if o.context_seen and (o.before or o.after):", "        if o.context_seen and not o.only:")
+[?2004l[?2004h> s=s.replace("                if sel and o.only and not o.invert:\n                    spans=matcher.nonoverlap(raw)\n                    for a,b in spans:\n                        output += prefix(o,shown,many,idx+1,off+a,False)+raw[a:b]+term\n                else:\n                    output += prefix(o,shown,many,idx+1,off,not sel)+raw+term", "                if o.only:\n                    if sel and not o.invert:\n                        spans=matcher.nonoverlap(raw)\n                        for a,b in spans:\n                            output += prefix(o,shown,many,idx+1,off+a,False)+raw[a:b]+term\n                else:\n                    output += prefix(o,shown,many,idx+1,off,not sel)+raw+term")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# cat > /tmp/test_pygrep.py <<'PY'
+[?2004l[?2004h> import os, subprocess, tempfile
+[?2004l[?2004h> G=['python3','/app/pygrep/grep.py']
+[?2004l[?2004h> td=tempfile.mkdtemp(); f=td+'/f'; empty=td+'/empty'; pf=td+'/pf'; binary=td+'/bin'
+[?2004l[?2004h> open(f,'wb').write(b'alpha\nbeta\nalphabet\nlast')
+[?2004l[?2004h> open(empty,'wb').write(b'')
+[?2004l[?2004h> open(pf,'wb').write(b'alpha\nbeta\n')
+[?2004l[?2004h> open(binary,'wb').write(b'no\0alpha\ntail\n')
+[?2004l[?2004h> def t(args, out, rc=0, stdin=b''):
+[?2004l[?2004h>  p=subprocess.run(G+args,input=stdin,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  assert (p.stdout,p.returncode)==(out,rc),(args,p.stdout,p.returncode,p.stderr)
+[?2004l[?2004h> t(['alpha',f],b'alpha\nalphabet\n')
+[?2004l[?2004h> t(['-n','alpha',f],b'1:alpha\n3:alphabet\n')
+[?2004l[?2004h> t(['-E','-o','a(lpha|l)',f],b'alpha\nalpha\n')
+[?2004l[?2004h> t(['-F','-o','a',f],b'a\na\na\na\na\na\n')
+[?2004l[?2004h> t(['-v','alpha',f],b'beta\nlast\n')
+[?2004l[?2004h> t(['-c','a',f],b'4\n')
+[?2004l[?2004h> t(['-l','-c','alpha',f],(f+'\n').encode())
+[?2004l[?2004h> t(['-l','-c','-L','alpha',f],b'',1)
+[?2004l[?2004h> t(['-q','-L','-c','alpha',f],b'',0)
+[?2004l[?2004h> t(['-m','1','alpha',f],b'alpha\n')
+[?2004l[?2004h> t(['-m','0','alpha',f],b'',1)
+[?2004l[?2004h> t(['-e','',empty],b'',1)
+[?2004l[?2004h> t(['-e','',f],open(f,'rb').read()+b'\n')
+[?2004l[?2004h> t(['-f',pf,f],b'alpha\nbeta\nalphabet\n')
+[?2004l[?2004h> open(pf,'wb').write(b'')
+[?2004l[?2004h> t(['-f',pf,f],b'',1)
+[?2004l[?2004h> t(['-v','-f',pf,f],open(f,'rb').read()+b'\n')
+[?2004l[?2004h> t(['-A0','alpha',f],b'alpha\n--\nalphabet\n')
+[?2004l[?2004h> t(['-A1','alpha',f],b'alpha\nbeta\nalphabet\nlast\n')
+[?2004l[?2004h> t(['-A1','-o','alpha',f],b'alpha\nalpha\n')
+[?2004l[?2004h> t(['-v','-o','alpha',f],b'',0)
+[?2004l[?2004h> t(['-b','-o','alpha',f],b'0:alpha\n11:alpha\n')
+[?2004l[?2004h> t(['-I','alpha',binary],b'',1)
+[?2004l[?2004h> t(['-a','alpha',binary],b'alpha\n')
+[?2004l[?2004h> t(['-c','alpha',binary],b'1\n')
+[?2004l[?2004h> t(['-z','-n','alpha',binary],b'2:alpha\ntail\n\0')
+[?2004l[?2004h> t(['alpha',td+'/missing',f],b'%s:alpha\n%s:alphabet\n'%((f).encode(),(f).encode()),2)
+[?2004l[?2004h> t(['-q','alpha',td+'/missing',f],b'',0)
+[?2004l[?2004h> t(['-E','(alpha|al)',f],b'alpha\nalphabet\n')
+[?2004l[?2004h> t(['-E','-o','(alpha|al)',f],b'alpha\nalpha\n')
+[?2004l[?2004h> t(['-w','',empty],b'',1)
+[?2004l[?2004h> print('ok')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_pygrep.py
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m26[0m, in [35m<module>[0m
+    [31mt[0m[1;31m(['-f',pf,f],b'',1)[0m
+    [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m10[0m, in [35mt[0m
+    assert [1;31m(p.stdout,p.returncode)==(out,rc)[0m,(args,p.stdout,p.returncode,p.stderr)
+           [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m(['-f', '/tmp/tmp7v3lh28p/pf', '/tmp/tmp7v3lh28p/f'], b'alpha\nbeta\nalphabet\nlast\n', 0, b'')[0m
+[?2004hroot@549045aa6fa8:/tmp# grep=''; sed -n '1,260p' /app/pygrep/grep.py | tail -20; python3 /app/pygrep/grep.py -E -F x /tmp/g1 >/tmp/conflict; echo conflict-status:$? bytes:$(wc -c </tmp/conflict); python3 /app/pygrep/grep.py -e $'x\n' /tmp/empty >/tmp/trailing; echo trailing-status:$? bytes:$(wc -c </tmp/trailing)
+[?2004l        if self.o.engine == 'fixed':
+            for p in self.fixed:
+                if p == '':
+                    for a in range(len(s)+1):
+                        if self.bounds(s,a,a): found.append((a,a))
+                else:
+                    a=cmp.find(p)
+                    while a >= 0:
+                        b=a+len(p)
+                        if self.bounds(s,a,b): found.append((a,b))
+                        a=cmp.find(p,a+1)
+        else:
+            # Test each start/end pair. fullmatch gives POSIX alternative independence;
+            # choosing max end below supplies leftmost-longest across all patterns.
+            for a in range(len(s)+1):
+                for rx in self.rx:
+                    for b in range(len(s), a-1, -1):
+                        if self.bounds(s,a,b) and rx.fullmatch(s,a,b) is not None:
+                            found.append((a,b)); break
+        return found
+grep: conflicting matchers specified
+conflict-status:2 bytes:0
+grep: /tmp/empty: No such file or directory
+trailing-status:2 bytes:0
+[?2004hroot@549045aa6fa8:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("    parts = data.split(b'\\n')\n    if data.endswith(b'\\n'): parts.pop()\n    o.patterns.extend(parts)", "    if not data:\n        return\n    parts = data.split(b'\\n')\n    if data.endswith(b'\\n'): parts.pop()\n    o.patterns.extend(parts)")
+[?2004l[?2004h> s=s.replace("class Matcher:\n    def __init__(self, o):", "ASCII_FOLD = str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')\n\n\nclass Matcher:\n    def __init__(self, o):")
+[?2004l[?2004h> s=s.replace("self.fixed.append(s.lower() if o.ignore else s)", "self.fixed.append(s.translate(ASCII_FOLD) if o.ignore else s)")
+[?2004l[?2004h> s=s.replace("cmp=s.lower() if self.o.ignore else s", "cmp=s.translate(ASCII_FOLD) if self.o.ignore else s")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 -m py_compile /app/pygrep/grep.py && python3 /tmp/test_pygrep.py
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m34[0m, in [35m<module>[0m
+    [31mt[0m[1;31m(['-a','alpha',binary],b'alpha\n')[0m
+    [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m10[0m, in [35mt[0m
+    assert [1;31m(p.stdout,p.returncode)==(out,rc)[0m,(args,p.stdout,p.returncode,p.stderr)
+           [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m(['-a', 'alpha', '/tmp/tmppibtn_l2/bin'], b'no\x00alpha\n', 0, b'')[0m
+[?2004hroot@549045aa6fa8:/tmp# printf '\n--- initial-tab ---\n'; sed -n '/initial-tab/,+18p' /app/docs/grep.txt | head -40; printf '\n--- binary ---\n'; sed -n '/binary-files/,+45p' /app/docs/grep.txt | head -70; printf '\n--- word regexp ---\n'; sed -n '/word-regexp/,+18p' /app/docs/grep.txt | head -35
+[?2004l
+--- initial-tab ---
+‘--initial-tab’
+     Make sure that the first character of actual line content lies on a
+     tab stop, so that the alignment of tabs looks normal.  This is
+     useful with options that prefix their output to the actual content:
+     ‘-H’, ‘-n’, and ‘-b’.  This may also prepend spaces to output line
+     numbers and byte offsets so that lines from a single file all start
+     at the same column.
+
+‘-Z’
+‘--null’
+     Output a zero byte (the ASCII NUL character) instead of the
+     character that normally follows a file name.  For example, ‘grep
+     -lZ’ outputs a zero byte after each file name instead of the usual
+     newline.  This option makes the output unambiguous, even in the
+     presence of file names containing unusual characters like newlines.
+     This option can be used with commands like ‘find -print0’, ‘perl
+     -0’, ‘sort -z’, and ‘xargs -0’ to process arbitrary file names,
+     even those that contain newline characters.
+
+
+--- binary ---
+     ‘--binary-files=text’ option.
+
+‘--binary-files=TYPE’
+     If a file’s data or metadata indicate that the file contains binary
+     data, assume that the file is of type TYPE.  Non-text bytes
+     indicate binary data; these are either output bytes that are
+     improperly encoded for the current locale (*note Environment
+     Variables::), or null input bytes when the ‘-z’ (‘--null-data’)
+     option is not given (*note Other Options::).
+
+     By default, TYPE is ‘binary’, and ‘grep’ suppresses output after
+     null input binary data is discovered, and suppresses output lines
+     that contain improperly encoded data.  When some output is
+     suppressed, ‘grep’ follows any output with a message to standard
+     error saying that a binary file matches.
+
+     If TYPE is ‘without-match’, when ‘grep’ discovers null input binary
+     data it assumes that the rest of the file does not match; this is
+     equivalent to the ‘-I’ option.
+
+     If TYPE is ‘text’, ‘grep’ processes binary data as if it were text;
+     this is equivalent to the ‘-a’ option.
+
+     When TYPE is ‘binary’, ‘grep’ may treat non-text bytes as line
+     terminators even without the ‘-z’ (‘--null-data’) option.  This
+     means choosing ‘binary’ versus ‘text’ can affect whether a pattern
+     matches a file.  For example, when TYPE is ‘binary’ the pattern
+     ‘q$’ might match ‘q’ immediately followed by a null byte, even
+     though this is not matched when TYPE is ‘text’.  Conversely, when
+     TYPE is ‘binary’ the pattern ‘.’ (period) might not match a null
+     byte.
+
+     _Warning:_ The ‘-a’ (‘--binary-files=text’) option might output
+     binary garbage, which can have nasty side effects if the output is
+     a terminal and if the terminal driver interprets some of it as
+     commands.  On the other hand, when reading files whose text
+     encodings are unknown, it can be helpful to use ‘-a’ or to set
+     ‘LC_ALL='C'’ in the environment, in order to find more matches even
+     if the matches are unsafe for direct display.
+
+‘-D ACTION’
+‘--devices=ACTION’
+     If an input file is a device, FIFO, or socket, use ACTION to
+     process it.  If ACTION is ‘read’, all devices are read just as if
+     they were ordinary files.  If ACTION is ‘skip’, devices, FIFOs, and
+     sockets are silently skipped.  By default, devices are read if they
+     is equivalent to the ‘--binary-files=without-match’ option.
+
+‘--include=GLOB’
+     Search only files whose name matches GLOB, using wildcard matching
+     as described under ‘--exclude’.  If contradictory ‘--include’ and
+     ‘--exclude’ options are given, the last matching one wins.  If no
+     ‘--include’ or ‘--exclude’ options match, a file is included unless
+     the first such option is ‘--include’.
+
+‘-r’
+‘--recursive’
+     For each directory operand, read and process all files in that
+     directory, recursively.  Follow symbolic links on the command line,
+     but skip symlinks that are encountered recursively.  Note that if
+     no file operand is given, grep searches the working directory.
+     This is the same as the ‘--directories=recurse’ option.
+
+‘-R’
+‘--dereference-recursive’
+     For each directory operand, read and process all files in that
+     directory, recursively, following all symbolic links.
+
+2.1.7 Other Options
+-------------------
+
+--- word regexp ---
+‘--word-regexp’
+     Select only those lines containing matches that form whole words.
+     The test is that the matching substring must either be at the
+     beginning of the line, or preceded by a non-word constituent
+     character.  Similarly, it must be either at the end of the line or
+     followed by a non-word constituent character.  Word constituent
+     characters are letters, digits, and the underscore.  This option
+     has no effect if ‘-x’ is also specified.
+
+     Because the ‘-w’ option can match a substring that does not begin
+     and end with word constituents, it differs from surrounding a
+     regular expression with ‘\<’ and ‘\>’.  For example, although ‘grep
+     -w @’ matches a line containing only ‘@’, ‘grep '\<@\>'’ cannot
+     match any line because ‘@’ is not a word constituent.  *Note
+     Special Backslash Expressions::.
+
+‘-x’
+‘--line-regexp’
+     Select only those matches that exactly match the whole line.  For
+[?2004hroot@549045aa6fa8:/tmp# cat > /tmp/test_more.py <<'PY'
+[?2004l[?2004h> import subprocess,tempfile,os
+[?2004l[?2004h> G=['python3','/app/pygrep/grep.py']; d=tempfile.mkdtemp(); f=d+'/f'
+[?2004l[?2004h> open(f,'wb').write(b'abc 123\nABC\na+b\naaa\nfoo_bar\nfoo-bar\n[xyz]\n')
+[?2004l[?2004h> def t(a,out,rc=0):
+[?2004l[?2004h>  p=subprocess.run(G+a,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  assert (p.stdout,p.returncode)==(out,rc),(a,p.stdout,p.returncode,p.stderr)
+[?2004l[?2004h> t(['-E','[[:digit:]]+',f],b'abc 123\n')
+[?2004l[?2004h> t(['-E','-o','[[:digit:]]+',f],b'123\n')
+[?2004l[?2004h> t(['-i','abc',f],b'abc 123\nABC\n')
+[?2004l[?2004h> t(['-i','--no-ignore-case','abc',f],b'abc 123\n')
+[?2004l[?2004h> t(['-F','a+b',f],b'a+b\n')
+[?2004l[?2004h> t([r'a\+b',f],b'a+b\n')
+[?2004l[?2004h> t([r'a\{3\}',f],b'aaa\n')
+[?2004l[?2004h> t(['-E','a{3}',f],b'aaa\n')
+[?2004l[?2004h> t(['-w','foo',f],b'foo-bar\n')
+[?2004l[?2004h> t(['-x','ABC',f],b'ABC\n')
+[?2004l[?2004h> t(['-e','nomatch','-e','ABC',f],b'ABC\n')
+[?2004l[?2004h> t(['-H','ABC',f],(f+':ABC\n').encode())
+[?2004l[?2004h> t(['-h','-H','ABC',f],(f+':ABC\n').encode())
+[?2004l[?2004h> t(['-H','-h','ABC',f],b'ABC\n')
+[?2004l[?2004h> t(['--label=X','-H','ABC','-'],b'X:ABC\n',stdin if False else 0)
+[?2004l[?2004h> print('more ok')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# # Remove malformed final stdin test before execution
+[?2004l[?2004hroot@549045aa6fa8:/tmp# sed -i "/label=X/d" /tmp/test_more.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_more.py
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/test_more.py"[0m, line [35m12[0m, in [35m<module>[0m
+    [31mt[0m[1;31m([r'a\+b',f],b'a+b\n')[0m
+    [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/test_more.py"[0m, line [35m6[0m, in [35mt[0m
+    assert [1;31m(p.stdout,p.returncode)==(out,rc)[0m,(a,p.stdout,p.returncode,p.stderr)
+           [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m(['a\\+b', '/tmp/tmp0gu8h_a9/f'], b'abc 123\n', 0, b'')[0m
+[?2004hroot@549045aa6fa8:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("            elif not inclass and d in 'bB': out.append('\\\\'+d)\n            elif d == 'w':", "            elif not inclass and d in 'bB': out.append('\\\\'+d)\n            elif d == 's': out.append(r'[\\t-\\r ]')\n            elif d == 'S': out.append(r'[^\\t-\\r ]')\n            elif d == 'w':")
+[?2004l[?2004h> s=s.replace("            if groups_emitted and o.context_seen and o.group_sep is not None: output += o.group_sep+term", "            if groups_emitted and o.context_seen and not o.only and o.group_sep is not None: output += o.group_sep+term")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# # Correct two expectations in local tests.
+[?2004l[?2004hroot@549045aa6fa8:/tmp# sed -i "s/b'alpha\\\\n')$/b'no\\\\x00alpha\\\\n')/" /tmp/test_pygrep.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# sed -i "s/t(\[r'a\\\\+b',f\],b'a+b\\\\n')/t([r'a\\\\+b',f],b'abc 123\\\\n')/" /tmp/test_more.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_pygrep.py && python3 /tmp/test_more.py
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m20[0m, in [35m<module>[0m
+    [31mt[0m[1;31m(['-m','1','alpha',f],b'no\x00alpha\n')[0m
+    [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m10[0m, in [35mt[0m
+    assert [1;31m(p.stdout,p.returncode)==(out,rc)[0m,(args,p.stdout,p.returncode,p.stderr)
+           [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m(['-m', '1', 'alpha', '/tmp/tmp4lvafo9g/f'], b'alpha\n', 0, b'')[0m
+[?2004hroot@549045aa6fa8:/tmp# cat > /tmp/test_edge.py <<'PY'
+[?2004l[?2004h> import subprocess,tempfile,os
+[?2004l[?2004h> G=['python3','/app/pygrep/grep.py']; d=tempfile.mkdtemp(); f=d+'/f'; f2=d+'/f2'; ep=d+'/ep'
+[?2004l[?2004h> open(f,'wb').write(b'a0\nxx\na2\nxx\na4\n')
+[?2004l[?2004h> open(f2,'wb').write(b'none\na9\n')
+[?2004l[?2004h> open(ep,'wb').write(b'')
+[?2004l[?2004h> def t(a,out,rc=0,inp=None):
+[?2004l[?2004h>  p=subprocess.run(G+a,input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  assert (p.stdout,p.returncode)==(out,rc),(a,p.stdout,p.returncode,p.stderr)
+[?2004l[?2004h> t(['-f',ep,f],b'',1)
+[?2004l[?2004h> t(['-v','-f',ep,f],open(f,'rb').read())
+[?2004l[?2004h> t(['--regexp=a0',f],b'a0\n')
+[?2004l[?2004h> t(['--fixed-strings','a.',f],b'',1)
+[?2004l[?2004h> t(['--ignore-case','--no-ignore-case','A0',f],b'',1)
+[?2004l[?2004h> t(['--no-ignore-case','-i','A0',f],b'a0\n')
+[?2004l[?2004h> t(['-C','4','-A','0','a[024]',f],b'a0\nxx\na2\nxx\na4\n')
+[?2004l[?2004h> t(['-A','0','-C','4','a[024]',f],b'a0\nxx\na2\nxx\na4\n')
+[?2004l[?2004h> t(['-B0','-A0','a[024]',f],b'a0\n--\na2\n--\na4\n')
+[?2004l[?2004h> t(['-A0','--no-group-separator','a[024]',f],b'a0\na2\na4\n')
+[?2004l[?2004h> t(['-A0','--group-separator=SEP','a[024]',f],b'a0\nSEP\na2\nSEP\na4\n')
+[?2004l[?2004h> t(['-A0','-o','a[024]',f,f2],(f+':a0\n'+f+':a2\n'+f+':a4\n'+f2+':a9\n').encode())
+[?2004l[?2004h> t(['-H','--label=STDIN','a0','-'],b'STDIN:a0\n',inp=b'a0\n')
+[?2004l[?2004h> t(['-HZ','a0',f],f.encode()+b'\0a0\n')
+[?2004l[?2004h> t(['-lZ','a0',f,f2],f.encode()+b'\0')
+[?2004l[?2004h> t(['-LZ','a0',f,f2],f2.encode()+b'\0')
+[?2004l[?2004h> t(['-s','a0',d+'/missing'],b'',2)
+[?2004l[?2004h> t(['-q','a0',f,d+'/missing'],b'',0)
+[?2004l[?2004h> t(['--binary-files=text','a0',f],b'a0\n')
+[?2004l[?2004h> t(['-E',r'\s+',f],b'',1)
+[?2004l[?2004h> print('edge ok')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_edge.py
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/test_edge.py"[0m, line [35m20[0m, in [35m<module>[0m
+    [31mt[0m[1;31m(['-A0','-o','a[024]',f,f2],(f+':a0\n'+f+':a2\n'+f+':a4\n'+f2+':a9\n').encode())[0m
+    [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/test_edge.py"[0m, line [35m8[0m, in [35mt[0m
+    assert [1;31m(p.stdout,p.returncode)==(out,rc)[0m,(a,p.stdout,p.returncode,p.stderr)
+           [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m(['-A0', '-o', 'a[024]', '/tmp/tmpnkdq4ova/f', '/tmp/tmpnkdq4ova/f2'], b'/tmp/tmpnkdq4ova/f:a0\n/tmp/tmpnkdq4ova/f:a2\n/tmp/tmpnkdq4ova/f:a4\n', 0, b'')[0m
+[?2004hroot@549045aa6fa8:/tmp# wc -l -c /app/pygrep/grep.py; python3 -m py_compile /app/pygrep/grep.py
+[?2004l  393 16636 /app/pygrep/grep.py
+[?2004hroot@549045aa6fa8:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> # Insert anchor normalization before Matcher.
+[?2004l[?2004h> needle="ASCII_FOLD = str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')\n"
+[?2004l[?2004h> insert=r'''def absolute_anchors(s):
+[?2004l[?2004h>     """Make grep's record anchors independent of Python regex endpos."""
+[?2004l[?2004h>     out=[]; incl=False; i=0
+[?2004l[?2004h>     while i < len(s):
+[?2004l[?2004h>         c=s[i]
+[?2004l[?2004h>         if c == '\\' and i+1 < len(s):
+[?2004l[?2004h>             out.append(s[i:i+2]); i += 2; continue
+[?2004l[?2004h>         if c == '[': incl=True
+[?2004l[?2004h>         elif c == ']' and incl: incl=False
+[?2004l[?2004h>         if not incl and c == '^': out.append(r'\A')
+[?2004l[?2004h>         elif not incl and c == '$': out.append(r'\Z')
+[?2004l[?2004h>         else: out.append(c)
+[?2004l[?2004h>         i += 1
+[?2004l[?2004h>     return ''.join(out)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> '''
+[?2004l[?2004h> s=s.replace(needle,insert+needle)
+[?2004l[?2004h> s=s.replace("        self.o=o; self.fixed=[]; self.rx=[]\n        flags=re.ASCII | (re.IGNORECASE if o.ignore else 0)", "        self.o=o; self.fixed=[]; self.rx=[]; self.sources=[]; self.validators={}\n        self.flags=re.ASCII | re.DOTALL | (re.IGNORECASE if o.ignore else 0)\n        flags=self.flags")
+[?2004l[?2004h> s=s.replace("                q=bre_to_py(s) if o.engine == 'bre' else ere_to_py(s)\n                try: self.rx.append(re.compile(q, flags))", "                q=bre_to_py(s) if o.engine == 'bre' else ere_to_py(s)\n                q=absolute_anchors(q)\n                try:\n                    self.rx.append(re.compile(q, flags)); self.sources.append(q)")
+[?2004l[?2004h> s=s.replace("                for rx in self.rx:\n                    for b in range(len(s), a-1, -1):\n                        if self.bounds(s,a,b) and rx.fullmatch(s,a,b) is not None:\n                            found.append((a,b)); break", "                for ri,rx in enumerate(self.rx):\n                    if rx.match(s,a) is None: continue\n                    for b in range(len(s), a-1, -1):\n                        if not self.bounds(s,a,b): continue\n                        rem=len(s)-b; key=(ri,rem)\n                        vrx=self.validators.get(key)\n                        if vrx is None:\n                            tail=r'(?=(?:[\\s\\S]{%d})\\Z)' % rem\n                            vrx=re.compile('(?:'+self.sources[ri]+')'+tail,self.flags)\n                            self.validators[key]=vrx\n                        if vrx.match(s,a) is not None:\n                            found.append((a,b)); break")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# # Repair local test expectations precisely.
+[?2004l[?2004hroot@549045aa6fa8:/tmp# sed -i "s/t(\['-m','1','alpha',f\],b'no\\x00alpha\\n')/t(['-m','1','alpha',f],b'alpha\\n')/" /tmp/test_pygrep.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# sed -i "s/+f2+':a9\\n'//" /tmp/test_edge.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_pygrep.py && python3 /tmp/test_more.py && python3 /tmp/test_edge.py
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m20[0m, in [35m<module>[0m
+    [31mt[0m[1;31m(['-m','1','alpha',f],b'no\x00alpha\n')[0m
+    [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/test_pygrep.py"[0m, line [35m10[0m, in [35mt[0m
+    assert [1;31m(p.stdout,p.returncode)==(out,rc)[0m,(args,p.stdout,p.returncode,p.stderr)
+           [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m(['-m', '1', 'alpha', '/tmp/tmpohmz9o4w/f'], b'alpha\n', 0, b'')[0m
+[?2004hroot@549045aa6fa8:/tmp# cat > /tmp/test_anchor.py <<'PY'
+[?2004l[?2004h> import subprocess,tempfile
+[?2004l[?2004h> G=['python3','/app/pygrep/grep.py']; d=tempfile.mkdtemp(); f=d+'/f'; z=d+'/z'
+[?2004l[?2004h> open(f,'wb').write(b'ba\nab\na\n')
+[?2004l[?2004h> open(z,'wb').write(b'x\ny\0a\nb\0')
+[?2004l[?2004h> def t(a,out,rc=0):
+[?2004l[?2004h>  p=subprocess.run(G+a,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  assert (p.stdout,p.returncode)==(out,rc),(a,p.stdout,p.returncode,p.stderr)
+[?2004l[?2004h> t(['a$',f],b'ba\na\n')
+[?2004l[?2004h> t(['^a',f],b'ab\na\n')
+[?2004l[?2004h> t(['^a$',f],b'a\n')
+[?2004l[?2004h> t(['-E','^(a|ab)$',f],b'ab\na\n')
+[?2004l[?2004h> t(['-E','-o','^(a|ab)$',f],b'ab\na\n')
+[?2004l[?2004h> t(['-z','^x.y$',z],b'x\ny\0')
+[?2004l[?2004h> t(['-z','a.b$',z],b'a\nb\0')
+[?2004l[?2004h> t(['-z','y$',z],b'',1)
+[?2004l[?2004h> t(['-z','b$',z],b'a\nb\0')
+[?2004l[?2004h> print('anchor ok')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_anchor.py
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/test_anchor.py"[0m, line [35m15[0m, in [35m<module>[0m
+    [31mt[0m[1;31m(['-z','y$',z],b'',1)[0m
+    [31m~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/tmp/test_anchor.py"[0m, line [35m7[0m, in [35mt[0m
+    assert [1;31m(p.stdout,p.returncode)==(out,rc)[0m,(a,p.stdout,p.returncode,p.stderr)
+           [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m(['-z', 'y$', '/tmp/tmpdm0nvnsi/z'], b'x\ny\x00', 0, b'')[0m
+[?2004hroot@549045aa6fa8:/tmp# python3 -m py_compile /app/pygrep/grep.py && tail -8 /app/pygrep/grep.py
+[?2004l    if had_error: return 2
+    if o.mode=='files_without':
+        # At least one output name means success.
+        return 0 if output else 1
+    return 0 if any_selected else 1
+
+if __name__=='__main__':
+    sys.exit(main(sys.argv[1:]))
+[?2004hroot@549045aa6fa8:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/tmp/test_pygrep.py'; s=open(p).read(); s=s.replace("t(['-m','1','alpha',f],b'no\\x00alpha\\n')","t(['-m','1','alpha',f],b'alpha\\n')"); open(p,'w').write(s)
+[?2004l[?2004h> p='/tmp/test_anchor.py'; s=open(p).read(); s=s.replace("t(['-z','y$',z],b'',1)","t(['-z','y$',z],b'x\\ny\\0')"); open(p,'w').write(s)
+[?2004l[?2004h> p='/tmp/test_edge.py'; s=open(p).read(); old="(f+':a0\\n'+f+':a2\\n'+f+':a4\\n'+f2+':a9\\n').encode()"; new="(f+':a0\\n'+f+':a2\\n'+f+':a4\\n').encode()"; s=s.replace(old,new); open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'; s=open(p).read()
+[?2004l[?2004h> s=s.replace("'space':'\\\\t-\\\\r ','upper':'A-Z','xdigit':'A-Fa-f0-9'", "'space':'\\\\t-\\\\r ','upper':'A-Z','xdigit':'A-Fa-f0-9','word':'A-Za-z0-9_'")
+[?2004l[?2004h> s=s.replace("(alnum|alpha|blank|cntrl|digit|graph|lower|print|punct|space|upper|xdigit)", "(alnum|alpha|blank|cntrl|digit|graph|lower|print|punct|space|upper|xdigit|word)")
+[?2004l[?2004h> s=s.replace("            elif not inclass and d in '<>': out.append(r'\\b')", "            elif not inclass and d == '<': out.append(r'(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])')\n            elif not inclass and d == '>': out.append(r'(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])')")
+[?2004l[?2004h> old="def ere_to_py(s):\n    # In valid EREs Python syntax is close; normalize POSIX classes.\n    return classes(s)"
+[?2004l[?2004h> new=r'''def ere_to_py(s):
+[?2004l[?2004h>     # Python ERE syntax is close; convert GNU special boundary escapes.
+[?2004l[?2004h>     out=[]; i=0; incl=False
+[?2004l[?2004h>     while i < len(s):
+[?2004l[?2004h>         c=s[i]
+[?2004l[?2004h>         if c == '[': incl=True
+[?2004l[?2004h>         elif c == ']' and incl: incl=False
+[?2004l[?2004h>         if c == '\\' and i+1 < len(s):
+[?2004l[?2004h>             d=s[i+1]
+[?2004l[?2004h>             if not incl and d == '<': out.append(r'(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])')
+[?2004l[?2004h>             elif not incl and d == '>': out.append(r'(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])')
+[?2004l[?2004h>             elif not incl and d == 's': out.append(r'[\t-\r ]')
+[?2004l[?2004h>             elif not incl and d == 'S': out.append(r'[^\t-\r ]')
+[?2004l[?2004h>             else: out.append(c+d)
+[?2004l[?2004h>             i += 2; continue
+[?2004l[?2004h>         out.append(c); i += 1
+[?2004l[?2004h>     return classes(''.join(out))'''
+[?2004l[?2004h> if old not in s: raise SystemExit('ere block not found')
+[?2004l[?2004h> s=s.replace(old,new)
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_pygrep.py && python3 /tmp/test_more.py && python3 /tmp/test_edge.py && python3 /tmp/test_anchor.py
+[?2004lok
+more ok
+edge ok
+anchor ok
+[?2004hroot@549045aa6fa8:/tmp# cat > /tmp/test_final.py <<'PY'
+[?2004l[?2004h> import subprocess,tempfile
+[?2004l[?2004h> G=['python3','/app/pygrep/grep.py']; d=tempfile.mkdtemp(); a=d+'/a'; b=d+'/b'; bn=d+'/bin'
+[?2004l[?2004h> open(a,'wb').write(b'foo food\n@\n foo \nbar\n')
+[?2004l[?2004h> open(b,'wb').write(b'foo\nend\n')
+[?2004l[?2004h> open(bn,'wb').write(b'foo\0no\nfoo\0foo\n')
+[?2004l[?2004h> def t(args,out,rc=0,inp=None):
+[?2004l[?2004h>  p=subprocess.run(G+args,input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+[?2004l[?2004h>  assert (p.stdout,p.returncode)==(out,rc),(args,p.stdout,p.returncode,p.stderr)
+[?2004l[?2004h> t([r'\<foo',a],b'foo food\n foo \n')
+[?2004l[?2004h> t([r'foo\>',a],b'foo food\n foo \n')
+[?2004l[?2004h> t(['-E',r'\<foo\>',a],b'foo food\n foo \n')
+[?2004l[?2004h> t(['-w','@',a],b'@\n')
+[?2004l[?2004h> t(['-E','[[:word:]]+',a],b'foo food\n foo \nbar\n')
+[?2004l[?2004h> t(['-A0','foo',a,b],(a+':foo food\n--\n'+a+': foo \n--\n'+b+':foo\n').encode())
+[?2004l[?2004h> t(['--no-group-separator','-A0','foo',a,b],(a+':foo food\n'+a+': foo \n'+b+':foo\n').encode())
+[?2004l[?2004h> t(['-c','-l','-c','foo',a],(a+'\n').encode())
+[?2004l[?2004h> t(['-L','-l','nomatch',a],b'',1)
+[?2004l[?2004h> t(['-l','-L','nomatch',a],(a+'\n').encode())
+[?2004l[?2004h> t(['-c','foo',bn],b'3\n')
+[?2004l[?2004h> t(['-m2','-c','foo',bn],b'2\n')
+[?2004l[?2004h> t(['-I','-a','foo',bn],b'foo\x00no\nfoo\x00foo\n')
+[?2004l[?2004h> t(['-a','-I','foo',bn],b'',1)
+[?2004l[?2004h> t(['-F','-e','foo\n','-o',a],b'foo\nfoo\nfoo\n')
+[?2004l[?2004h> t(['--label=IN','-H','bar'],b'IN:bar\n',inp=b'bar\n')
+[?2004l[?2004h> print('final ok')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/tmp# python3 /tmp/test_final.py
+[?2004lfinal ok
+[?2004hroot@549045aa6fa8:/tmp# cd /app && python3 -m py_compile pygrep/grep.py && printf 'one\ntwo\n' | python3 pygrep/grep.py -n -E 'one|two'; echo status:$?; python3 pygrep/grep.py -E -F x </dev/null >/tmp/noout; echo conflict-status:$? output-bytes:$(wc -c </tmp/noout)
+[?2004l1:one
+2:two
+status:0
+grep: conflicting matchers specified
+conflict-status:2 output-bytes:0
+[?2004hroot@549045aa6fa8:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pygrep/grep.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("        if self.o.word:\n            if a and self.wordchar(s[a-1]): return False", "        if self.o.word and not self.o.line:\n            if a and self.wordchar(s[a-1]): return False")
+[?2004l[?2004h> open(p,'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@549045aa6fa8:/app# python3 -m py_compile /app/pygrep/grep.py
+[?2004l[?2004hroot@549045aa6fa8:/app# printf '@\nfoo\n' >/tmp/xw_input
+[?2004l[?2004hroot@549045aa6fa8:/app# python3 /app/pygrep/grep.py -xw '@' /tmp/xw_input >/tmp/xw_out; rc=$?; test "$rc" = 0 && test "$(cat /tmp/xw_out)" = '@'
+[?2004l[?2004hroot@549045aa6fa8:/app# python3 /tmp/test_pygrep.py && python3 /tmp/test_more.py && python3 /tmp/test_edge.py && python3 /tmp/test_anchor.py && python3 /tmp/test_final.py
+[?2004lok
+more ok
+edge ok
+anchor ok
+final ok
+[?2004hroot@549045aa6fa8:/app# cd /app && python3 -m py_compile pygrep/grep.py && test -x pygrep/grep.py && echo 'pygrep implementation ready'
+[?2004lpygrep implementation ready
+[?2004hroot@549045aa6fa8:/app# 

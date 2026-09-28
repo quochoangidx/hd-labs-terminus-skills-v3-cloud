@@ -1,0 +1,1168 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 25 items
+
+../../tests/test_outputs.py FFFFFFFFFFFFFFFFFFFFFFF..                    [100%]
+
+=================================== FAILURES ===================================
+_______________ test_rule_3_1_carton_shipment_counts_by_receipt ________________
+
+    def test_rule_3_1_carton_shipment_counts_by_receipt():
+        """A carton shipment counts toward the quarter it is received in, the fourth day after its invoice."""
+>       check_family("carton_receipt")
+
+/tests/test_outputs.py:223: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 732}, {'from': 33400000, 'bp': 818}, {'from': 52800000, 'bp': 610}, {'from': 79000000, 'b...'prior': 0, 'purchases': [['2029-05-27', 4172, 13809], ['2029-06-27', 2552, 7594], ['2029-06-26', 1609, 10434]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+______________ test_rule_2_2_line_of_exactly_12_units_is_a_carton ______________
+
+    def test_rule_2_2_line_of_exactly_12_units_is_a_carton():
+        """Lines of exactly 12 units invoiced in the four days before either quarter edge move with their receipt."""
+>       check_family("carton_threshold")
+
+/tests/test_outputs.py:228: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 250}], 'accounts': [{'account': 'VCKZA', 'quarter': '2023-Q2', 'prior': 0, 'purchases': [...unt': 'K', 'quarter': '2022-Q1', 'prior': 0, 'purchases': [['2021-12-29', 12, 7293], ['2022-03-29', 12, 18510]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+__________________ test_rule_3_3_returns_less_40_cents_a_unit __________________
+
+    def test_rule_3_3_returns_less_40_cents_a_unit():
+        """Returns taken back in the quarter are credited at their value less 40 cents a unit."""
+>       check_family("returns_charge")
+
+/tests/test_outputs.py:233: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 829}], 'accounts': [{'account': 'U7EZAG4N', 'quarter': '2035-Q2', 'prior': 94773596730, '...ior': 9487340, 'purchases': [['2028-01-19', 1173, 15324], ['2028-02-21', 653, 789], ['2028-05-11', 4236, 4841]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+__________________ test_rule_3_3_returns_on_the_quarter_edges __________________
+
+    def test_rule_3_3_returns_on_the_quarter_edges():
+        """Returns on the first and last day count; the day before and the day after do not."""
+>       check_family("returns_edges")
+
+/tests/test_outputs.py:238: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 1403}, {'from': 2250000, 'bp': 700}, {'from': 6950000, 'bp': 1490}, {'from': 12150000, 'b... ...}, {'account': 'K8RL7MACV74Y', 'quarter': '2031-Q2', 'prior': 0, 'purchases': [['2031-05-16', 1604, 16781]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+________________ test_rule_3_5_tier_is_picked_on_net_purchases _________________
+
+    def test_rule_3_5_tier_is_picked_on_net_purchases():
+        """Returns that take net purchases below a threshold that gross purchases pass drop the tier."""
+>       check_family("tier_net")
+
+/tests/test_outputs.py:243: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 100}, {'from': 1000000, 'bp': 300}, {'from': 5000000, 'bp': 700}], 'accounts': [{'account...2248]], ...}, {'account': 'FU89GB0', 'quarter': '2037-Q1', 'prior': 0, 'purchases': [['2037-01-23', 500, 2081]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+___________________ test_rule_2_6_net_exactly_on_a_threshold ___________________
+
+    def test_rule_2_6_net_exactly_on_a_threshold():
+        """Net purchases exactly on a threshold reach that tier, directly and after returns; a cent short does not."""
+>       check_family("tier_threshold")
+
+/tests/test_outputs.py:248: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 50}, {'from': 1200000, 'bp': 300}, {'from': 3600000, 'bp': 900}], 'accounts': [{'account'... ...}, {'account': 'DUD3PZHCV81-K', 'quarter': '2021-Q3', 'prior': 0, 'purchases': [['2021-08-03', 1000, 1300]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+________________ test_rule_2_6_net_below_nought_reaches_no_tier ________________
+
+    def test_rule_2_6_net_below_nought_reaches_no_tier():
+        """Returns heavier than purchases: net below nought, rate and rebate nought."""
+>       check_family("net_below_nought")
+
+/tests/test_outputs.py:253: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 1500}], 'accounts': [{'account': 'JE2G', 'quarter': '2038-Q4', 'prior': 0, 'purchases': [...00]], ...}, {'account': '4SQ5FZ0WEQB', 'quarter': '2025-Q1', 'prior': 0, 'purchases': [['2025-03-07', 17, 500]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+_________________ test_rule_3_6_volume_rebate_rounded_half_up __________________
+
+    def test_rule_3_6_volume_rebate_rounded_half_up():
+        """The volume rebate is rounded to the nearest cent, an exact half going up."""
+>       check_family("rebate_rounding")
+
+/tests/test_outputs.py:258: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 7}, {'from': 10000, 'bp': 50}, {'from': 10200, 'bp': 7}], 'accounts': [{'account': 'XCQHB... 577, 8956]], ...}, {'account': '37', 'quarter': '2037-Q2', 'prior': 0, 'purchases': [['2037-04-21', 100, 101]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+__________________ test_rule_4_1_growth_bonus_on_the_increase __________________
+
+    def test_rule_4_1_growth_bonus_on_the_increase():
+        """The growth bonus is 200 basis points of the increase over last year's net purchases."""
+>       check_family("growth_increase")
+
+/tests/test_outputs.py:263: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 507}, {'from': 330000, 'bp': 570}, {'from': 670000, 'bp': 1318}, {'from': 840000, 'bp': 8..., 'quarter': '2022-Q3', 'prior': 42180558, 'purchases': [['2022-08-01', 2, 17766], ['2022-09-01', 4945, 16726]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+__________________ test_rule_4_1_growth_exactly_110_per_cent ___________________
+
+    def test_rule_4_1_growth_exactly_110_per_cent():
+        """Net purchases of exactly 110 per cent of last year's earn the bonus; a cent short does not."""
+>       check_family("growth_110")
+
+/tests/test_outputs.py:268: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 100}], 'accounts': [{'account': '732P', 'quarter': '2039-Q4', 'prior': 100000, 'purchases... ...}, {'account': 'JNMYUEWMD-', 'quarter': '2023-Q4', 'prior': 100000, 'purchases': [['2023-12-03', 25, 4449]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+__________________ test_rule_4_1_no_prior_purchases_no_bonus ___________________
+
+    def test_rule_4_1_no_prior_purchases_no_bonus():
+        """Last year's net purchases of nought earn no bonus; one cent does."""
+>       check_family("growth_no_prior")
+
+/tests/test_outputs.py:273: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 100}], 'accounts': [{'account': 'X', 'quarter': '2038-Q4', 'prior': 0, 'purchases': [['20......}, {'account': 'QHFMDQFUCL23X', 'quarter': '2037-Q4', 'prior': 0, 'purchases': [['2037-11-27', 3645, 18456]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+_______________ test_rule_5_1_price_drop_earns_cut_times_on_hand _______________
+
+    def test_rule_5_1_price_drop_earns_cut_times_on_hand():
+        """A price drop in the quarter earns the cut times the units on hand; one outside the quarter earns nothing."""
+>       check_family("price_drop")
+
+/tests/test_outputs.py:278: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 965}, {'from': 2190000, 'bp': 43}], 'accounts': [{'account': '-BMECNP3T', 'quarter': '202...M', 'quarter': '2023-Q2', 'prior': 56055724, 'purchases': [['2023-05-08', 1855, 9328], ['2023-06-12', 4, 7116]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+____________ test_rule_2_4_cut_of_exactly_250_cents_is_a_price_drop ____________
+
+    def test_rule_2_4_cut_of_exactly_250_cents_is_a_price_drop():
+        """A cut of exactly 250 cents on 100 units is a price drop earning 25,000 cents."""
+>       check_family("price_drop_threshold")
+
+/tests/test_outputs.py:283: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 0}], 'accounts': [{'account': 'XG080936', 'quarter': '2030-Q4', 'prior': 0, 'purchases': [], ...}, {'account': 'S7N9PAUR', 'quarter': '2030-Q3', 'prior': 0, 'purchases': [], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+____________________ test_rule_5_2_contract_sale_chargeback ____________________
+
+    def test_rule_5_2_contract_sale_chargeback():
+        """A contract sale in the quarter earns the amount below cost times the units."""
+>       check_family("contract_sale")
+
+/tests/test_outputs.py:288: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 1187}, {'from': 1050000, 'bp': 1181}, {'from': 1250000, 'bp': 1499}, {'from': 10700000, '...'quarter': '2025-Q2', 'prior': 40864039, 'purchases': [['2025-03-12', 1379, 9783], ['2025-05-10', 1701, 12439]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+______ test_rule_2_5_sale_exactly_100_cents_under_cost_is_a_contract_sale ______
+
+    def test_rule_2_5_sale_exactly_100_cents_under_cost_is_a_contract_sale():
+        """A sale exactly 100 cents under cost is a contract sale."""
+>       check_family("contract_threshold")
+
+/tests/test_outputs.py:293: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 0}], 'accounts': [{'account': '-', 'quarter': '2031-Q3', 'prior': 0, 'purchases': [], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+_______________________ test_rule_6_2_minimum_settlement _______________________
+
+    def test_rule_6_2_minimum_settlement():
+        """Settlements below 25,000 cents are carried whole, not paid."""
+>       check_family("minimum_settlement")
+
+/tests/test_outputs.py:298: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 100}], 'accounts': [{'account': 'F7ZSFFZ-F0M', 'quarter': '2033-Q3', 'prior': 0, 'purchas..., 9647]], ...}, {'account': '66SG5', 'quarter': '2037-Q4', 'prior': 0, 'purchases': [['2037-11-06', 100, 2813]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+_______________ test_rule_6_2_settlement_of_exactly_25000_cents ________________
+
+    def test_rule_6_2_settlement_of_exactly_25000_cents():
+        """A settlement of exactly 25,000 cents is paid; 24,999 is carried; an empty account settles nought."""
+>       check_family("settlement_edge")
+
+/tests/test_outputs.py:303: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 0}], 'accounts': [{'account': 'Y87-', 'quarter': '2032-Q2', 'prior': 0, 'purchases': [], ...or': 0, 'purchases': [], ...}, {'account': 'GMAE7AAVZGR7C8Y', 'quarter': '2028-Q4', 'prior': 0, 'purchases': [], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+_________________ test_loose_units_keep_their_invoice_quarter __________________
+
+    def test_loose_units_keep_their_invoice_quarter():
+        """A line below a carton keeps counting toward the quarter of its invoice date, as the shipped package counts it."""
+>       rows = check_family("loose_units")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 282}], 'accounts': [{'account': 'YCS', 'quarter': '2033-Q1', 'prior': 0, 'purchases': [['...', 'prior': 0, 'purchases': [['2039-06-28', 11, 742696], ['2039-08-16', 1224, 4581], ['2039-09-30', 4, 508402]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+___________________ test_tidy_up_notices_keep_todays_credit ____________________
+
+    def test_tidy_up_notices_keep_todays_credit():
+        """A price notice that is not a price drop keeps the credit the shipped package gives it."""
+>       for number, row in enumerate(check_family("tidy_ups")):
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 1060}, {'from': 26600000, 'bp': 1255}, {'from': 28600000, 'bp': 587}, {'from': 32800000, ...: [['2023-07-27', 611, 7202], ['2023-06-20', 2, 7719], ['2023-05-16', 922, 14372], ['2023-08-02', 3231, 17748]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+________________ test_price_match_sales_keep_todays_chargeback _________________
+
+    def test_price_match_sales_keep_todays_chargeback():
+        """A sale below cost that is not a contract sale keeps the chargeback the shipped package gives it."""
+>       for number, row in enumerate(check_family("price_match")):
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:328: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 769}, {'from': 350000, 'bp': 219}, {'from': 3900000, 'bp': 1201}, {'from': 5100000, 'bp':... 'Y-M3QU0FGD20-10G', 'quarter': '2020-Q1', 'prior': 31353937807, 'purchases': [['2019-11-30', 3365, 9649]], ...}, ...]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+________________________ test_statement_order_and_keys _________________________
+
+    def test_statement_order_and_keys():
+        """Settlements come in job order with codes as given (1 and 16 characters, spaces, quotes, non-ASCII)."""
+>       check_family("statement_order")
+
+/tests/test_outputs.py:375: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 550}, {'from': 510000, 'bp': 536}, {'from': 960000, 'bp': 345}, {'from': 1050000, 'bp': 7...5], ['2029-04-29', 1679, 10993]], ...}, {'account': 'x', 'quarter': '2033-Q2', 'prior': 0, 'purchases': [], ...}, ...]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """12 tier rows, thresholds of 10^11, 100 accounts, 400 lines, 100 returns, 50 notices, 200 sales, every field end."""
+>       check_family("limits_accounts")
+
+/tests/test_outputs.py:380: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 1500}, {'from': 5671497555, 'bp': 1500}, {'from': 35704290355, 'bp': 0}, {'from': 5746095...1-07-01', 12, 1000000]], ...}, {'account': 'BD1E', 'quarter': '2027-Q4', 'prior': 100000000000, 'purchases': [], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+_____________________________ test_generated_jobs ______________________________
+
+    def test_generated_jobs():
+        """Seeded jobs over the governed domain, as sealed and under fresh codes and orders."""
+>       rows = check_family("generated")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:395: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+job = {'tiers': [{'from': 0, 'bp': 432}], 'accounts': [{'account': 'H2WC6588-TL', 'quarter': '2027-Q1', 'prior': 10903098, '...r': 19982787, 'purchases': [['2022-09-09', 1813, 3147], ['2022-09-15', 1528, 1955], ['2022-06-28', 3654, 8718]], ...}]}
+shipped = False
+
+    def run(job, shipped=False):
+        """Run the driver on one job (the candidate's package, or the shipped copy); return its parsed stdout."""
+        stage = tempfile.mkdtemp()
+        work = tempfile.mkdtemp()
+        os.chmod(stage, 0o755)
+        os.chmod(work, 0o777)
+        path = os.path.join(stage, "job.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(job, handle)
+        os.chmod(path, 0o644)
+        remaining = DEADLINE - time.monotonic()
+        assert remaining > 0, "verifier time budget exhausted"
+        uid, driver = (SHIPPED_UID, str(SHIPPED_RUN / "app" / "tools" / "rebate_run.py")) if shipped else (CANDIDATE_UID, str(DELIVERED_DRIVER))
+        code, out, err = run_as(uid, ["python3", "-I", "-S", driver, path], work, remaining)
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+>       assert code == 0, f"driver exited {code}: {err[-2000:]}"
+E       AssertionError: driver exited 1: Traceback (most recent call last):
+E           File "/app/tools/rebate_run.py", line 9, in <module>
+E             from rebate import build_statements  # noqa: E402
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/app/tools/../src/rebate/__init__.py", line 3, in <module>
+E             from .statement import build_statements
+E           File "/app/tools/../src/rebate/statement.py", line 5, in <module>
+E             from .ledger import quarter_purchases
+E           File "/app/tools/../src/rebate/ledger.py", line 30
+E             return min(2**31 - 1, sum(value for day, _units, value in dated_lines(lines) if in_quarter(day, quarter))
+E                       ^
+E         SyntaxError: '(' was never closed
+E         
+E       assert 1 == 0
+
+/tests/test_outputs.py:129: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_3_1_carton_shipment_counts_by_receipt
+FAILED ../../tests/test_outputs.py::test_rule_2_2_line_of_exactly_12_units_is_a_carton
+FAILED ../../tests/test_outputs.py::test_rule_3_3_returns_less_40_cents_a_unit
+FAILED ../../tests/test_outputs.py::test_rule_3_3_returns_on_the_quarter_edges
+FAILED ../../tests/test_outputs.py::test_rule_3_5_tier_is_picked_on_net_purchases
+FAILED ../../tests/test_outputs.py::test_rule_2_6_net_exactly_on_a_threshold
+FAILED ../../tests/test_outputs.py::test_rule_2_6_net_below_nought_reaches_no_tier
+FAILED ../../tests/test_outputs.py::test_rule_3_6_volume_rebate_rounded_half_up
+FAILED ../../tests/test_outputs.py::test_rule_4_1_growth_bonus_on_the_increase
+FAILED ../../tests/test_outputs.py::test_rule_4_1_growth_exactly_110_per_cent
+FAILED ../../tests/test_outputs.py::test_rule_4_1_no_prior_purchases_no_bonus
+FAILED ../../tests/test_outputs.py::test_rule_5_1_price_drop_earns_cut_times_on_hand
+FAILED ../../tests/test_outputs.py::test_rule_2_4_cut_of_exactly_250_cents_is_a_price_drop
+FAILED ../../tests/test_outputs.py::test_rule_5_2_contract_sale_chargeback - ...
+FAILED ../../tests/test_outputs.py::test_rule_2_5_sale_exactly_100_cents_under_cost_is_a_contract_sale
+FAILED ../../tests/test_outputs.py::test_rule_6_2_minimum_settlement - Assert...
+FAILED ../../tests/test_outputs.py::test_rule_6_2_settlement_of_exactly_25000_cents
+FAILED ../../tests/test_outputs.py::test_loose_units_keep_their_invoice_quarter
+FAILED ../../tests/test_outputs.py::test_tidy_up_notices_keep_todays_credit
+FAILED ../../tests/test_outputs.py::test_price_match_sales_keep_todays_chargeback
+FAILED ../../tests/test_outputs.py::test_statement_order_and_keys - Assertion...
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+FAILED ../../tests/test_outputs.py::test_generated_jobs - AssertionError: dri...
+========================= 23 failed, 2 passed in 0.90s =========================

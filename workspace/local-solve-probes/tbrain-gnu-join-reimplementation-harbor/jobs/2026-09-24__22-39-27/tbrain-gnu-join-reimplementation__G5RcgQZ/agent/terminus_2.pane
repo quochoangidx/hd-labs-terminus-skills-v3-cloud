@@ -1,0 +1,1251 @@
+[?2004hroot@a876ad673e54:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@a876ad673e54:/app# clear
+[?2004l[H[J[3J[?2004hroot@a876ad673e54:/app# ls -la /app && find /app/pyjoin -maxdepth 2 -type f -print 2>/dev/null
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Sep 24 15:39 .
+drwxr-xr-x 1 root root 4096 Sep 24 15:39 ..
+-rw-r--r-- 1 root root  246 Sep 24 15:39 README.md
+drwxr-xr-x 2 root root 4096 Sep 24 15:39 docs
+drwxr-xr-x 2 root root 4096 Sep 24 15:39 pyjoin
+/app/pyjoin/join.py
+[?2004hroot@a876ad673e54:/app# cat /app/docs/join.txt
+[?2004l8.3 ‘join’: Join lines on a common field
+========================================
+
+‘join’ writes to standard output a line for each pair of input lines
+that have identical join fields.  Synopsis:
+
+     join [OPTION]... FILE1 FILE2
+
+   Either FILE1 or FILE2 (but not both) can be ‘-’, meaning standard
+input.  FILE1 and FILE2 should be sorted on the join fields.
+
+     $ cat file1
+     a 1
+     b 2
+     e 5
+
+     $ cat file2
+     a X
+     e Y
+     f Z
+
+     $ join file1 file2
+     a 1 X
+     e 5 Y
+
+‘join’’s default behavior (when no options are given):
+   • the join field is the first field in each line;
+   • fields in the input are separated by one or more blanks, with
+     leading blanks on the line ignored;
+   • fields in the output are separated by a space;
+   • each output line consists of the join field, the remaining fields
+     from FILE1, then the remaining fields from FILE2.
+
+* Menu:
+
+* General options in join::      Options which affect general program behavior.
+* Sorting files for join::       Using ‘sort’ before ‘join’.
+* Working with fields::          Joining on different fields.
+* Paired and unpaired lines::    Controlling ‘join’’s field matching.
+* Header lines::                 Working with header lines in files.
+* Set operations::               Union, Intersection and Difference of files.
+
+8.3.1 General options
+---------------------
+
+The program accepts the following options.  Also see *note Common
+options::.
+
+‘-a FILE-NUMBER’
+     Print a line for each unpairable line in file FILE-NUMBER (either
+     ‘1’ or ‘2’), in addition to the normal output.
+
+‘--check-order’
+     Fail with an error message if either input file is wrongly ordered.
+
+‘--nocheck-order’
+     Do not check that both input files are in sorted order.  This is
+     the default.
+
+‘-e STRING’
+     Replace those output fields that are missing in the input with
+     STRING.  I.e., missing fields specified with the ‘-12jo’ options.
+
+‘--header’
+     Treat the first line of each input file as a header line.  The
+     header lines will be joined and printed as the first output line.
+     If ‘-o’ is used to specify output format, the header line will be
+     printed according to the specified format.  The header lines will
+     not be checked for ordering even if ‘--check-order’ is specified.
+     Also if the header lines from each file do not match, the heading
+     fields from the first file will be used.
+
+‘-i’
+‘--ignore-case’
+     Ignore differences in case when comparing keys.  With this option,
+     the lines of the input files must be ordered in the same way.  Use
+     ‘sort -f’ to produce this ordering.
+
+‘-1 FIELD’
+     Join on field FIELD (a positive integer) of file 1.
+
+‘-2 FIELD’
+     Join on field FIELD (a positive integer) of file 2.
+
+‘-j FIELD’
+     Equivalent to ‘-1 FIELD -2 FIELD’.
+
+‘-o FIELD-LIST’
+‘-o auto’
+     If the keyword ‘auto’ is specified, infer the output format from
+     the first line in each file.  This is the same as the default
+     output format but also ensures the same number of fields are output
+     for each line.  Missing fields are replaced with the ‘-e’ option
+     and extra fields are discarded.
+
+     Otherwise, construct each output line according to the format in
+     FIELD-LIST.  Each element in FIELD-LIST is either the single
+     character ‘0’ or has the form M.N where the file number, M, is ‘1’
+     or ‘2’ and N is a positive field number.
+
+     A field specification of ‘0’ denotes the join field.  In most
+     cases, the functionality of the ‘0’ field spec may be reproduced
+     using the explicit M.N that corresponds to the join field.
+     However, when printing unpairable lines (using either of the ‘-a’
+     or ‘-v’ options), there is no way to specify the join field using
+     M.N in FIELD-LIST if there are unpairable lines in both files.  To
+     give ‘join’ that functionality, POSIX invented the ‘0’ field
+     specification notation.
+
+     The elements in FIELD-LIST are separated by commas or blanks.
+     Blank separators typically need to be quoted for the shell.  For
+     example, the commands ‘join -o 1.2,2.2’ and ‘join -o '1.2 2.2'’ are
+     equivalent.
+
+     All output lines—including those printed because of any -a or -v
+     option—are subject to the specified FIELD-LIST.
+
+‘-t CHAR’
+     Use character CHAR as the input and output field separator.  Treat
+     as significant each occurrence of CHAR in the input file.  Use
+     ‘sort -t CHAR’, without the ‘-b’ option of ‘sort’, to produce this
+     ordering.  If ‘join -t ''’ is specified, the whole line is
+     considered, matching the default operation of sort.  If ‘-t '\0'’
+     is specified then the ASCII NUL character is used to delimit the
+     fields.
+
+‘-v FILE-NUMBER’
+     Print a line for each unpairable line in file FILE-NUMBER (either
+     ‘1’ or ‘2’), instead of the normal output.
+
+‘-z’
+‘--zero-terminated’
+     Delimit items with a zero byte rather than a newline (ASCII LF).
+     I.e., treat input as items separated by ASCII NUL and terminate
+     output items with ASCII NUL. This option can be useful in
+     conjunction with ‘perl -0’ or ‘find -print0’ and ‘xargs -0’ which
+     do the same in order to reliably handle arbitrary file names (even
+     those containing blanks or other special characters).  Note with
+     ‘-z’ the newline character is treated as a field separator.
+
+   An exit status of zero indicates success, and a nonzero value
+indicates failure.
+
+   If the ‘--check-order’ option is given, unsorted inputs will cause a
+fatal error message.  If the option ‘--nocheck-order’ is given, unsorted
+inputs will never cause an error message.  If neither of these options
+is given, wrongly sorted inputs are diagnosed only if an input file is
+found to contain unpairable lines, and when both input files are non
+empty.  If an input file is diagnosed as being unsorted, the ‘join’
+command will exit with a nonzero status (and the output should not be
+used).
+
+   Forcing ‘join’ to process wrongly sorted input files containing
+unpairable lines by specifying ‘--nocheck-order’ is not guaranteed to
+produce any particular output.  The output will probably not correspond
+with whatever you hoped it would be.
+
+8.3.2 Pre-sorting
+-----------------
+
+‘join’ requires sorted input files.  Each input file should be sorted
+according to the key (=field/column number) used in ‘join’.  The
+recommended sorting option is ‘sort -k 1b,1’ (assuming the desired key
+is in the first column).
+
+Typical usage:
+     $ sort -k 1b,1 file1 > file1.sorted
+     $ sort -k 1b,1 file2 > file2.sorted
+     $ join file1.sorted file2.sorted > file3
+
+   Normally, the sort order is that of the collating sequence specified
+by the ‘LC_COLLATE’ locale.  Unless the ‘-t’ option is given, the sort
+comparison ignores blanks at the start of the join field, as in ‘sort
+-b’.  If the ‘--ignore-case’ option is given, the sort comparison
+ignores the case of characters in the join field, as in ‘sort -f’:
+
+     $ sort -k 1bf,1 file1 > file1.sorted
+     $ sort -k 1bf,1 file2 > file2.sorted
+     $ join --ignore-case file1.sorted file2.sorted > file3
+
+   The ‘sort’ and ‘join’ commands should use consistent locales and
+options if the output of ‘sort’ is fed to ‘join’.  You can use a command
+like ‘sort -k 1b,1’ to sort a file on its default join field, but if you
+select a non-default locale, join field, separator, or comparison
+options, then you should do so consistently between ‘join’ and ‘sort’.
+
+To avoid any locale-related issues, it is recommended to use the ‘C’
+locale for both commands:
+
+     $ LC_ALL=C sort -k 1b,1 file1 > file1.sorted
+     $ LC_ALL=C sort -k 1b,1 file2 > file2.sorted
+     $ LC_ALL=C join file1.sorted file2.sorted > file3
+
+8.3.3 Working with fields
+-------------------------
+
+Use ‘-1’,‘-2’ to set the key fields for each of the input files.  Ensure
+the preceding ‘sort’ commands operated on the same fields.
+
+The following example joins two files, using the values from seventh
+field of the first file and the third field of the second file:
+
+     $ sort -k 7b,7 file1 > file1.sorted
+     $ sort -k 3b,3 file2 > file2.sorted
+     $ join -1 7 -2 3 file1.sorted file2.sorted > file3
+
+If the field number is the same for both files, use ‘-j’:
+
+     $ sort -k4b,4 file1 > file1.sorted
+     $ sort -k4b,4 file2 > file2.sorted
+     $ join -j4    file1.sorted file2.sorted > file3
+
+Both ‘sort’ and ‘join’ operate of whitespace-delimited fields.  To
+specify a different delimiter, use ‘-t’ in _both_:
+
+     $ sort -t, -k3b,3 file1 > file1.sorted
+     $ sort -t, -k3b,3 file2 > file2.sorted
+     $ join -t, -j3    file1.sorted file2.sorted > file3
+
+To specify a tab (ASCII 0x09) character instead of whitespace, use (1):
+
+     $ sort -t$'\t' -k3b,3 file1 > file1.sorted
+     $ sort -t$'\t' -k3b,3 file2 > file2.sorted
+     $ join -t$'\t' -j3    file1.sorted file2.sorted > file3
+
+If ‘join -t ''’ is specified then the whole line is considered which
+matches the default operation of sort:
+
+     $ sort file1 > file1.sorted
+     $ sort file2 > file2.sorted
+     $ join -t '' file1.sorted file2.sorted > file3
+
+   ---------- Footnotes ----------
+
+   (1) the ‘$'\t'’ is supported in most modern shells.  For older
+shells, use a literal tab
+
+8.3.4 Controlling ‘join’’s field matching
+-----------------------------------------
+
+In this section the ‘sort’ commands are omitted for brevity.  Sorting
+the files before joining is still required.
+
+   ‘join’’s default behavior is to print only lines common to both input
+files.  Use ‘-a’ and ‘-v’ to print unpairable lines from one or both
+files.
+
+All examples below use the following two (pre-sorted) input files:
+
+     $ cat file1                          $ cat file2
+     a 1                                  a A
+     b 2                                  c C
+
+Command                              Outcome
+                                     
+--------------------------------------------------------------------------
+     $ join file1 file2              common lines (_intersection_)
+     a 1 A                           
+     $ join -a 1 file1 file2         common lines _and_ unpaired lines
+     a 1 A                           from the first file
+     b 2                             
+     $ join -a 2 file1 file2         common lines _and_ unpaired lines
+     a 1 A                           from the second file
+     c C                             
+     $ join -a 1 -a 2 file1 file2    all lines (paired and unpaired)
+     a 1 A                           from both files (_union_).
+     b 2                             see note below regarding ‘-o
+     c C                             auto’.
+                                     
+     $ join -v 1 file1 file2         unpaired lines from the first file
+     b 2                             (_difference_)
+                                     
+     $ join -v 2 file1 file2         unpaired lines from the second
+     c C                             file (_difference_)
+                                     
+     $ join -v 1 -v 2 file1 file2    unpaired lines from both files,
+     b 2                             omitting common lines (_symmetric
+     c C                             difference_).
+                                     
+
+The ‘-o auto -e X’ options are useful when dealing with unpaired lines.
+The following example prints all lines (common and unpaired) from both
+files.  Without ‘-o auto’ it is not easy to discern which fields
+originate from which file:
+
+     $ join -a 1 -a 2 file1 file2
+     a 1 A
+     b 2
+     c C
+
+     $ join -o auto -e X -a 1 -a 2 file1 file2
+     a 1 A
+     b 2 X
+     c X C
+
+   If the input has no unpairable lines, a GNU extension is available;
+the sort order can be any order that considers two fields to be equal if
+and only if the sort comparison described above considers them to be
+equal.  For example:
+
+     $ cat file1
+     a a1
+     c c1
+     b b1
+
+     $ cat file2
+     a a2
+     c c2
+     b b2
+
+     $ join file1 file2
+     a a1 a2
+     c c1 c2
+     b b1 b2
+
+8.3.5 Header lines
+------------------
+
+The ‘--header’ option can be used when the files to join have a header
+line which is not sorted:
+
+     $ cat file1
+     Name     Age
+     Alice    25
+     Charlie  34
+
+     $ cat file2
+     Name   Country
+     Alice  France
+     Bob    Spain
+
+     $ join --header -o auto -e NA -a1 -a2 file1 file2
+     Name     Age   Country
+     Alice    25    France
+     Bob      NA    Spain
+     Charlie  34    NA
+
+   To sort a file with a header line, use GNU ‘sed -u’.  The following
+example sort the files but keeps the first line of each file in place:
+
+     $ ( sed -u 1q ; sort -k2b,2 ) < file1 > file1.sorted
+     $ ( sed -u 1q ; sort -k2b,2 ) < file2 > file2.sorted
+     $ join --header -o auto -e NA -a1 -a2 file1.sorted file2.sorted > file3
+
+8.3.6 Union, Intersection and Difference of files
+-------------------------------------------------
+
+Combine ‘sort’, ‘uniq’ and ‘join’ to perform the equivalent of set
+operations on files:
+
+Command                              outcome
+--------------------------------------------------------------------------
+‘sort -u file1 file2’                Union of unsorted files
+                                     
+‘sort file1 file2 | uniq -d’         Intersection of unsorted files
+                                     
+‘sort file1 file1 file2 | uniq -u’   Difference of unsorted files
+                                     
+‘sort file1 file2 | uniq -u’         Symmetric Difference of unsorted
+                                     files
+                                     
+‘join -t '' -a1 -a2 file1 file2’     Union of sorted files
+                                     
+‘join -t '' file1 file2’             Intersection of sorted files
+                                     
+‘join -t '' -v2 file1 file2’         Difference of sorted files
+                                     
+‘join -t '' -v1 -v2 file1 file2’     Symmetric Difference of sorted
+                                     files
+                                     
+
+   All examples above operate on entire lines and not on specific
+fields: ‘sort’ without ‘-k’ and ‘join -t ''’ both consider entire lines
+as the key.
+
+2 Common options
+****************
+
+Certain options are available in all of these programs.  Rather than
+writing identical descriptions for each of the programs, they are
+described here.  (In fact, every GNU program accepts (or should accept)
+these options.)
+
+   Normally options and operands can appear in any order, and programs
+act as if all the options appear before any operands.  For example,
+‘sort -r passwd -t :’ acts like ‘sort -r -t : passwd’, since ‘:’ is an
+option-argument of ‘-t’.  However, if the ‘POSIXLY_CORRECT’ environment
+variable is set, options must appear before operands, unless otherwise
+specified for a particular command.
+
+   A few programs can usefully have trailing operands with leading ‘-’.
+With such a program, options must precede operands even if
+‘POSIXLY_CORRECT’ is not set, and this fact is noted in the program
+description.  For example, the ‘env’ command’s options must appear
+before its operands, since in some cases the operands specify a command
+that itself contains options.
+
+   Most programs that accept long options recognize unambiguous
+abbreviations of those options.  For example, ‘rmdir
+--ignore-fail-on-non-empty’ can be invoked as ‘rmdir --ignore-fail’ or
+even ‘rmdir --i’.  Ambiguous options, such as ‘ls --h’, are identified
+as such.
+
+   Some of these programs recognize the ‘--help’ and ‘--version’ options
+only when one of them is the sole command line argument.  For these
+programs, abbreviations of the long options are not always recognized.
+
+‘--help’
+     Print a usage message listing all available options, then exit
+     successfully.
+
+‘--version’
+     Print the version number, then exit successfully.
+
+‘--’
+     Delimit the option list.  Later arguments, if any, are treated as
+     operands even if they begin with ‘-’.  For example, ‘sort -- -r’
+     reads from the file named ‘-r’.
+
+   A single ‘-’ operand is not really an option, though it looks like
+one.  It stands for a file operand, and some tools treat it as standard
+input, or as standard output if that is clear from the context.  For
+example, ‘sort -’ reads from standard input, and is equivalent to plain
+‘sort’.  Unless otherwise specified, a ‘-’ can appear as any operand
+that requires a file name.
+
+* Menu:
+
+* Exit status::                 Indicating program success or failure.
+* Backup options::              -b -S, in some programs.
+* Block size::                  BLOCK_SIZE and –block-size, in some programs.
+* Floating point::              Floating point number representation.
+* Signal specifications::       Specifying signals using the –signal option.
+* Disambiguating names and IDs:: chgrp, chown, chroot, id: user and group syntax
+* Random sources::              –random-source, in some programs.
+* Target directory::            Specifying a target directory, in some programs.
+* Trailing slashes::            –strip-trailing-slashes, in some programs.
+* Traversing symlinks::         -H, -L, or -P, in some programs.
+* Treating / specially::        –preserve-root and –no-preserve-root.
+* Special built-in utilities::  ‘break’, ‘:’, ...
+* Standards conformance::       Conformance to the POSIX standard.
+* Multi-call invocation::       Multi-call program invocation.
+
+2.1 Exit status
+===============
+
+Nearly every command invocation yields an integral “exit status” that
+can be used to change how other commands work.  For the vast majority of
+commands, an exit status of zero indicates success.  Failure is
+indicated by a nonzero value—typically ‘1’, though it may differ on
+unusual platforms as POSIX requires only that it be nonzero.
+
+   However, some of the programs documented here do produce other exit
+status values and a few associate different meanings with the values ‘0’
+and ‘1’.  Here are some of the exceptions: ‘chroot’, ‘env’, ‘expr’,
+‘nice’, ‘nohup’, ‘numfmt’, ‘printenv’, ‘sort’, ‘stdbuf’, ‘test’,
+‘timeout’, ‘tty’.
+[?2004hroot@a876ad673e54:/app# sed -n '1,240p' /app/pyjoin/join.py
+[?2004l"""pyjoin: a GNU join (coreutils 9.1) replacement in pure Python.
+
+Usage: python3 /app/pyjoin/join.py [OPTION]... FILE1 FILE2
+"""
+
+import sys
+
+
+def main(argv):
+    sys.stderr.write("pyjoin: not implemented yet\n")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+[?2004hroot@a876ad673e54:/app# nl -ba /app/docs/join.txt | sed -n '1,260p'
+[?2004l     1	8.3 ‘join’: Join lines on a common field
+     2	========================================
+     3	
+     4	‘join’ writes to standard output a line for each pair of input lines
+     5	that have identical join fields.  Synopsis:
+     6	
+     7	     join [OPTION]... FILE1 FILE2
+     8	
+     9	   Either FILE1 or FILE2 (but not both) can be ‘-’, meaning standard
+    10	input.  FILE1 and FILE2 should be sorted on the join fields.
+    11	
+    12	     $ cat file1
+    13	     a 1
+    14	     b 2
+    15	     e 5
+    16	
+    17	     $ cat file2
+    18	     a X
+    19	     e Y
+    20	     f Z
+    21	
+    22	     $ join file1 file2
+    23	     a 1 X
+    24	     e 5 Y
+    25	
+    26	‘join’’s default behavior (when no options are given):
+    27	   • the join field is the first field in each line;
+    28	   • fields in the input are separated by one or more blanks, with
+    29	     leading blanks on the line ignored;
+    30	   • fields in the output are separated by a space;
+    31	   • each output line consists of the join field, the remaining fields
+    32	     from FILE1, then the remaining fields from FILE2.
+    33	
+    34	* Menu:
+    35	
+    36	* General options in join::      Options which affect general program behavior.
+    37	* Sorting files for join::       Using ‘sort’ before ‘join’.
+    38	* Working with fields::          Joining on different fields.
+    39	* Paired and unpaired lines::    Controlling ‘join’’s field matching.
+    40	* Header lines::                 Working with header lines in files.
+    41	* Set operations::               Union, Intersection and Difference of files.
+    42	
+    43	8.3.1 General options
+    44	---------------------
+    45	
+    46	The program accepts the following options.  Also see *note Common
+    47	options::.
+    48	
+    49	‘-a FILE-NUMBER’
+    50	     Print a line for each unpairable line in file FILE-NUMBER (either
+    51	     ‘1’ or ‘2’), in addition to the normal output.
+    52	
+    53	‘--check-order’
+    54	     Fail with an error message if either input file is wrongly ordered.
+    55	
+    56	‘--nocheck-order’
+    57	     Do not check that both input files are in sorted order.  This is
+    58	     the default.
+    59	
+    60	‘-e STRING’
+    61	     Replace those output fields that are missing in the input with
+    62	     STRING.  I.e., missing fields specified with the ‘-12jo’ options.
+    63	
+    64	‘--header’
+    65	     Treat the first line of each input file as a header line.  The
+    66	     header lines will be joined and printed as the first output line.
+    67	     If ‘-o’ is used to specify output format, the header line will be
+    68	     printed according to the specified format.  The header lines will
+    69	     not be checked for ordering even if ‘--check-order’ is specified.
+    70	     Also if the header lines from each file do not match, the heading
+    71	     fields from the first file will be used.
+    72	
+    73	‘-i’
+    74	‘--ignore-case’
+    75	     Ignore differences in case when comparing keys.  With this option,
+    76	     the lines of the input files must be ordered in the same way.  Use
+    77	     ‘sort -f’ to produce this ordering.
+    78	
+    79	‘-1 FIELD’
+    80	     Join on field FIELD (a positive integer) of file 1.
+    81	
+    82	‘-2 FIELD’
+    83	     Join on field FIELD (a positive integer) of file 2.
+    84	
+    85	‘-j FIELD’
+    86	     Equivalent to ‘-1 FIELD -2 FIELD’.
+    87	
+    88	‘-o FIELD-LIST’
+    89	‘-o auto’
+    90	     If the keyword ‘auto’ is specified, infer the output format from
+    91	     the first line in each file.  This is the same as the default
+    92	     output format but also ensures the same number of fields are output
+    93	     for each line.  Missing fields are replaced with the ‘-e’ option
+    94	     and extra fields are discarded.
+    95	
+    96	     Otherwise, construct each output line according to the format in
+    97	     FIELD-LIST.  Each element in FIELD-LIST is either the single
+    98	     character ‘0’ or has the form M.N where the file number, M, is ‘1’
+    99	     or ‘2’ and N is a positive field number.
+   100	
+   101	     A field specification of ‘0’ denotes the join field.  In most
+   102	     cases, the functionality of the ‘0’ field spec may be reproduced
+   103	     using the explicit M.N that corresponds to the join field.
+   104	     However, when printing unpairable lines (using either of the ‘-a’
+   105	     or ‘-v’ options), there is no way to specify the join field using
+   106	     M.N in FIELD-LIST if there are unpairable lines in both files.  To
+   107	     give ‘join’ that functionality, POSIX invented the ‘0’ field
+   108	     specification notation.
+   109	
+   110	     The elements in FIELD-LIST are separated by commas or blanks.
+   111	     Blank separators typically need to be quoted for the shell.  For
+   112	     example, the commands ‘join -o 1.2,2.2’ and ‘join -o '1.2 2.2'’ are
+   113	     equivalent.
+   114	
+   115	     All output lines—including those printed because of any -a or -v
+   116	     option—are subject to the specified FIELD-LIST.
+   117	
+   118	‘-t CHAR’
+   119	     Use character CHAR as the input and output field separator.  Treat
+   120	     as significant each occurrence of CHAR in the input file.  Use
+   121	     ‘sort -t CHAR’, without the ‘-b’ option of ‘sort’, to produce this
+   122	     ordering.  If ‘join -t ''’ is specified, the whole line is
+   123	     considered, matching the default operation of sort.  If ‘-t '\0'’
+   124	     is specified then the ASCII NUL character is used to delimit the
+   125	     fields.
+   126	
+   127	‘-v FILE-NUMBER’
+   128	     Print a line for each unpairable line in file FILE-NUMBER (either
+   129	     ‘1’ or ‘2’), instead of the normal output.
+   130	
+   131	‘-z’
+   132	‘--zero-terminated’
+   133	     Delimit items with a zero byte rather than a newline (ASCII LF).
+   134	     I.e., treat input as items separated by ASCII NUL and terminate
+   135	     output items with ASCII NUL. This option can be useful in
+   136	     conjunction with ‘perl -0’ or ‘find -print0’ and ‘xargs -0’ which
+   137	     do the same in order to reliably handle arbitrary file names (even
+   138	     those containing blanks or other special characters).  Note with
+   139	     ‘-z’ the newline character is treated as a field separator.
+   140	
+   141	   An exit status of zero indicates success, and a nonzero value
+   142	indicates failure.
+   143	
+   144	   If the ‘--check-order’ option is given, unsorted inputs will cause a
+   145	fatal error message.  If the option ‘--nocheck-order’ is given, unsorted
+   146	inputs will never cause an error message.  If neither of these options
+   147	is given, wrongly sorted inputs are diagnosed only if an input file is
+   148	found to contain unpairable lines, and when both input files are non
+   149	empty.  If an input file is diagnosed as being unsorted, the ‘join’
+   150	command will exit with a nonzero status (and the output should not be
+   151	used).
+   152	
+   153	   Forcing ‘join’ to process wrongly sorted input files containing
+   154	unpairable lines by specifying ‘--nocheck-order’ is not guaranteed to
+   155	produce any particular output.  The output will probably not correspond
+   156	with whatever you hoped it would be.
+   157	
+   158	8.3.2 Pre-sorting
+   159	-----------------
+   160	
+   161	‘join’ requires sorted input files.  Each input file should be sorted
+   162	according to the key (=field/column number) used in ‘join’.  The
+   163	recommended sorting option is ‘sort -k 1b,1’ (assuming the desired key
+   164	is in the first column).
+   165	
+   166	Typical usage:
+   167	     $ sort -k 1b,1 file1 > file1.sorted
+   168	     $ sort -k 1b,1 file2 > file2.sorted
+   169	     $ join file1.sorted file2.sorted > file3
+   170	
+   171	   Normally, the sort order is that of the collating sequence specified
+   172	by the ‘LC_COLLATE’ locale.  Unless the ‘-t’ option is given, the sort
+   173	comparison ignores blanks at the start of the join field, as in ‘sort
+   174	-b’.  If the ‘--ignore-case’ option is given, the sort comparison
+   175	ignores the case of characters in the join field, as in ‘sort -f’:
+   176	
+   177	     $ sort -k 1bf,1 file1 > file1.sorted
+   178	     $ sort -k 1bf,1 file2 > file2.sorted
+   179	     $ join --ignore-case file1.sorted file2.sorted > file3
+   180	
+   181	   The ‘sort’ and ‘join’ commands should use consistent locales and
+   182	options if the output of ‘sort’ is fed to ‘join’.  You can use a command
+   183	like ‘sort -k 1b,1’ to sort a file on its default join field, but if you
+   184	select a non-default locale, join field, separator, or comparison
+   185	options, then you should do so consistently between ‘join’ and ‘sort’.
+   186	
+   187	To avoid any locale-related issues, it is recommended to use the ‘C’
+   188	locale for both commands:
+   189	
+   190	     $ LC_ALL=C sort -k 1b,1 file1 > file1.sorted
+   191	     $ LC_ALL=C sort -k 1b,1 file2 > file2.sorted
+   192	     $ LC_ALL=C join file1.sorted file2.sorted > file3
+   193	
+   194	8.3.3 Working with fields
+   195	-------------------------
+   196	
+   197	Use ‘-1’,‘-2’ to set the key fields for each of the input files.  Ensure
+   198	the preceding ‘sort’ commands operated on the same fields.
+   199	
+   200	The following example joins two files, using the values from seventh
+   201	field of the first file and the third field of the second file:
+   202	
+   203	     $ sort -k 7b,7 file1 > file1.sorted
+   204	     $ sort -k 3b,3 file2 > file2.sorted
+   205	     $ join -1 7 -2 3 file1.sorted file2.sorted > file3
+   206	
+   207	If the field number is the same for both files, use ‘-j’:
+   208	
+   209	     $ sort -k4b,4 file1 > file1.sorted
+   210	     $ sort -k4b,4 file2 > file2.sorted
+   211	     $ join -j4    file1.sorted file2.sorted > file3
+   212	
+   213	Both ‘sort’ and ‘join’ operate of whitespace-delimited fields.  To
+   214	specify a different delimiter, use ‘-t’ in _both_:
+   215	
+   216	     $ sort -t, -k3b,3 file1 > file1.sorted
+   217	     $ sort -t, -k3b,3 file2 > file2.sorted
+   218	     $ join -t, -j3    file1.sorted file2.sorted > file3
+   219	
+   220	To specify a tab (ASCII 0x09) character instead of whitespace, use (1):
+   221	
+   222	     $ sort -t$'\t' -k3b,3 file1 > file1.sorted
+   223	     $ sort -t$'\t' -k3b,3 file2 > file2.sorted
+   224	     $ join -t$'\t' -j3    file1.sorted file2.sorted > file3
+   225	
+   226	If ‘join -t ''’ is specified then the whole line is considered which
+   227	matches the default operation of sort:
+   228	
+   229	     $ sort file1 > file1.sorted
+   230	     $ sort file2 > file2.sorted
+   231	     $ join -t '' file1.sorted file2.sorted > file3
+   232	
+   233	   ---------- Footnotes ----------
+   234	
+   235	   (1) the ‘$'\t'’ is supported in most modern shells.  For older
+   236	shells, use a literal tab
+   237	
+   238	8.3.4 Controlling ‘join’’s field matching
+   239	-----------------------------------------
+   240	
+   241	In this section the ‘sort’ commands are omitted for brevity.  Sorting
+   242	the files before joining is still required.
+   243	
+   244	   ‘join’’s default behavior is to print only lines common to both input
+   245	files.  Use ‘-a’ and ‘-v’ to print unpairable lines from one or both
+   246	files.
+   247	
+   248	All examples below use the following two (pre-sorted) input files:
+   249	
+   250	     $ cat file1                          $ cat file2
+   251	     a 1                                  a A
+   252	     b 2                                  c C
+   253	
+   254	Command                              Outcome
+   255	                                     
+   256	--------------------------------------------------------------------------
+   257	     $ join file1 file2              common lines (_intersection_)
+   258	     a 1 A                           
+   259	     $ join -a 1 file1 file2         common lines _and_ unpaired lines
+   260	     a 1 A                           from the first file
+[?2004hroot@a876ad673e54:/app# sed -n '100,170p' /app/docs/join.txt; sed -n '238,340p' /app/docs/join.txt
+[?2004l
+     A field specification of ‘0’ denotes the join field.  In most
+     cases, the functionality of the ‘0’ field spec may be reproduced
+     using the explicit M.N that corresponds to the join field.
+     However, when printing unpairable lines (using either of the ‘-a’
+     or ‘-v’ options), there is no way to specify the join field using
+     M.N in FIELD-LIST if there are unpairable lines in both files.  To
+     give ‘join’ that functionality, POSIX invented the ‘0’ field
+     specification notation.
+
+     The elements in FIELD-LIST are separated by commas or blanks.
+     Blank separators typically need to be quoted for the shell.  For
+     example, the commands ‘join -o 1.2,2.2’ and ‘join -o '1.2 2.2'’ are
+     equivalent.
+
+     All output lines—including those printed because of any -a or -v
+     option—are subject to the specified FIELD-LIST.
+
+‘-t CHAR’
+     Use character CHAR as the input and output field separator.  Treat
+     as significant each occurrence of CHAR in the input file.  Use
+     ‘sort -t CHAR’, without the ‘-b’ option of ‘sort’, to produce this
+     ordering.  If ‘join -t ''’ is specified, the whole line is
+     considered, matching the default operation of sort.  If ‘-t '\0'’
+     is specified then the ASCII NUL character is used to delimit the
+     fields.
+
+‘-v FILE-NUMBER’
+     Print a line for each unpairable line in file FILE-NUMBER (either
+     ‘1’ or ‘2’), instead of the normal output.
+
+‘-z’
+‘--zero-terminated’
+     Delimit items with a zero byte rather than a newline (ASCII LF).
+     I.e., treat input as items separated by ASCII NUL and terminate
+     output items with ASCII NUL. This option can be useful in
+     conjunction with ‘perl -0’ or ‘find -print0’ and ‘xargs -0’ which
+     do the same in order to reliably handle arbitrary file names (even
+     those containing blanks or other special characters).  Note with
+     ‘-z’ the newline character is treated as a field separator.
+
+   An exit status of zero indicates success, and a nonzero value
+indicates failure.
+
+   If the ‘--check-order’ option is given, unsorted inputs will cause a
+fatal error message.  If the option ‘--nocheck-order’ is given, unsorted
+inputs will never cause an error message.  If neither of these options
+is given, wrongly sorted inputs are diagnosed only if an input file is
+found to contain unpairable lines, and when both input files are non
+empty.  If an input file is diagnosed as being unsorted, the ‘join’
+command will exit with a nonzero status (and the output should not be
+used).
+
+   Forcing ‘join’ to process wrongly sorted input files containing
+unpairable lines by specifying ‘--nocheck-order’ is not guaranteed to
+produce any particular output.  The output will probably not correspond
+with whatever you hoped it would be.
+
+8.3.2 Pre-sorting
+-----------------
+
+‘join’ requires sorted input files.  Each input file should be sorted
+according to the key (=field/column number) used in ‘join’.  The
+recommended sorting option is ‘sort -k 1b,1’ (assuming the desired key
+is in the first column).
+
+Typical usage:
+     $ sort -k 1b,1 file1 > file1.sorted
+     $ sort -k 1b,1 file2 > file2.sorted
+     $ join file1.sorted file2.sorted > file3
+
+8.3.4 Controlling ‘join’’s field matching
+-----------------------------------------
+
+In this section the ‘sort’ commands are omitted for brevity.  Sorting
+the files before joining is still required.
+
+   ‘join’’s default behavior is to print only lines common to both input
+files.  Use ‘-a’ and ‘-v’ to print unpairable lines from one or both
+files.
+
+All examples below use the following two (pre-sorted) input files:
+
+     $ cat file1                          $ cat file2
+     a 1                                  a A
+     b 2                                  c C
+
+Command                              Outcome
+                                     
+--------------------------------------------------------------------------
+     $ join file1 file2              common lines (_intersection_)
+     a 1 A                           
+     $ join -a 1 file1 file2         common lines _and_ unpaired lines
+     a 1 A                           from the first file
+     b 2                             
+     $ join -a 2 file1 file2         common lines _and_ unpaired lines
+     a 1 A                           from the second file
+     c C                             
+     $ join -a 1 -a 2 file1 file2    all lines (paired and unpaired)
+     a 1 A                           from both files (_union_).
+     b 2                             see note below regarding ‘-o
+     c C                             auto’.
+                                     
+     $ join -v 1 file1 file2         unpaired lines from the first file
+     b 2                             (_difference_)
+                                     
+     $ join -v 2 file1 file2         unpaired lines from the second
+     c C                             file (_difference_)
+                                     
+     $ join -v 1 -v 2 file1 file2    unpaired lines from both files,
+     b 2                             omitting common lines (_symmetric
+     c C                             difference_).
+                                     
+
+The ‘-o auto -e X’ options are useful when dealing with unpaired lines.
+The following example prints all lines (common and unpaired) from both
+files.  Without ‘-o auto’ it is not easy to discern which fields
+originate from which file:
+
+     $ join -a 1 -a 2 file1 file2
+     a 1 A
+     b 2
+     c C
+
+     $ join -o auto -e X -a 1 -a 2 file1 file2
+     a 1 A
+     b 2 X
+     c X C
+
+   If the input has no unpairable lines, a GNU extension is available;
+the sort order can be any order that considers two fields to be equal if
+and only if the sort comparison described above considers them to be
+equal.  For example:
+
+     $ cat file1
+     a a1
+     c c1
+     b b1
+
+     $ cat file2
+     a a2
+     c c2
+     b b2
+
+     $ join file1 file2
+     a a1 a2
+     c c1 c2
+     b b1 b2
+
+8.3.5 Header lines
+------------------
+
+The ‘--header’ option can be used when the files to join have a header
+line which is not sorted:
+
+     $ cat file1
+     Name     Age
+     Alice    25
+     Charlie  34
+
+     $ cat file2
+     Name   Country
+     Alice  France
+     Bob    Spain
+
+     $ join --header -o auto -e NA -a1 -a2 file1 file2
+     Name     Age   Country
+     Alice    25    France
+     Bob      NA    Spain
+     Charlie  34    NA
+
+   To sort a file with a header line, use GNU ‘sed -u’.  The following
+example sort the files but keeps the first line of each file in place:
+
+[?2004hroot@a876ad673e54:/app# join --version | head -1
+[?2004lbash: join: command not found
+[?2004hroot@a876ad673e54:/app# cat > /app/pyjoin/join.py <<'PY'
+[?2004l-nocheck-order':
+            cfg[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> """A small, byte-oriented implementation of GNU join's documented interface."""
+[?2004l[?2004h> import os
+[?2004l[?2004h> import re
+[?2004l[?2004h> import sys
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class UsageError(Exception):
+[?2004l[?2004h>     pass
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def ascii_fold(s):
+[?2004l[?2004h>     return s.lower()
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def records(data, terminator):
+[?2004l[?2004h>     if not data:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     out = data.split(terminator)
+[?2004l[?2004h>     if data.endswith(terminator):
+[?2004l[?2004h>         out.pop()
+[?2004l[?2004h>     return out
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_fields(line, sep, zero_terminated):
+[?2004l[?2004h>     if sep == b'':                 # -t '' -- the entire record is one field
+[?2004l[?2004h>         return [line]
+[?2004l[?2004h>     if sep is not None:
+[?2004l[?2004h>         return line.split(sep)
+[?2004l[?2004h>     whitespace = b' \t\n' if zero_terminated else b' \t'
+[?2004l[?2004h>     # GNU join's default fields are separated by one or more blanks and
+[?2004l[?2004h>     # leading blanks are ignored.  An all-blank record has no fields.
+[?2004l[?2004h>     return [x for x in re.split(b'[' + re.escape(whitespace) + b']+', line.lstrip(whitespace)) if x != b'']
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_field_number(value):
+[?2004l[?2004h>     if not value.isdigit() or int(value) <= 0:
+[?2004l[?2004h>         raise UsageError('invalid field number')
+[?2004l[?2004h>     return int(value) - 1
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_output_list(value):
+[?2004l[?2004h>     if value == 'auto':
+[?2004l[?2004h>         return 'auto'
+[?2004l[?2004h>     pieces = [x for x in re.split(r'[ ,]+', value) if x]
+[?2004l[?2004h>     if not pieces:
+[?2004l[?2004h>         raise UsageError('invalid field list')
+[?2004l[?2004h>     result = []
+[?2004l[?2004h>     for item in pieces:
+[?2004l[?2004h>         if item == '0':
+[?2004l[?2004h>             result.append((0, 0))
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         m = re.fullmatch(r'([12])\.([0-9]+)', item)
+[?2004l[?2004h>         if not m or int(m.group(2)) == 0:
+[?2004l[?2004h>             raise UsageError('invalid field list')
+[?2004l[?2004h>         result.append((int(m.group(1)), int(m.group(2)) - 1))
+[?2004l[?2004h>     return result
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_args(argv):
+[?2004l[?2004h>     cfg = {
+[?2004l[?2004h>         'join1': 0, 'join2': 0, 'also': set(), 'only': set(),
+[?2004l[?2004h>         'empty': None, 'ignore_case': False, 'out': None,
+[?2004l[?2004h>         'sep': None, 'zero': False, 'header': False, 'check': None,
+[?2004l[?2004h>     }
+[?2004l[?2004h>     operands = []
+[?2004l[?2004h>     i = 0
+[?2004l[?2004h>     options = True
+[?2004l[?2004h>     value_options = {'-a', '-v', '-e', '-1', '-2', '-j', '-o', '-t'}
+[?2004l[?2004h>     while i < len(argv):
+[?2004l[?2004h>         arg = argv[i]
+[?2004l[?2004h>         if options and arg == '--':
+[?2004l[?2004h>             options = False
+[?2004l[?2004h>             i += 1
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if options and arg in value_options:
+[?2004l[?2004h>             if i + 1 >= len(argv):
+[?2004l[?2004h>                 raise UsageError('missing option argument')
+[?2004l[?2004h>             val = argv[i + 1]
+[?2004l[?2004h>             i += 2
+[?2004l[?2004h>             if arg in ('-a', '-v'):
+[?2004l[?2004h>                 if val not in ('1', '2'):
+[?2004l[?2004h>                     raise UsageError('invalid file number')
+[?2004l[?2004h>                 cfg['also' if arg == '-a' else 'only'].add(int(val))
+[?2004l[?2004h>             elif arg == '-e':
+[?2004l[?2004h>                 cfg['empty'] = os.fsencode(val)
+[?2004l[?2004h>             elif arg == '-1':
+[?2004l[?2004h>                 cfg['join1'] = parse_field_number(val)
+[?2004l[?2004h>             elif arg == '-2':
+[?2004l[?2004h>                 cfg['join2'] = parse_field_number(val)
+[?2004l[?2004h>             elif arg == '-j':
+[?2004l[?2004h>                 n = parse_field_number(val)
+[?2004l[?2004h>                 cfg['join1'] = cfg['join2'] = n
+[?2004l[?2004h>             elif arg == '-o':
+[?2004l[?2004h>                 parsed = parse_output_list(val)
+[?2004l[?2004h>                 if parsed == 'auto':
+[?2004l[?2004h>                     cfg['out'] = 'auto'
+[?2004l[?2004h>                 elif cfg['out'] is None:
+[?2004l[?2004h>                     cfg['out'] = parsed
+[?2004l[?2004h>                 elif cfg['out'] == 'auto':
+[?2004l[?2004h>                     raise UsageError('incompatible output formats')
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     cfg['out'].extend(parsed)
+[?2004l[?2004h>             elif arg == '-t':
+[?2004l[?2004h>                 if val == '':
+[?2004l[?2004h>                     cfg['sep'] = b''
+[?2004l[?2004h>                 elif val == r'\0':
+[?2004l[?2004h>                     cfg['sep'] = b'\0'
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     encoded = os.fsencode(val)
+[?2004l[?2004h>                     if len(encoded) != 1:
+[?2004l[?2004h>                         raise UsageError('separator must be one byte')
+[?2004l[?2004h>                     cfg['sep'] = encoded
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if options and arg in ('-i', '--ignore-case'):
+[?2004l[?2004h>             cfg['ignore_case'] = True
+[?2004l[?2004h>         elif options and arg in ('-z', '--zero-terminated'):
+[?2004l[?2004h>             cfg['zero'] = True
+[?2004l [?2004h>         elif options and arg == '--header':
+[?2004l[?2004h>             cfg['header'] = True
+[?2004l[?2004h>         elif options and arg == '--check-order':
+[?2004l[?2004h>             cfg['check'] = True
+[?2004l[?2004h>         elif options and arg == '--nocheck-order':
+[?2004l[?2004h>             cfg['check'] = False
+[?2004l[?2004h>         elif options and arg.startswith('-') and arg != '-':
+[?2004l[?2004h>             raise UsageError('unrecognized option')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             operands.append(arg)
+[?2004l[?2004h>         i += 1
+[?2004l[?2004h>     if len(operands) != 2 or operands.count('-') > 1:
+[?2004l[?2004h>         raise UsageError('two input files are required')
+[?2004l[?2004h>     cfg['files'] = operands
+[?2004l[?2004h>     return cfg
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_file(name):
+[?2004l[?2004h>     if name == '-':
+[?2004l[?2004h>         return sys.stdin.buffer.read()
+[?2004l[?2004h>     with open(os.fsencode(name), 'rb') as f:
+[?2004l[?2004h>         return f.read()
+[?2004l      k1, k2 = key(rows1[i], 1), key(rows2[j], 2)
+            if k1 < k2:
+                if 1 in unpaired:
+                    emit(rows1[i], None, 1)
+                i += 1
+            elif k1 > k2:
+                if 2 in unpaired:
+                    emit(None, rows2[j], 2)
+                j += 1
+            else:
+                i2, j2 = i + 1, j + 1
+                while i2 < len(rows1) and key(rows1[i2], 1) == k1:
+                    i2 += 1
+                while j2 < len(rows2) and key(ro[?2004h> 
+[?2004lw[?2004h> 
+[?2004l[?2004h> def main(argv):
+[?2004l[?2004h>     try:
+[?2004l [?2004h>         cfg = parse_args(argv)
+[?2004l[?2004h>         term = b'\0' if cfg['zero'] else b'\n'
+[?2004l[?2004h>         raw1 = records(read_file(cfg['files'][0]), term)
+[?2004l[j:[?2004h>         raw2 = records(read_file(cfg['files'][1]), term)
+[?2004l 1)
+          [?2004h>         rows1 = [split_fields(x, cfg['sep'], cfg['zero']) for x in raw1]
+[?2004l[?2004h>         rows2 = [split_fields(x, cfg['sep'], cfg['zero']) for x in raw2]
+[?2004l   if 2 in unpaired:
+     [?2004h> 
+[?2004l[?2004h>         # Auto is inferred from the first physical record, including headers.
+[?2004l[?2004h>         if cfg['out'] == 'auto':
+[?2004l[?2004h>             n1 = len(rows1[0]) if rows1 else 0
+[?2004l[?2004h>             n2 = len(rows2[0]) if rows2 else 0
+[?2004l[?2004h>             specs = [(0, 0)]
+[?2004l[?2004h>             specs += [(1, n) for n in range(n1) if n != cfg['join1']]
+[?2004l[?2004h>             specs += [(2, n) for n in range(n2) if n != cfg['join2']]
+[?2004l[?2004h>             cfg['out'] = specs
+[?2004l[?2004h> 
+[?2004l[?2004h>         header1 = header2 = None
+[?2004l[?2004h>         if cfg['header']:
+[?2004l[?2004h>             if rows1:
+[?2004l[?2004h>                 header1, rows1 = rows1[0], rows1[1:]
+[?2004l[?2004h>             if rows2:
+[?2004l[?2004h>                 header2, rows2 = rows2[0], rows2[1:]
+[?2004l[?2004h> 
+[?2004l[?2004h>         def field(row, n):
+[?2004l[?2004h>             return row[n] if row is not None and n < len(row) else b''
+[?2004l[?2004h> 
+[?2004l[?2004h>         def key(row, which):
+[?2004l[?2004h>             n = cfg['join1'] if which == 1 else cfg['join2']
+[?2004l[?2004h>             v = field(row, n)
+[?2004l[?2004h>             return ascii_fold(v) if cfg['ignore_case'] else v
+[?2004l[?2004h> 
+[?2004l[?2004h>         if cfg['check']:
+[?2004l[?2004h>             for which, rows in ((1, rows1), (2, rows2)):
+[?2004l[?2004h>                 for a, b in zip(rows, rows[1:]):
+[?2004l[?2004h>                     if key(a, which) > key(b, which):
+[?2004l[?2004h>                         raise RuntimeError('input is not in sorted order')
+[?2004l[?2004h> 
+[?2004l[?2004h>         output_sep = b' ' if cfg['sep'] is None else cfg['sep']
+[?2004l[?2004h>         replacement = cfg['empty'] if cfg['empty'] is not None else b''
+[?2004l[?2004h>         chunks = []
+[?2004l[?2004h> 
+[?2004l[?2004h>         def emit(r1, r2, key_source=0):
+[?2004l[?2004h>             # key_source selects file 1 or 2 for unpaired/header mismatch keys.
+[?2004l[?2004h>             if cfg['out'] is not None:
+[?2004l[?2004h>                 vals = []
+[?2004l[?2004h>                 for source, n in cfg['out']:
+[?2004l[?2004h>                     if source == 0:
+[?2004l[?2004h>                         if key_source == 2:
+[?2004l[?2004h>                             present, value = r2 is not None, field(r2, cfg['join2'])
+[?2004l[?2004h>                         else:
+[?2004l[?2004h>                             present, value = r1 is not None, field(r1, cfg['join1'])
+[?2004l[?2004h>                             if not present and r2 is not None:
+[?2004l[?2004h>                                 present, value = True, field(r2, cfg['join2'])
+[?2004l[?2004h>                     elif source == 1:
+[?2004l[?2004h>                         present = r1 is not None and n < len(r1)
+[?2004l[?2004h>                         value = field(r1, n)
+[?2004l[?2004h>                     else:
+[?2004l[?2004h>                         present = r2 is not None and n < len(r2)
+[?2004l[?2004h>                         value = field(r2, n)
+[?2004l[?2004h>                     vals.append(value if present else replacement)
+[?2004l[?2004h>             elif r1 is not None and r2 is not None:
+[?2004l[?2004h>                 vals = [field(r1, cfg['join1'])]
+[?2004l[?2004h>                 vals += [v for n, v in enumerate(r1) if n != cfg['join1']]
+[?2004l[?2004h>                 vals += [v for n, v in enumerate(r2) if n != cfg['join2']]
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 row = r1 if r1 is not None else r2
+[?2004l[?2004h>                 jn = cfg['join1'] if r1 is not None else cfg['join2']
+[?2004l[?2004h>                 vals = [field(row, jn)] + [v for n, v in enumerate(row) if n != jn]
+[?2004l[?2004h>             chunks.append(output_sep.join(vals) + term)
+[?2004l[?2004h> 
+[?2004l[?2004h>         # Header records are paired unconditionally; file 1 supplies field 0.
+[?2004l[?2004h>         if cfg['header'] and (header1 is not None or header2 is not None):
+[?2004l[?2004h>             emit(header1, header2, 1 if header1 is not None else 2)
+[?2004l[?2004h> 
+[?2004l[?2004h>         print_pairs = not cfg['only']
+[?2004l[?2004h>         unpaired = cfg['also'] | cfg['only']
+[?2004l[?2004h>         i = j = 0
+[?2004l[?2004h>         while i < len(rows1) and j < len(rows2):
+[?2004l[?2004h>             k1, k2 = key(rows1[i], 1), key(rows2[j], 2)
+[?2004l[?2004h>             if k1 < k2:
+[?2004l[?2004h>                 if 1 in unpaired:
+[?2004l[?2004h>                     emit(rows1[i], None, 1)
+[?2004l[?2004h>                 i += 1
+[?2004l[?2004h>             elif k1 > k2:
+[?2004l[?2004h>                 if 2 in unpaired:
+[?2004l[?2004h>                     emit(None, rows2[j], 2)
+[?2004l[?2004h>                 j += 1
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 i2, j2 = i + 1, j + 1
+[?2004l[?2004h>                 while i2 < len(rows1) and key(rows1[i2], 1) == k1:
+[?2004l[?2004h>                     i2 += 1
+[?2004l[?2004h>                 while j2 < len(rows2) and key(rows2[j2], 2) == k2:
+[?2004l[?2004h>                     j2 += 1
+[?2004l[?2004h>                 if print_pairs:
+[?2004l[?2004h>                     for a in rows1[i:i2]:
+[?2004l[?2004h>                         for b in rows2[j:j2]:
+[?2004l[?2004h>                             emit(a, b, 1)
+[?2004l[?2004h>                 i, j = i2, j2
+[?2004l[?2004h>         if 1 in unpaired:
+[?2004l[?2004h>             for row in rows1[i:]:
+[?2004l[?2004h>                 emit(row, None, 1)
+[?2004l[?2004h>         if 2 in unpaired:
+[?2004l[?2004h>             for row in rows2[j:]:
+[?2004l[?2004h>                 emit(None, row, 2)
+[?2004l[?2004h>         sys.stdout.buffer.write(b''.join(chunks))
+[?2004l[?2004h>         return 0
+[?2004l[?2004h>     except (UsageError, OSError, RuntimeError) as e:
+[?2004l[?2004h>         sys.stderr.write('join: ' + str(e) + '\n')
+[?2004l[?2004h>         return 1
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     sys.exit(main(sys.argv[1:]))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@a876ad673e54:/app# chmod +x /app/pyjoin/join.py
+[?2004l[?2004hroot@a876ad673e54:/app# python3 -m py_compile /app/pyjoin/join.py
+[?2004l[?2004hroot@a876ad673e54:/app# printf 'a 1\nb 2\ne 5\n' >/tmp/f1; printf 'a X\ne Y\nf Z' >/tmp/f2; python3 /app/pyjoin/join.py /tmp/f1 /tmp/f2; python3 /app/pyjoin/join.py -a 1 -a 2 -o auto -e X /tmp/f1 /tmp/f2
+[?2004la 1 X
+e 5 Y
+a 1 X
+b 2 X
+e 5 Y
+f X Z
+[?2004hroot@a876ad673e54:/app# printf 'k:a:aa\nk:b:bb\n' >/tmp/f1; printf 'x:k\ny:k\n' >/tmp/f2; python3 /app/pyjoin/join.py -t : -1 1 -2 2 /tmp/f1 /tmp/f2; printf 'a\0b\0' >/tmp/f1; printf 'b\0c' >/tmp/f2; python3 /app/pyjoin/join.py -z -a 1 -a 2 /tmp/f1 /tmp/f2 | od -An -tx1
+[?2004lk:a:aa:x
+k:a:aa:y
+k:b:bb:x
+k:b:bb:y
+ 61 00 62 00 63 00
+[?2004hroot@a876ad673e54:/app# printf 'Name Age\nAlice 25\nCharlie 34\n' >/tmp/f1; printf 'Name Country\nAlice France\nBob Spain\n' >/tmp/f2; python3 /app/pyjoin/join.py --header -o auto -e NA -a 1 -a 2 /tmp/f1 /tmp/f2
+[?2004lName Age Country
+Alice 25 France
+Bob NA Spain
+Charlie 34 NA
+[?2004hroot@a876ad673e54:/app# printf 'A one\nb two\n' >/tmp/f1; printf 'a X\nb Y\n' >/tmp/f2; printf '%s\n' '--- case/output list ---'; python3 /app/pyjoin/join.py -i -o '0,1.2 2.2 2.3' -e MISS /tmp/f1 /tmp/f2; printf '%s\n' '--- stdin ---'; cat /tmp/f1 | python3 /app/pyjoin/join.py -i - /tmp/f2
+[?2004l--- case/output list ---
+A one X MISS
+b two Y MISS
+--- stdin ---
+A one X
+b two Y
+[?2004hroot@a876ad673e54:/app# printf 'alpha\nbeta' >/tmp/f1; printf 'beta\ngamma\n' >/tmp/f2; python3 /app/pyjoin/join.py -t '' -a 1 -a 2 /tmp/f1 /tmp/f2 | od -An -tc; printf 'b 1\na 2\n' >/tmp/f1; printf 'a X\n' >/tmp/f2; python3 /app/pyjoin/join.py --check-order /tmp/f1 /tmp/f2 >/tmp/out 2>/tmp/err; printf 'status=%s output=' "$?"; od -An -tc /tmp/out
+[?2004l   a   l   p   h   a  \n   b   e   t   a  \n   g   a   m   m   a
+  \n
+status=1 output=[?2004hroot@a876ad673e54:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pyjoin/join.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("present, value = r2 is not None, field(r2, cfg['join2'])", "present = r2 is not None and cfg['join2'] < len(r2)\n                            value = field(r2, cfg['join2'])")
+[?2004l[?2004h> s=s.replace("present, value = r1 is not None, field(r1, cfg['join1'])", "present = r1 is not None and cfg['join1'] < len(r1)\n                            value = field(r1, cfg['join1'])")
+[?2004l[?2004h> open(p, 'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@a876ad673e54:/app# python3 -m py_compile /app/pyjoin/join.py
+[?2004l[?2004hroot@a876ad673e54:/app# printf 'x\n' >/tmp/f1; printf 'y\n' >/tmp/f2; python3 /app/pyjoin/join.py -1 2 -2 2 -a 1 -a 2 -o 0 -e MISSING /tmp/f1 /tmp/f2 | od -An -tc
+[?2004l  \n
+[?2004hroot@a876ad673e54:/app# python3 - <<'PY'
+[?2004l[?2004h> p='/app/pyjoin/join.py'
+[?2004l[?2004h> s=open(p).read()
+[?2004l[?2004h> s=s.replace("if not present and r2 is not None:\n                                present, value = True, field(r2, cfg['join2'])", "if not present and r2 is not None:\n                                present = cfg['join2'] < len(r2)\n                                value = field(r2, cfg['join2'])")
+[?2004l[?2004h> open(p, 'w').write(s)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@a876ad673e54:/app# python3 -m py_compile /app/pyjoin/join.py
+[?2004l[?2004hroot@a876ad673e54:/app# printf 'x\n' >/tmp/f1; printf 'y\n' >/tmp/f2; python3 /app/pyjoin/join.py -1 2 -2 2 -a 1 -a 2 -o 0 -e MISSING /tmp/f1 /tmp/f2 | od -An -tc
+[?2004l   M   I   S   S   I   N   G  \n
+[?2004hroot@a876ad673e54:/app# printf 'a one\n' >/tmp/f1; printf 'a two\n' >/tmp/f2; python3 /app/pyjoin/join.py -o 0 /tmp/f1 /tmp/f2 | od -An -tc
+[?2004l   a  \n
+[?2004hroot@a876ad673e54:/app# 

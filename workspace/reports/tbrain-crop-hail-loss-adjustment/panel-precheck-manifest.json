@@ -1,0 +1,443 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-crop-hail-loss-adjustment",
+ "primary_outcome": "the statements printed by /app/tools/hail_run.py give every field's stand loss, defoliation, leaf loss, loss, payable loss, indemnity, replant line and payment, and every claim's total and paid amount, as the Crop-Hail Loss Adjustment Procedure edition 7 gives them",
+ "obligations": [
+  {
+   "id": "PLOT_AVERAGE",
+   "class": "core",
+   "contribution": "stand loss and defoliation are averaged over all of a field's plots",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "Each average is"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/plots.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the averages make the field loss"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_averages_over_every_plot"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_3_field_with_no_damaged_plot"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "fields mixing plots with no plant lost and no leaf damage beside damaged plots",
+   "wrong_but_plausible": "divide by the plots with a figure above nought (shipped)",
+   "selfdescription_phrase": "averaged over all of a field's plots"
+  },
+  {
+   "id": "PLOT_STAND",
+   "class": "core",
+   "contribution": "a hail-thinned plot's stand loss is its dead and broken plants over its stand; a plot that is not hail-thinned keeps today's figure (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "The stand loss of a hail-thinned plot is its dead and broken plants"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/plots.py",
+    "environment/app/src/hailadj/figures.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "stand-loss figures make the field stand loss"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_hail_thinned_plot_stand_loss",
+     "test_outputs.py::test_lightly_hit_plots_keep_todays_stand_figure"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_1_one_plant_in_ten_is_hail_thinned",
+     "test_outputs.py::test_lightly_hit_plots_keep_todays_stand_figure"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "plots with exactly one plant in ten lost; plots losing fewer, with figures below 5.0, 5.0-7.9 and 8.0-9.9 per cent",
+   "wrong_but_plausible": "editing the shared trace_tenths entry to 80 for 5.1; nought for plots that are not hail-thinned; the plain share with no trace step",
+   "selfdescription_phrase": "not hail-thinned"
+  },
+  {
+   "id": "LEAF_CHART",
+   "class": "core",
+   "contribution": "leaf loss is the growth stage's chart percentage of the field's defoliation",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "defoliation times the percentage the leaf-loss"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/leaf.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "leaf loss makes the field loss"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_3_leaf_loss_chart_every_stage"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_complete_defoliation"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "R4 fields with defoliation, and every stage at 100 per cent defoliation",
+   "wrong_but_plausible": "R4 at 55 per cent (shipped)",
+   "selfdescription_phrase": "R4 row"
+  },
+  {
+   "id": "SURVIVING_STAND",
+   "class": "core",
+   "contribution": "a field's loss is its stand loss plus its leaf loss as a share of what the stand loss leaves",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "Leaf loss falls only on the plants the storm left standing"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/loss.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the loss decides the payable loss"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_leaf_loss_on_the_surviving_stand"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_2_whole_stand_lost"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "fields with both stand and leaf loss; a whole stand lost",
+   "wrong_but_plausible": "stand loss plus leaf loss (shipped)",
+   "selfdescription_phrase": "share of what the stand loss leaves"
+  },
+  {
+   "id": "MINIMUM_LOSS",
+   "class": "core",
+   "contribution": "a field whose loss is below 8.0 per cent has a payable loss of nought",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "A field whose loss is below 8.0 per cent"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/figures.py",
+    "environment/app/src/hailadj/loss.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the payable loss makes the indemnity"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_1_minimum_loss"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_1_loss_of_exactly_8_per_cent"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "losses of 5.0 to 7.9 per cent and exactly 8.0",
+   "wrong_but_plausible": "5.0 per cent (shipped, shared trace_tenths entry)",
+   "selfdescription_phrase": "minimum loss"
+  },
+  {
+   "id": "DEDUCTIBLE",
+   "class": "core",
+   "contribution": "straight: loss less 10.0 per cent, not below nought; vanishing: twice the excess over 20.0 per cent, not below nought, never more than the loss",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "Under `straight` it is the loss less 10.0 per cent"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/figures.py",
+    "environment/app/src/hailadj/loss.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the payable loss makes the indemnity"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_2_straight_deductible",
+     "test_outputs.py::test_rule_5_2_vanishing_deductible_never_pays_more_than_the_loss"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_2_vanishing_deductible_at_40_per_cent"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "straight fields from 8.0 to 15.0 per cent; vanishing fields around 20.0 and 40.0 per cent and above",
+   "wrong_but_plausible": "straight 5.0 (shipped); vanishing uncapped (shipped)",
+   "selfdescription_phrase": "straight deductible"
+  },
+  {
+   "id": "INDEMNITY",
+   "class": "core",
+   "contribution": "the payable loss taken as a share of the liability, rounded to the cent, half up",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "A field's indemnity is its liability times its payable loss"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/claim.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the indemnity makes the field payment"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_3_indemnity_rounded_half_up"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_3_indemnity_rounded_half_up"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "odd amounts per acre and acres leaving every remainder, exact halves included",
+   "wrong_but_plausible": "truncation (shipped)",
+   "selfdescription_phrase": "indemnity is rounded"
+  },
+  {
+   "id": "REPLANT",
+   "class": "core",
+   "contribution": "a replanted field (10.0 acres or more) earns 3,000 cents an acre replanted; a smaller replanting keeps today's line (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "A replanted field earns a replant payment of 3,000 cents"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/replant.py",
+    "environment/app/src/hailadj/figures.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the replant line makes the field payment"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_1_replanted_field_payment",
+     "test_outputs.py::test_small_replantings_keep_todays_replant_line"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_replanting_of_exactly_10_acres",
+     "test_outputs.py::test_small_replantings_keep_todays_replant_line"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "replantings of exactly 10.0 acres and of 0.1 to 9.9 acres priced below 2,500 and from 2,500 to 9,999 cents",
+   "wrong_but_plausible": "editing the shared small_cents entry to 10,000 for 7.2; nothing for replantings under 10.0 acres; no trace step",
+   "selfdescription_phrase": "replanting"
+  },
+  {
+   "id": "CLAIM_MINIMUM",
+   "class": "core",
+   "contribution": "a claim's total is its field payments; paid in full at 10,000 cents or more, otherwise not paid",
+   "authority": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "A claim whose total is 10,000 cents or more is paid in full"
+   },
+   "implementation_sites": [
+    "environment/app/src/hailadj/figures.py",
+    "environment/app/src/hailadj/claim.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the primary outcome's total and paid"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_7_2_minimum_claim"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_7_2_claim_of_exactly_10000_cents"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "claim totals of 2,500 to 9,999 cents, exactly 10,000 and 9,999",
+   "wrong_but_plausible": "2,500 cents (shipped, shared small_cents entry)",
+   "selfdescription_phrase": "minimum claim"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "PLOT_STAND",
+    "to": "PLOT_AVERAGE"
+   },
+   {
+    "from": "PLOT_AVERAGE",
+    "to": "LEAF_CHART"
+   },
+   {
+    "from": "PLOT_AVERAGE",
+    "to": "SURVIVING_STAND"
+   },
+   {
+    "from": "LEAF_CHART",
+    "to": "SURVIVING_STAND"
+   },
+   {
+    "from": "SURVIVING_STAND",
+    "to": "MINIMUM_LOSS"
+   },
+   {
+    "from": "MINIMUM_LOSS",
+    "to": "DEDUCTIBLE"
+   },
+   {
+    "from": "DEDUCTIBLE",
+    "to": "INDEMNITY"
+   },
+   {
+    "from": "INDEMNITY",
+    "to": "CLAIM_MINIMUM"
+   },
+   {
+    "from": "REPLANT",
+    "to": "CLAIM_MINIMUM"
+   },
+   {
+    "from": "CLAIM_MINIMUM",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "plots-make-the-field-loss",
+   "obligation_ids": [
+    "PLOT_STAND",
+    "PLOT_AVERAGE",
+    "LEAF_CHART",
+    "SURVIVING_STAND"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_3_averages_over_every_plot",
+    "test_outputs.py::test_rule_4_2_leaf_loss_on_the_surviving_stand",
+    "test_outputs.py::test_rule_4_3_leaf_loss_chart_every_stage"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "loss-through-deductible-to-indemnity",
+   "obligation_ids": [
+    "MINIMUM_LOSS",
+    "DEDUCTIBLE",
+    "INDEMNITY"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_5_1_minimum_loss",
+    "test_outputs.py::test_rule_5_2_straight_deductible"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "shared-figures-across-steps",
+   "obligation_ids": [
+    "PLOT_STAND",
+    "MINIMUM_LOSS",
+    "REPLANT",
+    "CLAIM_MINIMUM"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_lightly_hit_plots_keep_todays_stand_figure",
+    "test_outputs.py::test_small_replantings_keep_todays_replant_line",
+    "test_outputs.py::test_rule_5_1_minimum_loss",
+    "test_outputs.py::test_rule_7_2_minimum_claim"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "each rule of the procedure holds for every job inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Carry each rule of the procedure exactly as far as its words go",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/loss-adjustment-procedure.md",
+     "anchor": "some plots in lightly hit strips show only a plant or two dead or",
+     "witness_ids": [
+      "test_outputs.py::test_lightly_hit_plots_keep_todays_stand_figure"
+     ]
+    },
+    {
+     "file": "environment/app/docs/loss-adjustment-procedure.md",
+     "anchor": "sometimes only\na washed-out corner",
+     "witness_ids": [
+      "test_outputs.py::test_small_replantings_keep_todays_replant_line"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The jobs we run hold one to fifty claims"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "workspace/reports/tbrain-crop-hail-loss-adjustment/authoring/gen.py draw(seed) (authoring only; graded jobs will be sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave /app/tools/hail_run.py exactly as it is",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATEMENT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the payment system reads these keys in job and claim order; README fixes them",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "in\nthe order of the job's"
+   }
+  },
+  {
+   "id": "HALF-UP-ROUNDING",
+   "domain_required": true,
+   "rationale": "claims are paid in whole cents and percentages kept in tenths; 1.1 fixes nearest, half up",
+   "authority_anchor": {
+    "file": "environment/app/docs/loss-adjustment-procedure.md",
+    "anchor": "an exact half goes up"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": []
+}

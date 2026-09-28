@@ -1,0 +1,111 @@
+--- a/app/src/platecount/plates.py
++++ b/app/src/platecount/plates.py
+@@ -2,8 +2,8 @@
+ 
+ from fractions import Fraction
+ 
+-COUNTABLE_LOW = 25
+-COUNTABLE_HIGH = 250
++COUNTABLE_LOW = 20
++COUNTABLE_HIGH = 300
+ 
+ 
+ def dilution_at(step):
+@@ -13,7 +13,7 @@
+ 
+ def plated_amount(dilution):
+     """Grams or millilitres of sample on one plate of a dilution."""
+-    return dilution_at(dilution.step)
++    return dilution.volume * dilution_at(dilution.step)
+ 
+ 
+ def colonies(reading):
+@@ -26,8 +26,8 @@
+ 
+ def in_count(reading):
+     """A plate that takes part in a count."""
+-    return colonies(reading) <= COUNTABLE_HIGH
++    return not is_crowded(reading)
+ 
+ 
+ def is_crowded(reading):
+-    return colonies(reading) > COUNTABLE_HIGH
++    return reading is None or reading > COUNTABLE_HIGH
+--- a/app/src/platecount/report.py
++++ b/app/src/platecount/report.py
+@@ -22,7 +22,10 @@
+ def two_figures(value):
+     """(digits, power): value is about digits / 10 * 10 ** power, digits from 10 to 99."""
+     power = decade(value)
+-    digits = round(value / Fraction(10) ** (power - 1))
++    scaled = value / Fraction(10) ** (power - 1)
++    digits = int(scaled)
++    if scaled - digits >= Fraction(1, 2):
++        digits += 1
+     if digits == 100:
+         digits, power = 10, power + 1
+     return digits, power
+--- a/app/src/platecount/results.py
++++ b/app/src/platecount/results.py
+@@ -10,32 +10,40 @@
+ ABOVE = "above"
+ 
+ 
+-def count(dilution):
+-    """Colonies on the plates of a dilution that take part in a count, over their plated amount."""
+-    plates = [colonies(r) for r in dilution.plates if in_count(r)]
+-    return Fraction(sum(plates)) / (len(plates) * plated_amount(dilution))
++def counted_dilutions(dilutions):
++    """The first dilution holding a countable plate, and the dilution a tenth of it
++    (the next step) when it was plated and holds a countable plate too."""
++    for i, dilution in enumerate(dilutions):
++        if any(is_countable(r) for r in dilution.plates):
++            counted = [dilution]
++            for later in dilutions[i + 1:]:
++                if later.step == dilution.step + 1 and any(is_countable(r) for r in later.plates):
++                    counted.append(later)
++            return counted
++    return []
+ 
+ 
+-def estimate(dilutions):
+-    """A sample without a countable plate: pool the plates that are not crowded."""
+-    total = 0
+-    amount = Fraction(0)
++def count(counted):
++    """Colonies on the counted plates (not crowded) of the counted dilutions over their plated amounts."""
++    plates = [(colonies(r), plated_amount(d)) for d in counted for r in d.plates if in_count(r)]
++    return Fraction(sum(c for c, _a in plates)) / sum(a for _c, a in plates)
++
++
++def sparse_result(dilutions):
++    """A sparse sample: estimate from the first dilution holding a colony, else a less-than."""
+     for dilution in dilutions:
+-        for reading in dilution.plates:
+-            if not is_crowded(reading):
+-                total += colonies(reading)
+-                amount += plated_amount(dilution)
+-    if total == 0:
+-        return BELOW, 1 / plated_amount(dilutions[-1])
+-    return ESTIMATE, Fraction(total) / amount
++        if any(colonies(r) for r in dilution.plates):
++            return ESTIMATE, Fraction(sum(dilution.plates)) / (len(dilution.plates) * plated_amount(dilution))
++    return BELOW, 1 / plated_amount(dilutions[0])
+ 
+ 
+ def sample_result(sample):
+     """(kind, value) for one sample; value is exact and unrounded."""
+     dilutions = sample.dilutions
+-    for dilution in dilutions:
+-        if any(is_countable(r) for r in dilution.plates):
+-            return COUNT, count(dilution)
+-    if all(is_crowded(r) for d in dilutions for r in d.plates):
+-        return ABOVE, COUNTABLE_HIGH / plated_amount(dilutions[0])
+-    return estimate(dilutions)
++    counted = counted_dilutions(dilutions)
++    if counted:
++        return COUNT, count(counted)
++    crowded = [d for d in dilutions if any(is_crowded(r) for r in d.plates)]
++    if crowded:
++        return ABOVE, COUNTABLE_HIGH / plated_amount(crowded[-1])
++    return sparse_result(dilutions)

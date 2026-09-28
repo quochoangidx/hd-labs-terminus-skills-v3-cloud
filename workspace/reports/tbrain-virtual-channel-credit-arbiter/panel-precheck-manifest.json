@@ -1,0 +1,318 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-virtual-channel-credit-arbiter",
+ "primary_outcome": "the per-cycle port trace of vc_arb equals the timing document under coincidence-heavy stimulus",
+ "obligations": [
+  {
+   "id": "OPPORTUNITY",
+   "class": "core",
+   "contribution": "grant opportunity when out_valid is 0 or out_ready is 1",
+   "authority": {
+    "file": "environment/app/docs/spec.md",
+    "anchor": "grant opportunity"
+   },
+   "implementation_sites": [
+    "environment/app/rtl/vc_arb.v"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "all rules update one register set at the same edge and meet in the port trace"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_family_backpressure"
+    ],
+    "boundary": [
+     "test_outputs.py::test_family_mixed"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "out_ready lifts at the edge a byte is waiting",
+   "wrong_but_plausible": "grant only into an empty output register",
+   "selfdescription_phrase": "4.1"
+  },
+  {
+   "id": "ELIGIBILITY",
+   "class": "core",
+   "contribution": "eligibility from pre-edge counts and same-edge flush",
+   "authority": {
+    "file": "environment/app/docs/spec.md",
+    "anchor": "does not make a VC eligible at this edge"
+   },
+   "implementation_sites": [
+    "environment/app/rtl/vc_arb.v"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "all rules update one register set at the same edge and meet in the port trace"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_family_credit"
+    ],
+    "boundary": [
+     "test_outputs.py::test_family_config"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "credit returned at the edge a VC has a byte and no credit",
+   "wrong_but_plausible": "same-edge return enables the grant",
+   "selfdescription_phrase": "4.2"
+  },
+  {
+   "id": "SELECTION",
+   "class": "core",
+   "contribution": "run of two then round robin; no grant holds; flush ends a run",
+   "authority": {
+    "file": "environment/app/docs/spec.md",
+    "anchor": "Flush ends a run"
+   },
+   "implementation_sites": [
+    "environment/app/rtl/vc_arb.v"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "all rules update one register set at the same edge and meet in the port trace"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_family_runs"
+    ],
+    "boundary": [
+     "test_outputs.py::test_family_flush"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "flush of last while run is 1 and nothing is eligible, same-edge write",
+   "wrong_but_plausible": "idle or flush handled differently from 4.3/4.4",
+   "selfdescription_phrase": "4.3"
+  },
+  {
+   "id": "BUFFER",
+   "class": "core",
+   "contribution": "two-entry buffer with same-edge pop/push/flush",
+   "authority": {
+    "file": "environment/app/docs/spec.md",
+    "anchor": "A full buffer"
+   },
+   "implementation_sites": [
+    "environment/app/rtl/vc_arb.v"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "all rules update one register set at the same edge and meet in the port trace"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_family_buffer"
+    ],
+    "boundary": [
+     "test_outputs.py::test_family_flush"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "full buffer granted and offered a byte; flush with same-edge write",
+   "wrong_but_plausible": "ready pass-through when full; flush drops the write",
+   "selfdescription_phrase": "4.6"
+  },
+  {
+   "id": "CREDITS",
+   "class": "core",
+   "contribution": "clamp(base - spend + return)",
+   "authority": {
+    "file": "environment/app/docs/spec.md",
+    "anchor": "limited to the range 0 to 7"
+   },
+   "implementation_sites": [
+    "environment/app/rtl/vc_arb.v"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "all rules update one register set at the same edge and meet in the port trace"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_family_config"
+    ],
+    "boundary": [
+     "test_outputs.py::test_family_credit"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "credit load at an edge that spends and returns",
+   "wrong_but_plausible": "load overrides spend and return",
+   "selfdescription_phrase": "4.8"
+  },
+  {
+   "id": "OUTREG",
+   "class": "core",
+   "contribution": "output register load, drain to zero, hold on stall",
+   "authority": {
+    "file": "environment/app/docs/spec.md",
+    "anchor": "become 0. Otherwise they hold"
+   },
+   "implementation_sites": [
+    "environment/app/rtl/vc_arb.v"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "all rules update one register set at the same edge and meet in the port trace"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_family_mixed"
+    ],
+    "boundary": [
+     "test_outputs.py::test_family_reset"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "drain with no new grant",
+   "wrong_but_plausible": "stale out_data after drain",
+   "selfdescription_phrase": "4.5"
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "OPPORTUNITY",
+    "to": "SELECTION"
+   },
+   {
+    "from": "ELIGIBILITY",
+    "to": "SELECTION"
+   },
+   {
+    "from": "SELECTION",
+    "to": "OUTREG"
+   },
+   {
+    "from": "SELECTION",
+    "to": "BUFFER"
+   },
+   {
+    "from": "SELECTION",
+    "to": "CREDITS"
+   },
+   {
+    "from": "CREDITS",
+    "to": "ELIGIBILITY"
+   },
+   {
+    "from": "BUFFER",
+    "to": "ELIGIBILITY"
+   },
+   {
+    "from": "OUTREG",
+    "to": "OPPORTUNITY"
+   },
+   {
+    "from": "OUTREG",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "BUFFER",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "CREDITS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "credit-eligibility",
+   "obligation_ids": [
+    "CREDITS",
+    "ELIGIBILITY",
+    "SELECTION"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_family_credit"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "flush-run-buffer",
+   "obligation_ids": [
+    "BUFFER",
+    "SELECTION"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_family_flush"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "stall-opportunity",
+   "obligation_ids": [
+    "OPPORTUNITY",
+    "OUTREG",
+    "SELECTION"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_family_backpressure"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "a cycle may assert any combination of inputs"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "behaves exactly as the timing document",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The stimulus stays within the ports and widths of section 1"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "family:seed strings, fixed list"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "X-rtl-hygiene",
+   "statement": "no initial, delays, system tasks, `include or hierarchical names; yosys synth with no latch",
+   "enforced_by": [
+    "test_outputs.py::test_build_rules"
+   ],
+   "enforcement_level": "both",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_build_rules": "restriction check",
+  "test_outputs.py::test_family_reset": "reset values, support obligation RESET"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "PORTS",
+   "domain_required": true,
+   "rationale": "ports are the interface the bench binds",
+   "authority_anchor": {
+    "file": "instruction.md",
+    "anchor": "Keep the port list, names and widths exactly"
+   }
+  }
+ ],
+ "wrong_paths": []
+}

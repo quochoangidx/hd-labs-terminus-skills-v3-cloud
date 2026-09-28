@@ -1,0 +1,750 @@
+Binary files /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/planner/__pycache__/solve.cpython-313.pyc and /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/planner/__pycache__/solve.cpython-313.pyc differ
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/planner/solve.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/planner/solve.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/planner/solve.py	1970-01-01 08:00:00
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/planner/solve.py	2026-09-27 16:45:54
+@@ -0,0 +1,721 @@
++"""Heterogeneous fleet VRP with time windows solver (ALNS).
++
++Usage: python3 planner/solve.py orders/<m>.json plans/<m>.json [seconds] [seed]
++"""
++import json
++import math
++import random
++import sys
++import time
++
++
++def isqrt_ceil(sq):
++    d = math.isqrt(sq)
++    return d if d * d == sq else d + 1
++
++
++class Inst:
++    def __init__(self, path):
++        o = json.load(open(path))
++        self.raw = o
++        dp = o["depot"]
++        self.open = dp["open"]
++        self.close = dp["close"]
++        cs = sorted(o["customers"], key=lambda c: c["id"])
++        self.n = len(cs)
++        self.ids = [0] + [c["id"] for c in cs]
++        X = [dp["x"]] + [c["x"] for c in cs]
++        Y = [dp["y"]] + [c["y"] for c in cs]
++        self.dem = [0] + [c["demand"] for c in cs]
++        self.ready = [self.open] + [c["ready"] for c in cs]
++        self.due = [self.close] + [c["due"] for c in cs]
++        self.serv = [0] + [c["service"] for c in cs]
++        N = self.n + 1
++        self.D = [[0] * N for _ in range(N)]
++        for i in range(N):
++            Di = self.D[i]
++            xi, yi = X[i], Y[i]
++            for j in range(N):
++                dx = xi - X[j]
++                dy = yi - Y[j]
++                Di[j] = isqrt_ceil(dx * dx + dy * dy)
++        self.types = []
++        for f in o["fleet"]:
++            self.types.append({
++                "name": f["type"], "count": f["count"], "cap": f["capacity"],
++                "fixed": f["fixed"], "pu": f["per_unit"], "pace": f["pace"],
++                "shift": f["shift"], "range": f["range"] if f["range"] is not None else 10**9,
++            })
++        # order types cheapest-first by fixed cost
++        self.types.sort(key=lambda t: (t["fixed"], t["pu"]))
++        self.tidx = {t["name"]: i for i, t in enumerate(self.types)}
++
++
++def eval_route(inst, stops, t):
++    """Return (dist, depart) if feasible else None."""
++    if not stops:
++        return None
++    D = inst.D
++    dem = inst.dem
++    q = 0
++    for c in stops:
++        q += dem[c]
++    if q > t["cap"]:
++        return None
++    prev = 0
++    d = 0
++    for c in stops:
++        d += D[prev][c]
++        prev = c
++    d += D[prev][0]
++    if d > t["range"]:
++        return None
++    p = t["pace"]
++    ready = inst.ready
++    due = inst.due
++    serv = inst.serv
++    # backward pass: latest departure
++    lat = inst.close - D[stops[-1]][0] * p
++    for k in range(len(stops) - 1, -1, -1):
++        c = stops[k]
++        st = lat - serv[c]
++        if st > due[c]:
++            st = due[c]
++        if st < ready[c]:
++            return None
++        pv = stops[k - 1] if k else 0
++        lat = st - D[pv][c] * p
++    dep = lat
++    if dep < inst.open:
++        return None
++    if dep - inst.open > 0:
++        pass
++    # forward sim from dep
++    clock = dep
++    prev = 0
++    for c in stops:
++        a = clock + D[prev][c] * p
++        if a < ready[c]:
++            a = ready[c]
++        if a > due[c]:
++            return None
++        clock = a + serv[c]
++        prev = c
++    back = clock + D[prev][0] * p
++    if back > inst.close:
++        return None
++    if back - dep > t["shift"]:
++        return None
++    return (d, dep)
++
++
++class Sol:
++    __slots__ = ("routes", "cost")
++
++    def __init__(self):
++        self.routes = []  # list of [stops list, type index, dist]
++        self.cost = 0
++
++
++def rcost(inst, ti, dist):
++    t = inst.types[ti]
++    return t["fixed"] + t["pu"] * dist
++
++
++def total_cost(inst, routes):
++    return sum(rcost(inst, ti, d) for _, ti, d in routes)
++
++
++def counts_used(inst, routes):
++    u = [0] * len(inst.types)
++    for _, ti, _ in routes:
++        u[ti] += 1
++    return u
++
++
++def improve_route(inst, r):
++    """Intra-route 2-opt and or-opt; keeps type, shortens distance."""
++    t = inst.types[r[1]]
++    stops = r[0]
++    best = r[2]
++    changed = True
++    while changed:
++        changed = False
++        m = len(stops)
++        if m < 3:
++            break
++        for i in range(m - 1):
++            for j in range(i + 1, m):
++                ns = stops[:i] + stops[i:j + 1][::-1] + stops[j + 1:]
++                ev = eval_route(inst, ns, t)
++                if ev is not None and ev[0] < best:
++                    stops = ns
++                    best = ev[0]
++                    changed = True
++                    break
++            if changed:
++                break
++        if changed:
++            continue
++        for L in (1, 2, 3):
++            for i in range(m - L + 1):
++                seg = stops[i:i + L]
++                rest = stops[:i] + stops[i + L:]
++                for k in range(len(rest) + 1):
++                    if k == i:
++                        continue
++                    for sg in (seg, seg[::-1]):
++                        ns = rest[:k] + sg + rest[k:]
++                        ev = eval_route(inst, ns, t)
++                        if ev is not None and ev[0] < best:
++                            stops = ns
++                            best = ev[0]
++                            changed = True
++                            break
++                    if changed:
++                        break
++                if changed:
++                    break
++            if changed:
++                break
++    r[0] = stops
++    r[2] = best
++
++
++def ls_inter(inst, routes, rng, deadline, rounds=8):
++    """Neighbour-restricted relocate + swap between routes."""
++    types = inst.types
++    nb = inst.nb
++    for _ in range(rounds):
++        if time.time() > deadline:
++            break
++        posmap = make_posmap(routes)
++        any_imp = False
++        order = [c for c in range(1, inst.n + 1)]
++        rng.shuffle(order)
++        for c in order:
++            pm = posmap.get(c)
++            if pm is None:
++                continue
++            ri, idx = pm
++            r_i = routes[ri]
++            ti = r_i[1]
++            base_i = rcost(inst, ti, r_i[2])
++            ns_i = r_i[0][:idx] + r_i[0][idx + 1:]
++            if ns_i:
++                ev_i = eval_route(inst, ns_i, types[ti])
++                if ev_i is None:
++                    continue
++                new_i = rcost(inst, ti, ev_i[0])
++                di = ev_i[0]
++            else:
++                new_i = 0
++                di = 0
++            gain = base_i - new_i
++            bestmv = None
++            seen = set()
++            for v in nb[c]:
++                pv = posmap.get(v)
++                if pv is None:
++                    continue
++                rj = pv[0]
++                if rj == ri:
++                    continue
++                r_j = routes[rj]
++                base_j = rcost(inst, r_j[1], r_j[2])
++                for pos in (pv[1], pv[1] + 1):
++                    if (rj, pos) in seen:
++                        continue
++                    seen.add((rj, pos))
++                    cand = r_j[0][:pos] + [c] + r_j[0][pos:]
++                    ev = eval_route(inst, cand, types[r_j[1]])
++                    if ev is None:
++                        continue
++                    delta = rcost(inst, r_j[1], ev[0]) - base_j - gain
++                    if delta < -1e-9 and (bestmv is None or delta < bestmv[0]):
++                        bestmv = (delta, rj, pos, ev[0])
++            if bestmv:
++                _, rj, pos, ndj = bestmv
++                routes[rj][0].insert(pos, c)
++                routes[rj][2] = ndj
++                routes[ri][0] = ns_i
++                routes[ri][2] = di
++                any_imp = True
++                posmap = make_posmap(routes)
++                continue
++            # swap c with a nearby customer in another route
++            for v in nb[c]:
++                pv = posmap.get(v)
++                if pv is None:
++                    continue
++                rj, jdx = pv
++                if rj == ri:
++                    continue
++                r_j = routes[rj]
++                base_j = rcost(inst, r_j[1], r_j[2])
++                a = r_i[0][:idx] + [v] + r_i[0][idx + 1:]
++                b = r_j[0][:jdx] + [c] + r_j[0][jdx + 1:]
++                ea = eval_route(inst, a, types[ti])
++                if ea is None:
++                    continue
++                eb = eval_route(inst, b, types[r_j[1]])
++                if eb is None:
++                    continue
++                delta = (rcost(inst, ti, ea[0]) + rcost(inst, r_j[1], eb[0])
++                         - base_i - base_j)
++                if delta < -1e-9:
++                    routes[ri][0] = a
++                    routes[ri][2] = ea[0]
++                    routes[rj][0] = b
++                    routes[rj][2] = eb[0]
++                    any_imp = True
++                    posmap = make_posmap(routes)
++                    break
++        # cross-route segment relocation (or-opt, length 2-3)
++        posmap = make_posmap(routes)
++        for c in order:
++            if time.time() > deadline:
++                break
++            pm = posmap.get(c)
++            if pm is None:
++                continue
++            ri, idx = pm
++            r_i = routes[ri]
++            for L in (2, 3):
++                if idx + L > len(r_i[0]):
++                    continue
++                seg = r_i[0][idx:idx + L]
++                rest = r_i[0][:idx] + r_i[0][idx + L:]
++                base_i = rcost(inst, r_i[1], r_i[2])
++                if rest:
++                    ev_i = eval_route(inst, rest, types[r_i[1]])
++                    if ev_i is None:
++                        continue
++                    new_i = rcost(inst, r_i[1], ev_i[0])
++                    di = ev_i[0]
++                else:
++                    new_i = 0
++                    di = 0
++                gain = base_i - new_i
++                done = False
++                tried = set()
++                for v in nb[c]:
++                    pv = posmap.get(v)
++                    if pv is None or pv[0] == ri:
++                        continue
++                    rj = pv[0]
++                    r_j = routes[rj]
++                    base_j = rcost(inst, r_j[1], r_j[2])
++                    for pos in (pv[1], pv[1] + 1):
++                        if (rj, pos) in tried:
++                            continue
++                        tried.add((rj, pos))
++                        for sg in (seg, seg[::-1]):
++                            cand = r_j[0][:pos] + sg + r_j[0][pos:]
++                            ev = eval_route(inst, cand, types[r_j[1]])
++                            if ev is None:
++                                continue
++                            if rcost(inst, r_j[1], ev[0]) - base_j - gain < -1e-9:
++                                routes[rj][0] = cand
++                                routes[rj][2] = ev[0]
++                                routes[ri][0] = rest
++                                routes[ri][2] = di
++                                any_imp = True
++                                done = True
++                                break
++                        if done:
++                            break
++                    if done:
++                        break
++                if done:
++                    posmap = make_posmap(routes)
++                    break
++        routes[:] = [r for r in routes if r[0]]
++        if not any_imp:
++            break
++    return routes
++
++
++def build_neighbors(inst, K=22):
++    D = inst.D
++    n = inst.n
++    nb = [None] * (n + 1)
++    for c in range(1, n + 1):
++        order = sorted(range(1, n + 1), key=lambda v: D[c][v])
++        nb[c] = [v for v in order if v != c][:K]
++    inst.nb = nb
++
++
++def try_insert_all(inst, routes, used, c, noise, rng, posmap):
++    """Best insertion of customer c. Return (best, best2) tuples."""
++    best = None
++    best2 = None
++    ntypes = len(inst.types)
++    types = inst.types
++    # candidate (route, position) pairs from nearest neighbours
++    cands = {}
++    for v in inst.nb[c]:
++        pm = posmap.get(v)
++        if pm is None:
++            continue
++        ri, idx = pm
++        st = cands.setdefault(ri, set())
++        st.add(idx)
++        st.add(idx + 1)
++    for ri, r in enumerate(routes):
++        if len(r[0]) <= 3:
++            cands.setdefault(ri, set()).update(range(len(r[0]) + 1))
++    for ri, poss in cands.items():
++        stops, ti, dist = routes[ri]
++        cur = rcost(inst, ti, dist)
++        cand_types = [ti]
++        for tj in range(ntypes):
++            if tj != ti and used[tj] < types[tj]["count"]:
++                cand_types.append(tj)
++        m = len(stops)
++        for pos in poss:
++            if pos > m:
++                continue
++            ns = stops[:pos] + [c] + stops[pos:]
++            for tj in cand_types:
++                r = eval_route(inst, ns, types[tj])
++                if r is None:
++                    continue
++                delta = rcost(inst, tj, r[0]) - cur
++                if noise:
++                    delta += rng.uniform(-noise, noise)
++                if best is None or delta < best[0]:
++                    best2 = best
++                    best = (delta, ri, pos, tj, r[0])
++                elif best2 is None or delta < best2[0]:
++                    best2 = (delta, ri, pos, tj, r[0])
++    for tj in range(ntypes):
++        if used[tj] >= types[tj]["count"]:
++            continue
++        r = eval_route(inst, [c], types[tj])
++        if r is None:
++            continue
++        delta = rcost(inst, tj, r[0])
++        if noise:
++            delta += rng.uniform(-noise, noise)
++        if best is None or delta < best[0]:
++            best2 = best
++            best = (delta, -1, 0, tj, r[0])
++        elif best2 is None or delta < best2[0]:
++            best2 = (delta, -1, 0, tj, r[0])
++    return best, best2
++
++
++def make_posmap(routes):
++    pm = {}
++    for ri, r in enumerate(routes):
++        for i, c in enumerate(r[0]):
++            pm[c] = (ri, i)
++    return pm
++
++
++def repair(inst, routes, pool, rng, regret=True, noise=0.0):
++    used = counts_used(inst, routes)
++    pool = list(pool)
++    cache = {}
++    dirty = set(pool)
++    posmap = make_posmap(routes)
++    while pool:
++        for c in list(dirty):
++            if c in pool:
++                cache[c] = try_insert_all(inst, routes, used, c, noise, rng, posmap)
++        dirty.clear()
++        bestpick = None
++        for c in pool:
++            b, b2 = cache[c]
++            if b is None:
++                return False
++            if regret:
++                key = (-((b2[0] - b[0]) if b2 else 10 ** 7), b[0])
++            else:
++                key = (b[0], 0)
++            if bestpick is None or key < bestpick[0]:
++                bestpick = (key, c, b)
++        _, c, b = bestpick
++        delta, ri, pos, tj, nd = b
++        if ri == -1:
++            routes.append([[c], tj, nd])
++            used[tj] += 1
++            newri = len(routes) - 1
++        else:
++            stops, ti, _ = routes[ri]
++            stops.insert(pos, c)
++            if tj != ti:
++                used[ti] -= 1
++                used[tj] += 1
++                routes[ri][1] = tj
++            routes[ri][2] = nd
++            newri = ri
++        pool.remove(c)
++        posmap = make_posmap(routes)
++        nbset = set(inst.nb[c])
++        for c2 in pool:
++            cb = cache[c2][0]
++            if cb is None or cb[1] == newri or cb[1] == -1 or c2 in nbset:
++                dirty.add(c2)
++    return True
++
++
++def retype(inst, routes):
++    """Reassign vehicle types to routes to minimise cost, honouring counts."""
++    nt = len(inst.types)
++    opts = []
++    for idx, (stops, ti, dist) in enumerate(routes):
++        o = []
++        for tj in range(nt):
++            r = eval_route(inst, stops, inst.types[tj])
++            if r is not None:
++                o.append((rcost(inst, tj, r[0]), tj, r[0]))
++        o.sort()
++        opts.append(o)
++    # greedy by regret
++    order = sorted(range(len(routes)),
++                   key=lambda i: -((opts[i][1][0] - opts[i][0][0]) if len(opts[i]) > 1 else 10**7))
++    used = [0] * nt
++    assign = {}
++    for i in order:
++        for cost, tj, d in opts[i]:
++            if used[tj] < inst.types[tj]["count"]:
++                used[tj] += 1
++                assign[i] = (tj, d)
++                break
++        else:
++            return False
++    for i, (tj, d) in assign.items():
++        routes[i][1] = tj
++        routes[i][2] = d
++    return True
++
++
++def local_search(inst, routes, rng, deadline):
++    """Relocate + swap + 2-opt* style passes until no improvement."""
++    improved = True
++    while improved and time.time() < deadline:
++        improved = False
++        # relocate
++        for ri in range(len(routes)):
++            if time.time() > deadline:
++                break
++            stops_i = routes[ri][0]
++            for k in range(len(stops_i)):
++                c = stops_i[k]
++                base_i = rcost(inst, routes[ri][1], routes[ri][2])
++                ns_i = stops_i[:k] + stops_i[k + 1:]
++                if ns_i:
++                    ri_eval = eval_route(inst, ns_i, inst.types[routes[ri][1]])
++                    if ri_eval is None:
++                        continue
++                    new_i = rcost(inst, routes[ri][1], ri_eval[0])
++                else:
++                    ri_eval = (0, 0)
++                    new_i = 0
++                gain = base_i - new_i
++                bestmv = None
++                for rj in range(len(routes)):
++                    if rj == ri:
++                        continue
++                    stops_j, tj, dj = routes[rj]
++                    base_j = rcost(inst, tj, dj)
++                    for pos in range(len(stops_j) + 1):
++                        cand = stops_j[:pos] + [c] + stops_j[pos:]
++                        r = eval_route(inst, cand, inst.types[tj])
++                        if r is None:
++                            continue
++                        delta = rcost(inst, tj, r[0]) - base_j - gain
++                        if delta < -1e-9 and (bestmv is None or delta < bestmv[0]):
++                            bestmv = (delta, rj, pos, r[0])
++                if bestmv:
++                    _, rj, pos, ndj = bestmv
++                    routes[rj][0].insert(pos, c)
++                    routes[rj][2] = ndj
++                    routes[ri][0] = ns_i
++                    routes[ri][2] = ri_eval[0]
++                    improved = True
++                    break
++        routes[:] = [r for r in routes if r[0]]
++    return routes
++
++
++def load_warm(inst, path):
++    pl = json.load(open(path))
++    idmap = {cid: i for i, cid in enumerate(inst.ids)}
++    routes = []
++    for r in pl["routes"]:
++        stops = [idmap[c] for c in r["stops"]]
++        ti = inst.tidx[r["type"]]
++        ev = eval_route(inst, stops, inst.types[ti])
++        if ev is None:
++            return None
++        routes.append([stops, ti, ev[0]])
++    return routes
++
++
++def solve(inst, seconds, seed, warm=None):
++    rng = random.Random(seed)
++    t0 = time.time()
++    deadline = t0 + seconds
++    n = inst.n
++    allc = list(range(1, n + 1))
++    routes = load_warm(inst, warm) if warm else None
++    if routes is not None:
++        for r in routes:
++            improve_route(inst, r)
++        retype(inst, routes)
++        best = [[list(s), ti, d] for s, ti, d in routes]
++        bestc = total_cost(inst, best)
++        cur = [[list(s), ti, d] for s, ti, d in routes]
++        curc = bestc
++        return _loop(inst, rng, t0, deadline, seconds, n, best, bestc, cur, curc)
++    routes = []
++    if not repair(inst, routes, allc, rng, regret=True):
++        # fallback: greedy
++        routes = []
++        if not repair(inst, routes, allc, rng, regret=False):
++            raise SystemExit("no feasible initial solution")
++    for r in routes:
++        improve_route(inst, r)
++    retype(inst, routes)
++    ls_inter(inst, routes, rng, min(deadline, time.time() + 20), rounds=20)
++    for r in routes:
++        improve_route(inst, r)
++    retype(inst, routes)
++    best = [[list(s), ti, d] for s, ti, d in routes]
++    bestc = total_cost(inst, best)
++    cur = [[list(s), ti, d] for s, ti, d in routes]
++    curc = bestc
++    return _loop(inst, rng, t0, deadline, seconds, n, best, bestc, cur, curc)
++
++
++def _loop(inst, rng, t0, deadline, seconds, n, best, bestc, cur, curc):
++    import os
++    T0 = max(1.0, bestc * float(os.environ.get("SA_T", "0.006")))
++    it = 0
++    # relatedness
++    D = inst.D
++    while time.time() < deadline:
++        it += 1
++        frac = (time.time() - t0) / seconds
++        T = T0 * (0.02 ** frac)
++        cand = [[list(s), ti, d] for s, ti, d in cur]
++        op = rng.random()
++        removed = []
++        if rng.random() < 0.18:
++            maxrem = max(8, int(n * 0.5))
++        else:
++            maxrem = max(4, min(int(n * 0.25), 30))
++        k = rng.randint(max(3, int(n * 0.05)), maxrem)
++        if op < 0.30:
++            # random removal
++            pos = [(ri, i) for ri in range(len(cand)) for i in range(len(cand[ri][0]))]
++            rng.shuffle(pos)
++            pick = set()
++            for ri, i in pos[:k]:
++                pick.add(cand[ri][0][i])
++            removed = list(pick)
++        elif op < 0.70:
++            # related (Shaw) removal
++            seed_c = rng.randint(1, n)
++            allcur = [c for r in cand for c in r[0]]
++            allcur.sort(key=lambda c: D[seed_c][c] + abs(inst.due[c] - inst.due[seed_c]) / 600.0)
++            removed = allcur[:k]
++        elif op < 0.88:
++            # route removal
++            rng.shuffle(cand)
++            removed = []
++            nr = rng.randint(1, max(1, min(3, len(cand) - 1)))
++            for _ in range(nr):
++                if len(cand) <= 1:
++                    break
++                idx = rng.randrange(len(cand))
++                removed.extend(cand[idx][0])
++                cand.pop(idx)
++        else:
++            # worst removal
++            scored = []
++            for ri, (stops, ti, d) in enumerate(cand):
++                t = inst.types[ti]
++                for i, c in enumerate(stops):
++                    pv = stops[i - 1] if i else 0
++                    nx = stops[i + 1] if i + 1 < len(stops) else 0
++                    scored.append((-(D[pv][c] + D[c][nx] - D[pv][nx]) * t["pu"], c))
++            scored.sort()
++            removed = [c for _, c in scored[:k]]
++        rset = set(removed)
++        if not rset:
++            continue
++        for r in cand:
++            r[0] = [c for c in r[0] if c not in rset]
++        cand = [r for r in cand if r[0]]
++        for r in cand:
++            ev = eval_route(inst, r[0], inst.types[r[1]])
++            if ev is None:
++                r[2] = None
++            else:
++                r[2] = ev[0]
++        if any(r[2] is None for r in cand):
++            continue
++        use_regret = rng.random() < 0.6
++        noise = 0.0 if rng.random() < 0.5 else max(1.0, bestc * 0.0005)
++        ok = repair(inst, cand, removed, rng, regret=use_regret, noise=noise)
++        if not ok:
++            continue
++        for r in cand:
++            if any(c in rset for c in r[0]):
++                improve_route(inst, r)
++        retype(inst, cand)
++        cc = total_cost(inst, cand)
++        if cc < bestc * 1.0015:
++            # polish
++            for r in cand:
++                improve_route(inst, r)
++            ls_inter(inst, cand, rng, min(deadline, time.time() + 1.5), rounds=3)
++            for r in cand:
++                improve_route(inst, r)
++            retype(inst, cand)
++            cc = total_cost(inst, cand)
++        if cc < curc - 1e-9 or rng.random() < math.exp(-(cc - curc) / max(T, 1e-9)):
++            cur = cand
++            curc = cc
++        if cc < bestc - 1e-9:
++            best = [[list(s), ti, d] for s, ti, d in cand]
++            bestc = cc
++            sys.stderr.write("it %d t %.0f best %d\n" % (it, time.time() - t0, bestc))
++            sys.stderr.flush()
++        if curc > bestc * float(os.environ.get('SA_R', '1.15')):
++            cur = [[list(s), ti, d] for s, ti, d in best]
++            curc = bestc
++    sys.stderr.write("iterations %d\n" % it)
++    return best, bestc
++
++
++def write_plan(inst, routes, path):
++    out = []
++    for stops, ti, dist in routes:
++        t = inst.types[ti]
++        ev = eval_route(inst, stops, t)
++        assert ev is not None
++        out.append({"type": t["name"], "depart": int(ev[1]),
++                    "stops": [inst.ids[c] for c in stops]})
++    json.dump({"routes": out}, open(path, "w"))
++
++
++def main():
++    orders = sys.argv[1]
++    outp = sys.argv[2]
++    seconds = float(sys.argv[3]) if len(sys.argv) > 3 else 60.0
++    seed = int(sys.argv[4]) if len(sys.argv) > 4 else 1
++    warm = sys.argv[5] if len(sys.argv) > 5 else None
++    inst = Inst(orders)
++    build_neighbors(inst)
++    routes, cost = solve(inst, seconds, seed, warm)
++    write_plan(inst, routes, outp)
++    print("cost", int(cost))
++
++
++if __name__ == "__main__":
++    main()
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/harbour-lanes.json /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/harbour-lanes.json
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/harbour-lanes.json	1970-01-01 08:00:00
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/harbour-lanes.json	2026-09-27 15:37:40
+@@ -0,0 +1 @@
++{"routes": [{"type": "truck", "depart": 18147, "stops": [38, 59, 10, 30, 11, 50, 24, 15, 46]}, {"type": "van", "depart": 19675, "stops": [2, 56, 8, 51, 23, 12]}, {"type": "van", "depart": 22454, "stops": [7, 21, 36, 40]}, {"type": "van", "depart": 24859, "stops": [45, 22, 27, 26, 52, 3, 25]}, {"type": "van", "depart": 18776, "stops": [41, 33, 47, 20]}, {"type": "van", "depart": 18485, "stops": [17, 28, 31, 54, 48, 35]}, {"type": "bike", "depart": 20797, "stops": [49, 5, 44, 1]}, {"type": "van", "depart": 23039, "stops": [34, 57, 19, 55, 6, 18, 53, 42, 29]}, {"type": "bike", "depart": 24822, "stops": [16, 39]}, {"type": "bike", "depart": 24294, "stops": [60, 13, 32]}, {"type": "bike", "depart": 19224, "stops": [9, 43]}, {"type": "van", "depart": 20335, "stops": [37, 58, 4]}, {"type": "bike", "depart": 25260, "stops": [14]}]}
+\ No newline at end of file
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/north-ring.json /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/north-ring.json
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/north-ring.json	1970-01-01 08:00:00
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/north-ring.json	2026-09-27 16:52:50
+@@ -0,0 +1 @@
++{"routes": [{"type": "truck", "depart": 18232, "stops": [175, 143, 174, 23, 203, 211, 34, 149, 184, 158]}, {"type": "truck", "depart": 17100, "stops": [214, 110, 179, 84, 88, 121, 69]}, {"type": "van", "depart": 20298, "stops": [153, 13, 25]}, {"type": "van", "depart": 23781, "stops": [40, 181, 178, 76, 104]}, {"type": "bike", "depart": 24448, "stops": [187, 93]}, {"type": "bike", "depart": 21808, "stops": [36, 199, 39, 208]}, {"type": "van", "depart": 24545, "stops": [140, 195, 28, 62, 172, 111, 142, 11]}, {"type": "bike", "depart": 30398, "stops": [204, 135]}, {"type": "bike", "depart": 26846, "stops": [139]}, {"type": "van", "depart": 20489, "stops": [154, 182, 136, 185, 192, 115, 16]}, {"type": "van", "depart": 20643, "stops": [176, 90, 189, 128, 65]}, {"type": "bike", "depart": 28994, "stops": [6]}, {"type": "van", "depart": 20071, "stops": [124, 166, 83, 168, 160]}, {"type": "bike", "depart": 33316, "stops": [89, 144]}, {"type": "van", "depart": 22890, "stops": [47, 217, 5, 207, 157, 97, 24, 56, 152]}, {"type": "van", "depart": 19752, "stops": [71, 220, 137]}, {"type": "van", "depart": 22182, "stops": [106, 92, 2, 209, 131, 118]}, {"type": "bike", "depart": 25585, "stops": [77, 3, 80]}, {"type": "van", "depart": 19396, "stops": [126, 57, 55, 96]}, {"type": "van", "depart": 20082, "stops": [86, 64, 109, 101]}, {"type": "truck", "depart": 17531, "stops": [134, 141, 43, 66, 205, 169, 107, 102, 138, 81]}, {"type": "van", "depart": 20808, "stops": [72, 129, 219, 33]}, {"type": "van", "depart": 20841, "stops": [108, 75, 113, 170, 133]}, {"type": "bike", "depart": 24467, "stops": [103, 41]}, {"type": "van", "depart": 21716, "stops": [146, 202, 53, 52, 17, 20]}, {"type": "van", "depart": 20137, "stops": [49, 95, 123, 213]}, {"type": "van", "depart": 24177, "stops": [79, 7, 26, 173, 177, 105]}, {"type": "van", "depart": 19751, "stops": [196, 147, 44, 198]}, {"type": "bike", "depart": 22872, "stops": [10, 120, 12]}, {"type": "van", "depart": 21915, "stops": [151, 37, 206, 112, 130, 194]}, {"type": "truck", "depart": 19603, "stops": [32, 114, 21, 70, 35, 125, 46, 78, 200]}, {"type": "van", "depart": 19741, "stops": [14, 155, 171, 42]}, {"type": "bike", "depart": 19948, "stops": [74, 94, 117]}, {"type": "van", "depart": 19379, "stops": [58, 161, 165, 167]}, {"type": "van", "depart": 19619, "stops": [180, 1, 87]}, {"type": "bike", "depart": 26996, "stops": [159, 156, 197]}, {"type": "van", "depart": 27689, "stops": [122, 18, 30, 50, 188, 68, 19]}, {"type": "truck", "depart": 19696, "stops": [85, 127, 59, 61, 8, 67]}, {"type": "bike", "depart": 23176, "stops": [82, 183]}, {"type": "van", "depart": 19810, "stops": [191, 119, 215, 164, 38, 15]}, {"type": "bike", "depart": 24633, "stops": [193, 60, 186]}, {"type": "bike", "depart": 33538, "stops": [100]}, {"type": "van", "depart": 21127, "stops": [9, 212]}, {"type": "van", "depart": 22561, "stops": [29, 99, 31, 54, 216, 22]}, {"type": "van", "depart": 20280, "stops": [73, 162, 210, 91]}, {"type": "van", "depart": 23218, "stops": [27, 145, 148, 63, 48]}, {"type": "truck", "depart": 18172, "stops": [218, 201, 98, 132, 150, 116, 4, 45, 163]}, {"type": "bike", "depart": 22474, "stops": [51, 190]}]}
+\ No newline at end of file
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/old-town.json /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/old-town.json
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/old-town.json	1970-01-01 08:00:00
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/old-town.json	2026-09-27 16:13:30
+@@ -0,0 +1 @@
++{"routes": [{"type": "van", "depart": 24926, "stops": [26, 17, 33, 92, 87, 96, 24]}, {"type": "van", "depart": 23228, "stops": [53, 82, 65, 109, 100]}, {"type": "bike", "depart": 23418, "stops": [49, 77, 88]}, {"type": "bike", "depart": 25220, "stops": [103, 11, 58, 99]}, {"type": "van", "depart": 18951, "stops": [73, 29, 48, 93, 21, 56, 19, 42]}, {"type": "van", "depart": 21358, "stops": [106, 20, 5]}, {"type": "truck", "depart": 17997, "stops": [32, 30, 64, 23, 105, 22, 107, 55, 71, 44]}, {"type": "truck", "depart": 17577, "stops": [1, 14, 3, 18, 94, 80]}, {"type": "bike", "depart": 24738, "stops": [12, 78]}, {"type": "bike", "depart": 22069, "stops": [39, 34, 28, 85]}, {"type": "van", "depart": 29581, "stops": [101, 72, 60, 91, 98]}, {"type": "bike", "depart": 26120, "stops": [108, 104, 59]}, {"type": "van", "depart": 20605, "stops": [89, 90, 8, 67, 46, 45]}, {"type": "van", "depart": 19774, "stops": [62, 41, 61, 6]}, {"type": "van", "depart": 20478, "stops": [69, 63, 81, 15]}, {"type": "truck", "depart": 18878, "stops": [31, 79, 75, 51, 38, 97, 102, 36]}, {"type": "van", "depart": 22202, "stops": [74, 16, 10, 37, 35]}, {"type": "bike", "depart": 23220, "stops": [47, 13]}, {"type": "van", "depart": 26216, "stops": [110, 83, 25, 84, 76, 4]}, {"type": "van", "depart": 21171, "stops": [86, 9, 2, 68]}, {"type": "van", "depart": 22069, "stops": [54, 95, 40, 52, 70]}, {"type": "bike", "depart": 19026, "stops": [50, 7]}, {"type": "bike", "depart": 22509, "stops": [57, 66, 27]}, {"type": "bike", "depart": 27590, "stops": [43]}]}
+\ No newline at end of file
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/riverside.json /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/riverside.json
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/baseline/environment/app/plans/riverside.json	1970-01-01 08:00:00
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-bakery-fleet-dispatch/run_2/solve/environment/app/plans/riverside.json	2026-09-27 16:52:50
+@@ -0,0 +1 @@
++{"routes": [{"type": "van", "depart": 22066, "stops": [11, 110, 109, 119, 35]}, {"type": "van", "depart": 21873, "stops": [145, 78, 143, 65, 154, 102, 17]}, {"type": "van", "depart": 18890, "stops": [53, 19, 130, 23]}, {"type": "van", "depart": 23847, "stops": [62, 57, 136, 81, 25, 10, 82, 121]}, {"type": "van", "depart": 21017, "stops": [148, 75, 30, 97, 12]}, {"type": "truck", "depart": 15861, "stops": [88, 98, 153, 101, 21, 55, 16, 152, 93, 44]}, {"type": "van", "depart": 20082, "stops": [112, 104, 157, 18, 7, 129, 2]}, {"type": "van", "depart": 21433, "stops": [84, 36, 120, 91, 13]}, {"type": "truck", "depart": 19557, "stops": [40, 105, 71, 52, 116, 76, 47, 99, 59, 73, 141, 125]}, {"type": "bike", "depart": 25878, "stops": [43, 144, 39, 133]}, {"type": "bike", "depart": 20456, "stops": [123, 77]}, {"type": "bike", "depart": 25984, "stops": [100, 122]}, {"type": "bike", "depart": 29212, "stops": [24]}, {"type": "van", "depart": 20247, "stops": [49, 34, 137, 3]}, {"type": "van", "depart": 22256, "stops": [32, 8, 37, 45, 66, 95, 54]}, {"type": "van", "depart": 21204, "stops": [20, 60, 89, 74, 158]}, {"type": "van", "depart": 22001, "stops": [107, 155, 156, 9, 146, 29, 149]}, {"type": "van", "depart": 18525, "stops": [138, 103, 108, 111, 70, 27]}, {"type": "van", "depart": 20104, "stops": [135, 160, 159]}, {"type": "truck", "depart": 17344, "stops": [31, 117, 58, 72, 1, 96, 68, 85, 142, 86, 118]}, {"type": "truck", "depart": 19106, "stops": [92, 124, 56, 80, 94, 22, 140, 132, 67, 90, 5]}, {"type": "bike", "depart": 26468, "stops": [113]}, {"type": "bike", "depart": 23374, "stops": [106, 46]}, {"type": "bike", "depart": 26340, "stops": [151, 87, 114]}, {"type": "van", "depart": 19523, "stops": [127, 64, 131, 128]}, {"type": "bike", "depart": 20918, "stops": [83, 134, 6, 115]}, {"type": "van", "depart": 21215, "stops": [26, 15, 79, 33, 38]}, {"type": "van", "depart": 18025, "stops": [147, 14, 63, 69, 50]}, {"type": "van", "depart": 20225, "stops": [41, 139, 48, 42]}, {"type": "bike", "depart": 26534, "stops": [61, 4]}, {"type": "van", "depart": 20401, "stops": [126, 150, 51, 28]}]}
+\ No newline at end of file

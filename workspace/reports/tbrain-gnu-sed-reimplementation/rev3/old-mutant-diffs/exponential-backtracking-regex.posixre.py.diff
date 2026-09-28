@@ -1,0 +1,314 @@
+65d64
+<         quantified = False
+70,74d68
+<             if (not self.ere and quantified
+<                     and (c == "*" or (c == "\\" and self.peek(1) == "{"))):
+<                 # GNU sed 4.9 (glibc) rejects a BRE * or \{ right after another repetition
+<                 raise RegexError("Invalid preceding regular expression")
+<             quantified = True
+154d147
+<             # ERE ^ and $ are anchors anywhere (glibc, as GNU sed 4.9 runs them: a^b never matches)
+267,270d259
+<         self.icase_backref = icase  # I/i also makes \N compare case-insensitively
+<         self.prog = _compile(self.node)
+<         refs = sorted(_backrefs(self.node))
+<         self.ref_slots = tuple(k for g in refs for k in (2 * g, 2 * g + 1))
+272,274c261,270
+<     def match_at(self, s, i):
+<         """Longest match starting at i: (end, caps) or None."""
+<         return self._pike(s, i)
+---
+>     def _m(self, node, s, i, caps, k):
+>         """Generate every (end, caps) for node matching s at i, then call continuation."""
+>         kind = node[0]
+>         if kind == "set":
+>             if i < len(s) and ((s[i] in node[1]) != node[2]):
+>                 if not (self.multiline and s[i] == "\n" and (node[2] or len(node[1]) == 256)):
+>                     yield from k(i + 1, caps)
+>             return
+>         if kind == "cat":
+>             items = node[1]
+276,283c272,284
+<     def search(self, s, start=0):
+<         """Leftmost-longest match at or after start: (begin, end, groups) or None."""
+<         for i in range(start, len(s) + 1):
+<             r = self.match_at(s, i)
+<             if r is not None:
+<                 end, caps = r
+<                 return i, end, caps
+<         return None
+---
+>             def step(n, j, cp):
+>                 if n == len(items):
+>                     yield from k(j, cp)
+>                 else:
+>                     yield from self._m(items[n], s, j, cp, lambda jj, cc: step(n + 1, jj, cc))
+>             yield from step(0, i, caps)
+>             return
+>         if kind == "alt":
+>             for b in node[1]:
+>                 yield from self._m(b, s, i, caps, k)
+>             return
+>         if kind == "group":
+>             idx = node[1]
+285c286,312
+<     def _assert(self, kind, s, i):
+---
+>             def close(j, cp):
+>                 cp2 = cp[:idx] + ((i, j),) + cp[idx + 1:]
+>                 yield from k(j, cp2)
+>             yield from self._m(node[2], s, i, caps, close)
+>             return
+>         if kind == "backref":
+>             span = caps[node[1]]
+>             if span is None:
+>                 return
+>             text = s[span[0]:span[1]]
+>             if s.startswith(text, i) if not self.icase_backref else s[i:i + len(text)].lower() == text.lower():
+>                 yield from k(i + len(text), caps)
+>             return
+>         if kind == "rep":
+>             sub, lo, hi = node[1], node[2], node[3]
+> 
+>             def loop(count, j, cp):
+>                 if hi is None or count < hi:
+>                     def after(jj, cc):
+>                         if jj == j and count >= lo:
+>                             return iter(())
+>                         return loop(count + 1, jj, cc)
+>                     yield from self._m(sub, s, j, cp, after)
+>                 if count >= lo:
+>                     yield from k(j, cp)
+>             yield from loop(0, i, caps)
+>             return
+287,289c314,320
+<             return i == 0 or (self.multiline and s[i - 1] == "\n")
+<         if kind == "eol":
+<             return i == len(s) or (self.multiline and s[i] == "\n")
+---
+>             if i == 0 or (self.multiline and s[i - 1] == "\n"):
+>                 yield from k(i, caps)
+>             return
+>         if kind == "eol":
+>             if i == len(s) or (self.multiline and s[i] == "\n"):
+>                 yield from k(i, caps)
+>             return
+291c322,324
+<             return i == 0
+---
+>             if i == 0:
+>                 yield from k(i, caps)
+>             return
+293c326,328
+<             return i == len(s)
+---
+>             if i == len(s):
+>                 yield from k(i, caps)
+>             return
+296,297c331,334
+<         return {"wordb": before != after_, "nwordb": before == after_,
+<                 "wbeg": (not before) and after_, "wend": before and not after_}[kind]
+---
+>         ok = {"wordb": before != after_, "nwordb": before == after_,
+>               "wbeg": (not before) and after_, "wend": before and not after_}[kind]
+>         if ok:
+>             yield from k(i, caps)
+299,310c336
+<     def _pike(self, s, start):
+<         """Longest match at start, in polynomial time. When several paths give that longest
+<         match, the groups come from the first path in traversal order; for -E (a|aa)(a?) on
+<         aa this reports \\1 = a, as GNU sed 4.9 does. Threads run in priority (traversal)
+<         order and the first thread to reach a given end wins, which is the path a
+<         depth-first search would find first. Two threads at the same instruction and
+<         position whose back-referenced groups hold the same spans behave identically from
+<         there on, so only the first (higher-priority) one is kept."""
+<         prog = self.prog
+<         nslots = 2 * (self.ngroups + 1)
+<         ref_slots = self.ref_slots
+<         icase = self.icase_backref
+---
+>     icase_backref = False
+312,346c338,339
+<         def key(pc, off, caps):
+<             return (pc, off) + tuple(caps[k] for k in ref_slots)
+< 
+<         def add(threads, seen, pc, i, caps):
+<             stack = [(pc, caps)]
+<             while stack:
+<                 pc, caps = stack.pop()
+<                 k = key(pc, 0, caps)
+<                 if k in seen:
+<                     continue
+<                 seen.add(k)
+<                 op = prog[pc]
+<                 kind = op[0]
+<                 if kind == "jmp":
+<                     stack.append((op[1], caps))
+<                 elif kind == "split":
+<                     stack.append((op[2], caps))
+<                     stack.append((op[1], caps))
+<                 elif kind == "save":
+<                     caps = caps[:op[1]] + (i,) + caps[op[1] + 1:]
+<                     stack.append((pc + 1, caps))
+<                 elif kind == "assert":
+<                     if self._assert(op[1], s, i):
+<                         stack.append((pc + 1, caps))
+<                 elif kind == "backref":
+<                     b, e = caps[2 * op[1]], caps[2 * op[1] + 1]
+<                     if b is None or e is None:
+<                         continue  # an unset group matches nothing
+<                     if b == e:
+<                         stack.append((pc + 1, caps))
+<                     else:
+<                         threads.append((pc, caps, 0))
+<                 else:
+<                     threads.append((pc, caps, 0))
+< 
+---
+>     def match_at(self, s, i):
+>         """Longest match starting at i: (end, caps) or None."""
+348,392c341,345
+<         threads = []
+<         add(threads, set(), 0, start, (None,) * nslots)
+<         i = start
+<         while threads:
+<             nxt = []
+<             seen = set()
+<             ch = s[i] if i < len(s) else None
+<             for pc, caps, off in threads:
+<                 op = prog[pc]
+<                 kind = op[0]
+<                 if kind == "match":
+<                     if best is None or i > best[0]:
+<                         best = (i, caps)
+<                     continue  # later threads may still reach a longer end
+<                 if ch is None:
+<                     continue
+<                 if kind == "backref":
+<                     b, e = caps[2 * op[1]], caps[2 * op[1] + 1]
+<                     want = s[b + off]
+<                     if want != ch and not (icase and want.lower() == ch.lower()):
+<                         continue
+<                     if b + off + 1 < e:
+<                         k = key(pc, off + 1, caps)
+<                         if k not in seen:
+<                             seen.add(k)
+<                             nxt.append((pc, caps, off + 1))
+<                     else:
+<                         add(nxt, seen, pc + 1, i + 1, caps)
+<                     continue
+<                 chars, neg = op[1], op[2]
+<                 if (ch in chars) == neg:
+<                     continue
+<                 if self.multiline and ch == "\n" and (neg or len(chars) == 256):
+<                     continue
+<                 add(nxt, seen, pc + 1, i + 1, caps)
+<             threads = nxt
+<             i += 1
+<         if best is None:
+<             return None
+<         end, slots = best
+<         caps = [None]
+<         for g in range(1, self.ngroups + 1):
+<             b, e = slots[2 * g], slots[2 * g + 1]
+<             caps.append((b, e) if b is not None and e is not None else None)
+<         return end, tuple(caps)
+---
+>         init = (None,) * (self.ngroups + 1)
+>         for end, caps in self._m(self.node, s, i, init, lambda j, c: iter([(j, c)])):
+>             if best is None or end > best[0]:
+>                 best = (end, caps)
+>         return best
+393a347,360
+>     @staticmethod
+>     def _better(a, b):
+>         # POSIX: earlier subexpressions first, each leftmost then longest
+>         for x, y in zip(a[1:], b[1:]):
+>             if x == y:
+>                 continue
+>             if x is None:
+>                 return False
+>             if y is None:
+>                 return True
+>             if x[0] != y[0]:
+>                 return x[0] < y[0]
+>             return (x[1] - x[0]) > (y[1] - y[0])
+>         return False
+395,462c362,369
+< def _backrefs(node):
+<     kind = node[0]
+<     if kind == "backref":
+<         return {node[1]}
+<     if kind in ("cat", "alt"):
+<         return set().union(*(_backrefs(n) for n in node[1]))
+<     if kind == "group":
+<         return _backrefs(node[2])
+<     if kind == "rep":
+<         return _backrefs(node[1])
+<     return set()
+< 
+< 
+< def _compile(node):
+<     """Tree to a Pike-VM program: char/split/jmp/save/assert/backref/match."""
+<     prog = []
+< 
+<     def emit(op):
+<         prog.append(op)
+<         return len(prog) - 1
+< 
+<     def gen(n):
+<         kind = n[0]
+<         if kind == "set":
+<             emit(("char", n[1], n[2]))
+<         elif kind == "cat":
+<             for item in n[1]:
+<                 gen(item)
+<         elif kind == "alt":
+<             jumps = []
+<             for b in n[1][:-1]:
+<                 sp = emit(None)
+<                 gen(b)
+<                 jumps.append(emit(None))
+<                 prog[sp] = ("split", sp + 1, len(prog))
+<             gen(n[1][-1])
+<             for j in jumps:
+<                 prog[j] = ("jmp", len(prog))
+<         elif kind == "group":
+<             emit(("save", 2 * n[1]))
+<             gen(n[2])
+<             emit(("save", 2 * n[1] + 1))
+<         elif kind == "backref":
+<             emit(("backref", n[1]))
+<         elif kind == "rep":
+<             sub, lo, hi = n[1], n[2], n[3]
+<             for _ in range(lo):
+<                 gen(sub)
+<             if hi is None:
+<                 # an extra iteration may not match the empty string (it would loop back to
+<                 # a state already visited at this position, which the VM drops)
+<                 sp = emit(None)
+<                 gen(sub)
+<                 emit(("jmp", sp))
+<                 prog[sp] = ("split", sp + 1, len(prog))
+<             else:
+<                 holes = []
+<                 for _ in range(hi - lo):
+<                     holes.append(emit(None))
+<                     gen(sub)
+<                 for h in holes:
+<                     prog[h] = ("split", h + 1, len(prog))
+<         else:
+<             emit(("assert", kind))
+< 
+<     gen(node)
+<     emit(("match",))
+<     return prog
+---
+>     def search(self, s, start=0):
+>         """Leftmost-longest match at or after start: (begin, end, groups) or None."""
+>         for i in range(start, len(s) + 1):
+>             r = self.match_at(s, i)
+>             if r is not None:
+>                 end, caps = r
+>                 return i, end, caps
+>         return None

@@ -1,0 +1,564 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 24 items
+
+../../tests/test_outputs.py FFFF.FF..FFFFF.FFFF..F..                     [100%]
+
+=================================== FAILURES ===================================
+____________ test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays ____________
+
+    def test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays():
+        """A week's pay counts toward the week before its payday's week, for injuries on every day of the week."""
+>       check_family("weeks_pay")
+
+/tests/test_outputs.py:245: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W287001', 'aww': 129363, 'rate': 86242, 'waiting_days': 3, ...}, {'claim': 'W831002', 'aww': 75727, 'rate': 50484, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W287001', 'aww': 129363, 'rate': 86242, 'waiting_days': 3, ...}, {'claim': 'W831002', 'aww': 75727, 'rate': 50485, 'waiting_days': 3, ...}]}
+label = 'weeks_pay job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: weeks_pay job 0 statement 1 ('W831002') rate: 50484, expected 50485
+E               assert (<class 'int'> is <class 'int'> and 50484 == 50485)
+E                +  where <class 'int'> = type(50484)
+E                +  and   <class 'int'> = type(50485)
+
+/tests/test_outputs.py:235: AssertionError
+___________ test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay ____________
+
+    def test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay():
+        """A line of exactly 2,000 cents on an edge payday is a week's pay and moves to the week it pays."""
+>       check_family("weeks_pay_threshold")
+
+/tests/test_outputs.py:250: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W809008', 'aww': 112721, 'rate': 75147, 'waiting_days': 3, ...}, {'claim': 'W616009', 'aww'...84, 'rate': 77789, 'waiting_days': 3, ...}, {'claim': 'W358011', 'aww': 63470, 'rate': 42313, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W809008', 'aww': 112721, 'rate': 75147, 'waiting_days': 3, ...}, {'claim': 'W616009', 'aww'...84, 'rate': 77789, 'waiting_days': 3, ...}, {'claim': 'W358011', 'aww': 63470, 'rate': 42313, 'waiting_days': 3, ...}]}
+label = 'weeks_pay_threshold job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: weeks_pay_threshold job 0 statement 1 ('W616009') rate: 91902, expected 91903
+E               assert (<class 'int'> is <class 'int'> and 91902 == 91903)
+E                +  where <class 'int'> = type(91902)
+E                +  and   <class 'int'> = type(91903)
+
+/tests/test_outputs.py:235: AssertionError
+___________ test_rule_2_3_base_period_ends_before_the_week_of_injury ___________
+
+    def test_rule_2_3_base_period_ends_before_the_week_of_injury():
+        """The base period is the thirteen weeks before the week of injury; wages outside it do not count."""
+>       check_family("base_period")
+
+/tests/test_outputs.py:255: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W199012', 'aww': 38713, 'rate': 25808, 'waiting_days': 3, ...}, {'claim': 'W843013', 'aww':...09, 'rate': 18339, 'waiting_days': 3, ...}, {'claim': 'W400015', 'aww': 50447, 'rate': 33631, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W199012', 'aww': 38713, 'rate': 25809, 'waiting_days': 3, ...}, {'claim': 'W843013', 'aww':...09, 'rate': 18339, 'waiting_days': 3, ...}, {'claim': 'W400015', 'aww': 50447, 'rate': 33631, 'waiting_days': 3, ...}]}
+label = 'base_period job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: base_period job 0 statement 0 ('W199012') rate: 25808, expected 25809
+E               assert (<class 'int'> is <class 'int'> and 25808 == 25809)
+E                +  where <class 'int'> = type(25808)
+E                +  and   <class 'int'> = type(25809)
+
+/tests/test_outputs.py:235: AssertionError
+____________ test_rule_3_3_average_weekly_wage_divides_by_thirteen _____________
+
+    def test_rule_3_3_average_weekly_wage_divides_by_thirteen():
+        """The base-period wages are divided by thirteen whether one, five, nine, twelve or thirteen weeks were paid."""
+>       check_family("average_weekly_wage")
+
+/tests/test_outputs.py:260: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W620019', 'aww': 113260, 'rate': 75506, 'waiting_days': 3, ...}, {'claim': 'W290020', 'aww': 127119, 'rate': 84746, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W620019', 'aww': 113260, 'rate': 75507, 'waiting_days': 3, ...}, {'claim': 'W290020', 'aww': 127119, 'rate': 84746, 'waiting_days': 3, ...}]}
+label = 'average_weekly_wage job 1'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: average_weekly_wage job 1 statement 0 ('W620019') rate: 75506, expected 75507
+E               assert (<class 'int'> is <class 'int'> and 75506 == 75507)
+E                +  where <class 'int'> = type(75506)
+E                +  and   <class 'int'> = type(75507)
+
+/tests/test_outputs.py:235: AssertionError
+_______________________ test_rule_3_4_rate_is_two_thirds _______________________
+
+    def test_rule_3_4_rate_is_two_thirds():
+        """The weekly rate is two thirds of the average weekly wage, and so is a partial week's share of its loss."""
+>       check_family("rate_two_thirds")
+
+/tests/test_outputs.py:270: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W390023', 'aww': 84437, 'rate': 56291, 'waiting_days': 3, ...}, {'claim': 'W616024', 'aww':...15, 'rate': 78743, 'waiting_days': 3, ...}, {'claim': 'W663026', 'aww': 51499, 'rate': 34332, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W390023', 'aww': 84437, 'rate': 56291, 'waiting_days': 3, ...}, {'claim': 'W616024', 'aww':...15, 'rate': 78743, 'waiting_days': 3, ...}, {'claim': 'W663026', 'aww': 51499, 'rate': 34333, 'waiting_days': 3, ...}]}
+label = 'rate_two_thirds job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: rate_two_thirds job 0 statement 1 ('W616024') rate: 43342, expected 43343
+E               assert (<class 'int'> is <class 'int'> and 43342 == 43343)
+E                +  where <class 'int'> = type(43342)
+E                +  and   <class 'int'> = type(43343)
+
+/tests/test_outputs.py:235: AssertionError
+_______________ test_rule_3_4_maximum_and_minimum_bound_the_rate _______________
+
+    def test_rule_3_4_maximum_and_minimum_bound_the_rate():
+        """Two thirds of the average weekly wage at, above and below the maximum and the minimum."""
+>       check_family("rate_bounds")
+
+/tests/test_outputs.py:275: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W500033', 'aww': 150000, 'rate': 100000, 'waiting_days': 3, ...}, {'claim': 'W129034', 'aww...02, 'rate': 40001, 'waiting_days': 3, ...}, {'claim': 'W834038', 'aww': 59999, 'rate': 40000, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W500033', 'aww': 150000, 'rate': 100000, 'waiting_days': 3, ...}, {'claim': 'W129034', 'aww...02, 'rate': 40001, 'waiting_days': 3, ...}, {'claim': 'W834038', 'aww': 59999, 'rate': 40000, 'waiting_days': 3, ...}]}
+label = 'rate_bounds job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: rate_bounds job 0 statement 2 ('W104035') rate: 99998, expected 99999
+E               assert (<class 'int'> is <class 'int'> and 99998 == 99999)
+E                +  where <class 'int'> = type(99998)
+E                +  and   <class 'int'> = type(99999)
+
+/tests/test_outputs.py:235: AssertionError
+__________________ test_rule_2_5_both_ends_of_a_period_count ___________________
+
+    def test_rule_2_5_both_ends_of_a_period_count():
+        """Disability days include the first and last day of every period: one-day periods, 399 days, twelve periods."""
+>       check_family("disability_days")
+
+/tests/test_outputs.py:290: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W529043', 'aww': 92884, 'rate': 61922, 'waiting_days': 1, ...}, {'claim': 'W755044', 'aww':...0, 'rate': 32053, 'waiting_days': 3, ...}, {'claim': 'W515046', 'aww': 107303, 'rate': 71535, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W529043', 'aww': 92884, 'rate': 61923, 'waiting_days': 1, ...}, {'claim': 'W755044', 'aww':...0, 'rate': 32053, 'waiting_days': 3, ...}, {'claim': 'W515046', 'aww': 107303, 'rate': 71535, 'waiting_days': 3, ...}]}
+label = 'disability_days job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: disability_days job 0 statement 0 ('W529043') rate: 61922, expected 61923
+E               assert (<class 'int'> is <class 'int'> and 61922 == 61923)
+E                +  where <class 'int'> = type(61922)
+E                +  and   <class 'int'> = type(61923)
+
+/tests/test_outputs.py:235: AssertionError
+_______________________ test_rule_2_6_three_waiting_days _______________________
+
+    def test_rule_2_6_three_waiting_days():
+        """The waiting period is the first three disability days, or all of them when there are fewer."""
+>       check_family("waiting_period")
+
+/tests/test_outputs.py:295: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W369047', 'aww': 129334, 'rate': 86222, 'waiting_days': 1, ...}, {'claim': 'W739048', 'aww'...8, 'rate': 64952, 'waiting_days': 3, ...}, {'claim': 'W189051', 'aww': 133675, 'rate': 89116, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W369047', 'aww': 129334, 'rate': 86223, 'waiting_days': 1, ...}, {'claim': 'W739048', 'aww'...8, 'rate': 64952, 'waiting_days': 3, ...}, {'claim': 'W189051', 'aww': 133675, 'rate': 89117, 'waiting_days': 3, ...}]}
+label = 'waiting_period job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: waiting_period job 0 statement 0 ('W369047') rate: 86222, expected 86223
+E               assert (<class 'int'> is <class 'int'> and 86222 == 86223)
+E                +  where <class 'int'> = type(86222)
+E                +  and   <class 'int'> = type(86223)
+
+/tests/test_outputs.py:235: AssertionError
+_________________ test_rule_4_1_retroactive_from_fourteen_days _________________
+
+    def test_rule_4_1_retroactive_from_fourteen_days():
+        """The waiting days are paid back from fourteen disability days (13, 14 in one and three periods, 15)."""
+>       check_family("retroactive_days")
+
+/tests/test_outputs.py:300: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W335052', 'aww': 128564, 'rate': 85709, 'waiting_days': 3, ...}, {'claim': 'W629053', 'aww'...67, 'rate': 51244, 'waiting_days': 3, ...}, {'claim': 'W482055', 'aww': 54565, 'rate': 36376, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W335052', 'aww': 128564, 'rate': 85709, 'waiting_days': 3, ...}, {'claim': 'W629053', 'aww'...67, 'rate': 51245, 'waiting_days': 3, ...}, {'claim': 'W482055', 'aww': 54565, 'rate': 36377, 'waiting_days': 3, ...}]}
+label = 'retroactive_days job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: retroactive_days job 0 statement 1 ('W629053') rate: 73894, expected 73895
+E               assert (<class 'int'> is <class 'int'> and 73894 == 73895)
+E                +  where <class 'int'> = type(73894)
+E                +  and   <class 'int'> = type(73895)
+
+/tests/test_outputs.py:235: AssertionError
+___________________ test_rule_4_3_amount_rounded_to_the_cent ___________________
+
+    def test_rule_4_3_amount_rounded_to_the_cent():
+        """The total-disability amount is rate times paid days over seven, to the nearest cent (every remainder)."""
+>       check_family("ttd_rounding")
+
+/tests/test_outputs.py:305: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W486056', 'aww': 126833, 'rate': 84555, 'waiting_days': 3, ...}, {'claim': 'W550059', 'aww'...44, 'rate': 64162, 'waiting_days': 3, ...}, {'claim': 'W928069', 'aww': 62812, 'rate': 41874, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W486056', 'aww': 126833, 'rate': 84555, 'waiting_days': 3, ...}, {'claim': 'W550059', 'aww'...44, 'rate': 64163, 'waiting_days': 3, ...}, {'claim': 'W928069', 'aww': 62812, 'rate': 41875, 'waiting_days': 3, ...}]}
+label = 'ttd_rounding job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: ttd_rounding job 0 statement 3 ('W430063') rate: 63430, expected 63431
+E               assert (<class 'int'> is <class 'int'> and 63430 == 63431)
+E                +  where <class 'int'> = type(63430)
+E                +  and   <class 'int'> = type(63431)
+
+/tests/test_outputs.py:235: AssertionError
+________ test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate _________
+
+    def test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate():
+        """A week of partial disability pays two thirds of its wage loss, no more than the weekly rate."""
+>       check_family("partial_benefit")
+
+/tests/test_outputs.py:310: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W661070', 'aww': 136747, 'rate': 70000, 'waiting_days': 3, ...}, {'claim': 'W423071', 'aww'...2, 'rate': 61114, 'waiting_days': 3, ...}, {'claim': 'W375072', 'aww': 153687, 'rate': 70000, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W661070', 'aww': 136747, 'rate': 70000, 'waiting_days': 3, ...}, {'claim': 'W423071', 'aww'...2, 'rate': 61115, 'waiting_days': 3, ...}, {'claim': 'W375072', 'aww': 153687, 'rate': 70000, 'waiting_days': 3, ...}]}
+label = 'partial_benefit job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: partial_benefit job 0 statement 1 ('W423071') rate: 61114, expected 61115
+E               assert (<class 'int'> is <class 'int'> and 61114 == 61115)
+E                +  where <class 'int'> = type(61114)
+E                +  and   <class 'int'> = type(61115)
+
+/tests/test_outputs.py:235: AssertionError
+_____________ test_rule_2_7_week_earning_the_aww_has_no_wage_loss ______________
+
+    def test_rule_2_7_week_earning_the_aww_has_no_wage_loss():
+        """A week earning the average weekly wage or more has no wage loss."""
+>       check_family("no_wage_loss")
+
+/tests/test_outputs.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W727076', 'aww': 47662, 'rate': 31774, 'waiting_days': 3, ...}, {'claim': 'W650077', 'aww':...03, 'rate': 20535, 'waiting_days': 3, ...}, {'claim': 'W381078', 'aww': 30224, 'rate': 20149, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W727076', 'aww': 47662, 'rate': 31775, 'waiting_days': 3, ...}, {'claim': 'W650077', 'aww':...03, 'rate': 20535, 'waiting_days': 3, ...}, {'claim': 'W381078', 'aww': 30224, 'rate': 20149, 'waiting_days': 3, ...}]}
+label = 'no_wage_loss job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: no_wage_loss job 0 statement 0 ('W727076') rate: 31774, expected 31775
+E               assert (<class 'int'> is <class 'int'> and 31774 == 31775)
+E                +  where <class 'int'> = type(31774)
+E                +  and   <class 'int'> = type(31775)
+
+/tests/test_outputs.py:235: AssertionError
+___________ test_correction_below_a_weeks_pay_keeps_its_paydays_week ___________
+
+    def test_correction_below_a_weeks_pay_keeps_its_paydays_week():
+        """A line below a week's pay keeps counting toward its payday's week, as the shipped package counts it."""
+>       check_family("corrections")
+
+/tests/test_outputs.py:325: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W774079', 'aww': 88730, 'rate': 59153, 'waiting_days': 3, ...}, {'claim': 'W854080', 'aww':...40, 'rate': 73760, 'waiting_days': 3, ...}, {'claim': 'W145081', 'aww': 76204, 'rate': 50802, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W774079', 'aww': 88730, 'rate': 59153, 'waiting_days': 3, ...}, {'claim': 'W854080', 'aww':...40, 'rate': 73760, 'waiting_days': 3, ...}, {'claim': 'W145081', 'aww': 76204, 'rate': 50803, 'waiting_days': 3, ...}]}
+label = 'corrections job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: corrections job 0 statement 2 ('W145081') rate: 50802, expected 50803
+E               assert (<class 'int'> is <class 'int'> and 50802 == 50803)
+E                +  where <class 'int'> = type(50802)
+E                +  and   <class 'int'> = type(50803)
+
+/tests/test_outputs.py:235: AssertionError
+________________ test_week_below_1000_cents_keeps_todays_share _________________
+
+    def test_week_below_1000_cents_keeps_todays_share():
+        """A week of the partial earnings below 1,000 cents keeps the share the shipped package pays it."""
+>       check_family("low_partial_weeks")
+
+/tests/test_outputs.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W601086', 'aww': 104847, 'rate': 69898, 'waiting_days': 3, ...}, {'claim': 'W543087', 'aww': 126232, 'rate': 84154, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W601086', 'aww': 104847, 'rate': 69898, 'waiting_days': 3, ...}, {'claim': 'W543087', 'aww': 126232, 'rate': 84155, 'waiting_days': 3, ...}]}
+label = 'low_partial_weeks job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: low_partial_weeks job 0 statement 1 ('W543087') rate: 84154, expected 84155
+E               assert (<class 'int'> is <class 'int'> and 84154 == 84155)
+E                +  where <class 'int'> = type(84154)
+E                +  and   <class 'int'> = type(84155)
+
+/tests/test_outputs.py:235: AssertionError
+________________________ test_statement_order_and_keys _________________________
+
+    def test_statement_order_and_keys():
+        """Statements come in job order with claim numbers as given, exactly the README's keys, integer figures."""
+>       check_family("statement_order")
+
+/tests/test_outputs.py:388: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'Z', 'aww': 94357, 'rate': 62904, 'waiting_days': 3, ...}, {'claim': '0000000000000000000000...0, 'rate': 102353, 'waiting_days': 3, ...}, {'claim': 'a', 'aww': 101443, 'rate': 67628, 'waiting_days': 3, ...}, ...]}
+expected = {'statements': [{'claim': 'Z', 'aww': 94357, 'rate': 62905, 'waiting_days': 3, ...}, {'claim': '0000000000000000000000...0, 'rate': 102353, 'waiting_days': 3, ...}, {'claim': 'a', 'aww': 101443, 'rate': 67629, 'waiting_days': 3, ...}, ...]}
+label = 'statement_order job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: statement_order job 0 statement 0 ('Z') rate: 62904, expected 62905
+E               assert (<class 'int'> is <class 'int'> and 62904 == 62905)
+E                +  where <class 'int'> = type(62904)
+E                +  and   <class 'int'> = type(62905)
+
+/tests/test_outputs.py:235: AssertionError
+_____________________________ test_generated_jobs ______________________________
+
+    def test_generated_jobs():
+        """Seeded jobs over the governed domain, as sealed and under fresh claim numbers and orders."""
+>       check_family("generated")
+
+/tests/test_outputs.py:442: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:240: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'claim': 'W118108', 'aww': 64587, 'rate': 43058, 'waiting_days': 3, ...}, {'claim': 'W960109', 'aww':...45, 'rate': 85363, 'waiting_days': 3, ...}, {'claim': 'W999110', 'aww': 75742, 'rate': 50494, 'waiting_days': 3, ...}]}
+expected = {'statements': [{'claim': 'W118108', 'aww': 64587, 'rate': 43058, 'waiting_days': 3, ...}, {'claim': 'W960109', 'aww':...45, 'rate': 85363, 'waiting_days': 3, ...}, {'claim': 'W999110', 'aww': 75742, 'rate': 50495, 'waiting_days': 3, ...}]}
+label = 'generated job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the claim number an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level keys {list(actual) if isinstance(actual, dict) else actual!r}"
+        got, want = actual["statements"], expected["statements"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(want)}"
+        for index, (row, ref) in enumerate(zip(got, want)):
+            where = f"{label} statement {index} ({ref['claim']!r})"
+            assert isinstance(row, dict) and set(row) == FIELDS, f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in sorted(FIELDS):
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: generated job 0 statement 2 ('W999110') rate: 50494, expected 50495
+E               assert (<class 'int'> is <class 'int'> and 50494 == 50495)
+E                +  where <class 'int'> = type(50494)
+E                +  and   <class 'int'> = type(50495)
+
+/tests/test_outputs.py:235: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_3_no_week_paid_gives_nought
+PASSED ../../tests/test_outputs.py::test_rule_2_4_row_in_force_on_the_date_of_injury
+PASSED ../../tests/test_outputs.py::test_rule_3_5_low_wage_rate_is_the_aww
+PASSED ../../tests/test_outputs.py::test_rule_2_8_week_of_exactly_1000_cents_is_partial_disability
+PASSED ../../tests/test_outputs.py::test_section_one_limits_reached
+PASSED ../../tests/test_outputs.py::test_rule_3_4_row_figures_at_their_ends_decide_the_rate
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays
+FAILED ../../tests/test_outputs.py::test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay
+FAILED ../../tests/test_outputs.py::test_rule_2_3_base_period_ends_before_the_week_of_injury
+FAILED ../../tests/test_outputs.py::test_rule_3_3_average_weekly_wage_divides_by_thirteen
+FAILED ../../tests/test_outputs.py::test_rule_3_4_rate_is_two_thirds - Assert...
+FAILED ../../tests/test_outputs.py::test_rule_3_4_maximum_and_minimum_bound_the_rate
+FAILED ../../tests/test_outputs.py::test_rule_2_5_both_ends_of_a_period_count
+FAILED ../../tests/test_outputs.py::test_rule_2_6_three_waiting_days - Assert...
+FAILED ../../tests/test_outputs.py::test_rule_4_1_retroactive_from_fourteen_days
+FAILED ../../tests/test_outputs.py::test_rule_4_3_amount_rounded_to_the_cent
+FAILED ../../tests/test_outputs.py::test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate
+FAILED ../../tests/test_outputs.py::test_rule_2_7_week_earning_the_aww_has_no_wage_loss
+FAILED ../../tests/test_outputs.py::test_correction_below_a_weeks_pay_keeps_its_paydays_week
+FAILED ../../tests/test_outputs.py::test_week_below_1000_cents_keeps_todays_share
+FAILED ../../tests/test_outputs.py::test_statement_order_and_keys - Assertion...
+FAILED ../../tests/test_outputs.py::test_generated_jobs - AssertionError: gen...
+========================= 16 failed, 8 passed in 0.91s =========================

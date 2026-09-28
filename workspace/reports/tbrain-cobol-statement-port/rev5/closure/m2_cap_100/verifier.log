@@ -1,0 +1,138 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 55 items
+
+../../tests/test_outputs.py ..........FF................................ [ 80%]
+...........                                                              [100%]
+
+=================================== FAILURES ===================================
+________________________________ test_long_run _________________________________
+
+    def test_long_run():
+        # The instruction promises files of up to 500 records each; this pair is at
+        # that size on both streams, so a port with a smaller fixed capacity cannot
+        # pass on the shorter fixtures alone.
+        with open(os.path.join(CASES, "long_run.dat"), "rb") as fh:
+            readings = fh.read().split(b"\n")[:-1]
+        with open(os.path.join(CASES, "long_run.pay"), "rb") as fh:
+            postings = fh.read().split(b"\n")[:-1]
+        assert len(readings) == 500 and sum(r.startswith(b"C") for r in readings) == 499
+        assert len(postings) == 500
+>       check("long_run")
+
+/tests/test_outputs.py:205: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:114: in check
+    compare(_run_port(name), _expected(name))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+got = b'STATEMENTS FOR ALL DISTRICTS        DATED 30/09/2025\n\nACCOUNT ****5035  INES TANAKA              TARIFF D\nREADING...3   run 099\nLINE 100 REJECTED NO SUCH ACCOUNT\nPOSTED   90  REJECTED  10  PAID      $8,729.73   OTHER     $3,574.24\n'
+want = b'STATEMENTS FOR ALL DISTRICTS        DATED 30/09/2025\n\nACCOUNT ****5035  INES TANAKA              TARIFF D\nREADING...HOLE      1 BAL       104.17   last posting of\nPOSTED  478  REJECTED  22  PAID     $47,106.60   OTHER    $15,781.15\n'
+
+    def compare(got, want):
+        if got == want:
+            return
+        got_lines, want_lines = got.split(b"\n"), want.split(b"\n")
+        for number, (a, b) in enumerate(zip(got_lines, want_lines), start=1):
+            if a != b:
+>               pytest.fail(f"line {number} differs:\n  port: {a!r}\n  job:  {b!r}")
+E               Failed: line 801 differs:
+E                 port: b'ACCOUNTS BILLED  99  REJECTED   0  CREDITS   6'
+E                 job:  b'ACCOUNT ****0157  NOVAK COLD STORE         TARIFF C'
+
+/tests/test_outputs.py:109: Failed
+___________________________ test_long_run_no_header ____________________________
+
+    def test_long_run_no_header():
+        # The same limit reached by customer records alone: no header, 500 C records
+        # and a posting to each account, the last one included, so a port that keeps
+        # one of its 500 places for a header drops a bill and rejects a posting.
+        with open(os.path.join(CASES, "long_run_no_header.dat"), "rb") as fh:
+            readings = fh.read().split(b"\n")[:-1]
+        with open(os.path.join(CASES, "long_run_no_header.pay"), "rb") as fh:
+            postings = fh.read().split(b"\n")[:-1]
+        assert len(readings) == 500 and all(r.startswith(b"C") for r in readings)
+        assert len(postings) == 500 and postings[-1].startswith(readings[-1][1:9] + b";")
+>       check("long_run_no_header")
+
+/tests/test_outputs.py:218: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:114: in check
+    compare(_run_port(name), _expected(name))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+got = b'ACCOUNT ****5035  INES TANAKA              TARIFF D\nREADINGS 210804 TO 210916  USAGE       112 OVER  91 DAYS\nBANDS...261.38 WHOLE    261 BAL    12,408.34   run 100\nPOSTED  100  REJECTED   0  PAID     $19,556.72   OTHER     $2,210.47\n'
+want = b'ACCOUNT ****5035  INES TANAKA              TARIFF D\nREADINGS 210804 TO 210916  USAGE       112 OVER  91 DAYS\nBANDS...351.90 WHOLE    351 BAL        96.49   run 500\nPOSTED  500  REJECTED   0  PAID     $79,861.80   OTHER    $18,704.95\n'
+
+    def compare(got, want):
+        if got == want:
+            return
+        got_lines, want_lines = got.split(b"\n"), want.split(b"\n")
+        for number, (a, b) in enumerate(zip(got_lines, want_lines), start=1):
+            if a != b:
+>               pytest.fail(f"line {number} differs:\n  port: {a!r}\n  job:  {b!r}")
+E               Failed: line 807 differs:
+E                 port: b'ACCOUNTS BILLED 100  REJECTED   0  CREDITS   6'
+E                 job:  b'ACCOUNT ****4950  TUNDE TANAKA             TARIFF D'
+
+/tests/test_outputs.py:109: Failed
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_every_case_has_an_expected_statement
+PASSED ../../tests/test_outputs.py::test_band_boundaries
+PASSED ../../tests/test_outputs.py::test_credit_balances
+PASSED ../../tests/test_outputs.py::test_date_and_region
+PASSED ../../tests/test_outputs.py::test_district_run
+PASSED ../../tests/test_outputs.py::test_empty_file
+PASSED ../../tests/test_outputs.py::test_header_missing
+PASSED ../../tests/test_outputs.py::test_header_only
+PASSED ../../tests/test_outputs.py::test_header_out_of_place
+PASSED ../../tests/test_outputs.py::test_large_commercial_accounts
+PASSED ../../tests/test_outputs.py::test_meter_rollover
+PASSED ../../tests/test_outputs.py::test_names_of_every_shape
+PASSED ../../tests/test_outputs.py::test_postings_account_identifiers
+PASSED ../../tests/test_outputs.py::test_postings_amount_forms
+PASSED ../../tests/test_outputs.py::test_postings_empty
+PASSED ../../tests/test_outputs.py::test_postings_kinds_and_accounts
+PASSED ../../tests/test_outputs.py::test_postings_memos
+PASSED ../../tests/test_outputs.py::test_postings_ordinary
+PASSED ../../tests/test_outputs.py::test_postings_rounding_modes
+PASSED ../../tests/test_outputs.py::test_postings_with_fewer_fields
+PASSED ../../tests/test_outputs.py::test_rejected_records
+PASSED ../../tests/test_outputs.py::test_rounding_boundaries
+PASSED ../../tests/test_outputs.py::test_short_lines
+PASSED ../../tests/test_outputs.py::test_two_headers
+PASSED ../../tests/test_outputs.py::test_zero_amounts
+PASSED ../../tests/test_outputs.py::test_other_record_types
+PASSED ../../tests/test_outputs.py::test_short_header
+PASSED ../../tests/test_outputs.py::test_header_date_and_part_region
+PASSED ../../tests/test_outputs.py::test_blank_line_first
+PASSED ../../tests/test_outputs.py::test_generated_01
+PASSED ../../tests/test_outputs.py::test_generated_02
+PASSED ../../tests/test_outputs.py::test_generated_03
+PASSED ../../tests/test_outputs.py::test_generated_04
+PASSED ../../tests/test_outputs.py::test_generated_05
+PASSED ../../tests/test_outputs.py::test_generated_06
+PASSED ../../tests/test_outputs.py::test_generated_07
+PASSED ../../tests/test_outputs.py::test_generated_08
+PASSED ../../tests/test_outputs.py::test_generated_09
+PASSED ../../tests/test_outputs.py::test_generated_10
+PASSED ../../tests/test_outputs.py::test_generated_11
+PASSED ../../tests/test_outputs.py::test_generated_12
+PASSED ../../tests/test_outputs.py::test_generated_13
+PASSED ../../tests/test_outputs.py::test_generated_14
+PASSED ../../tests/test_outputs.py::test_generated_15
+PASSED ../../tests/test_outputs.py::test_generated_16
+PASSED ../../tests/test_outputs.py::test_generated_17
+PASSED ../../tests/test_outputs.py::test_generated_18
+PASSED ../../tests/test_outputs.py::test_generated_19
+PASSED ../../tests/test_outputs.py::test_generated_20
+PASSED ../../tests/test_outputs.py::test_generated_21
+PASSED ../../tests/test_outputs.py::test_generated_22
+PASSED ../../tests/test_outputs.py::test_generated_23
+PASSED ../../tests/test_outputs.py::test_generated_24
+FAILED ../../tests/test_outputs.py::test_long_run - Failed: line 801 differs:
+FAILED ../../tests/test_outputs.py::test_long_run_no_header - Failed: line 80...
+========================= 2 failed, 53 passed in 1.75s =========================

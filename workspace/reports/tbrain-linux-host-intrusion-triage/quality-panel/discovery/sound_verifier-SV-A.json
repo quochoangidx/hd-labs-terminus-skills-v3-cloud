@@ -1,0 +1,190 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "fa3d5d1ee0370a144e73521d4f98adcc12f305c4fc6402caf6137800aa961dbf",
+  "severity": "Unsure",
+  "summary": "The verifier compares the full seven-key report, type-strictly, on 24 sealed cases across 14 families. In the two cases that can be read, each named trap discriminates: shared-password regular user, admin sudo on another terminal, a 736 s near-miss brute burst, an exact 600 s window, an exact 2 s package ctime, a touch -r mtime decoy, a second address tied by a planted key, and an open session. The only unresolved concern is the rule-1 sign partition. Both inspected stepped cases have the host clock behind true time, and every sealed case's step_s fact is positive. The verifier may therefore never grade a clock-ahead host, where pre-step and post-step host times overlap. This could not be confirmed because 12 of the 14 evidence families are opaque tar.gz packs.",
+  "input_completeness": {
+    "status": "incomplete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/triage.py",
+      "environment/app/docs/case-guide.md",
+      "environment/app/docs/record-formats.md",
+      "environment/app/docs/report.md",
+      "environment/app/evidence/case-1/collection.txt",
+      "environment/app/evidence/case-1/fs-listing.tsv",
+      "environment/app/evidence/case-1/var/log/auth.log",
+      "environment/app/evidence/case-1/var/log/auth.log.1",
+      "environment/app/evidence/case-1/var/log/remote/files.log",
+      "environment/app/evidence/case-1/var/log/dpkg.log",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/apt-listchanges.list",
+      "environment/app/evidence/case-1/root/.bash_history",
+      "environment/app/evidence/case-1/home/git/.bash_history",
+      "environment/app/evidence/case-1/home/tpham/.bash_history",
+      "environment/app/evidence/case-1/home/git/.ssh/authorized_keys",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/case1.jsonl",
+      "tests/expected/clock.jsonl",
+      "tests/expected/year.jsonl",
+      "tests/expected/tz.jsonl",
+      "tests/expected/brute.jsonl",
+      "tests/expected/rotation.jsonl",
+      "tests/expected/key.jsonl",
+      "tests/expected/sudo.jsonl",
+      "tests/expected/ctime.jsonl",
+      "tests/expected/open.jsonl",
+      "tests/expected/broad.jsonl",
+      "tests/expected/edge_lo.jsonl",
+      "tests/expected/edge_hi.jsonl",
+      "tests/expected/edge_late.jsonl",
+      "readable-evidence sidecar H25178f (edge_hi): collection.txt, var/log/remote/edge7.log, var/log/auth.log, auth.log.2-5.txt (grep of sshd/sudo lines), wtmp.decoded.txt, btmp.decoded.txt, dpkg.log, fs-listing.tsv (persistence-kind rows), home/build/.bash_history, root/.bash_history"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/evidence/*.tar.gz (all 14 packs): gzip tar, unreadable with read-only tools. Only case1 (via environment/app/evidence/case-1) and edge_hi (via the readable-evidence sidecar) were inspected as text.",
+      "environment/app/evidence/case-1/var/log/auth.log.2.gz, auth.log.3.gz, wtmp, btmp: binary or gzip; not readable",
+      "tests/shipped/docs/*.md: not reopened; the manifest SHA-256 values are identical to environment/app/docs/*.md",
+      "case-1 dpkg info lists other than apt-listchanges.list, case-1 tpham/root authorized_keys: not individually opened (not needed for any traced check)"
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read test_outputs.py end to end: _seal_app, _load (roster SHA pin plus case count), _run_case (neutral 'evidence' staging, root-owned 0444/0555, setpriv --no-new-privs uid 65534, python3 -I -S, env -i), _differences (exact key set; the three list fields as str-only, duplicate-free, sorted-equal; initial_access dict exact keys and str values; other fields type-strict equality), _check_family (every case in a family must be exact) and the 15 tests.",
+    "False-rejection check against report.md: key set, set semantics for sources/accounts/persistence, 'each item appears once', null for privilege_escalation, and the fixed YYYY-MM-DDTHH:MM:SSZ time format all match _differences. Key order, whitespace and list order are not imposed.",
+    "Execution-environment check: the candidate may read /app/docs (docs re-copied from tests/shipped/docs with manifest-identical hashes). Deleting other /app files matches instruction.md:3 ('keep the program in /app/triage.py'). Stdlib-only under -I -S matches the contract. Per-case timeout is at most 300 s and at least 30 s.",
+    "edge_hi (H25178f) traced by hand against tests/expected/edge_hi.jsonl. Host clock behind true time by 7200 s: remote 18:51:27Z (local 08:51:27 at +14:00) versus auth.log.5 06:51:27. The step lies between the remote 22:12:09Z and 22:12:10Z preauth lines.",
+    "edge_hi rule 2: carol from 62.131.28.230 has 5 btmp failures spanning 736 s, then logs in before the intruder. A windowless or loose-window implementation would report carol as initial access. The intruder 77.48.154.160 has exactly 5 failures spanning exactly 600 s (1924706481 to 1924707081), so the inclusive boundary is graded. Only 3 of those failures survive in the auth logs; the rest are in btmp only.",
+    "edge_hi rule 4: the regular user of the build account logs in from 10.4.16.109 during the intrusion (shared password) and must be excluded. 185.227.69.176 is tied only by the key-fingerprint login and must be included.",
+    "edge_hi rule 5: an admin sudo on build pts/1 (07:09:16 host) precedes the intruder's sudo on pts/0 (07:37:29 host, true 19:37:29Z, the expected value). The terminal-tie rule is therefore discriminated.",
+    "edge_hi rule 6: /etc/cron.d/debsums ctime is exactly 2 s after the dpkg 'status installed debsums' line and inside the intruder session. It is expected to be excluded, so the inclusive 2 s boundary is graded. /home/build/.ssh/authorized_keys has a touch -r old mtime but an in-session ctime and is expected to be included, so mtime-based detection fails. /etc/cron.d/backup-nightly has an in-session mtime but an out-of-session ctime and is expected to be excluded.",
+    "edge_hi rule 7: first_activity 18:41:21Z comes from the earliest btmp failure (host 16:41:21 + 7200 s). last_activity is the open second-address login at 06:47:06Z, not collected_utc.",
+    "case1 (H01f621): the host clock is behind by 6036 s. Root history 'id' at host 15:08:33Z maps to true 16:49:09, consistent with the expected privilege_escalation 16:49:04Z and after initial access 16:39:40Z. Clock-ahead would put the root command before initial access. case1 also covers the shared-password git login from 10.233.9.93, the package-written /etc/cron.d/apt-listchanges (ctime equal to the dpkg install time, inside the intrusion), the touch -r decoy on /etc/rc.local, and /tmp/.x11-unix-apt-cache-clean, a non-persistence kind.",
+    "Scanned facts and report fields in all 14 expected/*.jsonl files. Present: signed UTC offsets including quarter-hour (345, 525) and negative half-hour (-210); year crossings; 1 to 6 auth files; null and non-null escalation; open and closed sessions; multi-source cases; every persistence kind except /etc/crontab (which is not a kind). Every step_s value is positive (30 to 7200)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if it is missing or reversed",
+      "status": "checked",
+      "reason": "Each case is compared field by field on all seven keys, and a family fails if any case differs. Every guide rule (1-7) feeds a graded field.",
+      "evidence": ["tests/test_outputs.py:114-139", "environment/app/docs/report.md:19-25"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result (values, membership, uniqueness), not only existence or shape",
+      "status": "checked",
+      "reason": "Exact key set; sets are compared by content with duplicates rejected; times and initial_access are compared exactly; type(None) is type(None) for a null escalation.",
+      "evidence": ["tests/test_outputs.py:115-126"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rules each have a case whose outcome changes when the rule is wrong",
+      "status": "unresolved",
+      "reason": "Rules 2, 4, 5, 6 and 7 have isolating traps in the inspected case1 and edge_hi sets, listed in checks_performed. Rule 1 is covered for a host clock behind true time only. Whether any sealed case has a clock-ahead host cannot be seen, because the clock/year/tz/other packs are opaque.",
+      "evidence": ["environment/app/docs/case-guide.md:9-14", "tests/expected/clock.jsonl:1-2", "tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Traced these wrong implementations to a failing field in the readable cases: count failures without a window; use strict <600 or strict <2; detect persistence by mtime; attribute the first sudo on the account; include the shared-password regular user; use collected_utc as last activity for an open session; ignore btmp; skip clock correction. A constant or case-1-hardcoded report fails the other 23 cases.",
+      "evidence": ["tests/expected/edge_hi.jsonl:1", "tests/expected/case1.jsonl:1", "tests/test_outputs.py:142-195"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives (formatting, ordering, implementation choices) are accepted",
+      "status": "checked",
+      "reason": "The output is parsed as JSON and list order is ignored. No stdout, exit-code or file-layout requirement is imposed beyond report.json. Candidate diagnostics go to the stderr tail only.",
+      "evidence": ["tests/test_outputs.py:105-108", "tests/test_outputs.py:121", "environment/app/docs/report.md:20-22"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and execution conditions enforced (no network, unprivileged, read-only evidence, stdlib only, no dependence on /app/evidence)",
+      "status": "checked",
+      "reason": "setpriv uid 65534 with --no-new-privs; evidence is root-owned 0444; /app/evidence is deleted before grading; python3 -I -S. The verifier image holds pytest but candidate runs are -I -S and the stdlib rule concerns the program, not the grader. The network is not explicitly cut in-test, but no graded outcome depends on it.",
+      "evidence": ["tests/test_outputs.py:33-36", "tests/test_outputs.py:53-66", "tests/test_outputs.py:96-104", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Initialization-to-first-event transition in contract state machines",
+      "status": "checked",
+      "reason": "The clock state before the first remote-log line and the first-activity event are both graded. edge_hi first_activity comes from a pre-step btmp failure that precedes any matching remote line, and is graded exactly.",
+      "evidence": ["tests/expected/edge_hi.jsonl:1", "environment/app/docs/case-guide.md:46-51"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: legal sign partitions discriminated",
+      "status": "unresolved",
+      "reason": "UTC offset sign: both signs are present. Clock-error sign: only 'behind' is verified (case1, edge_hi), and all step_s facts are positive. A clock-ahead case could not be confirmed or ruled out.",
+      "evidence": ["tests/expected/case1.jsonl:1", "tests/expected/edge_hi.jsonl:1", "tests/expected/clock.jsonl:1-2", "tests/expected/key.jsonl:1-2", "environment/app/docs/case-guide.md:11-14"],
+      "finding_ids": []
+    },
+    {
+      "category": "No proxy/Oracle-representation/stale-binary/self-controlled comparison",
+      "status": "checked",
+      "reason": "Expected reports are sealed JSONL, pinned by the ROSTER SHA-256 values. The candidate cannot read /tests (chmod 700, probe test). The verifier holds no model. The candidate's triage.py bytes are re-read at seal time, so no stale binary is used.",
+      "evidence": ["tests/test_outputs.py:42-80", "tests/test_outputs.py:198-211", "tests/test.sh:14"],
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases / representation beyond contract",
+      "status": "checked",
+      "reason": "The case facts in the expected files are within the instruction's declared ranges (offsets -720 to 840, years 2019 to 2031, 1 to 6 auth files, steps 30 to 7200). Systemd .wants symlinks graded as persistence match rule 6 wording and the fs-listing coverage of symlinks.",
+      "evidence": ["instruction.md:5", "environment/app/docs/record-formats.md:46-48", "environment/app/docs/case-guide.md:37-44"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 1 clock correction", "rule 2 600 s window using btmp"],
+      "case_or_path": "edge_hi: the intruder's btmp failures are host-clock pre-step times. The 600 s window is invariant under a constant shift, but first_activity requires the +7200 correction.",
+      "status": "checked",
+      "evidence": ["tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 6 package-write exclusion", "rule 1 clock correction (dpkg.log local host time vs fs ctime epoch)"],
+      "case_or_path": "edge_hi /etc/cron.d/debsums: ctime minus dpkg time is exactly 2 s on the host clock, and the file is excluded. Both timestamps are on the host clock, so no correction is needed for the comparison, but the in-session attribution uses the corrected time.",
+      "status": "checked",
+      "evidence": ["tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 4 terminal tie", "rule 5 escalation"],
+      "case_or_path": "edge_hi: the admin sudo on pts/1 of the same account precedes the intruder sudo on pts/0. The expected value selects pts/0.",
+      "status": "checked",
+      "evidence": ["tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 4 planted key", "rule 7 open session last activity"],
+      "case_or_path": "edge_hi: the second address is tied by the planted-key fingerprint. Its login has no logout, and last_activity equals that login, not collected_utc.",
+      "status": "checked",
+      "evidence": ["tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 1 clock step side determination", "rule 6/7 host-clock records absent from the remote log (fs ctime, timestamped history, wtmp/btmp)"],
+      "case_or_path": "A clock-ahead host where pre-step and post-step host times overlap. A threshold rule ('host time < true step instant means pre-step') is correct for behind clocks but misplaces overlap-region records for ahead clocks.",
+      "status": "unresolved",
+      "evidence": ["environment/app/docs/case-guide.md:11-14", "tests/expected/clock.jsonl:1-2"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "Rule 1 sign partition. The contract allows a host clock that was wrong in either direction by a fixed amount before being set right (case-guide.md:11-14; instruction.md:5 gives only the step magnitude 30 to 7,200 s). In both readable stepped cases the host clock is behind (case1 H01f621 by 6036 s, edge_hi H25178f by 7200 s). Every step_s fact in tests/expected/*.jsonl is positive, while the sibling utc_offset_min fact is signed. So the sealed corpus may contain no clock-ahead host. If so, a plausible wrong implementation would earn full reward even though it mis-dates a graded record whenever the clock was ahead: it could assume the correction is always additive, or classify host-clock records (fs ctime, history, wtmp/btmp) by 'host time < true step instant'. This would be a Minor sound_verifier gap on a core rule.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "Unpack each stepped case in tests/evidence/{clock,year,tz,brute,key,edge_lo,edge_late,...}.tar.gz. For each, compare one auth-log sshd line from before the step with its remote-log twin to get the sign of (true minus host). If every case is behind, add at least one clock-ahead case with a graded host-clock-only record near the overlap region, or narrow the contract to a clock that was behind. If an ahead case exists, this concern closes."
+    }
+  ],
+  "uncertainty": "Twelve of the fourteen evidence packs are opaque to read-only review. The verifier mechanics and the two readable cases show strong discrimination on every named rule. Only the clock-error sign partition could not be confirmed or ruled out, and the uniformly positive step_s facts point towards a behind-only corpus."
+}

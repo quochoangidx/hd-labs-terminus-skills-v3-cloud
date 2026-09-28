@@ -1,0 +1,134 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "d0b95eb49a2871a2577425abd4907ac7b599e158e452f8db6a7525ace2822711",
+  "severity": "None",
+  "summary": "No confirmed reference defect. solve.sh copies four committed plans into /app/plans and runs the shipped checker on each; under set -euo pipefail a nonzero checker exit fails the script. Static review of all four plans found a JSON object with only a routes key, routes with exactly type/depart/stops, integer departures no earlier than open, a vehicle count per kind within the fleet count, and every customer id 1..N delivered exactly once (60/110/160/220). I traced every route of harbour-lanes by hand with ceil-Euclidean legs, windows, service, return/close, shift, capacity and bike range. All 12 are feasible and the total is exactly 77867, which matches the solve.sh table and is at most the 80734 target. For the other mornings, 7 routes spot-traced by hand were feasible. The search in solution/search/sisr.py uses the same distance and feasibility rules as check_plan.py. Its departure choice (open + min(forward time slack, total waits)) provably keeps every service start at or before due, leaves the return time unchanged, and gives the minimum shift duration. That makes the provenance description in solve.sh consistent with the shipped search. The runtime arithmetic (4 mornings x 2400 s on two cores, about 80 min) is also consistent.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/dispatch-rules.md",
+      "environment/app/tools/check_plan.py",
+      "environment/app/planner/plan_morning.py",
+      "environment/app/orders/targets.json",
+      "environment/app/orders/harbour-lanes.json (full)",
+      "environment/app/orders/old-town.json (depot 1-10, fleet 1105-1143, customer records for ids 7, 17, 50, 110 via search)",
+      "environment/app/orders/riverside.json (depot, fleet 1605-1643, records for ids 110, 113, 138, 160 via search)",
+      "environment/app/orders/north-ring.json (depot, fleet 2205-2243, records for ids 61, 65, 99, 110, 220 via search)",
+      "solution/solve.sh",
+      "solution/search/sisr.py",
+      "solution/plans/harbour-lanes.json",
+      "solution/plans/old-town.json",
+      "solution/plans/riverside.json",
+      "solution/plans/north-ring.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "old-town.json, riverside.json and north-ring.json customer records were not all read line by line. Only the depot, fleet, customer-count/id layout (sequential ids, one record per 10 lines, confirmed by id 110/160/220 positions and the per-file id counts 110/160/220) and the records needed for the spot traces were read. Because of this, the per-route cost of the old-town, riverside and north-ring plans was not fully re-summed by hand; their feasibility was spot-checked, not exhaustively traced."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read the instruction and the rules document, and compared each rule with check_plan.py: ceil-Euclidean distance, unloading from max(arrival, ready) and no later than due, return no later than close, shift measured from departure, capacity, range, fleet count, exactly-once delivery, integer departure no earlier than open, strict JSON key set.",
+    "Traced solve.sh: mkdir, then cp /solution/plans/*.json to /app/plans, then check_plan for each of the 4 mornings under set -euo pipefail. It writes exactly the four required paths.",
+    "Validated the plan schema in all 4 plan files: top-level key is only routes; route keys are type/depart/stops; departures are JSON integers >= 14400; type names exist in the fleet.",
+    "Vehicle counts per kind vs fleet: harbour-lanes van 7/7, truck 1/3, bike 4/5. Old-town truck 4/5, van 10/13, bike 7/9. Riverside truck 7/8, van 10/20, bike 11/13. North-ring truck 10/11, van 16/27, bike 18/18.",
+    "Exact customer coverage: every id 1..60, 1..110, 1..160 and 1..220 was checked off once per morning, and the stop totals equal the customer counts, so there are no duplicates.",
+    "Full hand trace of all 12 harbour-lanes routes (legs, arrival/start/leave, due, return, shift, crates, range). Route costs are 6598, 7324, 7049, 15561, 1410, 1402, 9535, 1354, 9524, 8358, 1416 and 8336, totalling 77867, which is at most the 80734 target. Boundaries hit: start == due on several customers (e.g. 43->... route 8 customer 9 at 21600, truck customer 10 at 21600, customer 58 at 28800); truck crates == 150; bike crates == 14; van crates == 60; bike range 258/255/251 <= 260.",
+    "Spot traces in the other mornings, all feasible: old-town bike [17] (depart 21200, start 23400, dist 200) and bike [50,7] (start 21600 == due, dist 251, crates 14); riverside bikes [138] (start 18000, dist 238) and [113] (dist 212, crates 14); north-ring bikes [65], [99] and [61].",
+    "sisr.py feasibility equivalence: dist() is identical to check_plan.distance. evaluate() checks capacity, windows, close, range, and shift via min(forward time slack, waits). depart() returns open + min(fts, waits). Proof: start'_s = start_s + max(0, delta - W_s) <= due because delta <= fts. back' = back because delta <= W_total, so the close check at delta=0 still holds. Duration = back - open - delta, the minimum achievable.",
+    "sisr.py fleet-count preservation: a new route only when used < count; downsize only onto kinds with used < count; swap_kinds leaves the counts unchanged.",
+    "Checked the provenance claims in solve.sh against sisr.py: the CLI signature matches the usage line, and the described ruin/recreate/blink/downsize/swap/SA operators all exist. 'Dearest of three runs' implies every run reached the target. 4 mornings x 2400 s / 2 cores = 80 min.",
+    "Checked that plan_morning.py is not used by the reference, so its behaviour does not affect the reference outputs."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "ordinary case trace",
+      "status": "pass",
+      "reason": "Every harbour-lanes route was traced and the recomputed total equals the stated 77867.",
+      "evidence": "solution/plans/harbour-lanes.json:1-136; environment/app/orders/harbour-lanes.json:1-643; environment/app/tools/check_plan.py:40-107",
+      "finding_ids": []
+    },
+    {
+      "category": "boundary cases (window due equality, capacity equality, range, shift, close, vehicle-count equality)",
+      "status": "pass",
+      "reason": "Several starts equal due exactly (allowed because the check is start > due). The capacity-equality routes, the bike ranges near 260, and north-ring bike usage of 18/18 are all within the limits.",
+      "evidence": "environment/app/docs/dispatch-rules.md:37-46; check_plan.py:84,96,98,101-103; solution/plans/north-ring.json bike routes",
+      "finding_ids": []
+    },
+    {
+      "category": "output bytes / format / paths",
+      "status": "pass",
+      "reason": "The four files land at /app/plans/<morning>.json with integer departures and an exact key set. The checker's strict loader (no duplicate keys, no NaN) is satisfied.",
+      "evidence": "solution/solve.sh:25-29; dispatch-rules.md:54-62; check_plan.py:29-37,55-71",
+      "finding_ids": []
+    },
+    {
+      "category": "state updates / identifier uniqueness",
+      "status": "pass",
+      "reason": "Each customer id appears exactly once per plan. The ids in the orders files are sequential 1..N.",
+      "evidence": "all four solution/plans/*.json; orders id positions (e.g. old-town.json:1101, riverside.json:1601, north-ring.json:2201)",
+      "finding_ids": []
+    },
+    {
+      "category": "cost vs target",
+      "status": "pass",
+      "reason": "harbour-lanes was verified exactly (77867 <= 80734). The other mornings could not be fully re-summed by hand. Their stated costs are below target, the solve.sh check gate would fail loudly on infeasibility, and no infeasible or over-target route was found in the spot traces.",
+      "evidence": "environment/app/orders/targets.json:1-6; solution/solve.sh:19-23",
+      "finding_ids": []
+    },
+    {
+      "category": "solve.sh provenance claims vs shipped search",
+      "status": "pass",
+      "reason": "The operators, CLI, departure derivation and feasibility model in sisr.py match both the description and the rules. The runtime arithmetic is consistent. Longer runs producing the kept plans is not contradicted by anything in the packet.",
+      "evidence": "solution/solve.sh:4-17; solution/search/sisr.py:1-10,43-98,129-251,282-319",
+      "finding_ids": []
+    },
+    {
+      "category": "recovery/durability",
+      "status": "not_applicable",
+      "reason": "The contract has no interruption or recovery semantics.",
+      "evidence": "instruction.md:1-3",
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["departure time", "shift limit", "time windows"],
+      "case_or_path": "Later departure to shorten the shift while keeping windows; sisr depart() = open + min(fts, waits), e.g. harbour truck depart 18450, shift 11890.",
+      "status": "pass",
+      "evidence": "sisr.py:43-98; check_plan.py:73-95; harbour-lanes truck route trace",
+      "finding_ids": []
+    },
+    {
+      "rules": ["bike range", "bike capacity", "time windows"],
+      "case_or_path": "Bike routes with range 251-258 of 260 and crates 13-14 of 14.",
+      "status": "pass",
+      "evidence": "harbour-lanes bike routes; old-town bike [50,7]; check_plan.py:96-99",
+      "finding_ids": []
+    },
+    {
+      "rules": ["fleet count", "vehicle kind reassignment"],
+      "case_or_path": "north-ring uses all 18 bikes; the downsize/swap moves in sisr preserve the counts.",
+      "status": "pass",
+      "evidence": "solution/plans/north-ring.json; north-ring.json:2212-2221; sisr.py:152-156,170-197",
+      "finding_ids": []
+    },
+    {
+      "rules": ["wait at ready", "return before close"],
+      "case_or_path": "Routes that wait for late windows (e.g. harbour van [37,33,12] waits to 32400) still return by 34588 <= 46800.",
+      "status": "pass",
+      "evidence": "harbour-lanes van route 10 trace; check_plan.py:83,92",
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": "This is a static review; nothing was executed. harbour-lanes was verified exactly. The per-route costs of old-town, riverside and north-ring were not all re-summed by hand; their feasibility was spot-checked, together with a full check of structure, vehicle counts and coverage. The claims in solve.sh about seeds, run lengths and 'longer runs' cannot be reproduced statically, but nothing in the packet contradicts them."
+}

@@ -1,0 +1,30 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The bills printed by /app/tools/waterbill_run.py give, for every span of every account in a job,
+  the span's dates, days, use, sewer volume and service, water, sewer and total charges that
+  ordinance R-9 gives.
+causal_core: >
+  reads (actual and estimated) -> spans and use measured from the previous read (2.1, 2.2, 4.3)
+  -> rows the span falls under and days under each (2.5) -> per row: service charge per dwelling
+  unit per 30 days (3.1); water through blocks scaled to a regular cycle (2.3, 4.1, 4.2; a span
+  under 20 days keeps the schedule widths, reach rule); sewer on the sewer volume, a household's
+  volume capped at its winter allowance (2.4, 2.6, 5.1, 5.2; a multi-unit meter's volume keeps
+  today's figure, reach rule) -> day-weighted proration across rows (6.1) -> total (7.1).
+  Rounding 1.1 (half up, cubic foot or cent) applies at every step.
+core_obligations:
+  - {id: SPAN_USE, contribution: "each span measured from the read before it, estimated or actual (true-up)", authority: "ordinance 2.1, 2.2, 4.3", witness: "test_rule_4_3_estimate_is_trued_up_by_the_next_read", plausible_wrong: "measure from the last actual read (shipped)"}
+  - {id: BLOCK_SCALING, contribution: "a regular cycle's block widths scaled by days/30, rounded to the cubic foot; a span under 20 days keeps the schedule widths", authority: "ordinance 1.1, 2.3, 4.2; instruction reach rule", witness: "test_rule_4_2_regular_cycle_blocks_scale_with_its_days; test_special_read_span_keeps_the_schedule_widths (trap T1)", plausible_wrong: "30-day widths everywhere (shipped) / scale every span (minimal natural fix)"}
+  - {id: SERVICE, contribution: "service charge x dwelling units x days / 30", authority: "ordinance 3.1", witness: "test_rule_3_1_service_charge_per_unit_and_day", plausible_wrong: "flat per span (shipped)"}
+  - {id: SEWER_ALLOWANCE, contribution: "a household's sewer volume capped at winter average x days, rounded; a multi-unit meter keeps today's volume", authority: "ordinance 1.4, 2.4, 2.6, 5.2; instruction reach rule", witness: "test_rule_5_2_household_sewer_capped_at_winter_allowance; test_multi_unit_meter_keeps_its_sewer_volume (trap T2)", plausible_wrong: "no cap (shipped) / cap every account (minimal natural fix)"}
+  - {id: SEWER_CHARGE, contribution: "sewer on cubic feet x price / 100 rounded", authority: "ordinance 1.1, 5.1", witness: "test_rule_5_1_sewer_charged_on_cubic_feet", plausible_wrong: "whole 100s of cubic feet only (shipped)"}
+  - {id: PRORATION, contribution: "a span under several rows billed at each and weighted by its days under each", authority: "ordinance 2.5, 6.1", witness: "test_rule_6_1_rate_change_prorated_by_days", plausible_wrong: "row in force on the closing date (shipped)"}
+  - {id: ROUNDING, contribution: "half up to the cubic foot or cent", authority: "ordinance 1.1", witness: "test_rule_1_1_exact_half_goes_up", plausible_wrong: "round-half-even (shipped Python round)"}
+support_obligations:
+  - {id: DRIVER, supplied_boundary: "tools/waterbill_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: BILL_LAYOUT, supplied_boundary: "README bill keys and order, already produced by bill.py", why_not_core: "serialization already right"}
+  - {id: DATES, supplied_boundary: "dates.py ISO parsing and day counts", why_not_core: "already right"}
+non_goals:
+  - malformed or out-of-range job files (left entirely open in the instruction)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - meter rollover, meter replacement, commercial accounts, taxes, late fees, anything the ordinance does not mention

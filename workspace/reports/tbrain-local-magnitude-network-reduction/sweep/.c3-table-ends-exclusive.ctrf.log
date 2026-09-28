@@ -1,0 +1,155 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 19 items
+
+../../tests/test_outputs.py F....F.F......F....                          [100%]
+
+=================================== FAILURES ===================================
+____________ test_rule_2_2_record_amplitude_uses_magnification_2080 ____________
+
+    def test_rule_2_2_record_amplitude_uses_magnification_2080():
+        """Station magnitudes at listed distances, depth 0: the record amplitude uses magnification 2080."""
+>       check_file("gain.jsonl")
+
+/tests/test_outputs.py:176: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:171: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:157: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 2.8862145853
+where = 'gain.jsonl bulletin 0 event ev000001 ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: gain.jsonl bulletin 0 event ev000001 ml: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:145: AssertionError
+________________ test_rule_3_3_listed_distances_and_table_ends _________________
+
+    def test_rule_3_3_listed_distances_and_table_ends():
+        """At listed distances, 10 km and 600 km included, the correction is the listed value and the station contributes."""
+>       check_file("table_ends.jsonl")
+
+/tests/test_outputs.py:201: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:171: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:157: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 3.3809766916
+where = 'table_ends.jsonl bulletin 0 event ev000001 ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: table_ends.jsonl bulletin 0 event ev000001 ml: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:145: AssertionError
+__________________ test_rule_4_2_station_correction_is_added ___________________
+
+    def test_rule_4_2_station_correction_is_added():
+        """Station corrections from -1.0 to +1.0 are added to each channel magnitude."""
+>       check_file("correction.jsonl")
+
+/tests/test_outputs.py:211: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:171: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'events': [{'id': 'ev000001', 'ml': 4.070670289099282, 'stations': [{'code': 'R', 'distance_km': 300.0, 'ml': 2.59878...62907241, 'contributes': True}, {'code': 'AU23', 'distance_km': 30.0, 'ml': 5.424186099483965, 'contributes': True}]}]}
+expected = {'events': [{'id': 'ev000001', 'ml': 4.0706702891, 'stations': [{'code': 'R', 'contributes': True, 'distance_km': 300....ance_km': 20.0, 'ml': 0.9801233263}, {'code': 'AU23', 'contributes': True, 'distance_km': 30.0, 'ml': 5.4241860995}]}]}
+label = 'correction.jsonl bulletin 0'
+
+    def compare(actual, expected, label):
+        assert isinstance(actual, dict) and set(actual) == {"events"}, f"{label}: top-level keys"
+        got, want = actual["events"], expected["events"]
+        assert isinstance(got, list) and len(got) == len(want), f"{label}: {len(want)} events expected"
+        for event, ref in zip(got, want):
+            where = f"{label} event {ref['id']}"
+            assert isinstance(event, dict) and set(event) == {"id", "ml", "stations"}, f"{where}: keys"
+            assert type(event["id"]) is str and event["id"] == ref["id"], f"{where}: id {event['id']!r}"
+            _number(event["ml"], ref["ml"], f"{where} ml")
+            rows = event["stations"]
+            assert isinstance(rows, list) and len(rows) == len(ref["stations"]), f"{where}: station rows"
+            for index, (row, exp) in enumerate(zip(rows, ref["stations"])):
+                at = f"{where} station {index} ({exp['code']})"
+                assert isinstance(row, dict) and set(row) == {"code", "distance_km", "ml", "contributes"}, f"{at}: keys"
+                assert type(row["code"]) is str and row["code"] == exp["code"], f"{at}: code {row['code']!r}"
+                _number(row["distance_km"], exp["distance_km"], f"{at} distance_km")
+                _number(row["ml"], exp["ml"], f"{at} ml")
+>               assert type(row["contributes"]) is bool and row["contributes"] is exp["contributes"], f"{at}: contributes"
+E               AssertionError: correction.jsonl bulletin 0 event ev000002 station 2 (R): contributes
+E               assert (<class 'bool'> is bool and False is True)
+E                +  where <class 'bool'> = type(False)
+
+/tests/test_outputs.py:166: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """Fifty events, two hundred stations, forty recordings, and every amplitude, noise, depth and correction limit."""
+        rows = load("limits.jsonl")
+        bulletin = rows[0]["bulletin"]
+        assert len(bulletin["events"]) == 50 and len(bulletin["stations"]) == 200
+        assert max(len(e["recordings"]) for e in bulletin["events"]) == 40
+>       check_file("limits.jsonl")
+
+/tests/test_outputs.py:250: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:171: in check_file
+    compare(reduce(row["bulletin"]), row["report"], f"{name} bulletin {number}")
+/tests/test_outputs.py:157: in compare
+    _number(event["ml"], ref["ml"], f"{where} ml")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = None, expected = 2.1537539065
+where = 'limits.jsonl bulletin 0 event Z ml'
+
+    def _number(actual, expected, where):
+        if expected is None:
+            assert actual is None, f"{where}: {actual!r}, expected null"
+            return
+>       assert isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{where}: {actual!r} is not a number"
+E       AssertionError: limits.jsonl bulletin 0 event Z ml: None is not a number
+E       assert (False)
+E        +  where False = isinstance(None, (<class 'int'>, <class 'float'>))
+
+/tests/test_outputs.py:145: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_2_2_record_amplitude_is_half_peak_to_peak
+PASSED ../../tests/test_outputs.py::test_rule_2_3_station_mean_leaves_out_amplitudes_under_three_times_noise
+PASSED ../../tests/test_outputs.py::test_rule_3_1_distance_is_hypocentral
+PASSED ../../tests/test_outputs.py::test_rule_3_3_correction_linear_between_listed_distances
+PASSED ../../tests/test_outputs.py::test_station_beyond_the_table_keeps_the_shipped_correction
+PASSED ../../tests/test_outputs.py::test_rule_4_3_station_magnitude_is_mean_of_channel_magnitudes
+PASSED ../../tests/test_outputs.py::test_two_sensors_of_one_site_are_one_station
+PASSED ../../tests/test_outputs.py::test_rule_5_2_network_magnitude_is_median_of_contributors
+PASSED ../../tests/test_outputs.py::test_rule_5_2_even_number_takes_mean_of_middle_two
+PASSED ../../tests/test_outputs.py::test_rule_5_3_fewer_than_three_contributors_has_no_network_magnitude
+PASSED ../../tests/test_outputs.py::test_rule_5_3_three_contributors_give_a_network_magnitude
+PASSED ../../tests/test_outputs.py::test_report_keeps_file_and_recording_order
+PASSED ../../tests/test_outputs.py::test_generated_bulletins
+PASSED ../../tests/test_outputs.py::test_sandbox_cannot_read_ground_truth
+PASSED ../../tests/test_outputs.py::test_submitted_driver_matches_ours
+FAILED ../../tests/test_outputs.py::test_rule_2_2_record_amplitude_uses_magnification_2080
+FAILED ../../tests/test_outputs.py::test_rule_3_3_listed_distances_and_table_ends
+FAILED ../../tests/test_outputs.py::test_rule_4_2_station_correction_is_added
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+========================= 4 failed, 15 passed in 0.90s =========================

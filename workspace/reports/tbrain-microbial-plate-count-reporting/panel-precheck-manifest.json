@@ -1,0 +1,395 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-microbial-plate-count-reporting",
+ "primary_outcome": "the batch report printed by /app/tools/platecount_run.py gives every sample the unit, kind and reported APC that SOP MIC-14 gives",
+ "obligations": [
+  {
+   "id": "COUNTABLE_RANGE",
+   "class": "core",
+   "contribution": "countable plates from 20 to 300 colonies, crowded above 300 or marked too numerous to count",
+   "authority": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "A countable plate is a plate with from 20 to 300 colonies"
+   },
+   "implementation_sites": [
+    "environment/app/src/platecount/plates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "plate classes decide which result rule a sample gets and which plates it pools"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_countable_range_20_to_300",
+     "test_outputs.py::test_rule_2_5_too_numerous_plate_is_crowded"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_countable_range_20_to_300"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "readings 19, 20, 24, 25, 250, 251, 300, 301 and null in countable and crowded positions",
+   "wrong_but_plausible": "keep the reference-method 25-250; read null as no colonies",
+   "selfdescription_phrase": "countable range"
+  },
+  {
+   "id": "PLATED_AMOUNT",
+   "class": "core",
+   "contribution": "plated amount is volume times dilution in every result",
+   "authority": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "the volume plated on"
+   },
+   "implementation_sites": [
+    "environment/app/src/platecount/plates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every result divides by plated amounts"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_2_plated_amount_uses_the_volume"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "two volumes only"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "0.1 mL dilutions in counts, estimates and bounds, mixed with 1.0 mL dilutions in one sample",
+   "wrong_but_plausible": "dilution alone as if every plate were 1.0 mL",
+   "selfdescription_phrase": "plated amount"
+  },
+  {
+   "id": "COUNT",
+   "class": "core",
+   "contribution": "count over the countable plates of the counted dilutions: the first with a countable plate and the dilution a tenth of it when plated and countable",
+   "authority": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "The counted dilutions of a sample that has a countable plate"
+   },
+   "implementation_sites": [
+    "environment/app/src/platecount/results.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the counted dilutions and plated amounts together give the count"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_count_pools_two_consecutive_dilutions",
+     "test_outputs.py::test_dilution_that_is_not_a_tenth_stays_out_of_the_count"
+    ],
+    "boundary": [
+     "test_outputs.py::test_dilution_that_is_not_a_tenth_stays_out_of_the_count"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "countable plates at steps 2 and 3; at steps 1 and 3 with nothing plated at 2; at steps 1 and 3 with step 2 plated and not countable",
+   "wrong_but_plausible": "first dilution alone (shipped); pool the next listed dilution or the next holding a countable plate",
+   "selfdescription_phrase": "count"
+  },
+  {
+   "id": "SPARSE",
+   "class": "core",
+   "contribution": "sparse sample (neither countable nor crowded plate): estimate from the first dilution holding a colony, or less-than at the first dilution",
+   "authority": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "A sparse sample with a colony on one of its plates is given an estimated"
+   },
+   "implementation_sites": [
+    "environment/app/src/platecount/results.py",
+    "environment/app/src/platecount/plates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the sparse-sample predicate routes the estimate and less-than rules"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_estimate_from_first_dilution_with_a_colony",
+     "test_outputs.py::test_rule_4_3_less_than_at_the_first_dilution"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_2_estimate_from_first_dilution_with_a_colony"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "sparse samples with colonies at two or more dilutions, and all-empty samples of several dilutions",
+   "wrong_but_plausible": "pool every uncrowded plate; less-than at the last dilution",
+   "selfdescription_phrase": "estimated count"
+  },
+  {
+   "id": "COUNTED_PLATES",
+   "class": "core",
+   "contribution": "a count takes every counted plate: the plates of the counted dilutions that are not crowded, sparse and empty ones included",
+   "authority": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "counted plates are the plates of its counted dilutions"
+   },
+   "implementation_sites": [
+    "environment/app/src/platecount/plates.py",
+    "environment/app/src/platecount/results.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "shares the estimate expression and the routing the sparse repair rewrites"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_sparse_and_empty_plates_on_a_counted_dilution_stay_in_the_count"
+    ],
+    "boundary": [
+     "test_outputs.py::test_sparse_and_empty_plates_on_a_counted_dilution_stay_in_the_count"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "counted dilutions holding 0, 1-18 and 19-colony plates beside countable ones",
+   "wrong_but_plausible": "take only the countable plates of the counted dilutions",
+   "selfdescription_phrase": "counted plates"
+  },
+  {
+   "id": "ABOVE",
+   "class": "core",
+   "contribution": "a crowded plate and no countable plate: 300 over the plated amount of a plate of the last dilution holding a crowded plate",
+   "authority": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "more than 300 colonies in the plated amount of one plate"
+   },
+   "implementation_sites": [
+    "environment/app/src/platecount/results.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the bound uses plate classes and plated amounts"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_4_greater_than_at_the_last_dilution"
+    ],
+    "boundary": [],
+    "boundary_not_applicable": "end of series choice"
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "wholly crowded samples and crowded-then-sparse samples of two or more dilutions",
+   "wrong_but_plausible": "first dilution, 250",
+   "selfdescription_phrase": "greater-than result"
+  },
+  {
+   "id": "ROUNDING",
+   "class": "core",
+   "contribution": "two significant figures with an exact half going up, written d.dEk",
+   "authority": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "to two significant figures, an"
+   },
+   "implementation_sites": [
+    "environment/app/src/platecount/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "every reported result passes through it"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_1_2_exact_half_goes_up"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_exact_half_goes_up"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "results of 1.25, 1.05 and 2.85 times a power of ten",
+   "wrong_but_plausible": "round half to even",
+   "selfdescription_phrase": "reported result"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/platecount_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_driver_is_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "COUNTABLE_RANGE",
+    "to": "COUNT"
+   },
+   {
+    "from": "PLATED_AMOUNT",
+    "to": "COUNT"
+   },
+   {
+    "from": "COUNTABLE_RANGE",
+    "to": "SPARSE"
+   },
+   {
+    "from": "PLATED_AMOUNT",
+    "to": "SPARSE"
+   },
+   {
+    "from": "COUNTABLE_RANGE",
+    "to": "ABOVE"
+   },
+   {
+    "from": "PLATED_AMOUNT",
+    "to": "ABOVE"
+   },
+   {
+    "from": "SPARSE",
+    "to": "COUNTED_PLATES"
+   },
+   {
+    "from": "COUNTABLE_RANGE",
+    "to": "COUNTED_PLATES"
+   },
+   {
+    "from": "PLATED_AMOUNT",
+    "to": "COUNTED_PLATES"
+   },
+   {
+    "from": "COUNT",
+    "to": "ROUNDING"
+   },
+   {
+    "from": "SPARSE",
+    "to": "ROUNDING"
+   },
+   {
+    "from": "COUNTED_PLATES",
+    "to": "ROUNDING"
+   },
+   {
+    "from": "ABOVE",
+    "to": "ROUNDING"
+   },
+   {
+    "from": "ROUNDING",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "count-amount",
+   "obligation_ids": [
+    "COUNT",
+    "PLATED_AMOUNT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_1_count_pools_two_consecutive_dilutions"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "sparse-silent",
+   "obligation_ids": [
+    "SPARSE",
+    "COUNTED_PLATES"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_sparse_and_empty_plates_on_a_counted_dilution_stay_in_the_count"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "range-routing",
+   "obligation_ids": [
+    "COUNTABLE_RANGE",
+    "COUNT",
+    "SPARSE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_4_countable_range_20_to_300"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "above-amount",
+   "obligation_ids": [
+    "ABOVE",
+    "PLATED_AMOUNT",
+    "COUNTABLE_RANGE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_4_greater_than_at_the_last_dilution"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "rounding-results",
+   "obligation_ids": [
+    "ROUNDING",
+    "COUNT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_1_2_exact_half_goes_up"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each of its rules holds for every batch within the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the SOP gives no rule for a figure that one of the package's steps works out",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Batches of one to two hundred samples will be reported"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "authoring gen.py SEED=20260927 (graded batches will be sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "APC-WRITING",
+   "domain_required": true,
+   "rationale": "the certificate string is the reported result",
+   "authority_anchor": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "25,000 is written 2.5E4"
+   }
+  },
+  {
+   "id": "KIND-NAMES",
+   "domain_required": true,
+   "rationale": "result kinds named by the SOP",
+   "authority_anchor": {
+    "file": "environment/app/docs/apc-sop.md",
+    "anchor": "\"count\" for 4.1"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": []
+}

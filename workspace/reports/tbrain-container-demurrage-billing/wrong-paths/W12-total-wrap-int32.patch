@@ -1,0 +1,45 @@
+diff --git a/app/src/demurrage/charges.py b/app/src/demurrage/charges.py
+index 16bb10d..0c2e92f 100644
+--- a/app/src/demurrage/charges.py
++++ b/app/src/demurrage/charges.py
+@@ -5,5 +5,11 @@ def days(stood, free):
+     return stood - free
+ 
+ 
++FULL_RATE_DAYS = 4
++
++
+ def charge(box, chargeable):
+-    return chargeable * box["rate"]
++    if chargeable <= 0:
++        return chargeable * box["rate"]
++    later = max(chargeable - FULL_RATE_DAYS, 0)
++    return (chargeable - later) * box["rate"] + later * 2 * box["rate"]
+diff --git a/app/src/demurrage/dwell.py b/app/src/demurrage/dwell.py
+index 374e966..bb54f85 100644
+--- a/app/src/demurrage/dwell.py
++++ b/app/src/demurrage/dwell.py
+@@ -1,12 +1,13 @@
+ """Dwell and free time."""
+ 
+ FREE_DAYS = 5
++TARIFF_FREE_DAYS = {"DRY": 5, "REEFER": 3}
+ 
+ 
+ def dwell(box):
+     """Days the container stood in the terminal."""
+-    return box["picked_up"] - box["discharged"]
++    return box["picked_up"] - box["discharged"] + 1
+ 
+ 
+ def free_days(box):
+-    return FREE_DAYS
++    return TARIFF_FREE_DAYS.get(box["type"], FREE_DAYS)
+diff --git a/app/src/demurrage/statement.py b/app/src/demurrage/statement.py
+--- a/app/src/demurrage/statement.py
++++ b/app/src/demurrage/statement.py
+@@ -14,3 +14,3 @@
+ def statement(releases):
+     lines = [line(b) for b in releases["containers"]]
+-    return {"terminal": releases["terminal"], "containers": lines, "total": sum(x["charge"] for x in lines)}
++    return {"terminal": releases["terminal"], "containers": lines, "total": (sum(x["charge"] for x in lines) + 2**31) % 2**32 - 2**31}

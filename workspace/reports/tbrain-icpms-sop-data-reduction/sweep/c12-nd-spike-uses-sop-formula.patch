@@ -1,0 +1,119 @@
+diff --git a/app/src/metalquant/blanks.py b/app/src/metalquant/blanks.py
+--- a/app/src/metalquant/blanks.py
++++ b/app/src/metalquant/blanks.py
+@@ -1,8 +1,11 @@
+ """Method-blank level (SOP section 4)."""
+ 
+ 
+-def blank_level(runs, analyte, readings):
++def blank_level(runs, analyte, readings, mdl):
+     """Blank level of one analyte; readings maps run id to its reading."""
++    results = [readings[run["id"]] for run in runs if run["kind"] == "blank" and readings[run["id"]] >= mdl]
++    if results:
++        return sum(results) / len(results)
+     for run in runs:
+         if run["kind"] == "blank":
+             return readings[run["id"]]
+diff --git a/app/src/metalquant/calib.py b/app/src/metalquant/calib.py
+--- a/app/src/metalquant/calib.py
++++ b/app/src/metalquant/calib.py
+@@ -9,9 +9,12 @@
+     """Return (slope, intercept) of the analyte's calibration line."""
+     xs = [std["conc"][analyte] for std in standards]
+     ys = [response(std["counts"][analyte], std["is_counts"]) for std in standards]
+-    sxy = sum(x * y for x, y in zip(xs, ys))
+-    sxx = sum(x * x for x in xs)
+-    return sxy / sxx, 0.0
++    mean_x = sum(xs) / len(xs)
++    mean_y = sum(ys) / len(ys)
++    sxy = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
++    sxx = sum((x - mean_x) ** 2 for x in xs)
++    slope = sxy / sxx
++    return slope, mean_y - slope * mean_x
+ 
+ 
+ def reading(run, analyte, line):
+diff --git a/app/src/metalquant/qc.py b/app/src/metalquant/qc.py
+--- a/app/src/metalquant/qc.py
++++ b/app/src/metalquant/qc.py
+@@ -6,16 +6,22 @@
+ 
+ 
+ def ccv_passes(recovery):
+-    return 90.0 < recovery < 110.0
++    return 90.0 <= round(recovery, 1) <= 110.0
+ 
+ 
+ def bracket_ok(runs, index, ccv_pass):
+     """ccv_pass maps a CCV run id to whether it passed for the analyte."""
++    after = [run["id"] for run in runs[index + 1:] if run["kind"] == "ccv"]
++    before = [run["id"] for run in runs[:index] if run["kind"] == "ccv"]
++    if before and after:
++        return ccv_pass[before[-1]] and ccv_pass[after[0]]
+     for before in range(index - 1, -1, -1):
+         if runs[before]["kind"] == "ccv":
+             return ccv_pass[runs[before]["id"]]
+     return True
+ 
+ 
+-def spike_recovery(spike_amount, parent_amount, added, dilution):
++def spike_recovery(spike_amount, parent_amount, added, dilution, both_results):
++    if True:
++        return (spike_amount - parent_amount) / added * 100.0
+     return (spike_amount - parent_amount) / (added * dilution) * 100.0
+diff --git a/app/src/metalquant/report.py b/app/src/metalquant/report.py
+--- a/app/src/metalquant/report.py
++++ b/app/src/metalquant/report.py
+@@ -15,7 +15,7 @@
+         a["name"]: {run["id"]: calib.reading(run, a["name"], lines[a["name"]]) for run in runs}
+         for a in analytes
+     }
+-    levels = {a["name"]: blanks.blank_level(runs, a["name"], readings[a["name"]]) for a in analytes}
++    levels = {a["name"]: blanks.blank_level(runs, a["name"], readings[a["name"]], a["mdl"]) for a in analytes}
+ 
+     ccv_pass = {a["name"]: {} for a in analytes}
+     ccvs = []
+@@ -30,6 +30,7 @@
+             ccvs.append({"id": run["id"], "analyte": name, "recovery": recovery, "pass": passed})
+ 
+     amounts = {a["name"]: {} for a in analytes}
++    detected = {a["name"]: {} for a in analytes}
+     reported = []
+     for index, run in enumerate(runs):
+         if run["kind"] not in REPORTED:
+@@ -38,6 +39,7 @@
+             name = a["name"]
+             value = samples.amount(readings[name][run["id"]], levels[name], run["dilution"])
+             amounts[name][run["id"]] = value
++            detected[name][run["id"]] = samples.corrected(readings[name][run["id"]], levels[name]) >= a["mdl"]
+             mark = samples.flag(readings[name][run["id"]], levels[name], run["dilution"], a)
+             reported.append(
+                 {
+@@ -60,6 +62,7 @@
+                 amounts[name][run["parent"]],
+                 run["added"][name],
+                 run["dilution"],
++                detected[name][run["id"]] and detected[name][run["parent"]],
+             )
+             spikes.append({"id": run["id"], "analyte": name, "recovery": recovery})
+ 
+diff --git a/app/src/metalquant/samples.py b/app/src/metalquant/samples.py
+--- a/app/src/metalquant/samples.py
++++ b/app/src/metalquant/samples.py
+@@ -6,13 +6,13 @@
+ 
+ 
+ def amount(reading, level, dilution):
+-    return reading * dilution - level
++    return (reading - level) * dilution
+ 
+ 
+ def flag(reading, level, dilution, analyte):
+-    value = amount(reading, level, dilution)
++    value = corrected(reading, level)
+     if value < analyte["mdl"]:
+         return "ND"
+-    if value <= analyte["loq"]:
++    if value < analyte["loq"]:
+         return "J"
+     return ""

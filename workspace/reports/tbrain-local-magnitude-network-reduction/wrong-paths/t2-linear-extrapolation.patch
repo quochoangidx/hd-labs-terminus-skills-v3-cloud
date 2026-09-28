@@ -1,0 +1,130 @@
+diff --git a/app/mlnet/amplitude.py b/app/mlnet/amplitude.py
+--- a/app/mlnet/amplitude.py
++++ b/app/mlnet/amplitude.py
+@@ -3,15 +3,18 @@
+ import math
+ 
+ # Static magnification of the Wood-Anderson torsion seismometer.
+-WOOD_ANDERSON_GAIN = 2800.0
++WOOD_ANDERSON_GAIN = 2080.0
+ 
+ # Nanometres of ground displacement to millimetres, before magnification.
+ NM_TO_MM = 1.0e-6
+ 
+ 
+ def record_amplitude_mm(amplitude_nm):
+-    """Trace amplitude on the simulated Wood-Anderson record, in millimetres."""
+-    return float(amplitude_nm) * WOOD_ANDERSON_GAIN * NM_TO_MM
++    """Trace amplitude on the simulated Wood-Anderson record, in millimetres.
++
++    The picker measures peak to peak; the record amplitude is half of it.
++    """
++    return float(amplitude_nm) / 2.0 * WOOD_ANDERSON_GAIN * NM_TO_MM
+ 
+ 
+ def log_record_amplitude(amplitude_nm):
+diff --git a/app/mlnet/attenuation.py b/app/mlnet/attenuation.py
+--- a/app/mlnet/attenuation.py
++++ b/app/mlnet/attenuation.py
+@@ -32,6 +32,9 @@
+     """Distance correction -log A0 at ``distance_km`` kilometres."""
+     index = _segment(distance_km)
+     (near_km, near_value), (far_km, far_value) = CALIBRATION[index], CALIBRATION[index + 1]
++    if True:
++        return near_value + (far_value - near_value) * (distance_km - near_km) / (far_km - near_km)
++    # NPM-4 gives no correction outside its table: the calculation below stays as it was.
+     x = math.log10(distance_km)
+     x_near = math.log10(near_km)
+     x_far = math.log10(far_km)
+diff --git a/app/mlnet/bulletin.py b/app/mlnet/bulletin.py
+--- a/app/mlnet/bulletin.py
++++ b/app/mlnet/bulletin.py
+@@ -13,17 +13,23 @@
+ def reduce_event(event, corrections):
+     """Report object for one event."""
+     depth_km = float(event["depth_km"])
+-    rows = []
++    # A station's readings are those of all its recordings in the event.
++    amplitudes = {}
++    epicentral = {}
+     for recording in event["recordings"]:
+-        code = recording["code"]
+-        distance_km = station_distance_km(recording["epi_km"], depth_km)
+-        rows.append({
++        amplitudes.setdefault(recording["code"], []).extend(recording["amplitudes"])
++        epicentral.setdefault(recording["code"], recording["epi_km"])
++    stations = {}
++    for code, items in amplitudes.items():
++        distance_km = station_distance_km(epicentral[code], depth_km)
++        stations[code] = {
+             "code": code,
+             "distance_km": distance_km,
+-            "ml": station_magnitude(recording["amplitudes"], distance_km, corrections[code]),
++            "ml": station_magnitude(items, distance_km, corrections[code]),
+             "contributes": contributes(distance_km),
+-        })
+-    counted = [row["ml"] for row in rows if row["contributes"]]
++        }
++    rows = [dict(stations[recording["code"]]) for recording in event["recordings"]]
++    counted = [row["ml"] for row in stations.values() if row["contributes"]]
+     return {"id": event["id"], "ml": network_magnitude(counted), "stations": rows}
+ 
+ 
+diff --git a/app/mlnet/distance.py b/app/mlnet/distance.py
+--- a/app/mlnet/distance.py
++++ b/app/mlnet/distance.py
+@@ -1,10 +1,12 @@
+ """Source-station distance used by the magnitude."""
+ 
++import math
+ 
++
+ def station_distance_km(epi_km, depth_km):
+     """Distance, in kilometres, a station's magnitude is corrected for.
+ 
+     ``epi_km`` is the epicentral distance the locator gives for the station and
+     ``depth_km`` the depth of the event.
+     """
+-    return float(epi_km)
++    return math.sqrt(float(epi_km) ** 2 + float(depth_km) ** 2)
+diff --git a/app/mlnet/network.py b/app/mlnet/network.py
+--- a/app/mlnet/network.py
++++ b/app/mlnet/network.py
+@@ -16,7 +16,10 @@
+ 
+     Returns ``None`` when no magnitude can be formed.
+     """
+-    values = [float(value) for value in station_magnitudes]
+-    if not values:
++    values = sorted(float(value) for value in station_magnitudes)
++    if len(values) < 3:
+         return None
+-    return sum(values) / len(values)
++    middle = len(values) // 2
++    if len(values) % 2:
++        return values[middle]
++    return (values[middle - 1] + values[middle]) / 2.0
+diff --git a/app/mlnet/station.py b/app/mlnet/station.py
+--- a/app/mlnet/station.py
++++ b/app/mlnet/station.py
+@@ -9,7 +9,7 @@
+ 
+     ``correction`` is the station's entry in the station table.
+     """
+-    return log_record_amplitude(amplitude_nm) + minus_log_a0(distance_km) - correction
++    return log_record_amplitude(amplitude_nm) + minus_log_a0(distance_km) + correction
+ 
+ 
+ def station_magnitude(amplitudes, distance_km, correction):
+@@ -18,5 +18,9 @@
+     ``amplitudes`` is the recording's list of amplitude objects, each with its
+     ``channel``, ``amplitude_nm`` and ``noise_nm``.
+     """
+-    largest = max(float(item["amplitude_nm"]) for item in amplitudes)
+-    return channel_magnitude(largest, distance_km, correction)
++    magnitudes = [
++        channel_magnitude(float(item["amplitude_nm"]), distance_km, correction)
++        for item in amplitudes
++        if float(item["amplitude_nm"]) >= 3.0 * float(item["noise_nm"])
++    ]
++    return sum(magnitudes) / len(magnitudes)

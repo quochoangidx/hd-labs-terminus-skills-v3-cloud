@@ -1,0 +1,338 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-water-utility-tiered-billing",
+ "primary_outcome": "the bills printed by the fixed driver follow ordinance R-9 for every span of every account",
+ "obligations": [
+  {
+   "id": "SPAN_USE",
+   "class": "core",
+   "contribution": "each span measured from the read before it, actual or estimated (true-up)",
+   "authority": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "The span the next read"
+   },
+   "implementation_sites": [
+    "environment/app/src/waterbill/reads.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds a charge on the same bill and its total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_3_estimate_is_trued_up_by_the_next_read"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_3_estimate_closing_the_last_span"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "two and three estimates in a row, then an actual read",
+   "wrong_but_plausible": "measure from the last actual read (shipped)",
+   "selfdescription_phrase": "span use"
+  },
+  {
+   "id": "BLOCK_SCALING",
+   "class": "core",
+   "contribution": "a regular cycle's widths scaled by days/30 and rounded; a shorter span keeps the schedule widths",
+   "authority": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "The blocks of a regular"
+   },
+   "implementation_sites": [
+    "environment/app/src/waterbill/tiers.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds a charge on the same bill and its total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_regular_cycle_blocks_scale_with_its_days",
+     "test_outputs.py::test_special_read_span_keeps_the_schedule_widths"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_3_span_of_exactly_20_days_is_a_regular_cycle"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "spans of 19, 20, 21, 31, 45 and 62 days whose use crosses a block edge",
+   "wrong_but_plausible": "30-day widths everywhere (shipped); scale every span (natural over-repair)",
+   "selfdescription_phrase": "block widths"
+  },
+  {
+   "id": "SERVICE",
+   "class": "core",
+   "contribution": "service charge x dwelling units x days / 30",
+   "authority": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "Every span carries a service charge"
+   },
+   "implementation_sites": [
+    "environment/app/src/waterbill/service.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds a charge on the same bill and its total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_service_charge_per_unit_and_day"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_1_service_charge_of_nought"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "1 to 8 units, 1 to 62 days",
+   "wrong_but_plausible": "flat per span (shipped)",
+   "selfdescription_phrase": "service charge"
+  },
+  {
+   "id": "SEWER_ALLOWANCE",
+   "class": "core",
+   "contribution": "a household's volume capped at winter average x days; a multi-unit meter keeps today's volume",
+   "authority": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "A household's sewer volume"
+   },
+   "implementation_sites": [
+    "environment/app/src/waterbill/sewer.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds a charge on the same bill and its total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_2_household_sewer_capped_at_winter_allowance",
+     "test_outputs.py::test_multi_unit_meter_keeps_its_sewer_volume"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_2_allowance_equal_to_use"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "households with light winters and heavy summers; meters of 2 to 8 units with light winters",
+   "wrong_but_plausible": "no cap (shipped); cap every account (natural over-repair)",
+   "selfdescription_phrase": "sewer volume"
+  },
+  {
+   "id": "SEWER_CHARGE",
+   "class": "core",
+   "contribution": "sewer on cubic feet x price / 100 rounded",
+   "authority": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "Every span is charged for sewer"
+   },
+   "implementation_sites": [
+    "environment/app/src/waterbill/sewer.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds a charge on the same bill and its total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_1_sewer_charged_on_cubic_feet"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_1_volume_below_100_cubic_feet"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "volumes not a multiple of 100",
+   "wrong_but_plausible": "whole 100s of cubic feet (shipped)",
+   "selfdescription_phrase": "sewer charge"
+  },
+  {
+   "id": "PRORATION",
+   "class": "core",
+   "contribution": "a span under several rows billed at each, weighted by days",
+   "authority": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "falls under more than one row"
+   },
+   "implementation_sites": [
+    "environment/app/src/waterbill/schedule.py",
+    "environment/app/src/waterbill/bill.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds a charge on the same bill and its total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_1_rate_change_prorated_by_days"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_5_change_on_the_closing_day"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "changes on the opening day, the day after, and the closing day; two changes in one span",
+   "wrong_but_plausible": "row in force on the closing date (shipped)",
+   "selfdescription_phrase": "rate change"
+  },
+  {
+   "id": "ROUNDING",
+   "class": "core",
+   "contribution": "half up to the cubic foot or cent",
+   "authority": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "an exact half goes up"
+   },
+   "implementation_sites": [
+    "environment/app/src/waterbill/money.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds a charge on the same bill and its total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_1_1_exact_half_goes_up"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_1_exact_half_goes_up"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "block charges ending in exactly half a cent",
+   "wrong_but_plausible": "round-half-even (shipped)",
+   "selfdescription_phrase": "rounding"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/waterbill_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_is_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "SPAN_USE",
+    "to": "BLOCK_SCALING"
+   },
+   {
+    "from": "SPAN_USE",
+    "to": "SEWER_ALLOWANCE"
+   },
+   {
+    "from": "SEWER_ALLOWANCE",
+    "to": "SEWER_CHARGE"
+   },
+   {
+    "from": "BLOCK_SCALING",
+    "to": "PRORATION"
+   },
+   {
+    "from": "SERVICE",
+    "to": "PRORATION"
+   },
+   {
+    "from": "SEWER_CHARGE",
+    "to": "PRORATION"
+   },
+   {
+    "from": "ROUNDING",
+    "to": "PRORATION"
+   },
+   {
+    "from": "PRORATION",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "use-feeds-blocks-and-sewer",
+   "obligation_ids": [
+    "SPAN_USE",
+    "BLOCK_SCALING",
+    "SEWER_ALLOWANCE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_3_estimate_is_trued_up_by_the_next_read"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "row-charges-prorated",
+   "obligation_ids": [
+    "PRORATION",
+    "SERVICE",
+    "BLOCK_SCALING",
+    "SEWER_CHARGE",
+    "ROUNDING"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_6_1_rate_change_prorated_by_days"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "every rule of the ordinance holds for every job inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "that no rule of the ordinance settles is worked out the way today's code works it out",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The jobs we run hold one to two hundred accounts"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "authoring gen.py / skeleton_score.py SEED=20260927 (authoring only; graded jobs will be sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "BILL-SCHEMA",
+   "domain_required": true,
+   "rationale": "the billing system reads these keys in job and read order",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "with exactly these keys"
+   }
+  },
+  {
+   "id": "HALF-UP",
+   "domain_required": true,
+   "rationale": "ordinance 1.1 fixes rounding",
+   "authority_anchor": {
+    "file": "environment/app/docs/billing-ordinance.md",
+    "anchor": "an exact half goes up"
+   }
+  }
+ ],
+ "wrong_paths": []
+}

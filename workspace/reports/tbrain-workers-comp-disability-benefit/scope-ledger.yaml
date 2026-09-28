@@ -1,0 +1,28 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The statements printed by /app/tools/tdbenefit_run.py give, for every claim of a job, the average
+  weekly wage, weekly rate, waiting/retroactive/paid days, total-disability amount, partial weeks and
+  amount and total owed that manual TD-7 gives.
+causal_core: >
+  wage lines (all Friday paydays) -> week each line counts toward (2.2 threshold, 3.1, 3.2; a line
+  below a week's pay keeps its payday's week) -> base period and base-period wages (2.1, 2.3, 3.2)
+  -> AWW over thirteen (3.3) -> weekly rate with the row in force on the date of injury and the
+  low-wage rule (2.4, 3.4, 3.5) -> disability days, waiting period, retroactive and paid days,
+  total-disability amount (2.5, 2.6, 4.1-4.3, 1.1) -> wage loss and partial benefit capped at the rate,
+  two thirds for a week of partial disability (2.7, 2.8, 5.1), today's share for any other week (5.2,
+  reach rule) -> total (6.1).
+core_obligations:
+  - {id: WEEK_CREDIT, contribution: "a week's pay (2,000 cents or more) counts toward the week it pays for; a smaller line keeps its payday's week", authority: "manual 1.4, 2.2, 3.1, 3.2; instruction reach rule", witness: "test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays; test_correction_below_a_weeks_pay_keeps_its_paydays_week (trap T1)", plausible_wrong: "payday's week for every line (shipped) / shift every line (minimal natural fix)"}
+  - {id: AWW, contribution: "base-period wages / 13", authority: "manual 2.3, 3.2, 3.3", witness: "test_rule_3_3_average_weekly_wage_divides_by_thirteen", plausible_wrong: "divide by the weeks paid (shipped)"}
+  - {id: RATE, contribution: "two thirds of AWW within the max and min of the row in force on the date of injury; AWW below the minimum is the rate", authority: "manual 2.5, 3.4, 3.5", witness: "test_rule_3_4_two_thirds; test_rule_2_5_row_in_force_on_the_date_of_injury; test_rule_3_5_low_wage_rate_is_the_aww", plausible_wrong: "60 per cent / newest row / lift to minimum"}
+  - {id: TTD, contribution: "disability days both ends included; three waiting days paid back from fourteen days; amount rounded to the cent", authority: "manual 1.1, 2.6, 2.7, 4.1-4.3", witness: "test_rule_2_6_both_ends_count; test_rule_2_7_three_waiting_days; test_rule_4_3_amount_rounded_to_the_cent", plausible_wrong: "exclusive count / seven waiting days / truncation"}
+  - {id: TPD, contribution: "a week of partial disability (1,000 cents or more earned) pays two thirds of its wage loss, capped at the rate; any other week keeps today's share", authority: "manual 1.6, 2.7, 2.8, 5.1, 5.2; instruction reach rule", witness: "test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate; test_week_below_1000_cents_keeps_todays_share (trap T2)", plausible_wrong: "60 per cent (shipped) / two thirds for every week via the shared constant (minimal natural fix)"}
+support_obligations:
+  - {id: DRIVER, supplied_boundary: "tools/tdbenefit_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: STATEMENT_LAYOUT, supplied_boundary: "README statement keys and order, already produced by statement.py", why_not_core: "serialization already right"}
+  - {id: DATES, supplied_boundary: "dates.py ISO parsing and payroll-week helpers", why_not_core: "already right"}
+non_goals:
+  - malformed or out-of-range job files (left entirely open in the instruction)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - permanent disability, medical benefits, cost of living adjustments, concurrent employment, anything the manual does not mention

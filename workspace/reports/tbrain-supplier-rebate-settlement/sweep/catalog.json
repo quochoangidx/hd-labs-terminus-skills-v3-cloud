@@ -1,0 +1,318 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "c1-code-stripped": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "\"account\": account[\"account\"],",
+     "new": "\"account\": account[\"account\"].strip(),"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "README: the account code as given"
+  },
+  "c2-unit-price-capped-100000": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/rebate/ledger.py",
+     "old": "units * unit_cents",
+     "new": "units * min(unit_cents, 100000)"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: unit price up to 1,000,000"
+  },
+  "c3-lines-capped-256": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/rebate/ledger.py",
+     "old": "dated_lines(lines) if",
+     "new": "dated_lines(lines[:256]) if"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.4: 400 lines"
+  },
+  "c3-transit-3-days": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/rebate/ledger.py",
+     "old": "TRANSIT = datetime.timedelta(days=4)",
+     "new": "TRANSIT = datetime.timedelta(days=3)"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_1_carton_shipment_counts_by_receipt"
+   ],
+   "rationale": "2.2: fourth day"
+  },
+  "c4-no-prior-bonus-on-all": {
+   "class": "C4",
+   "edits": [
+    {
+     "file": "app/src/rebate/growth.py",
+     "old": "if prior <= 0:",
+     "new": "if prior < 0:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_no_prior_purchases_no_bonus"
+   ],
+   "rationale": "4.1: prior above nought"
+  },
+  "c5-accounts-capped-64": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "for account in job[\"accounts\"]]",
+     "new": "for account in job[\"accounts\"][:64]]"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: 100 accounts"
+  },
+  "c5-tier-rows-capped-8": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/rebate/tiers.py",
+     "old": "for row in rows]",
+     "new": "for row in rows[:8]]"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "1.3: 12 rows"
+  },
+  "c6-code-cut-8": {
+   "class": "C6",
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "\"account\": account[\"account\"],",
+     "new": "\"account\": account[\"account\"][:8],"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "1.3: 16 characters"
+  },
+  "c7-purchases-int32": {
+   "class": "C7",
+   "edits": [
+    {
+     "file": "app/src/rebate/ledger.py",
+     "old": "    return sum(value for",
+     "new": "    return min(2**31 - 1, sum(value for"
+    }
+   ],
+   "expect_failing": [
+    "test_section_one_limits_reached"
+   ],
+   "rationale": "purchases reach 2e12"
+  },
+  "c8-growth-floored": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rebate/growth.py",
+     "old": "return half_up((net - prior) * GROWTH_SHARE_BP, 10000)",
+     "new": "return (net - prior) * GROWTH_SHARE_BP // 10000"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_growth_bonus_on_the_increase"
+   ],
+   "rationale": "1.1: nearest cent"
+  },
+  "c8-carton-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rebate/ledger.py",
+     "old": "if units >= CARTON_UNITS:",
+     "new": "if units > CARTON_UNITS:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_2_line_of_exactly_12_units_is_a_carton"
+   ],
+   "rationale": "2.2: 12 units or more"
+  },
+  "c8-minimum-inclusive": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rebate/settle.py",
+     "old": "if total < figure(\"settlement_minimum\"):",
+     "new": "if total <= figure(\"settlement_minimum\"):"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_6_2_settlement_of_exactly_25000_cents"
+   ],
+   "rationale": "6.2: 25,000 or more paid"
+  },
+  "c8-growth-strict": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rebate/growth.py",
+     "old": "if net * GROWTH_TARGET[1] < prior * GROWTH_TARGET[0]:",
+     "new": "if net * GROWTH_TARGET[1] <= prior * GROWTH_TARGET[0]:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_4_1_growth_exactly_110_per_cent"
+   ],
+   "rationale": "4.1: 110 per cent or more"
+  },
+  "c8-half-down": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rebate/tiers.py",
+     "old": "return half_up(net * bp, 10000)",
+     "new": "return (2 * net * bp + 9999) // 20000"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_3_6_volume_rebate_rounded_half_up"
+   ],
+   "rationale": "1.1: exact half goes up"
+  },
+  "c8-negative-net-rate-kept": {
+   "class": "C8",
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "bp = tier_rate(net, tiers)",
+     "new": "bp = tier_rate(max(net, 0), tiers)"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_6_net_below_nought_reaches_no_tier"
+   ],
+   "rationale": "2.6: below nought reaches no tier"
+  },
+  "c9-code-ascii": {
+   "class": "C9",
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "\"account\": account[\"account\"],",
+     "new": "\"account\": account[\"account\"].encode(\"ascii\", \"replace\").decode(),"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "1.3: any characters"
+  },
+  "c10-first-row-only": {
+   "class": "C10",
+   "edits": [
+    {
+     "file": "app/src/rebate/tiers.py",
+     "old": "for threshold, bp in tiers:",
+     "new": "for threshold, bp in tiers[:1]:"
+    }
+   ],
+   "expect_failing": [
+    "test_rule_2_6_net_exactly_on_a_threshold"
+   ],
+   "rationale": "2.6"
+  },
+  "c15-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "for account in job[\"accounts\"]]",
+     "new": "for account in sorted(job[\"accounts\"], key=lambda a: a[\"account\"])]"
+    }
+   ],
+   "expect_failing": [
+    "test_statement_order_and_keys"
+   ],
+   "rationale": "README: job order"
+  },
+  "c16-total-float": {
+   "class": "C16",
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "total = rebate + growth + protection + charged",
+     "new": "total = float(rebate + growth + protection + charged)"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_jobs"
+   ],
+   "rationale": "README: integers"
+  }
+ },
+ "alternatives": {
+  "alt-additive-constants": {
+   "edits": [
+    {
+     "file": "app/src/rebate/rates.py",
+     "old": "    \"return_handling\": 40,\n    \"minimum_settlement\": 25000,\n",
+     "new": ""
+    },
+    {
+     "file": "app/src/rebate/rates.py",
+     "old": "\"return_charge\": \"return_handling\"",
+     "new": "\"return_charge\": \"unit_handling\""
+    },
+    {
+     "file": "app/src/rebate/rates.py",
+     "old": "\"settlement_minimum\": \"minimum_settlement\"",
+     "new": "\"settlement_minimum\": \"small_credit\""
+    },
+    {
+     "file": "app/src/rebate/returns.py",
+     "old": "figure(\"return_charge\")",
+     "new": "40"
+    },
+    {
+     "file": "app/src/rebate/settle.py",
+     "old": "if total < figure(\"settlement_minimum\"):",
+     "new": "if total < 25000:"
+    }
+   ],
+   "rationale": "the schedule's figures as literals at X, the shared table left as shipped"
+  },
+  "alt-keys-reversed": {
+   "edits": [
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "    return {\n        \"account\"",
+     "new": "    return dict(reversed(list({\n        \"account\""
+    },
+    {
+     "file": "app/src/rebate/statement.py",
+     "old": "        \"carried\": carried,\n    }\n",
+     "new": "        \"carried\": carried,\n    }.items())))\n"
+    }
+   ],
+   "rationale": "key order is not graded"
+  }
+ }
+}

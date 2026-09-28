@@ -1,0 +1,53 @@
+# Bounded scope ledger (bounded-task-design.md), written before scaffold expansion.
+task_slug: tbrain-cell-line-passage-doubling
+primary_outcome: >
+  the lineage report printed by the fixed driver follows SOP CB-3: per culture the passage
+  number, doublings, PDL and limit flag; per bank the vials left and the bank PDL
+causal_core: >
+  viable counts decide doublings (with the seed counted at its source suspension's viability);
+  doublings accumulate into PDL and age along the lineage through freeze and thaw; age decides
+  the flag; the lineage decides each vial's PDL, and the thaws decide which vials are left and
+  so which PDL the bank reports. Two places where the SOP sets no value keep today's figure.
+core_obligations:
+  - id: DOUBLINGS
+    contribution: doublings = log2(viable harvest / viable seed), seed at the source suspension's viability (2.3, 2.4, 3.1, 3.2)
+    authority: environment/app/docs/cell-bank-sop.md 2.3-3.2
+    witness: hand-built cultures with harvest and source viabilities that differ; losses
+    plausible_wrong: correct the harvest only, or correct the seed at the culture's own harvest viability (cancels)
+  - id: LINEAGE
+    contribution: passage and PDL follow source/vial links; a thaw keeps its vial's figures; supplier vial at seed (4.1-4.3)
+    authority: environment/app/docs/cell-bank-sop.md 4.1-4.3
+    witness: interleaved lineages, sister cultures, bank-vial thaws, supplier thaws
+    plausible_wrong: running figure per line in log order; +1 at a thaw; thaw from the line's seed
+  - id: AGE_FLAGS
+    contribution: age = highest PDL along the lineage; LIMIT above max, NEAR within 3 (5.1, 5.2)
+    authority: environment/app/docs/cell-bank-sop.md 5.1-5.2
+    witness: a crash after the limit; ages either side of max and max-3 by more than the margin
+    plausible_wrong: flag on the culture's own PDL; 5-doubling band
+  - id: BANKS
+    contribution: vials left = frozen less thawed per freeze; bank PDL = highest PDL of vials in stock (6.1, 6.2)
+    authority: environment/app/docs/cell-bank-sop.md 6.1-6.2
+    witness: banks of several freezes partly drawn down
+    plausible_wrong: frozen total; latest freeze's PDL; highest over every freeze ever made
+restraint_traps:
+  - id: T1_INVALID_COUNT_KEEPS_TOTAL_COUNT_DOUBLINGS
+    site: environment/app/src/cellbank/growth.py (rebuilt for DOUBLINGS)
+    silent_input: a culture whose harvest count or source suspension count is not a valid count (SOP 2.3, below 70.0)
+    kept_step: today's log2(harvested / seeded)
+    natural_over_repair: apply the viable-count formula with the recorded viability anyway
+  - id: T2_BANK_NOT_IN_USE_KEEPS_LATEST_FREEZE_PDL
+    site: environment/app/src/cellbank/banks.py (rebuilt for BANKS)
+    silent_input: a bank not in use (every vial thawed; SOP 2.5)
+    kept_step: today's bank PDL, the PDL of the bank's latest freeze
+    natural_over_repair: highest PDL over every freeze of the bank, or null
+support_obligations:
+  - id: REPORT_SHAPE
+    supplied_boundary: report.py assembly and tools/cellbank_run.py driver (frozen, byte-checked)
+    why_not_core: plumbing already correct; no departure
+  - id: INPUT_PARSING
+    supplied_boundary: json.load in the driver; README data contract
+    why_not_core: well-formed logs only; malformed logs are left entirely open
+non_goals:
+  - malformed or out-of-range logs (instruction tier 3)
+  - per-line summaries, doubling time, dates, confluence
+  - validation errors or messages of any kind

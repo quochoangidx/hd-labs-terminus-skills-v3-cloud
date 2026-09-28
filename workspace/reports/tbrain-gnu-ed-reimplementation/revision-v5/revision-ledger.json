@@ -1,0 +1,366 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-gnu-ed-reimplementation",
+ "report_path": "workspace/revision/fc57838e-86e3-431c-a65c-b8776a1f307e/v5/fc57838e-86e3-431c-a65c-b8776a1f307e.md",
+ "returned_snapshot_sha256": "9d7ea2b313258f63d8f70d1b4ad486bc07a014b1596cc8944fefa7fce2623b88",
+ "repaired_snapshot_sha256": "b5bece5464a3a8c76f4544975e7b8d889797d174f5ccd3ce641b91de19d6e20d",
+ "summary": "25 blocking findings. Three reference findings were real (the binary-buffer newline state, twice, and recursion in the matcher); two more were true of our errata rather than of the program, and one named a program behaviour the errata lacked; one is refuted by execution. Eighteen verifier findings: seventeen coverage gaps answered with cases the panel can read, one overstrict static audit removed.",
+ "findings": [
+  {
+   "id": "1",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "Reading a newline-terminated file after a binary buffer with an unterminated final line incorrectly transfers the old line's missing-newline flag to the newly read final line.",
+   "decision": "backed",
+   "rationale": "Right, and mine: the reference kept a per-line missing-newline flag and moved it onto the newly read last line. GNU ed (io.c) keeps one remembered line node, set when a read at the end of a binary buffer ends without a newline or reads nothing, and leaves the newline off only while that node is still the last line; the reference now keeps that node and its message and byte-count rules, errata entry 21 states the behaviour, and 58 binary-state scripts taken from the program at run time pin it.",
+   "reproduction": "receipts/returned-findings-1-2-binary-newline.json",
+   "closure": "receipts/repaired-reference-matches-ed.json",
+   "gate": {
+    "rule": "wrong path unterminated-never-remembered: a reference that never remembers the unterminated line must fail test_odd_files; errata-map entry 21 pins the states with graded cases"
+   }
+  },
+  {
+   "id": "2",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "Reading a newline-terminated file after a binary buffer with an unterminated last line incorrectly removes the newline from the newly appended last line.",
+   "decision": "backed",
+   "rationale": "Right, and mine: the reference kept a per-line missing-newline flag and moved it onto the newly read last line. GNU ed (io.c) keeps one remembered line node, set when a read at the end of a binary buffer ends without a newline or reads nothing, and leaves the newline off only while that node is still the last line; the reference now keeps that node and its message and byte-count rules, errata entry 21 states the behaviour, and 58 binary-state scripts taken from the program at run time pin it.",
+   "reproduction": "receipts/returned-findings-1-2-binary-newline.json",
+   "closure": "receipts/repaired-reference-matches-ed.json",
+   "gate": {
+    "rule": "wrong path unterminated-never-remembered; errata-map entry 21"
+   }
+  },
+  {
+   "id": "3",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "A backslash-continued global list stops consuming input at its empty continuation line, so a following q executes after all selected lines instead of as part of the list.",
+   "decision": "backed",
+   "rationale": "The program and the reference agree (each selected line printed twice, then the q runs), so the reference is right; the defect was ours all the same, in the errata: entry 16 said a following q is taken as part of the list, which is false, and the panel graded the reference against that sentence. The entry (now 18) says the empty line does not end with a backslash, so the line after it is the next command, and two graded cases hold the q and a ,n in that position.",
+   "reproduction": "receipts/returned-findings-3-5-6-7-refuted.json",
+   "closure": "receipts/repaired-reference-matches-ed.json",
+   "gate": {
+    "rule": "errata-map: every errata entry names graded cases whose expected result comes from the program, checked by check_coverage_map.py; an entry may state only what a graded case shows"
+   }
+  },
+  {
+   "id": "4",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "Valid long bounded-repeat regular expressions are parsed but matched by unbounded Python recursion, causing an unhandled RecursionError instead of GNU ed's successful substitution.",
+   "decision": "backed",
+   "rationale": "Right, and mine: the matcher enumerated matches through a chain of generators, one frame per repetition, so a 2,000-character line overflowed the recursion limit and a star over a long line was quadratic. posixre now compiles the expression to a small program and walks it depth-first in pattern order, exploring each (instruction, position) once per search, with a bounded run of one character class as a single instruction; 126,000 random searches agree with the old matcher and long-line scripts run in well under a second. Probing the boundary also found that GNU ed refuses a repeat count above 32767, now errata entry 11.",
+   "reproduction": "receipts/returned-finding-4-recursion.json",
+   "closure": "receipts/repaired-reference-matches-ed.json",
+   "gate": {
+    "rule": "regex cases over the 4,000- and 70,000-byte fixtures (bounded repeats, stars, nested stars, a count of 32767 and 32768) in tests/cases/regex.jsonl; coverage-map finding 4"
+   }
+  },
+  {
+   "id": "5",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The append command accepts a reversed two-address range, although only '=' may accept one under the GNU ed 1.19 erratum.",
+   "decision": "backed",
+   "rationale": "GNU ed accepts 2,1a and inserts after line 1, as the manual's rule for a one-address command says (the last address is used), and the reference does the same; the panel read errata entry 3, which wrongly said every command but = rejects a reversed pair. The entry now states the rule for one-address and range commands and is pinned by graded cases for a, i, k, c, d, j, s, g and more.",
+   "reproduction": "receipts/returned-findings-3-5-6-7-refuted.json",
+   "closure": "receipts/repaired-reference-matches-ed.json",
+   "gate": {
+    "rule": "errata-map entry 3; wrong path reversed-range-rejected-for-a must fail test_append_insert_change"
+   }
+  },
+  {
+   "id": "6",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The append command clears the undo stack before determining whether input mode inserts any line, so a successful empty append wrongly destroys the prior undoable buffer modification.",
+   "decision": "backed",
+   "rationale": "GNU ed clears the undo stack when a or i reads no line, and the reference does too, so the reference is right; but the manual does not say so and the errata did not either, which is what the panel read. Errata entry 14 now states it, with graded cases for a, i and c.",
+   "reproduction": "receipts/returned-findings-3-5-6-7-refuted.json",
+   "closure": "receipts/repaired-reference-matches-ed.json",
+   "gate": {
+    "rule": "errata-map entry 14; wrong path empty-append-keeps-undo must fail test_append_insert_change"
+   }
+  },
+  {
+   "id": "7",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The substitution parser accepts a repeat-form suffix character such as g as an explicit substitution delimiter, although the contract excludes characters used by the alternate repeat-substitution syntax.",
+   "decision": "disputed",
+   "rationale": "Refuted by execution: on the finding's own script sgxgyg GNU ed 1.19 prints ? and leaves the line as x, and so does the returned reference, because the repeat form is parsed first and g, p, r and digits are never taken as delimiters; l, n and a are accepted as delimiters by both. The scripts are now graded cases so the point stays pinned. Rows F7 and F7b to F7i of that receipt hold the scripts.",
+   "reproduction": "receipts/returned-findings-3-5-6-7-refuted.json",
+   "gate": {
+    "rule": "coverage-map finding 7: the delimiter scripts are graded cases"
+   },
+   "contract_citation": {
+    "file": "instruction.md",
+    "anchor": "where the manual and the program disagree the program is what counts"
+   },
+   "counterexample": "receipts/returned-findings-3-5-6-7-refuted.json",
+   "contested_in_channel": "prepared in revision-v5/contest-note.md for #terminus-3-submissions; this environment cannot post to the channel, so the note must be posted by hand before the resubmission is judged"
+  },
+  {
+   "id": "8",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "Fixture construction cannot create an existing subdirectory, so the verifier cannot distinguish an ed implementation that rejects otherwise valid file-command paths beneath one.",
+   "decision": "backed",
+   "rationale": "Right: the returned workdir opened each fixture name directly and never made a directory, so no case could put a file under one. A fixture name with a directory part now creates it, a name ending in a slash is a directory alone, the comparison walks the whole tree, and seven cases write, read and load files under sub/, with and without -r.",
+   "reproduction": "receipts/returned-verifier-findings-8-19.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map finding 8; verifier fixture names may hold a directory part and the snapshot walks the tree"
+   }
+  },
+  {
+   "id": "9",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "No shown case checks that '&' repeats an entire multiline G or V command list rather than just its first command.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (a G list of two lines repeated by &) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "10",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The shown cases do not reject an `f` filename attached directly to its command letter, although the contract requires separating filenames with whitespace.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (fout and fout followed by w) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "11",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The shown focused substitutions do not distinguish setting current address to the last substituted line from setting it to the last addressed line.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (1,2s/a/A/ then .= where only line 1 changes) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "12",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The shown cases exercise several substitution delimiters but do not enforce acceptance of every legal delimiter.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (~ ! Z , and . as delimiters) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "13",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The shown replacement tests check selected escapes, but not the rule that backslash also quotes an ordinary character.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (\\q and \\q\\z\\& in a replacement) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "14",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "The visible global-command cases do not enforce the rule that encountering u stops execution of that global command list after its first selected line.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (u inside a g list on two selected lines, as a pipe and as a file) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "16",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "The visible extended-regex cases do not make literal matching by escaped `\\|` decisive.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (x\\|y under -E) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "17",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "No shown case makes a one-address join's clearing of an existing undo stack decisive.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (1j after an edit, then u) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "18",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "No shown case checks that a global command selecting zero lines clears a preceding undo stack.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (a g that selects nothing, then u) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "20",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "The shown one-address j cases do not distinguish an implementation that leaves undo history intact.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (1j after an edit, then u) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "21",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "The shown one-address j cases cannot tell whether it incorrectly changes the current address to its explicit address.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (1j with current at line 2, then .=) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "22",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "No shown case checks that u inside a global command list limits execution of that list to one selected line.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (u inside a g list on two selected lines, from a regular file) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "23",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "The shown interactive-global cases do not distinguish undoing an entire G or V invocation from undoing only its last per-line edit.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (a G that edits two lines, then u) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "24",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "No shown V case applies an explicit address range, permitting an implementation that ignores V's range while handling its default range correctly.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (1,1V/b/ and 2,2G/b/) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "25",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "The displayed mark tests do not observe the requirement that k leave a previously different current address unchanged.",
+   "decision": "backed",
+   "rationale": "The returned corpus held no case for this behaviour (returned-no-such-case.json), and GNU ed and the reference agree on the finding's script, so it is a coverage gap. A case is added (1ka with current at line 2, then p and .=) in the family file the panel reads, with its expected result taken from GNU ed 1.19 at run time; the four case files the panel reported NOT SHOWN were under the per-file limit, so the whole corpus is now held under the panel's total read budget as well.",
+   "reproduction": "receipts/returned-no-such-case.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "coverage-map: revision-v5/evidence/coverage-map.json names the case each finding bought and check_coverage_map.py fails when one leaves the corpus; the corpus is also held under the panel's total read budget by panel_precheck.py panel_unread_budget, so the case files are read whole"
+   }
+  },
+  {
+   "id": "15",
+   "axis": "correct_reference_solution",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "The reference never enforces GNU ed's documented maximum line length or maximum number of lines, instead storing lines and counts in unbounded Python objects.",
+   "decision": "backed",
+   "rationale": "The instruction bounded the number of lines but not their length, so a two-gigabyte line was inside the domain. The instruction now says no line is longer than a hundred thousand bytes, which keeps the 70,000-byte fixture and puts INT_MAX outside the domain; the reference handles lines of that length in well under a second.",
+   "reproduction": "receipts/returned-instruction-unbounded-line.json",
+   "closure": "receipts/repaired-instruction-bounded-line.json",
+   "gate": {
+    "rule": "instruction: every input dimension the verifier can vary carries a stated bound (lines per file, bytes per line)"
+   }
+  },
+  {
+   "id": "19",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "The package audit mistakes an executable-format magic prefix in inert data for a delivered executable program, falsely rejecting a contract-legal submission.",
+   "decision": "backed",
+   "rationale": "Right: the static package audit rejected any delivered file whose first bytes look like an executable, a rule the instruction never stated (it says the three construction rules are checked while the program runs). The audit and its self-test are removed; the launcher, which stops a process start, native code and a foreign import at run time, remains the enforcer with its six probe programs.",
+   "reproduction": "receipts/returned-verifier-findings-8-19.json",
+   "closure": "receipts/repaired-oracle.json",
+   "gate": {
+    "rule": "restriction X-stdlib-no-programs is enforced only by the run-time launcher named in the instruction; a static check the instruction does not announce is not added again"
+   }
+  }
+ ],
+ "previous_findings": []
+}

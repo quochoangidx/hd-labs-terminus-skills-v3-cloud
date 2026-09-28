@@ -1,0 +1,228 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "SV-C",
+  "snapshot_sha256": "bb66f542e1517d687270867c133e8fe5ae5acea9f713376024ba90c41b1cd11f",
+  "severity": "Advisory",
+  "summary": "The verifier runs the delivered /app/triage.py unprivileged on 30 sealed cases across 15 rule-named families and compares all seven report fields exactly: type-strict scalars and the three list fields as duplicate-free sets. In the readable cases (clock/H066393, rootlogin/H30dd19 and the visible case-1 plaintext), the goldens agree with the guide. I traced the step correction, btmp-only failures, the inclusive 600 s window, key, password and terminal attribution, root login, ctime over mtime, package-write exclusion and an open session, and the goldens contain discriminating decoys for plausible wrong implementations. I found no confirmed false acceptance or false rejection. One advisory point: rule 6's inclusive 2-second package-write tolerance appears only at 0 s in every package write I could inspect.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/triage.py",
+      "environment/app/docs/case-guide.md",
+      "environment/app/docs/record-formats.md",
+      "environment/app/docs/report.md",
+      "environment/app/evidence/case-1/collection.txt",
+      "environment/app/evidence/case-1/fs-listing.tsv (persistence-kind and package rows)",
+      "environment/app/evidence/case-1/home/git/.bash_history",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/apt-listchanges.list",
+      "environment/app/evidence/case-1/var/log/dpkg.log",
+      "environment/app/evidence/case-1/var/log/auth.log",
+      "environment/app/evidence/case-1/var/log/auth.log.1 (head)",
+      "environment/app/evidence/case-1/var/log/remote/files.log (git and intruder lines)",
+      "tests/test.sh",
+      "tests/Dockerfile",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/case1.jsonl",
+      "tests/expected/clock.jsonl",
+      "tests/expected/year.jsonl",
+      "tests/expected/tz.jsonl",
+      "tests/expected/brute.jsonl",
+      "tests/expected/rotation.jsonl",
+      "tests/expected/key.jsonl",
+      "tests/expected/sudo.jsonl",
+      "tests/expected/rootlogin.jsonl",
+      "tests/expected/ctime.jsonl",
+      "tests/expected/open.jsonl",
+      "tests/expected/edge_lo.jsonl",
+      "tests/expected/edge_hi.jsonl",
+      "tests/expected/edge_late.jsonl",
+      "tests/expected/broad.jsonl",
+      "readable-evidence-clearance/clock/H066393/* (collection, remote log, wtmp/btmp decoded, auth.log.1/.2/.4 sudo/intruder lines, dpkg.log, fs-listing persistence rows, histories, root authorized_keys)",
+      "readable-evidence-clearance/rootlogin/H30dd19/* (collection, remote log, wtmp/btmp decoded, auth.log.2 intruder lines, dpkg.log, fs-listing persistence rows, histories, root authorized_keys)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/evidence/*.tar.gz: gzip tar packs that read-only tools cannot open. The brief declares them opaque and supplies plain JSONL expectations and two readable sample cases instead.",
+      "environment/app/evidence/case-1 binary wtmp/btmp and auth.log.2.gz/auth.log.3.gz: no plaintext extraction was supplied, so case-1 was only partly traced.",
+      "_panel_docs/quality-panel-examples.md was not re-read in this session; the judge guide was read completely.",
+      "tests/shipped/docs/*: not opened separately; their manifest hashes are identical to environment/app/docs/*."
+    ]
+  },
+  "findings": [
+    {
+      "id": "AXIS-1",
+      "severity": "Advisory",
+      "claim": "Rule 6 says a file is a package-manager write when its ctime is within 2 seconds of a 'status installed' line, with exactly 2 seconds included. In every package write I could inspect, the ctime equals the status time to the second (0 s). An exact-equality implementation and a correct inclusive-2-second implementation therefore get the same result on the inspectable evidence. I cannot show that the tolerance boundary is never exercised, because the ctime family and 27 other cases are sealed in opaque tar packs.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "case-guide.md:42-44 fixes an inclusive 2-second tolerance. Under the judge guide, a named boundary should have a case whose outcome changes when the boundary is implemented wrongly (for example, exact equality, or a strict < 2).",
+        "actual_behavior": "rootlogin/H30dd19: debsums status 2026-12-27 21:10:16 at -03:00 gives 1798416616, and /etc/cron.d/debsums has ctime 1798416616 (0 s). anacron gives 1798379617 against ctime 1798379617 (0 s). certbot gives 1798176718 against 1798176718 (0 s). clock/H066393: unattended-upgrades gives 1836650277 against 1836650277, and anacron gives 1836512637 against 1836512637 (0 s). case-1: apt-listchanges 2021-12-29 03:18:57 at -12:00 gives 1640791137 against ctime 1640791137 (0 s). No inspected persistence-kind file has a ctime 1-2 s, or just over 2 s, away from a status line of a package that lists it.",
+        "trace_or_receipt": "Static arithmetic from the dpkg.log local time, the collection.txt utc_offset and the fs-listing.tsv ctime for each case. No execution. The opaque tests/evidence/ctime.tar.gz and other packs may still contain a 1-2 s or 3 s witness; this is not claimed to be absent."
+      },
+      "reachable_case_or_path": "A candidate that marks a file as a package write only when ctime == status time, or when |diff| < 2, passes every inspectable case. It would be wrong on a host where dpkg's file write lands 1-2 s from the status line.",
+      "graded_effect": "Possible false acceptance of an implementation that gets the tolerance boundary wrong, if no opaque case exercises it. No incorrect outcome is demonstrated, so this does not block.",
+      "citations": [
+        "environment/app/docs/case-guide.md:42-44",
+        "tests/test_outputs.py:178-179",
+        "tests/expected/rootlogin.jsonl:1",
+        "tests/expected/clock.jsonl:3",
+        "tests/expected/case1.jsonl:1",
+        "environment/app/evidence/case-1/var/log/dpkg.log:21-25",
+        "environment/app/evidence/case-1/fs-listing.tsv:5"
+      ],
+      "root_invariant": "Every numeric boundary the contract names should have at least one graded case on each side of it.",
+      "authority": [
+        "environment/app/docs/case-guide.md:42-44"
+      ],
+      "implementation_sites": [
+        "tests/test_outputs.py:178-179",
+        "tests/expected/ctime.jsonl:1-2"
+      ],
+      "sibling_variants": [
+        "The rule 2 600-second inclusive window is covered: clock/H066393 has 193.236.16.41 failing at host 1836700419..1836701019, exactly 600 s on one side of the step, while ivan's 5 failures span 691 s and are followed by a login."
+      ],
+      "interaction_variants": [
+        "A package write that falls inside an intruder session is covered at 0 s: /etc/cron.d/debsums in H30dd19 during the jenkins session, and /etc/cron.d/apt-listchanges in case-1 during the git session. The interaction of the 2-second boundary with a host clock step is not evidenced."
+      ],
+      "minimal_repair_boundary": "If it is not already present in the sealed ctime family, add a graded package write whose ctime is exactly 2 s from its status line and whose exclusion changes the persistence set. Optionally add a 3 s decoy on a persistence-kind path inside an intruder session.",
+      "closure_evidence": [
+        "An implementation using ctime == status time fails at least one family.",
+        "An implementation using |diff| < 2 fails at least one family.",
+        "An implementation using |diff| <= 3 fails at least one family, if a 3 s decoy is added."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read test_outputs.py completely. Checked _differences: exactly seven keys; SETS compared as sorted lists of str without duplicates; initial_access checked by key set and exact str values; the other fields type-strict (None versus str).",
+    "Checked the run harness: the delivered /app/triage.py is run as uid 65534 with python3 -I -S, an empty environment and LANG=C.UTF-8, on read-only evidence staged under the neutral name 'evidence'. Only out.json is graded; stdout and exit code are ignored. The per-case timeout is min(300, remaining of 1650 s).",
+    "Checked _seal_app: /app is reduced to triage.py and the docs. The contract (instruction.md:3) forbids depending on /app/evidence and requires a single file, so this is no false rejection.",
+    "Checked -I/-S: the standard library is still importable. The only builtins lost are exit/quit/help, and exit() after writing the report cannot change grading.",
+    "Traced clock/H066393 end to end against clock.jsonl:3. Host ahead by 475 s until a step between 03:20:59Z and 16:54:58Z on 2028-03-15. initial_access 02:36:06Z from the collector. first_activity 02:25:44Z = btmp 1836700419 - 475. privilege_escalation 02:43:50Z = sudo 'Mar 15 16:51:45' at +14:00 - 475. last_activity 16:57:32Z = post-step sudo 'Mar 16 06:57:32' with the session still open. Persistence (cron.d/kworker, the 4 kworker systemd units, root authorized_keys) matches by ctime.",
+    "Traced rootlogin/H30dd19 against rootlogin.jsonl:1. Host ahead by 359 s. auth.log keeps only 3 failures before the accept, so the address is hostile only via btmp. The root password login from 203.55.182.190 at 02:20:02Z gives both privilege_escalation and last_activity. The jenkins key is written by history plus touch -r, so its mtime is old and its ctime is in-session. The debsums package write is excluded. certbot-renew has an in-session mtime and an out-of-session ctime, and is excluded.",
+    "Partly traced case-1 against case1.jsonl. The regular git user from 10.233.9.93 overlaps the intruder session, a shared-password decoy. 193.3.49.175 logs in by publickey after the history writes a key. apt-listchanges is a package write inside the session. The step is +6036 s.",
+    "Mapped every guide rule to a family and checked the facts across the 30 expected rows: step signs +1 and -1, steps from 30 to 7200 s, offsets from -720 to +840 minutes including quarter-hour offsets, years 2019-2031 with December-to-January crossings, 1-6 auth files, escalated true and false, and open and closed sessions."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to a failing assertion",
+      "status": "checked",
+      "reason": "One family per guide rule. Every family compares all seven report fields, so a wrong behavior in any rule changes some graded field.",
+      "evidence": ["tests/test_outputs.py:114-199", "environment/app/docs/case-guide.md:9-51"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result, not existence or shape",
+      "status": "checked",
+      "reason": "Exact values and set membership, with no duplicates, for all fields. There is no check for existence or keys only.",
+      "evidence": ["tests/test_outputs.py:114-128"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rule has an isolating case",
+      "status": "checked",
+      "reason": "The goldens discriminate the step correction (H066393, H30dd19), the btmp-only window (H30dd19), the inclusive 600 s boundary and a 691 s near-miss (H066393), the key tie and shared-password decoys (case-1, H066393, H30dd19), root login (H30dd19), ctime over mtime (H30dd19), package exclusion at 0 s (H30dd19, case-1), and collected_utc not counting as an event (H066393). The 2 s inclusive tolerance is not evidenced in any inspectable case.",
+      "evidence": ["tests/expected/clock.jsonl:3", "tests/expected/rootlogin.jsonl:1", "tests/expected/case1.jsonl:1"],
+      "finding_ids": ["AXIS-1"]
+    },
+    {
+      "category": "Plausible incorrect solution rejected",
+      "status": "checked",
+      "reason": "Several wrong implementations fail on traced cases. Ignoring the step fails H066393 first_activity. Correcting every time fails H066393 last_activity. Using auth logs only finds no hostile address in H30dd19. Counting 5 failures without a window picks ivan's earlier login in H066393. Attributing every login to the account adds 10.76.47.120 or 10.84.149.43 to sources. Using mtime drops /home/jenkins/.ssh/authorized_keys. Using collected_utc for an open session changes last_activity.",
+      "evidence": ["tests/expected/clock.jsonl:3", "tests/expected/rootlogin.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "Set comparison ignores order, JSON key order is irrelevant, stdout and exit code are ignored, and an out-path is supplied. The -I -S interpreter and the single-file /app match the contract restrictions (instruction.md:3).",
+      "evidence": ["tests/test_outputs.py:83-128", "instruction.md:3", "environment/app/docs/report.md:20-25"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced",
+      "status": "checked",
+      "reason": "Unprivileged runs, read-only evidence, no network dependency, and /app/evidence removed before grading enforce 'must not depend on /app/evidence'.",
+      "evidence": ["tests/test_outputs.py:53-69", "tests/test_outputs.py:88-111"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binary / self-controlled comparison / unreachable cases",
+      "status": "checked",
+      "reason": "Goldens are sealed, pinned in ROSTER and checked by SHA-256. The candidate cannot influence them, and the delivered file itself is executed. All sampled cases lie inside the instruction's documented domain.",
+      "evidence": ["tests/test_outputs.py:42-80", "tests/expected/ROSTER:1-30"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed quantities / sign partitions",
+      "status": "checked",
+      "reason": "Clock-step signs +1 and -1 and UTC offsets from -12:00 to +14:00 are all present among the graded cases.",
+      "evidence": ["tests/expected/clock.jsonl:1-3", "tests/expected/edge_lo.jsonl:1-2", "tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "State machine initialization-to-first-event",
+      "status": "checked",
+      "reason": "Cases with no step and with one step are both graded. In H066393 the pre-step offset applies from the first record, so a solver that assumes a correct clock at the start fails first_activity.",
+      "evidence": ["tests/expected/year.jsonl:1-2", "tests/expected/clock.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Representation versus semantic content",
+      "status": "checked",
+      "reason": "The only representation promises are the report.md time format and JSON types, and the verifier imposes nothing beyond them.",
+      "evidence": ["environment/app/docs/report.md:3-25"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 1 clock step", "rule 2 600 s window"],
+      "case_or_path": "H066393: all 5 failures from 193.236.16.41 fall before the step, so the host-clock span of exactly 600 s is preserved; ivan's 691 s span is also pre-step.",
+      "status": "checked",
+      "evidence": ["tests/expected/clock.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 6 package exclusion", "rule 6 intruder session attribution"],
+      "case_or_path": "debsums (H30dd19) and apt-listchanges (case-1) are package writes inside an intruder session; both are excluded from persistence.",
+      "status": "checked",
+      "evidence": ["tests/expected/rootlogin.jsonl:1", "tests/expected/case1.jsonl:1"],
+      "finding_ids": ["AXIS-1"]
+    },
+    {
+      "rules": ["rule 6 ctime", "rule 7 activity"],
+      "case_or_path": "H30dd19: /etc/cron.d/certbot-renew has an mtime inside the jenkins session and a ctime after logout; it is excluded, and last_activity is unaffected (the 02:20:02Z root login is later).",
+      "status": "checked",
+      "evidence": ["tests/expected/rootlogin.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 4 shared password", "rule 4 key tie"],
+      "case_or_path": "case-1: the regular git user from 10.233.9.93 overlaps the intruder session and is excluded; 193.3.49.175 logs in by publickey after the history writes a key and is included.",
+      "status": "checked",
+      "evidence": ["tests/expected/case1.jsonl:1", "environment/app/evidence/case-1/home/git/.bash_history:15"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 7 open session", "rule 1 post-step times"],
+      "case_or_path": "H066393: the second session is open at collection; last activity is a post-step sudo, not collected_utc.",
+      "status": "checked",
+      "evidence": ["tests/expected/clock.jsonl:3"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "Whether any opaque case (for example tests/evidence/ctime.tar.gz) contains a package write offset 1-2 s, or a 3 s decoy, from its status line.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "A plaintext extraction of fs-listing.tsv and dpkg.log for the ctime, sudo and key family cases, or a receipt from a mutant using exact equality or |diff| < 2 run against the verifier."
+    }
+  ],
+  "uncertainty": ""
+}

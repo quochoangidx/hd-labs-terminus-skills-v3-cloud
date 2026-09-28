@@ -1,0 +1,167 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "correct_reference_solution-A",
+  "snapshot_sha256": "1dfbd5f15aa1797e681b3da01af44bd2bd925c4ef393cae0824fad0adf711731",
+  "severity": "None",
+  "summary": "I checked all four shipped reference layouts by hand against makeup-rules.md, placement by placement. Every layout is valid under rules 1-5, and its cost, recomputed from the rules, equals the edition's target exactly (mon 4635, wed 6701, fri 7500, sat 10601). solve.sh writes them to /app/layouts/<edition>.json in the documented format. I found no reference defect.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/.dockerignore",
+      "environment/Dockerfile",
+      "environment/app/README.md",
+      "environment/app/docs/makeup-rules.md",
+      "environment/app/tools/check_layout.py",
+      "environment/app/planner/plan_edition.py",
+      "environment/app/editions/targets.json",
+      "environment/app/editions/mon.json",
+      "environment/app/editions/wed.json",
+      "environment/app/editions/fri.json",
+      "environment/app/editions/sat.json",
+      "solution/solve.sh",
+      "solution/search.py",
+      "solution/layouts/mon.json",
+      "solution/layouts/wed.json",
+      "solution/layouts/fri.json",
+      "solution/layouts/sat.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Checked that the files I read match the packet manifest: all 21 manifest files (including 2 panel docs and the manifest) were read in full, with no truncation.",
+    "Worked out the page limits from the rules: 60*42*6//100 = 151 cells on inner pages, and on page 1 rows 36-41 only (36 cells). These are the same in all four editions.",
+    "mon: grouped all placements by page (16 pages) and checked each one for page bounds, overlap, the resting rule across the full width, the cell limit, and the front-page strip. Checked competitor groups by spread, and that all 18 booked ads are placed. Recomputed the cost as 4305 for left-out ads, plus 114 for AD014 (sport ad on page 1) and 216 for AD033 (business ad on page 6), giving 4635, which equals the target.",
+    "wed: same per-page check over 20 pages. Recomputed the cost as 6175 for left-out ads (AD003, 011, 032, 050, 079, 082, 088), plus wrong-section penalties of 53, 123, 225 and 125, giving 6701, which equals the target.",
+    "fri: same per-page check over 24 pages. Recomputed the cost as 6688 for 10 left-out ads, plus wrong-section penalties of 175, 54, 216, 193, 82 and 92, giving 7500, which equals the target.",
+    "sat: same per-page check over 32 pages. Recomputed the cost as 9935 for 9 left-out ads, plus wrong-section penalties of 71, 75, 31, 121, 81, 135 and 152, giving 10601, which equals the target.",
+    "Checked that no right_hand ad sits on an even page in any of the four reference layouts, so the left-hand penalty contributes 0 in every edition.",
+    "Checked that solve.sh copies the layouts to /app/layouts/, runs the candidate-visible checker, and aborts if a layout is invalid or over its target. The layout files use JSON integers with no repeated keys and are far under the size, digit and nesting limits."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace ordinary and boundary cases through the reference logic",
+      "status": "checked",
+      "reason": "The reference is four precomputed layouts, so I traced every placement in all four through rules 1-5 and the cost formula by hand. Boundary cases covered: ads stacked on ads rather than on the foot, pages filled to exactly 151 cells, 42-row full-height ads, and page 1 front-strip ads at row 36.",
+      "evidence": [
+        "environment/app/docs/makeup-rules.md:28-55",
+        "solution/layouts/mon.json:1",
+        "solution/layouts/wed.json:1",
+        "solution/layouts/fri.json:1",
+        "solution/layouts/sat.json:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes, paths and format",
+      "status": "checked",
+      "reason": "Each layout is one JSON object with a placements object. page, column and row are integers, there are no duplicate keys, and the files are well under the size, digit and depth limits. solve.sh writes /app/layouts/<edition>.json for mon, wed, fri and sat, as the instruction requires.",
+      "evidence": [
+        "instruction.md:1",
+        "environment/app/docs/makeup-rules.md:57-72",
+        "solution/solve.sh:27-38"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Branches that update state (booked vs optional, section, right-hand, competitor groups)",
+      "status": "checked",
+      "reason": "In every edition all booked ads are placed and no two ads of one competitor group share a page or spread (page 1 alone; pages 2k and 2k+1 form spread k). Wrong-section and left-hand penalties were computed per ad with floor division, and the right_hand ads were all found on odd pages.",
+      "evidence": [
+        "environment/app/docs/makeup-rules.md:11-13",
+        "environment/app/docs/makeup-rules.md:43-55"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Target compliance (cost no more than targets.json)",
+      "status": "checked",
+      "reason": "Each recomputed cost equals its target: mon 4635, wed 6701, fri 7500, sat 10601.",
+      "evidence": [
+        "environment/app/editions/targets.json:1-6",
+        "solution/solve.sh:17-21"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability at interruption points",
+      "status": "not_applicable",
+      "reason": "The contract makes no recovery or durability promises. The deliverable is four static files.",
+      "evidence": [
+        "instruction.md:1-3"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Environment constraints (no network, Python 3.13 stdlib only)",
+      "status": "checked",
+      "reason": "solve.sh uses only bash, cp and python3 with the standard library, and search.py uses only the standard library. The search is not rerun at solve time, so no timing dependence is introduced.",
+      "evidence": [
+        "solution/solve.sh:26-38",
+        "solution/search.py:20-32",
+        "environment/Dockerfile:1-7"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "rule 2 (resting on foot or ads across full width)",
+        "rule 1 (no overlap)"
+      ],
+      "case_or_path": "Tall stacks where an ad rests on two different ads below it, for example fri p7 AD040 on AD036 and AD097, wed p17 AD053 on AD044 and AD069, and sat p27 AD073 on AD049 and AD070. In each case every cell under the ad is covered and nothing overlaps.",
+      "status": "checked",
+      "evidence": [
+        "solution/layouts/fri.json:1",
+        "solution/layouts/wed.json:1",
+        "solution/layouts/sat.json:1"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "rule 3 (cell cap)",
+        "rule 3 (front-page strip)"
+      ],
+      "case_or_path": "In every edition page 1 holds a single 6x6 ad at row 36, covering exactly the 36-cell strip. Many inner pages are filled to exactly 151 cells, for example mon p2/p4/p7/p8 and sat p6/p10/p12, and none exceeds 151.",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/makeup-rules.md:36-38"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "rule 4 (competitor spreads)",
+        "spread definition (page 1 alone; 2k with 2k+1)"
+      ],
+      "case_or_path": "The largest group, fri furniture (8 placed ads), falls on spreads 8, 9, 7, 6, 10, 3, 5 and 4, all distinct. sat cars (7 placed) falls on spreads 2, 12, 15, 14, 7, 8 and 1, also distinct.",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/makeup-rules.md:11-13",
+        "environment/app/docs/makeup-rules.md:39"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "wrong-section penalty",
+        "left-hand penalty (both may apply)"
+      ],
+      "case_or_path": "The wrong-section right_hand ads (fri AD009 p17, fri AD040 p7, sat AD002 p15, sat AD135 p15) are all on odd pages, so they take only the section penalty. No ad is charged both penalties, and the recomputed totals match the targets.",
+      "status": "checked",
+      "evidence": [
+        "environment/app/docs/makeup-rules.md:45-55"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

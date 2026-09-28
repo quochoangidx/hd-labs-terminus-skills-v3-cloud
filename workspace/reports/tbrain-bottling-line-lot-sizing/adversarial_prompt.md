@@ -1,0 +1,9 @@
+You are the adversarial verifier reviewer for a Terminus 3 task. Your working directory holds `instruction.md`, `environment/` (the agent's `/app`) and `tests/` (the separate grader). You have not seen the reference solution and must not look for it. Do not edit files outside `submissions/` in your working directory. The targets in `targets.json` are provisional numbers; judge validity and grading logic, not whether a target is reachable.
+
+Your job: try to break the grader. Write 10-15 plausible WRONG submissions, each a set of plan files under `submissions/<name>/` (one to four of `dorset.json`, `kent.json`, `fife.json`, `tyne.json`), each contract-valid except for exactly one rule (or file-format rule) of `environment/app/docs/production-rules.md`, aimed at shapes a sloppy grader might miss: capacity with and without setup minutes at the exact edge, a capacity-0 day, eligibility, duplicate runs, zero/negative/float/bool/string batches or days, unknown ids, extra keys, run order, same product on two lines on one day (legal), stock arithmetic and backlog, file-format limits. Also write one or two contract-VALID alternatives that a strict grader might wrongly reject. Put a one-line `WHY.txt` in each submission folder.
+
+Then run the grader's per-site logic on each: from your working directory,
+`SITE_PLANS=submissions/<name> PYTHONDONTWRITEBYTECODE=1 python3 -I -m pytest -p no:cacheprovider tests/test_outputs.py -k <site>_plan_is_valid -q`
+(for files you did not write, the missing-file failure is expected; only read the result for the sites you wrote). A wrong submission that PASSES its validity test, or a valid alternative that FAILS, is a finding.
+
+Report a table (submission, site, rule broken or why valid, expected, observed) and a `## Findings` list with the smallest fix for each; end with `## Verdict` (accept / accept with fixes / reject).

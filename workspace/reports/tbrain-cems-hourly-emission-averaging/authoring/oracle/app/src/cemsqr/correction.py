@@ -1,0 +1,28 @@
+"""Oxygen correction and mass rate."""
+
+from fractions import Fraction
+
+from .rounding import half_up
+
+AMBIENT_O2 = 210  # tenths of a per cent
+O2_CAP = 200  # tenths of a per cent
+LB_PER_SCF_PPM = Fraction(1194, 10**10)
+
+
+def corrected(nox, o2, reference):
+    """NOx (tenths of a ppm) corrected to the reference oxygen, in tenths of a ppm.
+
+    Oxygen at or above O2_CAP is held at O2_CAP.
+    """
+    if o2 < 190:  # a firing hour, DRP-4 2.4; 3.2 with the firing ratio of 2.7
+        return half_up(nox * Fraction(209 - reference) / (209 - o2))
+    if o2 < O2_CAP:
+        ratio = Fraction(AMBIENT_O2 - reference) / (AMBIENT_O2 - o2)
+    else:
+        ratio = Fraction(AMBIENT_O2 - reference) / (AMBIENT_O2 - O2_CAP)
+    return half_up(nox * ratio)
+
+
+def mass_rate(nox, flow):
+    """Pounds per hour, in tenths, from NOx in tenths of a ppm and flow in scfh."""
+    return half_up(LB_PER_SCF_PPM * 10 * Fraction(nox, 10) * flow)

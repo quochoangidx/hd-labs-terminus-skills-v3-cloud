@@ -1,0 +1,158 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "CRS-D",
+  "snapshot_sha256": "bb66f542e1517d687270867c133e8fe5ae5acea9f713376024ba90c41b1cd11f",
+  "severity": "None",
+  "summary": "I traced solution/triage.py (installed by solve.sh) against every rule in case-guide.md, record-formats.md and report.md, covering the normal case, the boundaries and the interactions within the stated input domain. I found no concrete incorrect behaviour: clock-step correction in both directions, year rollover, btmp-based hostility with the 600 s bound inclusive, wtmp initial access, the address/key/terminal fixed point, privilege escalation, persistence with the inclusive 2 s package exclusion, and first/last activity that excludes collected_utc all match the contract.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/triage.py",
+      "environment/app/docs/case-guide.md",
+      "environment/app/docs/record-formats.md",
+      "environment/app/docs/report.md",
+      "environment/app/evidence/case-1/collection.txt",
+      "environment/app/evidence/case-1/fs-listing.tsv",
+      "environment/app/evidence/case-1/var/log/auth.log",
+      "environment/app/evidence/case-1/var/log/auth.log.1",
+      "environment/app/evidence/case-1/var/log/remote/files.log",
+      "environment/app/evidence/case-1/var/log/dpkg.log",
+      "environment/app/evidence/case-1/var/log/wtmp",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/anacron.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/apt-listchanges.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/base-files.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/cron.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/logwatch.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/openssh-server.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/rkhunter.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/sysstat.list",
+      "environment/app/evidence/case-1/home/git/.bash_history",
+      "environment/app/evidence/case-1/home/tpham/.bash_history",
+      "environment/app/evidence/case-1/root/.bash_history",
+      "environment/app/evidence/case-1/home/git/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/home/tpham/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/root/.ssh/authorized_keys",
+      "solution/solve.sh",
+      "solution/triage.py",
+      "solution/model.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/evidence/case-1/var/log/auth.log.2.gz, auth.log.3.gz and btmp: gzip or binary files that I treated as opaque (no shell to decode them). wtmp rendered only partially as text. These are case-1 development samples, not contract authorities. I judged the reference's parsing of them against the record formats in record-formats.md:28-34 and model.py:470-563."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Confirmed that solve.sh copies solution/triage.py to /app/triage.py. The installed program uses only the standard library, imports nothing from model.py, seal.py or /app/evidence, and only reads the evidence directory.",
+    "Traced read_collection and date_lines: offset sign, collected_utc parsing, year taken from the collection-local time, and one year subtracted when walking back from a later month (Dec->Jan crossing).",
+    "Traced the clock-step detection (solution/triage.py:114-135) for a forward step (N>0) and a backward step (N<0). Collector copies are keyed by the pid-bearing sshd message. step_n is the host-to-collector difference and step_t/step_i is the first matching line after the mismatch. Auth-log lines are corrected by file position; other host-clock readings are corrected when their host time is below step_t.",
+    "Checked the backward-step overlap: record-formats says auth lines arrive in true order, and model.py:402-427 places the step so that no graded record falls where host times overlap. Every pre-step record therefore has a host time below tc and every post-step record a host time of at least tc+n.",
+    "Traced hostility over btmp type-6 records after fix(): ts[i+4]-ts[i] <= 600, so exactly 600 s is inclusive. Checked the 'brute' family at exactly 600 s, the carol/ivan decoy whose five attempts span more than 600 s, O2 mistypes (at most 4) and scanners that never log in.",
+    "Traced initial access: the earliest wtmp type-7 session from a hostile address, using the corrected time.",
+    "Traced the rule 4 fixed point. Keys are extracted from the histories of intruder accounts, only from commands mentioning authorized_keys (both the '>> ~/.ssh/authorized_keys' and '| sudo tee -a /root/.ssh/authorized_keys' forms). Fingerprints are computed as record-formats.md:44-45 specifies, and a matching Accepted publickey adds the address. Legitimate same-account password logins from other addresses are not tied.",
+    "Traced the sudo terminal tie via session_at(tty, t): the tty must belong to a wtmp session that contains the sudo time. Verified that tty allocation in model.py:481-487 never reuses a pts while it is busy, so ties are unambiguous. Legitimate victim and admin sudos on other ttys during the attack are excluded.",
+    "Traced privilege escalation: min over tied sudo-to-root lines and intruder root logins (both the rootlogin family and a root key login). The result is null when neither exists, and root is added to accounts when escalation exists.",
+    "Traced persistence: path-kind predicate (cron.d, crontabs, systemd .service/.timer including the wants/ symlinks, rc.local, root/home authorized_keys) plus corrected ctime inside an intruder session window. Package exclusion uses the corrected dpkg 'status installed' time and the .list membership with |delta| <= 2 inclusive, which covers the edge_lo/edge_hi ±2 s cases. The certbot-renew decoy (ctime between windows, old mtime inside the window) is excluded, and a touch -r forged mtime is still caught through ctime.",
+    "Traced first and last activity: btmp failures from intruder addresses (including failures days earlier), intruder wtmp logins and logouts, tied sudo lines, persistence ctimes, and stamped intruder-account history inside intruder windows after fix(). An open session contributes no end and collected_utc is not an event.",
+    "Checked the output shape against report.md: exactly seven keys, lists deduplicated and sorted, privilege_escalation null or ISO time, and every time formatted as YYYY-MM-DDTHH:MM:SSZ.",
+    "Checked that the program tolerates optional directories being absent (home, root, dpkg info, remote; missing wtmp/btmp/dpkg.log) as record-formats.md:3-4 allows.",
+    "Sanity-checked case-1 statically: remote log attacker login git@77.157.180.252 at 2021-12-29T16:39:40Z, an overlapping legitimate git login from 10.233.9.93 on pts/1, a later key login from 193.3.49.175 with the key echoed in git's history, and root history stamps about 1.5 h behind (a forward step within 30-7200 s) that fix() is designed to correct."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced ordinary and boundary cases for rules 1-7: the 600 s window at exactly 600, package ctime delta of exactly 2, a Dec->Jan year crossing, offsets -12:00 and +14:00, 1 or 6 auth files with rotation, clock steps of 30 and 7200 s forward and backward, an open final session, and no escalation.",
+      "evidence": ["solution/triage.py:57-78", "solution/triage.py:113-135", "solution/triage.py:158-170", "solution/triage.py:216-242", "environment/app/docs/case-guide.md:9-51"],
+      "finding_ids": []
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "iso() emits %Y-%m-%dT%H:%M:%SZ in UTC. The JSON has exactly the report.md keys. List fields are deduplicated by sets and dicts. Persistence entries are absolute host paths taken from fs-listing.",
+      "evidence": ["solution/triage.py:27-28", "solution/triage.py:253-261", "environment/app/docs/report.md:3-25"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-updating branches (loop state, identifier reuse, replacement)",
+      "status": "checked",
+      "reason": "Checked wtmp login/logout pairing through open_by_line (a logout pops the latest login on that line). The fixed-point loop recomputes esc/pe each iteration from monotonically growing sets and terminates on no change. Collector matching keys are pid-bearing sshd messages that are unique per session.",
+      "evidence": ["solution/triage.py:139-147", "solution/triage.py:184-208", "solution/model.py:96-98"],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability claims at interruption points",
+      "status": "not_applicable",
+      "reason": "The task is a single-pass read-only analyzer that writes one JSON file. It makes no recovery or durability promises.",
+      "evidence": ["instruction.md:1-3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Environment constraints (stdlib only, unprivileged, read-only evidence, no dependency on /app/evidence)",
+      "status": "checked",
+      "reason": "Imports are stdlib only. The program only reads the evidence and writes the output path argument. solve.sh installs a single file.",
+      "evidence": ["solution/triage.py:9-17", "solution/solve.sh:22-24", "environment/Dockerfile:1-9"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 1 clock step", "rule 6 package exclusion (2 s)"],
+      "case_or_path": "The dpkg status-installed time and the file ctime both lie on the host clock and both pass through fix(), so the 2 s comparison is made in true time. For a backward step, model.py overlap_is_empty keeps the dpkg and ctime records out of the ambiguous band.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:220-240", "solution/model.py:386-413"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 1 clock step", "rule 2 hostility / rule 3 initial access"],
+      "case_or_path": "btmp and wtmp times are corrected before the 600 s window and the earliest-login ordering are applied. The step lies at or after t_ia+60, so the attacker's failures sit uniformly on the pre-step side.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:137-170", "solution/model.py:355-362"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 4 key tie", "rule 5 escalation"],
+      "case_or_path": "A root-shell attacker writes the key into /root/.ssh/authorized_keys from root's history. root enters accounts only after pe is found, and the fixed point then reads root's history, finds the key and adds B through Accepted publickey. A root key login from B also counts toward pe.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:188-208", "solution/model.py:167-171", "solution/model.py:211-217"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 4 terminal tie", "rule 5 / rule 7 sudo events"],
+      "case_or_path": "In the 'sudo' family, a legitimate victim session from O2 and an admin session run sudo between t_ia and t_pe. session_at maps each sudo to the session on its tty, so only sudos on intruder ttys count toward pe and activity.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:172-176", "solution/triage.py:195", "solution/triage.py:249", "solution/model.py:283-290"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 6 persistence during intrusion", "files whose mtime differs from ctime"],
+      "case_or_path": "The touch -r forged file (old mtime, ctime t+2) is included through ctime. The certbot-renew decoy (mtime inside window 0, ctime between windows) is excluded.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:229-242", "solution/model.py:187-196", "solution/model.py:348-351"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 7 open session", "rule 6/7 windows"],
+      "case_or_path": "A final intruder session with no logout extends its window to collected_utc for persistence and history membership, but contributes no end event.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:210-213", "solution/triage.py:244-252", "environment/app/docs/case-guide.md:49-51"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 1 year inference", "rotation across 1-6 auth files"],
+      "case_or_path": "Files are read highest rotation first. The year is anchored on the last line against the collection-local time and decremented on backward month transitions (Dec->Jan). A backward step is placed within one month.",
+      "status": "checked",
+      "evidence": ["solution/triage.py:43-78", "solution/model.py:425"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

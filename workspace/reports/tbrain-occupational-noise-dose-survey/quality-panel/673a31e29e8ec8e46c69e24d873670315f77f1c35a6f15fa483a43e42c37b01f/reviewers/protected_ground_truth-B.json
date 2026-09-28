@@ -1,0 +1,189 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-B",
+  "snapshot_sha256": "673a31e29e8ec8e46c69e24d873670315f77f1c35a6f15fa483a43e42c37b01f",
+  "severity": "None",
+  "summary": "No reachable path lets candidate code read, replace, predict or impersonate the sealed expectations or the reward. Before any candidate code runs, /tests and /logs/verifier are sealed root 0700. Every candidate reduction runs as UID 65534 through setpriv with --no-new-privs, isolated Python (-I -S), a scrubbed environment, a neutral staged survey path and a fresh cwd. The differential oracle is the shipped buggy package (already public in /app), run as a separate UID from a 0700 directory. The reward depends only on the root pytest exit code and a root cmp of the driver.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/noise-survey-manual.md",
+      "environment/app/examples/press-shop-day.json",
+      "environment/app/tools/noisedose_run.py",
+      "environment/app/src/noisedose/__init__.py",
+      "environment/app/src/noisedose/flags.py",
+      "environment/app/src/noisedose/groups.py",
+      "environment/app/src/noisedose/levels.py",
+      "environment/app/src/noisedose/report.py",
+      "environment/app/src/noisedose/runs.py",
+      "environment/app/src/noisedose/shift.py",
+      "environment/app/src/noisedose/survey.py",
+      "environment/app/src/noisedose/twa.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/shipped/app/tools/noisedose_run.py",
+      "tests/shipped/app/src/noisedose/__init__.py",
+      "tests/shipped/app/src/noisedose/flags.py",
+      "tests/shipped/app/src/noisedose/groups.py",
+      "tests/shipped/app/src/noisedose/levels.py",
+      "tests/shipped/app/src/noisedose/report.py",
+      "tests/shipped/app/src/noisedose/runs.py",
+      "tests/shipped/app/src/noisedose/shift.py",
+      "tests/shipped/app/src/noisedose/survey.py",
+      "tests/shipped/app/src/noisedose/twa.py",
+      "tests/expected/ROSTER",
+      "tests/expected/reference_duration.jsonl",
+      "tests/expected/threshold.jsonl",
+      "tests/expected/sampled_time.jsonl",
+      "tests/expected/paused_runs.jsonl",
+      "tests/expected/partial_surveys.jsonl",
+      "tests/expected/whole_shift.jsonl",
+      "tests/expected/three_quarters.jsonl",
+      "tests/expected/below_three_quarters.jsonl",
+      "tests/expected/measured_nothing.jsonl",
+      "tests/expected/above_ceiling.jsonl",
+      "tests/expected/ceiling_level.jsonl",
+      "tests/expected/impulse.jsonl",
+      "tests/expected/twa.jsonl",
+      "tests/expected/rounding.jsonl",
+      "tests/expected/status.jsonl",
+      "tests/expected/groups.jsonl",
+      "tests/expected/quiet_members.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/limits_workers.jsonl",
+      "tests/expected/limits_logs.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/differential-below_three_quarters.jsonl",
+      "tests/expected/differential-above_ceiling.jsonl",
+      "tests/expected/differential-measured_nothing.jsonl"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Reconciled all 56 packet-manifest entries against the files read. Read tests/expected/limits_workers.jsonl through character ~40.6k with Read. Read its tail (worker report rows L160-L299 and all 40 group rows) with an -o Grep, so the whole file was covered.",
+    "Traced test.sh ordering. Reward is set to 0 first (test.sh:5). chmod 700 /tests and /logs/verifier (test.sh:15) runs before pytest imports test_outputs.py, and pytest is the first point where candidate code can run. Reward 1 requires pytest rc 0 plus a root cmp of the documented driver against the sealed copy (test.sh:22-27).",
+    "Traced candidate execution. run_as (test_outputs.py:95-116) uses setpriv --reuid/--regid=65534 --clear-groups --no-new-privs, env -i with a fixed PATH/HOME/LANG, and python3 -I -S. The staged file is always survey.json in a fresh mkdtemp stage (0755, file 0644) with a fresh 0777 cwd (test_outputs.py:119-136). No argument, path, cwd or env variable carries an expected label or family name.",
+    "Checked expected-value storage. The goldens exist only in /tests/expected, which is root-owned 0700 from both tests/Dockerfile:7 and test.sh:15. They are never staged, copied or exposed to candidate UIDs. test_candidate_cannot_read_verifier_state (test_outputs.py:371-381) runs a probe as the candidate UID and requires it to fail to read /tests, ROSTER, the shipped copy and /logs/verifier, with a positive control on /app/README.md.",
+    "Checked the environment for answer leakage. The environment Dockerfile copies only app/, and .dockerignore excludes tests/ and solution/. README, the manual and examples/press-shop-day.json carry rules and inputs only, with no expected reports. The shipped src hashes equal the environment src hashes (packet-manifest.json:12-21 vs 49-58), so the differential oracle is the already-public buggy package, not a reference model.",
+    "Checked the differential oracle. _install_shipped copies it into a 0700 mkdtemp chowned to UID 65533 (test_outputs.py:81-88). The driver resolves src relative to its own file (tests/shipped/app/tools/noisedose_run.py:7), so shipped runs cannot import candidate /app/src. With -I the 0777 cwd is not on sys.path, so a lingering 65534 process that writes into a shipped run's cwd cannot inject code.",
+    "Checked the driver-lock path. _install_driver reads the delivered driver as root, then does copyfile + chmod 0644 + os.replace onto /app/tools/noisedose_run.py before any candidate run (test_outputs.py:70-78, 91). If /app/tools is a candidate symlink, the root read only records bytes, and a symlink to a sealed path makes candidate runs unable to execute (the 65534 UID cannot traverse /tests). Either way this can only lower reward and cannot yield expected values.",
+    "Checked chmod -R a+rX /app (test.sh:16). /app is a verifier-image directory (tests/Dockerfile:5), not a candidate symlink. GNU chmod -R does not follow symlinks met during traversal, so candidate symlinks under /app cannot open /tests.",
+    "Checked session escape. A candidate that setsid()s out of the killed process group keeps running only as UID 65534 with no_new_privs. That UID cannot write /tests, /logs/verifier, SHIPPED_RUN or root-owned stage files. Staged survey inputs it could read are inputs, not answers, and RELABEL_SEED lives only in the root pytest process.",
+    "Checked output parsing and comparison (test_outputs.py:185-214). The candidate's stdout is parsed with json.loads and compared against sealed values with type checks. NaN, Infinity, booleans, missing keys or extra rows all fail. Candidate stdout cannot write the pytest result or reward.txt.",
+    "Checked pytest configuration surfaces. The command is python3 -I -m pytest -p no:cacheprovider from a fresh root-owned mktemp cwd against /tests/test_outputs.py, so rootdir/conftest/ini discovery covers only /tests and /. The candidate controls only /app contents in the verifier image (tests/Dockerfile:5)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Keep expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "The goldens are only under /tests/expected (root 0700). No reference model ships: seal.py is named only in a docstring and is absent from tests/ and environment/. The shipped package is the public buggy code, runs as a separate UID, and holds no expected answers.",
+      "evidence": ["tests/Dockerfile:6-7", "tests/test.sh:15", "tests/test_outputs.py:31-34", "tests/test_outputs.py:81-92", "tests/test_outputs.py:377-381", "environment/.dockerignore:5-6", "packet-manifest.json:12-21", "packet-manifest.json:49-58"],
+      "finding_ids": []
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths (symlink and path-traversal escapes)",
+      "status": "checked",
+      "reason": "The only privileged read of a candidate path is DELIVERED_DRIVER.read_bytes(). It is stored and compared against the sealed driver, never returned to candidate code or used as an expectation. The root chmod -R on /app does not follow traversal symlinks. Everything else root reads comes from sealed /tests paths.",
+      "evidence": ["tests/test_outputs.py:70-78", "tests/test_outputs.py:384-387", "tests/test.sh:16"],
+      "finding_ids": []
+    },
+    {
+      "category": "Expected values computed independently of the submitted artifact",
+      "status": "checked",
+      "reason": "The expected reports are sealed jsonl pinned by SHA-256 and row count in ROSTER and checked in load(). Relabelled expectations come from the sealed report via a root-held seed. The differential compares the candidate's a/b outputs with each other and uses the shipped copy only to check that the kept step is invariant. No candidate-supplied checksum or value certifies itself.",
+      "evidence": ["tests/test_outputs.py:59-67", "tests/test_outputs.py:170-182", "tests/test_outputs.py:222-232", "tests/test_outputs.py:339-368", "tests/expected/ROSTER:1-24"],
+      "finding_ids": []
+    },
+    {
+      "category": "Hidden outcomes exposed through filenames, arguments, working directories or environment variables",
+      "status": "checked",
+      "reason": "Every run uses stage/survey.json in a random mkdtemp, a random cwd and a fixed scrubbed env. Survey names inside the fixtures (HC4-00NN / HC4-70NN) do not encode an outcome, and every graded report requires exact computed figures. The generated family is also relabelled at run time.",
+      "evidence": ["tests/test_outputs.py:38", "tests/test_outputs.py:119-132", "tests/test_outputs.py:339-358", "tests/expected/threshold.jsonl:1", "tests/expected/generated.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading result kept in a trusted channel (stdout / early exit cannot impersonate verification)",
+      "status": "checked",
+      "reason": "reward.txt is written only by root test.sh from pytest's rc and a root cmp. /logs/verifier is 0700 root. Candidate stdout is parsed data, compared field by field, and a nonzero exit fails its test.",
+      "evidence": ["tests/test.sh:4-5", "tests/test.sh:20-27", "tests/test_outputs.py:135-136", "tests/test_outputs.py:207-214"],
+      "finding_ids": []
+    },
+    {
+      "category": "Access boundary tested from the candidate's execution context",
+      "status": "checked",
+      "reason": "test_candidate_cannot_read_verifier_state runs the probe through the same run_as(CANDIDATE_UID, python3 -I -S) path used for reductions. The probe covers /tests, ROSTER, SHIPPED_RUN and its driver, and /logs/verifier, with a positive control on a world-readable file.",
+      "evidence": ["tests/test_outputs.py:371-381"],
+      "finding_ids": []
+    },
+    {
+      "category": "Separate verifier container vs candidate code executed inside the verifier (privilege drop soundness, setuid)",
+      "status": "checked",
+      "reason": "The candidate code runs inside the verifier, but with setpriv --no-new-privs and --clear-groups as UID 65534. The verifier installs no setuid binary: the driver is set to 0644, and the shipped copy is chowned without a mode change beyond 0700 on its root.",
+      "evidence": ["tests/test_outputs.py:76", "tests/test_outputs.py:85-87", "tests/test_outputs.py:97-99"],
+      "finding_ids": []
+    },
+    {
+      "category": "Persisted / partially reset state trusted across invocations (cache_carryover)",
+      "status": "checked",
+      "reason": "The verifier trusts no candidate-written state across runs. Each reduction gets fresh stage/work dirs that are removed afterward. The differential trusts only the shipped outputs (a separate UID in a 0700 dir) and the sealed pairs.",
+      "evidence": ["tests/test_outputs.py:119-136", "tests/test_outputs.py:222-232"],
+      "finding_ids": []
+    },
+    {
+      "category": "Oracle/reference executable reachable by candidate (colocation_walk)",
+      "status": "checked",
+      "reason": "The only executable oracle-like artifact is the shipped package copy. It sits in a 0700 dir owned by 65533, and it reproduces the public pre-repair behaviour, not the expected answers. Calling it would reproduce the known-wrong figures that the families reject.",
+      "evidence": ["tests/test_outputs.py:81-92", "tests/test_outputs.py:131", "environment/app/src/noisedose/levels.py:9-10"],
+      "finding_ids": []
+    },
+    {
+      "category": "Candidate-writable inspected binary / driver replaced between check and use",
+      "status": "checked",
+      "reason": "The driver is re-installed by root before any run. Candidate code as 65534 could only replace it if the delivered /app/tools were world-writable. Even then, the driver just imports the candidate's own /app/src (so it gains nothing beyond its own code), and the root cmp at the end of test.sh plus test_submitted_driver_unchanged would drop reward to 0.",
+      "evidence": ["tests/test_outputs.py:70-78", "tests/test_outputs.py:384-387", "tests/test.sh:22-27", "environment/app/tools/noisedose_run.py:7"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["driver must match byte for byte (instruction.md:1)", "privileged read of delivered driver before seal replacement"],
+      "case_or_path": "The candidate delivers /app/tools as a symlink to /tests/shipped/app/tools or /tests/expected. The root reads those bytes and os.replace writes the verifier's own driver there. Candidate runs as 65534 cannot traverse /tests, so every reduction fails. No expected value reaches candidate code.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:70-78", "tests/test_outputs.py:131-135", "tests/test.sh:15"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["relabelled generated family (fresh labels drawn at run time)", "candidate process escaping killpg via setsid"],
+      "case_or_path": "A lingering 65534 process sees each sealed and relabelled generated survey input as it is staged. The expected reports stay in root memory and in /tests. RELABEL_SEED comes from os.urandom in the root process. The lingering process learns only inputs.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:43", "tests/test_outputs.py:105-115", "tests/test_outputs.py:361-368"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["differential against shipped copy (kept steps)", "candidate UID vs shipped UID separation"],
+      "case_or_path": "Candidate code tries to influence the shipped runs (cwd injection, writes to SHIPPED_RUN). The cwd is not on sys.path under -I, SHIPPED_RUN is 0700 owned by 65533, and the stage file is root-owned 0644. The shipped outputs stay candidate-independent.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:81-88", "tests/test_outputs.py:119-132", "tests/shipped/app/tools/noisedose_run.py:7"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["test.sh chmod -R a+rX /app", "/tests sealed 0700"],
+      "case_or_path": "Candidate symlinks under /app pointing into /tests. chmod -R does not follow symlinks during traversal, and /app itself is a verifier-image directory, so /tests stays 0700.",
+      "status": "checked",
+      "evidence": ["tests/test.sh:15-16", "tests/Dockerfile:5-7"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

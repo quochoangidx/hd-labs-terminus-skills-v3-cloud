@@ -1,0 +1,69 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 24 items
+
+../../tests/test_outputs.py .......F................                     [100%]
+
+=================================== FAILURES ===================================
+__________________ test_rule_2_3_credit_note_of_exactly_50000 __________________
+
+    def test_rule_2_3_credit_note_of_exactly_50000():
+        """A credit note of exactly 50,000 cents is a reversal, whatever the split, and is clawed back at 91-120 days."""
+>       check_family("reversal_threshold")
+
+/tests/test_outputs.py:249: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'A3LKC', 'bookings': 100000000, 'commission': 8000000, 'bonus': 0, ...}, {'rep': '182X4', 'boo...ion': 8000000, 'bonus': 0, ...}, {'rep': 'ZGYL8YPJHW', 'bookings': 100000000, 'commission': 8000000, 'bonus': 0, ...}]}
+expected = [{'rep': 'A3LKC', 'bookings': 100000000, 'commission': 8000000, 'bonus': 0, ...}, {'rep': '182X4', 'bookings': 1000000...sion': 8000000, 'bonus': 0, ...}, {'rep': 'ZGYL8YPJHW', 'bookings': 100000000, 'commission': 8000000, 'bonus': 0, ...}]
+label = 'reversal_threshold job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: reversal_threshold job 0 statement 0 ('A3LKC') clawback: 4000, expected 8000
+E               assert (<class 'int'> is <class 'int'> and 4000 == 8000)
+E                +  where <class 'int'> = type(4000)
+E                +  and   <class 'int'> = type(8000)
+
+/tests/test_outputs.py:202: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_2_bookings_take_the_reps_split
+PASSED ../../tests/test_outputs.py::test_rule_3_1_orders_on_the_quarter_edges
+PASSED ../../tests/test_outputs.py::test_rule_4_1_accelerators_apply_to_the_part_above_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_1_bookings_on_the_quota_and_twice_the_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_2_each_band_rounds_half_up
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reversals_up_to_120_days
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reversal_ages_120_and_121
+PASSED ../../tests/test_outputs.py::test_rule_5_2_credit_notes_outside_the_quarter
+PASSED ../../tests/test_outputs.py::test_courtesy_credits_keep_todays_clawback_line
+PASSED ../../tests/test_outputs.py::test_rule_6_1_new_logo_bonus_on_small_splits
+PASSED ../../tests/test_outputs.py::test_rule_2_4_first_order_of_exactly_250000
+PASSED ../../tests/test_outputs.py::test_trial_orders_keep_todays_bonus_line
+PASSED ../../tests/test_outputs.py::test_rule_7_2_shortfall_added_to_owed
+PASSED ../../tests/test_outputs.py::test_rule_7_2_total_exactly_on_the_draw
+PASSED ../../tests/test_outputs.py::test_rule_7_2_total_below_nought
+PASSED ../../tests/test_outputs.py::test_rule_7_3_recovery_only_above_the_draw
+PASSED ../../tests/test_outputs.py::test_rule_7_4_minimum_payment
+PASSED ../../tests/test_outputs.py::test_rule_7_4_due_of_24999_and_25000
+PASSED ../../tests/test_outputs.py::test_statement_order_and_keys
+PASSED ../../tests/test_outputs.py::test_section_one_limits_reached
+PASSED ../../tests/test_outputs.py::test_generated_jobs
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_2_3_credit_note_of_exactly_50000
+========================= 1 failed, 23 passed in 0.97s =========================

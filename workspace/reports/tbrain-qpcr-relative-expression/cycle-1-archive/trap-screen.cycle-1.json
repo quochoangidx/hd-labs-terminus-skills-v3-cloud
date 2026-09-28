@@ -1,0 +1,62 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-qpcr-relative-expression",
+ "stage": "phase 1 design, before contract_review and the skeleton probe",
+ "traps": [
+  {
+   "id": "TA_every_replicate_an_outlier_keeps_todays_replicates",
+   "semantic_node": "a sample's mean Ct for a gene (replicates.py kept/mean_ct; SOP 4.1-4.2)",
+   "kind": "emergent degenerate state: the defined-term filter (4.1 outlier: more than 0.50 from the median of three or more reportable replicates) feeds the aggregate (4.2 mean of the reportable replicates that are not outliers); with an even count of four or six and the middle two more than 1.00 apart, every reportable replicate is an outlier, so the qualified set is empty although replicates exist. 4.2 defines the mean only over a non-empty set; the value-level silence sentence leaves the mean Ct to today's step, which keeps every replicate (kept() returns list(cts) whenever more than one is stray)",
+   "properties": {
+    "inside_rebuilt_aggregate": "departure 4.1 (shipped drops only a lone stray) forces kept() to be rewritten, and departure 4.3 (shipped substitutes 40.0) forces mean_ct() to be rewritten; the natural rewrites ('if stray:' / 'return None when nothing is usable') remove today's keep-all fallthrough",
+    "not_an_enumeration_gap": "no definition lists cases; the empty set is a consequence of the median rule on even counts, visible only by composing 4.1 with 4.2",
+    "one_routing_decision": "which replicates enter the mean (all of them); no kept arithmetic beyond the SOP's own mean",
+    "keeping_requires_adding_code": "the rebuilt filter needs an explicit 'if nothing is left, keep them all' branch",
+    "chain": "2.2 reportable replicate -> 4.1 outlier -> 4.2 mean over the non-outliers (empty) -> 2.3/4.3 speak only of a gene with no reportable replicate -> value-level silence -> today's kept() keeps every replicate; everything downstream (5.1-5.4) follows the SOP"
+   },
+   "screen": {
+    "competing_positive_enumeration": "soft: 2.3/4.3 ('not detected' -> no mean Ct) and the nd flag of 6.3 tempt a solver to route an empty kept set to not-detected, but 2.3 is defined on reportable replicates, which exist here; no sentence gives a mean Ct or a no-mean state to an all-outlier set",
+    "no_definitional_chain": "no (chain above)",
+    "contrary_expert_instinct": "low to moderate: 'when every replicate is an outlier, none is' (average them all) is a common analyst reading; rejecting the sample is the other common one",
+    "unnamed_shared_step": "no: the unruled value is the defined figure 'mean Ct'",
+    "trap_in_several_tests": "no: all-outlier sets occur only in the TA family; jobgen.draw() rejects any other plate for which model.trap_inputs() reports TA",
+    "fuzz_blind_spot": "needs even-count replicate sets whose middle two are more than 1.00 cycle apart; tight random replicates never produce it"
+   },
+   "flags": "0 hard, 1 soft (competing not-detected route)",
+   "natural_over_repairs": {
+    "TA_filter_then_none": "kept(): 'if stray:'; mean_ct(): None when nothing usable -> fails TA only",
+    "TA_filter_crash": "kept(): 'if stray:' with the Oracle mean_ct -> ZeroDivisionError, fails TA only",
+    "TA_median_fallback": "keep the median when every replicate is an outlier -> fails TA only"
+   },
+   "receipts": ["receipts/departure-trap-checks.json", "receipts/skeleton-scorer/summary.txt"]
+  },
+  {
+   "id": "TB_gene_without_a_standard_curve_keeps_todays_factor",
+   "semantic_node": "a gene's amplification factor (curve.py amplification_factor; SOP 2.5, 3.1)",
+   "kind": "domain bound in a separate definition plus an apply-the-formula-everywhere edge: 3.1 reads universally ('A gene's amplification factor is 10^(-1/s) ... used as it is, with no ceiling'), but its s is the slope of the gene's standard curve, which 2.5 defines only for a gene with three or more curve points (curve points themselves filtered by 2.4). For a gene with two curve points the SOP gives no factor, so today's step stays: the least-squares line through the two points, capped at 2 (and 2.0 below two points)",
+   "properties": {
+    "inside_rebuilt_aggregate": "departure 3.1 (shipped caps every factor at 2) is repaired in the one line that also serves the two-point line; departure 2.4 rewrites curve_points() feeding it",
+    "natural_rewrite_looks_like_the_rule": "deleting min(..., 2.0) is exactly what 3.1's 'no ceiling' reads like",
+    "keeping_requires_adding_code": "a three-or-more branch that is uncapped, with the capped line kept below it",
+    "not_an_enumeration_gap": "the bound is a threshold inside the definition of 'standard curve' (2.5), not a missing case of an enumerated list; the rule sentence 3.1 carries no qualifier",
+    "chain": "2.4 curve point (two or more determined wells) -> 2.5 standard curve (three or more curve points) -> 3.1 factor of the standard curve -> value-level silence -> today's amplification_factor() on the SOP's curve points; 5.1-5.4 then use that factor"
+   },
+   "screen": {
+    "competing_positive_enumeration": "soft: 3.1's 'used as it is, with no ceiling' could be read as governing every factor; reworded to 'Such a factor above 2 ...' so it refers back to the standard-curve factor",
+    "no_definitional_chain": "no (chain above)",
+    "contrary_expert_instinct": "moderate: an analyst might fall back to perfect doubling (2.0) for a two-level series; the kept value agrees with that above 2 and differs below 2",
+    "unnamed_shared_step": "no: the unruled value is the defined figure 'amplification factor'",
+    "trap_in_several_tests": "no: genes with fewer than three curve points occur only in the TB family (jobgen predicate); TB plates keep every governed rule neutral between shipped and SOP (equal reference Cts, determined standards, factors of other genes at most 2)",
+    "fuzz_blind_spot": "self-fuzz generates short series but compares against its own opinion of the factor there; only a two-point line with a factor above 2 separates 'uncapped everywhere', and only one below 2 separates 'doubling below three points'"
+   },
+   "flags": "0 hard, 2 soft (competing 'no ceiling' reading, reduced by rewording; moderate expert fallback to 2.0)",
+   "natural_over_repairs": {
+    "TB_uncapped_everywhere": "delete the cap for every fitted line -> fails TB only",
+    "TB_doubling_below_three": "2.0 below three curve points -> fails TB only"
+   },
+   "receipts": ["receipts/departure-trap-checks.json", "receipts/skeleton-scorer/summary.txt"]
+  }
+ ],
+ "independence": "TA: the mean Ct of a sample (replicates.py; 4.1/4.2; an emergent empty set; exclusion-to-inclusion routing). TB: the amplification factor of a gene (curve.py; 2.5/3.1; a definition-bound domain; an arithmetic cap kept). Different figures, files, definitions and shapes; the instruction names neither; one careful policy ('for each defined figure, find inputs outside its rule and keep today's step') still reaches both, which is the residual collapse risk",
+ "verdict": "no trap carries a hard flag; TA has one soft flag and TB two soft flags. Neither is a unanimous-miss screen failure on paper; the skeleton pair (step 4a) re-screens"
+}

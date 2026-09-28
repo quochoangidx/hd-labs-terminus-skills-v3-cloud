@@ -1,0 +1,114 @@
+--- a/src/rebate/growth.py
++++ b/src/rebate/growth.py
+@@ -12,4 +12,4 @@
+         return 0
+     if net * GROWTH_TARGET[1] < prior * GROWTH_TARGET[0]:
+         return 0
+-    return half_up(net * GROWTH_SHARE_BP, 10000)
++    return half_up((net - prior) * GROWTH_SHARE_BP, 10000)
+--- a/src/rebate/ledger.py
++++ b/src/rebate/ledger.py
+@@ -1,8 +1,15 @@
+ """Purchase lines from the ledger export and the purchases of a quarter."""
+ 
++import datetime
++
+ from .dates import in_quarter, parse_day
+ 
++# A carton shipment (12 units or more) travels by road freight and is received on the fourth
++# day after its invoice date; it counts toward the quarter it is received in.
++CARTON_UNITS = 12
++TRANSIT = datetime.timedelta(days=4)
+ 
++
+ def dated_lines(lines):
+     """Each purchase line as (day, units, value in cents), dated as the export dates it.
+ 
+@@ -12,6 +19,8 @@
+     dated = []
+     for invoiced, units, unit_cents in lines:
+         day = parse_day(invoiced)
++        if units >= CARTON_UNITS:
++            day += TRANSIT
+         dated.append((day, units, units * unit_cents))
+     return dated
+ 
+--- a/src/rebate/returns.py
++++ b/src/rebate/returns.py
+@@ -2,14 +2,17 @@
+ 
+ from .dates import in_quarter, parse_day
+ 
+-# Cents the supplier keeps for each unit it handles back.
++# Cents the supplier keeps for each unit it handles back (chargeback.py reads this figure).
+ HANDLING_PER_UNIT = 25
+ 
++# The schedule's handling charge on a return, per unit.
++RETURN_HANDLING = 40
+ 
++
+ def returns_credit(returns, quarter):
+     """The credit in cents for the returns of the quarter."""
+     credit = 0
+     for taken, units, unit_cents in returns:
+         if in_quarter(parse_day(taken), quarter):
+-            credit += units * (unit_cents - HANDLING_PER_UNIT)
++            credit += units * (unit_cents - RETURN_HANDLING)
+     return credit
+--- a/src/rebate/settle.py
++++ b/src/rebate/settle.py
+@@ -1,11 +1,14 @@
+ """Paying a settlement or carrying it forward."""
+ 
+-# Credits below this many cents are not worth paying out.
++# Credits below this many cents are not worth paying out (protection.py reads this figure).
+ MINIMUM_CREDIT = 5000
+ 
++# The schedule's minimum settlement.
++MINIMUM_SETTLEMENT = 25000
+ 
++
+ def settle(total):
+     """(paid, carried) in cents for a settlement total."""
+-    if total < MINIMUM_CREDIT:
++    if total < MINIMUM_SETTLEMENT:
+         return 0, total
+     return total, 0
+--- a/src/rebate/statement.py
++++ b/src/rebate/statement.py
+@@ -14,7 +14,7 @@
+     purchases = quarter_purchases(account["purchases"], quarter)
+     returned = returns_credit(account["returns"], quarter)
+     net = purchases - returned
+-    bp = tier_rate(purchases, tiers)
++    bp = tier_rate(net, tiers)
+     rebate = volume_rebate(net, bp)
+     growth = growth_bonus(net, account["prior"])
+     protection = protection_credit(account["notices"], quarter)
+--- a/src/rebate/tiers.py
++++ b/src/rebate/tiers.py
+@@ -1,6 +1,8 @@
+ """The volume tier table and the volume rebate."""
+ 
++from .money import half_up
+ 
++
+ def load_tiers(rows):
+     """Tier rows as (threshold in cents, rate in basis points), in table order."""
+     return [(row["from"], row["bp"]) for row in rows]
+@@ -10,11 +12,13 @@
+     """The rate in basis points of the tier an amount of purchases reaches."""
+     rate = 0
+     for threshold, bp in tiers:
+-        if amount > threshold:
++        if amount >= threshold:
+             rate = bp
+     return rate
+ 
+ 
+ def volume_rebate(net, bp):
+     """The volume rebate in cents on net purchases at a rate in basis points."""
+-    return net * bp // 10000
++    if net <= 0:
++        return 0
++    return half_up(net * bp, 10000)

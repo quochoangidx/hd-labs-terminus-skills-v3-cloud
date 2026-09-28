@@ -1,0 +1,27 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The statement printed by /app/tools/ddbill_run.py gives, for every container, each stage's first day,
+  last free day, days, chargeable days, amount and status, the container's amount, discount and net,
+  and the invoice total, as tariff rules DT-3 give them.
+causal_core: >
+  moves -> stages and their days (2.2-2.4) -> free time (working days and closures at the terminal,
+  calendar days for the merchant stage; 2.5, 3.1-3.3) -> chargeable days (4.1) -> first chargeable day ->
+  revision in force and scale (5.1-5.2; before the earliest revision, today's choice) -> non-retroactive
+  tier charge (5.3) -> stage amount, charge or accrual (5.4) -> container amount -> discount (6.2 with 1.3;
+  for a container with a running stage, today's step) -> net and total (6.3).
+core_obligations:
+  - {id: STAGE_DAYS, contribution: "merchant stage starts on the gate-out date; days counted with both ends", authority: "rules 2.2, 2.4", witness: "test_rule_2_2_merchant_stage_starts_on_gate_out_day; test_rule_2_4_days_count_both_ends", plausible_wrong: "merchant stage from the day after gate-out (shipped); date difference (shipped)"}
+  - {id: TERMINAL_FREE_TIME, contribution: "terminal free days used one per working day, none on a closure day", authority: "rules 2.5, 3.1, 3.3", witness: "test_rule_3_1_terminal_free_time_uses_working_days; test_rule_3_1_closure_day_uses_no_free_time", plausible_wrong: "calendar days (shipped); skip weekends but not holidays; count closures"}
+  - {id: CHARGEABLE_DAYS, contribution: "days after the last free day, closure days left out at the terminal only", authority: "rule 4.1", witness: "test_rule_4_1_closure_day_is_not_chargeable_at_the_terminal", plausible_wrong: "days less free days (shipped); drop weekends/holidays after free time too; drop closures at the merchant stage"}
+  - {id: SCALE, contribution: "scale of the revision in force on the first chargeable day; before the earliest effective date today's choice (latest revision) stays", authority: "rules 5.1, 5.2; instruction silence clause", witness: "test_rule_5_2_scale_in_force_on_first_chargeable_day; test_charges_that_began_before_the_rate_sheet_keep_todays_scale (trap T2)", plausible_wrong: "latest revision always (shipped); earliest revision or an error when none is in force (natural over-repair)"}
+  - {id: TIER_CHARGE, contribution: "each chargeable day at its own tier's rate", authority: "rule 5.3", witness: "test_rule_5_3_tiers_are_not_retroactive", plausible_wrong: "every day at the rate of the tier the last day reaches (shipped); off-by-one tier boundary"}
+  - {id: DISCOUNT, contribution: "percentage of the charges rounded half up; a container with a running stage keeps today's truncated percentage of its (repaired) amount", authority: "rules 1.3, 5.4, 6.2; instruction silence clause", witness: "test_rule_6_2_discount_rounds_half_up; test_running_container_keeps_todays_discount (trap T1)", plausible_wrong: "truncation (shipped); half up everywhere, or a discount on the ended stages only (natural over-repairs)"}
+support_obligations:
+  - {id: JOB_DECODE, supplied_boundary: "src/ddbill/dates.py and stays.py decode dates and moves", why_not_core: "decoding is complete and not a repair surface"}
+  - {id: DRIVER, supplied_boundary: "tools/ddbill_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: STATEMENT_LAYOUT, supplied_boundary: "section 7 keys, container order, null merchant stage, already produced by statement.py", why_not_core: "serialization already right"}
+non_goals:
+  - jobs outside rule 1.4 (left entirely open in the instruction)
+  - error messages and exit codes other than the statement
+  - direct calls to package helpers (graded through the driver only)
+  - export (gate-in, load) stages, reefer power, storage at depots, currency conversion, payment terms

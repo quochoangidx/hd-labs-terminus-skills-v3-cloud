@@ -1,0 +1,28 @@
+# Bounded scope ledger (bounded-task-design.md), written before any verifier.
+primary_outcome: >
+  The report printed by /app/tools/cemsqr_run.py gives every operating hour's kind, corrected concentration
+  and mass rate, every operating day's rolling average and exceedance flag, the operating and valid hour
+  counts and the quarter's NOx tons as procedure DRP-4 gives them.
+causal_core: >
+  quarter-hour records -> operating quarters and hours (2.1) -> valid readings and valid hours under the
+  minimum-data rule with the calibration allowance (2.2, 2.3) -> hourly averages over valid readings (3.1)
+  -> corrected concentration of a firing hour with 209 (2.4, 3.2; any other valid hour keeps today's
+  correction, reach rule) and mass rate from the measured average (3.3) -> lost-hour substitution from the
+  valid hours either side (2.5, 4.2, 4.3; an hour neither valid nor lost keeps today's carried figures,
+  reach rule) -> quarter tons weighted by operating time (5.1) and 30-operating-day rolling averages of
+  valid hours with exceedance above the limit (2.6, 6.1, 6.2).
+core_obligations:
+  - {id: HOUR_VALIDITY, contribution: "valid readings are OK records of operating quarters; a valid hour has one for every operating quarter, or two with a CAL record; averages over valid readings only", authority: "DRP-4 2.1-2.3, 3.1", witness: "planned test_rule_2_3_calibration_hour_needs_two_valid_readings; test_rule_3_1_averages_use_valid_readings_only", plausible_wrong: "four OK records (shipped); every record averaged (shipped)"}
+  - {id: CORRECTION, contribution: "a firing hour (oxygen average below 190) is corrected with 209; any other valid hour keeps today's correction (silent, kept)", authority: "DRP-4 2.4, 3.2; instruction reach rule", witness: "planned test_rule_3_2_firing_hour_uses_209; test_hour_that_is_not_firing_keeps_todays_correction (trap T2)", plausible_wrong: "210 (shipped) / AMBIENT_O2 = 209 for every hour (minimal natural fix) / uncapped 209 formula for every hour"}
+  - {id: MASS, contribution: "mass rate from the measured NOx average times flow; quarter tons weight each hour by its operating time", authority: "DRP-4 3.3, 5.1", witness: "planned test_rule_3_3_mass_rate_uses_measured_nox; test_rule_5_1_tons_use_operating_time", plausible_wrong: "corrected concentration (shipped); a whole hour each (shipped)"}
+  - {id: SUBSTITUTE, contribution: "a lost hour (no valid reading) takes the before/after average, one side, or nought; an hour neither valid nor lost keeps today's carried figures (silent, kept)", authority: "DRP-4 2.5, 4.1-4.3; instruction reach rule", witness: "planned test_rule_4_2_lost_hour_averages_its_neighbours; test_rule_4_3_one_side_or_nought; test_hour_with_some_valid_readings_keeps_todays_figures (trap T1)", plausible_wrong: "carry forward every substitute hour (shipped) / the 4.2 fill for every substitute hour (minimal natural fix) / the hour's own partial averages"}
+  - {id: ROLLING, contribution: "rolling average over the operating day and 29 operating days before it, of valid hours' concentrations; exceedance above the limit", authority: "DRP-4 2.6, 6.1, 6.2", witness: "planned test_rule_6_1_thirty_operating_days; test_rule_6_1_valid_hours_only; test_rule_6_2_at_the_limit_is_not_an_exceedance", plausible_wrong: "30 calendar days (shipped); mean of daily means of all hours (shipped); at or above (shipped)"}
+support_obligations:
+  - {id: DRIVER, supplied_boundary: "tools/cemsqr_run.py, frozen and byte-checked", why_not_core: "plumbing; the harness runs its own copy"}
+  - {id: REPORT_LAYOUT, supplied_boundary: "README report keys and order, already produced by report.py", why_not_core: "serialization already right"}
+  - {id: GROUPING, supplied_boundary: "hours.group_hours, timebase helpers, rounding.half_up", why_not_core: "already right under 1.1, 1.5"}
+non_goals:
+  - malformed or out-of-range job files (left entirely open in the instruction)
+  - error messages and exit codes
+  - direct calls to package helpers (graded through the driver only)
+  - lookback-period substitution, bias adjustment factors, CO2 diluent, heat-input rates, anything the procedure does not mention

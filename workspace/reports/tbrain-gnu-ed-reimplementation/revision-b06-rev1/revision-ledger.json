@@ -1,0 +1,232 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-gnu-ed-reimplementation",
+ "report_path": "workspace/revision/b06b2c0a-ebb9-483b-b44d-bb86ce5eb3e9/v1/b06b2c0a-ebb9-483b-b44d-bb86ce5eb3e9.md",
+ "returned_snapshot_sha256": "699c2f22d2b8ed00d749a895d94ebc4b36c02cd91d02c3e1801264ebf9a5355d",
+ "repaired_snapshot_sha256": "bb75e5e6ccc8b312cc9eb3485042ccc396febe073169751a77704c0c1a7078a6",
+ "summary": "14 blocking findings: 9 backed (1 reference fix, 8 coverage/guard), 5 disputed with GNU ed receipts (2, 3, 4, 9, 13). Instruction and environment unchanged.",
+ "findings": [
+  {
+   "id": "1",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "Bounded-repeat run memo reused across search starts with a back-reference.",
+   "decision": "backed",
+   "rationale": "Real. The finding's script prints ? instead of aX (receipts/returned/crs-reproduction.json, f1). posixre.py now skips the offered-run memo when the pattern holds a back-reference, and rejects a back-reference to a group that is not yet closed (a sibling found by the sweep). Back-reference differential of 3,000 patterns vs GNU ed: 19 disagreements before, 0 after (work/fuzz-*-safebr.json); 4,000 patterns without back-references: 0. Two committed cases pin it; the returned reference as a submission scores 1 on the returned verifier and 0 on the repaired one.",
+   "reproduction": "receipts/returned/backref-run-memo-shared.json",
+   "closure": "receipts/repaired/backref-run-memo-shared.json",
+   "gate": {
+    "rule": "wrong path backref-run-memo-shared must fail test_regex (manifest wrong_paths, regression suite)"
+   }
+  },
+  {
+   "id": "2",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "s copies the pre-substitution line to the cut buffer.",
+   "decision": "disputed",
+   "rationale": "GNU ed 1.19 does the same: the finding's script prints aXc, abc in both. The cut buffer is also unobservable, since x and y never appear in a script.",
+   "reproduction": "receipts/returned/crs-reproduction.json",
+   "counterexample": "receipts/returned/crs-reproduction.json",
+   "contract_citation": {
+    "file": "instruction.md",
+    "anchor": "The commands `l`, `z`, `x`, `y`"
+   },
+   "contested_in_channel": "prepared in revision-b06-rev1/contest-note.md for #terminus-3-submissions; this environment cannot post, so the user must post it by hand before the resubmission is judged",
+   "gate": {
+    "rule": "every expected result is GNU ed 1.19's own output at test time"
+   }
+  },
+  {
+   "id": "3",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "A bare s repeat is rejected.",
+   "decision": "disputed",
+   "rationale": "Refuted by execution: the finding's script prints bb with no ? in GNU ed and the reference.",
+   "reproduction": "receipts/returned/crs-reproduction.json",
+   "counterexample": "receipts/returned/crs-reproduction.json",
+   "contract_citation": {
+    "file": "instruction.md",
+    "anchor": "where the manual and the program disagree the program is what counts"
+   },
+   "contested_in_channel": "prepared in revision-b06-rev1/contest-note.md for #terminus-3-submissions; this environment cannot post, so the user must post it by hand before the resubmission is judged",
+   "gate": {
+    "rule": "every expected result is GNU ed 1.19's own output at test time"
+   }
+  },
+  {
+   "id": "4",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "sr uses the last RE even with no later search.",
+   "decision": "disputed",
+   "rationale": "GNU ed 1.19 prints aaa and exits 0 on the finding's script, as the reference does; the manual's parenthetical does not say sr fails, and the program decides.",
+   "reproduction": "receipts/returned/crs-reproduction.json",
+   "counterexample": "receipts/returned/crs-reproduction.json",
+   "contract_citation": {
+    "file": "instruction.md",
+    "anchor": "where the manual and the program disagree the program is what counts"
+   },
+   "contested_in_channel": "prepared in revision-b06-rev1/contest-note.md for #terminus-3-submissions; this environment cannot post, so the user must post it by hand before the resubmission is judged",
+   "gate": {
+    "rule": "every expected result is GNU ed 1.19's own output at test time"
+   }
+  },
+  {
+   "id": "5",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "No long run for *, \\+ or \\{N,\\}.",
+   "decision": "backed",
+   "rationale": "Real: a 64 cap scores 1 on the returned verifier. Added a 200-byte fixture with *, \\+, \\{1,\\}, \\{150,\\}, \\{200\\}, group repeats and a back-reference repeat, basic and extended, plus an s count of 150 (sibling mutant s-count-cap-64 closed too).",
+   "reproduction": "receipts/returned/open-repeat-cap-64.json",
+   "closure": "receipts/repaired/open-repeat-cap-64.json",
+   "gate": {
+    "rule": "wrong path open-repeat-cap-64 must fail test_regex (manifest wrong_paths, regression suite)"
+   }
+  },
+  {
+   "id": "6",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "No f inside a g list.",
+   "decision": "backed",
+   "rationale": "Real. Added f, e, E, W, r, #, Q and wq inside g and v lists (sibling mutant global-file-commands-refused closed too).",
+   "reproduction": "receipts/returned/global-f-refused.json",
+   "closure": "receipts/repaired/global-f-refused.json",
+   "gate": {
+    "rule": "wrong path global-f-refused must fail test_global_commands (manifest wrong_paths, regression suite)"
+   }
+  },
+  {
+   "id": "7",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "No v with a nested g or v.",
+   "decision": "backed",
+   "rationale": "Real. All four nesting orders on a pipe, and v-with-g on a regular file.",
+   "reproduction": "receipts/returned/v-allows-nested-global.json",
+   "closure": "receipts/repaired/v-allows-nested-global.json",
+   "gate": {
+    "rule": "wrong path v-allows-nested-global must fail test_global_commands (manifest wrong_paths, regression suite)"
+   }
+  },
+  {
+   "id": "8",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "summary": "No ERE upper bound above 32767.",
+   "decision": "backed",
+   "rationale": "Real. {0,32768}, {1,32768}, {32767,32768} and {3,2}, extended and basic, pipe and file. (A {0,32767} row was dropped: GNU ed itself did not finish it reliably under load.)",
+   "reproduction": "receipts/returned/ere-upper-bound-unchecked.json",
+   "closure": "receipts/repaired/ere-upper-bound-unchecked.json",
+   "gate": {
+    "rule": "wrong path ere-upper-bound-unchecked must fail test_regex_extended (manifest wrong_paths, regression suite)"
+   }
+  },
+  {
+   "id": "9",
+   "axis": "correct_reference_solution",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "Offset components capped before the total is evaluated.",
+   "decision": "disputed",
+   "rationale": "GNU ed 1.19 also rejects 0+2147483648-2147483648= (prints ?) and accepts the 2147483647 control, as the reference does.",
+   "reproduction": "receipts/returned/crs-reproduction.json",
+   "counterexample": "receipts/returned/crs-reproduction.json",
+   "contract_citation": {
+    "file": "instruction.md",
+    "anchor": "where the manual and the program disagree the program is what counts"
+   },
+   "contested_in_channel": "prepared in revision-b06-rev1/contest-note.md for #terminus-3-submissions; this environment cannot post, so the user must post it by hand before the resubmission is judged",
+   "gate": {
+    "rule": "every expected result is GNU ed 1.19's own output at test time"
+   }
+  },
+  {
+   "id": "10",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "Marks other than a, b and x never used.",
+   "decision": "backed",
+   "rationale": "Real. Every lowercase mark c to z, plus the finding's regular-file case.",
+   "reproduction": "receipts/returned/marks-a-b-x-only.json",
+   "closure": "receipts/repaired/marks-a-b-x-only.json",
+   "gate": {
+    "rule": "wrong path marks-a-b-x-only must fail test_addresses (manifest wrong_paths, regression suite)"
+   }
+  },
+  {
+   "id": "11",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "Guard accepts a .pyc under /app.",
+   "decision": "backed",
+   "rationale": "Real: a source ed.py importing the editor from implementation.pyc scores 1 on the returned verifier. guard.py now accepts a module under /app only when its origin ends in .py, and a new probe (guardcheck/bytecode.py with a legacy.pyc written by the test) must be stopped.",
+   "reproduction": "receipts/returned/pyc-submission.json",
+   "closure": "receipts/repaired/pyc-submission.json",
+   "gate": {
+    "rule": "test_launcher_stops_delegation_and_foreign_code probes a sourceless .pyc beside the program"
+   }
+  },
+  {
+   "id": "12",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "No decimal address above 33.",
+   "decision": "backed",
+   "rationale": "Real. A 60-line fixture with addresses 34 to 61, pipe and file.",
+   "reproduction": "receipts/returned/line-number-cap-33.json",
+   "closure": "receipts/repaired/line-number-cap-33.json",
+   "gate": {
+    "rule": "wrong path line-number-cap-33 must fail test_addresses (manifest wrong_paths, regression suite)"
+   }
+  },
+  {
+   "id": "13",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "No numeric offset above two.",
+   "decision": "disputed",
+   "rationale": "Did not reproduce: a parser refusing offsets above 2 already fails test_addresses on the returned verifier (reward 0), because committed cases use larger offsets. Larger offsets (+3 to +60) were still added.",
+   "reproduction": "receipts/returned/offset-magnitude-2.json",
+   "counterexample": "receipts/returned/offset-magnitude-2.json",
+   "contract_citation": {
+    "file": "instruction.md",
+    "anchor": "every form of line address and address range"
+   },
+   "contested_in_channel": "prepared in revision-b06-rev1/contest-note.md for #terminus-3-submissions; this environment cannot post, so the user must post it by hand before the resubmission is judged",
+   "gate": {
+    "rule": "wrong path offset-magnitude-2 must fail test_addresses"
+   }
+  },
+  {
+   "id": "14",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "summary": "No run of four or more bare signs.",
+   "decision": "backed",
+   "rationale": "Real. Runs of 4, 5, 10 and mixed signs.",
+   "reproduction": "receipts/returned/bare-signs-max-3.json",
+   "closure": "receipts/repaired/bare-signs-max-3.json",
+   "gate": {
+    "rule": "wrong path bare-signs-max-3 must fail test_addresses (manifest wrong_paths, regression suite)"
+   }
+  }
+ ],
+ "previous_findings": []
+}

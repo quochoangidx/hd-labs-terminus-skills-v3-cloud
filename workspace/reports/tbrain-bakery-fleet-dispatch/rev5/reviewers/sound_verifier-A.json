@@ -1,0 +1,163 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-A",
+  "snapshot_sha256": "d0b95eb49a2871a2577425abd4907ac7b599e158e452f8db6a7525ace2822711",
+  "severity": "None",
+  "summary": "The verifier grades exactly the promised behavior. For each of the four mornings it reads /app/plans/<morning>.json as strict JSON and checks it with its own sealed copy of the dispatch rules (tests/check_plan.py). That file is byte-identical to the candidate-visible tool, per the manifest hashes. It uses sealed copies of the orders and targets, which are also byte-identical to the visible ones. It then requires every rule to hold and the independently computed cost to be at or below the target. Every rule in dispatch-rules.md maps to a check in evaluate(). No candidate code runs. A plan can only pass by being feasible and under target, which is the task itself. The comparator also accepts any key order, whitespace, route order and vehicle choice the contract leaves open. I found no false acceptance, false rejection, proxy, stale-artifact or self-controlled comparison defect.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/dispatch-rules.md",
+      "environment/app/tools/check_plan.py",
+      "environment/app/planner/plan_morning.py",
+      "environment/app/orders/targets.json",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/check_plan.py",
+      "tests/targets.json",
+      "tests/orders/harbour-lanes.json",
+      "tests/orders/{old-town,riverside,north-ring}.json (depot/fleet fields via grep)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "The customer arrays of tests/orders/old-town.json, riverside.json and north-ring.json were not read line by line. The manifest shows they are byte-identical to the environment copies, and their depot and fleet schema were grepped and match harbour-lanes. Customer-level data affects solvability (the reference axis), not whether the verifier is sound."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Compared manifest hashes. tests/check_plan.py is identical to environment/app/tools/check_plan.py (12abbd06...), tests/targets.json is identical to environment/app/orders/targets.json (38245533...), and each tests/orders/*.json is identical to its environment copy. The visible tool and the grader therefore cannot disagree.",
+    "Mapped each rule in dispatch-rules.md to check_plan.py evaluate(): integer departure not before open (line 70), window check start>due with start=max(arrival,ready) (lines 83-85), service time added (86), back<=close (92), shift (94), capacity (96), range where not null (98), at least one stop (67), at most count routes per type (101-103), every customer exactly once (77-78, 104-106), cost fixed+per_unit*distance (100), ceil Euclidean distance via isqrt (40-43), plan/route key sets (55, 61), no repeated keys and no NaN/Infinity (18-37).",
+    "Traced test_outputs.py. Each morning's target test calls evaluate on the sealed orders and the candidate plan and asserts cost <= TARGETS[morning] (lines 46-48). A PlanError fails the test (lines 35-39), and a missing file fails the assertion at line 31.",
+    "Checked test.sh. The reward is 1 only when pytest exits 0. It runs with python3 -I in a fresh mktemp cwd with -p no:randomly, so PYTHONPATH, user site and cwd shadowing cannot change which check_plan is imported (sys.path inserts /tests first).",
+    "Checked tests/Dockerfile: pinned base image, pinned pytest, tests copied to /tests, WORKDIR /tests. The grader uses no candidate-built binary and no /app code.",
+    "Plausible wrong implementations: the shipped greedy planner (instruction says it is over target and infeasible on two mornings), a plan missing customers, duplicated stops, over-capacity, over-range bike routes, window violations, too many vehicles of a type, float departures, and extra keys. Each is rejected by a specific evaluate() branch or by the cost/target assertion.",
+    "Valid alternatives: any JSON key order, whitespace or indentation, any route order in the list, any departure time >= open, any mix of vehicle types, and fewer vehicles than available are all accepted. Nothing compares against a reference plan.",
+    "Proxy and self-control: the cost comes from the verifier's own evaluate on sealed orders. No candidate-reported cost is trusted, and targets come from /tests."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Required behavior mapped to failing assertion",
+      "status": "pass",
+      "reason": "The two graded obligations are rule feasibility and cost <= target. Both have an assertion per morning, and each rule has a PlanError branch.",
+      "evidence": "tests/test_outputs.py:35-48; tests/check_plan.py:53-107",
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result checked (values, membership, uniqueness)",
+      "status": "pass",
+      "reason": "Coverage of every customer exactly once, fleet counts, and a recomputed total cost are all checked, not just the file existing or its schema.",
+      "evidence": "tests/check_plan.py:77-79, 101-107",
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rules have outcome-changing cases",
+      "status": "pass",
+      "reason": "The grader is a full rule evaluator applied to the candidate's own plan, so any violation of a named rule on any route is rejected. Bike range 260 and capacity 14 are binding against far customers and large markets in the data (for example harbour-lanes customer 28 at (-140,-128) with demand 34).",
+      "evidence": "tests/orders/harbour-lanes.json:280-289, 611-641; tests/check_plan.py:96-99",
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solution rejected",
+      "status": "pass",
+      "reason": "The greedy baseline, incomplete coverage, duplicate delivery, window, shift, capacity, range and fleet-count violations each hit a PlanError branch or the target assertion.",
+      "evidence": "instruction.md:1; environment/app/planner/plan_morning.py:20-53; tests/check_plan.py:67-106; tests/test_outputs.py:46-48",
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "pass",
+      "reason": "The plan is parsed as JSON and compared semantically. The only representation limits are integer depart and stop ids, only the routes key, exact route keys and no repeated keys, and the contract states all of them explicitly.",
+      "evidence": "environment/app/docs/dispatch-rules.md:54-62; tests/check_plan.py:29-37, 55-76",
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy / Oracle-specific representation / self-controlled comparison",
+      "status": "pass",
+      "reason": "There is no golden plan and no candidate-supplied cost or checksum. The expected threshold and the orders are verifier-owned copies.",
+      "evidence": "tests/test_outputs.py:19-32; tests/targets.json",
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries / artifacts",
+      "status": "pass",
+      "reason": "The verifier reads only the four JSON plan files at grading time and builds nothing. The instruction states that only the four plan files are used.",
+      "evidence": "instruction.md:3; tests/test_outputs.py:29-32; tests/Dockerfile:1-6",
+      "finding_ids": []
+    },
+    {
+      "category": "Unreachable test cases",
+      "status": "pass",
+      "reason": "All eight tests are reachable. The feasibility and target tests share one path, which is redundant but does not change the verdict.",
+      "evidence": "tests/test_outputs.py:51-80",
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions enforced",
+      "status": "not_applicable",
+      "reason": "The no-network, no-install and stdlib-only remarks describe the environment. Because how the plans are produced is explicitly up to the candidate, no process restriction is graded.",
+      "evidence": "instruction.md:3",
+      "finding_ids": []
+    },
+    {
+      "category": "Failure localization",
+      "status": "pass",
+      "reason": "Each morning has named tests, and PlanError messages name the route, the customer and the rule that failed.",
+      "evidence": "tests/test_outputs.py:35-48; tests/check_plan.py:60-106",
+      "finding_ids": []
+    },
+    {
+      "category": "Reward channel integrity in test.sh",
+      "status": "pass",
+      "reason": "reward.txt starts at 0 and becomes 1 only when pytest exits 0. The -I flag and the temp cwd prevent import shadowing.",
+      "evidence": "tests/test.sh:4-21",
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["time window", "shift", "bakery close"],
+      "case_or_path": "Late departure that waits for ready times: shift is measured from depart, and close is absolute.",
+      "status": "pass",
+      "evidence": "tests/check_plan.py:83-95 matches dispatch-rules.md:37-42.",
+      "finding_ids": []
+    },
+    {
+      "rules": ["range", "distance rounding"],
+      "case_or_path": "Bike route whose rounded legs sum just over 260 while its unrounded sum is under.",
+      "status": "pass",
+      "evidence": "Range uses the sum of the ceil-rounded legs (check_plan.py:81-82, 89-90, 98), as dispatch-rules.md:44-46 specifies.",
+      "finding_ids": []
+    },
+    {
+      "rules": ["exactly-once coverage", "fleet count"],
+      "case_or_path": "A cheaper plan that merges customers onto more bikes than exist, or drops a customer.",
+      "status": "pass",
+      "evidence": "check_plan.py:101-106 rejects both before any cost is returned.",
+      "finding_ids": []
+    },
+    {
+      "rules": ["cost", "target"],
+      "case_or_path": "A feasible plan above target, or one at exactly the target.",
+      "status": "pass",
+      "evidence": "test_outputs.py:48 uses <=, which matches 'costs no more than' in instruction.md:1.",
+      "finding_ids": []
+    },
+    {
+      "rules": ["JSON strictness", "native types"],
+      "case_or_path": "depart 18000.0, a boolean stop id, a repeated key, or NaN.",
+      "status": "pass",
+      "evidence": "All are rejected, and each is explicitly excluded by dispatch-rules.md:58-62 (check_plan.py:25-37, 70, 75).",
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": "This was a static review; nothing was executed. Whether the targets can actually be reached is a solvability and reference question outside this packet, which has no solution. It does not affect whether the verifier correctly grades a plan against its stated threshold."
+}

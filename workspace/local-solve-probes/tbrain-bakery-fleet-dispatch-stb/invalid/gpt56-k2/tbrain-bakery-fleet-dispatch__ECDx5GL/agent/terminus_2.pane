@@ -1,0 +1,6845 @@
+[?2004hroot@2b652d5e3a23:/app# asciinema rec --stdin /logs/agent/recording.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent/recording.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@2b652d5e3a23:/app# clear
+[?2004l[H[J[3J[?2004hroot@2b652d5e3a23:/app# find /app -maxdepth 3 -type f -printf '%p\n' | sort
+[?2004l/app/README.md
+/app/docs/dispatch-rules.md
+/app/orders/harbour-lanes.json
+/app/orders/north-ring.json
+/app/orders/old-town.json
+/app/orders/riverside.json
+/app/orders/targets.json
+/app/planner/plan_morning.py
+/app/tools/check_plan.py
+[?2004hroot@2b652d5e3a23:/app# cat /app/docs/dispatch-rules.md
+[?2004l# Morning dispatch rules
+
+These rules decide whether a delivery plan can be run and what it costs. They
+are the rules `tools/check_plan.py` applies.
+
+## Orders
+
+Each file in `orders/` is one morning. It lists the bakery (`depot`), the
+customers to deliver to, and the vehicles available (`fleet`). Positions are
+integer grid coordinates `x`, `y` in units of 100 m; times are seconds after
+midnight. The bakery opens at `open` and closes at `close`.
+
+A customer has an integer `id`, a position, a `demand` in crates, a delivery
+window `ready`..`due`, and a `service` time in seconds for unloading. Its
+`kind` (cafe, grocer, hotel, market) is for information only and changes no
+rule.
+
+A fleet entry is one kind of vehicle, named by its `type`: `count` vehicles of it are available,
+each carrying up to `capacity` crates. It travels at `pace` seconds per unit of
+distance, costs `fixed` for being used at all and `per_unit` for every unit of
+distance it drives, may be out for at most `shift` seconds from leaving the
+bakery to getting back, and, where `range` is not null, may drive at most
+`range` units of distance in the morning. Costs are in cents.
+
+## Distance and time
+
+The distance between two points is the Euclidean distance between them,
+rounded up to a whole unit. A vehicle takes `distance * pace` seconds to drive
+it.
+
+## A route
+
+A route is one vehicle's morning: it leaves the bakery at its departure time,
+visits its customers in order, and comes back. Every route visits at least one
+customer, and each vehicle runs at most one route.
+
+- The departure is a whole number of seconds, not before the bakery opens.
+- At each customer the vehicle unloads from the later of its arrival and the
+  customer's `ready` time, and that must not be after `due`. Unloading takes the
+  customer's `service` time; the vehicle leaves as soon as it is done.
+- The vehicle must be back at the bakery no later than it closes, and no more
+  than `shift` seconds after its departure.
+- The crates on the route (the sum of its customers' demands) must fit the
+  vehicle's `capacity`, and the distance driven must be within its `range`
+  where it has one. The distance driven is the sum of the rounded legs, from
+  the bakery through each customer in turn and back to the bakery.
+
+## A plan
+
+A plan delivers to every customer of the morning exactly once, uses no more
+vehicles of a kind than the fleet has, and costs the sum over its routes of the
+vehicle's `fixed` cost plus `per_unit` times the route's distance.
+
+It is written as JSON:
+
+    {"routes": [{"type": "van", "depart": 18000, "stops": [12, 4, 31]}, ...]}
+
+where `type` names a fleet entry, `depart` is the departure time as a JSON
+integer (`18000`, not `18000.0`) and `stops` lists customer ids, as the
+integers in the orders file, in visiting order. Other keys are ignored.
+[?2004hroot@2b652d5e3a23:/app# cat /app/orders/targets.json && printf '\n--- order files ---\n' && for f in /app/orders/*; do echo "### $f"; cat "$f"; echo; done
+[?2004l{
+ "harbour-lanes": 77867,
+ "old-town": 147362,
+ "riverside": 201921,
+ "north-ring": 288705
+}
+--- order files ---
+### /app/orders/harbour-lanes.json
+{
+ "name": "harbour-lanes",
+ "depot": {
+  "x": 0,
+  "y": 0,
+  "open": 14400,
+  "close": 46800
+ },
+ "customers": [
+  {
+   "id": 1,
+   "x": 99,
+   "y": 25,
+   "demand": 2,
+   "ready": 32400,
+   "due": 37800,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 2,
+   "x": 155,
+   "y": -80,
+   "demand": 14,
+   "ready": 18000,
+   "due": 21600,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 3,
+   "x": 147,
+   "y": -145,
+   "demand": 13,
+   "ready": 28800,
+   "due": 32400,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 4,
+   "x": 0,
+   "y": 10,
+   "demand": 14,
+   "ready": 23400,
+   "due": 27000,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 5,
+   "x": 102,
+   "y": -13,
+   "demand": 6,
+   "ready": 19800,
+   "due": 23400,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 6,
+   "x": 101,
+   "y": 23,
+   "demand": 2,
+   "ready": 25200,
+   "due": 30600,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 7,
+   "x": -66,
+   "y": -54,
+   "demand": 4,
+   "ready": 19800,
+   "due": 23400,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 8,
+   "x": 116,
+   "y": 24,
+   "demand": 7,
+   "ready": 28800,
+   "due": 32400,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 9,
+   "x": -93,
+   "y": 54,
+   "demand": 12,
+   "ready": 18000,
+   "due": 21600,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 10,
+   "x": 143,
+   "y": -5,
+   "demand": 32,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1040,
+   "kind": "market"
+  },
+  {
+   "id": 11,
+   "x": 110,
+   "y": 23,
+   "demand": 8,
+   "ready": 25200,
+   "due": 27900,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 12,
+   "x": 90,
+   "y": 111,
+   "demand": 15,
+   "ready": 32400,
+   "due": 37800,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 13,
+   "x": -91,
+   "y": 37,
+   "demand": 3,
+   "ready": 21600,
+   "due": 32400,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 14,
+   "x": -84,
+   "y": -85,
+   "demand": 13,
+   "ready": 25200,
+   "due": 27900,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 15,
+   "x": 91,
+   "y": 23,
+   "demand": 10,
+   "ready": 27000,
+   "due": 30600,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 16,
+   "x": -65,
+   "y": -74,
+   "demand": 7,
+   "ready": 23400,
+   "due": 27000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 17,
+   "x": -56,
+   "y": -152,
+   "demand": 5,
+   "ready": 18000,
+   "due": 21600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 18,
+   "x": 92,
+   "y": 27,
+   "demand": 5,
+   "ready": 21600,
+   "due": 28800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 19,
+   "x": 88,
+   "y": 25,
+   "demand": 2,
+   "ready": 19800,
+   "due": 25200,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 20,
+   "x": 57,
+   "y": 47,
+   "demand": 6,
+   "ready": 21600,
+   "due": 25200,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 21,
+   "x": -77,
+   "y": -73,
+   "demand": 25,
+   "ready": 18000,
+   "due": 25200,
+   "service": 865,
+   "kind": "hotel"
+  },
+  {
+   "id": 22,
+   "x": -21,
+   "y": 1,
+   "demand": 7,
+   "ready": 25200,
+   "due": 30600,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 23,
+   "x": 137,
+   "y": 74,
+   "demand": 8,
+   "ready": 28800,
+   "due": 31500,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 24,
+   "x": 91,
+   "y": 24,
+   "demand": 18,
+   "ready": 27000,
+   "due": 30600,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 25,
+   "x": 28,
+   "y": -6,
+   "demand": 6,
+   "ready": 25200,
+   "due": 36000,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 26,
+   "x": 95,
+   "y": -37,
+   "demand": 7,
+   "ready": 25200,
+   "due": 28800,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 27,
+   "x": 36,
+   "y": -48,
+   "demand": 9,
+   "ready": 27000,
+   "due": 30600,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 28,
+   "x": -140,
+   "y": -128,
+   "demand": 34,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1090,
+   "kind": "market"
+  },
+  {
+   "id": 29,
+   "x": 51,
+   "y": 35,
+   "demand": 16,
+   "ready": 32400,
+   "due": 37800,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 30,
+   "x": 112,
+   "y": 16,
+   "demand": 7,
+   "ready": 23400,
+   "due": 34200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 31,
+   "x": -151,
+   "y": -91,
+   "demand": 3,
+   "ready": 21600,
+   "due": 24300,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 32,
+   "x": -101,
+   "y": 68,
+   "demand": 6,
+   "ready": 25200,
+   "due": 27900,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 33,
+   "x": 103,
+   "y": 107,
+   "demand": 13,
+   "ready": 18000,
+   "due": 21600,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 34,
+   "x": 73,
+   "y": 28,
+   "demand": 18,
+   "ready": 21600,
+   "due": 24300,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 35,
+   "x": -83,
+   "y": -64,
+   "demand": 2,
+   "ready": 28800,
+   "due": 32400,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 36,
+   "x": -66,
+   "y": -73,
+   "demand": 13,
+   "ready": 21600,
+   "due": 27000,
+   "service": 565,
+   "kind": "hotel"
+  },
+  {
+   "id": 37,
+   "x": -2,
+   "y": 114,
+   "demand": 31,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1015,
+   "kind": "market"
+  },
+  {
+   "id": 38,
+   "x": 57,
+   "y": -8,
+   "demand": 2,
+   "ready": 18000,
+   "due": 21600,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 39,
+   "x": -71,
+   "y": -80,
+   "demand": 6,
+   "ready": 27000,
+   "due": 32400,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 40,
+   "x": -64,
+   "y": -68,
+   "demand": 17,
+   "ready": 21600,
+   "due": 28800,
+   "service": 665,
+   "kind": "grocer"
+  },
+  {
+   "id": 41,
+   "x": 98,
+   "y": 50,
+   "demand": 29,
+   "ready": 16200,
+   "due": 21600,
+   "service": 965,
+   "kind": "market"
+  },
+  {
+   "id": 42,
+   "x": 84,
+   "y": 30,
+   "demand": 2,
+   "ready": 28800,
+   "due": 31500,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 43,
+   "x": -45,
+   "y": -1,
+   "demand": 2,
+   "ready": 28800,
+   "due": 34200,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 44,
+   "x": 94,
+   "y": 6,
+   "demand": 3,
+   "ready": 28800,
+   "due": 32400,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 45,
+   "x": -28,
+   "y": -11,
+   "demand": 8,
+   "ready": 21600,
+   "due": 25200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 46,
+   "x": 74,
+   "y": 10,
+   "demand": 13,
+   "ready": 28800,
+   "due": 36000,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 47,
+   "x": 91,
+   "y": 89,
+   "demand": 7,
+   "ready": 21600,
+   "due": 28800,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 48,
+   "x": -81,
+   "y": -75,
+   "demand": 6,
+   "ready": 21600,
+   "due": 32400,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 49,
+   "x": 88,
+   "y": -8,
+   "demand": 3,
+   "ready": 21600,
+   "due": 25200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 50,
+   "x": 101,
+   "y": 29,
+   "demand": 14,
+   "ready": 25200,
+   "due": 36000,
+   "service": 590,
+   "kind": "hotel"
+  },
+  {
+   "id": 51,
+   "x": 115,
+   "y": 33,
+   "demand": 8,
+   "ready": 28800,
+   "due": 39600,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 52,
+   "x": 97,
+   "y": -64,
+   "demand": 10,
+   "ready": 28800,
+   "due": 36000,
+   "service": 490,
+   "kind": "hotel"
+  },
+  {
+   "id": 53,
+   "x": 89,
+   "y": 31,
+   "demand": 3,
+   "ready": 19800,
+   "due": 27000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 54,
+   "x": -95,
+   "y": -68,
+   "demand": 5,
+   "ready": 25200,
+   "due": 28800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 55,
+   "x": 99,
+   "y": 20,
+   "demand": 5,
+   "ready": 25200,
+   "due": 30600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 56,
+   "x": 149,
+   "y": -76,
+   "demand": 8,
+   "ready": 25200,
+   "due": 32400,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 57,
+   "x": 87,
+   "y": 24,
+   "demand": 7,
+   "ready": 21600,
+   "due": 25200,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 58,
+   "x": 29,
+   "y": 61,
+   "demand": 9,
+   "ready": 25200,
+   "due": 28800,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 59,
+   "x": 133,
+   "y": -4,
+   "demand": 41,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1265,
+   "kind": "market"
+  },
+  {
+   "id": 60,
+   "x": -20,
+   "y": 3,
+   "demand": 5,
+   "ready": 19800,
+   "due": 25200,
+   "service": 365,
+   "kind": "cafe"
+  }
+ ],
+ "fleet": [
+  {
+   "type": "bike",
+   "count": 5,
+   "capacity": 14,
+   "fixed": 900,
+   "per_unit": 2,
+   "pace": 22,
+   "shift": 18000,
+   "range": 260
+  },
+  {
+   "type": "van",
+   "count": 7,
+   "capacity": 60,
+   "fixed": 4200,
+   "per_unit": 11,
+   "pace": 11,
+   "shift": 25200,
+   "range": null
+  },
+  {
+   "type": "truck",
+   "count": 3,
+   "capacity": 150,
+   "fixed": 9500,
+   "per_unit": 19,
+   "pace": 13,
+   "shift": 28800,
+   "range": null
+  }
+ ]
+}
+### /app/orders/north-ring.json
+{
+ "name": "north-ring",
+ "depot": {
+  "x": 0,
+  "y": 0,
+  "open": 14400,
+  "close": 46800
+ },
+ "customers": [
+  {
+   "id": 1,
+   "x": 66,
+   "y": -48,
+   "demand": 24,
+   "ready": 16200,
+   "due": 21600,
+   "service": 840,
+   "kind": "market"
+  },
+  {
+   "id": 2,
+   "x": 18,
+   "y": -53,
+   "demand": 12,
+   "ready": 21600,
+   "due": 24300,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 3,
+   "x": 4,
+   "y": -48,
+   "demand": 2,
+   "ready": 23400,
+   "due": 27000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 4,
+   "x": -41,
+   "y": -66,
+   "demand": 19,
+   "ready": 21600,
+   "due": 24300,
+   "service": 715,
+   "kind": "hotel"
+  },
+  {
+   "id": 5,
+   "x": 47,
+   "y": 111,
+   "demand": 12,
+   "ready": 19800,
+   "due": 25200,
+   "service": 540,
+   "kind": "hotel"
+  },
+  {
+   "id": 6,
+   "x": 45,
+   "y": 57,
+   "demand": 14,
+   "ready": 27000,
+   "due": 30600,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 7,
+   "x": -19,
+   "y": 99,
+   "demand": 13,
+   "ready": 21600,
+   "due": 27000,
+   "service": 565,
+   "kind": "hotel"
+  },
+  {
+   "id": 8,
+   "x": 35,
+   "y": -42,
+   "demand": 9,
+   "ready": 25200,
+   "due": 36000,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 9,
+   "x": 9,
+   "y": -42,
+   "demand": 41,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1265,
+   "kind": "market"
+  },
+  {
+   "id": 10,
+   "x": 7,
+   "y": -22,
+   "demand": 4,
+   "ready": 19800,
+   "due": 23400,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 11,
+   "x": -70,
+   "y": 111,
+   "demand": 9,
+   "ready": 32400,
+   "due": 36000,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 12,
+   "x": -33,
+   "y": -41,
+   "demand": 5,
+   "ready": 27000,
+   "due": 32400,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 13,
+   "x": -22,
+   "y": 21,
+   "demand": 6,
+   "ready": 21600,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 14,
+   "x": -109,
+   "y": 129,
+   "demand": 42,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1290,
+   "kind": "market"
+  },
+  {
+   "id": 15,
+   "x": 111,
+   "y": -12,
+   "demand": 3,
+   "ready": 32400,
+   "due": 37800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 16,
+   "x": -49,
+   "y": 99,
+   "demand": 5,
+   "ready": 27000,
+   "due": 30600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 17,
+   "x": -11,
+   "y": -124,
+   "demand": 5,
+   "ready": 32400,
+   "due": 43200,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 18,
+   "x": 113,
+   "y": -147,
+   "demand": 9,
+   "ready": 27000,
+   "due": 30600,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 19,
+   "x": 136,
+   "y": -72,
+   "demand": 2,
+   "ready": 28800,
+   "due": 34200,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 20,
+   "x": 10,
+   "y": -57,
+   "demand": 8,
+   "ready": 28800,
+   "due": 36000,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 21,
+   "x": 27,
+   "y": 105,
+   "demand": 6,
+   "ready": 19800,
+   "due": 27000,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 22,
+   "x": -32,
+   "y": -53,
+   "demand": 8,
+   "ready": 23400,
+   "due": 26100,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 23,
+   "x": 2,
+   "y": 108,
+   "demand": 36,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1140,
+   "kind": "market"
+  },
+  {
+   "id": 24,
+   "x": 11,
+   "y": 131,
+   "demand": 3,
+   "ready": 25200,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 25,
+   "x": 0,
+   "y": 5,
+   "demand": 23,
+   "ready": 19800,
+   "due": 22500,
+   "service": 815,
+   "kind": "hotel"
+  },
+  {
+   "id": 26,
+   "x": -19,
+   "y": 109,
+   "demand": 21,
+   "ready": 27000,
+   "due": 34200,
+   "service": 765,
+   "kind": "hotel"
+  },
+  {
+   "id": 27,
+   "x": 46,
+   "y": 87,
+   "demand": 16,
+   "ready": 23400,
+   "due": 30600,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 28,
+   "x": -77,
+   "y": 107,
+   "demand": 2,
+   "ready": 23400,
+   "due": 27000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 29,
+   "x": -11,
+   "y": -22,
+   "demand": 2,
+   "ready": 21600,
+   "due": 27000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 30,
+   "x": 120,
+   "y": -154,
+   "demand": 3,
+   "ready": 27000,
+   "due": 32400,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 31,
+   "x": -33,
+   "y": -65,
+   "demand": 8,
+   "ready": 19800,
+   "due": 27000,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 32,
+   "x": 39,
+   "y": 94,
+   "demand": 32,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1040,
+   "kind": "market"
+  },
+  {
+   "id": 33,
+   "x": 41,
+   "y": -65,
+   "demand": 18,
+   "ready": 32400,
+   "due": 36000,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 34,
+   "x": 5,
+   "y": 128,
+   "demand": 8,
+   "ready": 28800,
+   "due": 34200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 35,
+   "x": 34,
+   "y": 130,
+   "demand": 14,
+   "ready": 23400,
+   "due": 27000,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 36,
+   "x": 20,
+   "y": -39,
+   "demand": 2,
+   "ready": 21600,
+   "due": 24300,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 37,
+   "x": -119,
+   "y": -116,
+   "demand": 20,
+   "ready": 21600,
+   "due": 25200,
+   "service": 740,
+   "kind": "hotel"
+  },
+  {
+   "id": 38,
+   "x": 120,
+   "y": -12,
+   "demand": 5,
+   "ready": 28800,
+   "due": 39600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 39,
+   "x": 20,
+   "y": -85,
+   "demand": 4,
+   "ready": 21600,
+   "due": 25200,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 40,
+   "x": -78,
+   "y": 102,
+   "demand": 6,
+   "ready": 21600,
+   "due": 25200,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 41,
+   "x": 65,
+   "y": -61,
+   "demand": 4,
+   "ready": 23400,
+   "due": 27000,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 42,
+   "x": -149,
+   "y": 68,
+   "demand": 5,
+   "ready": 27000,
+   "due": 30600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 43,
+   "x": 128,
+   "y": -14,
+   "demand": 8,
+   "ready": 18000,
+   "due": 25200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 44,
+   "x": 34,
+   "y": -51,
+   "demand": 12,
+   "ready": 28800,
+   "due": 34200,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 45,
+   "x": -41,
+   "y": -66,
+   "demand": 7,
+   "ready": 27000,
+   "due": 34200,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 46,
+   "x": 39,
+   "y": 106,
+   "demand": 23,
+   "ready": 23400,
+   "due": 27000,
+   "service": 815,
+   "kind": "hotel"
+  },
+  {
+   "id": 47,
+   "x": 27,
+   "y": 87,
+   "demand": 4,
+   "ready": 21600,
+   "due": 24300,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 48,
+   "x": 134,
+   "y": 45,
+   "demand": 13,
+   "ready": 32400,
+   "due": 37800,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 49,
+   "x": -18,
+   "y": -75,
+   "demand": 8,
+   "ready": 19800,
+   "due": 23400,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 50,
+   "x": 98,
+   "y": -150,
+   "demand": 3,
+   "ready": 25200,
+   "due": 36000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 51,
+   "x": 69,
+   "y": -46,
+   "demand": 4,
+   "ready": 21600,
+   "due": 24300,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 52,
+   "x": -56,
+   "y": -148,
+   "demand": 6,
+   "ready": 19800,
+   "due": 30600,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 53,
+   "x": -95,
+   "y": -157,
+   "demand": 17,
+   "ready": 21600,
+   "due": 27000,
+   "service": 665,
+   "kind": "grocer"
+  },
+  {
+   "id": 54,
+   "x": -41,
+   "y": -62,
+   "demand": 13,
+   "ready": 21600,
+   "due": 32400,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 55,
+   "x": -106,
+   "y": 38,
+   "demand": 6,
+   "ready": 18000,
+   "due": 25200,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 56,
+   "x": 19,
+   "y": 124,
+   "demand": 8,
+   "ready": 25200,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 57,
+   "x": -97,
+   "y": 78,
+   "demand": 29,
+   "ready": 16200,
+   "due": 21600,
+   "service": 965,
+   "kind": "market"
+  },
+  {
+   "id": 58,
+   "x": 9,
+   "y": 111,
+   "demand": 26,
+   "ready": 16200,
+   "due": 21600,
+   "service": 890,
+   "kind": "market"
+  },
+  {
+   "id": 59,
+   "x": 20,
+   "y": -50,
+   "demand": 16,
+   "ready": 21600,
+   "due": 25200,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 60,
+   "x": -65,
+   "y": -48,
+   "demand": 7,
+   "ready": 21600,
+   "due": 27000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 61,
+   "x": 31,
+   "y": -46,
+   "demand": 13,
+   "ready": 23400,
+   "due": 27000,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 62,
+   "x": -77,
+   "y": 107,
+   "demand": 16,
+   "ready": 27000,
+   "due": 30600,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 63,
+   "x": 146,
+   "y": 52,
+   "demand": 5,
+   "ready": 28800,
+   "due": 39600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 64,
+   "x": 153,
+   "y": -21,
+   "demand": 15,
+   "ready": 25200,
+   "due": 27900,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 65,
+   "x": -28,
+   "y": 77,
+   "demand": 14,
+   "ready": 32400,
+   "due": 36000,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 66,
+   "x": 124,
+   "y": -16,
+   "demand": 45,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1365,
+   "kind": "market"
+  },
+  {
+   "id": 67,
+   "x": 40,
+   "y": -24,
+   "demand": 28,
+   "ready": 25200,
+   "due": 32400,
+   "service": 940,
+   "kind": "hotel"
+  },
+  {
+   "id": 68,
+   "x": 149,
+   "y": -118,
+   "demand": 5,
+   "ready": 25200,
+   "due": 36000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 69,
+   "x": 92,
+   "y": -25,
+   "demand": 14,
+   "ready": 28800,
+   "due": 39600,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 70,
+   "x": 31,
+   "y": 109,
+   "demand": 7,
+   "ready": 19800,
+   "due": 23400,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 71,
+   "x": 160,
+   "y": -49,
+   "demand": 34,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1090,
+   "kind": "market"
+  },
+  {
+   "id": 72,
+   "x": -27,
+   "y": -66,
+   "demand": 26,
+   "ready": 16200,
+   "due": 21600,
+   "service": 890,
+   "kind": "market"
+  },
+  {
+   "id": 73,
+   "x": -85,
+   "y": 84,
+   "demand": 42,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1290,
+   "kind": "market"
+  },
+  {
+   "id": 74,
+   "x": 113,
+   "y": -25,
+   "demand": 3,
+   "ready": 19800,
+   "due": 22500,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 75,
+   "x": 49,
+   "y": -43,
+   "demand": 5,
+   "ready": 21600,
+   "due": 25200,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 76,
+   "x": -70,
+   "y": 84,
+   "demand": 22,
+   "ready": 21600,
+   "due": 27000,
+   "service": 790,
+   "kind": "hotel"
+  },
+  {
+   "id": 77,
+   "x": 1,
+   "y": -41,
+   "demand": 3,
+   "ready": 19800,
+   "due": 27000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 78,
+   "x": 40,
+   "y": 97,
+   "demand": 26,
+   "ready": 32400,
+   "due": 36000,
+   "service": 890,
+   "kind": "hotel"
+  },
+  {
+   "id": 79,
+   "x": -20,
+   "y": 90,
+   "demand": 12,
+   "ready": 21600,
+   "due": 25200,
+   "service": 540,
+   "kind": "hotel"
+  },
+  {
+   "id": 80,
+   "x": 17,
+   "y": -57,
+   "demand": 8,
+   "ready": 27000,
+   "due": 29700,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 81,
+   "x": 54,
+   "y": -20,
+   "demand": 2,
+   "ready": 25200,
+   "due": 28800,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 82,
+   "x": 23,
+   "y": 89,
+   "demand": 9,
+   "ready": 21600,
+   "due": 25200,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 83,
+   "x": 48,
+   "y": -70,
+   "demand": 8,
+   "ready": 21600,
+   "due": 24300,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 84,
+   "x": 59,
+   "y": -33,
+   "demand": 15,
+   "ready": 19800,
+   "due": 23400,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 85,
+   "x": 12,
+   "y": -32,
+   "demand": 39,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1215,
+   "kind": "market"
+  },
+  {
+   "id": 86,
+   "x": 133,
+   "y": 33,
+   "demand": 28,
+   "ready": 16200,
+   "due": 21600,
+   "service": 940,
+   "kind": "market"
+  },
+  {
+   "id": 87,
+   "x": 62,
+   "y": -43,
+   "demand": 13,
+   "ready": 27000,
+   "due": 32400,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 88,
+   "x": 75,
+   "y": -34,
+   "demand": 38,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1190,
+   "kind": "market"
+  },
+  {
+   "id": 89,
+   "x": 120,
+   "y": -16,
+   "demand": 6,
+   "ready": 25200,
+   "due": 36000,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 90,
+   "x": -16,
+   "y": 95,
+   "demand": 8,
+   "ready": 23400,
+   "due": 28800,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 91,
+   "x": -16,
+   "y": 33,
+   "demand": 7,
+   "ready": 25200,
+   "due": 36000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 92,
+   "x": 5,
+   "y": -44,
+   "demand": 5,
+   "ready": 19800,
+   "due": 23400,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 93,
+   "x": 41,
+   "y": -50,
+   "demand": 3,
+   "ready": 28800,
+   "due": 31500,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 94,
+   "x": 112,
+   "y": -26,
+   "demand": 7,
+   "ready": 25200,
+   "due": 30600,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 95,
+   "x": -32,
+   "y": -77,
+   "demand": 30,
+   "ready": 16200,
+   "due": 21600,
+   "service": 990,
+   "kind": "market"
+  },
+  {
+   "id": 96,
+   "x": -65,
+   "y": -10,
+   "demand": 11,
+   "ready": 25200,
+   "due": 28800,
+   "service": 515,
+   "kind": "hotel"
+  },
+  {
+   "id": 97,
+   "x": 27,
+   "y": 159,
+   "demand": 5,
+   "ready": 18000,
+   "due": 28800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 98,
+   "x": -41,
+   "y": -59,
+   "demand": 10,
+   "ready": 19800,
+   "due": 25200,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 99,
+   "x": -31,
+   "y": -64,
+   "demand": 13,
+   "ready": 23400,
+   "due": 27000,
+   "service": 565,
+   "kind": "hotel"
+  },
+  {
+   "id": 100,
+   "x": 68,
+   "y": -20,
+   "demand": 14,
+   "ready": 32400,
+   "due": 35100,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 101,
+   "x": 118,
+   "y": -33,
+   "demand": 12,
+   "ready": 32400,
+   "due": 39600,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 102,
+   "x": 113,
+   "y": -32,
+   "demand": 7,
+   "ready": 19800,
+   "due": 27000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 103,
+   "x": 56,
+   "y": -62,
+   "demand": 9,
+   "ready": 25200,
+   "due": 30600,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 104,
+   "x": -70,
+   "y": 83,
+   "demand": 12,
+   "ready": 27000,
+   "due": 32400,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 105,
+   "x": -17,
+   "y": 82,
+   "demand": 3,
+   "ready": 27000,
+   "due": 37800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 106,
+   "x": -2,
+   "y": -35,
+   "demand": 18,
+   "ready": 19800,
+   "due": 23400,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 107,
+   "x": 117,
+   "y": -33,
+   "demand": 15,
+   "ready": 23400,
+   "due": 26100,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 108,
+   "x": 53,
+   "y": -43,
+   "demand": 39,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1215,
+   "kind": "market"
+  },
+  {
+   "id": 109,
+   "x": 126,
+   "y": -40,
+   "demand": 4,
+   "ready": 23400,
+   "due": 28800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 110,
+   "x": 32,
+   "y": -37,
+   "demand": 28,
+   "ready": 16200,
+   "due": 21600,
+   "service": 940,
+   "kind": "market"
+  },
+  {
+   "id": 111,
+   "x": -73,
+   "y": 120,
+   "demand": 3,
+   "ready": 25200,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 112,
+   "x": -123,
+   "y": -147,
+   "demand": 5,
+   "ready": 27000,
+   "due": 30600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 113,
+   "x": 57,
+   "y": -51,
+   "demand": 7,
+   "ready": 23400,
+   "due": 28800,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 114,
+   "x": 37,
+   "y": 103,
+   "demand": 18,
+   "ready": 19800,
+   "due": 23400,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 115,
+   "x": -48,
+   "y": 124,
+   "demand": 7,
+   "ready": 28800,
+   "due": 34200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 116,
+   "x": -41,
+   "y": -65,
+   "demand": 4,
+   "ready": 19800,
+   "due": 23400,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 117,
+   "x": 22,
+   "y": -31,
+   "demand": 3,
+   "ready": 32400,
+   "due": 36000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 118,
+   "x": 10,
+   "y": -40,
+   "demand": 8,
+   "ready": 25200,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 119,
+   "x": 123,
+   "y": -6,
+   "demand": 33,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1065,
+   "kind": "market"
+  },
+  {
+   "id": 120,
+   "x": -6,
+   "y": -43,
+   "demand": 4,
+   "ready": 21600,
+   "due": 24300,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 121,
+   "x": 95,
+   "y": -21,
+   "demand": 10,
+   "ready": 23400,
+   "due": 28800,
+   "service": 490,
+   "kind": "hotel"
+  },
+  {
+   "id": 122,
+   "x": 77,
+   "y": -92,
+   "demand": 25,
+   "ready": 28800,
+   "due": 32400,
+   "service": 865,
+   "kind": "hotel"
+  },
+  {
+   "id": 123,
+   "x": -24,
+   "y": -84,
+   "demand": 18,
+   "ready": 25200,
+   "due": 30600,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 124,
+   "x": -2,
+   "y": -138,
+   "demand": 28,
+   "ready": 16200,
+   "due": 21600,
+   "service": 940,
+   "kind": "market"
+  },
+  {
+   "id": 125,
+   "x": 39,
+   "y": 121,
+   "demand": 6,
+   "ready": 25200,
+   "due": 30600,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 126,
+   "x": -60,
+   "y": 91,
+   "demand": 13,
+   "ready": 18000,
+   "due": 20700,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 127,
+   "x": 21,
+   "y": -47,
+   "demand": 44,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1340,
+   "kind": "market"
+  },
+  {
+   "id": 128,
+   "x": -33,
+   "y": 90,
+   "demand": 12,
+   "ready": 28800,
+   "due": 32400,
+   "service": 540,
+   "kind": "hotel"
+  },
+  {
+   "id": 129,
+   "x": -28,
+   "y": -69,
+   "demand": 8,
+   "ready": 25200,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 130,
+   "x": -83,
+   "y": -72,
+   "demand": 11,
+   "ready": 27000,
+   "due": 34200,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 131,
+   "x": 13,
+   "y": -51,
+   "demand": 6,
+   "ready": 25200,
+   "due": 27900,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 132,
+   "x": -33,
+   "y": -63,
+   "demand": 34,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1090,
+   "kind": "market"
+  },
+  {
+   "id": 133,
+   "x": 47,
+   "y": -41,
+   "demand": 3,
+   "ready": 21600,
+   "due": 27000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 134,
+   "x": 108,
+   "y": 0,
+   "demand": 31,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1015,
+   "kind": "market"
+  },
+  {
+   "id": 135,
+   "x": 101,
+   "y": -16,
+   "demand": 7,
+   "ready": 25200,
+   "due": 36000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 136,
+   "x": -57,
+   "y": 125,
+   "demand": 7,
+   "ready": 27000,
+   "due": 34200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 137,
+   "x": 139,
+   "y": -46,
+   "demand": 4,
+   "ready": 32400,
+   "due": 39600,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 138,
+   "x": 79,
+   "y": -27,
+   "demand": 3,
+   "ready": 18000,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 139,
+   "x": -5,
+   "y": 4,
+   "demand": 12,
+   "ready": 19800,
+   "due": 27000,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 140,
+   "x": -67,
+   "y": 94,
+   "demand": 8,
+   "ready": 25200,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 141,
+   "x": 131,
+   "y": -4,
+   "demand": 18,
+   "ready": 18000,
+   "due": 21600,
+   "service": 690,
+   "kind": "hotel"
+  },
+  {
+   "id": 142,
+   "x": -75,
+   "y": 116,
+   "demand": 2,
+   "ready": 32400,
+   "due": 35100,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 143,
+   "x": -6,
+   "y": 98,
+   "demand": 18,
+   "ready": 18000,
+   "due": 21600,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 144,
+   "x": 116,
+   "y": -7,
+   "demand": 8,
+   "ready": 32400,
+   "due": 43200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 145,
+   "x": 61,
+   "y": 104,
+   "demand": 10,
+   "ready": 21600,
+   "due": 25200,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 146,
+   "x": -58,
+   "y": -71,
+   "demand": 15,
+   "ready": 21600,
+   "due": 25200,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 147,
+   "x": 38,
+   "y": -57,
+   "demand": 30,
+   "ready": 16200,
+   "due": 21600,
+   "service": 990,
+   "kind": "market"
+  },
+  {
+   "id": 148,
+   "x": 107,
+   "y": 87,
+   "demand": 15,
+   "ready": 32400,
+   "due": 36000,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 149,
+   "x": -14,
+   "y": 116,
+   "demand": 8,
+   "ready": 23400,
+   "due": 34200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 150,
+   "x": -35,
+   "y": -63,
+   "demand": 14,
+   "ready": 21600,
+   "due": 27000,
+   "service": 590,
+   "kind": "hotel"
+  },
+  {
+   "id": 151,
+   "x": -118,
+   "y": -64,
+   "demand": 8,
+   "ready": 18000,
+   "due": 23400,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 152,
+   "x": 23,
+   "y": 100,
+   "demand": 5,
+   "ready": 25200,
+   "due": 36000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 153,
+   "x": -30,
+   "y": 5,
+   "demand": 29,
+   "ready": 16200,
+   "due": 21600,
+   "service": 965,
+   "kind": "market"
+  },
+  {
+   "id": 154,
+   "x": -28,
+   "y": 97,
+   "demand": 22,
+   "ready": 16200,
+   "due": 21600,
+   "service": 790,
+   "kind": "market"
+  },
+  {
+   "id": 155,
+   "x": -114,
+   "y": 117,
+   "demand": 3,
+   "ready": 21600,
+   "due": 25200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 156,
+   "x": -42,
+   "y": -80,
+   "demand": 4,
+   "ready": 32400,
+   "due": 37800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 157,
+   "x": 46,
+   "y": 139,
+   "demand": 3,
+   "ready": 25200,
+   "due": 32400,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 158,
+   "x": -11,
+   "y": 108,
+   "demand": 4,
+   "ready": 32400,
+   "due": 43200,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 159,
+   "x": -35,
+   "y": -74,
+   "demand": 4,
+   "ready": 25200,
+   "due": 28800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 160,
+   "x": 50,
+   "y": -60,
+   "demand": 10,
+   "ready": 32400,
+   "due": 37800,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 161,
+   "x": 16,
+   "y": 116,
+   "demand": 6,
+   "ready": 18000,
+   "due": 21600,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 162,
+   "x": -70,
+   "y": 77,
+   "demand": 7,
+   "ready": 28800,
+   "due": 39600,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 163,
+   "x": -24,
+   "y": -38,
+   "demand": 11,
+   "ready": 32400,
+   "due": 36000,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 164,
+   "x": 121,
+   "y": -10,
+   "demand": 9,
+   "ready": 21600,
+   "due": 32400,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 165,
+   "x": 20,
+   "y": 110,
+   "demand": 18,
+   "ready": 25200,
+   "due": 28800,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 166,
+   "x": 5,
+   "y": -152,
+   "demand": 7,
+   "ready": 19800,
+   "due": 23400,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 167,
+   "x": 19,
+   "y": 107,
+   "demand": 7,
+   "ready": 23400,
+   "due": 27000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 168,
+   "x": 49,
+   "y": -67,
+   "demand": 7,
+   "ready": 25200,
+   "due": 28800,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 169,
+   "x": 138,
+   "y": -29,
+   "demand": 14,
+   "ready": 25200,
+   "due": 27900,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 170,
+   "x": 55,
+   "y": -45,
+   "demand": 6,
+   "ready": 25200,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 171,
+   "x": -129,
+   "y": 127,
+   "demand": 6,
+   "ready": 27000,
+   "due": 29700,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 172,
+   "x": -70,
+   "y": 115,
+   "demand": 13,
+   "ready": 25200,
+   "due": 27900,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 173,
+   "x": -21,
+   "y": 111,
+   "demand": 3,
+   "ready": 25200,
+   "due": 27900,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 174,
+   "x": -6,
+   "y": 99,
+   "demand": 8,
+   "ready": 19800,
+   "due": 23400,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 175,
+   "x": -16,
+   "y": 93,
+   "demand": 17,
+   "ready": 18000,
+   "due": 21600,
+   "service": 665,
+   "kind": "hotel"
+  },
+  {
+   "id": 176,
+   "x": -12,
+   "y": 86,
+   "demand": 24,
+   "ready": 16200,
+   "due": 21600,
+   "service": 840,
+   "kind": "market"
+  },
+  {
+   "id": 177,
+   "x": -22,
+   "y": 105,
+   "demand": 6,
+   "ready": 28800,
+   "due": 32400,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 178,
+   "x": -76,
+   "y": 98,
+   "demand": 8,
+   "ready": 25200,
+   "due": 27900,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 179,
+   "x": 46,
+   "y": -45,
+   "demand": 22,
+   "ready": 18000,
+   "due": 23400,
+   "service": 790,
+   "kind": "hotel"
+  },
+  {
+   "id": 180,
+   "x": 63,
+   "y": -63,
+   "demand": 23,
+   "ready": 16200,
+   "due": 21600,
+   "service": 815,
+   "kind": "market"
+  },
+  {
+   "id": 181,
+   "x": -79,
+   "y": 99,
+   "demand": 12,
+   "ready": 25200,
+   "due": 28800,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 182,
+   "x": -52,
+   "y": 119,
+   "demand": 5,
+   "ready": 21600,
+   "due": 28800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 183,
+   "x": 15,
+   "y": 70,
+   "demand": 5,
+   "ready": 25200,
+   "due": 30600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 184,
+   "x": -18,
+   "y": 117,
+   "demand": 26,
+   "ready": 25200,
+   "due": 30600,
+   "service": 890,
+   "kind": "hotel"
+  },
+  {
+   "id": 185,
+   "x": -69,
+   "y": 149,
+   "demand": 9,
+   "ready": 21600,
+   "due": 28800,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 186,
+   "x": -51,
+   "y": -28,
+   "demand": 2,
+   "ready": 32400,
+   "due": 35100,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 187,
+   "x": 106,
+   "y": -46,
+   "demand": 11,
+   "ready": 23400,
+   "due": 27000,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 188,
+   "x": 122,
+   "y": -117,
+   "demand": 10,
+   "ready": 32400,
+   "due": 43200,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 189,
+   "x": -29,
+   "y": 87,
+   "demand": 2,
+   "ready": 25200,
+   "due": 28800,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 190,
+   "x": 97,
+   "y": -7,
+   "demand": 8,
+   "ready": 25200,
+   "due": 30600,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 191,
+   "x": 114,
+   "y": -7,
+   "demand": 7,
+   "ready": 19800,
+   "due": 22500,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 192,
+   "x": -64,
+   "y": 129,
+   "demand": 3,
+   "ready": 28800,
+   "due": 32400,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 193,
+   "x": -64,
+   "y": -54,
+   "demand": 5,
+   "ready": 21600,
+   "due": 32400,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 194,
+   "x": -65,
+   "y": -70,
+   "demand": 7,
+   "ready": 28800,
+   "due": 34200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 195,
+   "x": -67,
+   "y": 97,
+   "demand": 6,
+   "ready": 23400,
+   "due": 30600,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 196,
+   "x": 61,
+   "y": -69,
+   "demand": 12,
+   "ready": 18000,
+   "due": 25200,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 197,
+   "x": -19,
+   "y": -73,
+   "demand": 5,
+   "ready": 32400,
+   "due": 37800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 198,
+   "x": 34,
+   "y": -49,
+   "demand": 6,
+   "ready": 28800,
+   "due": 39600,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 199,
+   "x": 45,
+   "y": -63,
+   "demand": 4,
+   "ready": 23400,
+   "due": 27000,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 200,
+   "x": 34,
+   "y": 92,
+   "demand": 17,
+   "ready": 32400,
+   "due": 36000,
+   "service": 665,
+   "kind": "grocer"
+  },
+  {
+   "id": 201,
+   "x": -48,
+   "y": -53,
+   "demand": 7,
+   "ready": 18000,
+   "due": 20700,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 202,
+   "x": -122,
+   "y": -129,
+   "demand": 8,
+   "ready": 21600,
+   "due": 24300,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 203,
+   "x": 9,
+   "y": 108,
+   "demand": 18,
+   "ready": 18000,
+   "due": 25200,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 204,
+   "x": 88,
+   "y": 19,
+   "demand": 7,
+   "ready": 25200,
+   "due": 32400,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 205,
+   "x": 129,
+   "y": -18,
+   "demand": 7,
+   "ready": 23400,
+   "due": 34200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 206,
+   "x": -128,
+   "y": -116,
+   "demand": 9,
+   "ready": 27000,
+   "due": 30600,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 207,
+   "x": 65,
+   "y": 116,
+   "demand": 6,
+   "ready": 23400,
+   "due": 27000,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 208,
+   "x": 17,
+   "y": -48,
+   "demand": 4,
+   "ready": 23400,
+   "due": 26100,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 209,
+   "x": 11,
+   "y": -53,
+   "demand": 11,
+   "ready": 25200,
+   "due": 32400,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 210,
+   "x": -36,
+   "y": 86,
+   "demand": 4,
+   "ready": 28800,
+   "due": 36000,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 211,
+   "x": 1,
+   "y": 116,
+   "demand": 7,
+   "ready": 27000,
+   "due": 29700,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 212,
+   "x": -43,
+   "y": 26,
+   "demand": 15,
+   "ready": 19800,
+   "due": 30600,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 213,
+   "x": -15,
+   "y": -67,
+   "demand": 3,
+   "ready": 21600,
+   "due": 27000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 214,
+   "x": 27,
+   "y": -19,
+   "demand": 22,
+   "ready": 16200,
+   "due": 21600,
+   "service": 790,
+   "kind": "market"
+  },
+  {
+   "id": 215,
+   "x": 126,
+   "y": 2,
+   "demand": 3,
+   "ready": 25200,
+   "due": 32400,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 216,
+   "x": -42,
+   "y": -61,
+   "demand": 14,
+   "ready": 25200,
+   "due": 32400,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 217,
+   "x": 26,
+   "y": 100,
+   "demand": 12,
+   "ready": 21600,
+   "due": 25200,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 218,
+   "x": -44,
+   "y": -50,
+   "demand": 44,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1340,
+   "kind": "market"
+  },
+  {
+   "id": 219,
+   "x": 20,
+   "y": -61,
+   "demand": 6,
+   "ready": 28800,
+   "due": 32400,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 220,
+   "x": 136,
+   "y": -59,
+   "demand": 22,
+   "ready": 25200,
+   "due": 27900,
+   "service": 790,
+   "kind": "hotel"
+  }
+ ],
+ "fleet": [
+  {
+   "type": "bike",
+   "count": 18,
+   "capacity": 14,
+   "fixed": 900,
+   "per_unit": 2,
+   "pace": 22,
+   "shift": 18000,
+   "range": 260
+  },
+  {
+   "type": "van",
+   "count": 27,
+   "capacity": 60,
+   "fixed": 4200,
+   "per_unit": 11,
+   "pace": 11,
+   "shift": 25200,
+   "range": null
+  },
+  {
+   "type": "truck",
+   "count": 11,
+   "capacity": 150,
+   "fixed": 9500,
+   "per_unit": 19,
+   "pace": 13,
+   "shift": 28800,
+   "range": null
+  }
+ ]
+}
+### /app/orders/old-town.json
+{
+ "name": "old-town",
+ "depot": {
+  "x": 0,
+  "y": 0,
+  "open": 14400,
+  "close": 46800
+ },
+ "customers": [
+  {
+   "id": 1,
+   "x": 7,
+   "y": -22,
+   "demand": 33,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1065,
+   "kind": "market"
+  },
+  {
+   "id": 2,
+   "x": -15,
+   "y": -20,
+   "demand": 11,
+   "ready": 21600,
+   "due": 32400,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 3,
+   "x": 42,
+   "y": -44,
+   "demand": 25,
+   "ready": 16200,
+   "due": 21600,
+   "service": 865,
+   "kind": "market"
+  },
+  {
+   "id": 4,
+   "x": -77,
+   "y": -67,
+   "demand": 11,
+   "ready": 32400,
+   "due": 35100,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 5,
+   "x": -2,
+   "y": -21,
+   "demand": 15,
+   "ready": 25200,
+   "due": 28800,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 6,
+   "x": -22,
+   "y": -26,
+   "demand": 8,
+   "ready": 25200,
+   "due": 32400,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 7,
+   "x": -115,
+   "y": 47,
+   "demand": 2,
+   "ready": 25200,
+   "due": 27900,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 8,
+   "x": -113,
+   "y": -150,
+   "demand": 24,
+   "ready": 19800,
+   "due": 23400,
+   "service": 840,
+   "kind": "hotel"
+  },
+  {
+   "id": 9,
+   "x": -15,
+   "y": -23,
+   "demand": 6,
+   "ready": 21600,
+   "due": 24300,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 10,
+   "x": 3,
+   "y": -46,
+   "demand": 10,
+   "ready": 21600,
+   "due": 24300,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 11,
+   "x": 23,
+   "y": -54,
+   "demand": 6,
+   "ready": 21600,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 12,
+   "x": -20,
+   "y": 3,
+   "demand": 10,
+   "ready": 21600,
+   "due": 25200,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 13,
+   "x": 60,
+   "y": -33,
+   "demand": 7,
+   "ready": 28800,
+   "due": 31500,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 14,
+   "x": 39,
+   "y": -35,
+   "demand": 32,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1040,
+   "kind": "market"
+  },
+  {
+   "id": 15,
+   "x": -6,
+   "y": -3,
+   "demand": 5,
+   "ready": 25200,
+   "due": 36000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 16,
+   "x": 9,
+   "y": -45,
+   "demand": 14,
+   "ready": 19800,
+   "due": 23400,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 17,
+   "x": 94,
+   "y": 33,
+   "demand": 13,
+   "ready": 23400,
+   "due": 34200,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 18,
+   "x": 34,
+   "y": -52,
+   "demand": 33,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1065,
+   "kind": "market"
+  },
+  {
+   "id": 19,
+   "x": 115,
+   "y": -18,
+   "demand": 9,
+   "ready": 28800,
+   "due": 32400,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 20,
+   "x": -1,
+   "y": -23,
+   "demand": 6,
+   "ready": 19800,
+   "due": 23400,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 21,
+   "x": 128,
+   "y": 80,
+   "demand": 8,
+   "ready": 25200,
+   "due": 32400,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 22,
+   "x": 115,
+   "y": 107,
+   "demand": 10,
+   "ready": 32400,
+   "due": 36000,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 23,
+   "x": 115,
+   "y": 88,
+   "demand": 6,
+   "ready": 23400,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 24,
+   "x": -9,
+   "y": 131,
+   "demand": 6,
+   "ready": 32400,
+   "due": 35100,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 25,
+   "x": -103,
+   "y": -110,
+   "demand": 5,
+   "ready": 28800,
+   "due": 36000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 26,
+   "x": 63,
+   "y": 25,
+   "demand": 17,
+   "ready": 23400,
+   "due": 28800,
+   "service": 665,
+   "kind": "grocer"
+  },
+  {
+   "id": 27,
+   "x": -94,
+   "y": 22,
+   "demand": 8,
+   "ready": 25200,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 28,
+   "x": -96,
+   "y": 63,
+   "demand": 2,
+   "ready": 25200,
+   "due": 30600,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 29,
+   "x": 141,
+   "y": 52,
+   "demand": 4,
+   "ready": 21600,
+   "due": 27000,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 30,
+   "x": 134,
+   "y": 95,
+   "demand": 33,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1065,
+   "kind": "market"
+  },
+  {
+   "id": 31,
+   "x": -63,
+   "y": 60,
+   "demand": 40,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1240,
+   "kind": "market"
+  },
+  {
+   "id": 32,
+   "x": 97,
+   "y": 98,
+   "demand": 43,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1315,
+   "kind": "market"
+  },
+  {
+   "id": 33,
+   "x": 108,
+   "y": 67,
+   "demand": 8,
+   "ready": 27000,
+   "due": 37800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 34,
+   "x": -85,
+   "y": 59,
+   "demand": 6,
+   "ready": 21600,
+   "due": 25200,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 35,
+   "x": -1,
+   "y": -23,
+   "demand": 13,
+   "ready": 28800,
+   "due": 32400,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 36,
+   "x": -63,
+   "y": 68,
+   "demand": 8,
+   "ready": 21600,
+   "due": 32400,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 37,
+   "x": -2,
+   "y": -32,
+   "demand": 8,
+   "ready": 18000,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 38,
+   "x": -77,
+   "y": 67,
+   "demand": 16,
+   "ready": 21600,
+   "due": 32400,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 39,
+   "x": -64,
+   "y": 76,
+   "demand": 3,
+   "ready": 21600,
+   "due": 25200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 40,
+   "x": -160,
+   "y": 147,
+   "demand": 28,
+   "ready": 32400,
+   "due": 37800,
+   "service": 940,
+   "kind": "hotel"
+  },
+  {
+   "id": 41,
+   "x": -151,
+   "y": -89,
+   "demand": 2,
+   "ready": 28800,
+   "due": 36000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 42,
+   "x": 52,
+   "y": -156,
+   "demand": 20,
+   "ready": 32400,
+   "due": 35100,
+   "service": 740,
+   "kind": "hotel"
+  },
+  {
+   "id": 43,
+   "x": -54,
+   "y": -3,
+   "demand": 14,
+   "ready": 21600,
+   "due": 28800,
+   "service": 590,
+   "kind": "hotel"
+  },
+  {
+   "id": 44,
+   "x": 97,
+   "y": 83,
+   "demand": 8,
+   "ready": 28800,
+   "due": 39600,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 45,
+   "x": -94,
+   "y": -125,
+   "demand": 15,
+   "ready": 28800,
+   "due": 34200,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 46,
+   "x": -104,
+   "y": -128,
+   "demand": 8,
+   "ready": 25200,
+   "due": 36000,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 47,
+   "x": 75,
+   "y": -49,
+   "demand": 6,
+   "ready": 18000,
+   "due": 25200,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 48,
+   "x": 111,
+   "y": 70,
+   "demand": 6,
+   "ready": 18000,
+   "due": 23400,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 49,
+   "x": -77,
+   "y": -25,
+   "demand": 3,
+   "ready": 19800,
+   "due": 25200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 50,
+   "x": -107,
+   "y": 46,
+   "demand": 12,
+   "ready": 18000,
+   "due": 21600,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 51,
+   "x": -85,
+   "y": 64,
+   "demand": 14,
+   "ready": 25200,
+   "due": 30600,
+   "service": 590,
+   "kind": "hotel"
+  },
+  {
+   "id": 52,
+   "x": -80,
+   "y": 74,
+   "demand": 14,
+   "ready": 32400,
+   "due": 39600,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 53,
+   "x": -3,
+   "y": -16,
+   "demand": 17,
+   "ready": 21600,
+   "due": 24300,
+   "service": 665,
+   "kind": "grocer"
+  },
+  {
+   "id": 54,
+   "x": -7,
+   "y": 120,
+   "demand": 5,
+   "ready": 18000,
+   "due": 23400,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 55,
+   "x": 107,
+   "y": 98,
+   "demand": 11,
+   "ready": 32400,
+   "due": 35100,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 56,
+   "x": 108,
+   "y": -27,
+   "demand": 3,
+   "ready": 21600,
+   "due": 27000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 57,
+   "x": -86,
+   "y": 51,
+   "demand": 3,
+   "ready": 18000,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 58,
+   "x": 12,
+   "y": -54,
+   "demand": 3,
+   "ready": 25200,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 59,
+   "x": 21,
+   "y": -74,
+   "demand": 7,
+   "ready": 32400,
+   "due": 43200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 60,
+   "x": 157,
+   "y": -55,
+   "demand": 29,
+   "ready": 32400,
+   "due": 36000,
+   "service": 965,
+   "kind": "hotel"
+  },
+  {
+   "id": 61,
+   "x": -142,
+   "y": -77,
+   "demand": 6,
+   "ready": 25200,
+   "due": 36000,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 62,
+   "x": -121,
+   "y": -113,
+   "demand": 44,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1340,
+   "kind": "market"
+  },
+  {
+   "id": 63,
+   "x": -62,
+   "y": -141,
+   "demand": 8,
+   "ready": 23400,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 64,
+   "x": 111,
+   "y": 82,
+   "demand": 15,
+   "ready": 21600,
+   "due": 24300,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 65,
+   "x": 15,
+   "y": -27,
+   "demand": 7,
+   "ready": 21600,
+   "due": 25200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 66,
+   "x": -93,
+   "y": 50,
+   "demand": 3,
+   "ready": 18000,
+   "due": 25200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 67,
+   "x": -124,
+   "y": -150,
+   "demand": 4,
+   "ready": 28800,
+   "due": 34200,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 68,
+   "x": -4,
+   "y": -28,
+   "demand": 8,
+   "ready": 21600,
+   "due": 24300,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 69,
+   "x": -59,
+   "y": -83,
+   "demand": 36,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1140,
+   "kind": "market"
+  },
+  {
+   "id": 70,
+   "x": -86,
+   "y": 62,
+   "demand": 7,
+   "ready": 28800,
+   "due": 36000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 71,
+   "x": 99,
+   "y": 88,
+   "demand": 6,
+   "ready": 28800,
+   "due": 36000,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 72,
+   "x": 98,
+   "y": -69,
+   "demand": 2,
+   "ready": 25200,
+   "due": 36000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 73,
+   "x": 158,
+   "y": -1,
+   "demand": 8,
+   "ready": 18000,
+   "due": 20700,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 74,
+   "x": 17,
+   "y": -31,
+   "demand": 15,
+   "ready": 21600,
+   "due": 25200,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 75,
+   "x": -83,
+   "y": 68,
+   "demand": 13,
+   "ready": 25200,
+   "due": 27900,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 76,
+   "x": -75,
+   "y": -111,
+   "demand": 7,
+   "ready": 28800,
+   "due": 32400,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 77,
+   "x": -56,
+   "y": 14,
+   "demand": 3,
+   "ready": 25200,
+   "due": 36000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 78,
+   "x": 0,
+   "y": -5,
+   "demand": 3,
+   "ready": 32400,
+   "due": 36000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 79,
+   "x": -85,
+   "y": 75,
+   "demand": 39,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1215,
+   "kind": "market"
+  },
+  {
+   "id": 80,
+   "x": 21,
+   "y": -43,
+   "demand": 7,
+   "ready": 28800,
+   "due": 34200,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 81,
+   "x": -77,
+   "y": -144,
+   "demand": 9,
+   "ready": 32400,
+   "due": 43200,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 82,
+   "x": 15,
+   "y": -23,
+   "demand": 6,
+   "ready": 21600,
+   "due": 24300,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 83,
+   "x": -104,
+   "y": -112,
+   "demand": 6,
+   "ready": 25200,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 84,
+   "x": -92,
+   "y": -118,
+   "demand": 4,
+   "ready": 27000,
+   "due": 30600,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 85,
+   "x": -90,
+   "y": 48,
+   "demand": 3,
+   "ready": 32400,
+   "due": 43200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 86,
+   "x": -23,
+   "y": -31,
+   "demand": 35,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1115,
+   "kind": "market"
+  },
+  {
+   "id": 87,
+   "x": 88,
+   "y": 78,
+   "demand": 8,
+   "ready": 25200,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 88,
+   "x": 15,
+   "y": 39,
+   "demand": 7,
+   "ready": 25200,
+   "due": 28800,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 89,
+   "x": -101,
+   "y": -123,
+   "demand": 4,
+   "ready": 19800,
+   "due": 30600,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 90,
+   "x": -110,
+   "y": -145,
+   "demand": 5,
+   "ready": 21600,
+   "due": 32400,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 91,
+   "x": 73,
+   "y": -21,
+   "demand": 6,
+   "ready": 32400,
+   "due": 39600,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 92,
+   "x": 108,
+   "y": 82,
+   "demand": 2,
+   "ready": 25200,
+   "due": 30600,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 93,
+   "x": 121,
+   "y": 77,
+   "demand": 2,
+   "ready": 21600,
+   "due": 32400,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 94,
+   "x": 25,
+   "y": -49,
+   "demand": 16,
+   "ready": 28800,
+   "due": 31500,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 95,
+   "x": -53,
+   "y": 136,
+   "demand": 5,
+   "ready": 25200,
+   "due": 28800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 96,
+   "x": 31,
+   "y": 141,
+   "demand": 4,
+   "ready": 28800,
+   "due": 32400,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 97,
+   "x": -68,
+   "y": 83,
+   "demand": 14,
+   "ready": 21600,
+   "due": 28800,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 98,
+   "x": 58,
+   "y": -9,
+   "demand": 7,
+   "ready": 32400,
+   "due": 35100,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 99,
+   "x": 7,
+   "y": -19,
+   "demand": 3,
+   "ready": 27000,
+   "due": 29700,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 100,
+   "x": 27,
+   "y": -1,
+   "demand": 24,
+   "ready": 27000,
+   "due": 37800,
+   "service": 840,
+   "kind": "hotel"
+  },
+  {
+   "id": 101,
+   "x": 51,
+   "y": -45,
+   "demand": 16,
+   "ready": 28800,
+   "due": 34200,
+   "service": 640,
+   "kind": "hotel"
+  },
+  {
+   "id": 102,
+   "x": -58,
+   "y": 79,
+   "demand": 6,
+   "ready": 28800,
+   "due": 34200,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 103,
+   "x": 16,
+   "y": -36,
+   "demand": 2,
+   "ready": 23400,
+   "due": 26100,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 104,
+   "x": 30,
+   "y": -40,
+   "demand": 4,
+   "ready": 25200,
+   "due": 27900,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 105,
+   "x": 118,
+   "y": 91,
+   "demand": 9,
+   "ready": 25200,
+   "due": 28800,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 106,
+   "x": -3,
+   "y": -21,
+   "demand": 39,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1215,
+   "kind": "market"
+  },
+  {
+   "id": 107,
+   "x": 95,
+   "y": 118,
+   "demand": 8,
+   "ready": 32400,
+   "due": 36000,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 108,
+   "x": 20,
+   "y": -34,
+   "demand": 3,
+   "ready": 21600,
+   "due": 27000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 109,
+   "x": 31,
+   "y": -26,
+   "demand": 6,
+   "ready": 25200,
+   "due": 32400,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 110,
+   "x": -101,
+   "y": -107,
+   "demand": 26,
+   "ready": 27000,
+   "due": 30600,
+   "service": 890,
+   "kind": "hotel"
+  }
+ ],
+ "fleet": [
+  {
+   "type": "bike",
+   "count": 9,
+   "capacity": 14,
+   "fixed": 900,
+   "per_unit": 2,
+   "pace": 22,
+   "shift": 18000,
+   "range": 260
+  },
+  {
+   "type": "van",
+   "count": 13,
+   "capacity": 60,
+   "fixed": 4200,
+   "per_unit": 11,
+   "pace": 11,
+   "shift": 25200,
+   "range": null
+  },
+  {
+   "type": "truck",
+   "count": 5,
+   "capacity": 150,
+   "fixed": 9500,
+   "per_unit": 19,
+   "pace": 13,
+   "shift": 28800,
+   "range": null
+  }
+ ]
+}
+### /app/orders/riverside.json
+{
+ "name": "riverside",
+ "depot": {
+  "x": 0,
+  "y": 0,
+  "open": 14400,
+  "close": 46800
+ },
+ "customers": [
+  {
+   "id": 1,
+   "x": 49,
+   "y": 102,
+   "demand": 32,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1040,
+   "kind": "market"
+  },
+  {
+   "id": 2,
+   "x": 123,
+   "y": 40,
+   "demand": 4,
+   "ready": 32400,
+   "due": 36000,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 3,
+   "x": 125,
+   "y": 20,
+   "demand": 6,
+   "ready": 28800,
+   "due": 32400,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 4,
+   "x": 62,
+   "y": 96,
+   "demand": 8,
+   "ready": 23400,
+   "due": 34200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 5,
+   "x": 63,
+   "y": 85,
+   "demand": 8,
+   "ready": 32400,
+   "due": 43200,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 6,
+   "x": 58,
+   "y": 23,
+   "demand": 3,
+   "ready": 21600,
+   "due": 25200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 7,
+   "x": 124,
+   "y": 38,
+   "demand": 6,
+   "ready": 23400,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 8,
+   "x": 39,
+   "y": 92,
+   "demand": 7,
+   "ready": 28800,
+   "due": 36000,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 9,
+   "x": -156,
+   "y": 22,
+   "demand": 6,
+   "ready": 21600,
+   "due": 27000,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 10,
+   "x": 131,
+   "y": 72,
+   "demand": 8,
+   "ready": 27000,
+   "due": 30600,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 11,
+   "x": -17,
+   "y": 146,
+   "demand": 8,
+   "ready": 23400,
+   "due": 34200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 12,
+   "x": 47,
+   "y": 80,
+   "demand": 5,
+   "ready": 32400,
+   "due": 36000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 13,
+   "x": 25,
+   "y": -102,
+   "demand": 24,
+   "ready": 32400,
+   "due": 39600,
+   "service": 840,
+   "kind": "hotel"
+  },
+  {
+   "id": 14,
+   "x": 134,
+   "y": -116,
+   "demand": 4,
+   "ready": 18000,
+   "due": 28800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 15,
+   "x": 38,
+   "y": 8,
+   "demand": 8,
+   "ready": 21600,
+   "due": 25200,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 16,
+   "x": 75,
+   "y": 86,
+   "demand": 18,
+   "ready": 21600,
+   "due": 24300,
+   "service": 690,
+   "kind": "hotel"
+  },
+  {
+   "id": 17,
+   "x": 119,
+   "y": 38,
+   "demand": 16,
+   "ready": 28800,
+   "due": 31500,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 18,
+   "x": 128,
+   "y": 35,
+   "demand": 7,
+   "ready": 27000,
+   "due": 30600,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 19,
+   "x": 109,
+   "y": 137,
+   "demand": 8,
+   "ready": 19800,
+   "due": 23400,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 20,
+   "x": 33,
+   "y": 14,
+   "demand": 8,
+   "ready": 18000,
+   "due": 21600,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 21,
+   "x": 75,
+   "y": 99,
+   "demand": 7,
+   "ready": 18000,
+   "due": 20700,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 22,
+   "x": 69,
+   "y": 100,
+   "demand": 10,
+   "ready": 21600,
+   "due": 25200,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 23,
+   "x": 57,
+   "y": 110,
+   "demand": 6,
+   "ready": 32400,
+   "due": 39600,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 24,
+   "x": 99,
+   "y": 30,
+   "demand": 13,
+   "ready": 28800,
+   "due": 31500,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 25,
+   "x": 135,
+   "y": 68,
+   "demand": 19,
+   "ready": 27000,
+   "due": 30600,
+   "service": 715,
+   "kind": "hotel"
+  },
+  {
+   "id": 26,
+   "x": 34,
+   "y": -1,
+   "demand": 7,
+   "ready": 18000,
+   "due": 21600,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 27,
+   "x": -115,
+   "y": -3,
+   "demand": 11,
+   "ready": 32400,
+   "due": 36000,
+   "service": 515,
+   "kind": "hotel"
+  },
+  {
+   "id": 28,
+   "x": 98,
+   "y": 22,
+   "demand": 11,
+   "ready": 28800,
+   "due": 39600,
+   "service": 515,
+   "kind": "hotel"
+  },
+  {
+   "id": 29,
+   "x": -118,
+   "y": 47,
+   "demand": 4,
+   "ready": 27000,
+   "due": 30600,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 30,
+   "x": 71,
+   "y": 84,
+   "demand": 12,
+   "ready": 28800,
+   "due": 39600,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 31,
+   "x": 52,
+   "y": 78,
+   "demand": 23,
+   "ready": 16200,
+   "due": 21600,
+   "service": 815,
+   "kind": "market"
+  },
+  {
+   "id": 32,
+   "x": 42,
+   "y": 95,
+   "demand": 9,
+   "ready": 19800,
+   "due": 23400,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 33,
+   "x": 34,
+   "y": 11,
+   "demand": 16,
+   "ready": 27000,
+   "due": 30600,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 34,
+   "x": 119,
+   "y": 21,
+   "demand": 15,
+   "ready": 25200,
+   "due": 28800,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 35,
+   "x": 50,
+   "y": 99,
+   "demand": 20,
+   "ready": 32400,
+   "due": 35100,
+   "service": 740,
+   "kind": "hotel"
+  },
+  {
+   "id": 36,
+   "x": -47,
+   "y": -107,
+   "demand": 4,
+   "ready": 25200,
+   "due": 28800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 37,
+   "x": 45,
+   "y": 96,
+   "demand": 12,
+   "ready": 28800,
+   "due": 31500,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 38,
+   "x": 28,
+   "y": -13,
+   "demand": 13,
+   "ready": 28800,
+   "due": 39600,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 39,
+   "x": 70,
+   "y": 56,
+   "demand": 4,
+   "ready": 21600,
+   "due": 32400,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 40,
+   "x": 79,
+   "y": 71,
+   "demand": 4,
+   "ready": 18000,
+   "due": 25200,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 41,
+   "x": 109,
+   "y": 60,
+   "demand": 20,
+   "ready": 16200,
+   "due": 21600,
+   "service": 740,
+   "kind": "market"
+  },
+  {
+   "id": 42,
+   "x": 95,
+   "y": 46,
+   "demand": 26,
+   "ready": 28800,
+   "due": 34200,
+   "service": 890,
+   "kind": "hotel"
+  },
+  {
+   "id": 43,
+   "x": 49,
+   "y": 13,
+   "demand": 4,
+   "ready": 23400,
+   "due": 27000,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 44,
+   "x": 79,
+   "y": 70,
+   "demand": 8,
+   "ready": 21600,
+   "due": 28800,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 45,
+   "x": 57,
+   "y": 93,
+   "demand": 9,
+   "ready": 28800,
+   "due": 39600,
+   "service": 465,
+   "kind": "grocer"
+  },
+  {
+   "id": 46,
+   "x": 13,
+   "y": -52,
+   "demand": 4,
+   "ready": 25200,
+   "due": 28800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 47,
+   "x": 74,
+   "y": 105,
+   "demand": 21,
+   "ready": 25200,
+   "due": 28800,
+   "service": 765,
+   "kind": "hotel"
+  },
+  {
+   "id": 48,
+   "x": 106,
+   "y": 43,
+   "demand": 4,
+   "ready": 25200,
+   "due": 28800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 49,
+   "x": 118,
+   "y": 31,
+   "demand": 35,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1115,
+   "kind": "market"
+  },
+  {
+   "id": 50,
+   "x": 25,
+   "y": -8,
+   "demand": 21,
+   "ready": 28800,
+   "due": 34200,
+   "service": 765,
+   "kind": "hotel"
+  },
+  {
+   "id": 51,
+   "x": 105,
+   "y": 27,
+   "demand": 5,
+   "ready": 25200,
+   "due": 28800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 52,
+   "x": 104,
+   "y": 88,
+   "demand": 26,
+   "ready": 25200,
+   "due": 32400,
+   "service": 890,
+   "kind": "hotel"
+  },
+  {
+   "id": 53,
+   "x": 136,
+   "y": 115,
+   "demand": 41,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1265,
+   "kind": "market"
+  },
+  {
+   "id": 54,
+   "x": 17,
+   "y": 28,
+   "demand": 11,
+   "ready": 25200,
+   "due": 32400,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 55,
+   "x": 75,
+   "y": 89,
+   "demand": 4,
+   "ready": 19800,
+   "due": 22500,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 56,
+   "x": 66,
+   "y": 107,
+   "demand": 12,
+   "ready": 19800,
+   "due": 23400,
+   "service": 540,
+   "kind": "hotel"
+  },
+  {
+   "id": 57,
+   "x": 126,
+   "y": 50,
+   "demand": 4,
+   "ready": 25200,
+   "due": 32400,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 58,
+   "x": 57,
+   "y": 95,
+   "demand": 5,
+   "ready": 19800,
+   "due": 27000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 59,
+   "x": 75,
+   "y": 90,
+   "demand": 8,
+   "ready": 32400,
+   "due": 43200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 60,
+   "x": 62,
+   "y": 21,
+   "demand": 16,
+   "ready": 25200,
+   "due": 28800,
+   "service": 640,
+   "kind": "hotel"
+  },
+  {
+   "id": 61,
+   "x": 59,
+   "y": 84,
+   "demand": 6,
+   "ready": 25200,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 62,
+   "x": 114,
+   "y": 45,
+   "demand": 5,
+   "ready": 21600,
+   "due": 25200,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 63,
+   "x": 134,
+   "y": -146,
+   "demand": 4,
+   "ready": 18000,
+   "due": 21600,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 64,
+   "x": -64,
+   "y": -89,
+   "demand": 19,
+   "ready": 21600,
+   "due": 25200,
+   "service": 715,
+   "kind": "hotel"
+  },
+  {
+   "id": 65,
+   "x": 153,
+   "y": 37,
+   "demand": 3,
+   "ready": 28800,
+   "due": 36000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 66,
+   "x": 49,
+   "y": 89,
+   "demand": 4,
+   "ready": 28800,
+   "due": 34200,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 67,
+   "x": 67,
+   "y": 89,
+   "demand": 5,
+   "ready": 25200,
+   "due": 30600,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 68,
+   "x": 44,
+   "y": 97,
+   "demand": 10,
+   "ready": 25200,
+   "due": 30600,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 69,
+   "x": 81,
+   "y": -71,
+   "demand": 7,
+   "ready": 25200,
+   "due": 27900,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 70,
+   "x": -155,
+   "y": -55,
+   "demand": 7,
+   "ready": 25200,
+   "due": 27900,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 71,
+   "x": 88,
+   "y": 94,
+   "demand": 5,
+   "ready": 21600,
+   "due": 27000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 72,
+   "x": 56,
+   "y": 93,
+   "demand": 22,
+   "ready": 16200,
+   "due": 21600,
+   "service": 790,
+   "kind": "market"
+  },
+  {
+   "id": 73,
+   "x": 71,
+   "y": 84,
+   "demand": 13,
+   "ready": 28800,
+   "due": 34200,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 74,
+   "x": 56,
+   "y": -7,
+   "demand": 3,
+   "ready": 23400,
+   "due": 27000,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 75,
+   "x": 66,
+   "y": 83,
+   "demand": 5,
+   "ready": 21600,
+   "due": 24300,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 76,
+   "x": 80,
+   "y": 109,
+   "demand": 6,
+   "ready": 25200,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 77,
+   "x": 28,
+   "y": 17,
+   "demand": 8,
+   "ready": 25200,
+   "due": 36000,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 78,
+   "x": 140,
+   "y": 35,
+   "demand": 8,
+   "ready": 23400,
+   "due": 27000,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 79,
+   "x": 51,
+   "y": 18,
+   "demand": 16,
+   "ready": 23400,
+   "due": 28800,
+   "service": 640,
+   "kind": "hotel"
+  },
+  {
+   "id": 80,
+   "x": 66,
+   "y": 124,
+   "demand": 2,
+   "ready": 21600,
+   "due": 27000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 81,
+   "x": 137,
+   "y": 58,
+   "demand": 8,
+   "ready": 21600,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 82,
+   "x": 127,
+   "y": 63,
+   "demand": 7,
+   "ready": 28800,
+   "due": 32400,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 83,
+   "x": 26,
+   "y": 16,
+   "demand": 2,
+   "ready": 18000,
+   "due": 21600,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 84,
+   "x": 17,
+   "y": -95,
+   "demand": 15,
+   "ready": 19800,
+   "due": 22500,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 85,
+   "x": 46,
+   "y": 92,
+   "demand": 12,
+   "ready": 25200,
+   "due": 28800,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 86,
+   "x": 34,
+   "y": 90,
+   "demand": 13,
+   "ready": 18000,
+   "due": 28800,
+   "service": 565,
+   "kind": "hotel"
+  },
+  {
+   "id": 87,
+   "x": -53,
+   "y": 17,
+   "demand": 7,
+   "ready": 28800,
+   "due": 32400,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 88,
+   "x": 61,
+   "y": 99,
+   "demand": 41,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1265,
+   "kind": "market"
+  },
+  {
+   "id": 89,
+   "x": 62,
+   "y": -4,
+   "demand": 7,
+   "ready": 25200,
+   "due": 28800,
+   "service": 415,
+   "kind": "grocer"
+  },
+  {
+   "id": 90,
+   "x": 63,
+   "y": 89,
+   "demand": 3,
+   "ready": 32400,
+   "due": 43200,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 91,
+   "x": 4,
+   "y": -145,
+   "demand": 8,
+   "ready": 21600,
+   "due": 28800,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 92,
+   "x": 55,
+   "y": 103,
+   "demand": 43,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1315,
+   "kind": "market"
+  },
+  {
+   "id": 93,
+   "x": 76,
+   "y": 77,
+   "demand": 24,
+   "ready": 25200,
+   "due": 36000,
+   "service": 840,
+   "kind": "hotel"
+  },
+  {
+   "id": 94,
+   "x": 64,
+   "y": 115,
+   "demand": 14,
+   "ready": 23400,
+   "due": 27000,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 95,
+   "x": 43,
+   "y": 86,
+   "demand": 8,
+   "ready": 28800,
+   "due": 31500,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 96,
+   "x": 45,
+   "y": 99,
+   "demand": 5,
+   "ready": 23400,
+   "due": 27000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 97,
+   "x": 47,
+   "y": 78,
+   "demand": 16,
+   "ready": 25200,
+   "due": 30600,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 98,
+   "x": 61,
+   "y": 98,
+   "demand": 4,
+   "ready": 18000,
+   "due": 21600,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 99,
+   "x": 74,
+   "y": 100,
+   "demand": 7,
+   "ready": 28800,
+   "due": 31500,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 100,
+   "x": 120,
+   "y": 44,
+   "demand": 2,
+   "ready": 21600,
+   "due": 28800,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 101,
+   "x": 66,
+   "y": 98,
+   "demand": 7,
+   "ready": 19800,
+   "due": 25200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 102,
+   "x": 132,
+   "y": 34,
+   "demand": 11,
+   "ready": 28800,
+   "due": 31500,
+   "service": 515,
+   "kind": "grocer"
+  },
+  {
+   "id": 103,
+   "x": -111,
+   "y": -156,
+   "demand": 13,
+   "ready": 21600,
+   "due": 25200,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 104,
+   "x": 139,
+   "y": 47,
+   "demand": 6,
+   "ready": 23400,
+   "due": 28800,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 105,
+   "x": 88,
+   "y": 93,
+   "demand": 42,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1290,
+   "kind": "market"
+  },
+  {
+   "id": 106,
+   "x": -15,
+   "y": -81,
+   "demand": 8,
+   "ready": 19800,
+   "due": 25200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 107,
+   "x": -80,
+   "y": 70,
+   "demand": 15,
+   "ready": 18000,
+   "due": 23400,
+   "service": 615,
+   "kind": "grocer"
+  },
+  {
+   "id": 108,
+   "x": -128,
+   "y": -157,
+   "demand": 8,
+   "ready": 19800,
+   "due": 22500,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 109,
+   "x": 40,
+   "y": 114,
+   "demand": 18,
+   "ready": 18000,
+   "due": 25200,
+   "service": 690,
+   "kind": "grocer"
+  },
+  {
+   "id": 110,
+   "x": -11,
+   "y": 145,
+   "demand": 4,
+   "ready": 18000,
+   "due": 28800,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 111,
+   "x": -122,
+   "y": -94,
+   "demand": 13,
+   "ready": 21600,
+   "due": 28800,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 112,
+   "x": 130,
+   "y": 44,
+   "demand": 30,
+   "ready": 16200,
+   "due": 21600,
+   "service": 990,
+   "kind": "market"
+  },
+  {
+   "id": 113,
+   "x": 33,
+   "y": 100,
+   "demand": 14,
+   "ready": 23400,
+   "due": 28800,
+   "service": 590,
+   "kind": "grocer"
+  },
+  {
+   "id": 114,
+   "x": -23,
+   "y": 46,
+   "demand": 2,
+   "ready": 32400,
+   "due": 36000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 115,
+   "x": 58,
+   "y": 23,
+   "demand": 7,
+   "ready": 25200,
+   "due": 28800,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 116,
+   "x": 92,
+   "y": 115,
+   "demand": 8,
+   "ready": 27000,
+   "due": 34200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 117,
+   "x": 67,
+   "y": 95,
+   "demand": 8,
+   "ready": 18000,
+   "due": 25200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 118,
+   "x": 27,
+   "y": 65,
+   "demand": 8,
+   "ready": 25200,
+   "due": 28800,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 119,
+   "x": 45,
+   "y": 118,
+   "demand": 10,
+   "ready": 28800,
+   "due": 32400,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 120,
+   "x": -57,
+   "y": -144,
+   "demand": 8,
+   "ready": 27000,
+   "due": 30600,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 121,
+   "x": 125,
+   "y": 62,
+   "demand": 6,
+   "ready": 28800,
+   "due": 32400,
+   "service": 390,
+   "kind": "cafe"
+  },
+  {
+   "id": 122,
+   "x": 112,
+   "y": 46,
+   "demand": 12,
+   "ready": 27000,
+   "due": 37800,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 123,
+   "x": 51,
+   "y": -4,
+   "demand": 6,
+   "ready": 18000,
+   "due": 21600,
+   "service": 390,
+   "kind": "grocer"
+  },
+  {
+   "id": 124,
+   "x": 54,
+   "y": 105,
+   "demand": 10,
+   "ready": 21600,
+   "due": 24300,
+   "service": 490,
+   "kind": "grocer"
+  },
+  {
+   "id": 125,
+   "x": 70,
+   "y": 80,
+   "demand": 2,
+   "ready": 32400,
+   "due": 35100,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 126,
+   "x": 107,
+   "y": 16,
+   "demand": 41,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1265,
+   "kind": "market"
+  },
+  {
+   "id": 127,
+   "x": -93,
+   "y": -51,
+   "demand": 8,
+   "ready": 18000,
+   "due": 20700,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 128,
+   "x": -29,
+   "y": -68,
+   "demand": 27,
+   "ready": 25200,
+   "due": 28800,
+   "service": 915,
+   "kind": "hotel"
+  },
+  {
+   "id": 129,
+   "x": 121,
+   "y": 38,
+   "demand": 3,
+   "ready": 25200,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 130,
+   "x": 70,
+   "y": 128,
+   "demand": 5,
+   "ready": 18000,
+   "due": 23400,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 131,
+   "x": -46,
+   "y": -90,
+   "demand": 3,
+   "ready": 18000,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 132,
+   "x": 72,
+   "y": 95,
+   "demand": 13,
+   "ready": 25200,
+   "due": 27900,
+   "service": 565,
+   "kind": "grocer"
+  },
+  {
+   "id": 133,
+   "x": 50,
+   "y": 32,
+   "demand": 4,
+   "ready": 27000,
+   "due": 32400,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 134,
+   "x": 53,
+   "y": 23,
+   "demand": 2,
+   "ready": 19800,
+   "due": 27000,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 135,
+   "x": 127,
+   "y": 46,
+   "demand": 26,
+   "ready": 16200,
+   "due": 21600,
+   "service": 890,
+   "kind": "market"
+  },
+  {
+   "id": 136,
+   "x": 131,
+   "y": 50,
+   "demand": 3,
+   "ready": 19800,
+   "due": 30600,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 137,
+   "x": 125,
+   "y": 14,
+   "demand": 3,
+   "ready": 25200,
+   "due": 27900,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 138,
+   "x": -116,
+   "y": -24,
+   "demand": 8,
+   "ready": 18000,
+   "due": 20700,
+   "service": 440,
+   "kind": "grocer"
+  },
+  {
+   "id": 139,
+   "x": 108,
+   "y": 62,
+   "demand": 8,
+   "ready": 21600,
+   "due": 25200,
+   "service": 440,
+   "kind": "cafe"
+  },
+  {
+   "id": 140,
+   "x": 75,
+   "y": 102,
+   "demand": 29,
+   "ready": 19800,
+   "due": 25200,
+   "service": 965,
+   "kind": "hotel"
+  },
+  {
+   "id": 141,
+   "x": 70,
+   "y": 83,
+   "demand": 5,
+   "ready": 27000,
+   "due": 37800,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 142,
+   "x": 45,
+   "y": 89,
+   "demand": 12,
+   "ready": 27000,
+   "due": 32400,
+   "service": 540,
+   "kind": "grocer"
+  },
+  {
+   "id": 143,
+   "x": 146,
+   "y": 38,
+   "demand": 3,
+   "ready": 21600,
+   "due": 24300,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 144,
+   "x": 63,
+   "y": 24,
+   "demand": 2,
+   "ready": 21600,
+   "due": 32400,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 145,
+   "x": 112,
+   "y": 25,
+   "demand": 3,
+   "ready": 21600,
+   "due": 28800,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 146,
+   "x": -106,
+   "y": 39,
+   "demand": 4,
+   "ready": 23400,
+   "due": 27000,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 147,
+   "x": 115,
+   "y": -60,
+   "demand": 23,
+   "ready": 16200,
+   "due": 21600,
+   "service": 815,
+   "kind": "market"
+  },
+  {
+   "id": 148,
+   "x": 42,
+   "y": 32,
+   "demand": 22,
+   "ready": 16200,
+   "due": 21600,
+   "service": 790,
+   "kind": "market"
+  },
+  {
+   "id": 149,
+   "x": -88,
+   "y": 48,
+   "demand": 18,
+   "ready": 28800,
+   "due": 36000,
+   "service": 690,
+   "kind": "hotel"
+  },
+  {
+   "id": 150,
+   "x": 105,
+   "y": 24,
+   "demand": 3,
+   "ready": 23400,
+   "due": 30600,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 151,
+   "x": 29,
+   "y": 2,
+   "demand": 5,
+   "ready": 23400,
+   "due": 27000,
+   "service": 365,
+   "kind": "cafe"
+  },
+  {
+   "id": 152,
+   "x": 77,
+   "y": 77,
+   "demand": 3,
+   "ready": 19800,
+   "due": 30600,
+   "service": 315,
+   "kind": "cafe"
+  },
+  {
+   "id": 153,
+   "x": 62,
+   "y": 98,
+   "demand": 34,
+   "ready": 16200,
+   "due": 21600,
+   "service": 1090,
+   "kind": "market"
+  },
+  {
+   "id": 154,
+   "x": 144,
+   "y": 60,
+   "demand": 16,
+   "ready": 28800,
+   "due": 39600,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 155,
+   "x": -117,
+   "y": 101,
+   "demand": 7,
+   "ready": 21600,
+   "due": 25200,
+   "service": 415,
+   "kind": "cafe"
+  },
+  {
+   "id": 156,
+   "x": -141,
+   "y": 47,
+   "demand": 2,
+   "ready": 19800,
+   "due": 30600,
+   "service": 290,
+   "kind": "cafe"
+  },
+  {
+   "id": 157,
+   "x": 129,
+   "y": 36,
+   "demand": 4,
+   "ready": 23400,
+   "due": 30600,
+   "service": 340,
+   "kind": "cafe"
+  },
+  {
+   "id": 158,
+   "x": 47,
+   "y": -5,
+   "demand": 25,
+   "ready": 28800,
+   "due": 34200,
+   "service": 865,
+   "kind": "hotel"
+  },
+  {
+   "id": 159,
+   "x": 104,
+   "y": 54,
+   "demand": 16,
+   "ready": 25200,
+   "due": 32400,
+   "service": 640,
+   "kind": "grocer"
+  },
+  {
+   "id": 160,
+   "x": 122,
+   "y": 48,
+   "demand": 18,
+   "ready": 27000,
+   "due": 29700,
+   "service": 690,
+   "kind": "hotel"
+  }
+ ],
+ "fleet": [
+  {
+   "type": "bike",
+   "count": 13,
+   "capacity": 14,
+   "fixed": 900,
+   "per_unit": 2,
+   "pace": 22,
+   "shift": 18000,
+   "range": 260
+  },
+  {
+   "type": "van",
+   "count": 20,
+   "capacity": 60,
+   "fixed": 4200,
+   "per_unit": 11,
+   "pace": 11,
+   "shift": 25200,
+   "range": null
+  },
+  {
+   "type": "truck",
+   "count": 8,
+   "capacity": 150,
+   "fixed": 9500,
+   "per_unit": 19,
+   "pace": 13,
+   "shift": 28800,
+   "range": null
+  }
+ ]
+}
+### /app/orders/targets.json
+{
+ "harbour-lanes": 77867,
+ "old-town": 147362,
+ "riverside": 201921,
+ "north-ring": 288705
+}
+[?2004hroot@2b652d5e3a23:/app# printf '%s\n' '--- checker ---'; sed -n '1,260p' /app/tools/check_plan.py; printf '%s\n' '--- planner ---'; sed -n '1,320p' /app/planner/plan_morning.py
+[?2004l--- checker ---
+"""Check a delivery plan against docs/dispatch-rules.md and print its cost.
+
+Usage: python3 tools/check_plan.py orders/<morning>.json plans/<morning>.json
+"""
+
+import json
+import math
+import sys
+
+
+class PlanError(ValueError):
+    pass
+
+
+def distance(a, b):
+    sq = (a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2
+    d = math.isqrt(sq)
+    return d if d * d == sq else d + 1
+
+
+def evaluate(orders, plan):
+    depot = orders["depot"]
+    customers = {c["id"]: c for c in orders["customers"]}
+    fleet = {f["type"]: f for f in orders["fleet"]}
+    used = {t: 0 for t in fleet}
+    served = set()
+    total = 0
+    if not isinstance(plan, dict) or not isinstance(plan.get("routes"), list):
+        raise PlanError("a plan is a JSON object with a routes list")
+    for number, route in enumerate(plan["routes"], start=1):
+        where = f"route {number}"
+        if not isinstance(route, dict):
+            raise PlanError(f"{where}: not a JSON object")
+        kind = fleet.get(route.get("type")) if isinstance(route.get("type"), str) else None
+        if kind is None:
+            raise PlanError(f"{where}: unknown vehicle type {route.get('type')!r}")
+        stops = route.get("stops")
+        if not isinstance(stops, list) or not stops:
+            raise PlanError(f"{where}: no stops")
+        depart = route.get("depart")
+        if not isinstance(depart, int) or isinstance(depart, bool) or depart < depot["open"]:
+            raise PlanError(f"{where}: departure must be a whole second, not before opening")
+        used[route["type"]] += 1
+        clock, here, crates, driven = depart, depot, 0, 0
+        for cid in stops:
+            if not isinstance(cid, int) or isinstance(cid, bool) or cid not in customers:
+                raise PlanError(f"{where}: unknown customer {cid!r}")
+            if cid in served:
+                raise PlanError(f"{where}: customer {cid} delivered twice")
+            served.add(cid)
+            customer = customers[cid]
+            leg = distance(here, customer)
+            driven += leg
+            start = max(clock + leg * kind["pace"], customer["ready"])
+            if start > customer["due"]:
+                raise PlanError(f"{where}: customer {cid} reached at {start}, after its window closes at {customer['due']}")
+            clock = start + customer["service"]
+            crates += customer["demand"]
+            here = customer
+        leg = distance(here, depot)
+        driven += leg
+        back = clock + leg * kind["pace"]
+        if back > depot["close"]:
+            raise PlanError(f"{where}: back at {back}, after the bakery closes")
+        if back - depart > kind["shift"]:
+            raise PlanError(f"{where}: out for {back - depart} s, longer than the {kind['shift']} s shift")
+        if crates > kind["capacity"]:
+            raise PlanError(f"{where}: {crates} crates on a vehicle that carries {kind['capacity']}")
+        if kind["range"] is not None and driven > kind["range"]:
+            raise PlanError(f"{where}: drives {driven} units, beyond its range of {kind['range']}")
+        total += kind["fixed"] + kind["per_unit"] * driven
+    for name, count in used.items():
+        if count > fleet[name]["count"]:
+            raise PlanError(f"{count} routes use a {name}; only {fleet[name]['count']} are available")
+    missing = sorted(set(customers) - served)
+    if missing:
+        raise PlanError(f"{len(missing)} customers get no delivery, first {missing[:5]}")
+    return total
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.exit(__doc__)
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    with open(argv[2]) as fh:
+        plan = json.load(fh)
+    try:
+        cost = evaluate(orders, plan)
+    except PlanError as exc:
+        print(f"INFEASIBLE: {exc}")
+        return 1
+    print(f"feasible, cost {cost}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+--- planner ---
+"""Current dispatch planner: nearest-next greedy, vans first.
+
+Usage: python3 planner/plan_morning.py orders/<morning>.json plans/<morning>.json
+
+Builds one route at a time. A route leaves when the bakery opens and keeps
+driving to the nearest customer it can still reach inside that customer's window
+with room on board; when nothing fits, it goes home and the next vehicle starts.
+"""
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from check_plan import distance, evaluate  # noqa: E402
+
+ORDER = ("van", "truck", "bike")
+
+
+def plan(orders):
+    depot = orders["depot"]
+    left = {c["id"]: c for c in orders["customers"]}
+    fleet = sorted(orders["fleet"], key=lambda f: ORDER.index(f["type"]) if f["type"] in ORDER else 99)
+    routes = []
+    for kind in fleet:
+        for _ in range(kind["count"]):
+            if not left:
+                break
+            clock, here, crates, driven, stops = depot["open"], depot, 0, 0, []
+            while True:
+                best = None
+                for c in left.values():
+                    leg = distance(here, c)
+                    start = max(clock + leg * kind["pace"], c["ready"])
+                    if start > c["due"] or crates + c["demand"] > kind["capacity"]:
+                        continue
+                    back = start + c["service"] + distance(c, depot) * kind["pace"]
+                    if back > depot["close"] or back - depot["open"] > kind["shift"]:
+                        continue
+                    total = driven + leg + distance(c, depot)
+                    if kind["range"] is not None and total > kind["range"]:
+                        continue
+                    if best is None or leg < best[0]:
+                        best = (leg, c, start)
+                if best is None:
+                    break
+                leg, c, start = best
+                stops.append(c["id"])
+                clock, here, crates, driven = start + c["service"], c, crates + c["demand"], driven + leg
+                del left[c["id"]]
+            if stops:
+                routes.append({"type": kind["type"], "depart": depot["open"], "stops": stops})
+    return {"routes": routes}
+
+
+def main(argv):
+    with open(argv[1]) as fh:
+        orders = json.load(fh)
+    result = plan(orders)
+    with open(argv[2], "w") as fh:
+        json.dump(result, fh, indent=1)
+    try:
+        print("cost", evaluate(orders, result))
+    except ValueError as exc:
+        print("INFEASIBLE:", exc)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
+[?2004hroot@2b652d5e3a23:/app# cat docs/dispatch-rules.md; echo '--- TARGETS ---'; cat orders/targets.json; echo; echo '--- FILES ---'; ls -l orders plans
+[?2004l# Morning dispatch rules
+
+These rules decide whether a delivery plan can be run and what it costs. They
+are the rules `tools/check_plan.py` applies.
+
+## Orders
+
+Each file in `orders/` is one morning. It lists the bakery (`depot`), the
+customers to deliver to, and the vehicles available (`fleet`). Positions are
+integer grid coordinates `x`, `y` in units of 100 m; times are seconds after
+midnight. The bakery opens at `open` and closes at `close`.
+
+A customer has an integer `id`, a position, a `demand` in crates, a delivery
+window `ready`..`due`, and a `service` time in seconds for unloading. Its
+`kind` (cafe, grocer, hotel, market) is for information only and changes no
+rule.
+
+A fleet entry is one kind of vehicle, named by its `type`: `count` vehicles of it are available,
+each carrying up to `capacity` crates. It travels at `pace` seconds per unit of
+distance, costs `fixed` for being used at all and `per_unit` for every unit of
+distance it drives, may be out for at most `shift` seconds from leaving the
+bakery to getting back, and, where `range` is not null, may drive at most
+`range` units of distance in the morning. Costs are in cents.
+
+## Distance and time
+
+The distance between two points is the Euclidean distance between them,
+rounded up to a whole unit. A vehicle takes `distance * pace` seconds to drive
+it.
+
+## A route
+
+A route is one vehicle's morning: it leaves the bakery at its departure time,
+visits its customers in order, and comes back. Every route visits at least one
+customer, and each vehicle runs at most one route.
+
+- The departure is a whole number of seconds, not before the bakery opens.
+- At each customer the vehicle unloads from the later of its arrival and the
+  customer's `ready` time, and that must not be after `due`. Unloading takes the
+  customer's `service` time; the vehicle leaves as soon as it is done.
+- The vehicle must be back at the bakery no later than it closes, and no more
+  than `shift` seconds after its departure.
+- The crates on the route (the sum of its customers' demands) must fit the
+  vehicle's `capacity`, and the distance driven must be within its `range`
+  where it has one. The distance driven is the sum of the rounded legs, from
+  the bakery through each customer in turn and back to the bakery.
+
+## A plan
+
+A plan delivers to every customer of the morning exactly once, uses no more
+vehicles of a kind than the fleet has, and costs the sum over its routes of the
+vehicle's `fixed` cost plus `per_unit` times the route's distance.
+
+It is written as JSON:
+
+    {"routes": [{"type": "van", "depart": 18000, "stops": [12, 4, 31]}, ...]}
+
+where `type` names a fleet entry, `depart` is the departure time as a JSON
+integer (`18000`, not `18000.0`) and `stops` lists customer ids, as the
+integers in the orders file, in visiting order. Other keys are ignored.
+--- TARGETS ---
+{
+ "harbour-lanes": 77867,
+ "old-town": 147362,
+ "riverside": 201921,
+ "north-ring": 288705
+}
+--- FILES ---
+orders:
+total 88
+-rw-r--r-- 1 root root  8803 Sep 24 04:50 harbour-lanes.json
+-rw-r--r-- 1 root root 31020 Sep 24 04:50 north-ring.json
+-rw-r--r-- 1 root root 15733 Sep 24 04:50 old-town.json
+-rw-r--r-- 1 root root 22563 Sep 24 04:50 riverside.json
+-rw-r--r-- 1 root root    93 Sep 24 08:01 targets.json
+
+plans:
+total 0
+[?2004hroot@2b652d5e3a23:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,glob,os
+[?2004l[?2004h> for fn in sorted(glob.glob('orders/*.json')):
+[?2004l[?2004h>  if fn.endswith('targets.json'): continue
+[?2004l[?2004h>  o=json.load(open(fn)); print('\n###',os.path.basename(fn)); print('depot',o['depot']); print('fleet',o['fleet']); print('customers',len(o['customers']))
+[?2004l[?2004h>  for c in o['customers']: print(c)
+[?2004l[?2004h> PY
+[?2004l
+### harbour-lanes.json
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+fleet [{'type': 'bike', 'count': 5, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 7, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 3, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+customers 60
+{'id': 1, 'x': 99, 'y': 25, 'demand': 2, 'ready': 32400, 'due': 37800, 'service': 290, 'kind': 'cafe'}
+{'id': 2, 'x': 155, 'y': -80, 'demand': 14, 'ready': 18000, 'due': 21600, 'service': 590, 'kind': 'grocer'}
+{'id': 3, 'x': 147, 'y': -145, 'demand': 13, 'ready': 28800, 'due': 32400, 'service': 565, 'kind': 'grocer'}
+{'id': 4, 'x': 0, 'y': 10, 'demand': 14, 'ready': 23400, 'due': 27000, 'service': 590, 'kind': 'grocer'}
+{'id': 5, 'x': 102, 'y': -13, 'demand': 6, 'ready': 19800, 'due': 23400, 'service': 390, 'kind': 'cafe'}
+{'id': 6, 'x': 101, 'y': 23, 'demand': 2, 'ready': 25200, 'due': 30600, 'service': 290, 'kind': 'cafe'}
+{'id': 7, 'x': -66, 'y': -54, 'demand': 4, 'ready': 19800, 'due': 23400, 'service': 340, 'kind': 'cafe'}
+{'id': 8, 'x': 116, 'y': 24, 'demand': 7, 'ready': 28800, 'due': 32400, 'service': 415, 'kind': 'cafe'}
+{'id': 9, 'x': -93, 'y': 54, 'demand': 12, 'ready': 18000, 'due': 21600, 'service': 540, 'kind': 'grocer'}
+{'id': 10, 'x': 143, 'y': -5, 'demand': 32, 'ready': 16200, 'due': 21600, 'service': 1040, 'kind': 'market'}
+{'id': 11, 'x': 110, 'y': 23, 'demand': 8, 'ready': 25200, 'due': 27900, 'service': 440, 'kind': 'cafe'}
+{'id': 12, 'x': 90, 'y': 111, 'demand': 15, 'ready': 32400, 'due': 37800, 'service': 615, 'kind': 'grocer'}
+{'id': 13, 'x': -91, 'y': 37, 'demand': 3, 'ready': 21600, 'due': 32400, 'service': 315, 'kind': 'cafe'}
+{'id': 14, 'x': -84, 'y': -85, 'demand': 13, 'ready': 25200, 'due': 27900, 'service': 565, 'kind': 'grocer'}
+{'id': 15, 'x': 91, 'y': 23, 'demand': 10, 'ready': 27000, 'due': 30600, 'service': 490, 'kind': 'grocer'}
+{'id': 16, 'x': -65, 'y': -74, 'demand': 7, 'ready': 23400, 'due': 27000, 'service': 415, 'kind': 'cafe'}
+{'id': 17, 'x': -56, 'y': -152, 'demand': 5, 'ready': 18000, 'due': 21600, 'service': 365, 'kind': 'cafe'}
+{'id': 18, 'x': 92, 'y': 27, 'demand': 5, 'ready': 21600, 'due': 28800, 'service': 365, 'kind': 'cafe'}
+{'id': 19, 'x': 88, 'y': 25, 'demand': 2, 'ready': 19800, 'due': 25200, 'service': 290, 'kind': 'cafe'}
+{'id': 20, 'x': 57, 'y': 47, 'demand': 6, 'ready': 21600, 'due': 25200, 'service': 390, 'kind': 'cafe'}
+{'id': 21, 'x': -77, 'y': -73, 'demand': 25, 'ready': 18000, 'due': 25200, 'service': 865, 'kind': 'hotel'}
+{'id': 22, 'x': -21, 'y': 1, 'demand': 7, 'ready': 25200, 'due': 30600, 'service': 415, 'kind': 'cafe'}
+{'id': 23, 'x': 137, 'y': 74, 'demand': 8, 'ready': 28800, 'due': 31500, 'service': 440, 'kind': 'cafe'}
+{'id': 24, 'x': 91, 'y': 24, 'demand': 18, 'ready': 27000, 'due': 30600, 'service': 690, 'kind': 'grocer'}
+{'id': 25, 'x': 28, 'y': -6, 'demand': 6, 'ready': 25200, 'due': 36000, 'service': 390, 'kind': 'cafe'}
+{'id': 26, 'x': 95, 'y': -37, 'demand': 7, 'ready': 25200, 'due': 28800, 'service': 415, 'kind': 'cafe'}
+{'id': 27, 'x': 36, 'y': -48, 'demand': 9, 'ready': 27000, 'due': 30600, 'service': 465, 'kind': 'grocer'}
+{'id': 28, 'x': -140, 'y': -128, 'demand': 34, 'ready': 16200, 'due': 21600, 'service': 1090, 'kind': 'market'}
+{'id': 29, 'x': 51, 'y': 35, 'demand': 16, 'ready': 32400, 'due': 37800, 'service': 640, 'kind': 'grocer'}
+{'id': 30, 'x': 112, 'y': 16, 'demand': 7, 'ready': 23400, 'due': 34200, 'service': 415, 'kind': 'cafe'}
+{'id': 31, 'x': -151, 'y': -91, 'demand': 3, 'ready': 21600, 'due': 24300, 'service': 315, 'kind': 'cafe'}
+{'id': 32, 'x': -101, 'y': 68, 'demand': 6, 'ready': 25200, 'due': 27900, 'service': 390, 'kind': 'cafe'}
+{'id': 33, 'x': 103, 'y': 107, 'demand': 13, 'ready': 18000, 'due': 21600, 'service': 565, 'kind': 'grocer'}
+{'id': 34, 'x': 73, 'y': 28, 'demand': 18, 'ready': 21600, 'due': 24300, 'service': 690, 'kind': 'grocer'}
+{'id': 35, 'x': -83, 'y': -64, 'demand': 2, 'ready': 28800, 'due': 32400, 'service': 290, 'kind': 'cafe'}
+{'id': 36, 'x': -66, 'y': -73, 'demand': 13, 'ready': 21600, 'due': 27000, 'service': 565, 'kind': 'hotel'}
+{'id': 37, 'x': -2, 'y': 114, 'demand': 31, 'ready': 16200, 'due': 21600, 'service': 1015, 'kind': 'market'}
+{'id': 38, 'x': 57, 'y': -8, 'demand': 2, 'ready': 18000, 'due': 21600, 'service': 290, 'kind': 'cafe'}
+{'id': 39, 'x': -71, 'y': -80, 'demand': 6, 'ready': 27000, 'due': 32400, 'service': 390, 'kind': 'cafe'}
+{'id': 40, 'x': -64, 'y': -68, 'demand': 17, 'ready': 21600, 'due': 28800, 'service': 665, 'kind': 'grocer'}
+{'id': 41, 'x': 98, 'y': 50, 'demand': 29, 'ready': 16200, 'due': 21600, 'service': 965, 'kind': 'market'}
+{'id': 42, 'x': 84, 'y': 30, 'demand': 2, 'ready': 28800, 'due': 31500, 'service': 290, 'kind': 'cafe'}
+{'id': 43, 'x': -45, 'y': -1, 'demand': 2, 'ready': 28800, 'due': 34200, 'service': 290, 'kind': 'cafe'}
+{'id': 44, 'x': 94, 'y': 6, 'demand': 3, 'ready': 28800, 'due': 32400, 'service': 315, 'kind': 'cafe'}
+{'id': 45, 'x': -28, 'y': -11, 'demand': 8, 'ready': 21600, 'due': 25200, 'service': 440, 'kind': 'cafe'}
+{'id': 46, 'x': 74, 'y': 10, 'demand': 13, 'ready': 28800, 'due': 36000, 'service': 565, 'kind': 'grocer'}
+{'id': 47, 'x': 91, 'y': 89, 'demand': 7, 'ready': 21600, 'due': 28800, 'service': 415, 'kind': 'cafe'}
+{'id': 48, 'x': -81, 'y': -75, 'demand': 6, 'ready': 21600, 'due': 32400, 'service': 390, 'kind': 'cafe'}
+{'id': 49, 'x': 88, 'y': -8, 'demand': 3, 'ready': 21600, 'due': 25200, 'service': 315, 'kind': 'cafe'}
+{'id': 50, 'x': 101, 'y': 29, 'demand': 14, 'ready': 25200, 'due': 36000, 'service': 590, 'kind': 'hotel'}
+{'id': 51, 'x': 115, 'y': 33, 'demand': 8, 'ready': 28800, 'due': 39600, 'service': 440, 'kind': 'cafe'}
+{'id': 52, 'x': 97, 'y': -64, 'demand': 10, 'ready': 28800, 'due': 36000, 'service': 490, 'kind': 'hotel'}
+{'id': 53, 'x': 89, 'y': 31, 'demand': 3, 'ready': 19800, 'due': 27000, 'service': 315, 'kind': 'cafe'}
+{'id': 54, 'x': -95, 'y': -68, 'demand': 5, 'ready': 25200, 'due': 28800, 'service': 365, 'kind': 'cafe'}
+{'id': 55, 'x': 99, 'y': 20, 'demand': 5, 'ready': 25200, 'due': 30600, 'service': 365, 'kind': 'cafe'}
+{'id': 56, 'x': 149, 'y': -76, 'demand': 8, 'ready': 25200, 'due': 32400, 'service': 440, 'kind': 'cafe'}
+{'id': 57, 'x': 87, 'y': 24, 'demand': 7, 'ready': 21600, 'due': 25200, 'service': 415, 'kind': 'grocer'}
+{'id': 58, 'x': 29, 'y': 61, 'demand': 9, 'ready': 25200, 'due': 28800, 'service': 465, 'kind': 'grocer'}
+{'id': 59, 'x': 133, 'y': -4, 'demand': 41, 'ready': 16200, 'due': 21600, 'service': 1265, 'kind': 'market'}
+{'id': 60, 'x': -20, 'y': 3, 'demand': 5, 'ready': 19800, 'due': 25200, 'service': 365, 'kind': 'cafe'}
+
+### north-ring.json
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+fleet [{'type': 'bike', 'count': 18, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 27, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 11, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+customers 220
+{'id': 1, 'x': 66, 'y': -48, 'demand': 24, 'ready': 16200, 'due': 21600, 'service': 840, 'kind': 'market'}
+{'id': 2, 'x': 18, 'y': -53, 'demand': 12, 'ready': 21600, 'due': 24300, 'service': 540, 'kind': 'grocer'}
+{'id': 3, 'x': 4, 'y': -48, 'demand': 2, 'ready': 23400, 'due': 27000, 'service': 290, 'kind': 'cafe'}
+{'id': 4, 'x': -41, 'y': -66, 'demand': 19, 'ready': 21600, 'due': 24300, 'service': 715, 'kind': 'hotel'}
+{'id': 5, 'x': 47, 'y': 111, 'demand': 12, 'ready': 19800, 'due': 25200, 'service': 540, 'kind': 'hotel'}
+{'id': 6, 'x': 45, 'y': 57, 'demand': 14, 'ready': 27000, 'due': 30600, 'service': 590, 'kind': 'grocer'}
+{'id': 7, 'x': -19, 'y': 99, 'demand': 13, 'ready': 21600, 'due': 27000, 'service': 565, 'kind': 'hotel'}
+{'id': 8, 'x': 35, 'y': -42, 'demand': 9, 'ready': 25200, 'due': 36000, 'service': 465, 'kind': 'grocer'}
+{'id': 9, 'x': 9, 'y': -42, 'demand': 41, 'ready': 16200, 'due': 21600, 'service': 1265, 'kind': 'market'}
+{'id': 10, 'x': 7, 'y': -22, 'demand': 4, 'ready': 19800, 'due': 23400, 'service': 340, 'kind': 'cafe'}
+{'id': 11, 'x': -70, 'y': 111, 'demand': 9, 'ready': 32400, 'due': 36000, 'service': 465, 'kind': 'grocer'}
+{'id': 12, 'x': -33, 'y': -41, 'demand': 5, 'ready': 27000, 'due': 32400, 'service': 365, 'kind': 'cafe'}
+{'id': 13, 'x': -22, 'y': 21, 'demand': 6, 'ready': 21600, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 14, 'x': -109, 'y': 129, 'demand': 42, 'ready': 16200, 'due': 21600, 'service': 1290, 'kind': 'market'}
+{'id': 15, 'x': 111, 'y': -12, 'demand': 3, 'ready': 32400, 'due': 37800, 'service': 315, 'kind': 'cafe'}
+{'id': 16, 'x': -49, 'y': 99, 'demand': 5, 'ready': 27000, 'due': 30600, 'service': 365, 'kind': 'cafe'}
+{'id': 17, 'x': -11, 'y': -124, 'demand': 5, 'ready': 32400, 'due': 43200, 'service': 365, 'kind': 'cafe'}
+{'id': 18, 'x': 113, 'y': -147, 'demand': 9, 'ready': 27000, 'due': 30600, 'service': 465, 'kind': 'grocer'}
+{'id': 19, 'x': 136, 'y': -72, 'demand': 2, 'ready': 28800, 'due': 34200, 'service': 290, 'kind': 'cafe'}
+{'id': 20, 'x': 10, 'y': -57, 'demand': 8, 'ready': 28800, 'due': 36000, 'service': 440, 'kind': 'cafe'}
+{'id': 21, 'x': 27, 'y': 105, 'demand': 6, 'ready': 19800, 'due': 27000, 'service': 390, 'kind': 'cafe'}
+{'id': 22, 'x': -32, 'y': -53, 'demand': 8, 'ready': 23400, 'due': 26100, 'service': 440, 'kind': 'cafe'}
+{'id': 23, 'x': 2, 'y': 108, 'demand': 36, 'ready': 16200, 'due': 21600, 'service': 1140, 'kind': 'market'}
+{'id': 24, 'x': 11, 'y': 131, 'demand': 3, 'ready': 25200, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 25, 'x': 0, 'y': 5, 'demand': 23, 'ready': 19800, 'due': 22500, 'service': 815, 'kind': 'hotel'}
+{'id': 26, 'x': -19, 'y': 109, 'demand': 21, 'ready': 27000, 'due': 34200, 'service': 765, 'kind': 'hotel'}
+{'id': 27, 'x': 46, 'y': 87, 'demand': 16, 'ready': 23400, 'due': 30600, 'service': 640, 'kind': 'grocer'}
+{'id': 28, 'x': -77, 'y': 107, 'demand': 2, 'ready': 23400, 'due': 27000, 'service': 290, 'kind': 'cafe'}
+{'id': 29, 'x': -11, 'y': -22, 'demand': 2, 'ready': 21600, 'due': 27000, 'service': 290, 'kind': 'cafe'}
+{'id': 30, 'x': 120, 'y': -154, 'demand': 3, 'ready': 27000, 'due': 32400, 'service': 315, 'kind': 'cafe'}
+{'id': 31, 'x': -33, 'y': -65, 'demand': 8, 'ready': 19800, 'due': 27000, 'service': 440, 'kind': 'grocer'}
+{'id': 32, 'x': 39, 'y': 94, 'demand': 32, 'ready': 16200, 'due': 21600, 'service': 1040, 'kind': 'market'}
+{'id': 33, 'x': 41, 'y': -65, 'demand': 18, 'ready': 32400, 'due': 36000, 'service': 690, 'kind': 'grocer'}
+{'id': 34, 'x': 5, 'y': 128, 'demand': 8, 'ready': 28800, 'due': 34200, 'service': 440, 'kind': 'cafe'}
+{'id': 35, 'x': 34, 'y': 130, 'demand': 14, 'ready': 23400, 'due': 27000, 'service': 590, 'kind': 'grocer'}
+{'id': 36, 'x': 20, 'y': -39, 'demand': 2, 'ready': 21600, 'due': 24300, 'service': 290, 'kind': 'cafe'}
+{'id': 37, 'x': -119, 'y': -116, 'demand': 20, 'ready': 21600, 'due': 25200, 'service': 740, 'kind': 'hotel'}
+{'id': 38, 'x': 120, 'y': -12, 'demand': 5, 'ready': 28800, 'due': 39600, 'service': 365, 'kind': 'cafe'}
+{'id': 39, 'x': 20, 'y': -85, 'demand': 4, 'ready': 21600, 'due': 25200, 'service': 340, 'kind': 'cafe'}
+{'id': 40, 'x': -78, 'y': 102, 'demand': 6, 'ready': 21600, 'due': 25200, 'service': 390, 'kind': 'cafe'}
+{'id': 41, 'x': 65, 'y': -61, 'demand': 4, 'ready': 23400, 'due': 27000, 'service': 340, 'kind': 'cafe'}
+{'id': 42, 'x': -149, 'y': 68, 'demand': 5, 'ready': 27000, 'due': 30600, 'service': 365, 'kind': 'cafe'}
+{'id': 43, 'x': 128, 'y': -14, 'demand': 8, 'ready': 18000, 'due': 25200, 'service': 440, 'kind': 'cafe'}
+{'id': 44, 'x': 34, 'y': -51, 'demand': 12, 'ready': 28800, 'due': 34200, 'service': 540, 'kind': 'grocer'}
+{'id': 45, 'x': -41, 'y': -66, 'demand': 7, 'ready': 27000, 'due': 34200, 'service': 415, 'kind': 'grocer'}
+{'id': 46, 'x': 39, 'y': 106, 'demand': 23, 'ready': 23400, 'due': 27000, 'service': 815, 'kind': 'hotel'}
+{'id': 47, 'x': 27, 'y': 87, 'demand': 4, 'ready': 21600, 'due': 24300, 'service': 340, 'kind': 'cafe'}
+{'id': 48, 'x': 134, 'y': 45, 'demand': 13, 'ready': 32400, 'due': 37800, 'service': 565, 'kind': 'grocer'}
+{'id': 49, 'x': -18, 'y': -75, 'demand': 8, 'ready': 19800, 'due': 23400, 'service': 440, 'kind': 'grocer'}
+{'id': 50, 'x': 98, 'y': -150, 'demand': 3, 'ready': 25200, 'due': 36000, 'service': 315, 'kind': 'cafe'}
+{'id': 51, 'x': 69, 'y': -46, 'demand': 4, 'ready': 21600, 'due': 24300, 'service': 340, 'kind': 'cafe'}
+{'id': 52, 'x': -56, 'y': -148, 'demand': 6, 'ready': 19800, 'due': 30600, 'service': 390, 'kind': 'cafe'}
+{'id': 53, 'x': -95, 'y': -157, 'demand': 17, 'ready': 21600, 'due': 27000, 'service': 665, 'kind': 'grocer'}
+{'id': 54, 'x': -41, 'y': -62, 'demand': 13, 'ready': 21600, 'due': 32400, 'service': 565, 'kind': 'grocer'}
+{'id': 55, 'x': -106, 'y': 38, 'demand': 6, 'ready': 18000, 'due': 25200, 'service': 390, 'kind': 'grocer'}
+{'id': 56, 'x': 19, 'y': 124, 'demand': 8, 'ready': 25200, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 57, 'x': -97, 'y': 78, 'demand': 29, 'ready': 16200, 'due': 21600, 'service': 965, 'kind': 'market'}
+{'id': 58, 'x': 9, 'y': 111, 'demand': 26, 'ready': 16200, 'due': 21600, 'service': 890, 'kind': 'market'}
+{'id': 59, 'x': 20, 'y': -50, 'demand': 16, 'ready': 21600, 'due': 25200, 'service': 640, 'kind': 'grocer'}
+{'id': 60, 'x': -65, 'y': -48, 'demand': 7, 'ready': 21600, 'due': 27000, 'service': 415, 'kind': 'cafe'}
+{'id': 61, 'x': 31, 'y': -46, 'demand': 13, 'ready': 23400, 'due': 27000, 'service': 565, 'kind': 'grocer'}
+{'id': 62, 'x': -77, 'y': 107, 'demand': 16, 'ready': 27000, 'due': 30600, 'service': 640, 'kind': 'grocer'}
+{'id': 63, 'x': 146, 'y': 52, 'demand': 5, 'ready': 28800, 'due': 39600, 'service': 365, 'kind': 'cafe'}
+{'id': 64, 'x': 153, 'y': -21, 'demand': 15, 'ready': 25200, 'due': 27900, 'service': 615, 'kind': 'grocer'}
+{'id': 65, 'x': -28, 'y': 77, 'demand': 14, 'ready': 32400, 'due': 36000, 'service': 590, 'kind': 'grocer'}
+{'id': 66, 'x': 124, 'y': -16, 'demand': 45, 'ready': 16200, 'due': 21600, 'service': 1365, 'kind': 'market'}
+{'id': 67, 'x': 40, 'y': -24, 'demand': 28, 'ready': 25200, 'due': 32400, 'service': 940, 'kind': 'hotel'}
+{'id': 68, 'x': 149, 'y': -118, 'demand': 5, 'ready': 25200, 'due': 36000, 'service': 365, 'kind': 'cafe'}
+{'id': 69, 'x': 92, 'y': -25, 'demand': 14, 'ready': 28800, 'due': 39600, 'service': 590, 'kind': 'grocer'}
+{'id': 70, 'x': 31, 'y': 109, 'demand': 7, 'ready': 19800, 'due': 23400, 'service': 415, 'kind': 'grocer'}
+{'id': 71, 'x': 160, 'y': -49, 'demand': 34, 'ready': 16200, 'due': 21600, 'service': 1090, 'kind': 'market'}
+{'id': 72, 'x': -27, 'y': -66, 'demand': 26, 'ready': 16200, 'due': 21600, 'service': 890, 'kind': 'market'}
+{'id': 73, 'x': -85, 'y': 84, 'demand': 42, 'ready': 16200, 'due': 21600, 'service': 1290, 'kind': 'market'}
+{'id': 74, 'x': 113, 'y': -25, 'demand': 3, 'ready': 19800, 'due': 22500, 'service': 315, 'kind': 'cafe'}
+{'id': 75, 'x': 49, 'y': -43, 'demand': 5, 'ready': 21600, 'due': 25200, 'service': 365, 'kind': 'cafe'}
+{'id': 76, 'x': -70, 'y': 84, 'demand': 22, 'ready': 21600, 'due': 27000, 'service': 790, 'kind': 'hotel'}
+{'id': 77, 'x': 1, 'y': -41, 'demand': 3, 'ready': 19800, 'due': 27000, 'service': 315, 'kind': 'cafe'}
+{'id': 78, 'x': 40, 'y': 97, 'demand': 26, 'ready': 32400, 'due': 36000, 'service': 890, 'kind': 'hotel'}
+{'id': 79, 'x': -20, 'y': 90, 'demand': 12, 'ready': 21600, 'due': 25200, 'service': 540, 'kind': 'hotel'}
+{'id': 80, 'x': 17, 'y': -57, 'demand': 8, 'ready': 27000, 'due': 29700, 'service': 440, 'kind': 'cafe'}
+{'id': 81, 'x': 54, 'y': -20, 'demand': 2, 'ready': 25200, 'due': 28800, 'service': 290, 'kind': 'cafe'}
+{'id': 82, 'x': 23, 'y': 89, 'demand': 9, 'ready': 21600, 'due': 25200, 'service': 465, 'kind': 'grocer'}
+{'id': 83, 'x': 48, 'y': -70, 'demand': 8, 'ready': 21600, 'due': 24300, 'service': 440, 'kind': 'grocer'}
+{'id': 84, 'x': 59, 'y': -33, 'demand': 15, 'ready': 19800, 'due': 23400, 'service': 615, 'kind': 'grocer'}
+{'id': 85, 'x': 12, 'y': -32, 'demand': 39, 'ready': 16200, 'due': 21600, 'service': 1215, 'kind': 'market'}
+{'id': 86, 'x': 133, 'y': 33, 'demand': 28, 'ready': 16200, 'due': 21600, 'service': 940, 'kind': 'market'}
+{'id': 87, 'x': 62, 'y': -43, 'demand': 13, 'ready': 27000, 'due': 32400, 'service': 565, 'kind': 'grocer'}
+{'id': 88, 'x': 75, 'y': -34, 'demand': 38, 'ready': 16200, 'due': 21600, 'service': 1190, 'kind': 'market'}
+{'id': 89, 'x': 120, 'y': -16, 'demand': 6, 'ready': 25200, 'due': 36000, 'service': 390, 'kind': 'grocer'}
+{'id': 90, 'x': -16, 'y': 95, 'demand': 8, 'ready': 23400, 'due': 28800, 'service': 440, 'kind': 'grocer'}
+{'id': 91, 'x': -16, 'y': 33, 'demand': 7, 'ready': 25200, 'due': 36000, 'service': 415, 'kind': 'cafe'}
+{'id': 92, 'x': 5, 'y': -44, 'demand': 5, 'ready': 19800, 'due': 23400, 'service': 365, 'kind': 'cafe'}
+{'id': 93, 'x': 41, 'y': -50, 'demand': 3, 'ready': 28800, 'due': 31500, 'service': 315, 'kind': 'cafe'}
+{'id': 94, 'x': 112, 'y': -26, 'demand': 7, 'ready': 25200, 'due': 30600, 'service': 415, 'kind': 'cafe'}
+{'id': 95, 'x': -32, 'y': -77, 'demand': 30, 'ready': 16200, 'due': 21600, 'service': 990, 'kind': 'market'}
+{'id': 96, 'x': -65, 'y': -10, 'demand': 11, 'ready': 25200, 'due': 28800, 'service': 515, 'kind': 'hotel'}
+{'id': 97, 'x': 27, 'y': 159, 'demand': 5, 'ready': 18000, 'due': 28800, 'service': 365, 'kind': 'cafe'}
+{'id': 98, 'x': -41, 'y': -59, 'demand': 10, 'ready': 19800, 'due': 25200, 'service': 490, 'kind': 'grocer'}
+{'id': 99, 'x': -31, 'y': -64, 'demand': 13, 'ready': 23400, 'due': 27000, 'service': 565, 'kind': 'hotel'}
+{'id': 100, 'x': 68, 'y': -20, 'demand': 14, 'ready': 32400, 'due': 35100, 'service': 590, 'kind': 'grocer'}
+{'id': 101, 'x': 118, 'y': -33, 'demand': 12, 'ready': 32400, 'due': 39600, 'service': 540, 'kind': 'grocer'}
+{'id': 102, 'x': 113, 'y': -32, 'demand': 7, 'ready': 19800, 'due': 27000, 'service': 415, 'kind': 'cafe'}
+{'id': 103, 'x': 56, 'y': -62, 'demand': 9, 'ready': 25200, 'due': 30600, 'service': 465, 'kind': 'grocer'}
+{'id': 104, 'x': -70, 'y': 83, 'demand': 12, 'ready': 27000, 'due': 32400, 'service': 540, 'kind': 'grocer'}
+{'id': 105, 'x': -17, 'y': 82, 'demand': 3, 'ready': 27000, 'due': 37800, 'service': 315, 'kind': 'cafe'}
+{'id': 106, 'x': -2, 'y': -35, 'demand': 18, 'ready': 19800, 'due': 23400, 'service': 690, 'kind': 'grocer'}
+{'id': 107, 'x': 117, 'y': -33, 'demand': 15, 'ready': 23400, 'due': 26100, 'service': 615, 'kind': 'grocer'}
+{'id': 108, 'x': 53, 'y': -43, 'demand': 39, 'ready': 16200, 'due': 21600, 'service': 1215, 'kind': 'market'}
+{'id': 109, 'x': 126, 'y': -40, 'demand': 4, 'ready': 23400, 'due': 28800, 'service': 340, 'kind': 'cafe'}
+{'id': 110, 'x': 32, 'y': -37, 'demand': 28, 'ready': 16200, 'due': 21600, 'service': 940, 'kind': 'market'}
+{'id': 111, 'x': -73, 'y': 120, 'demand': 3, 'ready': 25200, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 112, 'x': -123, 'y': -147, 'demand': 5, 'ready': 27000, 'due': 30600, 'service': 365, 'kind': 'cafe'}
+{'id': 113, 'x': 57, 'y': -51, 'demand': 7, 'ready': 23400, 'due': 28800, 'service': 415, 'kind': 'cafe'}
+{'id': 114, 'x': 37, 'y': 103, 'demand': 18, 'ready': 19800, 'due': 23400, 'service': 690, 'kind': 'grocer'}
+{'id': 115, 'x': -48, 'y': 124, 'demand': 7, 'ready': 28800, 'due': 34200, 'service': 415, 'kind': 'cafe'}
+{'id': 116, 'x': -41, 'y': -65, 'demand': 4, 'ready': 19800, 'due': 23400, 'service': 340, 'kind': 'cafe'}
+{'id': 117, 'x': 22, 'y': -31, 'demand': 3, 'ready': 32400, 'due': 36000, 'service': 315, 'kind': 'cafe'}
+{'id': 118, 'x': 10, 'y': -40, 'demand': 8, 'ready': 25200, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 119, 'x': 123, 'y': -6, 'demand': 33, 'ready': 16200, 'due': 21600, 'service': 1065, 'kind': 'market'}
+{'id': 120, 'x': -6, 'y': -43, 'demand': 4, 'ready': 21600, 'due': 24300, 'service': 340, 'kind': 'cafe'}
+{'id': 121, 'x': 95, 'y': -21, 'demand': 10, 'ready': 23400, 'due': 28800, 'service': 490, 'kind': 'hotel'}
+{'id': 122, 'x': 77, 'y': -92, 'demand': 25, 'ready': 28800, 'due': 32400, 'service': 865, 'kind': 'hotel'}
+{'id': 123, 'x': -24, 'y': -84, 'demand': 18, 'ready': 25200, 'due': 30600, 'service': 690, 'kind': 'grocer'}
+{'id': 124, 'x': -2, 'y': -138, 'demand': 28, 'ready': 16200, 'due': 21600, 'service': 940, 'kind': 'market'}
+{'id': 125, 'x': 39, 'y': 121, 'demand': 6, 'ready': 25200, 'due': 30600, 'service': 390, 'kind': 'cafe'}
+{'id': 126, 'x': -60, 'y': 91, 'demand': 13, 'ready': 18000, 'due': 20700, 'service': 565, 'kind': 'grocer'}
+{'id': 127, 'x': 21, 'y': -47, 'demand': 44, 'ready': 16200, 'due': 21600, 'service': 1340, 'kind': 'market'}
+{'id': 128, 'x': -33, 'y': 90, 'demand': 12, 'ready': 28800, 'due': 32400, 'service': 540, 'kind': 'hotel'}
+{'id': 129, 'x': -28, 'y': -69, 'demand': 8, 'ready': 25200, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 130, 'x': -83, 'y': -72, 'demand': 11, 'ready': 27000, 'due': 34200, 'service': 515, 'kind': 'grocer'}
+{'id': 131, 'x': 13, 'y': -51, 'demand': 6, 'ready': 25200, 'due': 27900, 'service': 390, 'kind': 'cafe'}
+{'id': 132, 'x': -33, 'y': -63, 'demand': 34, 'ready': 16200, 'due': 21600, 'service': 1090, 'kind': 'market'}
+{'id': 133, 'x': 47, 'y': -41, 'demand': 3, 'ready': 21600, 'due': 27000, 'service': 315, 'kind': 'cafe'}
+{'id': 134, 'x': 108, 'y': 0, 'demand': 31, 'ready': 16200, 'due': 21600, 'service': 1015, 'kind': 'market'}
+{'id': 135, 'x': 101, 'y': -16, 'demand': 7, 'ready': 25200, 'due': 36000, 'service': 415, 'kind': 'cafe'}
+{'id': 136, 'x': -57, 'y': 125, 'demand': 7, 'ready': 27000, 'due': 34200, 'service': 415, 'kind': 'cafe'}
+{'id': 137, 'x': 139, 'y': -46, 'demand': 4, 'ready': 32400, 'due': 39600, 'service': 340, 'kind': 'cafe'}
+{'id': 138, 'x': 79, 'y': -27, 'demand': 3, 'ready': 18000, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 139, 'x': -5, 'y': 4, 'demand': 12, 'ready': 19800, 'due': 27000, 'service': 540, 'kind': 'grocer'}
+{'id': 140, 'x': -67, 'y': 94, 'demand': 8, 'ready': 25200, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 141, 'x': 131, 'y': -4, 'demand': 18, 'ready': 18000, 'due': 21600, 'service': 690, 'kind': 'hotel'}
+{'id': 142, 'x': -75, 'y': 116, 'demand': 2, 'ready': 32400, 'due': 35100, 'service': 290, 'kind': 'cafe'}
+{'id': 143, 'x': -6, 'y': 98, 'demand': 18, 'ready': 18000, 'due': 21600, 'service': 690, 'kind': 'grocer'}
+{'id': 144, 'x': 116, 'y': -7, 'demand': 8, 'ready': 32400, 'due': 43200, 'service': 440, 'kind': 'cafe'}
+{'id': 145, 'x': 61, 'y': 104, 'demand': 10, 'ready': 21600, 'due': 25200, 'service': 490, 'kind': 'grocer'}
+{'id': 146, 'x': -58, 'y': -71, 'demand': 15, 'ready': 21600, 'due': 25200, 'service': 615, 'kind': 'grocer'}
+{'id': 147, 'x': 38, 'y': -57, 'demand': 30, 'ready': 16200, 'due': 21600, 'service': 990, 'kind': 'market'}
+{'id': 148, 'x': 107, 'y': 87, 'demand': 15, 'ready': 32400, 'due': 36000, 'service': 615, 'kind': 'grocer'}
+{'id': 149, 'x': -14, 'y': 116, 'demand': 8, 'ready': 23400, 'due': 34200, 'service': 440, 'kind': 'cafe'}
+{'id': 150, 'x': -35, 'y': -63, 'demand': 14, 'ready': 21600, 'due': 27000, 'service': 590, 'kind': 'hotel'}
+{'id': 151, 'x': -118, 'y': -64, 'demand': 8, 'ready': 18000, 'due': 23400, 'service': 440, 'kind': 'grocer'}
+{'id': 152, 'x': 23, 'y': 100, 'demand': 5, 'ready': 25200, 'due': 36000, 'service': 365, 'kind': 'cafe'}
+{'id': 153, 'x': -30, 'y': 5, 'demand': 29, 'ready': 16200, 'due': 21600, 'service': 965, 'kind': 'market'}
+{'id': 154, 'x': -28, 'y': 97, 'demand': 22, 'ready': 16200, 'due': 21600, 'service': 790, 'kind': 'market'}
+{'id': 155, 'x': -114, 'y': 117, 'demand': 3, 'ready': 21600, 'due': 25200, 'service': 315, 'kind': 'cafe'}
+{'id': 156, 'x': -42, 'y': -80, 'demand': 4, 'ready': 32400, 'due': 37800, 'service': 340, 'kind': 'cafe'}
+{'id': 157, 'x': 46, 'y': 139, 'demand': 3, 'ready': 25200, 'due': 32400, 'service': 315, 'kind': 'cafe'}
+{'id': 158, 'x': -11, 'y': 108, 'demand': 4, 'ready': 32400, 'due': 43200, 'service': 340, 'kind': 'cafe'}
+{'id': 159, 'x': -35, 'y': -74, 'demand': 4, 'ready': 25200, 'due': 28800, 'service': 340, 'kind': 'cafe'}
+{'id': 160, 'x': 50, 'y': -60, 'demand': 10, 'ready': 32400, 'due': 37800, 'service': 490, 'kind': 'grocer'}
+{'id': 161, 'x': 16, 'y': 116, 'demand': 6, 'ready': 18000, 'due': 21600, 'service': 390, 'kind': 'cafe'}
+{'id': 162, 'x': -70, 'y': 77, 'demand': 7, 'ready': 28800, 'due': 39600, 'service': 415, 'kind': 'cafe'}
+{'id': 163, 'x': -24, 'y': -38, 'demand': 11, 'ready': 32400, 'due': 36000, 'service': 515, 'kind': 'grocer'}
+{'id': 164, 'x': 121, 'y': -10, 'demand': 9, 'ready': 21600, 'due': 32400, 'service': 465, 'kind': 'grocer'}
+{'id': 165, 'x': 20, 'y': 110, 'demand': 18, 'ready': 25200, 'due': 28800, 'service': 690, 'kind': 'grocer'}
+{'id': 166, 'x': 5, 'y': -152, 'demand': 7, 'ready': 19800, 'due': 23400, 'service': 415, 'kind': 'cafe'}
+{'id': 167, 'x': 19, 'y': 107, 'demand': 7, 'ready': 23400, 'due': 27000, 'service': 415, 'kind': 'cafe'}
+{'id': 168, 'x': 49, 'y': -67, 'demand': 7, 'ready': 25200, 'due': 28800, 'service': 415, 'kind': 'cafe'}
+{'id': 169, 'x': 138, 'y': -29, 'demand': 14, 'ready': 25200, 'due': 27900, 'service': 590, 'kind': 'grocer'}
+{'id': 170, 'x': 55, 'y': -45, 'demand': 6, 'ready': 25200, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 171, 'x': -129, 'y': 127, 'demand': 6, 'ready': 27000, 'due': 29700, 'service': 390, 'kind': 'cafe'}
+{'id': 172, 'x': -70, 'y': 115, 'demand': 13, 'ready': 25200, 'due': 27900, 'service': 565, 'kind': 'grocer'}
+{'id': 173, 'x': -21, 'y': 111, 'demand': 3, 'ready': 25200, 'due': 27900, 'service': 315, 'kind': 'cafe'}
+{'id': 174, 'x': -6, 'y': 99, 'demand': 8, 'ready': 19800, 'due': 23400, 'service': 440, 'kind': 'cafe'}
+{'id': 175, 'x': -16, 'y': 93, 'demand': 17, 'ready': 18000, 'due': 21600, 'service': 665, 'kind': 'hotel'}
+{'id': 176, 'x': -12, 'y': 86, 'demand': 24, 'ready': 16200, 'due': 21600, 'service': 840, 'kind': 'market'}
+{'id': 177, 'x': -22, 'y': 105, 'demand': 6, 'ready': 28800, 'due': 32400, 'service': 390, 'kind': 'cafe'}
+{'id': 178, 'x': -76, 'y': 98, 'demand': 8, 'ready': 25200, 'due': 27900, 'service': 440, 'kind': 'grocer'}
+{'id': 179, 'x': 46, 'y': -45, 'demand': 22, 'ready': 18000, 'due': 23400, 'service': 790, 'kind': 'hotel'}
+{'id': 180, 'x': 63, 'y': -63, 'demand': 23, 'ready': 16200, 'due': 21600, 'service': 815, 'kind': 'market'}
+{'id': 181, 'x': -79, 'y': 99, 'demand': 12, 'ready': 25200, 'due': 28800, 'service': 540, 'kind': 'grocer'}
+{'id': 182, 'x': -52, 'y': 119, 'demand': 5, 'ready': 21600, 'due': 28800, 'service': 365, 'kind': 'cafe'}
+{'id': 183, 'x': 15, 'y': 70, 'demand': 5, 'ready': 25200, 'due': 30600, 'service': 365, 'kind': 'cafe'}
+{'id': 184, 'x': -18, 'y': 117, 'demand': 26, 'ready': 25200, 'due': 30600, 'service': 890, 'kind': 'hotel'}
+{'id': 185, 'x': -69, 'y': 149, 'demand': 9, 'ready': 21600, 'due': 28800, 'service': 465, 'kind': 'grocer'}
+{'id': 186, 'x': -51, 'y': -28, 'demand': 2, 'ready': 32400, 'due': 35100, 'service': 290, 'kind': 'cafe'}
+{'id': 187, 'x': 106, 'y': -46, 'demand': 11, 'ready': 23400, 'due': 27000, 'service': 515, 'kind': 'grocer'}
+{'id': 188, 'x': 122, 'y': -117, 'demand': 10, 'ready': 32400, 'due': 43200, 'service': 490, 'kind': 'grocer'}
+{'id': 189, 'x': -29, 'y': 87, 'demand': 2, 'ready': 25200, 'due': 28800, 'service': 290, 'kind': 'cafe'}
+{'id': 190, 'x': 97, 'y': -7, 'demand': 8, 'ready': 25200, 'due': 30600, 'service': 440, 'kind': 'cafe'}
+{'id': 191, 'x': 114, 'y': -7, 'demand': 7, 'ready': 19800, 'due': 22500, 'service': 415, 'kind': 'cafe'}
+{'id': 192, 'x': -64, 'y': 129, 'demand': 3, 'ready': 28800, 'due': 32400, 'service': 315, 'kind': 'cafe'}
+{'id': 193, 'x': -64, 'y': -54, 'demand': 5, 'ready': 21600, 'due': 32400, 'service': 365, 'kind': 'cafe'}
+{'id': 194, 'x': -65, 'y': -70, 'demand': 7, 'ready': 28800, 'due': 34200, 'service': 415, 'kind': 'cafe'}
+{'id': 195, 'x': -67, 'y': 97, 'demand': 6, 'ready': 23400, 'due': 30600, 'service': 390, 'kind': 'cafe'}
+{'id': 196, 'x': 61, 'y': -69, 'demand': 12, 'ready': 18000, 'due': 25200, 'service': 540, 'kind': 'grocer'}
+{'id': 197, 'x': -19, 'y': -73, 'demand': 5, 'ready': 32400, 'due': 37800, 'service': 365, 'kind': 'cafe'}
+{'id': 198, 'x': 34, 'y': -49, 'demand': 6, 'ready': 28800, 'due': 39600, 'service': 390, 'kind': 'grocer'}
+{'id': 199, 'x': 45, 'y': -63, 'demand': 4, 'ready': 23400, 'due': 27000, 'service': 340, 'kind': 'cafe'}
+{'id': 200, 'x': 34, 'y': 92, 'demand': 17, 'ready': 32400, 'due': 36000, 'service': 665, 'kind': 'grocer'}
+{'id': 201, 'x': -48, 'y': -53, 'demand': 7, 'ready': 18000, 'due': 20700, 'service': 415, 'kind': 'cafe'}
+{'id': 202, 'x': -122, 'y': -129, 'demand': 8, 'ready': 21600, 'due': 24300, 'service': 440, 'kind': 'cafe'}
+{'id': 203, 'x': 9, 'y': 108, 'demand': 18, 'ready': 18000, 'due': 25200, 'service': 690, 'kind': 'grocer'}
+{'id': 204, 'x': 88, 'y': 19, 'demand': 7, 'ready': 25200, 'due': 32400, 'service': 415, 'kind': 'grocer'}
+{'id': 205, 'x': 129, 'y': -18, 'demand': 7, 'ready': 23400, 'due': 34200, 'service': 415, 'kind': 'cafe'}
+{'id': 206, 'x': -128, 'y': -116, 'demand': 9, 'ready': 27000, 'due': 30600, 'service': 465, 'kind': 'grocer'}
+{'id': 207, 'x': 65, 'y': 116, 'demand': 6, 'ready': 23400, 'due': 27000, 'service': 390, 'kind': 'cafe'}
+{'id': 208, 'x': 17, 'y': -48, 'demand': 4, 'ready': 23400, 'due': 26100, 'service': 340, 'kind': 'cafe'}
+{'id': 209, 'x': 11, 'y': -53, 'demand': 11, 'ready': 25200, 'due': 32400, 'service': 515, 'kind': 'grocer'}
+{'id': 210, 'x': -36, 'y': 86, 'demand': 4, 'ready': 28800, 'due': 36000, 'service': 340, 'kind': 'cafe'}
+{'id': 211, 'x': 1, 'y': 116, 'demand': 7, 'ready': 27000, 'due': 29700, 'service': 415, 'kind': 'cafe'}
+{'id': 212, 'x': -43, 'y': 26, 'demand': 15, 'ready': 19800, 'due': 30600, 'service': 615, 'kind': 'grocer'}
+{'id': 213, 'x': -15, 'y': -67, 'demand': 3, 'ready': 21600, 'due': 27000, 'service': 315, 'kind': 'cafe'}
+{'id': 214, 'x': 27, 'y': -19, 'demand': 22, 'ready': 16200, 'due': 21600, 'service': 790, 'kind': 'market'}
+{'id': 215, 'x': 126, 'y': 2, 'demand': 3, 'ready': 25200, 'due': 32400, 'service': 315, 'kind': 'cafe'}
+{'id': 216, 'x': -42, 'y': -61, 'demand': 14, 'ready': 25200, 'due': 32400, 'service': 590, 'kind': 'grocer'}
+{'id': 217, 'x': 26, 'y': 100, 'demand': 12, 'ready': 21600, 'due': 25200, 'service': 540, 'kind': 'grocer'}
+{'id': 218, 'x': -44, 'y': -50, 'demand': 44, 'ready': 16200, 'due': 21600, 'service': 1340, 'kind': 'market'}
+{'id': 219, 'x': 20, 'y': -61, 'demand': 6, 'ready': 28800, 'due': 32400, 'service': 390, 'kind': 'grocer'}
+{'id': 220, 'x': 136, 'y': -59, 'demand': 22, 'ready': 25200, 'due': 27900, 'service': 790, 'kind': 'hotel'}
+
+### old-town.json
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+fleet [{'type': 'bike', 'count': 9, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 13, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 5, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+customers 110
+{'id': 1, 'x': 7, 'y': -22, 'demand': 33, 'ready': 16200, 'due': 21600, 'service': 1065, 'kind': 'market'}
+{'id': 2, 'x': -15, 'y': -20, 'demand': 11, 'ready': 21600, 'due': 32400, 'service': 515, 'kind': 'grocer'}
+{'id': 3, 'x': 42, 'y': -44, 'demand': 25, 'ready': 16200, 'due': 21600, 'service': 865, 'kind': 'market'}
+{'id': 4, 'x': -77, 'y': -67, 'demand': 11, 'ready': 32400, 'due': 35100, 'service': 515, 'kind': 'grocer'}
+{'id': 5, 'x': -2, 'y': -21, 'demand': 15, 'ready': 25200, 'due': 28800, 'service': 615, 'kind': 'grocer'}
+{'id': 6, 'x': -22, 'y': -26, 'demand': 8, 'ready': 25200, 'due': 32400, 'service': 440, 'kind': 'cafe'}
+{'id': 7, 'x': -115, 'y': 47, 'demand': 2, 'ready': 25200, 'due': 27900, 'service': 290, 'kind': 'cafe'}
+{'id': 8, 'x': -113, 'y': -150, 'demand': 24, 'ready': 19800, 'due': 23400, 'service': 840, 'kind': 'hotel'}
+{'id': 9, 'x': -15, 'y': -23, 'demand': 6, 'ready': 21600, 'due': 24300, 'service': 390, 'kind': 'cafe'}
+{'id': 10, 'x': 3, 'y': -46, 'demand': 10, 'ready': 21600, 'due': 24300, 'service': 490, 'kind': 'grocer'}
+{'id': 11, 'x': 23, 'y': -54, 'demand': 6, 'ready': 21600, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 12, 'x': -20, 'y': 3, 'demand': 10, 'ready': 21600, 'due': 25200, 'service': 490, 'kind': 'grocer'}
+{'id': 13, 'x': 60, 'y': -33, 'demand': 7, 'ready': 28800, 'due': 31500, 'service': 415, 'kind': 'cafe'}
+{'id': 14, 'x': 39, 'y': -35, 'demand': 32, 'ready': 16200, 'due': 21600, 'service': 1040, 'kind': 'market'}
+{'id': 15, 'x': -6, 'y': -3, 'demand': 5, 'ready': 25200, 'due': 36000, 'service': 365, 'kind': 'cafe'}
+{'id': 16, 'x': 9, 'y': -45, 'demand': 14, 'ready': 19800, 'due': 23400, 'service': 590, 'kind': 'grocer'}
+{'id': 17, 'x': 94, 'y': 33, 'demand': 13, 'ready': 23400, 'due': 34200, 'service': 565, 'kind': 'grocer'}
+{'id': 18, 'x': 34, 'y': -52, 'demand': 33, 'ready': 16200, 'due': 21600, 'service': 1065, 'kind': 'market'}
+{'id': 19, 'x': 115, 'y': -18, 'demand': 9, 'ready': 28800, 'due': 32400, 'service': 465, 'kind': 'grocer'}
+{'id': 20, 'x': -1, 'y': -23, 'demand': 6, 'ready': 19800, 'due': 23400, 'service': 390, 'kind': 'grocer'}
+{'id': 21, 'x': 128, 'y': 80, 'demand': 8, 'ready': 25200, 'due': 32400, 'service': 440, 'kind': 'cafe'}
+{'id': 22, 'x': 115, 'y': 107, 'demand': 10, 'ready': 32400, 'due': 36000, 'service': 490, 'kind': 'grocer'}
+{'id': 23, 'x': 115, 'y': 88, 'demand': 6, 'ready': 23400, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 24, 'x': -9, 'y': 131, 'demand': 6, 'ready': 32400, 'due': 35100, 'service': 390, 'kind': 'grocer'}
+{'id': 25, 'x': -103, 'y': -110, 'demand': 5, 'ready': 28800, 'due': 36000, 'service': 365, 'kind': 'cafe'}
+{'id': 26, 'x': 63, 'y': 25, 'demand': 17, 'ready': 23400, 'due': 28800, 'service': 665, 'kind': 'grocer'}
+{'id': 27, 'x': -94, 'y': 22, 'demand': 8, 'ready': 25200, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 28, 'x': -96, 'y': 63, 'demand': 2, 'ready': 25200, 'due': 30600, 'service': 290, 'kind': 'cafe'}
+{'id': 29, 'x': 141, 'y': 52, 'demand': 4, 'ready': 21600, 'due': 27000, 'service': 340, 'kind': 'cafe'}
+{'id': 30, 'x': 134, 'y': 95, 'demand': 33, 'ready': 16200, 'due': 21600, 'service': 1065, 'kind': 'market'}
+{'id': 31, 'x': -63, 'y': 60, 'demand': 40, 'ready': 16200, 'due': 21600, 'service': 1240, 'kind': 'market'}
+{'id': 32, 'x': 97, 'y': 98, 'demand': 43, 'ready': 16200, 'due': 21600, 'service': 1315, 'kind': 'market'}
+{'id': 33, 'x': 108, 'y': 67, 'demand': 8, 'ready': 27000, 'due': 37800, 'service': 440, 'kind': 'cafe'}
+{'id': 34, 'x': -85, 'y': 59, 'demand': 6, 'ready': 21600, 'due': 25200, 'service': 390, 'kind': 'cafe'}
+{'id': 35, 'x': -1, 'y': -23, 'demand': 13, 'ready': 28800, 'due': 32400, 'service': 565, 'kind': 'grocer'}
+{'id': 36, 'x': -63, 'y': 68, 'demand': 8, 'ready': 21600, 'due': 32400, 'service': 440, 'kind': 'grocer'}
+{'id': 37, 'x': -2, 'y': -32, 'demand': 8, 'ready': 18000, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 38, 'x': -77, 'y': 67, 'demand': 16, 'ready': 21600, 'due': 32400, 'service': 640, 'kind': 'grocer'}
+{'id': 39, 'x': -64, 'y': 76, 'demand': 3, 'ready': 21600, 'due': 25200, 'service': 315, 'kind': 'cafe'}
+{'id': 40, 'x': -160, 'y': 147, 'demand': 28, 'ready': 32400, 'due': 37800, 'service': 940, 'kind': 'hotel'}
+{'id': 41, 'x': -151, 'y': -89, 'demand': 2, 'ready': 28800, 'due': 36000, 'service': 290, 'kind': 'cafe'}
+{'id': 42, 'x': 52, 'y': -156, 'demand': 20, 'ready': 32400, 'due': 35100, 'service': 740, 'kind': 'hotel'}
+{'id': 43, 'x': -54, 'y': -3, 'demand': 14, 'ready': 21600, 'due': 28800, 'service': 590, 'kind': 'hotel'}
+{'id': 44, 'x': 97, 'y': 83, 'demand': 8, 'ready': 28800, 'due': 39600, 'service': 440, 'kind': 'grocer'}
+{'id': 45, 'x': -94, 'y': -125, 'demand': 15, 'ready': 28800, 'due': 34200, 'service': 615, 'kind': 'grocer'}
+{'id': 46, 'x': -104, 'y': -128, 'demand': 8, 'ready': 25200, 'due': 36000, 'service': 440, 'kind': 'cafe'}
+{'id': 47, 'x': 75, 'y': -49, 'demand': 6, 'ready': 18000, 'due': 25200, 'service': 390, 'kind': 'cafe'}
+{'id': 48, 'x': 111, 'y': 70, 'demand': 6, 'ready': 18000, 'due': 23400, 'service': 390, 'kind': 'cafe'}
+{'id': 49, 'x': -77, 'y': -25, 'demand': 3, 'ready': 19800, 'due': 25200, 'service': 315, 'kind': 'cafe'}
+{'id': 50, 'x': -107, 'y': 46, 'demand': 12, 'ready': 18000, 'due': 21600, 'service': 540, 'kind': 'grocer'}
+{'id': 51, 'x': -85, 'y': 64, 'demand': 14, 'ready': 25200, 'due': 30600, 'service': 590, 'kind': 'hotel'}
+{'id': 52, 'x': -80, 'y': 74, 'demand': 14, 'ready': 32400, 'due': 39600, 'service': 590, 'kind': 'grocer'}
+{'id': 53, 'x': -3, 'y': -16, 'demand': 17, 'ready': 21600, 'due': 24300, 'service': 665, 'kind': 'grocer'}
+{'id': 54, 'x': -7, 'y': 120, 'demand': 5, 'ready': 18000, 'due': 23400, 'service': 365, 'kind': 'cafe'}
+{'id': 55, 'x': 107, 'y': 98, 'demand': 11, 'ready': 32400, 'due': 35100, 'service': 515, 'kind': 'grocer'}
+{'id': 56, 'x': 108, 'y': -27, 'demand': 3, 'ready': 21600, 'due': 27000, 'service': 315, 'kind': 'cafe'}
+{'id': 57, 'x': -86, 'y': 51, 'demand': 3, 'ready': 18000, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 58, 'x': 12, 'y': -54, 'demand': 3, 'ready': 25200, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 59, 'x': 21, 'y': -74, 'demand': 7, 'ready': 32400, 'due': 43200, 'service': 415, 'kind': 'cafe'}
+{'id': 60, 'x': 157, 'y': -55, 'demand': 29, 'ready': 32400, 'due': 36000, 'service': 965, 'kind': 'hotel'}
+{'id': 61, 'x': -142, 'y': -77, 'demand': 6, 'ready': 25200, 'due': 36000, 'service': 390, 'kind': 'grocer'}
+{'id': 62, 'x': -121, 'y': -113, 'demand': 44, 'ready': 16200, 'due': 21600, 'service': 1340, 'kind': 'market'}
+{'id': 63, 'x': -62, 'y': -141, 'demand': 8, 'ready': 23400, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 64, 'x': 111, 'y': 82, 'demand': 15, 'ready': 21600, 'due': 24300, 'service': 615, 'kind': 'grocer'}
+{'id': 65, 'x': 15, 'y': -27, 'demand': 7, 'ready': 21600, 'due': 25200, 'service': 415, 'kind': 'cafe'}
+{'id': 66, 'x': -93, 'y': 50, 'demand': 3, 'ready': 18000, 'due': 25200, 'service': 315, 'kind': 'cafe'}
+{'id': 67, 'x': -124, 'y': -150, 'demand': 4, 'ready': 28800, 'due': 34200, 'service': 340, 'kind': 'cafe'}
+{'id': 68, 'x': -4, 'y': -28, 'demand': 8, 'ready': 21600, 'due': 24300, 'service': 440, 'kind': 'cafe'}
+{'id': 69, 'x': -59, 'y': -83, 'demand': 36, 'ready': 16200, 'due': 21600, 'service': 1140, 'kind': 'market'}
+{'id': 70, 'x': -86, 'y': 62, 'demand': 7, 'ready': 28800, 'due': 36000, 'service': 415, 'kind': 'cafe'}
+{'id': 71, 'x': 99, 'y': 88, 'demand': 6, 'ready': 28800, 'due': 36000, 'service': 390, 'kind': 'grocer'}
+{'id': 72, 'x': 98, 'y': -69, 'demand': 2, 'ready': 25200, 'due': 36000, 'service': 290, 'kind': 'cafe'}
+{'id': 73, 'x': 158, 'y': -1, 'demand': 8, 'ready': 18000, 'due': 20700, 'service': 440, 'kind': 'cafe'}
+{'id': 74, 'x': 17, 'y': -31, 'demand': 15, 'ready': 21600, 'due': 25200, 'service': 615, 'kind': 'grocer'}
+{'id': 75, 'x': -83, 'y': 68, 'demand': 13, 'ready': 25200, 'due': 27900, 'service': 565, 'kind': 'grocer'}
+{'id': 76, 'x': -75, 'y': -111, 'demand': 7, 'ready': 28800, 'due': 32400, 'service': 415, 'kind': 'cafe'}
+{'id': 77, 'x': -56, 'y': 14, 'demand': 3, 'ready': 25200, 'due': 36000, 'service': 315, 'kind': 'cafe'}
+{'id': 78, 'x': 0, 'y': -5, 'demand': 3, 'ready': 32400, 'due': 36000, 'service': 315, 'kind': 'cafe'}
+{'id': 79, 'x': -85, 'y': 75, 'demand': 39, 'ready': 16200, 'due': 21600, 'service': 1215, 'kind': 'market'}
+{'id': 80, 'x': 21, 'y': -43, 'demand': 7, 'ready': 28800, 'due': 34200, 'service': 415, 'kind': 'grocer'}
+{'id': 81, 'x': -77, 'y': -144, 'demand': 9, 'ready': 32400, 'due': 43200, 'service': 465, 'kind': 'grocer'}
+{'id': 82, 'x': 15, 'y': -23, 'demand': 6, 'ready': 21600, 'due': 24300, 'service': 390, 'kind': 'grocer'}
+{'id': 83, 'x': -104, 'y': -112, 'demand': 6, 'ready': 25200, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 84, 'x': -92, 'y': -118, 'demand': 4, 'ready': 27000, 'due': 30600, 'service': 340, 'kind': 'cafe'}
+{'id': 85, 'x': -90, 'y': 48, 'demand': 3, 'ready': 32400, 'due': 43200, 'service': 315, 'kind': 'cafe'}
+{'id': 86, 'x': -23, 'y': -31, 'demand': 35, 'ready': 16200, 'due': 21600, 'service': 1115, 'kind': 'market'}
+{'id': 87, 'x': 88, 'y': 78, 'demand': 8, 'ready': 25200, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 88, 'x': 15, 'y': 39, 'demand': 7, 'ready': 25200, 'due': 28800, 'service': 415, 'kind': 'cafe'}
+{'id': 89, 'x': -101, 'y': -123, 'demand': 4, 'ready': 19800, 'due': 30600, 'service': 340, 'kind': 'cafe'}
+{'id': 90, 'x': -110, 'y': -145, 'demand': 5, 'ready': 21600, 'due': 32400, 'service': 365, 'kind': 'cafe'}
+{'id': 91, 'x': 73, 'y': -21, 'demand': 6, 'ready': 32400, 'due': 39600, 'service': 390, 'kind': 'cafe'}
+{'id': 92, 'x': 108, 'y': 82, 'demand': 2, 'ready': 25200, 'due': 30600, 'service': 290, 'kind': 'cafe'}
+{'id': 93, 'x': 121, 'y': 77, 'demand': 2, 'ready': 21600, 'due': 32400, 'service': 290, 'kind': 'cafe'}
+{'id': 94, 'x': 25, 'y': -49, 'demand': 16, 'ready': 28800, 'due': 31500, 'service': 640, 'kind': 'grocer'}
+{'id': 95, 'x': -53, 'y': 136, 'demand': 5, 'ready': 25200, 'due': 28800, 'service': 365, 'kind': 'cafe'}
+{'id': 96, 'x': 31, 'y': 141, 'demand': 4, 'ready': 28800, 'due': 32400, 'service': 340, 'kind': 'cafe'}
+{'id': 97, 'x': -68, 'y': 83, 'demand': 14, 'ready': 21600, 'due': 28800, 'service': 590, 'kind': 'grocer'}
+{'id': 98, 'x': 58, 'y': -9, 'demand': 7, 'ready': 32400, 'due': 35100, 'service': 415, 'kind': 'grocer'}
+{'id': 99, 'x': 7, 'y': -19, 'demand': 3, 'ready': 27000, 'due': 29700, 'service': 315, 'kind': 'cafe'}
+{'id': 100, 'x': 27, 'y': -1, 'demand': 24, 'ready': 27000, 'due': 37800, 'service': 840, 'kind': 'hotel'}
+{'id': 101, 'x': 51, 'y': -45, 'demand': 16, 'ready': 28800, 'due': 34200, 'service': 640, 'kind': 'hotel'}
+{'id': 102, 'x': -58, 'y': 79, 'demand': 6, 'ready': 28800, 'due': 34200, 'service': 390, 'kind': 'grocer'}
+{'id': 103, 'x': 16, 'y': -36, 'demand': 2, 'ready': 23400, 'due': 26100, 'service': 290, 'kind': 'cafe'}
+{'id': 104, 'x': 30, 'y': -40, 'demand': 4, 'ready': 25200, 'due': 27900, 'service': 340, 'kind': 'cafe'}
+{'id': 105, 'x': 118, 'y': 91, 'demand': 9, 'ready': 25200, 'due': 28800, 'service': 465, 'kind': 'grocer'}
+{'id': 106, 'x': -3, 'y': -21, 'demand': 39, 'ready': 16200, 'due': 21600, 'service': 1215, 'kind': 'market'}
+{'id': 107, 'x': 95, 'y': 118, 'demand': 8, 'ready': 32400, 'due': 36000, 'service': 440, 'kind': 'cafe'}
+{'id': 108, 'x': 20, 'y': -34, 'demand': 3, 'ready': 21600, 'due': 27000, 'service': 315, 'kind': 'cafe'}
+{'id': 109, 'x': 31, 'y': -26, 'demand': 6, 'ready': 25200, 'due': 32400, 'service': 390, 'kind': 'cafe'}
+{'id': 110, 'x': -101, 'y': -107, 'demand': 26, 'ready': 27000, 'due': 30600, 'service': 890, 'kind': 'hotel'}
+
+### riverside.json
+depot {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+fleet [{'type': 'bike', 'count': 13, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}, {'type': 'van', 'count': 20, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}, {'type': 'truck', 'count': 8, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}]
+customers 160
+{'id': 1, 'x': 49, 'y': 102, 'demand': 32, 'ready': 16200, 'due': 21600, 'service': 1040, 'kind': 'market'}
+{'id': 2, 'x': 123, 'y': 40, 'demand': 4, 'ready': 32400, 'due': 36000, 'service': 340, 'kind': 'cafe'}
+{'id': 3, 'x': 125, 'y': 20, 'demand': 6, 'ready': 28800, 'due': 32400, 'service': 390, 'kind': 'grocer'}
+{'id': 4, 'x': 62, 'y': 96, 'demand': 8, 'ready': 23400, 'due': 34200, 'service': 440, 'kind': 'cafe'}
+{'id': 5, 'x': 63, 'y': 85, 'demand': 8, 'ready': 32400, 'due': 43200, 'service': 440, 'kind': 'grocer'}
+{'id': 6, 'x': 58, 'y': 23, 'demand': 3, 'ready': 21600, 'due': 25200, 'service': 315, 'kind': 'cafe'}
+{'id': 7, 'x': 124, 'y': 38, 'demand': 6, 'ready': 23400, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 8, 'x': 39, 'y': 92, 'demand': 7, 'ready': 28800, 'due': 36000, 'service': 415, 'kind': 'cafe'}
+{'id': 9, 'x': -156, 'y': 22, 'demand': 6, 'ready': 21600, 'due': 27000, 'service': 390, 'kind': 'cafe'}
+{'id': 10, 'x': 131, 'y': 72, 'demand': 8, 'ready': 27000, 'due': 30600, 'service': 440, 'kind': 'cafe'}
+{'id': 11, 'x': -17, 'y': 146, 'demand': 8, 'ready': 23400, 'due': 34200, 'service': 440, 'kind': 'cafe'}
+{'id': 12, 'x': 47, 'y': 80, 'demand': 5, 'ready': 32400, 'due': 36000, 'service': 365, 'kind': 'cafe'}
+{'id': 13, 'x': 25, 'y': -102, 'demand': 24, 'ready': 32400, 'due': 39600, 'service': 840, 'kind': 'hotel'}
+{'id': 14, 'x': 134, 'y': -116, 'demand': 4, 'ready': 18000, 'due': 28800, 'service': 340, 'kind': 'cafe'}
+{'id': 15, 'x': 38, 'y': 8, 'demand': 8, 'ready': 21600, 'due': 25200, 'service': 440, 'kind': 'grocer'}
+{'id': 16, 'x': 75, 'y': 86, 'demand': 18, 'ready': 21600, 'due': 24300, 'service': 690, 'kind': 'hotel'}
+{'id': 17, 'x': 119, 'y': 38, 'demand': 16, 'ready': 28800, 'due': 31500, 'service': 640, 'kind': 'grocer'}
+{'id': 18, 'x': 128, 'y': 35, 'demand': 7, 'ready': 27000, 'due': 30600, 'service': 415, 'kind': 'cafe'}
+{'id': 19, 'x': 109, 'y': 137, 'demand': 8, 'ready': 19800, 'due': 23400, 'service': 440, 'kind': 'cafe'}
+{'id': 20, 'x': 33, 'y': 14, 'demand': 8, 'ready': 18000, 'due': 21600, 'service': 440, 'kind': 'cafe'}
+{'id': 21, 'x': 75, 'y': 99, 'demand': 7, 'ready': 18000, 'due': 20700, 'service': 415, 'kind': 'cafe'}
+{'id': 22, 'x': 69, 'y': 100, 'demand': 10, 'ready': 21600, 'due': 25200, 'service': 490, 'kind': 'grocer'}
+{'id': 23, 'x': 57, 'y': 110, 'demand': 6, 'ready': 32400, 'due': 39600, 'service': 390, 'kind': 'cafe'}
+{'id': 24, 'x': 99, 'y': 30, 'demand': 13, 'ready': 28800, 'due': 31500, 'service': 565, 'kind': 'grocer'}
+{'id': 25, 'x': 135, 'y': 68, 'demand': 19, 'ready': 27000, 'due': 30600, 'service': 715, 'kind': 'hotel'}
+{'id': 26, 'x': 34, 'y': -1, 'demand': 7, 'ready': 18000, 'due': 21600, 'service': 415, 'kind': 'grocer'}
+{'id': 27, 'x': -115, 'y': -3, 'demand': 11, 'ready': 32400, 'due': 36000, 'service': 515, 'kind': 'hotel'}
+{'id': 28, 'x': 98, 'y': 22, 'demand': 11, 'ready': 28800, 'due': 39600, 'service': 515, 'kind': 'hotel'}
+{'id': 29, 'x': -118, 'y': 47, 'demand': 4, 'ready': 27000, 'due': 30600, 'service': 340, 'kind': 'cafe'}
+{'id': 30, 'x': 71, 'y': 84, 'demand': 12, 'ready': 28800, 'due': 39600, 'service': 540, 'kind': 'grocer'}
+{'id': 31, 'x': 52, 'y': 78, 'demand': 23, 'ready': 16200, 'due': 21600, 'service': 815, 'kind': 'market'}
+{'id': 32, 'x': 42, 'y': 95, 'demand': 9, 'ready': 19800, 'due': 23400, 'service': 465, 'kind': 'grocer'}
+{'id': 33, 'x': 34, 'y': 11, 'demand': 16, 'ready': 27000, 'due': 30600, 'service': 640, 'kind': 'grocer'}
+{'id': 34, 'x': 119, 'y': 21, 'demand': 15, 'ready': 25200, 'due': 28800, 'service': 615, 'kind': 'grocer'}
+{'id': 35, 'x': 50, 'y': 99, 'demand': 20, 'ready': 32400, 'due': 35100, 'service': 740, 'kind': 'hotel'}
+{'id': 36, 'x': -47, 'y': -107, 'demand': 4, 'ready': 25200, 'due': 28800, 'service': 340, 'kind': 'cafe'}
+{'id': 37, 'x': 45, 'y': 96, 'demand': 12, 'ready': 28800, 'due': 31500, 'service': 540, 'kind': 'grocer'}
+{'id': 38, 'x': 28, 'y': -13, 'demand': 13, 'ready': 28800, 'due': 39600, 'service': 565, 'kind': 'grocer'}
+{'id': 39, 'x': 70, 'y': 56, 'demand': 4, 'ready': 21600, 'due': 32400, 'service': 340, 'kind': 'cafe'}
+{'id': 40, 'x': 79, 'y': 71, 'demand': 4, 'ready': 18000, 'due': 25200, 'service': 340, 'kind': 'cafe'}
+{'id': 41, 'x': 109, 'y': 60, 'demand': 20, 'ready': 16200, 'due': 21600, 'service': 740, 'kind': 'market'}
+{'id': 42, 'x': 95, 'y': 46, 'demand': 26, 'ready': 28800, 'due': 34200, 'service': 890, 'kind': 'hotel'}
+{'id': 43, 'x': 49, 'y': 13, 'demand': 4, 'ready': 23400, 'due': 27000, 'service': 340, 'kind': 'cafe'}
+{'id': 44, 'x': 79, 'y': 70, 'demand': 8, 'ready': 21600, 'due': 28800, 'service': 440, 'kind': 'grocer'}
+{'id': 45, 'x': 57, 'y': 93, 'demand': 9, 'ready': 28800, 'due': 39600, 'service': 465, 'kind': 'grocer'}
+{'id': 46, 'x': 13, 'y': -52, 'demand': 4, 'ready': 25200, 'due': 28800, 'service': 340, 'kind': 'cafe'}
+{'id': 47, 'x': 74, 'y': 105, 'demand': 21, 'ready': 25200, 'due': 28800, 'service': 765, 'kind': 'hotel'}
+{'id': 48, 'x': 106, 'y': 43, 'demand': 4, 'ready': 25200, 'due': 28800, 'service': 340, 'kind': 'cafe'}
+{'id': 49, 'x': 118, 'y': 31, 'demand': 35, 'ready': 16200, 'due': 21600, 'service': 1115, 'kind': 'market'}
+{'id': 50, 'x': 25, 'y': -8, 'demand': 21, 'ready': 28800, 'due': 34200, 'service': 765, 'kind': 'hotel'}
+{'id': 51, 'x': 105, 'y': 27, 'demand': 5, 'ready': 25200, 'due': 28800, 'service': 365, 'kind': 'cafe'}
+{'id': 52, 'x': 104, 'y': 88, 'demand': 26, 'ready': 25200, 'due': 32400, 'service': 890, 'kind': 'hotel'}
+{'id': 53, 'x': 136, 'y': 115, 'demand': 41, 'ready': 16200, 'due': 21600, 'service': 1265, 'kind': 'market'}
+{'id': 54, 'x': 17, 'y': 28, 'demand': 11, 'ready': 25200, 'due': 32400, 'service': 515, 'kind': 'grocer'}
+{'id': 55, 'x': 75, 'y': 89, 'demand': 4, 'ready': 19800, 'due': 22500, 'service': 340, 'kind': 'cafe'}
+{'id': 56, 'x': 66, 'y': 107, 'demand': 12, 'ready': 19800, 'due': 23400, 'service': 540, 'kind': 'hotel'}
+{'id': 57, 'x': 126, 'y': 50, 'demand': 4, 'ready': 25200, 'due': 32400, 'service': 340, 'kind': 'cafe'}
+{'id': 58, 'x': 57, 'y': 95, 'demand': 5, 'ready': 19800, 'due': 27000, 'service': 365, 'kind': 'cafe'}
+{'id': 59, 'x': 75, 'y': 90, 'demand': 8, 'ready': 32400, 'due': 43200, 'service': 440, 'kind': 'cafe'}
+{'id': 60, 'x': 62, 'y': 21, 'demand': 16, 'ready': 25200, 'due': 28800, 'service': 640, 'kind': 'hotel'}
+{'id': 61, 'x': 59, 'y': 84, 'demand': 6, 'ready': 25200, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 62, 'x': 114, 'y': 45, 'demand': 5, 'ready': 21600, 'due': 25200, 'service': 365, 'kind': 'cafe'}
+{'id': 63, 'x': 134, 'y': -146, 'demand': 4, 'ready': 18000, 'due': 21600, 'service': 340, 'kind': 'cafe'}
+{'id': 64, 'x': -64, 'y': -89, 'demand': 19, 'ready': 21600, 'due': 25200, 'service': 715, 'kind': 'hotel'}
+{'id': 65, 'x': 153, 'y': 37, 'demand': 3, 'ready': 28800, 'due': 36000, 'service': 315, 'kind': 'cafe'}
+{'id': 66, 'x': 49, 'y': 89, 'demand': 4, 'ready': 28800, 'due': 34200, 'service': 340, 'kind': 'cafe'}
+{'id': 67, 'x': 67, 'y': 89, 'demand': 5, 'ready': 25200, 'due': 30600, 'service': 365, 'kind': 'cafe'}
+{'id': 68, 'x': 44, 'y': 97, 'demand': 10, 'ready': 25200, 'due': 30600, 'service': 490, 'kind': 'grocer'}
+{'id': 69, 'x': 81, 'y': -71, 'demand': 7, 'ready': 25200, 'due': 27900, 'service': 415, 'kind': 'grocer'}
+{'id': 70, 'x': -155, 'y': -55, 'demand': 7, 'ready': 25200, 'due': 27900, 'service': 415, 'kind': 'cafe'}
+{'id': 71, 'x': 88, 'y': 94, 'demand': 5, 'ready': 21600, 'due': 27000, 'service': 365, 'kind': 'cafe'}
+{'id': 72, 'x': 56, 'y': 93, 'demand': 22, 'ready': 16200, 'due': 21600, 'service': 790, 'kind': 'market'}
+{'id': 73, 'x': 71, 'y': 84, 'demand': 13, 'ready': 28800, 'due': 34200, 'service': 565, 'kind': 'grocer'}
+{'id': 74, 'x': 56, 'y': -7, 'demand': 3, 'ready': 23400, 'due': 27000, 'service': 315, 'kind': 'cafe'}
+{'id': 75, 'x': 66, 'y': 83, 'demand': 5, 'ready': 21600, 'due': 24300, 'service': 365, 'kind': 'cafe'}
+{'id': 76, 'x': 80, 'y': 109, 'demand': 6, 'ready': 25200, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 77, 'x': 28, 'y': 17, 'demand': 8, 'ready': 25200, 'due': 36000, 'service': 440, 'kind': 'cafe'}
+{'id': 78, 'x': 140, 'y': 35, 'demand': 8, 'ready': 23400, 'due': 27000, 'service': 440, 'kind': 'cafe'}
+{'id': 79, 'x': 51, 'y': 18, 'demand': 16, 'ready': 23400, 'due': 28800, 'service': 640, 'kind': 'hotel'}
+{'id': 80, 'x': 66, 'y': 124, 'demand': 2, 'ready': 21600, 'due': 27000, 'service': 290, 'kind': 'cafe'}
+{'id': 81, 'x': 137, 'y': 58, 'demand': 8, 'ready': 21600, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 82, 'x': 127, 'y': 63, 'demand': 7, 'ready': 28800, 'due': 32400, 'service': 415, 'kind': 'grocer'}
+{'id': 83, 'x': 26, 'y': 16, 'demand': 2, 'ready': 18000, 'due': 21600, 'service': 290, 'kind': 'cafe'}
+{'id': 84, 'x': 17, 'y': -95, 'demand': 15, 'ready': 19800, 'due': 22500, 'service': 615, 'kind': 'grocer'}
+{'id': 85, 'x': 46, 'y': 92, 'demand': 12, 'ready': 25200, 'due': 28800, 'service': 540, 'kind': 'grocer'}
+{'id': 86, 'x': 34, 'y': 90, 'demand': 13, 'ready': 18000, 'due': 28800, 'service': 565, 'kind': 'hotel'}
+{'id': 87, 'x': -53, 'y': 17, 'demand': 7, 'ready': 28800, 'due': 32400, 'service': 415, 'kind': 'cafe'}
+{'id': 88, 'x': 61, 'y': 99, 'demand': 41, 'ready': 16200, 'due': 21600, 'service': 1265, 'kind': 'market'}
+{'id': 89, 'x': 62, 'y': -4, 'demand': 7, 'ready': 25200, 'due': 28800, 'service': 415, 'kind': 'grocer'}
+{'id': 90, 'x': 63, 'y': 89, 'demand': 3, 'ready': 32400, 'due': 43200, 'service': 315, 'kind': 'cafe'}
+{'id': 91, 'x': 4, 'y': -145, 'demand': 8, 'ready': 21600, 'due': 28800, 'service': 440, 'kind': 'cafe'}
+{'id': 92, 'x': 55, 'y': 103, 'demand': 43, 'ready': 16200, 'due': 21600, 'service': 1315, 'kind': 'market'}
+{'id': 93, 'x': 76, 'y': 77, 'demand': 24, 'ready': 25200, 'due': 36000, 'service': 840, 'kind': 'hotel'}
+{'id': 94, 'x': 64, 'y': 115, 'demand': 14, 'ready': 23400, 'due': 27000, 'service': 590, 'kind': 'grocer'}
+{'id': 95, 'x': 43, 'y': 86, 'demand': 8, 'ready': 28800, 'due': 31500, 'service': 440, 'kind': 'cafe'}
+{'id': 96, 'x': 45, 'y': 99, 'demand': 5, 'ready': 23400, 'due': 27000, 'service': 365, 'kind': 'cafe'}
+{'id': 97, 'x': 47, 'y': 78, 'demand': 16, 'ready': 25200, 'due': 30600, 'service': 640, 'kind': 'grocer'}
+{'id': 98, 'x': 61, 'y': 98, 'demand': 4, 'ready': 18000, 'due': 21600, 'service': 340, 'kind': 'cafe'}
+{'id': 99, 'x': 74, 'y': 100, 'demand': 7, 'ready': 28800, 'due': 31500, 'service': 415, 'kind': 'cafe'}
+{'id': 100, 'x': 120, 'y': 44, 'demand': 2, 'ready': 21600, 'due': 28800, 'service': 290, 'kind': 'cafe'}
+{'id': 101, 'x': 66, 'y': 98, 'demand': 7, 'ready': 19800, 'due': 25200, 'service': 415, 'kind': 'cafe'}
+{'id': 102, 'x': 132, 'y': 34, 'demand': 11, 'ready': 28800, 'due': 31500, 'service': 515, 'kind': 'grocer'}
+{'id': 103, 'x': -111, 'y': -156, 'demand': 13, 'ready': 21600, 'due': 25200, 'service': 565, 'kind': 'grocer'}
+{'id': 104, 'x': 139, 'y': 47, 'demand': 6, 'ready': 23400, 'due': 28800, 'service': 390, 'kind': 'cafe'}
+{'id': 105, 'x': 88, 'y': 93, 'demand': 42, 'ready': 16200, 'due': 21600, 'service': 1290, 'kind': 'market'}
+{'id': 106, 'x': -15, 'y': -81, 'demand': 8, 'ready': 19800, 'due': 25200, 'service': 440, 'kind': 'cafe'}
+{'id': 107, 'x': -80, 'y': 70, 'demand': 15, 'ready': 18000, 'due': 23400, 'service': 615, 'kind': 'grocer'}
+{'id': 108, 'x': -128, 'y': -157, 'demand': 8, 'ready': 19800, 'due': 22500, 'service': 440, 'kind': 'cafe'}
+{'id': 109, 'x': 40, 'y': 114, 'demand': 18, 'ready': 18000, 'due': 25200, 'service': 690, 'kind': 'grocer'}
+{'id': 110, 'x': -11, 'y': 145, 'demand': 4, 'ready': 18000, 'due': 28800, 'service': 340, 'kind': 'cafe'}
+{'id': 111, 'x': -122, 'y': -94, 'demand': 13, 'ready': 21600, 'due': 28800, 'service': 565, 'kind': 'grocer'}
+{'id': 112, 'x': 130, 'y': 44, 'demand': 30, 'ready': 16200, 'due': 21600, 'service': 990, 'kind': 'market'}
+{'id': 113, 'x': 33, 'y': 100, 'demand': 14, 'ready': 23400, 'due': 28800, 'service': 590, 'kind': 'grocer'}
+{'id': 114, 'x': -23, 'y': 46, 'demand': 2, 'ready': 32400, 'due': 36000, 'service': 290, 'kind': 'cafe'}
+{'id': 115, 'x': 58, 'y': 23, 'demand': 7, 'ready': 25200, 'due': 28800, 'service': 415, 'kind': 'cafe'}
+{'id': 116, 'x': 92, 'y': 115, 'demand': 8, 'ready': 27000, 'due': 34200, 'service': 440, 'kind': 'cafe'}
+{'id': 117, 'x': 67, 'y': 95, 'demand': 8, 'ready': 18000, 'due': 25200, 'service': 440, 'kind': 'cafe'}
+{'id': 118, 'x': 27, 'y': 65, 'demand': 8, 'ready': 25200, 'due': 28800, 'service': 440, 'kind': 'grocer'}
+{'id': 119, 'x': 45, 'y': 118, 'demand': 10, 'ready': 28800, 'due': 32400, 'service': 490, 'kind': 'grocer'}
+{'id': 120, 'x': -57, 'y': -144, 'demand': 8, 'ready': 27000, 'due': 30600, 'service': 440, 'kind': 'grocer'}
+{'id': 121, 'x': 125, 'y': 62, 'demand': 6, 'ready': 28800, 'due': 32400, 'service': 390, 'kind': 'cafe'}
+{'id': 122, 'x': 112, 'y': 46, 'demand': 12, 'ready': 27000, 'due': 37800, 'service': 540, 'kind': 'grocer'}
+{'id': 123, 'x': 51, 'y': -4, 'demand': 6, 'ready': 18000, 'due': 21600, 'service': 390, 'kind': 'grocer'}
+{'id': 124, 'x': 54, 'y': 105, 'demand': 10, 'ready': 21600, 'due': 24300, 'service': 490, 'kind': 'grocer'}
+{'id': 125, 'x': 70, 'y': 80, 'demand': 2, 'ready': 32400, 'due': 35100, 'service': 290, 'kind': 'cafe'}
+{'id': 126, 'x': 107, 'y': 16, 'demand': 41, 'ready': 16200, 'due': 21600, 'service': 1265, 'kind': 'market'}
+{'id': 127, 'x': -93, 'y': -51, 'demand': 8, 'ready': 18000, 'due': 20700, 'service': 440, 'kind': 'cafe'}
+{'id': 128, 'x': -29, 'y': -68, 'demand': 27, 'ready': 25200, 'due': 28800, 'service': 915, 'kind': 'hotel'}
+{'id': 129, 'x': 121, 'y': 38, 'demand': 3, 'ready': 25200, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 130, 'x': 70, 'y': 128, 'demand': 5, 'ready': 18000, 'due': 23400, 'service': 365, 'kind': 'cafe'}
+{'id': 131, 'x': -46, 'y': -90, 'demand': 3, 'ready': 18000, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 132, 'x': 72, 'y': 95, 'demand': 13, 'ready': 25200, 'due': 27900, 'service': 565, 'kind': 'grocer'}
+{'id': 133, 'x': 50, 'y': 32, 'demand': 4, 'ready': 27000, 'due': 32400, 'service': 340, 'kind': 'cafe'}
+{'id': 134, 'x': 53, 'y': 23, 'demand': 2, 'ready': 19800, 'due': 27000, 'service': 290, 'kind': 'cafe'}
+{'id': 135, 'x': 127, 'y': 46, 'demand': 26, 'ready': 16200, 'due': 21600, 'service': 890, 'kind': 'market'}
+{'id': 136, 'x': 131, 'y': 50, 'demand': 3, 'ready': 19800, 'due': 30600, 'service': 315, 'kind': 'cafe'}
+{'id': 137, 'x': 125, 'y': 14, 'demand': 3, 'ready': 25200, 'due': 27900, 'service': 315, 'kind': 'cafe'}
+{'id': 138, 'x': -116, 'y': -24, 'demand': 8, 'ready': 18000, 'due': 20700, 'service': 440, 'kind': 'grocer'}
+{'id': 139, 'x': 108, 'y': 62, 'demand': 8, 'ready': 21600, 'due': 25200, 'service': 440, 'kind': 'cafe'}
+{'id': 140, 'x': 75, 'y': 102, 'demand': 29, 'ready': 19800, 'due': 25200, 'service': 965, 'kind': 'hotel'}
+{'id': 141, 'x': 70, 'y': 83, 'demand': 5, 'ready': 27000, 'due': 37800, 'service': 365, 'kind': 'cafe'}
+{'id': 142, 'x': 45, 'y': 89, 'demand': 12, 'ready': 27000, 'due': 32400, 'service': 540, 'kind': 'grocer'}
+{'id': 143, 'x': 146, 'y': 38, 'demand': 3, 'ready': 21600, 'due': 24300, 'service': 315, 'kind': 'cafe'}
+{'id': 144, 'x': 63, 'y': 24, 'demand': 2, 'ready': 21600, 'due': 32400, 'service': 290, 'kind': 'cafe'}
+{'id': 145, 'x': 112, 'y': 25, 'demand': 3, 'ready': 21600, 'due': 28800, 'service': 315, 'kind': 'cafe'}
+{'id': 146, 'x': -106, 'y': 39, 'demand': 4, 'ready': 23400, 'due': 27000, 'service': 340, 'kind': 'cafe'}
+{'id': 147, 'x': 115, 'y': -60, 'demand': 23, 'ready': 16200, 'due': 21600, 'service': 815, 'kind': 'market'}
+{'id': 148, 'x': 42, 'y': 32, 'demand': 22, 'ready': 16200, 'due': 21600, 'service': 790, 'kind': 'market'}
+{'id': 149, 'x': -88, 'y': 48, 'demand': 18, 'ready': 28800, 'due': 36000, 'service': 690, 'kind': 'hotel'}
+{'id': 150, 'x': 105, 'y': 24, 'demand': 3, 'ready': 23400, 'due': 30600, 'service': 315, 'kind': 'cafe'}
+{'id': 151, 'x': 29, 'y': 2, 'demand': 5, 'ready': 23400, 'due': 27000, 'service': 365, 'kind': 'cafe'}
+{'id': 152, 'x': 77, 'y': 77, 'demand': 3, 'ready': 19800, 'due': 30600, 'service': 315, 'kind': 'cafe'}
+{'id': 153, 'x': 62, 'y': 98, 'demand': 34, 'ready': 16200, 'due': 21600, 'service': 1090, 'kind': 'market'}
+{'id': 154, 'x': 144, 'y': 60, 'demand': 16, 'ready': 28800, 'due': 39600, 'service': 640, 'kind': 'grocer'}
+{'id': 155, 'x': -117, 'y': 101, 'demand': 7, 'ready': 21600, 'due': 25200, 'service': 415, 'kind': 'cafe'}
+{'id': 156, 'x': -141, 'y': 47, 'demand': 2, 'ready': 19800, 'due': 30600, 'service': 290, 'kind': 'cafe'}
+{'id': 157, 'x': 129, 'y': 36, 'demand': 4, 'ready': 23400, 'due': 30600, 'service': 340, 'kind': 'cafe'}
+{'id': 158, 'x': 47, 'y': -5, 'demand': 25, 'ready': 28800, 'due': 34200, 'service': 865, 'kind': 'hotel'}
+{'id': 159, 'x': 104, 'y': 54, 'demand': 16, 'ready': 25200, 'due': 32400, 'service': 640, 'kind': 'grocer'}
+{'id': 160, 'x': 122, 'y': 48, 'demand': 18, 'ready': 27000, 'due': 29700, 'service': 690, 'kind': 'hotel'}
+[?2004hroot@2b652d5e3a23:/app# mkdir -p plans; for m in harbour-lanes old-town riverside north-ring; do echo "--- $m ---"; python3 planner/plan_morning.py "orders/$m.json" "plans/$m.json"; python3 tools/check_plan.py "orders/$m.json" "plans/$m.json"; done
+[?2004l--- harbour-lanes ---
+INFEASIBLE: 3 customers get no delivery, first [2, 17, 28]
+INFEASIBLE: 3 customers get no delivery, first [2, 17, 28]
+--- old-town ---
+INFEASIBLE: 4 customers get no delivery, first [8, 30, 62, 73]
+INFEASIBLE: 4 customers get no delivery, first [8, 30, 62, 73]
+--- riverside ---
+cost 313212
+feasible, cost 313212
+--- north-ring ---
+cost 425927
+feasible, cost 425927
+[?2004hroot@2b652d5e3a23:/app# python3 - <<'PY'
+[?2004l[?2004h> import json,glob,os
+[?2004l[?2004h> print('targets:',json.load(open('orders/targets.json')))
+[?2004l[?2004h> for fn in sorted(glob.glob('orders/*.json')):
+[?2004l[?2004h>  if fn.endswith('targets.json'): continue
+[?2004l[?2004h>  o=json.load(open(fn)); print(os.path.basename(fn), 'n=',len(o['customers']), 'depot=',o['depot']);
+[?2004l[?2004h>  for f in o['fleet']: print(' ',f)
+[?2004l[?2004h> PY
+[?2004ltargets: {'harbour-lanes': 77867, 'old-town': 147362, 'riverside': 201921, 'north-ring': 288705}
+harbour-lanes.json n= 60 depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+  {'type': 'bike', 'count': 5, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 7, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 3, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+north-ring.json n= 220 depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+  {'type': 'bike', 'count': 18, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 27, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 11, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+old-town.json n= 110 depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+  {'type': 'bike', 'count': 9, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 13, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 5, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+riverside.json n= 160 depot= {'x': 0, 'y': 0, 'open': 14400, 'close': 46800}
+  {'type': 'bike', 'count': 13, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+  {'type': 'van', 'count': 20, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+  {'type': 'truck', 'count': 8, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+[?2004hroot@2b652d5e3a23:/app# cat docs/dispatch-rules.md
+[?2004l# Morning dispatch rules
+
+These rules decide whether a delivery plan can be run and what it costs. They
+are the rules `tools/check_plan.py` applies.
+
+## Orders
+
+Each file in `orders/` is one morning. It lists the bakery (`depot`), the
+customers to deliver to, and the vehicles available (`fleet`). Positions are
+integer grid coordinates `x`, `y` in units of 100 m; times are seconds after
+midnight. The bakery opens at `open` and closes at `close`.
+
+A customer has an integer `id`, a position, a `demand` in crates, a delivery
+window `ready`..`due`, and a `service` time in seconds for unloading. Its
+`kind` (cafe, grocer, hotel, market) is for information only and changes no
+rule.
+
+A fleet entry is one kind of vehicle, named by its `type`: `count` vehicles of it are available,
+each carrying up to `capacity` crates. It travels at `pace` seconds per unit of
+distance, costs `fixed` for being used at all and `per_unit` for every unit of
+distance it drives, may be out for at most `shift` seconds from leaving the
+bakery to getting back, and, where `range` is not null, may drive at most
+`range` units of distance in the morning. Costs are in cents.
+
+## Distance and time
+
+The distance between two points is the Euclidean distance between them,
+rounded up to a whole unit. A vehicle takes `distance * pace` seconds to drive
+it.
+
+## A route
+
+A route is one vehicle's morning: it leaves the bakery at its departure time,
+visits its customers in order, and comes back. Every route visits at least one
+customer, and each vehicle runs at most one route.
+
+- The departure is a whole number of seconds, not before the bakery opens.
+- At each customer the vehicle unloads from the later of its arrival and the
+  customer's `ready` time, and that must not be after `due`. Unloading takes the
+  customer's `service` time; the vehicle leaves as soon as it is done.
+- The vehicle must be back at the bakery no later than it closes, and no more
+  than `shift` seconds after its departure.
+- The crates on the route (the sum of its customers' demands) must fit the
+  vehicle's `capacity`, and the distance driven must be within its `range`
+  where it has one. The distance driven is the sum of the rounded legs, from
+  the bakery through each customer in turn and back to the bakery.
+
+## A plan
+
+A plan delivers to every customer of the morning exactly once, uses no more
+vehicles of a kind than the fleet has, and costs the sum over its routes of the
+vehicle's `fixed` cost plus `per_unit` times the route's distance.
+
+It is written as JSON:
+
+    {"routes": [{"type": "van", "depart": 18000, "stops": [12, 4, 31]}, ...]}
+
+where `type` names a fleet entry, `depart` is the departure time as a JSON
+integer (`18000`, not `18000.0`) and `stops` lists customer ids, as the
+integers in the orders file, in visiting order. Other keys are ignored.
+[?2004hroot@2b652d5e3a23:/app# python3 - <<'PY'
+[?2004l[?2004h> import json, os
+[?2004l[?2004h> T=json.load(open('orders/targets.json')); print('TARGETS',T)
+[?2004l[?2004h> for m in ['harbour-lanes','old-town','riverside','north-ring']:
+[?2004l[?2004h>  o=json.load(open('orders/'+m+'.json')); print('\n',m,'N',len(o['customers']),'DEPOT',o['depot'],'TARGET',T[m])
+[?2004l[?2004h>  for f in o['fleet']: print(f)
+[?2004l[?2004h> PY
+[?2004lTARGETS {'harbour-lanes': 77867, 'old-town': 147362, 'riverside': 201921, 'north-ring': 288705}
+
+ harbour-lanes N 60 DEPOT {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} TARGET 77867
+{'type': 'bike', 'count': 5, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+{'type': 'van', 'count': 7, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+{'type': 'truck', 'count': 3, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+
+ old-town N 110 DEPOT {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} TARGET 147362
+{'type': 'bike', 'count': 9, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+{'type': 'van', 'count': 13, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+{'type': 'truck', 'count': 5, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+
+ riverside N 160 DEPOT {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} TARGET 201921
+{'type': 'bike', 'count': 13, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+{'type': 'van', 'count': 20, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+{'type': 'truck', 'count': 8, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+
+ north-ring N 220 DEPOT {'x': 0, 'y': 0, 'open': 14400, 'close': 46800} TARGET 288705
+{'type': 'bike', 'count': 18, 'capacity': 14, 'fixed': 900, 'per_unit': 2, 'pace': 22, 'shift': 18000, 'range': 260}
+{'type': 'van', 'count': 27, 'capacity': 60, 'fixed': 4200, 'per_unit': 11, 'pace': 11, 'shift': 25200, 'range': None}
+{'type': 'truck', 'count': 11, 'capacity': 150, 'fixed': 9500, 'per_unit': 19, 'pace': 13, 'shift': 28800, 'range': None}
+[?2004hroot@2b652d5e3a23:/app# cat > /tmp/solve.py <<'PY'
+[?2004l[?2004h> import json,math,random,time,sys,os
+[?2004l[?2004h> from functools import lru_cache
+[?2004l[?2004h> from tools.check_plan import evaluate
+[?2004l[?2004h> 
+[?2004l[?2004h> name=sys.argv[1]; limit=float(sys.argv[2]) if len(sys.argv)>2 else 20
+[?2004l[?2004h> O=json.load(open('orders/'+name+'.json')); target=json.load(open('orders/targets.json'))[name]
+[?2004l[?2004h> D=O['depot']; C={c['id']:c for c in O['customers']}; kinds={f['type']:f for f in O['fleet']}
+[?2004l[?2004h> slots=[f['type'] for f in O['fleet'] for _ in range(f['count'])]
+[?2004l[?2004h> pts={0:D}|C
+[?2004l[?2004h> @lru_cache(None)
+[?2004l[?2004h> def dist(a,b):
+[?2004l[?2004h>  p,q=pts[a],pts[b]; z=(p['x']-q['x'])**2+(p['y']-q['y'])**2; return math.isqrt(z)+(math.isqrt(z)**2<z)
+[?2004l[?2004h> @lru_cache(None)
+[?2004l[?2004h> def info(typ,r):
+[?2004l[?2004h>  if not r:return (0,D['open'],0)
+[?2004l[?2004h>  k=kinds[typ]
+[?2004l[?2004h>  if sum(C[x]['demand'] for x in r)>k['capacity']: return None
+[?2004l[?2004h>  driven=dist(0,r[0])+sum(dist(a,b) for a,b in zip(r,r[1:]))+dist(r[-1],0)
+[?2004l[?2004h>  if k['range'] is not None and driven>k['range']: return None
+[?2004l[?2004h>  # Latest departure consistent with all due times and depot close.
+[?2004l[?2004h>  t=D['close']-dist(r[-1],0)*k['pace']
+[?2004l[?2004h>  for i in range(len(r)-1,-1,-1):
+[?2004l[?2004h>   c=C[r[i]]; t=min(c['due'],t-c['service'])-dist(0 if i==0 else r[i-1],r[i])*k['pace']
+[?2004l[?2004h>  dep=t
+[?2004l[?2004h>  if dep<D['open']: return None
+[?2004l[?2004h>  clock=dep; prev=0
+[?2004l[?2004h>  for x in r:
+[?2004l[?2004h>   c=C[x]; clock=max(clock+dist(prev,x)*k['pace'],c['ready'])
+[?2004l[?2004h>   if clock>c['due']:return None
+[?2004l[?2004h>   clock+=c['service'];prev=x
+[?2004l[?2004h>  back=clock+dist(prev,0)*k['pace']
+[?2004l[?2004h>  if back>D['close'] or back-dep>k['shift']:return None
+[?2004l[?2004h>  return (k['fixed']+k['per_unit']*driven,dep,driven)
+[?2004l[?2004h> def rc(i,r):
+[?2004l[?2004h>  z=info(slots[i],tuple(r)); return z[0] if z else None
+[?2004l[?2004h> 
+[?2004l[?2004h> def construct(rng):
+[?2004l[?2004h>  R=[[] for _ in slots]; left=set(C)
+[?2004l[?2004h>  # Regret insertion: prioritize constrained customers while selecting near-cheapest insertion.
+[?2004l[?2004h>  while left:
+[?2004l[?2004h>   chosen=None
+[?2004l[?2004h>   sample=list(left) if len(left)<45 else rng.sample(list(left),45)
+[?2004l[?2004h>   for x in sample:
+[?2004l[?2004h>    opts=[]
+[?2004l[?2004h>    for i,r in enumerate(R):
+[?2004l[?2004h>     old=rc(i,r) or 0
+[?2004l[?2004h>     for p in range(len(r)+1):
+[?2004l[?2004h>      nr=r[:p]+[x]+r[p:]; nc=rc(i,nr)
+[?2004l[?2004h>      if nc is not None: opts.append((nc-old+rng.random()*40,i,p))
+[?2004l[?2004h>    if not opts: continue
+[?2004l[?2004h>    opts.sort(); regret=(opts[1][0]-opts[0][0] if len(opts)>1 else 100000)
+[?2004l[?2004h>    # Tight windows/high demand receive a mild priority.
+[?2004l[?2004h>    score=regret + 1000/(1+len(opts)) + C[x]['demand']*2
+[?2004l[?2004h>    if chosen is None or score>chosen[0]: chosen=(score,x,opts)
+[?2004l[?2004h>   if chosen is None:return None
+[?2004l[?2004h>   _,x,opts=chosen
+[?2004l[?2004h>   # Mostly best, occasionally second-best to diversify.
+[?2004l[?2004h>   q=1 if len(opts)>1 and rng.random()<.07 else 0
+[?2004l[?2004h>   _,i,p=opts[q];R[i].insert(p,x);left.remove(x)
+[?2004l[?2004h>  return R
+[?2004l[?2004h> 
+[?2004l[?2004h> def total(R):return sum(rc(i,r) or 10**9 for i,r in enumerate(R))
+[?2004l[?2004h> def planof(R):
+[?2004l[?2004h>  return {'routes':[{'type':slots[i],'depart':info(slots[i],tuple(r))[1],'stops':r} for i,r in enumerate(R) if r]}
+[?2004l[?2004h> 
+[?2004l[?2004h> end=time.time()+limit; best=None;bestcost=10**18;seed=0
+[?2004l[?2004h> while time.time()<end and bestcost>target:
+[?2004l[?2004h>  rng=random.Random(7919*seed+hash(name)%100000);seed+=1
+[?2004l[?2004h>  R=construct(rng)
+[?2004l[?2004h>  if R is None:continue
+[?2004l[?2004h>  cur=total(R)
+[?2004l[?2004h>  if cur<bestcost:
+[?2004l[?2004h>   bestcost=cur;best=[r[:] for r in R];print(name,'construct',seed,cur,flush=True)
+[?2004l[?2004h>  # SA with feasible relocate/swap/2-opt moves.
+[?2004l[?2004h>  T=1200.0
+[?2004l[?2004h>  it=0
+[?2004l[?2004h>  while time.time()<end and it<180000 and bestcost>target:
+[?2004l[?2004h>   it+=1
+[?2004l[?2004h>   non=[i for i,r in enumerate(R) if r]
+[?2004l[?2004h>   mode=rng.random()
+[?2004l[?2004h>   changes=[]
+[?2004l[?2004h>   if mode<.58:
+[?2004l[?2004h>    a=rng.choice(non); pa=rng.randrange(len(R[a])); x=R[a][pa]
+[?2004l[?2004h>    b=rng.randrange(len(R)); pb=rng.randrange(len(R[b])+1)
+[?2004l[?2004h>    if a==b and (pb==pa or pb==pa+1):continue
+[?2004l[?2004h>    na=R[a][:];na.pop(pa)
+[?2004l[?2004h>    if a==b:
+[?2004l[?2004h>     if pb>pa:pb-=1
+[?2004l[?2004h>     na.insert(pb,x); nb=None
+[?2004l[?2004h>    else:
+[?2004l[?2004h>     nb=R[b][:];nb.insert(pb,x)
+[?2004l[?2004h>    changes=[(a,na)] if a==b else [(a,na),(b,nb)]
+[?2004l[?2004h>   elif mode<.83:
+[?2004l[?2004h>    if len(non)<2:continue
+[?2004l[?2004h>    a,b=rng.sample(non,2);pa=rng.randrange(len(R[a]));pb=rng.randrange(len(R[b]))
+[?2004l[?2004h>    na=R[a][:];nb=R[b][:];na[pa],nb[pb]=nb[pb],na[pa];changes=[(a,na),(b,nb)]
+[?2004l[?2004h>   else:
+[?2004l[?2004h>    a=rng.choice(non)
+[?2004l[?2004h>    if len(R[a])<3:continue
+[?2004l[?2004h>    p,q=sorted(rng.sample(range(len(R[a])+1),2))
+[?2004l[?2004h>    if q-p<2:continue
+[?2004l[?2004h>    na=R[a][:p]+R[a][p:q][::-1]+R[a][q:];changes=[(a,na)]
+[?2004l[?2004h>   if len({i for i,_ in changes})<len(changes):continue
+[?2004l[?2004h>   old=sum(rc(i,R[i]) for i,_ in changes); newvals=[rc(i,nr) for i,nr in changes]
+[?2004l[?2004h>   if any(v is None for v in newvals):continue
+[?2004l[?2004h>   new=sum(newvals); delta=new-old
+[?2004l[?2004h>   if delta<=0 or rng.random()<math.exp(-delta/max(T,1)):
+[?2004l[?2004h>    for i,nr in changes:R[i]=nr
+[?2004l[?2004h>    cur+=delta
+[?2004l[?2004h>    if cur<bestcost:
+[?2004l[?2004h>     bestcost=cur;best=[r[:] for r in R]
+[?2004l[?2004h>     print(name,'best',bestcost,'iter',it,flush=True)
+[?2004l[?2004h>   T*=.99994
+[?2004l[?2004h>  if best:
+[?2004l[?2004h>   json.dump(planof(best),open('plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h> print('DONE',name,bestcost,'target',target,'seeds',seed)
+[?2004l[?2004h> if best:
+[?2004l[?2004h>  p=planof(best); print('official',evaluate(O,p));json.dump(p,open('plans/'+name+'.json','w'),indent=1)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@2b652d5e3a23:/app# python3 /tmp/solve.py harbour-lanes 25
+[?2004lTraceback (most recent call last):
+  File [35m"/tmp/solve.py"[0m, line [35m3[0m, in [35m<module>[0m
+    from tools.check_plan import evaluate
+[1;35mModuleNotFoundError[0m: [35mNo module named 'tools'[0m
+[?2004hroot@2b652d5e3a23:/app# 

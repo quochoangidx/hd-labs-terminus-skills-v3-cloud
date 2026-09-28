@@ -1,0 +1,652 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-climate-observer-monthly-summary",
+ "primary_outcome": "the summary printed by /app/tools/coopsum_run.py gives every station's figures as handbook CN-7 part 3 gives them",
+ "obligations": [
+  {
+   "id": "CREDIT_MAX",
+   "class": "core",
+   "contribution": "a maximum read at a morning observation is credited to the day before its form day; next's maximum to the month's last day; a form day 1 maximum leaves the month",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "is credited to the day before its form day"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/crediting.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "credited maxima decide means, extremes, degree days, threshold days and completeness"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_morning_maximum_on_the_day_before"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_hour_eleven_is_morning_and_noon_is_not"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "morning stations (hours 0, 7, 11) whose maxima change day to day, with a maximum on form day 1 and in next; afternoon stations at 12 and 23",
+   "wrong_but_plausible": "every maximum on its form day (shipped); minimum moved with it",
+   "selfdescription_phrase": "maximum read at a morning observation"
+  },
+  {
+   "id": "CREDIT_PRECIP",
+   "class": "core",
+   "contribution": "a day's precipitation (2.4: the catch of one observation day) entered at a morning observation is credited to the day before its form day; an accumulated amount (1.3: the whole catch since the gauge was last emptied; 2.1: the gauge is emptied at each observation) is outside 3.3 and keeps the package's form-day crediting (reach rule); 5.1/5.2 total every amount credited to a day",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "A day's precipitation is credited as a day's maximum is"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/crediting.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "credited day totals decide the total, precipitation days and greatest"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_morning_precipitation_on_the_day_before",
+     "test_outputs.py::test_accumulated_amount_keeps_its_form_day"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_hour_eleven_is_morning_and_noon_is_not"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "morning stations with rain on form day 1 and in next; an accumulated amount after one to six unread observations within the month and as next",
+   "wrong_but_plausible": "every amount on its form day (shipped); every amount including accumulated ones moved a day (natural over-repair)",
+   "selfdescription_phrase": "day's precipitation"
+  },
+  {
+   "id": "TRACE",
+   "class": "core",
+   "contribution": "a trace counts nought",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "it counts as nought wherever this part adds or compares amounts"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/entries.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "traces enter every day total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_1_2_trace_counts_nought"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_2_trace_counts_nought"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "stations logging half their days as traces",
+   "wrong_but_plausible": "a trace as 0.01 inch (shipped)",
+   "selfdescription_phrase": "trace"
+  },
+  {
+   "id": "MEAN_TEMP",
+   "class": "core",
+   "contribution": "a month's mean temperature is the average of its standard means (2.9: mean maximum and mean minimum of a well-observed month, 2.8, gap count five or fewer, 2.7); any other month has none and keeps the package's mean of its days' mean temperatures, to tenths (section 6)",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "A month's mean temperature is the average of its two standard means"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/temperature.py",
+    "environment/app/src/coopsum/summary.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the mean depends on credited days and completeness"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_3_mean_of_a_well_observed_month",
+     "test_outputs.py::test_month_with_gaps_keeps_its_mean_of_daily_means"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_7_gap_count_from_credited_days"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "complete months with one to five one-sided days; months with six to sixteen days lacking a maximum or a minimum",
+   "wrong_but_plausible": "mean of daily means everywhere (shipped); null or the 4.3 formula for a month that is not complete (natural over-repairs)",
+   "selfdescription_phrase": "standard means"
+  },
+  {
+   "id": "DEGREE_DAYS",
+   "class": "core",
+   "contribution": "each day's degree days from its mean rounded to the whole degree, a half up",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "worked from its mean temperature rounded to the whole degree"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/temperature.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "degree days use credited maxima and minima"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_4_degree_days_from_the_rounded_daily_mean"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_4_degree_days_from_the_rounded_daily_mean"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "days whose mean falls on a half degree, both signs, and on 65",
+   "wrong_but_plausible": "unrounded daily means with the month's total rounded (shipped)",
+   "selfdescription_phrase": "degree days"
+  },
+  {
+   "id": "THRESHOLDS",
+   "class": "core",
+   "contribution": "90.0 or above, 32.0 or below and 0.0 or below include the value",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "a maximum of 90.0 or above"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/temperature.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "threshold days count credited readings"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_5_threshold_days_include_their_value"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_5_threshold_days_include_their_value"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "maxima of exactly 90.0 and 32.0, minima of exactly 32.0 and 0.0",
+   "wrong_but_plausible": "strict comparisons (shipped)",
+   "selfdescription_phrase": "90.0 or above"
+  },
+  {
+   "id": "EXTREMES",
+   "class": "core",
+   "contribution": "a tied highest, lowest or greatest is given with the latest day",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "the latest of those days is given"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/temperature.py",
+    "environment/app/src/coopsum/precipitation.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "extremes read credited days"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_tied_extremes_take_the_latest_day"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_4_tied_greatest_takes_the_latest_day"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "the month's highest, lowest and wettest values repeated on a later day",
+   "wrong_but_plausible": "the first day (shipped)",
+   "selfdescription_phrase": "latest of those days"
+  },
+  {
+   "id": "PRECIP_COUNTS",
+   "class": "core",
+   "contribution": "0.10 and 1.00 inch or more include the value",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "0.10 inch or"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/precipitation.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "counts read credited day totals"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_3_heavy_days_include_their_threshold"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_3_heavy_days_include_their_threshold"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "credited day totals of exactly 0.10 and 1.00",
+   "wrong_but_plausible": "strict comparisons (shipped)",
+   "selfdescription_phrase": "1.00 inch or more"
+  },
+  {
+   "id": "COMPLETENESS",
+   "class": "core",
+   "contribution": "gap count (2.7) and well-observed month (2.8) from the credited days (already right; `complete` field)",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "A well-observed month is a month whose gap count is five or fewer"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/temperature.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "completeness selects the mean-temperature rule"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_7_gap_count_from_credited_days"
+    ],
+    "boundary": [
+     "test_outputs.py::test_month_with_gaps_keeps_its_mean_of_daily_means"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "morning stations with M maxima on form day 1 and in next; five and six lacking days",
+   "wrong_but_plausible": "counting M entries on the form",
+   "selfdescription_phrase": "gap count"
+  },
+  {
+   "id": "MEANS",
+   "class": "core",
+   "contribution": "mean maximum and mean minimum to tenths, an exact half up (already right)",
+   "authority": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "an exact half goes to"
+   },
+   "implementation_sites": [
+    "environment/app/src/coopsum/temperature.py",
+    "environment/app/src/coopsum/entries.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "threshold days count credited readings"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_means_to_tenths_half_up"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_means_to_tenths_half_up"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "mean maxima on a half tenth above and below nought",
+   "wrong_but_plausible": "half-even or half away from zero",
+   "selfdescription_phrase": "half-up"
+  },
+  {
+   "id": "ENTRY_DECODE",
+   "class": "support",
+   "contribution": "decode entries to whole tenths and hundredths and the calendar",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/coopsum/entries.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_generated_forms"
+   ]
+  },
+  {
+   "id": "LAYOUT",
+   "class": "support",
+   "contribution": "section 6 keys and station order",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/coopsum/summary.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_generated_forms"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "CREDIT_MAX",
+    "to": "COMPLETENESS"
+   },
+   {
+    "from": "CREDIT_MAX",
+    "to": "MEAN_TEMP"
+   },
+   {
+    "from": "CREDIT_MAX",
+    "to": "DEGREE_DAYS"
+   },
+   {
+    "from": "CREDIT_MAX",
+    "to": "THRESHOLDS"
+   },
+   {
+    "from": "CREDIT_MAX",
+    "to": "EXTREMES"
+   },
+   {
+    "from": "COMPLETENESS",
+    "to": "MEAN_TEMP"
+   },
+   {
+    "from": "CREDIT_PRECIP",
+    "to": "PRECIP_COUNTS"
+   },
+   {
+    "from": "CREDIT_PRECIP",
+    "to": "EXTREMES"
+   },
+   {
+    "from": "TRACE",
+    "to": "PRECIP_COUNTS"
+   },
+   {
+    "from": "CREDIT_MAX",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "CREDIT_PRECIP",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "TRACE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "MEAN_TEMP",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "DEGREE_DAYS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "THRESHOLDS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "EXTREMES",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "PRECIP_COUNTS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "COMPLETENESS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "CREDIT_MAX",
+    "to": "MEANS"
+   },
+   {
+    "from": "MEANS",
+    "to": "MEAN_TEMP"
+   },
+   {
+    "from": "MEANS",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "crediting-decides-completeness-and-mean",
+   "obligation_ids": [
+    "CREDIT_MAX",
+    "COMPLETENESS",
+    "MEAN_TEMP",
+    "MEANS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_7_gap_count_from_credited_days",
+    "test_outputs.py::test_month_with_gaps_keeps_its_mean_of_daily_means",
+    "test_outputs.py::test_rule_4_1_means_to_tenths_half_up"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "crediting-and-trace-decide-day-totals",
+   "obligation_ids": [
+    "CREDIT_PRECIP",
+    "TRACE",
+    "PRECIP_COUNTS",
+    "EXTREMES"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_accumulated_amount_keeps_its_form_day",
+    "test_outputs.py::test_rule_5_4_tied_greatest_takes_the_latest_day"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "crediting-feeds-degree-days-and-thresholds",
+   "obligation_ids": [
+    "CREDIT_MAX",
+    "DEGREE_DAYS",
+    "THRESHOLDS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_1_morning_maximum_on_the_day_before",
+    "test_outputs.py::test_rule_4_5_threshold_days_include_their_value"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "each of its rules holds for every form within the limits of its section 1.5"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Every rule of the handbook applies to exactly the readings, days and months that its own defined terms describe",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Forms of one to forty stations will be run"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution-side generator SEED (authoring only; graded forms are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave the driver alone: the file at that path must stay byte-for-byte the one you were given",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED), checked before and after candidate code",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness: the candidate user cannot read /tests, the sealed expectations, the shipped copy or /logs/verifier (with a readable control)",
+  "test_outputs.py::test_generated_forms": "seeded trap-free forms (well-observed months, no accumulated amount at a morning station) over the rest of the handbook's domain, also under run-time labels",
+  "test_outputs.py::test_section_one_limits_reached": "forty stations, leap February, 1950-01 and 2099-12, -60.0 and 130.0, 20.00-inch amounts, six unread observations at an afternoon station, a 620.00-inch month (trap-free)"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATION-ORDER",
+   "domain_required": true,
+   "rationale": "stations in form order",
+   "authority_anchor": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "one object per station in the form's order"
+   }
+  },
+  {
+   "id": "HALF-UP",
+   "domain_required": true,
+   "rationale": "means and rounded daily means",
+   "authority_anchor": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "an exact half goes to"
+   }
+  },
+  {
+   "id": "LATEST-DAY",
+   "domain_required": true,
+   "rationale": "tied extremes",
+   "authority_anchor": {
+    "file": "environment/app/docs/observer-handbook.md",
+    "anchor": "the latest of those days is given"
+   }
+  }
+ ],
+ "wrong_paths": [
+  {
+   "id": "D1_max_on_form_day",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CREDIT_MAX"
+   ],
+   "receipt": "wrong-paths/D1_max_on_form_day.json"
+  },
+  {
+   "id": "D2_precip_on_form_day",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CREDIT_PRECIP"
+   ],
+   "receipt": "wrong-paths/D2_precip_on_form_day.json"
+  },
+  {
+   "id": "D3_dd_from_unrounded_mean",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DEGREE_DAYS"
+   ],
+   "receipt": "wrong-paths/D3_dd_from_unrounded_mean.json"
+  },
+  {
+   "id": "D4_mean_of_daily_means",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEAN_TEMP"
+   ],
+   "receipt": "wrong-paths/D4_mean_of_daily_means.json"
+  },
+  {
+   "id": "D5_strict_temperature_thresholds",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "THRESHOLDS"
+   ],
+   "receipt": "wrong-paths/D5_strict_temperature_thresholds.json"
+  },
+  {
+   "id": "D6_first_day_on_ties",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "EXTREMES"
+   ],
+   "receipt": "wrong-paths/D6_first_day_on_ties.json"
+  },
+  {
+   "id": "D7_trace_as_hundredth",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TRACE"
+   ],
+   "receipt": "wrong-paths/D7_trace_as_hundredth.json"
+  },
+  {
+   "id": "D8_strict_precip_thresholds",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "PRECIP_COUNTS"
+   ],
+   "receipt": "wrong-paths/D8_strict_precip_thresholds.json"
+  },
+  {
+   "id": "T1_natural_shift_every_amount",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "CREDIT_PRECIP"
+   ],
+   "receipt": "wrong-paths/T1_natural_shift_every_amount.json"
+  },
+  {
+   "id": "T2_natural_new_formula_everywhere",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEAN_TEMP"
+   ],
+   "receipt": "wrong-paths/T2_natural_new_formula_everywhere.json"
+  },
+  {
+   "id": "T2_natural_null_when_incomplete",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEAN_TEMP"
+   ],
+   "receipt": "wrong-paths/T2_natural_null_when_incomplete.json"
+  },
+  {
+   "id": "H01_driver_tampered",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H01_driver_tampered.json"
+  },
+  {
+   "id": "H02_read_sealed_expectations",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H02_read_sealed_expectations.json"
+  },
+  {
+   "id": "c3-well-observed-strict-at-five",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "COMPLETENESS"
+   ],
+   "receipt": "sweep/c3-well-observed-strict-at-five.json"
+  },
+  {
+   "id": "c8-mean-half-even",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "MEANS"
+   ],
+   "receipt": "sweep/c8-mean-half-even.json"
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "task_snapshot_sha256": "80a54e90927aa5771ec9e9fd2ef908c8ff600195ae5382bdd5dc6c9204deb9ce"
+}

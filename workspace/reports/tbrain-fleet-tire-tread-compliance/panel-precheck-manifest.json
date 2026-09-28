@@ -1,0 +1,288 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-fleet-tire-tread-compliance",
+ "primary_outcome": "the tire summary printed by the fixed driver follows standard TS-6 for every tire of a job",
+ "obligations": [
+  {
+   "id": "DEPTH",
+   "class": "core",
+   "contribution": "every reading's depth is the figure shown plus its gauge's offset",
+   "authority": {
+    "file": "environment/app/docs/tread-standard.md",
+    "anchor": "A reading's depth is the figure the gauge showed"
+   },
+   "implementation_sites": [
+    "environment/app/src/treadcheck/gauges.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the latest depth, wear or status of the same tire entry"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_reading_takes_its_gauge_offset"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_1_offsets_of_minus_9_and_9"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "offsets -9..9 on every reading",
+   "wrong_but_plausible": "figure shown (shipped)",
+   "selfdescription_phrase": "reading depth"
+  },
+  {
+   "id": "WEAR",
+   "class": "core",
+   "contribution": "tread worn from new depth over the distance from the mounting odometer",
+   "authority": {
+    "file": "environment/app/docs/tread-standard.md",
+    "anchor": "A tire's tread worn is the tread depth it had when new"
+   },
+   "implementation_sites": [
+    "environment/app/src/treadcheck/wear.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the latest depth, wear or status of the same tire entry"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_2_worn_from_new_depth_and_mounting"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_2_first_depth_equal_to_new"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "first depth 0-10 tenths below new",
+   "wrong_but_plausible": "first reading to latest reading (shipped)",
+   "selfdescription_phrase": "tread worn"
+  },
+  {
+   "id": "RATE",
+   "class": "core",
+   "contribution": "wear rate half up; km_left (no rule) keeps today's half-even rounding through the shared helper",
+   "authority": {
+    "file": "environment/app/docs/tread-standard.md",
+    "anchor": "wear rate is its tread worn"
+   },
+   "implementation_sites": [
+    "environment/app/src/treadcheck/wear.py",
+    "environment/app/src/treadcheck/rounding.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the latest depth, wear or status of the same tire entry"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_3_wear_rate",
+     "test_outputs.py::test_km_left_keeps_todays_rounding"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_1_1_exact_half_goes_up"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "distances giving exact halves",
+   "wrong_but_plausible": "round half even for the rate (shipped); half up for km_left too (natural in-place fix of the shared helper)",
+   "selfdescription_phrase": "wear rate"
+  },
+  {
+   "id": "STATUS",
+   "class": "core",
+   "contribution": "removal 40 steer / 30 drive and trailer; pull and watch at or below; the regrooving check (no rule) keeps today's floor of 52",
+   "authority": {
+    "file": "environment/app/docs/tread-standard.md",
+    "anchor": "at or below its removal depth"
+   },
+   "implementation_sites": [
+    "environment/app/src/treadcheck/status.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the latest depth, wear or status of the same tire entry"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_steer_removal_depth",
+     "test_outputs.py::test_rule_5_1_status_at_or_below",
+     "test_outputs.py::test_regroove_check_keeps_todays_floor"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_1_latest_exactly_on_each_limit"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "latest depths on, above and below 32, 40, 48 and 56",
+   "wrong_but_plausible": "32 everywhere, strict comparisons (shipped); regroove floor moving with the edited REMOVAL constant (natural in-place fix)",
+   "selfdescription_phrase": "status"
+  },
+  {
+   "id": "RETREAD",
+   "class": "core",
+   "contribution": "only a pulled tire goes for retread; casing age in days below 2,190 and fewer than 2 retreads",
+   "authority": {
+    "file": "environment/app/docs/tread-standard.md",
+    "anchor": "A casing may go for retread"
+   },
+   "implementation_sites": [
+    "environment/app/src/treadcheck/retread.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the latest depth, wear or status of the same tire entry"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_1_casing_age_in_days",
+     "test_outputs.py::test_rule_6_1_fewer_than_two_retreads"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_1_casing_of_2189_and_2190_days"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "casings 2,189-2,190 days old across a year boundary; 0-4 retreads",
+   "wrong_but_plausible": "any tire; calendar-year age; 2 or fewer retreads (shipped)",
+   "selfdescription_phrase": "retread"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/treadcheck_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_is_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "DEPTH",
+    "to": "WEAR"
+   },
+   {
+    "from": "DEPTH",
+    "to": "STATUS"
+   },
+   {
+    "from": "WEAR",
+    "to": "RATE"
+   },
+   {
+    "from": "RATE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STATUS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "RETREAD",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STATUS",
+    "to": "RETREAD"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "depth-feeds-wear-and-status",
+   "obligation_ids": [
+    "DEPTH",
+    "WEAR",
+    "STATUS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_1_measurement_takes_its_gauge_offset"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "fresh-test-uses-corrected-depth",
+   "obligation_ids": [
+    "DEPTH",
+    "WEAR",
+    "RATE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_3_first_depth_exactly_10_below_new_is_fresh"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "status-gates-retread",
+   "obligation_ids": [
+    "DEPTH",
+    "STATUS",
+    "RETREAD"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_6_1_only_a_pulled_tire_goes_for_retread"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "every rule of the standard holds for every job inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "that no rule of the standard settles is worked out as today's code works it out",
+   "named_cases": []
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The jobs we run hold one to three hundred tires"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "authoring gen.py / skeleton_score.py SEED=20260927 (authoring only; graded jobs will be sealed files)"
+  ],
+  "clock_dependence": "none (report date is a job field)",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "SUMMARY-SCHEMA",
+   "domain_required": true,
+   "rationale": "the fleet system reads these keys in job order",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "with exactly these keys"
+   }
+  },
+  {
+   "id": "HALF-UP",
+   "domain_required": true,
+   "rationale": "standard 1.1 fixes rounding",
+   "authority_anchor": {
+    "file": "environment/app/docs/tread-standard.md",
+    "anchor": "an exact half goes up"
+   }
+  }
+ ],
+ "wrong_paths": []
+}

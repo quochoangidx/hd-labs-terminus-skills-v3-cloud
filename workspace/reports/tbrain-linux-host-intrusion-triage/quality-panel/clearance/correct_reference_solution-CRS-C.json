@@ -1,0 +1,337 @@
+{
+  "axis": "correct_reference_solution",
+  "reviewer_id": "CRS-C",
+  "snapshot_sha256": "bb66f542e1517d687270867c133e8fe5ae5acea9f713376024ba90c41b1cd11f",
+  "severity": "Minor",
+  "summary": "The reference implements rules 2-7 faithfully. Its rule-1 clock handling is incomplete for contract-valid inputs the sealed generator deliberately avoids. (1) Year inference goes wrong when a backward clock step straddles a month boundary. (2) Non-auth host-clock records (wtmp logins/logouts, btmp, ctimes, dpkg, history stamps) are placed on a side of the step using only an auth-log-derived host-time threshold, which misplaces collector-settleable logins in a backward-step overlap and misses a step whose pre-step auth lines were rotated away. Both are narrow boundary defects, so each is rated Minor.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "instruction.md",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/triage.py",
+      "environment/app/docs/case-guide.md",
+      "environment/app/docs/record-formats.md",
+      "environment/app/docs/report.md",
+      "environment/app/evidence/case-1/collection.txt",
+      "environment/app/evidence/case-1/fs-listing.tsv",
+      "environment/app/evidence/case-1/var/log/auth.log",
+      "environment/app/evidence/case-1/var/log/auth.log.1",
+      "environment/app/evidence/case-1/var/log/remote/files.log",
+      "environment/app/evidence/case-1/var/log/dpkg.log",
+      "environment/app/evidence/case-1/var/log/btmp",
+      "environment/app/evidence/case-1/home/git/.bash_history",
+      "environment/app/evidence/case-1/home/tpham/.bash_history",
+      "environment/app/evidence/case-1/root/.bash_history",
+      "environment/app/evidence/case-1/home/git/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/home/tpham/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/root/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/anacron.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/apt-listchanges.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/base-files.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/cron.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/logwatch.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/openssh-server.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/rkhunter.list",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/sysstat.list",
+      "solution/solve.sh",
+      "solution/triage.py",
+      "solution/model.py",
+      "solution/seal.py"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "environment/app/evidence/case-1/var/log/wtmp, var/log/btmp (binary; string fields visible, int32 times not decodable without a shell), var/log/auth.log.2.gz and auth.log.3.gz (gzip) are opaque case-1 fixtures. No report is supplied for case-1, and the reference's parsing of these formats was checked against record-formats.md instead, so they are not needed for this axis."
+    ]
+  },
+  "findings": [
+    {
+      "id": "CRS-1",
+      "severity": "Minor",
+      "claim": "date_lines() assigns auth-log years by decrementing whenever a line's month exceeds the next line's month in file order. After a backward clock step (host clock ahead, then set back) that straddles a month boundary, the non-monotonic host month is read as a year rollover. Every earlier auth line is then dated one year too early, and the derived step offset becomes about one year, which fix() applies to every pre-step wtmp/btmp/ctime/dpkg/history time.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "case-guide.md rule 1: report true UTC times for a host clock that may have been wrong by a fixed amount for part of the period and then set right once. instruction.md allows a step of 30-7200 s, any year 2019-2031 and collections crossing December into January. Nothing excludes a step near a month end, so pre-step records must be reported at their true times.",
+        "actual_behavior": "Pre-step auth lines get year Y-1. d = true - t becomes about 365 days - n, so step_n is about 1 year - n. fix() adds that to every host-clock record below step_t, and pre-step logins, failures and ctimes are reported about one year late.",
+        "trace_or_receipt": "Offset +00:00. Clock ahead by n=900 s until true tc=2025-03-31T23:55:00Z. A collector-kept sshd line at true 23:54:59 is written 'Apr  1 00:09:59', and the next line, at true 23:55:00, is written 'Mar 31 23:55:00'. solution/triage.py:72-74 walks backward: at i=the Apr line, parsed[i][0]=4 > parsed[i+1][0]=3, so year becomes 2024 for it and all earlier lines. solution/triage.py:124-128 sets step_n = true - t = 31536000-900 for those lines. solution/triage.py:129-130 sets step_t at the first agreeing line (host 2025-03-31T23:55:00). solution/triage.py:132-133 then adds about 1 year to every wtmp/btmp/ctime/dpkg/history time below step_t, so a pre-step intruder login on 2025-03-20 is reported as about 2026-03-20. Static trace, not executed."
+      },
+      "reachable_case_or_path": "Any evidence directory with a backward clock step whose true time tc lies within n seconds before a month boundary, with an auth-log line recorded in [boundary - n, tc). The Dec->Jan case is explicitly in the instruction's domain. solution/model.py:425 (a.month == b.month) shows that the sealed generator never emits this case.",
+      "graded_effect": "initial_access.time, first_activity, last_activity, privilege_escalation (sudo lines no longer fall inside the shifted sessions) and persistence membership (ctime windows) can all be wrong for such a directory. The current sealed corpus avoids the case, so Oracle reward is unaffected. The reference still fails 'every rule in the guide holds for every such directory'.",
+      "citations": [
+        "solution/triage.py:57-78",
+        "solution/triage.py:123-135",
+        "solution/model.py:416-427",
+        "environment/app/docs/case-guide.md:9-14",
+        "instruction.md:3",
+        "instruction.md:5"
+      ],
+      "root_invariant": "Auth-log year assignment must follow true chronology, not host-clock month order, which a backward step can make non-monotonic.",
+      "authority": [
+        "environment/app/docs/case-guide.md:9-14",
+        "environment/app/docs/record-formats.md:9-13",
+        "instruction.md:5"
+      ],
+      "implementation_sites": [
+        "solution/triage.py:67-74"
+      ],
+      "sibling_variants": [
+        "Backward step straddling Dec 31 -> Jan 1 (the year-crossing family combined with the clock family): same decrement at the Jan->Dec host order, so pre-step lines lose a year.",
+        "Forward step (host clock behind) across a month boundary keeps host months monotonic and is handled correctly. This was checked and is not a sibling defect."
+      ],
+      "interaction_variants": [
+        "Rule 1 x rule 3: pre-step wtmp logins are shifted about +1 year by fix(), so the earliest hostile login and its time are wrong.",
+        "Rule 1 x rule 6: ctimes below step_t are shifted out of every intruder window, so persistence is dropped."
+      ],
+      "minimal_repair_boundary": "date_lines() year assignment: anchor each line's year using the collector copies or the step detection (for example treat a small backward jump as a clock step rather than a year rollover), or compute years after the step correction.",
+      "closure_evidence": [
+        "A generated case with a backward step of 900 s placed 300 s before a month end, and one before Jan 1, where the reference output equals model truth.",
+        "A mutant that ignores the step still fails those cases."
+      ]
+    },
+    {
+      "id": "CRS-2",
+      "severity": "Minor",
+      "claim": "For every host-clock record that is not an auth-log line, the reference decides the side of the step with one host-time threshold (t < step_t), and it derives the step only from auth-log lines paired with collector lines. The guide promises the collector settles each graded time's side, and two collector-settleable cases break this: (a) after a backward step, an intruder login/logout whose true time is within n seconds before the step has a host time >= step_t and is left uncorrected, although its Accepted/session-closed sshd line in the collector log settles it as pre-step; (b) when rotation removed every pre-step auth line, no auth line disagrees with the collector, so step_n stays 0 and pre-step wtmp/btmp/ctime records are never corrected, although collector Accepted lines versus wtmp logins still show the offset.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "case-guide.md rule 1: report true times, and 'The collector's record always settles which side of a step every graded host-clock time lies on.' record-formats.md: the collector keeps every non-failure sshd line for the whole evidence period, including Accepted and session-closed lines in the same second they were written. A login in the backward-step overlap, or before a step whose auth lines were rotated away, is therefore settled by the collector, and the report must use its true time.",
+        "actual_behavior": "(a) The login is reported n seconds late. (b) Pre-step failures and logins are reported N seconds off.",
+        "trace_or_receipt": "(a) Backward step n=600 at true tc, initial login at true tc-100. The host wrote wtmp tv_sec=tc+500. The first agreeing auth line has host time tc, so step_t=tc (solution/triage.py:129-130). fix(tc+500) is not < step_t, so it returns tc+500 (solution/triage.py:132-133, 137). initial_access.time is tc+500 instead of tc-100, although the collector holds 'Accepted ... for USER from ADDR' at tc-100. (b) Clock behind by N until tc, auth.log rotation keeps only lines after tc, and the intruder's earlier failures (btmp) and admin logins precede tc. solution/triage.py:124-130 iterates only `dated` auth lines, every d==0, step_t stays None, and fix() is the identity. btmp failures of the intruder address are reported N seconds early, and first_activity is wrong by N. The reference's own solve.sh:10 comment admits the assumption: 'no graded record falls where host times overlap after a backward step'. The candidate-visible contract states no such restriction. Static trace, not executed."
+      },
+      "reachable_case_or_path": "(a) A backward step of 30-7200 s placed within n seconds after an intruder login or logout, allowed by instruction.md:5 and case-guide rule 1. solution/model.py:402-413 and 425 exclude it from the sealed corpus. (b) A forward or backward step that precedes the oldest retained auth-log line while graded host-clock records (intruder failures days earlier, logins) precede the step. instruction.md:5 allows rotation and a step independently, and case-guide.md:17-19 anticipates rotation eating into the intruder's failures.",
+      "graded_effect": "initial_access.time, first_activity and last_activity can be wrong by the step size. Session windows shift too, which can move sudo attribution (privilege_escalation) and persistence ctime membership. The sealed corpus avoids these layouts, so Oracle reward is unaffected, but the reference disagrees with the guide on contract-valid directories.",
+      "citations": [
+        "solution/triage.py:113-138",
+        "solution/triage.py:244-252",
+        "solution/solve.sh:5-11",
+        "solution/model.py:396-442",
+        "environment/app/docs/case-guide.md:9-14",
+        "environment/app/docs/case-guide.md:16-19",
+        "environment/app/docs/record-formats.md:22-27",
+        "instruction.md:5"
+      ],
+      "root_invariant": "Every graded host-clock record must be placed on the side of the step that the collector's record establishes, and the step must be found from all collector-settleable evidence, not only from surviving local auth-log lines and one host-time cutoff.",
+      "authority": [
+        "environment/app/docs/case-guide.md:9-14",
+        "environment/app/docs/record-formats.md:22-27"
+      ],
+      "implementation_sites": [
+        "solution/triage.py:123-133",
+        "solution/triage.py:137-138",
+        "solution/triage.py:222",
+        "solution/triage.py:234",
+        "solution/triage.py:252"
+      ],
+      "sibling_variants": [
+        "wtmp logout (DEAD_PROCESS) in the backward-step overlap: its sshd 'session closed' line is collector-kept, so it is settleable but misplaced the same way.",
+        "Auth-log lines themselves are handled correctly by file order (step_i). This was checked and is not a sibling.",
+        "btmp failures, ctimes and history stamps in the overlap cannot be settled by the collector, so the guide's promise excludes them. They are not claimed here."
+      ],
+      "interaction_variants": [
+        "Rule 1 x rule 5: a shifted session window can exclude or include a sudo line on that TTY via session_at (solution/triage.py:172-176).",
+        "Rule 1 x rule 7: an open final session's uncorrected start or a pre-step failure changes first_activity or last_activity.",
+        "Rule 1 x auth-log rotation (rule 2 context): case (b)."
+      ],
+      "minimal_repair_boundary": "The rule-1 correction layer: pair wtmp logins and logouts with collector Accepted/session-closed lines to find and bound the step and to settle overlap records, and use auth-log/collector pairs only as one source of that evidence.",
+      "closure_evidence": [
+        "A generated backward-step case with the initial login 100 s before tc where the reference matches truth.",
+        "A generated forward-step case with the rotation cut after tc and intruder failures before tc where the reference matches truth.",
+        "An existing sealed corpus that still passes."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Traced read_collection sign and offset parsing and epoch() local->UTC conversion for negative and positive offsets (case-1 -12:00: auth.log 'Jan  2 21:17:07' maps to 2022-01-03T09:17:07Z, which matches remote/files.log:58).",
+    "Traced auth_lines rotation ordering (highest number first, .gz decompress) against record-formats.md:9-13.",
+    "Traced date_lines year inference for the last line against collected_utc, for a Dec->Jan crossing without a step, for a forward step across a month, and for a backward step across a month (CRS-1).",
+    "Traced the step detection loop and fix() for a forward step (no overlap, correct), for a backward step (CRS-2a) and for a step before the retained auth lines (CRS-2b).",
+    "Checked rule 2 hostile detection (btmp type 6, sliding five-failure window <=600 s inclusive).",
+    "Checked rule 3 (earliest wtmp USER_PROCESS from a hostile host).",
+    "Checked the rule 4 fixed point: key extraction from histories of intruder accounts including root after escalation, fingerprint computation matching record-formats.md:42-45, key-login address expansion, no password tie.",
+    "Checked rule 5: sudo USER=root on a TTY whose covering wtmp session is an intruder session, or an intruder root login, whichever is earlier.",
+    "Checked rule 6: path kinds (cron.d, crontabs, systemd .service/.timer below /etc/systemd/system including *.wants, rc.local, authorized_keys regex), ctime used rather than mtime, dpkg exclusion |ctime - installed| <= 2 inclusive with arch-suffixed .list names.",
+    "Checked rule 7 event set: intruder-source failures, logins/logouts, TTY-tied sudo lines, persistence ctimes, stamped history inside intruder windows. An open session's end is excluded as an event, and collected_utc is used only as a window bound.",
+    "Checked the report shape against report.md: seven keys, ISO-Z times, null privilege_escalation, sets.",
+    "Checked operating constraints: stdlib only, read-only evidence, optional directories absent, no dependency on /app/evidence."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Trace an ordinary case and each relevant boundary through the reference logic",
+      "status": "checked",
+      "reason": "Traced case-1 shaped inputs through every rule. Boundaries traced: 600 s inclusive window, 2 s dpkg inclusive, session window inclusive, open session, Dec->Jan year crossing, forward and backward clock step. Defects appear only on the backward-step month boundary and on collector-settleable records outside the auth-derived threshold.",
+      "evidence": [
+        "solution/triage.py:57-78",
+        "solution/triage.py:109-261"
+      ],
+      "finding_ids": [
+        "CRS-1",
+        "CRS-2"
+      ]
+    },
+    {
+      "category": "Output bytes: widths, precision, delimiters, paths",
+      "status": "checked",
+      "reason": "iso() emits YYYY-MM-DDTHH:MM:SSZ in UTC. The keys match report.md exactly. Lists are sorted unique sets, and null is emitted for no escalation.",
+      "evidence": [
+        "solution/triage.py:27-28",
+        "solution/triage.py:253-261",
+        "environment/app/docs/report.md:3-25"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Every branch that updates state (identifier reuse, replacement, expiry)",
+      "status": "checked",
+      "reason": "wtmp session pairing by tty with pop on logout handles tty reuse. The fixed-point loop recomputes pe and accounts each iteration until stable. The persistence dict is keyed by path. Remote true_at is keyed by 'sshd[pid]: msg', and pid reuse with an identical message is theoretically possible but speculative, so it is not claimed.",
+      "evidence": [
+        "solution/triage.py:139-147",
+        "solution/triage.py:184-208",
+        "solution/triage.py:114-119"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Recovery and durability at interruption points",
+      "status": "not_applicable",
+      "reason": "A single-shot read-only analyzer that writes one JSON file, with no recovery contract.",
+      "evidence": [
+        "instruction.md:1-3"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Rule 1 time handling (UTC offset, year inference, clock step)",
+      "status": "checked",
+      "reason": "Offset handling is correct. Year inference fails on a backward step across a month (CRS-1). Side assignment for non-auth records relies on an auth-derived threshold (CRS-2).",
+      "evidence": [
+        "solution/triage.py:35-40",
+        "solution/triage.py:57-78",
+        "solution/triage.py:120-135"
+      ],
+      "finding_ids": [
+        "CRS-1",
+        "CRS-2"
+      ]
+    },
+    {
+      "category": "Rules 2-7 domain semantics",
+      "status": "checked",
+      "reason": "Each rule is implemented as the guide states (see checks_performed). No independent defect was found. Attributing concurrent admin root-history commands or admin file edits inside an intruder window is a contract-determinacy question for coherent_contract, not a reference defect.",
+      "evidence": [
+        "solution/triage.py:157-252",
+        "environment/app/docs/case-guide.md:16-51"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "solve.sh installs the reference at the declared path",
+      "status": "checked",
+      "reason": "It copies solution/triage.py to /app/triage.py with mode 0755. The comment map matches the implementation.",
+      "evidence": [
+        "solution/solve.sh:22-24"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "rule 1 backward step",
+        "record-formats year-less syslog dates"
+      ],
+      "case_or_path": "Backward step of 900 s at 5 minutes before a month end: host month order goes 4 then 3.",
+      "status": "checked",
+      "evidence": [
+        "solution/triage.py:72-74",
+        "solution/triage.py:124-133"
+      ],
+      "finding_ids": [
+        "CRS-1"
+      ]
+    },
+    {
+      "rules": [
+        "rule 1 collector settles side",
+        "rule 3 initial access time"
+      ],
+      "case_or_path": "Backward step 100 s after the initial login: the wtmp host time exceeds step_t, so it is left uncorrected.",
+      "status": "checked",
+      "evidence": [
+        "solution/triage.py:132-137"
+      ],
+      "finding_ids": [
+        "CRS-2"
+      ]
+    },
+    {
+      "rules": [
+        "rule 1 clock step",
+        "rule 2 rotation losing oldest lines"
+      ],
+      "case_or_path": "Step before the oldest retained auth line: no disagreeing pair, so step_n=0.",
+      "status": "checked",
+      "evidence": [
+        "solution/triage.py:123-133"
+      ],
+      "finding_ids": [
+        "CRS-2"
+      ]
+    },
+    {
+      "rules": [
+        "rule 4 key tie",
+        "rule 5 root login"
+      ],
+      "case_or_path": "The intruder adds a key to /root/.ssh/authorized_keys and logs in as root from new address B. The fixed point adds B, marks the root session, and sets pe to the earlier of sudo and root login.",
+      "status": "checked",
+      "evidence": [
+        "solution/triage.py:188-208"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "rule 6 package exclusion",
+        "rule 1 clock step"
+      ],
+      "case_or_path": "The dpkg local time and the listed file ctime are both passed through fix() before the 2 s comparison, so they stay consistent on the same side of a forward step.",
+      "status": "checked",
+      "evidence": [
+        "solution/triage.py:220-241"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "rule 7 open session",
+        "rule 6 window"
+      ],
+      "case_or_path": "The open session window extends to collected_utc only for membership, and the session end is not added as an event.",
+      "status": "checked",
+      "evidence": [
+        "solution/triage.py:210-213",
+        "solution/triage.py:245-248"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "rule 5 terminal tie",
+        "admin sudo during the intrusion"
+      ],
+      "case_or_path": "An admin sudo on its own pts while the intruder is logged in: session_at resolves to the admin session, which is excluded.",
+      "status": "checked",
+      "evidence": [
+        "solution/triage.py:172-176",
+        "solution/triage.py:195"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

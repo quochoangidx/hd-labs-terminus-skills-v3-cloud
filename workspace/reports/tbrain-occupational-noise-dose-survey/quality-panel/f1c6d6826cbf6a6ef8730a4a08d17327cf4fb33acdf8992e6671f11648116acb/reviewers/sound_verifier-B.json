@@ -1,0 +1,224 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "f1c6d6826cbf6a6ef8730a4a08d17327cf4fb33acdf8992e6671f11648116acb",
+  "severity": "None",
+  "summary": "The verifier checks the complete report (survey name, row order, id, group, status, ceiling and impulse flags, the exact rounded TWA or null, and the dose within the stated tolerance) against sealed expectations. Every named manual rule has a fixture whose expected result changes when that rule is wrong, the two kept (unspecified) steps are pinned by exact fixtures plus a shipped-package differential, and no contract-valid representation choice was found to be rejected.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "packet-manifest.json",
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/noise-survey-manual.md",
+      "environment/app/examples/press-shop-day.json",
+      "environment/app/tools/noisedose_run.py",
+      "environment/app/src/noisedose/__init__.py",
+      "environment/app/src/noisedose/levels.py",
+      "environment/app/src/noisedose/runs.py",
+      "environment/app/src/noisedose/shift.py",
+      "environment/app/src/noisedose/twa.py",
+      "environment/app/src/noisedose/flags.py",
+      "environment/app/src/noisedose/groups.py",
+      "environment/app/src/noisedose/report.py",
+      "environment/app/src/noisedose/survey.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/reference_duration.jsonl",
+      "tests/expected/threshold.jsonl",
+      "tests/expected/sampled_time.jsonl",
+      "tests/expected/paused_runs.jsonl",
+      "tests/expected/partial_surveys.jsonl",
+      "tests/expected/whole_shift.jsonl",
+      "tests/expected/three_quarters.jsonl",
+      "tests/expected/below_three_quarters.jsonl",
+      "tests/expected/differential-below_three_quarters.jsonl",
+      "tests/expected/measured_nothing.jsonl",
+      "tests/expected/differential-measured_nothing.jsonl",
+      "tests/expected/above_ceiling.jsonl",
+      "tests/expected/differential-above_ceiling.jsonl",
+      "tests/expected/ceiling_level.jsonl",
+      "tests/expected/impulse.jsonl",
+      "tests/expected/twa.jsonl",
+      "tests/expected/rounding.jsonl",
+      "tests/expected/status.jsonl",
+      "tests/expected/groups.jsonl",
+      "tests/expected/quiet_members.jsonl",
+      "tests/expected/report_order.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/limits_workers.jsonl (first 40.6 KB via Read; worker rows L165-L299, all report worker rows and all 40 group rows via Grep extraction)",
+      "tests/expected/limits_logs.jsonl (via Grep extraction: survey name, the start of each worker's input, all report worker and group rows)",
+      "tests/shipped/app/** (SHA-256 identical per packet-manifest.json to environment/app/tools/noisedose_run.py and environment/app/src/noisedose/*.py, which were read in full)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/expected/limits_logs.jsonl: the full 1,500-run log and the 500-peak list of L-1500/L-PEAKS were not read value by value. The Read tool truncates single-line JSON. The verifier itself asserts their counts and the section 1 limits (tests/test_outputs.py:339-347, 154-166), and every report row was read.",
+      "tests/expected/limits_workers.jsonl: the middle of the single-line input (workers L000-L164) was read through the first Read page. The report rows L000-L164 were read on that page, and all remaining rows came from Grep, so nothing graded was left unread."
+    ]
+  },
+  "findings": [],
+  "checks_performed": [
+    "Mapped each manual rule (2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 4.1, 1.2 rounding, 5.1, 5.2, 5.3, 6.1) and each README report promise to the family test and fixture rows that grade it (tests/test_outputs.py:246-347).",
+    "Recomputed expected doses and TWAs by hand from the manual for about 25 fixture rows, e.g. HC4-0006 B2 = 6.6667; HC4-0005 A1 = 251.98; HC4-0015 X1 = 317.48; HC4-0019 Y1 = 5178.55; HC4-0020 Z1/Z2; HC4-0038 K1/G1; HC4-0026 G1/G2; HC4-0031 L-2880/L-PEAKS; HC4-0034 = 1660.7. All agree with the sealed values.",
+    "Checked each plausible wrong implementation against the fixtures it fails, e.g. federal 90/5 dose and TWA, strict >80 threshold, sampled time counting only counted readings, paused runs counted as readings, projection to 8 h instead of to the shift, strict >3/4 partial test, projecting down when sampled > shift, floor/ceil instead of nearest-tenth rounding, status on the unrounded TWA, >140 impulse, >=115 ceiling, group mean of TWAs, group mean over members with a TWA only, group flags affecting group status, and above-ceiling readings counted at their own level. Each has at least one fixture whose compared value differs.",
+    "Checked that the kept below-three-quarters step (today's 480-minute projection from manual sampled time and measured dose) covers both sub-branches: sampled < 480 (X1, Y2, Y3, Y4, Y5, V1, V2) and sampled >= 480 (X2, Y1). Also checked that the shipped-package differential pairs vary only shift_minutes inside the below-3/4 region.",
+    "Checked the dose comparator against the instruction's pass/fail band. REL = ABS = 5e-11 lies between 1e-11 and 1e-10, and the 12-significant-digit goldens add at most about 5e-12 relative error.",
+    "Checked the type and representation strictness of _row/compare. Extra worker keys are ignored; int or float is accepted for dose and TWA; exact float equality on the TWA matches any nearest-tenth implementation after JSON round-tripping; null TWA requires None.",
+    "Checked that the relabelled generated surveys preserve every manual-defined figure (splitting runs at the same level, fresh ids, shuffled order, and names allowed by the README).",
+    "Checked that the largest-dose synthetic test's expectations are linear multiples of the sealed 102400 dose (X4 = 4x, X3 = 3x at exactly 3/4, X6 = 6x) and that the offset TWA check (121.0) is exact.",
+    "Checked stale-binary and self-comparison risks. The verifier's own driver is installed and /app is sealed before any run; the shipped differential copy runs as a separate uid and serves only as an invariance oracle, never as the expected value source for the candidate's figures.",
+    "Checked reachability of exact half-tenth TWAs. With levels to one decimal, (L-85)/3 = k/30, so TWAs lie in Q(2^(1/30)) up to rational projection factors. An exact .x5 tie would need 2^(±1/4) or 2^(±1/12) in that field, which is impossible, so the half-up rule cannot change a graded result and no fixture is required."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if it is missing or reversed",
+      "status": "checked",
+      "reason": "Every numbered manual rule and README field has a family test that compares the full report. Rule-specific rows change outcome under the rule's negation, e.g. 80.0 vs 79.9, 115.0 vs 115.1, 139.9 vs 140.0, 457/610 vs 458/610, 450/600, and 85.025 vs 85.069.",
+      "evidence": ["tests/test_outputs.py:246-347", "tests/expected/threshold.jsonl:1", "tests/expected/three_quarters.jsonl:1-2", "tests/expected/status.jsonl:1", "tests/expected/impulse.jsonl:1", "tests/expected/ceiling_level.jsonl:1", "environment/app/docs/noise-survey-manual.md:44-103"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result, not just existence, keys or row count",
+      "status": "checked",
+      "reason": "compare() checks the survey name, row counts, and every README key of every worker and group row in order. Dose is checked numerically; TWA exactly or as null; status, flags, id and group exactly with type.",
+      "evidence": ["tests/test_outputs.py:196-230", "environment/app/README.md:29-41"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case for each named domain rule (not only held-out variation)",
+      "status": "checked",
+      "reason": "Dedicated families exist for reference duration, threshold, sampled time, paused runs, partial projection, whole shift, exactly 3/4, below 3/4, measured nothing, above ceiling, ceiling level, impulse, TWA formula, rounding, status bands, group mean, quiet members and report order. Generated surveys are additional, not the only check.",
+      "evidence": ["tests/test_outputs.py:246-347", "tests/expected/ROSTER:1-24"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect implementations are rejected",
+      "status": "checked",
+      "reason": "Traced the shipped package's own defects (90/5 criterion, >80 threshold, sampled time from counted runs, projection to 480, floor rounding, federal TWA, 90/85 status bands, >140 impulse, mean-of-TWA groups) and a further dozen partial-fix mutants. Each fails at least one sealed row, e.g. HC4-0006 B2, HC4-0024 R0/R2/R4, HC4-0025 T0/T1/T2, HC4-0026 G1 and HC4-0013 A1/A3.",
+      "evidence": ["environment/app/src/noisedose/levels.py:9-23", "environment/app/src/noisedose/runs.py:16-24", "environment/app/src/noisedose/shift.py:17-22", "environment/app/src/noisedose/twa.py:9-32", "environment/app/src/noisedose/groups.py:16-24", "environment/app/src/noisedose/flags.py:6-13", "tests/expected/rounding.jsonl:1", "tests/expected/groups.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives (formatting, ordering, implementation choices) are accepted",
+      "status": "checked",
+      "reason": "Output is parsed as JSON; extra worker keys are ignored; int or float is accepted for numbers; the dose tolerance sits inside the instruction's band; TWA equality holds for any nearest-tenth method. The only extra-key restriction is ceiling/impulse on group rows, which README (group row keys) and manual 6.1 ('a group carries no ceiling or impulse flag') both support. List order is contract-fixed.",
+      "evidence": ["tests/test_outputs.py:196-225", "environment/app/README.md:39-41", "environment/app/docs/noise-survey-manual.md:100-102", "instruction.md:5"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle behavior enforced",
+      "status": "checked",
+      "reason": "The byte-identical driver requirement is enforced by test_submitted_driver_unchanged and by the cmp in test.sh. The reduction runs through the documented command against the candidate's /app/src. No other lifecycle promise exists.",
+      "evidence": ["instruction.md:1", "tests/test_outputs.py:70-78", "tests/test_outputs.py:439-445", "tests/test.sh:22-27"],
+      "finding_ids": []
+    },
+    {
+      "category": "Kept (manual-silent) steps graded against today's code, not an invented rule",
+      "status": "checked",
+      "reason": "The below-3/4 expectations match shift.py's 480-minute projection applied to manual sampled time and measured dose. The above-ceiling expectations match runs.py's min(level, 115.0) counting. Measured-nothing expectations are 0.0. The differential pairs vary only fields the kept step ignores (shift_minutes; above-ceiling level vs 115.0).",
+      "evidence": ["environment/app/src/noisedose/shift.py:17-22", "environment/app/src/noisedose/runs.py:19-23", "tests/expected/below_three_quarters.jsonl:1-3", "tests/expected/above_ceiling.jsonl:1-3", "tests/expected/differential-below_three_quarters.jsonl:1-5", "tests/expected/differential-above_ceiling.jsonl:1-4", "tests/test_outputs.py:233-243"],
+      "finding_ids": []
+    },
+    {
+      "category": "Proxy behavior, Oracle-specific representation, stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "Expected values are sealed and hash-pinned, not produced by candidate code. The verifier's driver copy replaces the delivered one before runs. The shipped copy is used only for invariance, never as the candidate's expected value. All fixtures are asserted to be within the section 1 limits, and trap inputs are confined to declared families, so no graded case falls outside the contract domain.",
+      "evidence": ["tests/test_outputs.py:59-103", "tests/test_outputs.py:154-193", "tests/expected/ROSTER:1-24"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities: legal sign partitions discriminated",
+      "status": "checked",
+      "reason": "log2(D/100) is exercised both negative (TWAs 53.3, 65.9, 73.3, 79.x-84.x) and positive (85.1-121.0), and at zero (dose 100 -> 85.0). The rounding rows discriminate floor/ceil/nearest on both sides of a tenth.",
+      "evidence": ["tests/expected/twa.jsonl:1", "tests/expected/rounding.jsonl:1", "tests/expected/status.jsonl:1", "tests/test_outputs.py:383-413"],
+      "finding_ids": []
+    },
+    {
+      "category": "State-machine initialization-to-first-event transition",
+      "status": "not_applicable",
+      "reason": "The reduction is a stateless per-worker sum over runs followed by per-group means. Run order does not affect any figure (relabel splits runs without changing the expected report).",
+      "evidence": ["environment/app/docs/noise-survey-manual.md:68-75", "tests/test_outputs.py:361-380"],
+      "finding_ids": []
+    },
+    {
+      "category": "Semantic content vs native encoding / layout / diagnostic output",
+      "status": "checked",
+      "reason": "Only parsed stdout JSON is graded. Stderr, key order, whitespace, ASCII escaping of non-ASCII survey names and file layout under /app/src are not constrained, except for the driver bytes, which the instruction explicitly requires.",
+      "evidence": ["tests/test_outputs.py:130-147", "tests/test_outputs.py:350-358", "instruction.md:1"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.4 sampled time includes quiet readings", "2.5/3.3 partial projection to own shift"],
+      "case_or_path": "HC4-0005 A1 (200@92 + 200@70 on a 480 shift): partial only if the 70 dBA minutes count, giving 251.98 instead of the 8 h projection or measured 209.99",
+      "status": "checked",
+      "evidence": ["tests/expected/sampled_time.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.2 paused runs are not readings", "2.5 three-quarter boundary / kept below-3/4 step"],
+      "case_or_path": "HC4-0007 A1 (370 of 480 sampled, partial) and HC4-0037 V2 (paused plus quiet, below 3/4, kept 480 projection 211.65)",
+      "status": "checked",
+      "evidence": ["tests/expected/paused_runs.jsonl:1", "tests/expected/below_three_quarters.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["kept above-ceiling counted level", "2.5/3.3 partial projection"],
+      "case_or_path": "HC4-0019 Y1: 20 min at 118.5 counted at 115 and included in sampled time 420 of 480, projected by 480/420 to 5178.55",
+      "status": "checked",
+      "evidence": ["tests/expected/above_ceiling.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.2 impulse makes worker over", "6.1 group carries no flag"],
+      "case_or_path": "HC4-0035 MOXEK302: worker over by impulse at TWA 81.5, group below; HC4-0025 U1/H9; HC4-0022 G1",
+      "status": "checked",
+      "evidence": ["tests/expected/generated.jsonl:4", "tests/expected/status.jsonl:1", "tests/expected/impulse.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.3 status on reported TWA", "1.2 nearest-tenth rounding"],
+      "case_or_path": "HC4-0025 T0 (81.985 -> 82.0 action), T1 (85.025 -> 85.0 action), T2 (85.069 -> 85.1 over), T3 (81.91 -> 81.9 below)",
+      "status": "checked",
+      "evidence": ["tests/expected/status.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["6.1 group mean of shift doses", "4.1 no TWA for zero dose / kept measured-nothing"],
+      "case_or_path": "HC4-0017 G1 (empty-log member counts as 0 in the mean) and HC4-0028 G1 (two quiet members plus one at 200 -> 66.67, TWA 83.2 action)",
+      "status": "checked",
+      "evidence": ["tests/expected/measured_nothing.jsonl:1", "tests/expected/quiet_members.jsonl:2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["6.1 group mean", "3.3 partial vs whole-shift members"],
+      "case_or_path": "HC4-0026 G2: full-shift 125.99 and partial 250.0 (not measured 208.33) -> mean 187.996",
+      "status": "checked",
+      "evidence": ["tests/expected/groups.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["5.1 ceiling flag makes worker over", "5.3 TWA bands"],
+      "case_or_path": "Any reading above 115.0 contributes at least 213.3% (1 min at 115 counted level) and projection factors are >= 1, so the TWA is always >= 88.3 and the ceiling-only 'over' branch can never change status; no isolating fixture is possible or needed",
+      "status": "checked",
+      "evidence": ["environment/app/docs/noise-survey-manual.md:86-95", "tests/expected/above_ceiling.jsonl:3"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["kept below-3/4 step", "kept above-ceiling step"],
+      "case_or_path": "No fixture combines both kept steps in one worker (TRAP_INPUTS keeps them apart). Each kept step is independent in today's code (runs.py vs shift.py), so no plausible implementation fails only in the combination.",
+      "status": "checked",
+      "evidence": ["tests/test_outputs.py:48-56", "environment/app/src/noisedose/runs.py:16-24", "environment/app/src/noisedose/shift.py:17-22"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}

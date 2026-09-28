@@ -1,0 +1,128 @@
+--- a/app/src/treadcheck/gauges.py
++++ b/app/src/treadcheck/gauges.py
+@@ -12,7 +12,7 @@
+ def reading_depths(tire, table):
+     """The depth in tenths each of a tire's readings gives, in reading order."""
+     depths = []
+-    for _date, _odometer, shown, _gauge in tire["readings"]:
+-        depth = shown
++    for _date, _odometer, shown, gauge in tire["readings"]:
++        depth = shown + table[gauge]
+         depths.append(depth)
+     return depths
+--- a/app/src/treadcheck/retread.py
++++ b/app/src/treadcheck/retread.py
+@@ -2,13 +2,13 @@
+ 
+ from . import dates
+ 
+-MAX_AGE_YEARS = 6
++MAX_AGE_DAYS = 2190
+ MAX_RETREADS = 2
+ 
+ 
+ def casing_eligible(tire, report_date):
+     """True when the casing may be sent for retread."""
+-    age = dates.year_of(report_date) - dates.year_of(tire["casing"])
+-    if age >= MAX_AGE_YEARS:
++    age = dates.days_between(tire["casing"], report_date)
++    if age >= MAX_AGE_DAYS:
+         return False
+-    return tire["retreads"] <= MAX_RETREADS
++    return tire["retreads"] < MAX_RETREADS
+--- a/app/src/treadcheck/rounding.py
++++ b/app/src/treadcheck/rounding.py
+@@ -2,5 +2,10 @@
+ 
+ 
+ def divide(numerator, denominator):
+-    """numerator / denominator rounded to a whole unit."""
++    """numerator / denominator rounded to a whole unit, an exact half to the larger number (1.1)."""
++    return (2 * numerator + denominator) // (2 * denominator)
++
++
++def divide_even(numerator, denominator):
++    """numerator / denominator rounded as the package always has, an exact half to the even number."""
+     return round(numerator / denominator)
+--- a/app/src/treadcheck/status.py
++++ b/app/src/treadcheck/status.py
+@@ -1,6 +1,7 @@
+ """In service, on watch or to be pulled."""
+ 
+-REMOVAL = 32  # tenths
++REMOVAL = 30  # tenths at a drive or trailer position (2.2)
++STEER_REMOVAL = 40  # tenths at a steer position (2.2)
+ WATCH_BAND = 16  # tenths above the removal depth
+ 
+ IN_SERVICE = "in service"
+@@ -10,24 +11,26 @@
+ 
+ def removal_depth(position):
+     """The depth in tenths at which a tire at this position comes off."""
++    if position == "steer":
++        return STEER_REMOVAL
+     return REMOVAL
+ 
+ 
+ def status(position, latest):
+     """The status of a tire from its position and latest depth."""
+     limit = removal_depth(position)
+-    if latest < limit:
++    if latest <= limit:
+         return PULL
+-    if latest < limit + WATCH_BAND:
++    if latest <= limit + WATCH_BAND:
+         return WATCH
+     return IN_SERVICE
+ 
+ 
+-REGROOVE_MARGIN = 20  # tenths of tread a regroove needs above the removal depth
++REGROOVE_FLOOR = 52  # tenths: the regrooving check as it has always stood (32 + 20)
+ 
+ 
+ def regroove(position, latest):
+     """True when a drive or trailer tire passes the shop's regrooving check."""
+     if position == "steer":
+         return False
+-    return latest >= REMOVAL + REGROOVE_MARGIN
++    return latest >= REGROOVE_FLOOR
+--- a/app/src/treadcheck/summary.py
++++ b/app/src/treadcheck/summary.py
+@@ -8,6 +8,7 @@
+     depths = gauges.reading_depths(tire, table)
+     latest = depths[-1]
+     worn, distance = wear.tread_worn(tire, depths)
++    tire_status = status.status(tire["position"], latest)
+     return {
+         "tire": tire["tire"],
+         "position": tire["position"],
+@@ -15,8 +16,8 @@
+         "worn": worn,
+         "distance": distance,
+         "rate": wear.wear_rate(worn, distance),
+-        "status": status.status(tire["position"], latest),
+-        "retread": retread.casing_eligible(tire, job["report_date"]),
++        "status": tire_status,
++        "retread": tire_status == status.PULL and retread.casing_eligible(tire, job["report_date"]),
+         "km_left": wear.km_left(latest, status.removal_depth(tire["position"]), wear.wear_rate(worn, distance)),
+         "regroove": status.regroove(tire["position"], latest),
+     }
+--- a/app/src/treadcheck/wear.py
++++ b/app/src/treadcheck/wear.py
+@@ -8,8 +8,8 @@
+ def tread_worn(tire, depths):
+     """(tread worn in tenths, distance in km it was worn over)."""
+     readings = tire["readings"]
+-    worn = depths[0] - depths[-1]
+-    distance = readings[-1][1] - readings[0][1]
++    worn = tire["new_depth"] - depths[-1]
++    distance = readings[-1][1] - tire["mounted_km"]
+     return worn, distance
+ 
+ 
+@@ -22,4 +22,4 @@
+     """The km a tire can still run before its limit at its wear rate (0 when it is not wearing)."""
+     if rate <= 0:
+         return 0
+-    return rounding.divide((latest - limit) * PER_KM, rate)
++    return rounding.divide_even((latest - limit) * PER_KM, rate)

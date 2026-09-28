@@ -1,0 +1,67 @@
+{
+ "schema": "blueprint-4.3-zero-of-eight-screen",
+ "task_slug": "tbrain-cems-hourly-emission-averaging",
+ "stage": "strengthening 1/1 after skeleton cycle-1 2/2 (both solvers kept both traps by writing new branches beside untouched old code)",
+ "design_rule": "in both traps the minimal natural fix of the host departure changes the silent case; keeping it needs added code; each trap's rule is bounded by a defined term in section 2, not in the rule sentence and not in the instruction's silence clause",
+ "traps": [
+  {
+   "id": "T1_hour_with_some_valid_readings_keeps_todays_figures",
+   "kind": "two-hop bare-state exclusion inside the substitution loop a departure (D6) forces the solver to rewrite; one routing decision (which hour's figures are reported)",
+   "blueprint_4_1_properties": {
+    "inside_rebuilt_aggregate": "D6 (4.2/4.3: a lost hour takes the before/after average) forces substitute.fill() to be rewritten; the shipped loop treats every operating hour that is not valid alike (carry the last valid hour forward), so the minimal fix fills every such hour by 4.2",
+    "bare_two_hop_representation": "nothing labels the subtype: it is an operating hour whose quarters carry some OK and some MNT/OOC/CAL codes so that it fails 2.3; only 2.5 'a lost hour is an operating hour in which no reading is valid' separates it from a lost hour",
+    "one_routing_decision": "the hour reports the figures of the last valid hour before it (today's step), not a fill",
+    "keeping_requires_adding_code": "an `elif lost` branch around the 4.2 fill, keeping the carry for the rest",
+    "definition_chain": "2.2 valid reading -> 2.3 valid hour -> 2.5 lost hour (no valid reading) -> 4.2/4.3 subject 'a lost hour' -> 4.1 'every operating hour has a reported concentration and mass rate' (closes the exclusion reading) -> reach rule keeps today's carried figures"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none: 4.1 requires a figure without giving one; 3.1-3.3 give averages, corrections and mass rates to valid hours only; only 4.2/4.3 give substitute figures, and only to lost hours",
+    "no_definitional_chain": "no (chain above)",
+    "contrary_expert_instinct": "soft-to-moderate: in permit practice an hour failing the minimum-data rule is missing data and an engineer would fill it like any other; the procedure's narrower definition of a lost hour is the only support",
+    "unnamed_shared_step": "no: the unruled figure is the reported concentration and mass rate of an operating hour that is neither valid nor lost",
+    "trap_in_several_tests": "no: only family T1 holds such an hour (gen.trap_inputs asserted in the scorer and in check_departures.py)"
+   },
+   "flags": "0 hard, 1 soft (contrary instinct)",
+   "evidence": {
+    "natural_fixes_failing_only_T1": [
+     "T1-fill-rule-for-every-substitute-hour",
+     "T1-carry-last-valid-hour-only"
+    ],
+    "cycle1_trees": "both fail T1 (receipts/skeleton2-scorer-validation-c1run{1,2}.json)",
+    "shipped_step_equals_model": "70/70 (receipts/departure-trap-checks.json)"
+   },
+   "strengthening": "today's fill() now carries the figures reported for the previous operating hour, whatever its kind (`last` updated after every operating hour), which equals the last valid hour only in today's package. After D6 a lost hour reports a before/after average, so a hour neither valid nor lost that follows a lost hour must carry that average. The natural rebuild (both cycle-1 diffs: nearest valid hour before) loses it; T1 inputs now include lost hours before such hours"
+  },
+  {
+   "id": "T2_valid_hour_that_is_not_firing_keeps_todays_correction",
+   "kind": "departure in a shared constant (AMBIENT_O2 = 210, read by the one correction expression) whose non-firing branch is outside the rule's defined subject; an apply-the-formula-everywhere edge in a function already being edited",
+   "blueprint_4_1_properties": {
+    "shared_expression": "D3 (3.2: 209) is the constant AMBIENT_O2 in correction.corrected(), which every valid hour passes through; the minimal fix edits the constant (or writes the 3.2 formula for every hour) and moves every non-firing valid hour",
+    "defined_domain": "3.2's subject is 'a firing hour', defined in 2.4 as a valid hour whose oxygen average is below 190 tenths; 2.4 describes the other hours in domain words (light-off and purge, close to ambient); 4.1 gives every operating hour a reported concentration (closes the exclusion reading)",
+    "one_routing_decision": "which expression the hour's concentration comes from; the kept one is today's (oxygen held at 190, 210) fed with the procedure's 3.1 averages",
+    "keeping_requires_adding_code": "a firing-hour branch with 209 beside the untouched expression",
+    "definition_chain": "2.3 valid hour -> 3.1 averages -> 2.4 firing hour (threshold 190) -> 3.2 subject 'a firing hour' -> 4.1 every hour has a reported concentration -> reach rule keeps today's correction"
+   },
+   "screen": {
+    "competing_positive_enumeration": "none after the phase-1 wording repair: 3.2 is the only sentence that corrects; 6.1 was changed to 'reported concentrations of the valid hours' and 3.2's ambient-air gloss was removed, so no sentence settles 20.9 or a correction for every valid hour",
+    "no_definitional_chain": "no (chain above)",
+    "contrary_expert_instinct": "soft-to-moderate: 21 against 20.9 looks like a plain physics slip; today's expression also holds oxygen at 190, which reads as a diluent cap, a recognised practice for near-ambient hours",
+    "unnamed_shared_step": "no: the unruled figure is the corrected concentration of a valid hour whose oxygen average is 190 or more",
+    "trap_in_several_tests": "no: only family T2 holds such an hour; every other family draws firing oxygen (20-180 per operating quarter)"
+   },
+   "flags": "0 hard, 1 soft (contrary instinct)",
+   "evidence": {
+    "natural_fixes_failing_only_T2": [
+     "T2-ambient-209-for-every-hour",
+     "T2-cap-moved-to-190",
+     "T2-firing-formula-for-every-hour"
+    ],
+    "cycle1_trees": "both fail T2",
+    "shipped_step_equals_model": "50/50"
+   },
+   "risk_note": "if both solvers read 2.4 and still apply 209 to non-firing hours, judge it as a 0/8 risk at step 7",
+   "strengthening": "today's corrected() now branches on the shared package constant O2_CAP = 200 (unheld 210 formula below it, held at 200 at or above). 2.4 puts the firing line at 190, so the natural repair moves O2_CAP to 190 (cycle-1 run 2 already reused O2_CAP as its firing test) or edits AMBIENT_O2; either moves the non-firing hours of 190-199 and 200-205, which the solver believes it kept. Keeping them needs a separate 190 test and both constants untouched"
+  }
+ ],
+ "independence": "different nodes (substitution in substitute.py vs correction in correction.py), different host departures (D6 vs D3), different kinds (rewritten loop routing vs shared constant/formula edge), different definitions (2.5 lost hour vs 2.4 firing hour); the instruction's single reach rule names neither"
+}

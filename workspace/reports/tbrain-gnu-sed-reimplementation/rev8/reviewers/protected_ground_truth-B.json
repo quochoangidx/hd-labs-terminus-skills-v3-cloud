@@ -1,0 +1,270 @@
+{
+  "axis": "protected_ground_truth",
+  "reviewer_id": "protected_ground_truth-B",
+  "snapshot_sha256": "d1e1daa9b7f760fc2ef54e5302bcfffd2ae5c1a4e0da387ba432453d620dfa2a",
+  "severity": "Major",
+  "summary": "The oracle (GNU sed 4.9) is sealed only by chmod 700 plus a Python audit hook. The hook blocks subprocess.Popen/os.* spawn events but not the unaudited _posixsubprocess.fork_exec (reachable as subprocess._fork_exec), and the no-native-code check only inspects the first 4 bytes of each /app file. A candidate can therefore ship an encoded byte-identical copy of the dev image's /bin/sed (same pinned base digest) inside /app/pysed/sed.py and exec it as the job user. That reproduces the trusted expected output for every case and earns reward 1 without reimplementing sed. Every other ground-truth boundary checked (goldens, reward file, workdir, filenames, env, symlinks) holds.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/scope.md",
+      "environment/app/docs/sed.txt",
+      "environment/app/pysed/sed.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/cases/inputs.json",
+      "tests/cases/areas.json",
+      "tests/cases/areas_2.json",
+      "tests/cases/mixed_1_2.json",
+      "tests/cases/mixed_3_4.json",
+      "tests/cases/matrix.json",
+      "tests/cases/sweeps.json"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [
+    {
+      "id": "PGT-1",
+      "severity": "Major",
+      "claim": "Candidate code run by the verifier can execute a byte-identical copy of the oracle (GNU sed 4.9) that it carries inside /app. The only runtime barrier to process creation is a Python audit hook, and it does not cover the unaudited _posixsubprocess.fork_exec primitive (also reachable as subprocess._fork_exec). The static no-native-code check only looks at each file's first 4 bytes. So a wrapper that exec's the embedded oracle matches every expected stdout and exit status and passes all tests, including test_editing_is_done_in_python.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "instruction.md:1 and :7 say the program may not call GNU sed and may not start other processes or programs. test_outputs.py:4-9 and test.sh:13-16 say the reference binary is made root-only so that the expected result stays under verifier control. Per the judge guide (Axis 3; C-8), live reference implementations must be inaccessible to candidate code that the verifier executes.",
+        "actual_behavior": "A candidate that embeds the dev image's /bin/sed (base64/zlib text inside sed.py) writes it to a memfd or /tmp at run time and calls subprocess._fork_exec / _posixsubprocess.fork_exec. That runs the embedded binary, which is the exact oracle. The guard fires only on the audit events os.exec, os.posix_spawn, os.spawn, os.system, os.fork, os.forkpty, subprocess.Popen and ctypes.dlopen, and on extension imports from outside lib-dynload. Python emits none of these for a direct fork_exec call, so the process is never killed with status 97 and its stdout/exit status equal GNU sed's.",
+        "trace_or_receipt": "1) instruction.md:1 confirms GNU sed 4.9 is at /bin/sed in the development image, so the candidate can read it there. 2) environment/Dockerfile:1 and tests/Dockerfile:1 pin the same base image digest (python:3.13-slim-bookworm@sha256:01f42367...), so the dev-image sed is byte-identical to the verifier's oracle at /bin/sed (test_outputs.py:78). Its shared-library dependencies stay world-readable in the verifier image; only the sed executable itself is chmod 700 (test.sh:16). 3) instruction.md:7 says only /app is carried over. test_outputs.py:336-342 rejects a file only if its first 4 bytes are \\x7fELF, so a .py file holding the encoded binary passes. 4) test.sh:20-21 makes /app root-owned and readable; the candidate needs no write access under /app because it can write to /tmp or a memfd. 5) test_outputs.py:85-106: the GUARD blocks the listed audit events and non-lib-dynload extension imports. _posixsubprocess is a stdlib extension (lib-dynload or builtin), and the stdlib subprocess module imports it at import time; importing subprocess is not blocked. In CPython, the 'subprocess.Popen' audit event is raised by Popen._execute_child in Lib/subprocess.py, not by _posixsubprocess.fork_exec, so a direct subprocess._fork_exec(...) call raises no blocked event. This is the one fact taken from the pinned CPython 3.13 runtime rather than from the packet. 6) DEMOTE (test_outputs.py:107) uses setpriv --no-new-privs with uid 65534. That does not stop exec of a non-setuid binary, and no RLIMIT_NPROC or seccomp limit is applied. 7) check() (test_outputs.py:142-161) compares (stdout, returncode) from root /bin/sed with the candidate's. The embedded copy runs with the same argv, cwd, stdin and LC_ALL=C (test_outputs.py:109, 130-139), so got == want for all ~1,600 roster cases. 8) test_editing_is_done_in_python only runs three cases and asserts status != 97 (test_outputs.py:348-355); the wrapper never trips the guard. 9) pytest exits 0, so test.sh:27-28 writes reward 1. This is a static trace, not an execution."
+      },
+      "reachable_case_or_path": "The candidate's /app/pysed/sed.py holds BLOB = zlib/base64 of /bin/sed read in the dev container. At run time it does: fd = os.memfd_create('s'); os.write(fd, decompress(BLOB)); import subprocess; pid = subprocess._fork_exec(['sed', *sys.argv[1:]], ['/proc/self/fd/%d' % fd], True, (fd,), None, None, 0, 1, -1, -1, -1, -1, errpipe_r, errpipe_w, False, False, -1, None, None, None, -1, None, False) (argument list per the 3.13 signature). Then it waits for the child with os.waitpid and exits with the child's status. Writing the blob to /tmp/x (mode 0700) and executing /tmp/x works the same way. The verifier then runs this for every case in test_outputs.py:147-150.",
+      "graded_effect": "Full reward (1.0) goes to a submission that does no Python reimplementation of sed at all. Its outputs come from the trusted oracle, so no case in the roster can tell it apart from a correct reimplementation, and the process-start guard never fires.",
+      "citations": [
+        "instruction.md:1",
+        "instruction.md:7",
+        "environment/Dockerfile:1",
+        "tests/Dockerfile:1",
+        "tests/test.sh:13-21",
+        "tests/test.sh:25-31",
+        "tests/test_outputs.py:4-9",
+        "tests/test_outputs.py:78",
+        "tests/test_outputs.py:85-107",
+        "tests/test_outputs.py:130-139",
+        "tests/test_outputs.py:142-161",
+        "tests/test_outputs.py:332-355"
+      ],
+      "root_invariant": "The trusted answer source (the GNU sed 4.9 binary) must not be executable by any code path open to the candidate process during grading. Here that boundary depends on an allow-list of Python audit events rather than an OS-level restriction on process creation or exec, so any unaudited process-creation primitive re-opens it.",
+      "authority": [
+        "instruction.md:1",
+        "instruction.md:7",
+        "_panel_docs/quality-panel-judge-guide.md:162-173",
+        "_panel_docs/quality-panel-examples.md:242-250"
+      ],
+      "implementation_sites": [
+        "tests/test_outputs.py:85-106 (GUARD event allow-list)",
+        "tests/test_outputs.py:107 (DEMOTE: no process-count or exec restriction)",
+        "tests/test_outputs.py:336-342 (ELF check limited to the first 4 bytes of each file)",
+        "tests/test.sh:16 (only the sed executable itself is sealed)"
+      ],
+      "sibling_variants": [
+        "Instead of an embedded copy, the candidate can exec other programs already in the verifier image through the same unaudited fork_exec (e.g. perl-base or python3 without the hook). This breaks the no-other-programs rule, but none of these is the oracle, so on this axis it adds no reward beyond PGT-1.",
+        "The 4-byte ELF check (test_outputs.py:340) also misses any other native blob stored compressed or at a non-zero offset (e.g. a zip/pyz holding a .so). Loading such a .so from /tmp should be caught by the hook's non-lib-dynload extension check (test_outputs.py:92-94); this was not relied on and is recorded as unverified.",
+        "The 'import' audit event may be raised with a None filename on the normal import path. The extension check therefore depends on the separate event raised when an extension is actually loaded. Not needed for PGT-1 and not asserted as a defect."
+      ],
+      "interaction_variants": [
+        "Oracle seal (chmod 700 on /bin/sed, test.sh:16) interacting with the same pinned base image in the environment and the verifier (environment/Dockerfile:1, tests/Dockerfile:1) and with the instruction's disclosure that /bin/sed exists in the dev image (instruction.md:1): the seal protects only the verifier's path, not the identical bytes the candidate can copy during the agent phase.",
+        "'Only /app is carried over' (instruction.md:7) interacting with the ELF-magic check (test_outputs.py:340): an encoded oracle survives the carry-over and passes the static check.",
+        "Audit-hook allow-list (test_outputs.py:87-88) interacting with the lib-dynload allowance (test_outputs.py:90-93): _posixsubprocess can be imported and its fork_exec raises none of the blocked events."
+      ],
+      "minimal_repair_boundary": "The candidate execution boundary (DEMOTE + CANDIDATE in test_outputs.py:106-107, applied at test_outputs.py:150 and :352) must stop process creation or exec at the OS level. For example, lower RLIMIT_NPROC for uid 65534 to its current process count (e.g. `prlimit --nproc=1` inside the setpriv chain) so fork fails, or apply a seccomp/execve denial. Additionally, blocking import of _posixsubprocess, subprocess, multiprocessing and pty in the hook is defense in depth but is not sufficient on its own. An alternative is to stop relying on the oracle being unreachable, e.g. by running expected outputs in a separate container. That still leaves the exec path open, though, and it only helps together with the process restriction.",
+      "closure_evidence": [
+        "A mutant sed.py that embeds the dev image's /bin/sed and exec's it via subprocess._fork_exec (memfd or /tmp path) is run through the real test.sh and must receive reward 0 (fork fails or the guard kills it), not 1.",
+        "The same mutant using os.posix_spawn / subprocess.Popen still fails as before (status 97).",
+        "A pure-Python reference implementation still receives reward 1 under the new restriction (no regression from the nproc/seccomp limit).",
+        "Inside DEMOTE+CANDIDATE, a probe calling `import subprocess; subprocess._fork_exec(...)` must not produce a running child."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read the complete packet (manifest reconciled: 20 files, all read; sed.txt paginated through line 5116 of 5119; matrix.json paginated through line 3833).",
+    "Traced test.sh ownership/permission setup: /tests and /logs/verifier chmod 700, /bin/sed resolved and chmod 700, site-packages chmod 700, /app chown root and go-w.",
+    "Traced check(): root /bin/sed runs first in a fresh mkdtemp workdir (chmod 755, root-owned, input files 0644); the candidate then runs as uid 65534 with no_new_privs, fixed env and stdin pipe; stdout and status are compared in verifier memory.",
+    "Confirmed that no case script uses w/W/r/R/e/F or an s///w|e flag and no option other than -n/-E/-s/-e (grep over all case files plus full read), so root sed never writes files, executes commands or reads candidate-influenced paths.",
+    "Checked case file names ('f','g','m','missing','-','e','f1'..'f3') and cwd/env/argv for outcome leakage: the expected output is not encoded in any candidate-visible name; argv is the required input.",
+    "Checked the reward channel: reward.txt is written by root test.sh from the pytest exit code under /logs/verifier (0700). Candidate stdout goes only into a pipe, and the candidate cannot signal root processes.",
+    "Checked root privileged reads of candidate-controlled /app content: os.walk + open().read(4). The content is only compared to ELF magic, so a symlink could at worst hang or fail the run (reward 0), never expose or forge expected values. chown -R/chmod -R do not follow symlinks during traversal.",
+    "Checked cross-case state: the candidate can write only to world-writable /tmp. Later root sed runs read only verifier-created files in fresh root-owned directories, so no expected value can be influenced.",
+    "Traced the GUARD audit hook against the process-creation and native-code primitives available in the stdlib and identified the unaudited _posixsubprocess.fork_exec path (static reasoning; not executed)."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Keep expected answers and live reference implementations inaccessible to candidate code, including code the verifier executes",
+      "status": "checked",
+      "reason": "Expected values are produced in memory by root /bin/sed and never persisted. /tests and /bin/sed are 0700. However, a byte-identical oracle copy can be carried in /app and exec'd through an unaudited fork_exec, so the reference implementation remains usable by candidate code.",
+      "evidence": [
+        "tests/test.sh:15-16",
+        "tests/test_outputs.py:78",
+        "tests/test_outputs.py:85-107",
+        "tests/test_outputs.py:336-342",
+        "environment/Dockerfile:1",
+        "tests/Dockerfile:1",
+        "instruction.md:1"
+      ],
+      "finding_ids": ["PGT-1"]
+    },
+    {
+      "category": "Privileged reads of candidate-influenced paths (symlink / path traversal)",
+      "status": "checked",
+      "reason": "Root only reads candidate-controlled /app files for 4-byte ELF magic (test_outputs.py:337-341), and the result can only fail the test, not forge expected values. Workdir input files are created by root from verifier data; case file names contain no path separators or absolute paths. chown/chmod -R do not follow traversal symlinks.",
+      "evidence": [
+        "tests/test_outputs.py:118-127",
+        "tests/test_outputs.py:336-342",
+        "tests/test.sh:20-21"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Compute expected values independently of the submitted artifact",
+      "status": "checked",
+      "reason": "want is computed by /bin/sed before the candidate runs, on verifier-owned inputs in a root-owned directory the candidate cannot write. The candidate cannot alter the inputs or the want value.",
+      "evidence": [
+        "tests/test_outputs.py:146-150",
+        "tests/test_outputs.py:118-127"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "No hidden outcomes exposed through filenames, arguments, working directories, or environment variables",
+      "status": "checked",
+      "reason": "cwd is a random mkdtemp name. ENV is fixed (LC_ALL, PATH, HOME). File names are neutral single letters or 'missing' (the file's absence is observable by design). argv carries only the required script and inputs. Test names are not passed to the candidate.",
+      "evidence": [
+        "tests/test_outputs.py:109-121",
+        "tests/cases/areas.json:1519-1537",
+        "tests/cases/matrix.json:1792-1806"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Grading results kept in a trusted channel (stdout / early exit cannot impersonate verification)",
+      "status": "checked",
+      "reason": "Reward is derived from pytest's exit code in root test.sh and written to root-only /logs/verifier. Candidate stdout is only compared as data. The candidate runs as uid 65534 in its own session and cannot signal or modify root processes or files.",
+      "evidence": [
+        "tests/test.sh:4-5",
+        "tests/test.sh:15",
+        "tests/test.sh:25-31",
+        "tests/test_outputs.py:130-139"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Test the access boundary from the same execution context as the candidate; confirm a suspected shortcut is really defeated",
+      "status": "checked",
+      "reason": "The verifier probes site-packages readability and guard trips from the DEMOTE context (test_outputs.py:344-355). No probe checks unaudited process creation, and the three guard-trip cases do not defeat an fork_exec-based oracle wrapper.",
+      "evidence": [
+        "tests/test_outputs.py:343-355"
+      ],
+      "finding_ids": ["PGT-1"]
+    },
+    {
+      "category": "Persisted / cross-case state that could change expected values (cache_carryover)",
+      "status": "checked",
+      "reason": "Each case uses a fresh root-owned workdir that is removed afterwards. The candidate can persist only in /tmp, which later root sed runs never read (no r/R/w/e in any case script, confirmed by reading all case files).",
+      "evidence": [
+        "tests/test_outputs.py:146-152",
+        "environment/app/docs/scope.md:8"
+      ],
+      "finding_ids": []
+    },
+    {
+      "category": "Privilege drop and setuid/no_new_privs preconditions",
+      "status": "checked",
+      "reason": "DEMOTE uses setpriv --reuid/--regid 65534 --clear-groups --no-new-privs, and /app is not setuid-capable content installed by the verifier. No privilege-regain path found; the defect is exec of an unprivileged oracle copy, not escalation.",
+      "evidence": [
+        "tests/test_outputs.py:107",
+        "tests/test.sh:20-21"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": [
+        "Oracle sealed root-only in the verifier (test.sh:16)",
+        "Same pinned base image and disclosed /bin/sed in the development image (instruction.md:1, environment/Dockerfile:1, tests/Dockerfile:1)"
+      ],
+      "case_or_path": "The candidate copies the dev image's /bin/sed bytes into /app during the agent phase; the verifier's chmod 700 does not affect that copy.",
+      "status": "checked",
+      "evidence": [
+        "instruction.md:1",
+        "environment/Dockerfile:1",
+        "tests/Dockerfile:1",
+        "tests/test.sh:16"
+      ],
+      "finding_ids": ["PGT-1"]
+    },
+    {
+      "rules": [
+        "Only /app is carried over (instruction.md:7)",
+        "No compiled executable under /app, checked by 4-byte ELF magic (test_outputs.py:336-342)"
+      ],
+      "case_or_path": "An encoded oracle stored inside a .py file is carried over and passes the static scan.",
+      "status": "checked",
+      "evidence": [
+        "instruction.md:7",
+        "tests/test_outputs.py:336-342"
+      ],
+      "finding_ids": ["PGT-1"]
+    },
+    {
+      "rules": [
+        "Audit hook blocks listed spawn events (test_outputs.py:87-88)",
+        "Stdlib lib-dynload extensions allowed (test_outputs.py:90-93)"
+      ],
+      "case_or_path": "import subprocess (allowed) followed by a direct subprocess._fork_exec call raises none of the blocked events.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:85-104"
+      ],
+      "finding_ids": ["PGT-1"]
+    },
+    {
+      "rules": [
+        "Root /bin/sed runs first in the shared workdir",
+        "Candidate runs second in the same workdir"
+      ],
+      "case_or_path": "Could root sed leave answer-bearing artifacts (w files, -i edits) in the workdir for the candidate to read? No case uses w/W/-i/s///w, so root sed writes nothing to the workdir.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:146-150",
+        "environment/app/docs/scope.md:7-8"
+      ],
+      "finding_ids": []
+    },
+    {
+      "rules": [
+        "Missing-file cases (text null)",
+        "Workdir is root-owned 755"
+      ],
+      "case_or_path": "A candidate cannot create the named-but-missing file (e.g. 'm', 'missing') to change the verifier's view; the exit-status-2 expectation is computed before the candidate runs and the candidate cannot write the directory.",
+      "status": "checked",
+      "evidence": [
+        "tests/test_outputs.py:118-127",
+        "tests/cases/matrix.json:1792-1806"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "PGT-1 relies on CPython 3.13's _posixsubprocess.fork_exec (reached via subprocess._fork_exec) raising no audit event. The packet contains no CPython source or execution receipt to confirm this.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "Run the closure mutant (embedded /bin/sed exec'd through subprocess._fork_exec) inside DEMOTE+CANDIDATE in the pinned verifier image and record whether it exits 97 or matches GNU sed output."
+    }
+  ],
+  "uncertainty": ""
+}

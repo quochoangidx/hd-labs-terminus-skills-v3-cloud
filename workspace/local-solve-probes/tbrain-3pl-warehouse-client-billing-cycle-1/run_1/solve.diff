@@ -1,0 +1,182 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/dates.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/dates.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/dates.py	2026-09-27 14:54:48
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/dates.py	2026-09-27 15:01:57
+@@ -19,6 +19,10 @@
+     def is_holiday(self, day):
+         return day in self.holidays
+ 
++    def is_working_day(self, day):
++        """A Monday to Friday that is not one of the job's holidays (2.4)."""
++        return day.weekday() < 5 and not self.is_holiday(day)
++
+     def is_out_of_hours(self, day):
+-        """A day the warehouse works out of hours."""
+-        return day.weekday() >= 5
++        """A day that is not a working day: movements are billed out of hours (5.2)."""
++        return not self.is_working_day(day)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/handling.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/handling.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/handling.py	2026-09-27 14:54:48
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/handling.py	2026-09-27 15:01:57
+@@ -14,12 +14,13 @@
+ 
+ def handling(lot, client, calendar, start, end):
+     """The lot's handling over the period, in cents."""
+-    rates = rates_for(client)["handling"]
+     total = 0
+     received = parse(lot["received"])
+     if start <= received <= end:
++        rates = rates_for(client, received)["handling"]
+         total += lot["pallets"] * movement_rate(rates, received, calendar, "in")
+-    for when, _pallets in dispatches(lot):
++    for when, pallets in dispatches(lot):
+         if start <= when <= end:
+-            total += movement_rate(rates, when, calendar, "out")
++            rates = rates_for(client, when)["handling"]
++            total += pallets * movement_rate(rates, when, calendar, "out")
+     return total
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/lots.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/lots.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/lots.py	2026-09-27 14:54:48
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/lots.py	2026-09-27 15:01:57
+@@ -9,10 +9,14 @@
+ 
+ 
+ def on_hand(lot, day):
+-    """How many of the lot's pallets are in the warehouse on `day`."""
++    """How many of the lot's pallets are in the warehouse on `day` (2.2).
++
++    A dispatched pallet is still on hand on the day it is dispatched and is gone
++    from the next day, so only dispatches on earlier days are taken off.
++    """
+     left = lot["pallets"]
+     for when, pallets in dispatches(lot):
+-        if when <= day:
++        if when < day:
+             left -= pallets
+     return left
+ 
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/rates.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/rates.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/rates.py	2026-09-27 14:54:48
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/rates.py	2026-09-27 15:01:57
+@@ -1,14 +1,28 @@
+ """Rate cards and storage tiers (billing schedule sections 3 and 4.3)."""
+ 
++from .dates import parse
+ 
+-def current_revision(client):
+-    """The client's revision in force: the latest one on its rate card."""
+-    return client["revisions"][-1]
+ 
++def revision_in_force(client, day):
++    """The client's latest revision whose effective date is on or before `day` (3.1).
+ 
+-def rates_for(client):
+-    """The rates a client is billed on: {"storage": tiers, "handling": {...}}."""
+-    return current_revision(client)["rates"]
++    On a day before the client's earliest effective date no revision is in force
++    and the schedule gives no rule for the value; the package keeps its own
++    reading of the rate card there, the latest revision on it.
++    """
++    revisions = client["revisions"]
++    in_force = None
++    for revision in revisions:
++        if parse(revision["effective"]) <= day:
++            in_force = revision
++    if in_force is None:
++        return revisions[-1]
++    return in_force
++
++
++def rates_for(client, day):
++    """The rates in force on `day`: {"storage": tiers, "handling": {...}}."""
++    return revision_in_force(client, day)["rates"]
+ 
+ 
+ def tier_rate(number, tiers):
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/statement.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/statement.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/statement.py	2026-09-27 14:54:48
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/statement.py	2026-09-27 15:02:10
+@@ -6,9 +6,9 @@
+ from .storage import storage
+ 
+ 
+-def discount_on(amount, percent):
+-    """The client discount on a lot's amount, in cents."""
+-    return amount * percent // 100
++def discount_on(charges, percent):
++    """The client discount on a lot's charges, in cents, half a cent rounded up (1.3, 6.3)."""
++    return (charges * percent + 50) // 100
+ 
+ 
+ def lot_entry(lot, job, calendar, start, end):
+@@ -17,11 +17,13 @@
+     weeks, stored = storage(lot, client, start, end)
+     handled = handling(lot, client, calendar, start, end)
+     amount = stored + handled
+-    discount = discount_on(amount, client["discount_percent"])
++    closed = is_closed(lot)
++    charges = handled + (stored if closed else 0)
++    discount = discount_on(charges, client["discount_percent"])
+     return {
+         "id": lot["id"],
+         "client": lot["client"],
+-        "status": "closed" if is_closed(lot) else "open",
++        "status": "closed" if closed else "open",
+         "storage_weeks": weeks,
+         "storage": stored,
+         "handling": handled,
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/storage.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/storage.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/baseline/environment/app/src/stockbill/storage.py	2026-09-27 14:54:48
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-3pl-warehouse-client-billing-cycle-1/run_1/solve/environment/app/src/stockbill/storage.py	2026-09-27 15:02:10
+@@ -1,18 +1,32 @@
+ """Storage weeks (billing schedule section 4)."""
+ 
+-from .dates import ONE_DAY, parse
++from datetime import timedelta
++
++from .dates import parse
+ from .lots import on_hand
+ from .rates import rates_for, tier_rate
+ 
++ONE_WEEK = timedelta(days=7)
+ 
++
+ def week_starts(lot, start, end):
+-    """First days of the lot's storage weeks that fall in the period."""
+-    day = max(start, parse(lot["received"]))
++    """(number, first day) of the lot's storage weeks that start within the period.
++
++    The weeks run in blocks of seven days from the receipt date (4.1); the ones
++    whose first day falls between the period's start and end dates, both
++    included, are the candidates for billing (4.2).
++    """
++    received = parse(lot["received"])
+     out = []
++    number, day = 1, received
++    if start > received:
++        skipped = (start - received).days // 7
++        number, day = number + skipped, day + skipped * ONE_WEEK
++        if day < start:
++            number, day = number + 1, day + ONE_WEEK
+     while day <= end:
+-        if day.weekday() == 0:
+-            out.append(day)
+-        day += ONE_DAY
++        out.append((number, day))
++        number, day = number + 1, day + ONE_WEEK
+     return out
+ 
+ 
+@@ -23,11 +37,11 @@
+ 
+ def storage(lot, client, start, end):
+     """(billed weeks, storage in cents) for the lot over the period."""
+-    rate = tier_rate(week_number(lot, end), rates_for(client)["storage"])
+     weeks, total = 0, 0
+-    for first in week_starts(lot, start, end):
++    for number, first in week_starts(lot, start, end):
+         pallets = on_hand(lot, first)
+         if pallets > 0:
++            rate = tier_rate(number, rates_for(client, first)["storage"])
+             weeks += 1
+             total += pallets * rate
+     return weeks, total

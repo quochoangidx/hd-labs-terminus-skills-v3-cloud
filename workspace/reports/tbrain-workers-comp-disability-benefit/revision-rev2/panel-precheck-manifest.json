@@ -1,0 +1,499 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-workers-comp-disability-benefit",
+ "primary_outcome": "the statements printed by /app/tools/tdbenefit_run.py give every claim's average weekly wage, weekly rate, waiting, retroactive and paid days, total-disability amount, partial weeks and amount and total owed as manual TD-7 gives them",
+ "obligations": [
+  {
+   "id": "WEEK_CREDIT",
+   "class": "core",
+   "contribution": "a week's pay (a wage line of 2,000 cents or more) counts toward the payroll week it pays for; a smaller line keeps counting toward its payday's week (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/td-benefits-manual.md",
+    "anchor": "A week's pay counts toward the payroll week whose work it pays"
+   },
+   "implementation_sites": [
+    "environment/app/src/tdbenefit/payroll.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "decides which pay makes the base-period wages, hence the AWW, rate and every amount"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays",
+     "test_outputs.py::test_correction_below_a_weeks_pay_keeps_its_paydays_week",
+     "test_outputs.py::test_jobs_drawn_at_run_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_line_of_exactly_2000_cents_is_a_weeks_pay",
+     "test_outputs.py::test_rule_2_3_base_period_ends_before_the_week_of_injury",
+     "test_outputs.py::test_correction_below_a_weeks_pay_keeps_its_paydays_week"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "weekly wage lines on every base-period payday and the paydays just outside it; separately, corrections of 1 to 1,999 cents on the payday in the week of injury and in the first base week",
+   "wrong_but_plausible": "count every line toward its payday's week (shipped); shift every line a week, corrections included (minimal natural fix of 3.1)",
+   "selfdescription_phrase": "week a line counts"
+  },
+  {
+   "id": "AWW",
+   "class": "core",
+   "contribution": "the average weekly wage is the base-period wages divided by thirteen",
+   "authority": {
+    "file": "environment/app/docs/td-benefits-manual.md",
+    "anchor": "The average weekly wage is the base-period wages divided by thirteen"
+   },
+   "implementation_sites": [
+    "environment/app/src/tdbenefit/payroll.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the AWW sets the rate, the partial wage loss and every amount"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_3_average_weekly_wage_divides_by_thirteen",
+     "test_outputs.py::test_jobs_drawn_at_run_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_3_no_week_paid_gives_nought",
+     "test_outputs.py::test_register_of_more_than_52_distinct_paydays"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "workers paid for 0, 1, 9, 12 and 13 base weeks",
+   "wrong_but_plausible": "divide by the base weeks some line counts toward (shipped)",
+   "selfdescription_phrase": "average weekly wage"
+  },
+  {
+   "id": "RATE",
+   "class": "core",
+   "contribution": "two thirds of the AWW, within the maximum and minimum of the row in force on the date of injury; an AWW below that minimum is the rate",
+   "authority": {
+    "file": "environment/app/docs/td-benefits-manual.md",
+    "anchor": "The weekly rate is two thirds of the average weekly wage"
+   },
+   "implementation_sites": [
+    "environment/app/src/tdbenefit/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the rate multiplies every paid day and caps every partial benefit"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_4_rate_is_two_thirds",
+     "test_outputs.py::test_rule_2_4_row_in_force_on_the_date_of_injury",
+     "test_outputs.py::test_rule_3_5_low_wage_rate_is_the_aww",
+     "test_outputs.py::test_rule_3_4_maximum_and_minimum_bound_the_rate",
+     "test_outputs.py::test_rule_3_4_row_figures_at_their_ends_decide_the_rate",
+     "test_outputs.py::test_jobs_drawn_at_run_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_row_in_force_on_the_date_of_injury",
+     "test_outputs.py::test_rule_3_5_low_wage_rate_is_the_aww",
+     "test_outputs.py::test_rule_3_4_maximum_and_minimum_bound_the_rate",
+     "test_outputs.py::test_rule_3_4_row_figures_at_their_ends_decide_the_rate"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "rates far from the caps; injuries before, on and after a row's effective date with the maximum or minimum binding; AWWs one cent below and at the minimum",
+   "wrong_but_plausible": "60 per cent (shipped); the table's newest row (shipped); lifting a low wage to the minimum (shipped)",
+   "selfdescription_phrase": "weekly rate"
+  },
+  {
+   "id": "TTD",
+   "class": "core",
+   "contribution": "disability days include both ends; the first three are the waiting period, paid back from fourteen days; the amount is rate x paid days / 7 rounded to the cent",
+   "authority": {
+    "file": "environment/app/docs/td-benefits-manual.md",
+    "anchor": "The total-disability amount is the weekly rate times the paid days"
+   },
+   "implementation_sites": [
+    "environment/app/src/tdbenefit/disability.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "paid days times the rate make the total owed"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_5_both_ends_of_a_period_count",
+     "test_outputs.py::test_rule_2_6_three_waiting_days",
+     "test_outputs.py::test_rule_4_3_amount_rounded_to_the_cent",
+     "test_outputs.py::test_jobs_drawn_at_run_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_retroactive_from_fourteen_days",
+     "test_outputs.py::test_rule_2_5_both_ends_of_a_period_count"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "one-day periods and claims of twelve periods; claims of 1, 2, 3, 13 and 14 disability days; amounts whose seventh leaves a remainder of four to six",
+   "wrong_but_plausible": "exclusive day count, seven waiting days, truncated amount (shipped)",
+   "selfdescription_phrase": "total-disability"
+  },
+  {
+   "id": "TPD",
+   "class": "core",
+   "contribution": "a week of partial disability (1,000 cents earned or more) pays two thirds of its wage loss, no more than the weekly rate; any other week of the partial earnings keeps today's share (silent, kept)",
+   "authority": {
+    "file": "environment/app/docs/td-benefits-manual.md",
+    "anchor": "A week of partial disability pays two thirds of its wage loss"
+   },
+   "implementation_sites": [
+    "environment/app/src/tdbenefit/partial.py",
+    "environment/app/src/tdbenefit/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the partial amount adds to the total owed"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate",
+     "test_outputs.py::test_week_below_1000_cents_keeps_todays_share",
+     "test_outputs.py::test_jobs_drawn_at_run_time"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_8_week_of_exactly_1000_cents_is_partial_disability",
+     "test_outputs.py::test_rule_2_7_week_earning_the_aww_has_no_wage_loss",
+     "test_outputs.py::test_week_below_1000_cents_keeps_todays_share"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "partial weeks earning 1,000 cents, more, the AWW and above it, with the rate cap binding; separately, weeks earning 0 to 999 cents",
+   "wrong_but_plausible": "60 per cent everywhere (shipped); two thirds for every week once the shared fraction is fixed (minimal natural fix of 3.4/5.1); nothing for a week below 1,000 cents (exclusion reading)",
+   "selfdescription_phrase": "partial benefit"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver printing the statements",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/tdbenefit_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "WEEK_CREDIT",
+    "to": "AWW"
+   },
+   {
+    "from": "AWW",
+    "to": "RATE"
+   },
+   {
+    "from": "AWW",
+    "to": "TPD"
+   },
+   {
+    "from": "RATE",
+    "to": "TTD"
+   },
+   {
+    "from": "RATE",
+    "to": "TPD"
+   },
+   {
+    "from": "TTD",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "TPD",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "AWW",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "RATE",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "credited-pay-makes-the-aww",
+   "obligation_ids": [
+    "WEEK_CREDIT",
+    "AWW"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_1_weeks_pay_counts_toward_the_week_it_pays",
+    "test_outputs.py::test_rule_3_3_average_weekly_wage_divides_by_thirteen"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "aww-sets-rate-and-wage-loss",
+   "obligation_ids": [
+    "AWW",
+    "RATE",
+    "TPD"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_5_low_wage_rate_is_the_aww",
+    "test_outputs.py::test_rule_5_1_partial_week_pays_two_thirds_capped_at_the_rate"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "rate-times-paid-days",
+   "obligation_ids": [
+    "RATE",
+    "TTD"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_3_amount_rounded_to_the_cent",
+    "test_outputs.py::test_generated_jobs"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "every rule in the manual applies to every job inside the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Whatever the package works out, or does with an item, that no rule of the manual reaches",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/td-benefits-manual.md",
+     "anchor": "small corrections to earlier pay",
+     "witness_ids": [
+      "test_outputs.py::test_correction_below_a_weeks_pay_keeps_its_paydays_week"
+     ]
+    },
+    {
+     "file": "environment/app/docs/td-benefits-manual.md",
+     "anchor": "A week of partial disability is a week of the partial earnings in which the",
+     "witness_ids": [
+      "test_outputs.py::test_week_below_1000_cents_keeps_todays_share"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "The jobs we run hold one to two hundred claims"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED=20260927 (authoring only; graded jobs are sealed files)",
+   "tests/test_outputs.py RELABEL_SEED from os.urandom: fresh claim numbers and orders for the generated and limits jobs, a relabelling that leaves every figure unchanged; printed with any failure",
+   "tests/test_outputs.py DRAW_SEED from os.urandom: four jobs with fresh figures and dates graded against tests/manual_model.py (a byte copy of solution/model.py); printed with any failure; 12,000 offline draws stay inside section 1 and free of the two kept cases, and 6,000 match the Oracle"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave /app/tools/tdbenefit_run.py exactly as it is",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED), before and after candidate code",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness: the candidate user cannot read /tests, the sealed expectations, the shipped copy or /logs/verifier (with a readable control)",
+  "test_outputs.py::test_generated_jobs": "seeded trap-free jobs over the governed section 1 domain, also relabelled at run time",
+  "test_outputs.py::test_section_one_limits_reached": "section 1 ends: 40 rows, 200 claims, 120 lines, 12 periods of 400 days, 104 partial weeks, 1 and 500,000 cents, 2016 and 2035 (trap-free)",
+  "test_outputs.py::test_statement_order_and_keys": "README statement layout: job order, claim numbers as given, exactly ten keys, integer figures"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATEMENT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the payment system reads these keys in job order; README fixes them",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "in the order of the job's"
+   }
+  },
+  {
+   "id": "CENT-ROUNDING",
+   "domain_required": true,
+   "rationale": "indemnity is paid in whole cents; manual 1.1 fixes the nearest cent (no rule's divisor, 13, 3, 5 or 7, can land on an exact half cent)",
+   "authority_anchor": {
+    "file": "environment/app/docs/td-benefits-manual.md",
+    "anchor": "the result is rounded to the nearest cent"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "preflight.json",
+ "wrong_paths": [
+  {
+   "id": "W01-credit-by-payday-week",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "WEEK_CREDIT"
+   ],
+   "receipt": "wrong-paths/W01-credit-by-payday-week.json"
+  },
+  {
+   "id": "W02-divide-by-weeks-paid",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "AWW"
+   ],
+   "receipt": "wrong-paths/W02-divide-by-weeks-paid.json"
+  },
+  {
+   "id": "W03-sixty-per-cent",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "RATE",
+    "TPD"
+   ],
+   "receipt": "wrong-paths/W03-sixty-per-cent.json"
+  },
+  {
+   "id": "W04-newest-rate-row",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "RATE"
+   ],
+   "receipt": "wrong-paths/W04-newest-rate-row.json"
+  },
+  {
+   "id": "W05-low-wage-lifted-to-minimum",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "RATE"
+   ],
+   "receipt": "wrong-paths/W05-low-wage-lifted-to-minimum.json"
+  },
+  {
+   "id": "W06-period-one-day-short",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TTD"
+   ],
+   "receipt": "wrong-paths/W06-period-one-day-short.json"
+  },
+  {
+   "id": "W07-seven-waiting-days",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TTD"
+   ],
+   "receipt": "wrong-paths/W07-seven-waiting-days.json"
+  },
+  {
+   "id": "W08-ttd-truncated",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TTD"
+   ],
+   "receipt": "wrong-paths/W08-ttd-truncated.json"
+  },
+  {
+   "id": "W09-shift-every-line",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "WEEK_CREDIT"
+   ],
+   "receipt": "wrong-paths/W09-shift-every-line.json"
+  },
+  {
+   "id": "W10-drop-lines-below-a-weeks-pay",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "WEEK_CREDIT"
+   ],
+   "receipt": "wrong-paths/W10-drop-lines-below-a-weeks-pay.json"
+  },
+  {
+   "id": "W11-one-fraction-for-every-week",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TPD"
+   ],
+   "receipt": "wrong-paths/W11-one-fraction-for-every-week.json"
+  },
+  {
+   "id": "W12-low-week-pays-nothing",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TPD"
+   ],
+   "receipt": "wrong-paths/W12-low-week-pays-nothing.json"
+  },
+  {
+   "id": "W14-low-week-floored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TPD"
+   ],
+   "receipt": "wrong-paths/W14-low-week-floored.json"
+  },
+  {
+   "id": "W13-low-week-uncapped",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TPD"
+   ],
+   "receipt": "wrong-paths/W13-low-week-uncapped.json"
+  },
+  {
+   "id": "W15-maximum-floored",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "RATE"
+   ],
+   "receipt": "wrong-paths/W15-maximum-floored.json"
+  },
+  {
+   "id": "H01-driver-tampered",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H01-driver-tampered.json"
+  },
+  {
+   "id": "H02-read-sealed-expectations",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H02-read-sealed-expectations.json"
+  },
+  {
+   "id": "W16-payday-guard-52",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "AWW"
+   ],
+   "receipt": "wrong-paths/W16-payday-guard-52.json"
+  },
+  {
+   "id": "H03-sealed-corpus-lookup",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H03-sealed-corpus-lookup.json"
+  }
+ ],
+ "task_snapshot_sha256": "25ad45d1287d30e6f4eed8d37767c839d57ae280d416a32335ac9c96ca5be19b"
+}

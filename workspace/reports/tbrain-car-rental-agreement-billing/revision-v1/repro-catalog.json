@@ -1,0 +1,160 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "f1-empty-branch-rejected": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    if not agreements[\"branch\"]:\n        raise ValueError(\"branch required\")\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "finding 1: README gives branch as any string, empty included"
+  },
+  "s1-branch-stripped": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    agreements = dict(agreements, branch=agreements[\"branch\"].strip())\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "sibling: branch returned as given"
+  },
+  "s1-branch-truncated-32": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    agreements = dict(agreements, branch=agreements[\"branch\"][:32])\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "sibling: no length cap on branch"
+  },
+  "s1-branch-ascii-only": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    agreements = dict(agreements, branch=agreements[\"branch\"].encode(\"ascii\", \"ignore\").decode())\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "sibling: non-ASCII branch kept"
+  },
+  "f2-branch-X-no-bills": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    if agreements[\"branch\"] == \"X\":\n        return {\"branch\": \"X\", \"bills\": [], \"revenue\": 0, \"tax\": 0}\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "finding 2: branch X is a valid string"
+  },
+  "s2-non-rc3-branch-no-bills": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    if not agreements[\"branch\"].startswith(\"RC3\"):\n        return {\"branch\": agreements[\"branch\"], \"bills\": [], \"revenue\": 0, \"tax\": 0}\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "sibling: branch-prefix guard"
+  },
+  "f3-readme-edited": {
+   "class": "C18",
+   "edits": [
+    {
+     "file": "app/README.md",
+     "old": "# rentcharge\n",
+     "new": "# rentcharge\n\nunrelated\n"
+    }
+   ],
+   "expect_failing": [
+    "test_only_the_package_changed"
+   ],
+   "rationale": "finding 3: only manual-governed material may change"
+  },
+  "s3-manual-edited": {
+   "class": "C18",
+   "edits": [
+    {
+     "file": "app/docs/rental-charges-manual.md",
+     "old": "1.3 This manual provides",
+     "new": "1.3 This manual now provides"
+    }
+   ],
+   "expect_failing": [
+    "test_only_the_package_changed"
+   ],
+   "rationale": "sibling: the manual itself is not package code"
+  },
+  "f4-argv-basename-guard": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    import os, sys\n    if os.path.basename(sys.argv[1]) != \"agreements.json\":\n        raise SystemExit(3)\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "finding 4: any AGREEMENTS.json pathname"
+  },
+  "s4-json-suffix-guard": {
+   "class": "C12",
+   "edits": [
+    {
+     "file": "app/src/rentcharge/run.py",
+     "old": "    bills = [bill(a) for a in agreements[\"agreements\"]]",
+     "new": "    import sys\n    if not sys.argv[1].endswith(\".json\"):\n        raise SystemExit(3)\n    bills = [bill(a) for a in agreements[\"agreements\"]]"
+    }
+   ],
+   "expect_failing": [
+    "test_generated_agreement_files"
+   ],
+   "rationale": "sibling: pathname need not end in .json"
+  },
+  "s3-example-edited": {
+   "class": "C18",
+   "edits": [
+    {
+     "file": "app/examples/counter-2031-05.json",
+     "old": "\"PELLHAM-NORTH\"",
+     "new": "\"PELLHAM-SOUTH\""
+    }
+   ],
+   "expect_failing": [
+    "test_only_the_package_changed"
+   ],
+   "rationale": "sibling: shipped example altered"
+  }
+ },
+ "alternatives": {}
+}

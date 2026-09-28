@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-gnu-bc-reimplementation"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Software"
+subcategory = "Languages"
+languages = ["python"]
+tags = ["gnu-dc", "rpn-calculator", "arbitrary-precision", "macros", "reimplementation"]
+expert_time_estimate_hours = 12
+difficulty_explanation = "A drop-in GNU dc 1.4.1 has to reproduce an arbitrary-precision reverse-Polish language from its manual with no dc to compare against: the scale rules of every arithmetic operation (multiplication keeps the larger operand scale up to the precision but never beyond the exact result, division, remainder, divide-with-remainder, exponentiation and modular exponentiation each truncate differently, and the square root is taken at the larger of the precision and the argument's scale), exact conversion to and from every input and output radix including the grouped digits of radixes above 16 and the fraction digits of non-decimal output, the splitting of long numbers across lines, and a macro language with register stacks that each carry their own array, conditional execution, tail calls and the q and Q commands that leave a counted number of macro levels. Errors are part of the behaviour: dc prints a diagnostic and carries on. The expertise is reading these rules exactly; an engineer who implements dc from memory of simpler calculators gets the scale, radix and quit-level details wrong while everything else passes."
+solution_explanation = "The reference is a standard-library port of GNU dc's evaluator together with the arithmetic of the bc number library. Numbers are kept as a sign, their digits and a scale, so each operation reproduces the library's scale and truncation rules, including the Newton iteration of the square root at growing scale and the in-place scale cut of exponentiation. The evaluator reads commands from expressions, files and standard input with the same one-character lookahead, keeps a main stack and register stacks that each carry an array, evaluates macros with tail-call handling and the level counting of q and Q, and prints numbers in any output radix with the 70-column line split."
+verification_explanation = "A separate verifier image holds the scripts, each with its command-line arguments, input files and standard input. For every case the verifier runs the image's own GNU dc 1.4.1 as root in a fresh directory to get the expected output, then runs /app/pydc/dc.py as an unprivileged user in another fresh copy with LC_ALL=C and compares standard output byte for byte. The dc binary is made root-only first, so the candidate cannot delegate to it. Cases are grouped into one named test per chapter of the manual plus buckets of generated scripts; a case is kept only if its output does not change under any other plausible reading of a point the manual leaves open or states differently from GNU dc."
+relevant_experience = "Years of Unix tooling and numerical work: writing dc and bc scripts for build and report pipelines, porting command-line tools to minimal containers, and implementing arbitrary-precision decimal arithmetic."
+
+[verifier]
+timeout_sec = 3600
+environment_mode = "separate"
+network_mode = "public"
+
+[agent]
+timeout_sec = 7200
+network_mode = "public"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

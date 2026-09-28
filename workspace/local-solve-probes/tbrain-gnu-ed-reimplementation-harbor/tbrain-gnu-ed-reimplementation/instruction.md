@@ -1,0 +1,12 @@
+Our minimal images have no ed, and the maintenance scripts that still pipe edit commands into it are being pointed at `/app/pyed/ed.py` instead. Implement it so that `python3 /app/pyed/ed.py [OPTIONS] [FILE]` behaves exactly like GNU ed 1.19 run as `ed [OPTIONS] [FILE]` with `LC_ALL=C` and the same standard input. It must produce the same standard output, byte for byte, and leave the same files with the same contents in the current directory. Its exit status must be zero exactly when GNU ed's is. What goes to standard error is not compared. The GNU ed manual is in `/app/docs/ed.txt`.
+
+It has to cover everything the manual describes, with these exceptions: shell commands, the options `-G` and `-v`, and the commands `h` and `H`. That means:
+
+- the options `-E`, `-l`, `-p STRING`, `-q`, `-r` and `-s`, and no others. Each comes as its own argument before the optional FILE, and `-p` takes the prompt string as the next argument;
+- every form of line address and address range;
+- basic and extended regular expressions. In basic ones `\|` is alternation, as in GNU. Matching is POSIX leftmost-longest: of the matches that start at the leftmost possible position, the longest one wins, whichever alternative of a `|` produces it;
+- every other command, command suffix and `s` flag, including the global commands, undo, marks and the interactive forms `G` and `V`, which read their command lists from standard input like any other line.
+
+After every command that fails, ed writes `?` and a newline to standard output, and when its standard input is a regular file it then stops. Standard input is sometimes a regular file and sometimes a pipe, and none of the standard streams is a terminal. Reaching the end of standard input acts like a `q` command, repeated as often as needed. The `!` command never appears, and neither do FILE or command arguments that start with `!`. The files involved are ASCII text of at most a few dozen lines each. Files named in commands may not exist, and a FILE named on the command line may not exist when standard input is a pipe. Use only the Python standard library and do not start other programs.
+
+Every check relies only on behaviour that the manual describes, together with the rules above. It will be checked against GNU ed 1.19 itself with many command scripts.

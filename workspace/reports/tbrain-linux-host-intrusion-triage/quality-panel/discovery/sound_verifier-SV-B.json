@@ -1,0 +1,259 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "SV-B",
+  "snapshot_sha256": "fa3d5d1ee0370a144e73521d4f98adcc12f305c4fc6402caf6137800aa961dbf",
+  "severity": "Minor",
+  "summary": "The comparator, staging and family structure are sound, and the readable edge_hi set shows strong decoys: the exactly-600 s hostile window, the exactly-2 s package boundary, a shared-password regular user whose earlier sudo must not count, a timestomped authorized_keys and an open session. Two gaps remain. (1) The sealed goldens exclude a persistence-kind file whose ctime falls inside the intrusion span but between the intruder's sessions. That applies a session-bounded meaning of 'during the intrusion' that the guide never states, so a contract-faithful window reading is rejected on case1 and edge_hi. (2) Every graded clock step is host-behind (a forward step), so the backward-step or overlap partition, which is the one where the guide's 'collector settles which side' rule matters, is never discriminated.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/triage.py",
+      "environment/app/docs/case-guide.md",
+      "environment/app/docs/record-formats.md",
+      "environment/app/docs/report.md",
+      "environment/app/evidence/case-1/collection.txt",
+      "environment/app/evidence/case-1/fs-listing.tsv",
+      "environment/app/evidence/case-1/var/log/auth.log",
+      "environment/app/evidence/case-1/var/log/auth.log.1",
+      "environment/app/evidence/case-1/var/log/dpkg.log",
+      "environment/app/evidence/case-1/var/log/remote/files.log",
+      "environment/app/evidence/case-1/home/git/.bash_history",
+      "environment/app/evidence/case-1/home/git/.ssh/authorized_keys",
+      "environment/app/evidence/case-1/home/tpham/.bash_history",
+      "environment/app/evidence/case-1/root/.bash_history",
+      "environment/app/evidence/case-1/var/lib/dpkg/info/*.list (grep for persistence-kind paths)",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/expected/ROSTER",
+      "tests/expected/*.jsonl (all 14 families, 27 cases)",
+      "readable-evidence/H25178f/* (edge_hi plain-text extraction named in the brief: collection, remote log, auth.log..auth.log.5, wtmp/btmp decoded, histories, fs-listing, dpkg.log)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": [
+      "tests/evidence/*.tar.gz: gzip tar packs are opaque to read-only tools (the brief allows treating them as opaque); only edge_hi is available as a readable extraction",
+      "environment/app/evidence/case-1/var/log/{wtmp,btmp,auth.log.2.gz,auth.log.3.gz}: binary or gzip, not decoded",
+      "case-1 authorized_keys for root/tpham and the non-grepped .list bodies were not read line by line (not needed for the traced paths)",
+      "tests/shipped/docs/*: not reread; the manifest hashes match the environment/app/docs files that were read"
+    ]
+  },
+  "findings": [
+    {
+      "id": "SV-1",
+      "severity": "Minor",
+      "claim": "The sealed goldens apply an undocumented, session-bounded meaning of 'changed during the intrusion' (rule 6). A persistence-kind file whose true ctime lies inside the intrusion span, but when no intruder session is open, is excluded from the expected report. An implementation that reads 'during the intrusion' as the span from initial access to last activity, or to collection, reports it and is rejected, although the guide never ties a file change to an open intruder session.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "Rule 6 (case-guide.md:37-44) says only 'files of these kinds that the intruder created or changed during the intrusion', with ctime as the change time and a package-manager exclusion. It defines neither 'during the intrusion' nor any attribution of file changes to sessions. Reading the intrusion as its time span, from initial access through last activity or collection, is contract-consistent, so a non-package /etc/cron.d/ file whose true ctime lies inside that span is a persistence artefact under that reading.",
+        "actual_behavior": "edge_hi H25178f expects persistence == ['/home/build/.ssh/authorized_keys'] and excludes /etc/cron.d/backup-nightly. Its host ctime 1924729396 is after the clock step, so the true time is 2030-12-28T23:03:16Z, inside [initial_access 18:51:27Z, last_activity 2030-12-29T06:47:06Z]. That is after intruder session 1 closed (21:36:26Z) and before session 2 opened (06:47:06Z), and no session of any user is open. case1 H01f621 shows the same pattern: /etc/cron.d/certbot-renew has host ctime 1640792760, before the step, so the true time is 17:26:36Z (host +6036). That is inside [16:39:40Z, 17:53:04Z] but between intruder sessions (16:39:40-17:11:55Z and 17:51:33Z-open), and case1.jsonl excludes it.",
+        "trace_or_receipt": "edge_hi, static read of the readable extraction. (a) Step boundary: auth.log.5.txt line 34 'Dec 29 10:12:09' at +14:00 is host 20:12:09Z, while the remote edge7.log line 46 says 22:12:09Z, so the host is 7200 s behind. auth.log.5.txt line 35 'Dec 29 12:12:10' is 22:12:10Z and remote line 47 says 22:12:10Z, so the host clock is correct. The step is therefore at true 22:12:10Z, epoch 1924726330. (b) fs-listing.tsv line 4 gives backup-nightly ctime 1924729396, which is >= 1924726330. A pre-step reading would need a true time of 1924736596, past the step, so the value is post-step and the true time is 23:03:16Z. It is not package-written: no .list names it, and no dpkg 'status installed' line falls within 2 s. (c) Sessions from edge7.log lines 37-49: intruder 18:51:27-21:36:26Z, regular build 19:06:55-19:30:47Z, tpham 19:11:09-19:26:09Z, intruder key login 06:47:06Z with no close. No session covers 23:03:16Z. (d) edge_hi.jsonl:1 persistence omits it. (e) Its mtime 1924713670 is before the step, so the true time is 20:41:23Z, inside session 1. The file is an mtime-vs-ctime decoy, but its ctime was placed inside the intrusion span rather than outside it. The same trace applies to case-1: fs-listing.tsv line 6, files.log lines 40-55, root/.bash_history, case1.jsonl:1. Not executed."
+      },
+      "reachable_case_or_path": "Candidate: for each non-package persistence-kind path, include it if its step-corrected ctime lies in [initial_access, last intruder event]. On edge_hi H25178f it outputs ['/etc/cron.d/backup-nightly', '/home/build/.ssh/authorized_keys']. On case1 H01f621 it adds '/etc/cron.d/certbot-renew'. test_outputs.py:121 set comparison fails on persistence, so test_range_ends_high and test_case_1_visible_collection fail and the reward is 0.",
+      "graded_effect": "A contract-faithful reading of rule 6 earns reward 0 (at least 2 graded families fail). The verifier thus enforces an attribution rule, 'changed while an intruder session was open', that exists only in the scenario generator the goldens were derived from (test_outputs.py:3-6).",
+      "citations": [
+        "environment/app/docs/case-guide.md:37-44",
+        "environment/app/docs/case-guide.md:46-51",
+        "tests/expected/edge_hi.jsonl:1",
+        "tests/expected/case1.jsonl:1",
+        "tests/test_outputs.py:3-6",
+        "tests/test_outputs.py:120-121",
+        "environment/app/evidence/case-1/fs-listing.tsv:6",
+        "environment/app/evidence/case-1/var/log/remote/files.log:40-55",
+        "environment/app/evidence/case-1/root/.bash_history:1-2",
+        "readable-evidence/H25178f/fs-listing.tsv:4",
+        "readable-evidence/H25178f/var/log/auth.log.5.txt:32-35",
+        "readable-evidence/H25178f/var/log/remote/edge7.log:37-49"
+      ],
+      "root_invariant": "Every graded persistence membership must follow from a rule the guide states. If attribution requires an open intruder session, the guide must say so. Otherwise the goldens must include in-span unattributed changes, or the decoy's ctime must lie outside every contract-plausible intrusion window.",
+      "authority": [
+        "environment/app/docs/case-guide.md:37-44",
+        "instruction.md:1-3"
+      ],
+      "implementation_sites": [
+        "tests/expected/*.jsonl persistence fields (generated from the scenario, not from evidence)",
+        "sealed decoy placement in tests/evidence/case1.tar.gz and tests/evidence/edge_hi.tar.gz"
+      ],
+      "sibling_variants": [
+        "The same decoy shape probably appears in other sealed families (ctime family in particular). It cannot be confirmed because the tars are opaque.",
+        "The attribution question for a change made while the intruder and a regular user of the same or another account are both logged in (edge_hi 19:11-19:26 overlap). No readable witness changes a graded file in the overlap."
+      ],
+      "interaction_variants": [
+        "Rule 6 with rule 1: both witnesses need step correction to place the ctime between sessions (edge_hi post-step, case1 pre-step).",
+        "Rule 6 with rule 7: including the file would not move last_activity in either witness, so persistence is the only graded field affected."
+      ],
+      "minimal_repair_boundary": "Either state in case-guide.md rule 6 that a change counts only when its true ctime falls within one of the intruder's sessions (login to logout, or to collection when open), or move the mtime/ctime decoy's ctime outside [first_activity, collected_utc] and regenerate the affected goldens.",
+      "closure_evidence": [
+        "The span-window implementation and the session-window implementation agree on every graded case, or the guide names the session rule and the span-window implementation fails with a stated reason.",
+        "The mtime-based mutant still fails on backup-nightly or certbot-renew and on the timestomped authorized_keys."
+      ]
+    },
+    {
+      "id": "SV-2",
+      "severity": "Minor",
+      "claim": "Only the host-behind (forward-step) sign of the rule-1 clock error is graded. With a forward step, host-clock values before and after the step fall into disjoint ranges, so a candidate that assigns each host-clock time to a side by value alone passes every graded case. The legal host-ahead (backward-step) partition, where host-clock times overlap and 'the collector's record always settles which side of a step every graded host-clock time lies on' becomes load-bearing, is never discriminated.",
+      "finding_evidence": {
+        "status": "static_proof",
+        "expected_behavior": "case-guide.md:9-14 allows the host clock to be 'wrong by a fixed amount for part of the evidence period and then set right, at most once', without restricting the sign, and requires true times on the correct side of the step. instruction.md:5 allows 'one clock step of 30 to 7,200 seconds'. A host-ahead clock that is set back is a legal directory, and its overlapping host times must be sided correctly.",
+        "actual_behavior": "All 10 stepped cases carry positive facts.step_s (30..7200). In both readable stepped cases a positive value means the host was behind (true = host + step): edge_hi +7200 (edge7.log:37 vs wtmp 1924707087) and case1 +6036 (root history id 1640790513 is consistent with escalation at 16:49:04Z). No graded case produces overlapping host times.",
+        "trace_or_receipt": "facts.step_s values across the expected rows: 6036 (case1), 2630, 496 (clock), 2922 (brute), 5574, 5800 (tz), 1694 (open), 30 (edge_lo), 7200 (edge_hi), 7200 (edge_late). All other rows are null. Static reading of the rows plus the edge_hi and case1 traces. The only residual assumption is that step_s is signed like the two verified cases. Not executed."
+      },
+      "reachable_case_or_path": "Mutant: detect the step instant from the remote log, then correct any host timestamp h by '+delta if h < step_host_instant else 0'. Every graded case uses a forward step with a gap, so it matches the reference everywhere and the reward is 1.0. On a legal host-ahead directory it misassigns pre-step events whose host time exceeds the reset point, giving wrong privilege_escalation, first/last activity or persistence membership.",
+      "graded_effect": "An implementation that mishandles a stated, legal branch of rule 1 earns full reward. The verifier cannot distinguish correct sequence-based siding from value-threshold siding.",
+      "citations": [
+        "environment/app/docs/case-guide.md:9-14",
+        "instruction.md:5",
+        "tests/expected/clock.jsonl:1-2",
+        "tests/expected/edge_lo.jsonl:1",
+        "tests/expected/edge_hi.jsonl:1",
+        "tests/expected/edge_late.jsonl:1",
+        "tests/expected/case1.jsonl:1",
+        "tests/test_outputs.py:146-147"
+      ],
+      "root_invariant": "Each legal sign partition of a signed derived quantity (the host clock error) needs a graded case where the partition changes the result.",
+      "authority": [
+        "environment/app/docs/case-guide.md:9-14"
+      ],
+      "implementation_sites": [
+        "tests/expected/clock.jsonl",
+        "tests/expected/edge_*.jsonl",
+        "tests/evidence/clock.tar.gz"
+      ],
+      "sibling_variants": [
+        "A step that falls inside a hostile failure burst, where true spacing differs from host spacing across the 600 s window. No readable witness exists."
+      ],
+      "interaction_variants": [
+        "Rule 1 with rule 2: siding btmp failures around a backward step changes whether five failures fit within 600 s.",
+        "Rule 1 with rule 6: siding fs-listing ctimes and dpkg.log times in the overlap changes the 2 s package match and intrusion-window membership."
+      ],
+      "minimal_repair_boundary": "Either add a backward-step (host-ahead) case with graded events in the overlapping host-time range, or restrict the contract to a host clock that was behind (set forward) and drop the 'which side' sentence's broader promise.",
+      "closure_evidence": [
+        "The value-threshold siding mutant fails the new case while the reference passes.",
+        "Existing forward-step families still pass."
+      ]
+    }
+  ],
+  "checks_performed": [
+    "Read the instruction, all three docs, the verifier harness (test.sh, Dockerfile, test_outputs.py), ROSTER and all 27 expected rows.",
+    "Traced edge_hi H25178f end to end against its expected report. Initial access, sources, accounts, escalation, persistence, first/last activity and the step boundary all check out; the only disputed item is backup-nightly exclusion (SV-1).",
+    "Partially traced case1 H01f621: persistence ctimes, the package boundary (apt-listchanges 0 s), escalation consistency and the certbot-renew placement.",
+    "Checked the _differences comparator for type strictness, set semantics, duplicate rejection, exact keys and null handling against report.md.",
+    "Checked staging: neutral 'evidence' name, read-only tree, unprivileged uid, -I -S stdlib-only interpreter, /app reduced to triage.py plus docs, and the shipped docs hashes equal to the environment docs.",
+    "Checked partition coverage from facts: UTC offsets of both signs and quarter hours, years 2019-2031 with new-year crossings, auth_files 1-6, open and closed sessions, escalated true/false, step null/30/7200."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to a failing assertion",
+      "status": "checked",
+      "reason": "One family per rule. Every family compares all seven fields exactly, so any rule error that changes a field fails the family.",
+      "evidence": ["tests/test_outputs.py:131-195"],
+      "finding_ids": []
+    },
+    {
+      "category": "Full core result, not existence or shape",
+      "status": "checked",
+      "reason": "Values, set membership, uniqueness, native types and exact keys are all compared. The empty-report starter fails on the key check.",
+      "evidence": ["tests/test_outputs.py:114-128", "environment/app/triage.py:16-17"],
+      "finding_ids": []
+    },
+    {
+      "category": "Isolating case per named rule",
+      "status": "checked",
+      "reason": "In edge_hi: rule 2 at the exact 600 s window (77.48.154.160 btmp 1924706481..1924707081) and a 736 s near-miss decoy (carol); rule 2 rotation via btmp-only first failures; rule 4 shared password (regular build from 10.4.16.109); rule 5 on the intruder's terminal, where the regular user's earlier sudo on pts/1 at 19:09:16Z would give a wrong answer; rule 6 at the exact 2 s package boundary (debsums), a timestomped authorized_keys and non-kind implants; rule 7 with an open session and btmp-only first activity. The rule-1 sign partition and the rule-6 attribution window are gaps.",
+      "evidence": ["readable-evidence/H25178f/var/log/btmp.decoded.txt:5-9", "readable-evidence/H25178f/var/log/btmp.decoded.txt:32-36", "readable-evidence/H25178f/var/log/auth.log.5.txt:13-27", "readable-evidence/H25178f/fs-listing.tsv:6", "readable-evidence/H25178f/var/log/dpkg.log:21-25", "tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": ["SV-1", "SV-2"]
+    },
+    {
+      "category": "Plausible incorrect solution rejected",
+      "status": "checked",
+      "reason": "The mtime-based, collected_utc-as-last, all-sudo-on-account, <600-exclusive, <2-exclusive, auth.log-only-failures and UTC-without-offset mutants each change at least one edge_hi field. The value-threshold step-siding mutant is not rejected (SV-2).",
+      "evidence": ["tests/expected/edge_hi.jsonl:1"],
+      "finding_ids": ["SV-2"]
+    },
+    {
+      "category": "Contract-valid alternatives accepted",
+      "status": "checked",
+      "reason": "List order, key order and whitespace are free because the output is parsed as JSON and compared as sets. The span-window reading of rule 6 is rejected (SV-1).",
+      "evidence": ["tests/test_outputs.py:105-128"],
+      "finding_ids": ["SV-1"]
+    },
+    {
+      "category": "Documented restrictions and lifecycle enforced",
+      "status": "checked",
+      "reason": "Stdlib-only is enforced by -I -S. 'Must not depend on /app/evidence' is enforced by _seal_app. Unprivileged execution, read-only evidence and no network are enforced by the demotion and staging code.",
+      "evidence": ["tests/test_outputs.py:53-69", "tests/test_outputs.py:83-111"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries, self-controlled comparisons, unreachable cases",
+      "status": "checked",
+      "reason": "Goldens come from sealed JSONL pinned by ROSTER. The candidate cannot supply the expected values. The fresh triage.py is run per case. No graded case is unreachable.",
+      "evidence": ["tests/test_outputs.py:72-80", "tests/expected/ROSTER:1-28"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed quantities and state transitions (initialization to first event)",
+      "status": "checked",
+      "reason": "UTC offsets of both signs are covered. The clock step is covered only in the host-behind sign. The wrong-then-right clock transition and open/closed sessions are covered.",
+      "evidence": ["tests/expected/tz.jsonl:1-2", "tests/expected/clock.jsonl:1-2"],
+      "finding_ids": ["SV-2"]
+    },
+    {
+      "category": "Representation vs semantic content",
+      "status": "checked",
+      "reason": "Only the documented time string format and value types are imposed. Candidate diagnostics, file layout and encoding are not graded.",
+      "evidence": ["environment/app/docs/report.md:19-25", "tests/test_outputs.py:114-128"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["rule 1 clock step", "rule 6 persistence ctime"],
+      "case_or_path": "edge_hi backup-nightly lands post-step at 23:03:16Z, between intruder sessions. case1 certbot-renew lands pre-step at 17:26:36Z, between intruder sessions.",
+      "status": "checked",
+      "evidence": ["readable-evidence/H25178f/fs-listing.tsv:4", "environment/app/evidence/case-1/fs-listing.tsv:6"],
+      "finding_ids": ["SV-1"]
+    },
+    {
+      "rules": ["rule 4 shared password", "rule 5 terminal tie"],
+      "case_or_path": "edge_hi: the regular build user on pts/1 runs sudo at 19:09:16Z, before the intruder's sudo on pts/0 at 19:37:29Z. Only terminal attribution yields the golden.",
+      "status": "checked",
+      "evidence": ["readable-evidence/H25178f/var/log/auth.log.5.txt:10-27", "readable-evidence/H25178f/var/log/wtmp.decoded.txt:20-22"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 2 btmp", "rule 7 first activity with rotation"],
+      "case_or_path": "edge_hi: the first two intruder failures are missing from auth.log.5 but present in btmp, so first_activity is 18:41:21Z.",
+      "status": "checked",
+      "evidence": ["readable-evidence/H25178f/var/log/auth.log.5.txt:1-6", "readable-evidence/H25178f/var/log/btmp.decoded.txt:32-36"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["rule 1 step siding", "rule 2 600 s window / rule 6 2 s package window"],
+      "case_or_path": "A backward step with overlapping host times. No graded witness exists.",
+      "status": "checked",
+      "evidence": ["tests/expected/clock.jsonl:1-2"],
+      "finding_ids": ["SV-2"]
+    },
+    {
+      "rules": ["rule 6 package exclusion", "rule 1 local offset"],
+      "case_or_path": "edge_hi debsums: dpkg.log local 08:23:49 at +14:00 gives host epoch 1924712629, and the ctime is 1924712631, exactly 2 s after. A UTC-as-local misreading or an exclusive boundary includes it.",
+      "status": "checked",
+      "evidence": ["readable-evidence/H25178f/var/log/dpkg.log:21-25", "readable-evidence/H25178f/fs-listing.tsv:6"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [
+    {
+      "concern": "Whether any sealed case discriminates key-fingerprint matching in rule 4 (a legitimate key logging in to the intruder's account from a non-intruder address) and escalation by root login in rule 5. The two readable sets have no legitimate publickey login to the intruder account, so a 'tie every publickey login to the intruder account' shortcut is not rejected there.",
+      "finding_evidence": "unverified_hypothesis",
+      "missing_evidence": "Readable extraction of the key, sudo and broad families (sealed tar.gz, opaque to read-only tools)."
+    }
+  ],
+  "uncertainty": ""
+}

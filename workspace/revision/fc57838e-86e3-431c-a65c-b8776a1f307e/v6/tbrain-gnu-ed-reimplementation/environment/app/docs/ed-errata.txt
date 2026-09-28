@@ -1,0 +1,118 @@
+GNU ed 1.19 against its own manual
+==================================
+
+The manual in ed.txt describes ed, but the program is what the maintenance scripts
+talk to, and in the places below 1.19 does not do what a reading of the manual
+would suggest. Each entry states what the program does, and each was checked
+against the program itself. Everything the manual describes that is not listed
+here holds as written.
+
+Addresses and marks
+
+1. An apostrophe address whose mark was never set resolves to address 0 while the
+   buffer is empty, so 'a= prints 0 and 'aa appends at the start. Once the buffer
+   holds a line, the same address fails.
+
+2. Changing a marked line clears its mark: after 1ka and 1s/a/A/, the address 'a
+   fails. Undoing that change brings the mark back.
+
+3. A command that takes one address uses the last address given, as the manual
+   says, and does not care about the order of the pair: 2,1= prints 1, 2,1a appends
+   after line 1, 2,1i inserts before it and 2,1kx marks it. A command that takes a
+   range, such as p, d, c, j, s, w or g, refuses one whose first address is above
+   its second.
+
+Regular expressions
+
+4. A bounded repeat at the start of an expression or subexpression is an error, not
+   the literal text the manual promises: \{2\} on its own fails to compile, and so
+   does \(\{2\}\). An unescaped brace is an ordinary character, so {2} matches the
+   text {2}.
+
+5. In extended expressions ^ and $ anchor wherever they appear, so a^b matches
+   nothing. The manual and POSIX make them ordinary characters away from the ends.
+
+6. A global substitution continues from what is left of the line and treats that
+   remainder as a line of its own, so a word-beginning anchor can match inside the
+   original word: s/\<./X/g turns ab into XX.
+
+7. A substitution with the g suffix is refused once a zero-length match repeats at
+   the same place: s/a*/X/g fails on a line holding b, while it succeeds on a line
+   holding a, where the first match covers the whole line. The same expression
+   without the g suffix always succeeds.
+
+8. A backslash ending a regular-expression parameter does not continue it onto the
+   next line; the command fails instead.
+
+9. When two branches of an alternation reach the same whole match, the branch
+   written first supplies the captured text.
+
+10. A collating element or equivalence class holding more than one character, such
+    as [[.ab.]], is an error in the C locale.
+
+11. A repeat count above 32767 is an error, in basic and extended expressions alike:
+    y\{32768\} and y\{0,32768\} fail to compile, while y\{32767\} is accepted.
+
+Commands
+
+12. f FILE sets the default filename and prints it. The manual has it print the
+    filename only when FILE is left out. Bare f with no filename set fails.
+
+13. A one-address j does nothing, as the manual says, but it still clears the undo
+    stack, so a following u has nothing to undo.
+
+14. An a or i whose input ends at once, with a period on its first line, adds no
+    line but still clears the undo stack, so a following u has nothing to undo. A c
+    whose input ends at once has deleted the addressed lines, and u puts them back.
+
+15. A global command clears the undo stack even when its pattern selected no line.
+
+16. m accepts the last line of the range being moved as its destination, although
+    the manual forbids a destination inside that range. A destination strictly
+    inside the range is still refused.
+
+17. A successful s leaves the line as it stood before the substitution in the cut
+    buffer, not the line it produced.
+
+18. In a global command list, a line ending with a backslash continues onto the
+    next line, and every segment is a command, an empty one being a print. So g/./
+    with a backslash and then an empty line holds two empty commands and prints every
+    selected line twice; the empty line does not end with a backslash, so the line
+    after it is the next command, and a q there quits once the global command has
+    run through every selected line. Without the backslash, an empty command list
+    means one print per selected line.
+
+19. A substitution with no final delimiter inside a global command list takes the
+    rest of the list as its replacement text instead of failing.
+
+20. W clears the warning that q gives for a modified buffer when it writes the
+    whole buffer, the same way w does.
+
+Files
+
+21. A file holding a NUL makes the buffer binary, and it stays binary until e or E
+    loads a fresh one. When a read adds lines at the end of a binary buffer and the
+    last line read has no newline, ed remembers that line and writes it back without
+    a newline, but only while it is still the last line of the buffer: delete the
+    lines after it, or move it back to the end, and its newline stays off; copy, join
+    or substitute it and the copy or the new line is written with a newline. Reading
+    an empty file at the end of a binary buffer marks the current last line the same
+    way. A read whose last line has no newline gets one appended anywhere else,
+    whether into the middle of the buffer or into a text buffer, and says Newline
+    appended; a read that adds lines after the remembered line says Newline inserted
+    instead. The byte count a read prints includes the newline it added unless the
+    buffer is binary, except that a read into the middle of a text buffer that itself
+    makes the buffer binary counts it too.
+
+Diagnostics
+
+22. The ? notification goes to standard output. Only the longer explanations, which
+    -q suppresses, go to standard error.
+
+Invocation
+
+23. Options may appear before or after FILE, may be combined in one argument, and -p
+    may carry its string attached. A lone -- ends the options. An unknown option, or
+    -p with no string after it, is a usage error: ed exits non-zero without reading
+    any command. The program also accepts -G and -v; no invocation here uses them, so
+    accepting or rejecting them makes no difference.

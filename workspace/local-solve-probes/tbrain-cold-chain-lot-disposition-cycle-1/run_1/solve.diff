@@ -1,0 +1,185 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/attribution.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/attribution.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/attribution.py	2026-09-27 13:00:40
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/attribution.py	2026-09-27 13:06:39
+@@ -1,26 +1,29 @@
+ """How long each logger reading stands for, and where the logger missed readings."""
+ 
+ HOLD_CAP_MINUTES = 60  # the longest stretch one logger reading is credited with
+-GAP_MINUTES = 60  # a spacing longer than this means the logger missed readings
++LOGGED_MINUTES = 30  # an interval this long or shorter is logged (2.4); longer is a logger gap
+ 
+ 
+ def holds(readings):
+-    """Minutes each reading of one export stands for, in export order."""
++    """Minutes each reading of one export stands for, in export order (2.7)."""
+     held = []
+     for index, reading in enumerate(readings):
+-        if index + 1 < len(readings):
+-            span = readings[index + 1].minute - reading.minute
++        if index + 1 == len(readings):
++            held.append(0)  # the last reading of an export has a hold of nought
++            continue
++        span = readings[index + 1].minute - reading.minute
++        if span <= LOGGED_MINUTES:
++            held.append(span)  # the length of the logged interval it opens
+         else:
+-            span = HOLD_CAP_MINUTES
+-        held.append(min(span, HOLD_CAP_MINUTES))
++            held.append(min(span, HOLD_CAP_MINUTES))
+     return held
+ 
+ 
+ def unlogged_minutes(readings):
+-    """Total length of the spacings where the logger missed readings."""
++    """Total length of the logger gaps of one export (3.2)."""
+     total = 0
+     for earlier, later in zip(readings, readings[1:]):
+         span = later.minute - earlier.minute
+-        if span > GAP_MINUTES:
++        if span > LOGGED_MINUTES:
+             total += span
+     return total
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/bands.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/bands.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/bands.py	2026-09-27 12:34:22
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/bands.py	2026-09-27 13:06:46
+@@ -3,16 +3,23 @@
+ 
+ def band_of(temp, stability):
+     """Name of the band a reading is charged to, or None for a reading in range."""
+-    if stability.low <= temp < stability.high:
++    if stability.low <= temp <= stability.high:
++        return None  # in range (2.1)
++    if temp < stability.low:
++        # A band below the range holds [lower end, upper end) (2.5).
++        for band in stability.bands:
++            if band.upper <= stability.low and band.lower <= temp < band.upper:
++                return band.name
+         return None
+-    for band in sorted(stability.bands, key=lambda entry: entry.lower, reverse=True):
+-        if temp >= band.lower:
+-            break
+-    return band.name
++    # A band above the range holds (lower end, upper end] (2.5).
++    for band in stability.bands:
++        if band.lower >= stability.high and band.lower < temp <= band.upper:
++            return band.name
++    return None
+ 
+ 
+ def band_minutes(readings, minutes, stability):
+-    """Minutes charged to each band of the record over one leg."""
++    """Minutes charged to each band of the record over one leg (3.1)."""
+     totals = {band.name: 0 for band in stability.bands}
+     for reading, spent in zip(readings, minutes):
+         name = band_of(reading.temp, stability)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/disposition.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/disposition.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/disposition.py	2026-09-27 12:50:45
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/disposition.py	2026-09-27 13:07:07
+@@ -5,8 +5,22 @@
+ from .kinetics import mean_kinetic_temperature
+ 
+ UNLOGGED_LIMIT_MINUTES = 120
++CHAIN_LIMIT_MINUTES = 2880  # the longest handover a chained lot may have (2.9)
+ 
+ 
++def handovers(lot):
++    """Minutes from the last reading of each leg to the first reading of the next (2.9)."""
++    spans = []
++    for earlier, later in zip(lot.legs, lot.legs[1:]):
++        spans.append(later.readings[0].minute - earlier.readings[-1].minute)
++    return spans
++
++
++def is_chained(lot):
++    """Whether no handover of the lot is longer than 2,880 minutes (2.9)."""
++    return all(span <= CHAIN_LIMIT_MINUTES for span in handovers(lot))
++
++
+ def lot_band_minutes(lot, stability):
+     """Minutes the lot spent in each band, and its unlogged minutes."""
+     per_leg = []
+@@ -15,20 +29,32 @@
+         minutes = holds(leg.readings)
+         per_leg.append(band_minutes(leg.readings, minutes, stability))
+         unlogged += unlogged_minutes(leg.readings)
+-    totals = {band.name: max(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
++    if is_chained(lot):
++        totals = {band.name: sum(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
++    else:
++        totals = {band.name: max(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
+     return totals, unlogged
+ 
+ 
+ def dispose(lot, stability):
+     """The QA figures and the disposition of one lot, times in minutes."""
+     band_time, unlogged = lot_band_minutes(lot, stability)
+-    remaining = {band.name: band.allowance_h * 60 - band_time[band.name] for band in stability.bands}
+-    readings = lot.readings()
+-    mkt = mean_kinetic_temperature([reading.temp for reading in readings], stability.ratio)
+-    frozen = any(reading.temp < stability.freeze_point for reading in readings)
++    remaining = {
++        band.name: band.allowance_h * 60 - lot.prior_minutes.get(band.name, 0) - band_time[band.name]
++        for band in stability.bands
++    }
++    temps = []
++    weights = []
++    for leg in lot.legs:
++        held = holds(leg.readings)
++        for reading, minutes in zip(leg.readings, held):
++            temps.append(reading.temp)
++            weights.append(minutes)
++    mkt = mean_kinetic_temperature(temps, weights, stability.ratio)
++    frozen = any(reading.temp < stability.freeze_point for reading in lot.readings())
+     if frozen or any(left < 0 for left in remaining.values()):
+         decision = "reject"
+-    elif round(mkt, 1) > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
++    elif mkt > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
+         decision = "quarantine"
+     else:
+         decision = "release"
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/kinetics.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/kinetics.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/kinetics.py	2026-09-27 12:50:45
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/kinetics.py	2026-09-27 13:06:54
+@@ -5,7 +5,15 @@
+ KELVIN_OFFSET = 273.15
+ 
+ 
+-def mean_kinetic_temperature(temps, ratio):
+-    """Arrhenius mean of temperatures in degrees Celsius; ratio is the activation ratio in kelvin."""
+-    total = sum(math.exp(-ratio / (temp + KELVIN_OFFSET)) for temp in temps)
+-    return ratio / -math.log(total / len(temps)) - KELVIN_OFFSET
++def mean_kinetic_temperature(temps, weights, ratio):
++    """Arrhenius mean of temperatures in degrees Celsius, each weighted by its hold (5.1).
++
++    ratio is the activation ratio in kelvin.
++    """
++    total = 0.0
++    weight = 0.0
++    for temp, held in zip(temps, weights):
++        if held:
++            total += held * math.exp(-ratio / (temp + KELVIN_OFFSET))
++            weight += held
++    return ratio / -math.log(total / weight) - KELVIN_OFFSET
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/report.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/report.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/baseline/environment/app/src/coldchain/report.py	2026-09-27 12:34:22
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-1/run_1/solve/environment/app/src/coldchain/report.py	2026-09-27 13:07:13
+@@ -1,11 +1,14 @@
+ """The disposition report the driver prints."""
+ 
+-import math
+-
+-
+ def hours(minutes):
+-    """Minutes as hours to the hundredth."""
+-    return math.trunc(minutes / 60 * 100) / 100
++    """Minutes as hours, rounded to the nearest hundredth of an hour (1.2).
++
++    A whole number of minutes never falls halfway between two hundredths.
++    """
++    hundredths, rest = divmod(int(minutes) * 100, 60)
++    if rest * 2 > 60:
++        hundredths += 1
++    return hundredths / 100
+ 
+ 
+ def build_report(stability, results):

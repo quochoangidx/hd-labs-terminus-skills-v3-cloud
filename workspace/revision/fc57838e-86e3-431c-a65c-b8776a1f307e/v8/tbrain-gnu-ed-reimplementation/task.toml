@@ -1,0 +1,32 @@
+artifacts = ["/app/"]
+name = "tbrain-gnu-ed-reimplementation"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Software"
+subcategory = "Languages"
+languages = ["python"]
+tags = ["gnu-ed", "line-editor", "posix-regex", "undo", "reimplementation"]
+expert_time_estimate_hours = 8
+difficulty_explanation = "A drop-in GNU ed 1.19 has to reproduce a stateful line editor from its manual with no ed to compare against: every address form, including relative offsets, marks, wrapping regex searches and the rule that a semicolon moves the current address before the next address is read; the exact current address after every command; undo that can itself be undone and that treats a whole global command as one step; global commands whose active list drops lines the command list touches; substitution with counts, the repeat form, omitted delimiters and line splitting; and a POSIX regular-expression engine that takes the leftmost and then the longest match, with back-references and bounded repeats, which Python's re does not do. Errors matter as much as success: ed prints a question mark, stops at the first error when its commands come from a regular file but carries on when they come from a pipe, and warns once before quitting a modified buffer. The expertise is reading these rules exactly and seeing how they combine; an engineer who implements ed from memory gets the current-address, undo, active-list and exit-status details wrong in combinations that a handful of hand-made checks never exercise. The graded scripts are ed command scripts written for this task or drawn from its command grammar, over small text fixtures written with them; no external corpus is involved, and the expected result of each one is produced by running GNU ed 1.19 itself at grading time rather than stored."
+solution_explanation = "The reference is a standard-library port of the editor model in two files. posixre.py parses basic and extended regular expressions and compiles them to a small program walked depth-first in pattern order, visiting each (instruction, position) pair once per search, so the leftmost start and then the longest end win in time linear in the line. ed.py keeps the buffer as a circular list of line nodes and an undo stack of add, delete and move records that relink those nodes, so undo, undo of undo, marks and the global active list behave as the manual describes; it parses addresses and commands with their suffixes, runs g and v over an active list, applies substitutions with counts, the repeat form and line splitting, and prints question marks and sets the exit status according to whether standard input is a regular file and whether -l is given. It also carries code for parts of ed the task leaves out (l, z, x, y, G, V and binary files), which no graded script reaches."
+verification_explanation = "A separate verifier image holds two kinds of case. The committed ones, each written for one rule of the manual or its errata, sit one per line in a file per area of the manual, with their input files shared through a named fixture table and a roster of families and counts committed beside them; collection fails unless what loads matches that roster exactly. The generated ones come from generated.py, which draws 640 scripts from the task's command grammar with a fixed seed (every address form, command, suffix, s flag and form, regular-expression construct, file command with a space or a tab before its name, option combination and a set of malformed commands) and fails collection if any entry of its tables was drawn fewer than three times. Before anything runs, scope.py reads every committed and generated script the way ed splits it into command lines and fails collection if any case leaves the domain the instruction states: an option other than -E, -l and -s, one of the commands l, z, x, y, G, V, P, h, H or ! or the l suffix anywhere in the script (reached or not), an argument starting with !, a missing FILE with a regular-file standard input, non-ASCII text, a NUL byte, or a line over 200 bytes. Each case carries its options, its files and the kind of standard input (a pipe or a regular file). For every case the verifier runs the image's own GNU ed 1.19 as root in a fresh directory to get the expected output, then runs /app/pyed/ed.py as an unprivileged user in another fresh copy of the same files with LC_ALL=C. It compares standard output byte for byte, whether the exit status is zero, and the names and contents of every file left in the directory tree. The ed binary is made root-only first, and the candidate runs through a launcher that ends the run if the program starts another process, loads native code or imports a module from outside the standard library and its own delivered files. The launcher's rules live only in the closure of its audit hook, built from functions captured before the program starts, so a program that rebinds names in the launcher's module, os, posix or builtins cannot switch them off; it also replaces the C helper behind subprocess, which raises no audit event, and stops a search of live objects or a fresh copy of that helper. Nine probe programs check the launcher, one per route, and a tenth checks that an ordinary program, which imports a compiled standard-library module, keeps its output and status. Cases are grouped into one named test per area of the manual plus eight buckets of generated scripts."
+relevant_experience = "Years of Unix systems work: maintaining shell and ed/sed scripts that edit configuration files in place, porting command-line tools to minimal containers, and implementing regular-expression engines with POSIX leftmost-longest semantics."
+
+[verifier]
+timeout_sec = 3600
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 7200
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

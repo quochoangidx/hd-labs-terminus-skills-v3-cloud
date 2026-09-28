@@ -1,0 +1,32 @@
+artifacts = ["/app/plans/"]
+name = "tbrain-airport-gate-assignment"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "advanced"
+category = "Operations"
+subcategory = "Logistics"
+languages = ["python"]
+tags = ["gate-assignment", "quadratic-assignment", "interval-scheduling", "metaheuristics", "airport-operations"]
+expert_time_estimate_hours = 6
+difficulty_explanation = "Each day is a stand-allocation problem on a realistic apron layout: 180-360 aircraft turns on 31-63 stands, with stand size limits, border-control stands for international turns, a buffer between turns on one stand, and wingtip pairs of neighbouring stands that cannot both hold widebodies at once. The cost is transfer-passenger walking between the stands of connecting turns plus a per-passenger bus charge for remote stands, so it is a quadratic assignment problem layered on interval scheduling: the value of a stand for one turn depends on where every connecting turn is, and moving one turn usually means moving the turns it collides with. An apron planner has to build a search that works on this coupling (moving chains of turns, swapping what two stands hold over a time window) while keeping every move feasible. The shipped first-free-stand planner costs 25-44 percent over target. The targets are the cheapest plans found by hours of multi-seed annealing, pooled with the best plans from trial runs, so the last half to one percent needs a well-tuned search (temperature matched to the size of a move, moves that shift chains of turns) run for most of the time available. The days are synthetic but modelled on a three-pier terminal with a remote apron."
+solution_explanation = "The reference plans come from simulated annealing over the stand rules with incremental cost updates. Moves: move a turn to another stand it fits, sending the turns it collides with there back to its old stand; and exchange everything two stands hold over a time window that grows until no turn crosses its edges. Runs started from the shipped planner and later from the cheapest plan so far, pooled with the best plans from trial runs, with the temperature falling from 30000-60000 to 10-30 over 20-60 minutes per run, several seeds per day, until restarts stopped improving. Each target is the cost of the cheapest plan seen. solve.sh copies the four plans and runs the checker on each."
+verification_explanation = "The verifier reads the four plan files as JSON data and scores them with its own copy of the checker, days and targets, so nothing the agent edits under /app affects grading and no candidate code runs. The verifier keeps each day as a gzip-compressed copy of /app/days/<day>.json and fails if its SHA-256 or its stand, turn and transfer counts differ from a roster. For each day one test checks that the plan is valid (standard JSON within the stated limits, every turn placed exactly once on a known stand, size, border control, buffer and wingtip rules) and one checks that its integer cost is at or below the target. The reference plans sit exactly on the targets; the shipped planner's plans cost 9077225, 12189855, 14519325 and 21326260 against targets of 7241380, 9017700, 10098740 and 15505590."
+relevant_experience = "Airport operations research: stand and gate allocation with transfer-passenger walking costs, aircraft size and border-control constraints, and local-search and annealing methods for daily apron planning."
+
+[verifier]
+timeout_sec = 1800
+environment_mode = "separate"
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 5400
+network_mode = "no-network"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240

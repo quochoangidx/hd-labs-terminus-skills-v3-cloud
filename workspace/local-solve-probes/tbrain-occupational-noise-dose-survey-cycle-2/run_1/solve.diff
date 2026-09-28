@@ -1,0 +1,199 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/flags.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/flags.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/flags.py	2026-09-26 21:06:08
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/flags.py	2026-09-26 21:50:43
+@@ -1,13 +1,13 @@
+ """Ceiling and impulse flags of one worker."""
+ 
+-from .levels import CEILING_DBA, IMPULSE_DBC
++from .levels import CEILING_DBA, IMPULSE_DBC, is_reading
+ 
+ 
+ def over_ceiling(log):
+-    """True when a run in the log was logged above the continuous-level ceiling."""
+-    return any(level > CEILING_DBA for _minutes, level in log)
++    """True when a reading in the log was above the continuous-level ceiling."""
++    return any(is_reading(level) and level > CEILING_DBA for _minutes, level in log)
+ 
+ 
+ def has_impulse(peaks):
+-    """True when a held peak is above the impulse level."""
+-    return any(peak > IMPULSE_DBC for peak in peaks)
++    """True when a held peak is an impulse, that is at or above the impulse level."""
++    return any(peak >= IMPULSE_DBC for peak in peaks)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/groups.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/groups.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/groups.py	2026-09-26 21:06:08
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/groups.py	2026-09-26 21:50:43
+@@ -4,7 +4,7 @@
+ gets one row with its own dose, TWA and status.
+ """
+ 
+-from .twa import status_for, to_tenth
++from .twa import status_for, to_tenth, twa_for
+ 
+ 
+ def group_rows(worker_rows):
+@@ -14,12 +14,10 @@
+         members.setdefault(row["group"], []).append(row)
+     rows = []
+     for code in sorted(members):
+-        levels = [row["twa"] for row in members[code] if row["twa"] is not None]
+-        if levels:
+-            twa = to_tenth(sum(levels) / len(levels))
+-            dose = 100.0 * 10.0 ** ((twa - 90.0) / 16.61)
+-        else:
+-            twa = None
+-            dose = 0.0
++        doses = [row["dose"] for row in members[code]]
++        dose = sum(doses) / len(doses)
++        twa = twa_for(dose)
++        if twa is not None:
++            twa = to_tenth(twa)
+         rows.append({"group": code, "dose": dose, "twa": twa, "status": status_for(twa)})
+     return rows
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/levels.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/levels.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/levels.py	2026-09-26 21:06:08
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/levels.py	2026-09-26 21:50:43
+@@ -6,9 +6,10 @@
+ 
+ EIGHT_HOURS = 480  # minutes in the reference working day
+ 
+-CRITERION_DBA = 90.0  # steady level that gives a 100 per cent dose over eight hours
+-EXCHANGE_DB = 5.0  # change in level that halves or doubles the allowed time
+-THRESHOLD_DBA = 80.0  # runs at or below this level add no dose
++CRITERION_DBA = 85.0  # steady level that gives a 100 per cent dose over eight hours
++EXCHANGE_DB = 3.0  # change in level that halves or doubles the allowed time
++READING_DBA = 40.0  # bottom of the dosimeter's measuring range
++THRESHOLD_DBA = 80.0  # runs below this level add no dose
+ CEILING_DBA = 115.0  # continuous-level ceiling
+ IMPULSE_DBC = 140.0  # peak level treated as impulse noise
+ 
+@@ -18,6 +19,11 @@
+     return EIGHT_HOURS / 2.0 ** ((level - CRITERION_DBA) / EXCHANGE_DB)
+ 
+ 
++def is_reading(level):
++    """True when a run logged at ``level`` is a reading (manual 2.2)."""
++    return level >= READING_DBA
++
++
+ def adds_dose(level):
+-    """True when a run logged at ``level`` counts toward the dose."""
+-    return level > THRESHOLD_DBA
++    """True when a reading counted at ``level`` counts toward the dose (manual 2.3)."""
++    return level >= THRESHOLD_DBA
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/runs.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/runs.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/runs.py	2026-09-26 21:41:39
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/runs.py	2026-09-26 21:50:43
+@@ -4,21 +4,25 @@
+ dosimeter logged it.
+ """
+ 
+-from .levels import CEILING_DBA, adds_dose, reference_minutes
++from .levels import CEILING_DBA, adds_dose, is_reading, reference_minutes
+ 
+ 
+ def measure(log):
+     """Return ``(sampled_minutes, measured_dose)`` for a log.
+ 
+-    The measured dose is in per cent: the sum over the runs that count of each
+-    run's minutes divided by its reference duration, times 100.
++    The sampled time is the total length of the worker's readings. The
++    measured dose is in per cent: the sum over the counted readings of each
++    reading's minutes divided by the reference duration at the level it is
++    counted at, times 100.
+     """
+     sampled = 0
+     fraction = 0.0
+     for minutes, level in log:
++        if not is_reading(level):
++            continue
++        sampled += minutes
+         counted = min(level, CEILING_DBA)
+         if not adds_dose(counted):
+             continue
+-        sampled += minutes
+         fraction += minutes / reference_minutes(counted)
+     return sampled, 100.0 * fraction
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/shift.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/shift.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/shift.py	2026-09-26 21:22:07
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/shift.py	2026-09-26 21:50:43
+@@ -4,19 +4,28 @@
+ sample less of the day than the worker actually worked.
+ """
+ 
+-from .levels import EIGHT_HOURS
+ from .runs import measure
+ 
++PARTIAL_NUMERATOR = 3  # a partial survey samples at least three quarters
++PARTIAL_DENOMINATOR = 4  # of the worker's shift, but less than all of it
+ 
++
++def is_partial(sampled, shift_minutes):
++    """True when the survey is partial by manual 2.5."""
++    return (
++        sampled < shift_minutes
++        and sampled * PARTIAL_DENOMINATOR >= shift_minutes * PARTIAL_NUMERATOR
++    )
++
++
+ def shift_dose(log, shift_minutes):
+     """Dose for the worker's shift in per cent, projecting a partial survey.
+ 
+-    A survey that sampled less than a full day is scaled up to it on the
+-    assumption that the unsampled time looked like the sampled time.
++    A partial survey is scaled up to the shift on the assumption that the
++    unsampled time looked like the sampled time; any other survey reports its
++    measured dose.
+     """
+     sampled, measured = measure(log)
+-    if sampled == 0:
+-        return 0.0
+-    if sampled < EIGHT_HOURS:
+-        return measured * EIGHT_HOURS / sampled
++    if is_partial(sampled, shift_minutes):
++        return measured * shift_minutes / sampled
+     return measured
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/twa.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/twa.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/baseline/environment/app/src/noisedose/twa.py	2026-09-26 21:06:08
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-occupational-noise-dose-survey-cycle-2/run_1/solve/environment/app/src/noisedose/twa.py	2026-09-26 21:50:43
+@@ -1,21 +1,26 @@
+ """Eight-hour time-weighted average level and exposure status."""
+ 
+ import math
++from decimal import ROUND_HALF_UP, Decimal
+ 
+-ACTION_LEVEL_DB = 85.0
+-EXPOSURE_LIMIT_DB = 90.0
++from .levels import CRITERION_DBA, EXCHANGE_DB
+ 
++ACTION_LEVEL_DB = 82.0
++EXPOSURE_LIMIT_DB = 85.0
+ 
++_TENTH = Decimal("0.1")
++
++
+ def twa_for(dose):
+     """Eight-hour TWA in dB for a dose in per cent, or None for no dose."""
+     if dose <= 0.0:
+         return None
+-    return 90.0 + 16.61 * math.log10(dose / 100.0)
++    return CRITERION_DBA + EXCHANGE_DB * math.log2(dose / 100.0)
+ 
+ 
+ def to_tenth(value):
+-    """A level as reported, to a tenth of a decibel."""
+-    return math.floor(value * 10.0) / 10.0
++    """A level as reported, to a tenth of a decibel, an exact half going up."""
++    return float(Decimal(value).quantize(_TENTH, rounding=ROUND_HALF_UP))
+ 
+ 
+ def status_for(twa):
+@@ -25,7 +30,7 @@
+     """
+     if twa is None:
+         return "below"
+-    if twa >= EXPOSURE_LIMIT_DB:
++    if twa > EXPOSURE_LIMIT_DB:
+         return "over"
+     if twa >= ACTION_LEVEL_DB:
+         return "action"

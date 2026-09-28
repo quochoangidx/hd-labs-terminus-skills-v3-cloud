@@ -1,0 +1,116 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-gnu-sed-reimplementation",
+ "report_path": "workspace/revision/09c61abb-fee2-44bf-b3c9-3e0a5ff12108/v1/09c61abb-fee2-44bf-b3c9-3e0a5ff12108.md",
+ "returned_snapshot_sha256": "b091600c616a33ffbb2d51b2c5bbaeb1021d8d2b9baa1ef6f257188ad352ddfd",
+ "repaired_snapshot_sha256": "794fadab70ecfd2a524a002ea10dfdd59afbbf0021ca33d19fa955a0cc3209fc",
+ "note": "Platform task 09c61abb (a fresh upload of the rev7 bytes of retired task 12e6eda4; source zip sha256 0c07fad0...). Quality panel: 5 Major + 2 Minor, all sound_verifier; the other four axes clean. Tests-only repair: instruction.md, environment/ and solution/ are byte-identical to the graded zip. Besides the seven named findings, the batch closes three verifier defects already known on these bytes: an embedded binary started through _posixsubprocess.fork_exec scored reward 1 on the returned verifier (ledger-receipts-p09c/repro-embedded-sed-fork-exec.json; the demoted candidate now runs under prlimit --nproc=1:1 after setpriv, witnessed in test_editing_is_done_in_python), the candidate could put site-packages back on sys.path (rev8 finding v8-10; test.sh now makes it root-only), and one graded case (sX\\XXXXg) was a script GNU sed rejects, against 'Scripts never fail' (now sX\\XX-Xg; p09c-rev1/roster-results.json). The rev8 sweeps for classes, empty regex and bracket edges are carried over, rebuilt on the unchanged reference.",
+ "findings": [
+  {
+   "id": "1",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "summary": "line reader capped at 64 characters",
+   "rationale": "Backed (core: FILES/CYCLE; line length is unbounded in the contract). The panel's 64-character-cap mutant scored reward 1 on the returned verifier. sweep_long_lines now runs lines of 64, 65, 127, 128, 257, 1023, 1025 and 4100 characters and pattern spaces past 16 KB through =, p, s with large number flags, N/P/D, G and long intervals; sweep_long_scripts takes the same class on the script side (70-600 character regexes and replacements, 400-1100 character a/i/c texts, 120-character labels, 200-character file names, 70 commands, 40 nested blocks).",
+   "reproduction": "ledger-receipts-p09c/repro-line-cap-64.json",
+   "closure": "wrong-paths/line-cap-64.json",
+   "witness": "test_outputs.py::test_sweep_long_lines",
+   "gate": {
+    "rule": "class sweep in tests/cases/sweeps.json built by p09c-rev1/gen_sweeps.py (every case kept only when GNU sed accepts the script, matches any manual-derived expectation and the unchanged reference agrees) plus a wrong_path_runner receipt; blueprint \u00a75 classes C3/C6 (field lengths, numeric parameters) \u2014 candidate for panel_precheck: every stated 'any'/'every' domain needs a sweep family"
+   }
+  },
+  {
+   "id": "2",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "summary": "addr1,+N / addr1,~N read as one digit",
+   "rationale": "Backed (core: ADDRESSES). Mutant reading one digit after + or ~ scored reward 1 on the returned verifier. sweep_numbers takes every numeric parameter at two or more digits: line numbers, +N and ~N ends (including the panel's 1,+10 and 1,~10 on eleven lines, and ends past the input), first~step on both sides, s number flags, q/Q codes up to 255 and interval bounds.",
+   "reproduction": "ledger-receipts-p09c/repro-special-range-one-digit.json",
+   "closure": "wrong-paths/special-range-one-digit.json",
+   "witness": "test_outputs.py::test_sweep_numbers",
+   "gate": {
+    "rule": "class sweep in tests/cases/sweeps.json built by p09c-rev1/gen_sweeps.py (every case kept only when GNU sed accepts the script, matches any manual-derived expectation and the unchanged reference agrees) plus a wrong_path_runner receipt; blueprint \u00a75 classes C3/C6 (field lengths, numeric parameters) \u2014 candidate for panel_precheck: every stated 'any'/'every' domain needs a sweep family"
+   }
+  },
+  {
+   "id": "3",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "summary": "interval bounds read as one digit",
+   "rationale": "Backed (core: REGEX). Mutant scored reward 1 on the returned verifier; sweep_numbers now holds two-digit lower and upper bounds, open and closed, on atoms and groups, in BRE and ERE, in s and in addresses (\\{10\\}, \\{2,12\\}, {10,13}, (a{3}){3,4}...).",
+   "reproduction": "ledger-receipts-p09c/repro-interval-one-digit.json",
+   "closure": "wrong-paths/interval-one-digit.json",
+   "witness": "test_outputs.py::test_sweep_numbers",
+   "gate": {
+    "rule": "class sweep in tests/cases/sweeps.json built by p09c-rev1/gen_sweeps.py (every case kept only when GNU sed accepts the script, matches any manual-derived expectation and the unchanged reference agrees) plus a wrong_path_runner receipt; blueprint \u00a75 classes C3/C6 (field lengths, numeric parameters) \u2014 candidate for panel_precheck: every stated 'any'/'every' domain needs a sweep family"
+   }
+  },
+  {
+   "id": "4",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "summary": "bare q drops exit status 2 after an unreadable file",
+   "rationale": "Backed (stated in scope.md: once an unreadable named file has been reached the status is 2 even if q or Q then gives a code). Mutant (bare q returns 0, explicit codes keep 2) scored reward 1 on the returned verifier. sweep_exit_status crosses the unreadable file (first, middle, last, only, two missing, beside an empty file and -) with every way a run ends: bare q, q0, q N, bare Q, Q N, $q, N and n at end of input, -n, -s and plain end of input, plus files never reached.",
+   "reproduction": "ledger-receipts-p09c/repro-bare-q-clears-status.json",
+   "closure": "wrong-paths/bare-q-clears-status.json",
+   "witness": "test_outputs.py::test_sweep_exit_status",
+   "gate": {
+    "rule": "class sweep in tests/cases/sweeps.json built by p09c-rev1/gen_sweeps.py (every case kept only when GNU sed accepts the script, matches any manual-derived expectation and the unchanged reference agrees) plus a wrong_path_runner receipt; blueprint \u00a75 classes C3/C6 (field lengths, numeric parameters) \u2014 candidate for panel_precheck: every stated 'any'/'every' domain needs a sweep family"
+   }
+  },
+  {
+   "id": "5",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "summary": "BRE $ before \\| treated as literal",
+   "rationale": "Backed (core: REGEX; sed.txt 5.3 names the positions). The panel's own example s/a\\|b$/X/p puts $ at the end of the whole regex and does not distinguish the mutant (p09c-rev1/panel-inputs.log); the defect is real for $ right before \\| (s/b$\\|x/X/), and the mutant scored reward 1 on the returned verifier. sweep_anchors puts ^ and $ at every position the manual gives them (whole regex, after \\( and \\|, before \\) and \\|, nested groups) and as ordinary characters elsewhere in a BRE, the ERE positions scope.md keeps, in s and in addresses and on multi-line pattern spaces.",
+   "reproduction": "ledger-receipts-p09c/repro-bre-dollar-before-alt-literal.json",
+   "closure": "wrong-paths/bre-dollar-before-alt-literal.json",
+   "witness": "test_outputs.py::test_sweep_anchors",
+   "gate": {
+    "rule": "class sweep in tests/cases/sweeps.json built by p09c-rev1/gen_sweeps.py (every case kept only when GNU sed accepts the script, matches any manual-derived expectation and the unchanged reference agrees) plus a wrong_path_runner receipt; blueprint \u00a75 classes C3/C6 (field lengths, numeric parameters) \u2014 candidate for panel_precheck: every stated 'any'/'every' domain needs a sweep family"
+   }
+  },
+  {
+   "id": "6",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "decision": "backed",
+   "summary": "-n -E -s together lose -s",
+   "rationale": "Backed (scope.md lists the three options). Mutant scored reward 1 on the returned verifier. sweep_options runs every order of every non-empty subset of -n, -E and -s over two files with a script whose output depends on each option, plus the three together with -e pieces, a script argument and a repeated option.",
+   "reproduction": "ledger-receipts-p09c/repro-nes-together-drops-s.json",
+   "closure": "wrong-paths/nes-together-drops-s.json",
+   "witness": "test_outputs.py::test_sweep_options",
+   "gate": {
+    "rule": "class sweep in tests/cases/sweeps.json built by p09c-rev1/gen_sweeps.py (every case kept only when GNU sed accepts the script, matches any manual-derived expectation and the unchanged reference agrees) plus a wrong_path_runner receipt; blueprint \u00a75 classes C3/C6 (field lengths, numeric parameters) \u2014 candidate for panel_precheck: every stated 'any'/'every' domain needs a sweep family"
+   }
+  },
+  {
+   "id": "7",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "decision": "backed",
+   "summary": "? rejected as the s delimiter",
+   "rationale": "Backed (scope.md: any delimiter). Mutant scored reward 1 on the returned verifier. sweep_delimiters uses every printable ASCII character (32-126) as the delimiter of s and every one but n as that of a \\cREGEXc address, with manual-derived expected output, regex metacharacters (? + * . [ ] { } ( ) ^ $ |) as delimiters under BRE and ERE, and twelve delimiters escaped inside both regex and replacement.",
+   "reproduction": "ledger-receipts-p09c/repro-question-delimiter-rejected.json",
+   "closure": "wrong-paths/question-delimiter-rejected.json",
+   "witness": "test_outputs.py::test_sweep_delimiters",
+   "gate": {
+    "rule": "class sweep in tests/cases/sweeps.json built by p09c-rev1/gen_sweeps.py (every case kept only when GNU sed accepts the script, matches any manual-derived expectation and the unchanged reference agrees) plus a wrong_path_runner receipt; blueprint \u00a75 classes C3/C6 (field lengths, numeric parameters) \u2014 candidate for panel_precheck: every stated 'any'/'every' domain needs a sweep family"
+   }
+  }
+ ],
+ "previous_findings": []
+}

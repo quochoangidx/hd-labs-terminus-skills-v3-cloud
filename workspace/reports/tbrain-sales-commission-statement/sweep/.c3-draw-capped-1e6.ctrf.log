@@ -1,0 +1,168 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 24 items
+
+../../tests/test_outputs.py .............FFF....F...                     [100%]
+
+=================================== FAILURES ===================================
+____________________ test_rule_7_2_shortfall_added_to_owed _____________________
+
+    def test_rule_7_2_shortfall_added_to_owed():
+        """A total below the draw: the draw is paid, nothing recovered or carried, the shortfall added to the owed balance."""
+>       check_family("draw_shortfall")
+
+/tests/test_outputs.py:291: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': '9QYVR98D86CM', 'bookings': 10923262, 'commission': 873861, 'bonus': 0, ...}, {'rep': 'DV1WW9L...9', 'bookings': 0, 'commission': 0, 'bonus': 0, ...}, {'rep': 'ZN2', 'bookings': 0, 'commission': 0, 'bonus': 0, ...}]}
+expected = [{'rep': '9QYVR98D86CM', 'bookings': 10923262, 'commission': 873861, 'bonus': 0, ...}, {'rep': 'DV1WW9LGGV66', 'bookin...L9', 'bookings': 0, 'commission': 0, 'bonus': 0, ...}, {'rep': 'ZN2', 'bookings': 0, 'commission': 0, 'bonus': 0, ...}]
+label = 'draw_shortfall job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: draw_shortfall job 0 statement 3 ('ZN2') owed: 976865, expected 2196540
+E               assert (<class 'int'> is <class 'int'> and 976865 == 2196540)
+E                +  where <class 'int'> = type(976865)
+E                +  and   <class 'int'> = type(2196540)
+
+/tests/test_outputs.py:202: AssertionError
+___________________ test_rule_7_2_total_exactly_on_the_draw ____________________
+
+    def test_rule_7_2_total_exactly_on_the_draw():
+        """A total exactly on the draw, a cent under and a cent over, with owed balances of nought and above."""
+>       check_family("draw_edge")
+
+/tests/test_outputs.py:296: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': '8YDW11K6', 'bookings': 91359962, 'commission': 7308797, 'bonus': 0, ...}, {'rep': '3WNNE1S1A6...mission': 5117843, 'bonus': 0, ...}, {'rep': 'X6D0XPA', 'bookings': 69308262, 'commission': 5544661, 'bonus': 0, ...}]}
+expected = [{'rep': '8YDW11K6', 'bookings': 91359962, 'commission': 7308797, 'bonus': 0, ...}, {'rep': '3WNNE1S1A6H', 'bookings':...mmission': 5117843, 'bonus': 0, ...}, {'rep': 'X6D0XPA', 'bookings': 69308262, 'commission': 5544661, 'bonus': 0, ...}]
+label = 'draw_edge job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: draw_edge job 0 statement 1 ('3WNNE1S1A6H') recovered: 8039707, expected 0
+E               assert (<class 'int'> is <class 'int'> and 8039707 == 0)
+E                +  where <class 'int'> = type(8039707)
+E                +  and   <class 'int'> = type(0)
+
+/tests/test_outputs.py:202: AssertionError
+_______________________ test_rule_7_2_total_below_nought _______________________
+
+    def test_rule_7_2_total_below_nought():
+        """Clawback heavier than the rest: totals below nought, with a draw of nought and above."""
+>       check_family("negative_total")
+
+/tests/test_outputs.py:301: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'R139', 'bookings': 728538, 'commission': 58283, 'bonus': 0, ...}, {'rep': 'BDCA8ZR6Q', 'booki...867, 'commission': 65029, 'bonus': 0, ...}, {'rep': 'HB9D0E', 'bookings': 76762, 'commission': 6141, 'bonus': 0, ...}]}
+expected = [{'rep': 'R139', 'bookings': 728538, 'commission': 58283, 'bonus': 0, ...}, {'rep': 'BDCA8ZR6Q', 'bookings': 995094, '...2867, 'commission': 65029, 'bonus': 0, ...}, {'rep': 'HB9D0E', 'bookings': 76762, 'commission': 6141, 'bonus': 0, ...}]
+label = 'negative_total job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: negative_total job 0 statement 2 ('5PD8BFX') owed: 51649062, expected 53457087
+E               assert (<class 'int'> is <class 'int'> and 51649062 == 53457087)
+E                +  where <class 'int'> = type(51649062)
+E                +  and   <class 'int'> = type(53457087)
+
+/tests/test_outputs.py:202: AssertionError
+_______________________ test_section_one_limits_reached ________________________
+
+    def test_section_one_limits_reached():
+        """60 reps, 300 orders, 100 credit notes, quotas of 100,000 and 10^10, every field at its ends."""
+>       check_family("limits_reps")
+
+/tests/test_outputs.py:366: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:208: in check_family
+    compare(run(row["job"]), row["statements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'statements': [{'rep': 'P7V7', 'bookings': 1010002501, 'commission': 80800200, 'bonus': 30000075, ...}, {'rep': 'SN10...ion': 161588400, 'bonus': 30000075, ...}, {'rep': '1QUWUX8BZM2PRL6', 'bookings': 1, 'commission': 0, 'bonus': 0, ...}]}
+expected = [{'rep': 'P7V7', 'bookings': 1010002501, 'commission': 80800200, 'bonus': 30000075, ...}, {'rep': 'SN10E63DA57U9', 'bo...sion': 161588400, 'bonus': 30000075, ...}, {'rep': '1QUWUX8BZM2PRL6', 'bookings': 1, 'commission': 0, 'bonus': 0, ...}]
+label = 'limits_reps job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, statements in job order, each with exactly the README's keys, every value
+        but the rep code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["statements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["statements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} statements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} statement {index} ({ref['rep']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: limits_reps job 0 statement 4 ('1QUWUX8BZM2PRL6') owed: 101000000, expected 110000000
+E               assert (<class 'int'> is <class 'int'> and 101000000 == 110000000)
+E                +  where <class 'int'> = type(101000000)
+E                +  and   <class 'int'> = type(110000000)
+
+/tests/test_outputs.py:202: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_2_bookings_take_the_reps_split
+PASSED ../../tests/test_outputs.py::test_rule_3_1_orders_on_the_quarter_edges
+PASSED ../../tests/test_outputs.py::test_rule_4_1_accelerators_apply_to_the_part_above_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_1_bookings_on_the_quota_and_twice_the_quota
+PASSED ../../tests/test_outputs.py::test_rule_4_2_each_band_rounds_half_up
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reversals_up_to_120_days
+PASSED ../../tests/test_outputs.py::test_rule_5_1_reversal_ages_120_and_121
+PASSED ../../tests/test_outputs.py::test_rule_2_3_credit_note_of_exactly_50000
+PASSED ../../tests/test_outputs.py::test_rule_5_2_credit_notes_outside_the_quarter
+PASSED ../../tests/test_outputs.py::test_courtesy_credits_keep_todays_clawback_line
+PASSED ../../tests/test_outputs.py::test_rule_6_1_new_logo_bonus_on_small_splits
+PASSED ../../tests/test_outputs.py::test_rule_2_4_first_order_of_exactly_250000
+PASSED ../../tests/test_outputs.py::test_trial_orders_keep_todays_bonus_line
+PASSED ../../tests/test_outputs.py::test_rule_7_3_recovery_only_above_the_draw
+PASSED ../../tests/test_outputs.py::test_rule_7_4_minimum_payment
+PASSED ../../tests/test_outputs.py::test_rule_7_4_due_of_24999_and_25000
+PASSED ../../tests/test_outputs.py::test_statement_order_and_keys
+PASSED ../../tests/test_outputs.py::test_generated_jobs
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_7_2_shortfall_added_to_owed - A...
+FAILED ../../tests/test_outputs.py::test_rule_7_2_total_exactly_on_the_draw
+FAILED ../../tests/test_outputs.py::test_rule_7_2_total_below_nought - Assert...
+FAILED ../../tests/test_outputs.py::test_section_one_limits_reached - Asserti...
+========================= 4 failed, 20 passed in 1.29s =========================

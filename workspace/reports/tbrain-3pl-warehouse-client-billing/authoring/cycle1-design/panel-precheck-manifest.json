@@ -1,0 +1,381 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-3pl-warehouse-client-billing",
+ "primary_outcome": "the statement printed by /app/tools/stockbill_run.py gives every lot's status, billed weeks, storage, handling, amount, discount and net and the total as schedule WB-5 gives them",
+ "obligations": [
+  {
+   "id": "ON_HAND",
+   "class": "core",
+   "contribution": "a dispatched pallet is still on hand on its dispatch day",
+   "authority": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "A dispatched pallet is still on hand on the day it is dispatched"
+   },
+   "implementation_sites": [
+    "environment/app/src/stockbill/lots.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "on-hand pallets decide which weeks are billed and for how many pallets"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_2_pallet_on_hand_on_its_dispatch_day"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_dispatch_on_the_receipt_day"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a whole lot dispatched on the first day of a storage week inside the period",
+   "wrong_but_plausible": "pallets gone on their dispatch day (shipped)",
+   "selfdescription_phrase": "pallets on hand"
+  },
+  {
+   "id": "STORAGE_WEEKS",
+   "class": "core",
+   "contribution": "storage weeks run in seven-day blocks from the receipt date; those starting in the period are billed",
+   "authority": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "run in blocks of seven days from its receipt date"
+   },
+   "implementation_sites": [
+    "environment/app/src/stockbill/storage.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "billed weeks set the storage amount"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_storage_weeks_run_from_receipt"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_2_week_starting_on_the_period_end"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "lots received on every weekday, periods of 1 to 62 days, a week starting on the period's first and last day",
+   "wrong_but_plausible": "calendar weeks from Monday (shipped)",
+   "selfdescription_phrase": "storage weeks"
+  },
+  {
+   "id": "STORAGE_TIERS",
+   "class": "core",
+   "contribution": "each billed week at the rate of the tier that takes its own number",
+   "authority": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "Tiers are not retroactive"
+   },
+   "implementation_sites": [
+    "environment/app/src/stockbill/storage.py",
+    "environment/app/src/stockbill/rates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the tier rate is the storage price"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_3_tiers_are_not_retroactive"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_3_week_on_a_tier_boundary"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a period whose weeks cross two tier boundaries of a five-tier scale",
+   "wrong_but_plausible": "every week at the tier the lot's age at period end reaches (shipped)",
+   "selfdescription_phrase": "tier that takes its number"
+  },
+  {
+   "id": "HANDLING",
+   "class": "core",
+   "contribution": "per pallet moved, out-of-hours rate on non-working days including public holidays",
+   "authority": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "billed at the out-of-hours rate"
+   },
+   "implementation_sites": [
+    "environment/app/src/stockbill/handling.py",
+    "environment/app/src/stockbill/dates.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "handling is part of every lot amount and charge"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_1_dispatch_billed_per_pallet",
+     "test_outputs.py::test_rule_5_2_public_holiday_is_out_of_hours"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_1_movements_on_the_period_ends"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a forty-pallet dispatch on a weekday and a receipt on a weekday public holiday",
+   "wrong_but_plausible": "one charge per dispatch; weekends only (shipped)",
+   "selfdescription_phrase": "handling"
+  },
+  {
+   "id": "RATE_CARD",
+   "class": "core",
+   "contribution": "rates of the revision in force on the line's date; before the earliest effective date the schedule gives no rule and the latest revision stays",
+   "authority": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "the revision in force on the week's first day"
+   },
+   "implementation_sites": [
+    "environment/app/src/stockbill/rates.py",
+    "environment/app/src/stockbill/storage.py",
+    "environment/app/src/stockbill/handling.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the card prices every storage week and movement"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_rates_in_force_on_the_day",
+     "test_outputs.py::test_lines_before_the_first_rate_card_keep_todays_card"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_1_revision_effective_on_the_day"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "a period crossing a revision, a line on an effective date, and lines before the earliest effective date",
+   "wrong_but_plausible": "latest card always (shipped); earliest card or an error (natural over-repair)",
+   "selfdescription_phrase": "revision in force"
+  },
+  {
+   "id": "DISCOUNT",
+   "class": "core",
+   "contribution": "percentage of the lot's charges rounded half up; an open lot keeps today's truncated percentage of its amount",
+   "authority": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "A lot's discount is its client's discount percentage"
+   },
+   "implementation_sites": [
+    "environment/app/src/stockbill/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the discount sets the net and the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_3_discount_rounds_half_up",
+     "test_outputs.py::test_open_lot_keeps_todays_discount"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_3_exact_half_cent"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "closed lots leaving 0, 49, 50 and 99 hundredths; open lots leaving 50 to 99 hundredths",
+   "wrong_but_plausible": "truncation (shipped); half up everywhere or handling-only for open lots (natural over-repairs)",
+   "selfdescription_phrase": "discount"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/stockbill_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  },
+  {
+   "id": "STATEMENT_LAYOUT",
+   "class": "support",
+   "contribution": "section 7 keys and lot order",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/stockbill/statement.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_statement_layout_and_order"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "ON_HAND",
+    "to": "STORAGE_WEEKS"
+   },
+   {
+    "from": "STORAGE_WEEKS",
+    "to": "STORAGE_TIERS"
+   },
+   {
+    "from": "RATE_CARD",
+    "to": "STORAGE_TIERS"
+   },
+   {
+    "from": "RATE_CARD",
+    "to": "HANDLING"
+   },
+   {
+    "from": "STORAGE_TIERS",
+    "to": "DISCOUNT"
+   },
+   {
+    "from": "HANDLING",
+    "to": "DISCOUNT"
+   },
+   {
+    "from": "ON_HAND",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STORAGE_WEEKS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "STORAGE_TIERS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "HANDLING",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "RATE_CARD",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "DISCOUNT",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "on-hand-decides-billed-weeks",
+   "obligation_ids": [
+    "ON_HAND",
+    "STORAGE_WEEKS",
+    "STORAGE_TIERS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_2_pallet_on_hand_on_its_dispatch_day",
+    "test_outputs.py::test_rule_4_1_storage_weeks_run_from_receipt"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "card-in-force-prices-lines",
+   "obligation_ids": [
+    "RATE_CARD",
+    "STORAGE_TIERS",
+    "HANDLING"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_2_rates_in_force_on_the_day"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "lot-status-decides-discount",
+   "obligation_ids": [
+    "STORAGE_TIERS",
+    "HANDLING",
+    "DISCOUNT"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_6_3_discount_rounds_half_up",
+    "test_outputs.py::test_open_lot_keeps_todays_discount"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each clause applies to every job inside the limits of clause 1.4"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the schedule gives no rule for a value the package works out",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/billing-schedule.md",
+     "anchor": "where a rule needs the revision in force on such a day",
+     "witness_ids": [
+      "test_outputs.py::test_lines_before_the_first_rate_card_keep_todays_card"
+     ]
+    },
+    {
+     "file": "environment/app/docs/billing-schedule.md",
+     "anchor": "Where a rule needs the storage charge",
+     "witness_ids": [
+      "test_outputs.py::test_open_lot_keeps_todays_discount"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Jobs of one to three hundred lots for one to twenty clients will be run"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py SEED (authoring only; graded jobs are sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave the driver alone: the file you leave at that path must be byte-for-byte the one you were given",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_candidate_cannot_read_ground_truth": "protected ground truth witness (planned)"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATEMENT-ORDER",
+   "domain_required": true,
+   "rationale": "lots in job order",
+   "authority_anchor": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "in the job's order"
+   }
+  },
+  {
+   "id": "HALF-CENT-UP",
+   "domain_required": true,
+   "rationale": "discount rounding",
+   "authority_anchor": {
+    "file": "environment/app/docs/billing-schedule.md",
+    "anchor": "an exact half cent is rounded up"
+   }
+  }
+ ],
+ "wrong_paths": []
+}

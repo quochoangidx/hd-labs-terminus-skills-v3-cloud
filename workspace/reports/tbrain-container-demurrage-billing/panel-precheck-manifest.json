@@ -1,0 +1,401 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-container-demurrage-billing",
+ "primary_outcome": "the statement printed by /app/tools/demurrage_run.py gives every container's dwell, free days, demurrage days and charge and the file's total, in file order, as tariff DM-3 gives them",
+ "obligations": [
+  {
+   "id": "DWELL",
+   "class": "core",
+   "contribution": "dwell counts the discharge day, the pickup day and every day between",
+   "authority": {
+    "file": "environment/app/docs/demurrage-tariff.md",
+    "anchor": "A container's dwell counts every day it stood in the terminal"
+   },
+   "implementation_sites": [
+    "environment/app/src/demurrage/dwell.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "dwell feeds demurrage days, hence the charge and the total"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_1_dwell_counts_both_ends"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_1_dwell_counts_both_ends",
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "containers picked up on their discharge day (dwell 1) and 120 days later (dwell 121)",
+   "wrong_but_plausible": "pickup less discharge, one day short (shipped); capping dwell at 120 days",
+   "selfdescription_phrase": "dwell"
+  },
+  {
+   "id": "FREE_DAYS",
+   "class": "core",
+   "contribution": "a dry container has 5 free days, a reefer 3; a tank keeps today's 5 (silent)",
+   "authority": {
+    "file": "environment/app/docs/demurrage-tariff.md",
+    "anchor": "A reefer\ncontainer has 3 free days"
+   },
+   "implementation_sites": [
+    "environment/app/src/demurrage/dwell.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "free days set the demurrage days of every container"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_2_reefer_free_days",
+     "test_outputs.py::test_tank_container_keeps_todays_free_days"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_2_reefer_free_days",
+     "test_outputs.py::test_tank_container_keeps_todays_free_days",
+     "test_outputs.py::test_figures_left_to_todays_code_together"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "reefers and dry boxes on the last free day and one past; tanks inside and past five days",
+   "wrong_but_plausible": "5 for every type (shipped); a tank given 0 or 3 free days (natural over-repair)",
+   "selfdescription_phrase": "free days"
+  },
+  {
+   "id": "DEMURRAGE_CHARGE",
+   "class": "core",
+   "contribution": "the rate for each of the first 4 demurrage days and twice the rate for each day after; a container not on demurrage keeps today's days and charge (dwell less free days at the rate, silent)",
+   "authority": {
+    "file": "environment/app/docs/demurrage-tariff.md",
+    "anchor": "twice its daily rate for each demurrage day after the"
+   },
+   "implementation_sites": [
+    "environment/app/src/demurrage/charges.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the charge is each container's line and the total's summand"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_1_twice_the_rate_after_the_fourth_day",
+     "test_outputs.py::test_container_not_on_demurrage_keeps_todays_days_and_charge"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_1_twice_the_rate_after_the_fourth_day",
+     "test_outputs.py::test_container_not_on_demurrage_keeps_todays_days_and_charge",
+     "test_outputs.py::test_figures_left_to_todays_code_together",
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "demurrage of 3, 4, 5 days and more; containers inside their free time",
+   "wrong_but_plausible": "the rate for every day (shipped); doubling after the 3rd or 5th day; flooring days or charge at 0 inside free time (natural over-repair)",
+   "selfdescription_phrase": "demurrage charge"
+  },
+  {
+   "id": "TOTAL",
+   "class": "core",
+   "contribution": "the total is the sum of every container's charge, containers in file order, with no cap or wrap at 200 containers of the largest charge (4,600,000,000 cents)",
+   "authority": {
+    "file": "environment/app/docs/demurrage-tariff.md",
+    "anchor": "A statement's total is the sum of its containers' demurrage charges"
+   },
+   "implementation_sites": [
+    "environment/app/src/demurrage/statement.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "the total is the statement's headline figure"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_total_and_container_order",
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_3_2_total_and_container_order",
+     "test_outputs.py::test_rule_1_2_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "200 containers at rate 100,000 and 121-day stays: total 4,600,000,000 cents, past 2^31 and 2^32",
+   "wrong_but_plausible": "a 32-bit clamp or wrap of the total; dropping the 200th container",
+   "selfdescription_phrase": "3.2"
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver printing the statement",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/demurrage_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "DWELL",
+    "to": "DEMURRAGE_CHARGE"
+   },
+   {
+    "from": "FREE_DAYS",
+    "to": "DEMURRAGE_CHARGE"
+   },
+   {
+    "from": "DEMURRAGE_CHARGE",
+    "to": "TOTAL"
+   },
+   {
+    "from": "DWELL",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "FREE_DAYS",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "DEMURRAGE_CHARGE",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "TOTAL",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "dwell-and-free-days-make-demurrage-days",
+   "obligation_ids": [
+    "DWELL",
+    "FREE_DAYS",
+    "DEMURRAGE_CHARGE"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_2_1_dwell_counts_both_ends",
+    "test_outputs.py::test_rule_2_2_reefer_free_days",
+    "test_outputs.py::test_figures_left_to_todays_code_together"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "charges-make-the-total",
+   "obligation_ids": [
+    "DEMURRAGE_CHARGE",
+    "TOTAL"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_2_total_and_container_order",
+    "test_outputs.py::test_rule_1_2_limits_reached",
+    "test_outputs.py::test_generated_release_files"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each rule holds for every release file within the limits of rule 1.2"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the tariff gives no rule for a figure that one of the package's steps works out",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/demurrage-tariff.md",
+     "anchor": "A dry container has 5 free days",
+     "witness_ids": [
+      "test_outputs.py::test_tank_container_keeps_todays_free_days",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    },
+    {
+     "file": "environment/app/docs/demurrage-tariff.md",
+     "anchor": "The demurrage\ncharge of a container on demurrage",
+     "witness_ids": [
+      "test_outputs.py::test_container_not_on_demurrage_keeps_todays_days_and_charge",
+      "test_outputs.py::test_figures_left_to_todays_code_together"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Release files of one to two hundred containers will be billed"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "solution/jobgen.py (authoring only; graded files are sealed)",
+   "tests/test_outputs.py RELABEL_SEED from os.urandom: relabels the generated family only (name, ids, order, shift in time), leaving every expected figure unchanged; printed with any failure"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [
+  {
+   "id": "DRIVER-UNCHANGED",
+   "statement": "leave that driver exactly as it is; the file you leave there has to match ours byte for byte",
+   "enforced_by": [
+    "test_outputs.py::test_submitted_driver_unchanged"
+   ],
+   "enforcement_level": "source",
+   "allowed_exceptions_disclosed": true
+  }
+ ],
+ "unclaimed_units_rationale": {
+  "test_outputs.py::test_submitted_driver_unchanged": "restriction witness (DRIVER-UNCHANGED)",
+  "test_outputs.py::test_candidate_cannot_read_verifier_state": "isolation witness: the candidate user cannot read /tests, the sealed expectations, the shipped copy or /logs/verifier (with a readable control)",
+  "test_outputs.py::test_generated_release_files": "seeded dry and reefer files on demurrage over the rule 1.2 domain, sealed and relabelled; exercises every governed obligation together"
+ },
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "STATEMENT-SCHEMA",
+   "domain_required": true,
+   "rationale": "the office's billing reads this JSON statement; keys, integer types and container order are fixed by the README",
+   "authority_anchor": {
+    "file": "environment/app/README.md",
+    "anchor": "in the order of the file"
+   }
+  }
+ ],
+ "verifier_matrix": "verifier-matrix.json",
+ "strict_preflight": "revision-v15/preflight/preflight.json",
+ "wrong_paths": [
+  {
+   "id": "H01-driver-tampered",
+   "kind": "harness_bypass",
+   "obligation_ids": [],
+   "receipt": "wrong-paths/H01-driver-tampered.json"
+  },
+  {
+   "id": "W01-revert-higher-rate",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DEMURRAGE_CHARGE"
+   ],
+   "receipt": "wrong-paths/W01-revert-higher-rate.json"
+  },
+  {
+   "id": "W02-revert-dwell-and-free-days",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DWELL",
+    "FREE_DAYS"
+   ],
+   "receipt": "wrong-paths/W02-revert-dwell-and-free-days.json"
+  },
+  {
+   "id": "W03-doubled-after-third-day",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DEMURRAGE_CHARGE"
+   ],
+   "receipt": "wrong-paths/W03-doubled-after-third-day.json"
+  },
+  {
+   "id": "W04-doubled-after-fifth-day",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DEMURRAGE_CHARGE"
+   ],
+   "receipt": "wrong-paths/W04-doubled-after-fifth-day.json"
+  },
+  {
+   "id": "W05-tank-free-zero",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FREE_DAYS"
+   ],
+   "receipt": "wrong-paths/W05-tank-free-zero.json"
+  },
+  {
+   "id": "W06-tank-free-three",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "FREE_DAYS"
+   ],
+   "receipt": "wrong-paths/W06-tank-free-three.json"
+  },
+  {
+   "id": "W07-days-floored-in-free-time",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DEMURRAGE_CHARGE"
+   ],
+   "receipt": "wrong-paths/W07-days-floored-in-free-time.json"
+  },
+  {
+   "id": "W08-charge-floored-in-free-time",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DEMURRAGE_CHARGE"
+   ],
+   "receipt": "wrong-paths/W08-charge-floored-in-free-time.json"
+  },
+  {
+   "id": "W09-dwell-capped-at-120",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "DWELL"
+   ],
+   "receipt": "wrong-paths/W09-dwell-capped-at-120.json"
+  },
+  {
+   "id": "W10-container-cap-199",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TOTAL"
+   ],
+   "receipt": "wrong-paths/W10-container-cap-199.json"
+  },
+  {
+   "id": "W11-total-clamp-int32-max",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TOTAL"
+   ],
+   "receipt": "wrong-paths/W11-total-clamp-int32-max.json"
+  },
+  {
+   "id": "W12-total-wrap-int32",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TOTAL"
+   ],
+   "receipt": "wrong-paths/W12-total-wrap-int32.json"
+  },
+  {
+   "id": "W13-total-clamp-uint32-max",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TOTAL"
+   ],
+   "receipt": "wrong-paths/W13-total-clamp-uint32-max.json"
+  },
+  {
+   "id": "W14-total-wrap-uint32",
+   "kind": "semantic_partial",
+   "obligation_ids": [
+    "TOTAL"
+   ],
+   "receipt": "wrong-paths/W14-total-wrap-uint32.json"
+  }
+ ],
+ "task_snapshot_sha256": "ad335e9b7724f38004d12ad3dbbe3512e32ac8edb6c7cb6b2e7c9cb7967240fa"
+}

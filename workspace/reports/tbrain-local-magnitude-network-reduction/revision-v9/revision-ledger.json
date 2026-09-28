@@ -1,0 +1,60 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-local-magnitude-network-reduction",
+ "report_path": "workspace/revision/12e6eda4-8ced-4dcd-928d-7abc22b133a9/v9/12e6eda4-8ced-4dcd-928d-7abc22b133a9.md",
+ "returned_snapshot_sha256": "9414897d83a07c44806773bd0d0b4d27367aa25640032ba4d38b8dfedf4f1cc9",
+ "repaired_snapshot_sha256": "2aee80f68c0c1bfe8cd7121ce0ab758fe9ef9685f3c9e37eea6203bfa161df16",
+ "findings": [
+  {
+   "id": "1",
+   "axis": "sound_verifier",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "core: rule 4.3 averages every reading whatever its channel code, and 1.2 allows any three-character code; the corpus only ever used eight familiar codes. Added hand-built bulletins with codes XYZ, HHZ, 123, a_b, 'Z Z', ?!., EHZ, LHN, BH1, xx9 (station_mean.jsonl, including a station whose only reading is XYZ) and a labels bulletin with ids and station codes across their lengths and characters (order.jsonl).",
+   "reproduction": "revision-v9/receipts/f1-reproduction.json",
+   "closure": "revision-v9/receipts/f1-closure.json",
+   "gate": {
+    "rule": "sweep catalog C9/C6 field-value mutants (familiar-channel whitelist, vertical-looking channel skipped, id truncation) kept as regression; class candidate for a verifier_static_checks field-alphabet rule once it recurs"
+   }
+  },
+  {
+   "id": "2",
+   "axis": "correct_reference_solution",
+   "severity": "Major",
+   "blocking": true,
+   "decision": "dropped",
+   "removed_obligation_id": "TIE_AT_THREE_TIMES_NOISE",
+   "rationale": "reproduced on the returned snapshot (0.3/0.1 dropped, station ml -0.98297 instead of -0.74441). Tie handling is not the hard thing; making the reference decide decimal ties exactly would force every solver into decimal arithmetic and invite the mirror Sound Verifier finding. NPM-4 1.2 now keeps every amplitude more than one part in a thousand from three times its noise, so binary and exact arithmetic agree on every legal bulletin; ties left the corpus and the verifier checks the margin at load.",
+   "gate": {
+    "not_mechanizable": "recorded as a seal-time check (seal.py numeric_discipline in exact decimals) for this task; the general class 'a float comparison at a discontinuity of the contract' needs a per-task margin argument"
+   }
+  },
+  {
+   "id": "3",
+   "axis": "correct_reference_solution",
+   "severity": "Minor",
+   "blocking": true,
+   "decision": "dropped",
+   "removed_obligation_id": "TABLE_END_EXACT",
+   "rationale": "reproduced (epi 600, depth 1e-6 -> contributes true). Same class as finding 2: NPM-4 1.2 now keeps every station more than a metre from 10 and 600 km; exact-end stations left the corpus (now 10.01/599.99 and interior listed distances), the verifier checks the margin at load, and the two exclusive-end sweep mutants are retired with that reason.",
+   "gate": {
+    "not_mechanizable": "same class and seal-time check as finding 2"
+   }
+  },
+  {
+   "id": "4",
+   "axis": "sound_verifier",
+   "severity": "Minor",
+   "blocking": true,
+   "decision": "backed",
+   "rationale": "expectations are stored to 9 decimals and the comparator allows 1e-9 on top of 1e-6 for the stored values' rounding, which a 50-digit recomputation puts below 5.1e-10; no output within 1e-6 of the exact figure can be rejected. (Full double precision would push tests/ past the panel's 150 KB read budget.)",
+   "reproduction": "revision-v9/receipts/f4-reproduction.json",
+   "closure": "revision-v9/receipts/f4-closure.json",
+   "gate": {
+    "rule": "seal-time: never round sealed expectations; golden_precision_check.py receipt"
+   }
+  }
+ ],
+ "previous_findings": []
+}

@@ -1,0 +1,70 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tests
+plugins: json-ctrf-0.5.2
+collected 25 items
+
+../../tests/test_outputs.py .......F.................                    [100%]
+
+=================================== FAILURES ===================================
+_________________ test_rule_3_6_volume_rebate_rounded_half_up __________________
+
+    def test_rule_3_6_volume_rebate_rounded_half_up():
+        """The volume rebate is rounded to the nearest cent, an exact half going up."""
+>       check_family("rebate_rounding")
+
+/tests/test_outputs.py:258: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tests/test_outputs.py:217: in check_family
+    compare(run(row["job"]), row["settlements"], f"{name} job {number}")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = {'settlements': [{'account': 'XCQHB4L', 'purchases': 528461, 'returns': 0, 'net': 528461, ...}, {'account': 'ATMQW77DG...: 5167612, 'returns': 0, 'net': 5167612, ...}, {'account': '37', 'purchases': 10100, 'returns': 0, 'net': 10100, ...}]}
+expected = [{'account': 'XCQHB4L', 'purchases': 528461, 'returns': 0, 'net': 528461, ...}, {'account': 'ATMQW77DGM53CLTX', 'purch...': 5167612, 'returns': 0, 'net': 5167612, ...}, {'account': '37', 'purchases': 10100, 'returns': 0, 'net': 10100, ...}]
+label = 'rebate_rounding job 0'
+
+    def compare(actual, expected, label):
+        """The whole output: one key, settlements in job order, each with exactly the README's keys, every value
+        but the account code an integer (a float or a boolean is not), all equal to the expected ones."""
+        assert isinstance(actual, dict) and list(actual) == ["settlements"], f"{label}: top-level {actual!r:.200}"
+        got = actual["settlements"]
+        assert isinstance(got, list) and len(got) == len(expected), f"{label}: {len(got) if isinstance(got, list) else got!r} settlements, expected {len(expected)}"
+        for index, (row, ref) in enumerate(zip(got, expected)):
+            where = f"{label} settlement {index} ({ref['account']!r})"
+            assert isinstance(row, dict) and set(row) == set(FIELDS) and len(row) == len(FIELDS), f"{where}: keys {sorted(row) if isinstance(row, dict) else row!r}"
+            for key in FIELDS:
+>               assert type(row[key]) is type(ref[key]) and row[key] == ref[key], f"{where} {key}: {row[key]!r}, expected {ref[key]!r}"
+E               AssertionError: rebate_rounding job 0 settlement 4 ('37') rebate: 50, expected 51
+E               assert (<class 'int'> is <class 'int'> and 50 == 51)
+E                +  where <class 'int'> = type(50)
+E                +  and   <class 'int'> = type(51)
+
+/tests/test_outputs.py:211: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../tests/test_outputs.py::test_rule_3_1_carton_shipment_counts_by_receipt
+PASSED ../../tests/test_outputs.py::test_rule_2_2_line_of_exactly_12_units_is_a_carton
+PASSED ../../tests/test_outputs.py::test_rule_3_3_returns_less_40_cents_a_unit
+PASSED ../../tests/test_outputs.py::test_rule_3_3_returns_on_the_quarter_edges
+PASSED ../../tests/test_outputs.py::test_rule_3_5_tier_is_picked_on_net_purchases
+PASSED ../../tests/test_outputs.py::test_rule_2_6_net_exactly_on_a_threshold
+PASSED ../../tests/test_outputs.py::test_rule_2_6_net_below_nought_reaches_no_tier
+PASSED ../../tests/test_outputs.py::test_rule_4_1_growth_bonus_on_the_increase
+PASSED ../../tests/test_outputs.py::test_rule_4_1_growth_exactly_110_per_cent
+PASSED ../../tests/test_outputs.py::test_rule_4_1_no_prior_purchases_no_bonus
+PASSED ../../tests/test_outputs.py::test_rule_5_1_price_drop_earns_cut_times_on_hand
+PASSED ../../tests/test_outputs.py::test_rule_2_4_cut_of_exactly_250_cents_is_a_price_drop
+PASSED ../../tests/test_outputs.py::test_rule_5_2_contract_sale_chargeback
+PASSED ../../tests/test_outputs.py::test_rule_2_5_sale_exactly_100_cents_under_cost_is_a_contract_sale
+PASSED ../../tests/test_outputs.py::test_rule_6_2_minimum_settlement
+PASSED ../../tests/test_outputs.py::test_rule_6_2_settlement_of_exactly_25000_cents
+PASSED ../../tests/test_outputs.py::test_loose_units_keep_their_invoice_quarter
+PASSED ../../tests/test_outputs.py::test_tidy_up_notices_keep_todays_credit
+PASSED ../../tests/test_outputs.py::test_price_match_sales_keep_todays_chargeback
+PASSED ../../tests/test_outputs.py::test_statement_order_and_keys
+PASSED ../../tests/test_outputs.py::test_section_one_limits_reached
+PASSED ../../tests/test_outputs.py::test_generated_jobs
+PASSED ../../tests/test_outputs.py::test_candidate_cannot_read_verifier_state
+PASSED ../../tests/test_outputs.py::test_submitted_driver_unchanged
+FAILED ../../tests/test_outputs.py::test_rule_3_6_volume_rebate_rounded_half_up
+========================= 1 failed, 24 passed in 1.46s =========================

@@ -1,0 +1,422 @@
+{
+ "schema_version": 1,
+ "task_slug": "tbrain-bod5-dilution-data-reduction",
+ "primary_outcome": "the SOP WQ-14 batch report: seed factor, blank depletion, check value, qualifiers, sample relations and values, duplicate RPDs and pass",
+ "obligations": [
+  {
+   "id": "USABLE",
+   "class": "core",
+   "contribution": "a usable bottle is not spent and has depleted 2.50 mg/L or more",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "A bottle is usable when it is not spent and its depletion is 2.50 mg/L or"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/bottles.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_4_usable_bottle_needs_two_and_a_half"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_4_usable_bottle_needs_two_and_a_half"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "sample bottles depleting 2.01-2.49 mg/L beside usable ones",
+   "wrong_but_plausible": "keep the 2.0 mg/L limit (shipped)",
+   "selfdescription_phrase": "usable bottle"
+  },
+  {
+   "id": "SPENT",
+   "class": "core",
+   "contribution": "a bottle is spent below a final DO of 1.20 mg/L",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "A bottle is spent when its final DO is below 1.20 mg/L"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/bottles.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_2_3_spent_below_one_point_two"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_3_spent_below_one_point_two"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "bottles with a final DO of 1.00-1.19 and large depletion",
+   "wrong_but_plausible": "keep the 1.0 mg/L limit (shipped)",
+   "selfdescription_phrase": "spent bottle"
+  },
+  {
+   "id": "SEED_FACTOR",
+   "class": "core",
+   "contribution": "mean seed rate of the reference controls (usable controls, or every control when none is usable)",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "The seed factor of the batch is the mean seed rate of its reference"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/seed.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_3_2_seed_factor_is_mean_rate_of_usable_controls",
+     "test_outputs.py::test_rule_2_5_batch_without_usable_control_uses_every_control"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_2_5_batch_without_usable_control_uses_every_control"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "short controls beside usable ones of different seed volumes; batches with only short or spent controls",
+   "wrong_but_plausible": "pool every control (shipped); keep today's pooled figure or 0.0 when no control is usable (keep-today over-reading of 2.5)",
+   "selfdescription_phrase": "seed factor"
+  },
+  {
+   "id": "BOTTLE_BOD",
+   "class": "core",
+   "contribution": "seed correction comes off the depletion before dividing by the sample fraction",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "The BOD of a check or sample bottle is its depletion less its seed"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/bottles.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_4_1_seed_correction_before_dilution"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_4_1_seed_correction_before_dilution"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "seeded bottles holding 1-150 mL of sample",
+   "wrong_but_plausible": "depletion / fraction - correction (shipped)",
+   "selfdescription_phrase": "bottle BOD"
+  },
+  {
+   "id": "BOUNDS",
+   "class": "core",
+   "contribution": "'>' from the least-sample bottle when all are spent, '<' 2.50 over the fraction of the most-sample bottle otherwise, first listed on ties",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "Any other sample with no usable bottle is reported as"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/samples.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_5_3_less_than_from_bottle_holding_most"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_5_4_first_listed_on_equal_volumes"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "samples of only short bottles of different volumes; mixed short and spent",
+   "wrong_but_plausible": "take the bottle holding least (shipped)",
+   "selfdescription_phrase": "less-than result"
+  },
+  {
+   "id": "RPD",
+   "class": "core",
+   "contribution": "RPD over the mean of two measured BODs; where a side is a bound, today's calculation on the section 5 values",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "Its RPD is the difference between its measured BOD and the measured BOD"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/qc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_6_1_rpd_over_mean_of_measured_bods",
+     "test_outputs.py::test_duplicate_of_a_bound_keeps_todays_rpd"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_6_2_rpd_pass_limit"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "duplicate pairs of measured samples; pairs with a bound on one or both sides",
+   "wrong_but_plausible": "divide by the value duplicated (shipped); the mean-denominator formula for bounds too (natural over-repair)",
+   "selfdescription_phrase": "duplicate RPD"
+  },
+  {
+   "id": "BLANK",
+   "class": "core",
+   "contribution": "blank depletion is the largest blank depletion; B above 0.20",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "The blank depletion of the batch is the largest depletion among its"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/qc.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_7_1_blank_depletion_is_largest"
+    ],
+    "boundary": [
+     "test_outputs.py::test_rule_7_1_blank_depletion_is_largest"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "one blank above 0.20 beside blanks below it",
+   "wrong_but_plausible": "mean of the blanks (shipped)",
+   "selfdescription_phrase": "blank depletion"
+  },
+  {
+   "id": "ROUNDING",
+   "class": "core",
+   "contribution": "reported values to three significant figures; nothing else rounded",
+   "authority": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "is rounded to three significant figures, an exact half going away"
+   },
+   "implementation_sites": [
+    "environment/app/src/bodcalc/report.py"
+   ],
+   "separability": {
+    "standalone_deliverable": false,
+    "joins_before_output": true,
+    "rationale": "feeds the sample values, duplicate RPDs or batch qualifiers of the one report"
+   },
+   "witnesses": {
+    "positive": [
+     "test_outputs.py::test_rule_1_2_three_significant_figures"
+    ],
+    "boundary": [
+     "test_outputs.py::test_section_one_limits_reached"
+    ]
+   },
+   "expected_source": "independent_model",
+   "discriminating_instance": "values from about 1.6 to 5,700 mg/L",
+   "wrong_but_plausible": "one decimal place (shipped); rounding the seed factor or RPD as well",
+   "selfdescription_phrase": "reported values"
+  },
+  {
+   "id": "DECODE",
+   "class": "support",
+   "contribution": "bench sheet numbers to floats",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/src/bodcalc/bench.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_example_batch_smoke"
+   ]
+  },
+  {
+   "id": "DRIVER",
+   "class": "support",
+   "contribution": "fixed driver prints the report",
+   "implementation_complete": true,
+   "repair_surface": false,
+   "paths": [
+    "environment/app/tools/bodcalc_run.py"
+   ],
+   "smoke_test_ids": [
+    "test_outputs.py::test_driver_is_unchanged"
+   ]
+  }
+ ],
+ "causal_graph": {
+  "edges": [
+   {
+    "from": "USABLE",
+    "to": "SEED_FACTOR"
+   },
+   {
+    "from": "SPENT",
+    "to": "USABLE"
+   },
+   {
+    "from": "SEED_FACTOR",
+    "to": "BOTTLE_BOD"
+   },
+   {
+    "from": "BOTTLE_BOD",
+    "to": "BOUNDS"
+   },
+   {
+    "from": "USABLE",
+    "to": "BOUNDS"
+   },
+   {
+    "from": "BOUNDS",
+    "to": "RPD"
+   },
+   {
+    "from": "BOUNDS",
+    "to": "ROUNDING"
+   },
+   {
+    "from": "RPD",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "ROUNDING",
+    "to": "PRIMARY_OUTCOME"
+   },
+   {
+    "from": "BLANK",
+    "to": "PRIMARY_OUTCOME"
+   }
+  ]
+ },
+ "interactions": [
+  {
+   "id": "usable-controls-set-the-seed-factor",
+   "obligation_ids": [
+    "USABLE",
+    "SPENT",
+    "SEED_FACTOR"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_3_2_seed_factor_is_mean_rate_of_usable_controls",
+    "test_outputs.py::test_rule_2_5_batch_without_usable_control_uses_every_control"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "seed-factor-feeds-bottle-bod",
+   "obligation_ids": [
+    "SEED_FACTOR",
+    "BOTTLE_BOD"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_4_1_seed_correction_before_dilution"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "measured-or-bound-decides-rpd",
+   "obligation_ids": [
+    "USABLE",
+    "BOUNDS",
+    "RPD"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_6_1_rpd_over_mean_of_measured_bods",
+    "test_outputs.py::test_duplicate_of_a_bound_keeps_todays_rpd"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "rpd-on-unrounded-values-rounding-on-report",
+   "obligation_ids": [
+    "ROUNDING",
+    "RPD",
+    "BOUNDS"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_1_2_three_significant_figures",
+    "test_outputs.py::test_rule_6_1_rpd_over_mean_of_measured_bods"
+   ],
+   "joins_before_output": true
+  },
+  {
+   "id": "blank-and-check-share-the-qualifier-string",
+   "obligation_ids": [
+    "BLANK",
+    "BOTTLE_BOD",
+    "SEED_FACTOR"
+   ],
+   "witness_ids": [
+    "test_outputs.py::test_rule_7_1_blank_depletion_is_largest"
+   ],
+   "joins_before_output": true
+  }
+ ],
+ "closure": {
+  "universal_rule": {
+   "file": "instruction.md",
+   "anchor": "Each of its rules holds for every batch within the limits of its section 1"
+  },
+  "silence": {
+   "file": "instruction.md",
+   "anchor": "Where the SOP leaves a figure without a definition for a particular batch",
+   "named_cases": [
+    {
+     "file": "environment/app/docs/sop-wq14-bod5.md",
+     "anchor": "A sample with one or more usable bottles has a measured BOD",
+     "witness_ids": [
+      "test_outputs.py::test_duplicate_of_a_bound_keeps_todays_rpd"
+     ]
+    }
+   ]
+  },
+  "coverage_envelope": {
+   "file": "instruction.md",
+   "anchor": "Batches of one to forty samples will be reduced"
+  }
+ },
+ "determinism": {
+  "seeds": [
+   "authoring gen.py SEED=20260927 (authoring only; graded batches will be sealed files)"
+  ],
+  "clock_dependence": "none",
+  "network": "none",
+  "order_sensitivity": "none"
+ },
+ "reference_selfdescription": "solution/solve.sh",
+ "restrictions": [],
+ "unclaimed_units_rationale": {},
+ "removed_obligations": [],
+ "exact_output_requirements": [
+  {
+   "id": "REPORT-LAYOUT",
+   "domain_required": true,
+   "rationale": "the lab's LIMS import reads the report fields and list order",
+   "authority_anchor": {
+    "file": "environment/app/docs/sop-wq14-bod5.md",
+    "anchor": "prints one JSON object"
+   }
+  }
+ ],
+ "wrong_paths": []
+}

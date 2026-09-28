@@ -1,0 +1,163 @@
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/attribution.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/attribution.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/attribution.py	2026-09-27 13:13:52
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/attribution.py	2026-09-27 13:22:27
+@@ -1,25 +1,32 @@
+ """How long each logger reading stands for, and where the logger missed readings."""
+ 
+-LAST_READING_MINUTES = 60  # a logger's last reading is taken to cover one more reporting window
+-GAP_MINUTES = 60  # a spacing longer than this means the logger missed readings
++LOGGED_INTERVAL_MINUTES = 30  # an interval of this length or less is a logged interval (2.4)
+ 
+ 
+-def holds(readings):
+-    """Minutes each reading of one export stands for, in export order."""
+-    held = []
++def spacings(readings):
++    """Minutes from each reading of one export to the next, nought for the last (5.1)."""
++    spans = []
+     for index, reading in enumerate(readings):
+         if index + 1 < len(readings):
+-            held.append(readings[index + 1].minute - reading.minute)
++            spans.append(readings[index + 1].minute - reading.minute)
+         else:
+-            held.append(LAST_READING_MINUTES)
++            spans.append(0)
++    return spans
++
++
++def holds(readings):
++    """Minutes each reading of one export stands for, in export order (2.7)."""
++    held = []
++    for span in spacings(readings):
++        held.append(span if span <= LOGGED_INTERVAL_MINUTES else 0)
+     return held
+ 
+ 
+ def unlogged_minutes(readings):
+-    """Total length of the spacings where the logger missed readings."""
++    """Total length of the logger gaps of one export (2.4, 3.2)."""
+     total = 0
+     for earlier, later in zip(readings, readings[1:]):
+         span = later.minute - earlier.minute
+-        if span > GAP_MINUTES:
++        if span > LOGGED_INTERVAL_MINUTES:
+             total += span
+     return total
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/bands.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/bands.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/bands.py	2026-09-27 12:34:22
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/bands.py	2026-09-27 13:22:37
+@@ -2,17 +2,33 @@
+ 
+ 
+ def band_of(temp, stability):
+-    """Name of the band a reading is charged to, or None for a reading in range."""
+-    if stability.low <= temp < stability.high:
++    """Name of the band a reading is charged to, or None for a reading in range (2.1, 2.5, 2.6)."""
++    if stability.low <= temp <= stability.high:
+         return None
+-    for band in sorted(stability.bands, key=lambda entry: entry.lower, reverse=True):
+-        if temp >= band.lower:
+-            break
+-    return band.name
++    below = [band for band in stability.bands if band.upper <= stability.low]
++    above = [band for band in stability.bands if band.lower >= stability.high]
++    if temp < stability.low:
++        # A band below the range holds temperatures from its lower end up to but
++        # not including its upper end.
++        for band in sorted(below, key=lambda entry: entry.lower):
++            if band.lower <= temp < band.upper:
++                return band.name
++        candidates = sorted(below, key=lambda entry: entry.lower)
++    else:
++        # A band above the range holds temperatures above its lower end up to and
++        # including its upper end.
++        for band in sorted(above, key=lambda entry: entry.lower):
++            if band.lower < temp <= band.upper:
++                return band.name
++        candidates = sorted(above, key=lambda entry: entry.lower)
++    if not candidates:
++        return None
++    # Outside the table's span, which section 1.4 does not provide for.
++    return candidates[0].name if temp < stability.low else candidates[-1].name
+ 
+ 
+ def band_minutes(readings, minutes, stability):
+-    """Minutes charged to each band of the record over one leg."""
++    """Minutes charged to each band of the record over one leg (3.1)."""
+     totals = {band.name: 0 for band in stability.bands}
+     for reading, spent in zip(readings, minutes):
+         name = band_of(reading.temp, stability)
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/disposition.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/disposition.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/disposition.py	2026-09-27 13:13:52
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/disposition.py	2026-09-27 13:22:50
+@@ -1,12 +1,22 @@
+ """Per-lot figures and the release decision."""
+ 
+-from .attribution import holds, unlogged_minutes
++from .attribution import holds, spacings, unlogged_minutes
+ from .bands import band_minutes
+ from .kinetics import mean_kinetic_temperature
+ 
+ UNLOGGED_LIMIT_MINUTES = 120
++EXCURSION_ENTRY_MINUTES = 15  # an entry shorter than this records a transient (2.6)
+ 
+ 
++def prior_minutes(lot, stability):
++    """Prior time against each band: the lot's excursion entries against it (2.6, 2.9)."""
++    totals = {}
++    for band in stability.bands:
++        entries = lot.certificate.get(band.name, [])
++        totals[band.name] = sum(entry for entry in entries if entry >= EXCURSION_ENTRY_MINUTES)
++    return totals
++
++
+ def dispose(lot, stability):
+     """The QA figures and the disposition of one lot, times in minutes."""
+     per_leg = []
+@@ -17,14 +27,17 @@
+         per_leg.append(band_minutes(leg.readings, held, stability))
+         unlogged += unlogged_minutes(leg.readings)
+         temps += [reading.temp for reading in leg.readings]
+-        weights += held
+-    band_time = {band.name: max(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
+-    remaining = {band.name: band.allowance_h * 60 - band_time[band.name] for band in stability.bands}
++        weights += spacings(leg.readings)
++    prior = prior_minutes(lot, stability)
++    band_time = {band.name: sum(leg_totals[band.name] for leg_totals in per_leg) for band in stability.bands}
++    remaining = {
++        band.name: band.allowance_h * 60 - prior[band.name] - band_time[band.name] for band in stability.bands
++    }
+     mkt = mean_kinetic_temperature(temps, weights, stability.ratio)
+     frozen = any(reading.temp < stability.freeze_point for reading in lot.readings())
+     if frozen or any(left < 0 for left in remaining.values()):
+         decision = "reject"
+-    elif round(mkt, 1) > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
++    elif mkt > stability.high or unlogged > UNLOGGED_LIMIT_MINUTES:
+         decision = "quarantine"
+     else:
+         decision = "release"
+diff -ruN --exclude .git /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/report.py /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/report.py
+--- /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/baseline/environment/app/src/coldchain/report.py	2026-09-27 12:34:22
++++ /Users/quochoangdev/HDTechLS/hd-labs-terminus-skills-v3/workspace/local-solve-probes/tbrain-cold-chain-lot-disposition-cycle-2/run_1/solve/environment/app/src/coldchain/report.py	2026-09-27 13:22:59
+@@ -1,11 +1,17 @@
+ """The disposition report the driver prints."""
+ 
+-import math
+ 
+-
+ def hours(minutes):
+-    """Minutes as hours to the hundredth."""
+-    return math.trunc(minutes / 60 * 100) / 100
++    """Minutes as hours, rounded to the nearest hundredth of an hour (1.2)."""
++    if isinstance(minutes, int):
++        # hundredths of an hour = minutes * 100 / 60 = minutes * 5 / 3, rounded to
++        # the nearest whole hundredth; a whole number of minutes never lands halfway.
++        numerator, denominator = minutes * 5, 3
++        whole, rest = divmod(numerator, denominator)
++        if 2 * rest >= denominator:
++            whole += 1
++        return whole / 100
++    return round(minutes / 60, 2)
+ 
+ 
+ def build_report(stability, results):

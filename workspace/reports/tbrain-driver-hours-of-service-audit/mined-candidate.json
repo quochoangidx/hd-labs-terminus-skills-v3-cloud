@@ -1,0 +1,181 @@
+{
+ "task_slug": "tbrain-driver-hours-of-service-audit",
+ "category": "Operations",
+ "subcategory": "Compliance",
+ "category_rationale": "Correctness is decided by motor-carrier hours-of-service compliance rules (shift, window, break, cycle, yard-move and team-berth semantics) in the fleet's manual; closest rejected pair Operations/Logistics (dispatch planning is not graded; only regulatory limit auditing is).",
+ "gallery_novelty": "novel",
+ "closest_gallery_task": "none found; mined-candidates/index.jsonl and gallery_tasks_snapshot.md are absent from this checkout, so the registry dedupe could not be run (recorded risk)",
+ "forbidden_domain_check": "not IFTA fuel tax (no jurisdiction mileage/tax), not bakery/fleet dispatch (no routing or assignment), not payroll overtime (no pay); no accepted-task setting, trap instance or data shape reused",
+ "target_difficulty": "core",
+ "artifacts": [
+  "/app/src"
+ ],
+ "agent_network_mode": "no-network",
+ "verifier_network_mode": "no-network",
+ "disposition": "active",
+ "domain_crux": {
+  "failure_mode": "an ELD log audit that reads the federal rules from memory, pauses the 14-hour window during rest, opens the shift at the first wheel minute, accepts on-duty fuelling as a break and books violations to the shift's start day",
+  "native_work_surface": "a small Python audit package plus the fleet's numbered hours-of-service manual",
+  "native_artifact_or_behavior": "per-day driving/on-duty/violation minutes and end-of-log time left for one driver log",
+  "difficulty_without_incidental_conventions": "with the report schema and rounding stated, the solver must still rebuild the driving-time classification and the per-minute limit walk without sweeping team-berth or personal-conveyance miles into driving time, and must stop the new rounding at the edge of the range the manual provides for"
+ },
+ "crux_card_pattern_blind": "A compliance analyst audits one driver's week of duty-status changes against the fleet's own hours manual. The hard part is not the limits themselves (10 h driving, 14 h clock window, 8 h to a rest break, 60 h in 7 days) but what counts: a yard move in the on status counts as driving once the truck covers a mile, yet the berth time of a team driver whose truck is moving, or an off-duty personal-conveyance trip, remains rest; the window runs on the clock from the first on-duty minute; and the tenth-of-an-hour rounding covers only time left the manual provides for.",
+ "scope_ledger": {
+  "primary_outcome": "the report printed by the fixed driver follows FM-4",
+  "causal_core": "stretch classification (rest / on-duty / driving time incl. yard moves) -> resets, shifts and breaks -> per-minute limit walk (3.1-3.4) with calendar-day attribution -> time left at log end",
+  "core_obligations": [
+   "DRIVING_TIME",
+   "SHIFT",
+   "WINDOW",
+   "BREAK",
+   "DRIVING_LIMIT",
+   "CYCLE",
+   "DAY_ATTRIBUTION",
+   "TIME_LEFT"
+  ],
+  "supplied_plumbing": [
+   "tools/hoslog_run.py driver (frozen, byte-checked)",
+   "JSON loading and stretch construction",
+   "midnight splitting of day totals (already correct)",
+   "report serialization"
+  ],
+  "non_goals": [
+   "34-hour restart",
+   "sleeper-berth split provision",
+   "adverse-conditions and short-haul exceptions",
+   "malformed logs or anything outside FM-4 section 1",
+   "helpers called directly (graded through the driver only)"
+  ]
+ },
+ "departures": [
+  {
+   "id": "D1",
+   "rule": "3.1",
+   "shipped": "11-hour driving limit (federal memory)",
+   "fixed": "10 hours per shift",
+   "site": "limits.py DRIVING_LIMIT"
+  },
+  {
+   "id": "D2",
+   "rule": "3.2/5.1",
+   "shipped": "window counts only on-duty minutes (pauses during rest), in the walk and in time left",
+   "fixed": "clock time since shift start",
+   "site": "limits.py shift_on, report.py used"
+  },
+  {
+   "id": "D3",
+   "rule": "2.4",
+   "shipped": "shift opens at the first driving minute after a reset",
+   "fixed": "first on-duty minute",
+   "site": "shifts.py shifts"
+  },
+  {
+   "id": "D4",
+   "rule": "2.5",
+   "shipped": "any 30 non-driving minutes are a break (federal 2020 memory)",
+   "fixed": "only a rest period of 30 minutes or more",
+   "site": "shifts.py breaks"
+  },
+  {
+   "id": "D5",
+   "rule": "2.6/3.4/5.1",
+   "shipped": "70 hours over 8 days",
+   "fixed": "60 hours over 7 days",
+   "site": "cycle.py CYCLE_DAYS/CYCLE_MINUTES"
+  },
+  {
+   "id": "D6",
+   "rule": "2.2",
+   "shipped": "on-status yard moves are on-duty not driving (federal)",
+   "fixed": "an on-status stretch covering one mile or more is driving time",
+   "site": "stretches.py is_driving"
+  },
+  {
+   "id": "D7",
+   "rule": "5.2",
+   "shipped": "time left rounded to nearest tenth (round)",
+   "fixed": "rounded down to a tenth, for time left from nought up",
+   "site": "report.py hours"
+  },
+  {
+   "id": "D8",
+   "rule": "4.1",
+   "shipped": "violation minutes booked to the day the shift began",
+   "fixed": "to the day the minute falls in",
+   "site": "limits.py per_day[start // DAY]"
+  }
+ ],
+ "restraint_traps": [
+  {
+   "id": "T1",
+   "kind": "definition hop / exclusion inside a rebuilt aggregate",
+   "semantic_node": "driving-time classification (stretches.is_driving), rebuilt by D6",
+   "silent_or_governed": "governed through a two-hop chain: 2.2 driving time = driving status + yard moves; 2.3 a yard move is on-duty time in a stretch covering >=1 mile; 2.1 on-duty time is time that is not rest. A non-zero `miles` on a sleeper/off stretch (team berth, personal conveyance) is therefore rest. README describes miles neutrally (recorded on every entry whatever its status); no team/co-driver signpost",
+   "kept_step": "one routing decision: the stretch stays rest (can make a break or reset, is not on-duty time)",
+   "natural_wrong_repair": "is_driving = status == 'driving' or miles >= 1 (or miles >= 1 and status != 'driving'), which turns moving rest into driving time inside the per-minute walk (shift driving, break accrual, violations) and in day/time-left totals",
+   "witness": "test_outputs.py::test_moving_truck_rest_stays_rest (own fixture; broad and generated logs carry miles 0 on every rest stretch)",
+   "screen_4_3": {
+    "competing_positive_enumeration": "none: no sentence says moving time or miles make driving time except 2.2's on-status sentence",
+    "definitional_chain": "yes: 2.1 -> 2.2 -> 2.3/2.5",
+    "contrary_expert_instinct": "none; expert instinct agrees (berth time on a moving team truck and personal conveyance are rest/off duty)",
+    "unnamed_shared_step": "none: the line is drawn with defined statuses",
+    "isolation": "own test only",
+    "flags": 0
+   }
+  },
+  {
+   "id": "T2",
+   "kind": "apply-the-formula-everywhere edge at the range the book provides for",
+   "semantic_node": "time-left formatting (report.hours), edited by D7",
+   "silent_or_governed": "silent tier 2, unannounced: FM-4 1.5 provides for time left from nought up to its limit; the instruction's generic value-level rule keeps only the shipped step that turns manual-correct minutes into the reported value",
+   "kept_step": "for a negative time left the shipped round(minutes / 60, 1) stands; minutes themselves follow the manual (composition sentence)",
+   "natural_wrong_repair": "hours = (minutes // 6) / 10 (or math.floor) for every value, or a clamp at nought",
+   "witness": "test_outputs.py::test_time_left_past_a_limit_keeps_todays_conversion (minutes <= -3 only)",
+   "screen_4_3": {
+    "competing_positive_enumeration": "soft: 5.2 itself reads as universal unless 1.5 is read with it (the rebill-style range bound)",
+    "definitional_chain": "yes: 5.1 minutes -> 1.5 range -> generic value-level silence rule",
+    "contrary_expert_instinct": "weak: reporting an over-limit balance as negative is normal; clamping is the counter-instinct, which the no-clamp wording addresses",
+    "unnamed_shared_step": "the step is described generically ('the step that turns those figures into the reported value'), not named; only one reported value is silent, so it is not shared with governed values",
+    "isolation": "own test; broad/generated logs end with every time left >= 0 (predicate)",
+    "flags": 1
+   }
+  }
+ ],
+ "solver_path_screen": {
+  "premortem": "A strong solver reads FM-4, writes its own per-minute reference (classify stretches, derive resets/shifts/breaks, walk driving minutes against 3.1-3.4, attribute by day, format time left), differential-tests the package against it on random logs and fixes every departure. Where it can go wrong: its reference encodes its own reading of 'driving time' (moving truck = driving is a tempting generalisation of 2.2) and its own formatter (floor everywhere); self-tests agree with its reference, so both over-repairs survive self-checking. Everything else converges.",
+  "scores": {
+   "reference_unreachable": 2,
+   "authority_incomplete_for_grading": 3,
+   "hidden_state_not_closed_form": 3,
+   "restraint_traps": 3,
+   "fuzz_blind_spot": 3
+  },
+  "self_verification_resistance": 3,
+  "prediction": "resists",
+  "confidence": "low-medium",
+  "decisive_reason": "two independent traps of mixed kind at different nodes (a definition-hop routing decision and a range-edge formula) that a self-written reference reproduces rather than catches"
+ },
+ "scoring": {
+  "subsystem_interaction": 4,
+  "deterministic_reproducibility": 5,
+  "runtime_viability": 5,
+  "anti_shortcut_hardness": 4,
+  "self_verification_resistance": 3,
+  "verifier_complexity": 4,
+  "runtime_cost": 5,
+  "leakage_risk": 5
+ },
+ "runtime_class": "lightweight",
+ "rejection_reason": null,
+ "redesign": {
+  "round": 1,
+  "after": "contract-review.json CR-1",
+  "changes": [
+   "yard move made a defined term (2.3), exclusion via 2.1",
+   "README miles signpost removed",
+   "walk classifies every stretch through is_driving",
+   "named below-nought sentence deleted; value-level silence rule",
+   "symptoms, tolerance"
+  ]
+ }
+}

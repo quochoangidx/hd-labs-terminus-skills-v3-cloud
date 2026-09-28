@@ -1,0 +1,186 @@
+{
+  "axis": "sound_verifier",
+  "reviewer_id": "sound_verifier-B",
+  "snapshot_sha256": "b72b7d24481f63694018154766c639922c60ffb3cc92716d02868c89f47d7361",
+  "severity": "None",
+  "summary": "The verifier compares every statement field exactly, with strict types, against sealed expectations that I re-derived from manual TD-7. Each named rule has a case that changes the result when the rule is broken. The two inputs the instruction leaves to today's code (corrections on a base-period edge payday, partial weeks below 1,000 cents) are pinned to the shipped step, and a differential runs the shipped package on them. Relabelled and freshly drawn jobs avoid those inputs, so no contract-valid alternative is rejected. I found no gap that accepts wrong work and no false rejection.",
+  "input_completeness": {
+    "status": "complete",
+    "files_read": [
+      "_panel_docs/quality-panel-judge-guide.md",
+      "_panel_docs/quality-panel-examples.md",
+      "packet-manifest.json",
+      "instruction.md",
+      "environment/Dockerfile",
+      "environment/.dockerignore",
+      "environment/app/README.md",
+      "environment/app/docs/td-benefits-manual.md",
+      "environment/app/examples/sample-job.json",
+      "environment/app/tools/tdbenefit_run.py",
+      "environment/app/src/tdbenefit/__init__.py",
+      "environment/app/src/tdbenefit/dates.py",
+      "environment/app/src/tdbenefit/disability.py",
+      "environment/app/src/tdbenefit/money.py",
+      "environment/app/src/tdbenefit/partial.py",
+      "environment/app/src/tdbenefit/payroll.py",
+      "environment/app/src/tdbenefit/rates.py",
+      "environment/app/src/tdbenefit/statement.py",
+      "tests/Dockerfile",
+      "tests/test.sh",
+      "tests/test_outputs.py",
+      "tests/manual_model.py",
+      "tests/expected/ROSTER",
+      "tests/expected/weeks_pay.jsonl",
+      "tests/expected/weeks_pay_threshold.jsonl",
+      "tests/expected/base_period.jsonl",
+      "tests/expected/average_weekly_wage.jsonl",
+      "tests/expected/no_base_wages.jsonl",
+      "tests/expected/rate_two_thirds.jsonl",
+      "tests/expected/rate_bounds.jsonl",
+      "tests/expected/row_in_force.jsonl",
+      "tests/expected/low_wage_rate.jsonl",
+      "tests/expected/disability_days.jsonl",
+      "tests/expected/waiting_period.jsonl",
+      "tests/expected/retroactive_days.jsonl",
+      "tests/expected/ttd_rounding.jsonl",
+      "tests/expected/partial_benefit.jsonl",
+      "tests/expected/partial_week_threshold.jsonl",
+      "tests/expected/no_wage_loss.jsonl",
+      "tests/expected/statement_order.jsonl",
+      "tests/expected/limits_claims.jsonl",
+      "tests/expected/limits_job.jsonl",
+      "tests/expected/generated.jsonl",
+      "tests/expected/corrections.jsonl",
+      "tests/expected/differential-corrections.jsonl",
+      "tests/expected/low_partial_weeks.jsonl",
+      "tests/expected/differential-low_partial_weeks.jsonl",
+      "tests/shipped/app/** (content inspected through byte-identical environment/app copies; packet-manifest.json gives identical SHA-256 for every shipped file)"
+    ],
+    "missing_dependencies": [],
+    "unread_or_truncated_ranges": []
+  },
+  "findings": [],
+  "checks_performed": [
+    "Read the manual TD-7, README, instruction and shipped package; derived each graded figure's rule and which inputs the instruction's precedence clause leaves to today's code (a correction below 2,000 cents credited to its payday's week; a partial week below 1,000 cents paid 3/5 of its wage loss and capped at the manual rate).",
+    "Compared tests/manual_model.py step by step with the manual: week's pay credited to Friday-5; base period of 13 Sundays before the week of injury; AWW = round(sum/13); row in force by injury date; 3.5 before the 3.4 clamp; inclusive disability days; waiting min(3, days); retro at >=14; TTD = round(rate*paid/7); TPD 2/3 per week capped at rate, loss floored at nought; tpd_weeks = len(earnings). Confirmed that /13, /7, *2/3 and *3/5 never leave an exact half, so the half-up tie rule cannot affect grading.",
+    "Recomputed by hand the expected statements of sampled sealed rows: corrections W924016 (AWW 12356, TTD 18827), low_partial W601086 and W543087, low_wage_rate (4 claims), row_in_force (3 jobs), rate_bounds W104035 and W834038, ttd_rounding W486056, partial_week_threshold W609073, no_wage_loss W727076, limits_claims W320102 and W297107, limits_job L003, and the hand-worked R40/MAX/MIN/HIMIN/SPAN53/SPAN57 cases in test_outputs.py.",
+    "Checked each named rule for a plausible wrong implementation that the sealed data rejects: payday-week crediting, a >2000 threshold, dividing by weeks paid, a 3/5 rate, floor instead of nearest cent, the newest row instead of the row in force, a low-wage test on 2/3 AWW, exclusive period ends, a 7-day waiting period, retro at >14, rounding a daily rate, rounding the TPD total instead of each week (W297107: 35738040 vs 35738075), counting only weeks of partial disability in tpd_weeks, zero or 2/3 for low weeks, and crediting corrections to the prior week at either base-period edge.",
+    "Traced both edge directions of the correction differential: pair 1 moves a line into the week of injury, pair 2 moves one into the oldest base week, so a candidate crediting corrections like a week's pay changes AWW within a pair while the shipped step does not.",
+    "Checked that differential-low_partial_weeks jobs have AWW and rate that today's code and the manual agree on (e.g. W535003: 150000 and 80000 both ways; W431005: rate 60000 both ways).",
+    "Checked that _draw_job stays inside section 1 for every reachable draw (latest date about 2035-10 against the 2035-12-31 limit, at most 68 wage lines, one week's-pay line per payday, corrections only off the base-period edges, earnings >= 1,000 cents) and carries no open input, so model expectations are contract-determined.",
+    "Checked compare(): exact top-level key, statement count and order, exact README key set, and type-strict equality (a bool or float is rejected). Checked that relabel() shuffles only what the README leaves unordered (wage lines) and reorders the expected rows with the claims.",
+    "Checked driver handling: the delivered bytes are compared with the shipped driver, the verifier's copy runs as an unprivileged user with python3 -I -S, and test.sh gives reward 1 only if pytest passes and the driver is unchanged.",
+    "No execution performed; all traces are static."
+  ],
+  "coverage_sweep": [
+    {
+      "category": "Map each required behavior to an assertion that fails if it is missing or reversed",
+      "status": "checked",
+      "reason": "Each rule in manual sections 2-6 has its own family test comparing complete statements; for each I identified a wrong implementation with a different expected value.",
+      "evidence": ["tests/test_outputs.py:246-345", "tests/expected/ROSTER:1-24", "environment/app/docs/td-benefits-manual.md:50-117"],
+      "finding_ids": []
+    },
+    {
+      "category": "Check the full core result, not just existence, keys or row count",
+      "status": "checked",
+      "reason": "compare() checks every one of the ten fields of every statement by value and exact type.",
+      "evidence": ["tests/test_outputs.py:228-238", "environment/app/README.md:35-50"],
+      "finding_ids": []
+    },
+    {
+      "category": "Named domain rules each have an isolating case",
+      "status": "checked",
+      "reason": "Isolating cases exist for 2.2 (2,000 vs 1,999 on edge paydays), 2.3, 2.4 (day before and day of a change), 2.5, 2.6, 2.7 (earnings equal to and one cent below AWW), 2.8 (exactly 1,000), 3.3, 3.4, 3.5 (AWW at and below the minimum), 4.1 (13/14/15 days), 4.3 (every remainder) and 5.1 (cap). Injuries fall on all seven weekdays.",
+      "evidence": ["tests/expected/weeks_pay_threshold.jsonl:1", "tests/expected/row_in_force.jsonl:1-3", "tests/expected/low_wage_rate.jsonl:1", "tests/expected/retroactive_days.jsonl:1", "tests/expected/no_wage_loss.jsonl:1", "tests/expected/weeks_pay.jsonl:1-4"],
+      "finding_ids": []
+    },
+    {
+      "category": "Plausible incorrect solutions are rejected",
+      "status": "checked",
+      "reason": "Traced these wrong implementations to a failing sealed row: the unmodified shipped package, floor rounding, a daily-rate TTD, rounding the TPD total, a 60% rate, the newest row, exclusive period ends, low weeks paid zero or 2/3, and corrections credited to the prior week. Fresh run-time draws, graded against the model, defeat an implementation that memorises the sealed answers.",
+      "evidence": ["tests/test_outputs.py:489-548", "tests/expected/limits_claims.jsonl:2", "tests/expected/ttd_rounding.jsonl:1", "tests/expected/low_partial_weeks.jsonl:1-3", "tests/expected/corrections.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "category": "Contract-valid alternatives for unconstrained formatting, ordering and implementation choices are accepted",
+      "status": "checked",
+      "reason": "Output is parsed as JSON, so whitespace, key order and ASCII escaping are free. Wage-line order is shuffled in the relabel tests, as the README permits. Rounding halves cannot arise. The inputs the instruction leaves open are excluded from the drawn and generated jobs by trap_inputs, and the two inputs left to today's code follow the shipped step.",
+      "evidence": ["tests/test_outputs.py:194-206", "tests/test_outputs.py:372-386", "tests/manual_model.py:34-49", "tests/manual_model.py:95-104", "instruction.md:3"],
+      "finding_ids": []
+    },
+    {
+      "category": "Documented restrictions and lifecycle behavior enforced",
+      "status": "checked",
+      "reason": "The byte-for-byte driver restriction is enforced both before the run (DELIVERED_BYTES) and after it (test.sh cmp). The instruction's sentence on inputs left to today's code is enforced by the corrections and low-partial families and their shipped-package differentials. No other lifecycle promise exists.",
+      "evidence": ["instruction.md:1", "tests/test_outputs.py:466-472", "tests/test.sh:22-27", "tests/test_outputs.py:326-345"],
+      "finding_ids": []
+    },
+    {
+      "category": "Stale binaries, self-controlled comparisons, Oracle-specific representation",
+      "status": "checked",
+      "reason": "The verifier installs its own driver, and expectations come from sealed files plus an independent model. The candidate's output is never used as an expected value. There is no binary build step.",
+      "evidence": ["tests/test_outputs.py:66-99", "tests/test_outputs.py:209-225"],
+      "finding_ids": []
+    },
+    {
+      "category": "Signed derived quantities / state-machine initialization",
+      "status": "checked",
+      "reason": "Wage loss is the only signed quantity. Rows with earnings above AWW (500,000 cents), equal to AWW and one cent below it separate the flooring rule from a signed subtraction. No contract state machine exists.",
+      "evidence": ["tests/expected/no_wage_loss.jsonl:1", "environment/app/docs/td-benefits-manual.md:69-70"],
+      "finding_ids": []
+    },
+    {
+      "category": "Reachability of graded cases within section 1 limits",
+      "status": "checked",
+      "reason": "load() applies within_limits to every sealed job, and the drawn generator cannot exceed the limits (worst-case dates traced).",
+      "evidence": ["tests/test_outputs.py:159-191", "tests/test_outputs.py:493-537"],
+      "finding_ids": []
+    }
+  ],
+  "interaction_sweep": [
+    {
+      "rules": ["2.2/3.1 week's-pay crediting", "2.3 base-period edges"],
+      "case_or_path": "2,000-cent and 1,999-cent lines on the first payday after the base period and on the oldest base payday (weeks_pay_threshold W809008, W616009)",
+      "status": "checked",
+      "evidence": ["tests/expected/weeks_pay_threshold.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.5 low-wage rate", "5.1 cap at weekly rate"],
+      "case_or_path": "rate = AWW 2,000 caps partial benefits and TTD (low_wage_rate W937042: tpd 1334, ttd 5143)",
+      "status": "checked",
+      "evidence": ["tests/expected/low_wage_rate.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.8 partial-week threshold", "instruction precedence: today's share and cap for weeks below 1,000"],
+      "case_or_path": "Low weeks under a capped rate (low_partial row 3: 3 x 70,000) and under an uncapped rate (W543087: 75739 + 75140)",
+      "status": "checked",
+      "evidence": ["tests/expected/low_partial_weeks.jsonl:1-3", "tests/test_outputs.py:336-345"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.2 correction lines", "2.3 base-period edges"],
+      "case_or_path": "Correction on the week-of-injury payday (excluded) and on the oldest-base payday (included), in both the sealed and differential families",
+      "status": "checked",
+      "evidence": ["tests/expected/corrections.jsonl:1-2", "tests/expected/differential-corrections.jsonl:1-2"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["3.3 AWW of nought", "3.5 / 4.3 / 5.1"],
+      "case_or_path": "Empty register gives AWW 0, rate 0 and zero amounts, while days and tpd_weeks are still counted (W345021, W667106)",
+      "status": "checked",
+      "evidence": ["tests/expected/no_base_wages.jsonl:1", "tests/expected/limits_claims.jsonl:1"],
+      "finding_ids": []
+    },
+    {
+      "rules": ["2.6 waiting period", "4.1 retroactive at 14 across periods"],
+      "case_or_path": "14 disability days split across three periods (W784054) and 12 one-day periods (disability_days W515046)",
+      "status": "checked",
+      "evidence": ["tests/expected/retroactive_days.jsonl:1", "tests/expected/disability_days.jsonl:1"],
+      "finding_ids": []
+    }
+  ],
+  "unresolved_checks": [],
+  "uncertainty": ""
+}
