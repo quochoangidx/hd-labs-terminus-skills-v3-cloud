@@ -1,0 +1,199 @@
+{
+ "reference_patch": "solution/fix.patch",
+ "mutants": {
+  "j1-no-tier": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "HOME_LATER_RATE = 34",
+     "new": "HOME_LATER_RATE = 28"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_home_tiers"
+   ],
+   "rationale": "2.2 34 after"
+  },
+  "j1b-tier-299": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "HOME_FIRST_KWH = 300",
+     "new": "HOME_FIRST_KWH = 299"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_home_tiers"
+   ],
+   "rationale": "first 300"
+  },
+  "j1c-tier-301": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "HOME_FIRST_KWH = 300",
+     "new": "HOME_FIRST_KWH = 301"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_2_2_home_tiers"
+   ],
+   "rationale": "first 300"
+  },
+  "j2-shop-950": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "TARIFF_SERVICE = {\"HOME\": 950, \"SHOP\": 1450}",
+     "new": "TARIFF_SERVICE = {\"HOME\": 950, \"SHOP\": 950}"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_service_charges"
+   ],
+   "rationale": "SHOP 1,450"
+  },
+  "tx-credit-floor": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "    if net_kwh <= 0 or meter[\"tariff\"] != \"HOME\":\n        return net_kwh * RATE[meter[\"tariff\"]]",
+     "new": "    if net_kwh <= 0:\n        return 0\n    if meter[\"tariff\"] != \"HOME\":\n        return net_kwh * RATE[meter[\"tariff\"]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_exporter_keeps_todays_energy_credit"
+   ],
+   "rationale": "kept credit"
+  },
+  "ty-farm-zero": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "    return SERVICE_CHARGE\n",
+     "new": "    return 0 if meter[\"tariff\"] == \"FARM\" else SERVICE_CHARGE\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_small_or_farm_meter_keeps_todays_service_charge"
+   ],
+   "rationale": "kept 950"
+  },
+  "ty-farm-1450": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "    if meter[\"tariff\"] in TARIFF_SERVICE and meter[\"imported\"] >= TARIFF_SERVICE_FROM_KWH:",
+     "new": "    if meter[\"imported\"] >= TARIFF_SERVICE_FROM_KWH:\n        return TARIFF_SERVICE.get(meter[\"tariff\"], 1450)\n    if False:"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_small_or_farm_meter_keeps_todays_service_charge"
+   ],
+   "rationale": "kept 950"
+  },
+  "c5-capped-199": {
+   "class": "C5",
+   "edits": [
+    {
+     "file": "app/src/netbill/statement.py",
+     "old": "bills = [bill(m) for m in reads[\"meters\"]]",
+     "new": "bills = [bill(m) for m in reads[\"meters\"][:199]]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_limits_reached"
+   ],
+   "rationale": "200 meters"
+  },
+  "c15-sorted": {
+   "class": "C15",
+   "edits": [
+    {
+     "file": "app/src/netbill/statement.py",
+     "old": "bills = [bill(m) for m in reads[\"meters\"]]",
+     "new": "bills = [bill(m) for m in sorted(reads[\"meters\"], key=lambda q: q[\"id\"])]"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_2_totals_and_bill_order"
+   ],
+   "rationale": "file order"
+  },
+  "c7-net-capped": {
+   "class": "C7",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "    return meter[\"imported\"] - meter[\"exported\"]",
+     "new": "    return min(49999, meter[\"imported\"] - meter[\"exported\"])"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_1_2_limits_reached"
+   ],
+   "rationale": "50,000 kWh"
+  },
+  "j2b-threshold-201": {
+   "class": "C3",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "TARIFF_SERVICE_FROM_KWH = 200",
+     "new": "TARIFF_SERVICE_FROM_KWH = 201"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_rule_3_1_service_charges"
+   ],
+   "rationale": "200 or more"
+  },
+  "ty-small-new-rule": {
+   "class": "C1",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": " and meter[\"imported\"] >= TARIFF_SERVICE_FROM_KWH:",
+     "new": ":"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_small_or_farm_meter_keeps_todays_service_charge"
+   ],
+   "rationale": "kept step under 200"
+  },
+  "ty-small-zero": {
+   "class": "C2",
+   "edits": [
+    {
+     "file": "app/src/netbill/charges.py",
+     "old": "    if meter[\"imported\"] < SERVICE_FREE_BELOW_KWH:\n        return 0\n    return SERVICE_CHARGE\n",
+     "new": "    return 0\n"
+    }
+   ],
+   "expect_failing": [
+    "tests/test_outputs.py::test_small_or_farm_meter_keeps_todays_service_charge"
+   ],
+   "rationale": "kept 950 from 50"
+  }
+ },
+ "alternatives": {
+  "alt-extra-keys": {
+   "edits": [
+    {
+     "file": "app/src/netbill/statement.py",
+     "old": "return {\"id\": meter[\"id\"],",
+     "new": "return {\"note\": \"x\", \"id\": meter[\"id\"],"
+    }
+   ],
+   "rationale": "extra keys ignored"
+  }
+ }
+}
