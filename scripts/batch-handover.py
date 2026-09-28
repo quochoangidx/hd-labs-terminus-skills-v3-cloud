@@ -972,9 +972,9 @@ def validate_submission(
             "Rubrics",
         )
     }
-    # Since 2026-09-26 the packet holds only Metadata and Rubrics: the four
-    # explanations live in task.toml [metadata], which the platform reads from the
-    # ZIP, so they are taken from there when the packet does not repeat them.
+    # Since 2026-09-26 the packet holds Relevant Experience, Metadata and Rubrics:
+    # the explanations live in task.toml [metadata], which the platform reads from
+    # the ZIP, so they are taken from there when the packet does not repeat them.
     try:
         import tomllib
 

@@ -75,8 +75,9 @@ The ZIP must contain only the files/folders required by the Platform Submission 
 **Make shell scripts executable before zipping.** Reviewers reject a ZIP whose `tests/test.sh` or `solution/solve.sh` is non-executable. Run `chmod +x tests/test.sh solution/solve.sh` first, then verify the stored Unix mode with `unzip -Z <zip> tests/test.sh solution/solve.sh` (expect `-rwxr-xr-x`). `zip -X` preserves the Unix permission mode — it only strips uid/gid and timestamps — so the allowlist command below keeps the exec bit intact.
 
 The platform's `Difficulty Explanation`, `Solution Explanation`,
-`Verification Explanation`, and `Relevant Experience` fields are entered
-separately in the UI. They are not ZIP contents.
+`Verification Explanation`, and `Relevant Experience` fields come from
+`task.toml` `[metadata]`; they are not separate ZIP files. The first three are
+never written into `SUBMISSION-<slug>.md`.
 
 The Terminus 3 ZIP root should contain:
 
@@ -206,8 +207,8 @@ in `instruction.md`.
 
 Before sending the task to a reviewer, check the four explanations in
 `task.toml` `[metadata]` and the packet
-`workspace/submissions/SUBMISSION-<task-slug>.md` (title `# SUBMISSION — <slug>` with one-line Task, Category and ZIP entries, then `# Metadata` and `# Rubrics`; layout in `task-clone`).
-The four explanations (`difficulty_explanation`, `solution_explanation`, `verification_explanation`, `relevant_experience`) live only in `task.toml` `[metadata]`, which the platform reads from the ZIP; do not write them again into a source draft or the packet (user decision 2026-09-26: generating text that is never pasted only spends quota).
+`workspace/submissions/SUBMISSION-<task-slug>.md` (title `# SUBMISSION — <slug>` with one-line Task, Category and ZIP entries, then `# Relevant Experience`, `# Metadata` and `# Rubrics`; layout in `task-clone`).
+The three explanations (`difficulty_explanation`, `solution_explanation`, `verification_explanation`) live only in `task.toml` `[metadata]`, which the platform reads from the ZIP; the packet must not carry them and no source draft is written (user decision 2026-09-26). The packet's Relevant Experience must match `task.toml` `relevant_experience`.
 
 Check that:
 
@@ -230,9 +231,10 @@ but they do not change the ZIP allowlist.
 On first upload:
 
 - upload the ZIP through the Terminus 3 submission flow
-- the explanations come from `task.toml` inside the ZIP; copy only the metadata
-  answers and the Rubrics block from `workspace/submissions/SUBMISSION-<slug>.md`
-  into their platform fields, without the headings
+- the three explanation fields come from `task.toml` inside the ZIP; copy only
+  the Relevant Experience, metadata answers and the Rubrics block from
+  `workspace/submissions/SUBMISSION-<slug>.md` into their platform fields,
+  without the headings
 - check "Generate Rubric(s)" while "Send to Reviewer" is unchecked
 - keep "Send to Reviewer" unchecked
 - inspect CI and generated rubric before final reviewer submission

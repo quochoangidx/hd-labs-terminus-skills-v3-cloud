@@ -7,7 +7,7 @@ description: Author or review Terminus 3 platform rubrics for a task folder or e
 
 Build the rubric from the task's contract and evidence, not from a preferred number
 of positive or negative lines. The rubric is a platform UI artifact stored locally in
-`workspace/submissions/SUBMISSION-<slug>.md`; never put it in the task ZIP. The packet holds only the title `# SUBMISSION — <slug>` with one-line Task, Category and ZIP entries, then `# Metadata` and `# Rubrics`; the four explanations stay in `task.toml`, so this skill writes no explanation sections.
+`workspace/submissions/SUBMISSION-<slug>.md`; never put it in the task ZIP. The packet holds only the title `# SUBMISSION — <slug>` with one-line Task, Category and ZIP entries, then `# Relevant Experience`, `# Metadata` and `# Rubrics`; the explanations stay in `task.toml`, so this skill writes no explanation sections.
 
 ## Workflow
 

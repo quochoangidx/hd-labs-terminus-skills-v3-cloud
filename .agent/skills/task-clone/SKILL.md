@@ -457,7 +457,8 @@ rather than discovered at packaging.
     clear findings, then freeze the full task/verifier snapshot.
 17. Run counted real-agent trials. Package only after the difficulty gate;
     then write and separately style-audit reviewer-facing Difficulty, Solution,
-    and Verification explanations outside the task folder.
+    and Verification explanations in `task.toml` `[metadata]` (never in the
+    `SUBMISSION-<slug>.md` packet).
 
 > Terminus 3 explicitly values domain inference, live state, native artifacts,
 > and interacting constraints. The archetypes in
@@ -1413,7 +1414,7 @@ prompt, oracle, verifier and available solve probes are stable:
 - `relevant_experience`: concrete domain, toolchain, or repository background that
   supports the task design, without invented credentials.
 
-The four explanations (`difficulty_explanation`, `solution_explanation`, `verification_explanation`, `relevant_experience`) live only in `task.toml` `[metadata]`, which the platform reads from the ZIP; do not write them again into a source draft or the packet (user decision 2026-09-26: generating text that is never pasted only spends quota).
+The three explanations (`difficulty_explanation`, `solution_explanation`, `verification_explanation`) live only in `task.toml` `[metadata]`, which the platform reads from the ZIP; do not write them into a source draft or the packet (user decision 2026-09-26: generating text that is never pasted only spends quota). `relevant_experience` is the one field also copied verbatim into the packet.
 
 Then produce the paste-ready packet `workspace/submissions/SUBMISSION-<slug>.md`
 (the single canonical name, shared with `task-batch`), outside the task ZIP, with
@@ -1426,6 +1427,10 @@ only what the form needs beyond the ZIP:
 - Category: <Category> / <Subcategory>
 - ZIP: `workspace/submissions/<slug>.zip`
 
+# Relevant Experience
+
+<verbatim copy of task.toml relevant_experience>
+
 # Metadata
 
 - Does this task use an approved canonical base image? Yes/No — `<exact digest-pinned image from the Dockerfile>`
@@ -1434,6 +1439,14 @@ only what the form needs beyond the ZIP:
 # Rubrics
 
 Agent ... , +3
+...
+
+# Metadata
+
+...
+
+# Rubrics
+
 ...
 ```
 

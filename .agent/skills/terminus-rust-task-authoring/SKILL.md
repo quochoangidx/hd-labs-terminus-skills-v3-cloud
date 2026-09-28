@@ -79,8 +79,9 @@ file conflicts with those skills, the canonical skills win.
 
 ## Submission Explanations
 
-Create the reviewer-facing Difficulty, Solution, and Verification explanations
-outside the task folder under:
+Write the reviewer-facing Difficulty, Solution, and Verification explanations
+in `task.toml` `[metadata]` (never in `SUBMISSION-<slug>.md`); factual source
+notes may live under:
 
 ```text
 workspace/reports/<task-slug>/

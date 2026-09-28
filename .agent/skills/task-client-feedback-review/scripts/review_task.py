@@ -195,6 +195,11 @@ def candidate_driver_trusted(
     sources = verifier_python if isinstance(verifier_python, dict) else {"tests/test_outputs.py": verifier_python}
     flagged = []
     for name in _shipped_driver_pairs(files):
+        if any(_restores_shipped_driver(src, name) for src in sources.values()):
+            # os.replace of the shipped copy onto /app/tools/<name> before any run is the
+            # AGENTS.md "Verifier-owned driver" pattern for interpreted drivers: the file the
+            # verifier executes is its own, at the documented path.
+            continue
         hit = any(
             driver_execution_sites(src, name, app_default=_app_default(src))
             for src in sources.values()
@@ -209,6 +214,12 @@ def candidate_driver_trusted(
         if hit:
             flagged.append(name)
     return flagged
+
+
+def _restores_shipped_driver(source: str, name: str) -> bool:
+    """True when the verifier os.replace()s its shipped copy of <name> onto /app/tools/<name>."""
+    return ("os.replace(" in source and f"/app/tools/{name}" in source
+            and re.search(r"shipped[\"'/ )]*.*tools.*" + re.escape(name) + r"|\"tools\"\s*/\s*\"" + re.escape(name), source) is not None)
 
 
 _BYTE_CHECK_RE = re.compile(r"read_bytes|hashlib|filecmp|\bcmp\b|sha\d+|md5|file_digest|read_text|==")

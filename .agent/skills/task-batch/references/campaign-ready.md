@@ -949,13 +949,15 @@ Create one file per accepted task:
 workspace/submissions/SUBMISSION-<slug>.md
 ```
 
-The four explanations (`difficulty_explanation`, `solution_explanation`,
-`verification_explanation`, `relevant_experience`) are written only into
-`task.toml` `[metadata]`, which the platform reads from the ZIP: name the
-professional role, state where any corpus or fixtures came from (or that no
-external data is used), base difficulty on the actual design and observed probe
-failures, and never copy the Oracle or hidden fixture values. Do not repeat them in
-the packet (user decision 2026-09-26). Use this exact structure:
+The three explanations (`difficulty_explanation`, `solution_explanation`,
+`verification_explanation`) are written only into `task.toml` `[metadata]`,
+which the platform reads from the ZIP: name the professional role, state where
+any corpus or fixtures came from (or that no external data is used), base
+difficulty on the actual design and observed probe failures, and never copy the
+Oracle or hidden fixture values. Do not repeat them in this file and write no
+separate source draft. `relevant_experience` is written in `task.toml` and
+repeated verbatim under `# Relevant Experience` below so it is ready to paste.
+Use this exact structure:
 
 ```markdown
 # SUBMISSION — <slug>
@@ -963,6 +965,10 @@ the packet (user decision 2026-09-26). Use this exact structure:
 - Task: <one sentence: what the agent must produce, in domain words>
 - Category: <Category> / <Subcategory>
 - ZIP: `workspace/submissions/<slug>.zip`
+
+# Relevant Experience
+
+State the concrete domain, toolchain, or repository experience that supports the task design. Keep it factual and do not invent personal credentials.
 
 # Metadata
 
